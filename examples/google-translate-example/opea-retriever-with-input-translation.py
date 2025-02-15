@@ -1,19 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from google_translator import GoogleTranslator
 import requests
 import os
 
 # Initialize FastAPI
 app = FastAPI()
 
-# Load Google API Key from environment variable
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-if not GOOGLE_API_KEY:
-    raise ValueError("Google API Key is missing. Set GOOGLE_API_KEY environment variable.")
-
-# Initialize Google Translator
-translator = GoogleTranslator(GOOGLE_API_KEY)
+# Define the OPEA Google Translate Microservice URL
+TRANSLATION_SERVICE_URL = "http://localhost:8001/translate"
 
 # Define the OPEA Retrieval API endpoint (replace with actual endpoint)
 OPEA_RETRIEVER_URL = "https://opea.example.com/api/retrieve"
@@ -24,6 +18,18 @@ class QueryRequest(BaseModel):
     source_language: str  # e.g., "id" (Indonesian), "jv" (Javanese), "su" (Sundanese)
     target_language: str = "en"  # Default to English for retrieval
 
+
+def translate_text(text: str, source_language: str, target_language: str) -> str:
+    """Calls the OPEA Google Translate Microservice to translate text."""
+    payload = {"text": text, "source_language": source_language, "target_language": target_language}
+    response = requests.post(TRANSLATION_SERVICE_URL, json=payload)
+    
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Translation service failed.")
+    
+    return response.json().get("translated_text", "")
+
+
 @app.post("/retrieve")
 async def retrieve_data(request: QueryRequest):
     """
@@ -31,7 +37,7 @@ async def retrieve_data(request: QueryRequest):
     """
     try:
         # Step 1: Translate user query to English
-        translated_query = translator.translate_text(request.text, target_language=request.target_language, source_language=request.source_language)
+        translated_query = translate_text(request.text, request.source_language, request.target_language)
 
         # Step 2: Send translated query to OPEA's retrieval system
         opea_payload = {"query": translated_query}
@@ -43,9 +49,14 @@ async def retrieve_data(request: QueryRequest):
         retrieved_text = response.json().get("response", "")
 
         # Step 3: Translate OPEA's response back to the original language
-        final_response = translator.translate_text(retrieved_text, target_language=request.source_language, source_language="en")
+        final_response = translate_text(retrieved_text, "en", request.source_language)
 
-        return {"original_query": request.text, "translated_query": translated_query, "retrieved_text": retrieved_text, "final_response": final_response}
+        return {
+            "original_query": request.text,
+            "translated_query": translated_query,
+            "retrieved_text": retrieved_text,
+            "final_response": final_response,
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -53,4 +64,4 @@ async def retrieve_data(request: QueryRequest):
 # Run the microservice (for local development)
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="localhost", port=8000)

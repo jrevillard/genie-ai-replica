@@ -39,7 +39,7 @@ To use the Google Translate API, you need to create a **Google Cloud service acc
 
 ### **1️⃣ Enable Cloud Translation API**
 1. Go to **Google Cloud Console**:  
-   🔗 [Enable Cloud Translation API](https://console.developers.google.com/apis/api/translate.googleapis.com/overview)
+   👉 [Enable Cloud Translation API](https://console.developers.google.com/apis/api/translate.googleapis.com/overview)
 2. Click **"Enable"**.
 3. Wait **a few minutes** for the API to activate.
 
@@ -120,51 +120,54 @@ Then you're all set! 🚀
 
 ---
 
-## **🚀 Running the Microservice**
-### **Run Locally**
-```bash
-python opea-google-translate-microservice.py
-```
-By default, the service will be available at:
-```
-http://localhost:8001
+## **🔧 Modify OPEA Configuration (`compose.yaml`)**
+To integrate this service into OPEA, modify the `compose.yaml` file:
+
+### **1️⃣ Add Translation Service**
+```yaml
+services:
+  translation_service:
+    image: your-translation-service-image
+    container_name: translation_service
+    ports:
+      - "8001:8001"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/path/to/your-service-account.json
+    volumes:
+      - /local/path/to/your-service-account.json:/path/to/your-service-account.json
+    networks:
+      - opea_network
 ```
 
----
+### **2️⃣ Modify Input, Output, and Vectorization Services**
+```yaml
+services:
+  user_input_processor:
+    image: your-user-input-processor-image
+    environment:
+      - TRANSLATION_SERVICE_URL=http://translation_service:8001/translate
+    depends_on:
+      - translation_service
 
-## **🌍 API Endpoints**
-### **1️⃣ Translate Text**
-#### **📌 Request**
-```http
-POST /translate
-Content-Type: application/json
-```
-**Example Request Body:**
-```json
-{
-    "text": "Halo, bagaimana kabarmu?",
-    "source_language": "id",
-    "target_language": "en"
-}
-```
-
-#### **📌 Response**
-```json
-{
-    "translated_text": "Hello, how are you?"
-}
+  model_output_processor:
+    image: your-model-output-processor-image
+    environment:
+      - TRANSLATION_SERVICE_URL=http://translation_service:8001/translate
+    depends_on:
+      - translation_service
 ```
 
----
-
-## **🤖 Running in Docker**
-1. **Build the Docker Image**
-```bash
-docker build -t opea-google-translate .
-```
-2. **Run the Container**
-```bash
-docker run -p 8001:8001 -e GOOGLE_APPLICATION_CREDENTIALS=/app/your-service-account.json opea-google-translate
+### **3️⃣ Configure Vectorization**
+```yaml
+services:
+  vectorizer_service:
+    image: your-vectorizer-service-image
+    environment:
+      - VECTOR_STORE_PATH=/path/to/vector/store
+    volumes:
+      - /local/path/to/vector/store:/path/to/vector/store
+    networks:
+      - opea_network
 ```
 
 ---

@@ -5,11 +5,6 @@ import os
 
 app = FastAPI()
 
-# Load Google API Key from environment variable
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-if not GOOGLE_API_KEY:
-    raise ValueError("Google API Key is missing. Set GOOGLE_API_KEY environment variable.")
-
 # Initialize Google Translator
 translator = GoogleTranslator()
 

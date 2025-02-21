@@ -1,0 +1,1 @@
+This is a temporary file for setting project development standards.

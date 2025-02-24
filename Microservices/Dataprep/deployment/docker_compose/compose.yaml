@@ -1,5 +1,10 @@
-# Adapted from OPEA-project by Intel Corporation
-# Please visit https://github.com/opea-project
+
+# This file contains code derived from the OPEA project by Intel Corporation
+# available at https://github.com/opea-project
+
+# Copyright 2024 Intel Corporation;
+# Licensed under the Apache License, Version 2.0;
+
 
 include:
   - ../../../third_parties/elasticsearch/deployment/docker_compose/compose.yaml

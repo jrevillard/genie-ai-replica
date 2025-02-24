@@ -1,7 +1,7 @@
 Dataprep microservice
 =====================
 
-This microservice shall be based on the [OPEA Dataprep Microservice](https://github.com/opea-project/GenAIComps/tree/main/comps/dataprep) (see [opea-project](https://github.com/opea-project) on GitHub for more details) and aims to preprocess the data from various sources (either structured or unstructured data) to text data, and ingest that data into a searchable database.
+This repository contains code derived from the [OPEA Dataprep Microservice](https://github.com/opea-project/GenAIComps/tree/main/comps/dataprep) (see [opea-project](https://github.com/opea-project) on GitHub for more details). The microservice aims to preprocess the data from various sources (either structured or unstructured data) to text data, and ingest that data into a searchable database.
 
 Several modifications have been introduced to adapt the original OPEA microservice to the needs and requirements of the ITU Initiative on Open-Source GenAI for Public Services, specifically for the [Multilingual Chatbot for Public Services Discovery use case](https://osaips.atlassian.net/wiki/external/Y2QzYmIyODljZmMzNDBhOGI2NzA5MzBkODUyZDk1NmU):
 

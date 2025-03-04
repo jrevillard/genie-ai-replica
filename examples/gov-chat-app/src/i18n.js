@@ -14,7 +14,8 @@ const messages = {
     },
     sidebar: {
       governmentServices: 'Government Services',
-      chatHistory: 'Chat History'
+      chatHistory: 'Chat History',
+      searchPlaceholder: 'Search services...'
     },
     leftPanel: {
       cat1: {
@@ -249,7 +250,7 @@ const messages = {
   },
 
   // ----------------------------------------------------------------
-  // FRENCH (Complete, approximate)
+  // FRENCH
   fr: {
     brandName: 'Services IA du eGouvernement du Kenya pour les Citoyens',
     nav: {
@@ -259,7 +260,8 @@ const messages = {
     },
     sidebar: {
       governmentServices: 'Services gouvernementaux',
-      chatHistory: 'Historique de conversation'
+      chatHistory: 'Historique de conversation',
+      searchPlaceholder: 'Rechercher un service...'
     },
     leftPanel: {
       cat1: {
@@ -494,7 +496,7 @@ const messages = {
   },
 
   // ----------------------------------------------------------------
-  // SWAHILI (Complete, approximate)
+  // SWAHILI
   sw: {
     brandName: 'Huduma za Kenya eGovernment AI kwa Wananchi',
     nav: {
@@ -504,7 +506,8 @@ const messages = {
     },
     sidebar: {
       governmentServices: 'Huduma za Serikali',
-      chatHistory: 'Historia ya Gumzo'
+      chatHistory: 'Historia ya Gumzo',
+      searchPlaceholder: 'Tafuta huduma...'
     },
     leftPanel: {
       cat1: {
@@ -740,7 +743,7 @@ const messages = {
 }
 
 export default createI18n({
-  locale: 'sw', // or 'en', 'fr' if you prefer
+  locale: 'sw', // or 'en', 'fr'
   fallbackLocale: 'en',
   messages
 })

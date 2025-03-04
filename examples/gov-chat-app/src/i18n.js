@@ -4,7 +4,7 @@ import { createI18n } from 'vue-i18n'
 
 const messages = {
   // ----------------------------------------------------------------
-  // ENGLISH (complete)
+  // ENGLISH
   en: {
     brandName: 'Kenya eGovernment AI Services for Citizens',
     nav: {
@@ -155,7 +155,7 @@ const messages = {
         tab12: '12. Civic & Political Participation'
       },
       fields: {
-        // Tab 1: Personal Identification
+        // Tab 1
         fullName: 'Full name (including aliases)',
         dob: 'Date of birth',
         gender: 'Gender',
@@ -163,27 +163,27 @@ const messages = {
         maritalStatus: 'Marital status',
         photograph: 'Photograph',
         biometric: 'Fingerprints / Biometric data',
-        // Tab 2: Civil Registration
+        // Tab 2
         birthCert: 'Birth certificate',
         deathCert: 'Death certificate',
         marriageDivorce: 'Marriage / Divorce records',
         adoption: 'Adoption records',
         citizenship: 'Citizenship / Naturalization documents',
         immigration: 'Immigration & visa history',
-        // Tab 3: Address & Residency
+        // Tab 3
         currentAddress: 'Current residential address',
         previousAddresses: 'Previous addresses',
         homeOrRental: 'Homeownership or rental details',
         utilityBills: 'Utility bills linked to the address',
         landRecords: 'Land and property ownership records',
-        // Tab 4: Identity & Travel
+        // Tab 4
         idCard: 'National ID card number',
         passport: 'Passport details',
         driversLicense: 'Driver’s license',
         voterId: 'Voter ID',
         ssn: 'Social Security / National Insurance Number',
         militaryRecords: 'Military service records',
-        // Tab 5: Health & Medical
+        // Tab 5
         medicalHistory: 'Medical history and health conditions',
         vaccinations: 'Vaccination records',
         insuranceDetails: 'Health insurance details',
@@ -191,7 +191,7 @@ const messages = {
         organDonor: 'Organ donor status',
         prescriptions: 'Prescriptions and treatments received',
         mentalHealth: 'Mental health history',
-        // Tab 6: Employment & Economic
+        // Tab 6
         eHistory: 'Employment history',
         currentEmployer: 'Current employer details',
         workPermits: 'Work permits and labor contracts',
@@ -199,36 +199,35 @@ const messages = {
         unemployment: 'Unemployment status and benefits received',
         tin: 'Taxpayer identification number (TIN)',
         businessAffiliations: 'Business ownership and company affiliations',
-        // Tab 7: Education & Academic
+        // Tab 7
         schools: 'School and university attended',
         diplomas: 'Diplomas, degrees, and certifications',
         performance: 'Academic performance and test scores',
         scholarships: 'Scholarships and financial aid received',
-        // Tab 8: Financial & Tax
+        // Tab 8
         incomeTax: 'Income tax records',
         bankAccounts: 'Banking and financial accounts',
         propertyTax: 'Property tax payments',
         businessTax: 'Business tax filings',
         pensionContrib: 'Pension contributions and withdrawals',
         loanAid: 'Loan and government aid records',
-        // Tab 9: Social Security & Welfare
+        // Tab 9
         pensionStatus: 'Pension status and contributions',
         childcare: 'Childcare support',
         foodAssistance: 'Food assistance / welfare programs',
         housingAssistance: 'Housing assistance',
-        // We also had "unemployment" & "disability" but those appear in other tabs, so it’s optional if repeated
-        // Tab 10: Criminal & Legal
+        // Tab 10
         policeRecords: 'Police records (criminal history, arrests, charges)',
         courtCases: 'Court case history',
         finesPenalties: 'Fines and penalties',
         paroleProbation: 'Parole or probation status',
         citizenshipRevocation: 'Citizenship revocation (if applicable)',
-        // Tab 11: Transportation & Mobility
+        // Tab 11
         vehicleReg: 'Vehicle registration details',
         trafficViolations: 'Traffic violations and fines',
         licenseHistory: 'Driving license history and endorsements',
         publicTransportCard: 'Public transport card usage',
-        // Tab 12: Civic & Political
+        // Tab 12
         voterRegistration: 'Voter registration details',
         electionHistory: 'Election participation history',
         partyMembership: 'Political party membership',
@@ -250,7 +249,7 @@ const messages = {
   },
 
   // ----------------------------------------------------------------
-  // FRENCH (complete, approximate)
+  // FRENCH (Complete, approximate)
   fr: {
     brandName: 'Services IA du eGouvernement du Kenya pour les Citoyens',
     nav: {
@@ -495,7 +494,7 @@ const messages = {
   },
 
   // ----------------------------------------------------------------
-  // SWAHILI (complete, approximate)
+  // SWAHILI (Complete, approximate)
   sw: {
     brandName: 'Huduma za Kenya eGovernment AI kwa Wananchi',
     nav: {
@@ -741,8 +740,7 @@ const messages = {
 }
 
 export default createI18n({
-  // If you want Swahili by default, set this to 'sw'; otherwise 'en'.
-  locale: 'sw',
+  locale: 'sw', // or 'en', 'fr' if you prefer
   fallbackLocale: 'en',
   messages
 })

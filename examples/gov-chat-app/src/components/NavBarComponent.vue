@@ -1,8 +1,8 @@
-<!-- src/components/NavBarComponent.vue -->
+<!-- NavBarComponent.vue -->
 <template>
   <header class="nav-bar">
     <div class="nav-left">
-      <!-- Hamburger toggles sidebar -->
+      <!-- Hamburger toggles the sidebar -->
       <button class="icon-btn" @click="$emit('toggleSidebar')">
         <img
           :alt="$t('nav.menu')"
@@ -19,6 +19,7 @@
     </div>
 
     <div class="nav-center">
+      <!-- Language selector -->
       <select v-model="$i18n.locale" class="lang-select">
         <option value="en">English</option>
         <option value="fr">Français</option>
@@ -28,14 +29,22 @@
 
     <div class="nav-right">
       <!-- Analytics -->
-      <button class="icon-btn" @click="showAnalytics = true" :title="$t('nav.analytics')">
+      <button
+        class="icon-btn"
+        @click="showAnalytics = true"
+        :title="$t('nav.analytics')"
+      >
         <img
           :alt="$t('nav.analytics')"
           src="@/assets/analytics.svg"
         />
       </button>
-      <!-- User profile -->
-      <button class="icon-btn" @click="showUserProfile = true" :title="$t('nav.userProfile')">
+      <!-- User Profile -->
+      <button
+        class="icon-btn"
+        @click="showUserProfile = true"
+        :title="$t('nav.userProfile')"
+      >
         <img
           :alt="$t('nav.userProfile')"
           src="@/assets/user.svg"
@@ -43,11 +52,13 @@
       </button>
     </div>
 
+    <!-- The REAL analytics dialog, not the placeholder -->
     <analytics-component
       v-if="showAnalytics"
       @close="showAnalytics = false"
     />
 
+    <!-- The 12-tab user profile -->
     <user-profile-component
       v-if="showUserProfile"
       @cancel="showUserProfile = false"
@@ -97,7 +108,6 @@ export default {
   align-items: center;
 }
 
-/* Force icon sizes so no global CSS can blow them up */
 .icon-btn img {
   width: 24px !important;
   height: 24px !important;
@@ -121,6 +131,7 @@ export default {
   display: flex;
   justify-content: center;
 }
+
 .lang-select {
   padding: 4px 6px;
   border: 1px solid #ccc;

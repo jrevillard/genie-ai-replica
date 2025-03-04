@@ -1,4 +1,4 @@
-<!-- src/components/AnalyticsComponent.vue -->
+<!-- AnalyticsComponent.vue -->
 <template>
   <div class="analytics-dialog">
     <div class="overlay" @click="closeDialog"></div>
@@ -23,8 +23,6 @@
         </ul>
       </div>
 
-      <analytics-chart-placeholder />
-
       <div class="actions">
         <button @click="closeDialog">{{ $t('analytics.close') }}</button>
       </div>
@@ -33,11 +31,8 @@
 </template>
 
 <script>
-import AnalyticsChartPlaceholder from './AnalyticsChartPlaceholder.vue'
-
 export default {
   name: 'AnalyticsComponent',
-  components: { AnalyticsChartPlaceholder },
   methods: {
     closeDialog() {
       this.$emit('close')
@@ -50,14 +45,19 @@ export default {
 .analytics-dialog {
   position: fixed;
   top: 0; left: 0;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   z-index: 9999;
 }
+
+/* Dark overlay behind the dialog */
 .overlay {
   position: absolute;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   background: rgba(0,0,0,0.5);
 }
+
 .dialog-content {
   position: relative;
   background: #fff;
@@ -66,16 +66,22 @@ export default {
   margin: 60px auto;
   padding: 20px;
   border-radius: 8px;
+  /* Force black text in case a global style sets color: #fff */
+  color: #000 !important;
 }
+
 .note {
   margin-bottom: 16px;
 }
+
 .section {
   margin-bottom: 16px;
 }
+
 .actions {
   text-align: right;
 }
+
 .actions button {
   padding: 8px 16px;
   border: none;
@@ -84,6 +90,7 @@ export default {
   color: #fff;
   cursor: pointer;
 }
+
 .actions button:hover {
   background: #3a7da0;
 }

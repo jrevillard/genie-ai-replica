@@ -1,6 +1,7 @@
 <!-- ChatBotComponent.vue -->
 <template>
   <div class="chatbot-container">
+    <!-- The scrollable chat window -->
     <div class="chat-window" ref="chatWindow">
       <div
         v-for="(msg, index) in chatMessages"
@@ -11,12 +12,14 @@
         <div class="message-bubble">
           <span>{{ msg.content }}</span>
         </div>
+        <!-- Feedback for bot messages -->
         <div v-if="msg.sender === 'bot'" class="feedback-trigger">
           <button @click="openFeedbackDialog(index)">Feedback</button>
         </div>
       </div>
     </div>
 
+    <!-- Input row at bottom -->
     <div class="chat-input">
       <textarea
         v-model="newMessage"
@@ -42,10 +45,11 @@
         </div>
       </div>
 
-      <button class="send-btn" @click="sendMessage">{{ $t('chatbot.sendButton') }}</button>
+      <button class="send-btn" @click="sendMessage">
+        {{ $t('chatbot.sendButton') }}
+      </button>
     </div>
 
-    <!-- Feedback dialog, etc. -->
     <chat-response-feedback-dialog
       :visible="feedbackDialog.visible"
       :message="feedbackDialog.message"
@@ -80,7 +84,7 @@ export default {
     }
   },
   mounted() {
-    this.scrollToBottom()
+    this.scrollToBottom(true)
   },
   watch: {
     chatMessages() {
@@ -150,15 +154,19 @@ export default {
     },
     handleFeedbackSubmit(feedback) {
       console.log('Feedback submitted:', feedback)
-      // e.g. axios.post('/api/feedback', feedback)
     },
-    scrollToBottom() {
+    scrollToBottom(force = false) {
+      console.log(`[scrollToBottom] triggered, force=${force}`)
       this.$nextTick(() => {
-        // short delay so images, PDFs, etc. can size
         setTimeout(() => {
           const container = this.$refs.chatWindow
           if (container) {
             container.scrollTop = container.scrollHeight
+            console.log('[scrollToBottom] after set scrollTop', {
+              offsetHeight: container.offsetHeight,
+              scrollHeight: container.scrollHeight,
+              scrollTop: container.scrollTop
+            })
           }
         }, 100)
       })
@@ -200,7 +208,16 @@ export default {
   border-radius: 16px;
   max-width: 60%;
   line-height: 1.4;
+
+  /* Ensure long text/code wraps */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+
+  /* Optionally limit bubble height */
+  /* max-height: 300px;
+     overflow-y: auto; */
 }
+
 .chat-message.user .message-bubble {
   background: #4e97d1;
   color: #fff;

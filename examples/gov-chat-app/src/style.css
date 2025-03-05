@@ -70,3 +70,16 @@ h1 {
   margin: 0.5rem 0;
 }
 
+/* ------------------------------------------------------------------- */
+/* OVERRIDE BLOCK: Force certain classes to use Arial, ignoring local scope */
+.nav-bar,
+.side-bar,
+.service-tree-panel,
+.node-label,
+.nav-left,
+.nav-right,
+.brand-name,
+.brand-logo {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+

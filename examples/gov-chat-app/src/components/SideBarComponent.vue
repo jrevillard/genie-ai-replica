@@ -1,46 +1,65 @@
-<!-- src/components/SideBarComponent.vue -->
+<!-- SideBarComponent.vue -->
 <template>
+  <!-- 
+    We add :class="{ 'side-bar-open': isOpen }" 
+    so the sidebar can expand/collapse based on the isOpen prop 
+  -->
   <aside class="side-bar" :class="{ 'side-bar-open': isOpen }">
     <div class="sidebar-inner">
+      <!-- 
+        Preserve all your existing child components/features here 
+        (e.g., the service tree, chat history, etc.). 
+        For example:
+      -->
       <service-tree-panel-component />
-
-      <h3>{{ $t('sidebar.chatHistory') }}</h3>
-      <ul>
-        <li>Tax Inquiry 2025-02-27</li>
-        <li>Fire Safety 2025-02-26</li>
-      </ul>
+      <chat-history-component />
     </div>
   </aside>
 </template>
 
 <script>
 import ServiceTreePanelComponent from './ServiceTreePanelComponent.vue'
+import ChatHistoryComponent from './ChatHistoryComponent.vue'
 
 export default {
   name: 'SideBarComponent',
   components: {
-    ServiceTreePanelComponent
+    ServiceTreePanelComponent,
+    ChatHistoryComponent
   },
   props: {
-    isOpen: { type: Boolean, default: true }
+    // The boolean prop that toggles open/closed 
+    isOpen: {
+      type: Boolean,
+      default: true
+    }
   }
 }
 </script>
 
 <style scoped>
+/* 
+  Your existing CSS, plus 
+  the .side-bar-open class for toggling 
+*/
 .side-bar {
   width: 300px;
-  background: #fff;
+  background: #ffffff;
   border-right: 1px solid #ddd;
   height: 100%;
   overflow-y: auto;
   transition: transform 0.3s ease, width 0.3s ease;
 }
 
+/* The inner container for your components */
 .sidebar-inner {
   padding: 10px;
 }
 
+/* 
+  For mobile: position absolute, 
+  transform to hide it if !isOpen
+*/
 @media screen and (max-width: 768px) {
   .side-bar {
     position: absolute;
@@ -54,10 +73,14 @@ export default {
   }
 }
 
+/* 
+  For desktop: 
+  either transform(0) or set width=0 if not open 
+*/
 @media screen and (min-width: 769px) {
   .side-bar {
     transform: translateX(0);
-    width: 250px;
+    width: 250px; /* or 300px, if you prefer */
   }
   .side-bar:not(.side-bar-open) {
     width: 0;

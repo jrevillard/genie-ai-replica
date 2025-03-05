@@ -2,91 +2,48 @@
 <template>
   <header class="nav-bar">
     <div class="nav-left">
-      <!-- Hamburger toggles the sidebar -->
+      <!-- HAMBURGER: restore toggling the sidebar -->
       <button class="icon-btn" @click="$emit('toggleSidebar')">
-        <img
-          :alt="$t('nav.menu')"
-          src="@/assets/menu.svg"
-        />
+        <img src="@/assets/menu.svg" alt="Menu" />
       </button>
 
-      <img
-        class="brand-logo"
-        src="@/assets/brand-logo.png"
-        :alt="$t('brandName')"
-      />
+      <!-- Brand text or logo (unchanged) -->
       <h1 class="brand-name">{{ $t('brandName') }}</h1>
     </div>
 
+    <!-- Center area: your language dropdown or nothing -->
     <div class="nav-center">
-      <!-- Language selector -->
-      <select v-model="$i18n.locale" class="lang-select">
+      <select v-model="currentLocale" @change="changeLocale">
         <option value="en">English</option>
         <option value="fr">Français</option>
         <option value="sw">Kiswahili</option>
       </select>
     </div>
 
+    <!-- Right side: analytics + user profile buttons -->
     <div class="nav-right">
-      <!-- Analytics -->
-      <button
-        class="icon-btn"
-        @click="showAnalytics = true"
-        :title="$t('nav.analytics')"
-      >
-        <img
-          :alt="$t('nav.analytics')"
-          src="@/assets/analytics.svg"
-        />
+      <button class="icon-btn" @click="$emit('openAnalytics')">
+        <img src="@/assets/analytics.svg" alt="Analytics" />
       </button>
-      <!-- User Profile -->
-      <button
-        class="icon-btn"
-        @click="showUserProfile = true"
-        :title="$t('nav.userProfile')"
-      >
-        <img
-          :alt="$t('nav.userProfile')"
-          src="@/assets/user.svg"
-        />
+      <button class="icon-btn" @click="$emit('openProfile')">
+        <img src="@/assets/user.svg" alt="User Profile" />
       </button>
     </div>
-
-    <!-- The REAL analytics dialog, not the placeholder -->
-    <analytics-component
-      v-if="showAnalytics"
-      @close="showAnalytics = false"
-    />
-
-    <!-- The 12-tab user profile -->
-    <user-profile-component
-      v-if="showUserProfile"
-      @cancel="showUserProfile = false"
-      @save="handleProfileSave"
-    />
   </header>
 </template>
 
 <script>
-import AnalyticsComponent from './AnalyticsComponent.vue'
-import UserProfileComponent from './UserProfileComponent.vue'
-
 export default {
   name: 'NavBarComponent',
-  components: {
-    AnalyticsComponent,
-    UserProfileComponent
-  },
+  emits: ['toggleSidebar', 'openAnalytics', 'openProfile'],
   data() {
     return {
-      showAnalytics: false,
-      showUserProfile: false
+      currentLocale: this.$i18n.locale
     }
   },
   methods: {
-    handleProfileSave(profileData) {
-      console.log('Profile saved:', profileData)
-      this.showUserProfile = false
+    changeLocale() {
+      this.$i18n.locale = this.currentLocale
     }
   }
 }
@@ -96,61 +53,51 @@ export default {
 .nav-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   background: linear-gradient(135deg, #4E97D1, #3A7DA0);
   color: #fff;
-  padding: 0 16px;
   height: 60px;
+  padding: 0 16px;
 }
 
-.nav-left {
+.nav-left,
+.nav-center,
+.nav-right {
   display: flex;
   align-items: center;
 }
 
-.icon-btn img {
-  width: 24px !important;
-  height: 24px !important;
-}
-
-.brand-logo {
-  width: auto !important;
-  height: 40px !important;
-  margin-left: 10px;
-  margin-right: 10px;
-}
-
-.brand-name {
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 0;
-}
-
 .nav-center {
   flex: 1;
-  display: flex;
   justify-content: center;
 }
 
-.lang-select {
+.brand-name {
+  margin-left: 12px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.icon-btn img {
+  width: 24px;
+  height: 24px;
+}
+
+/* Language dropdown styling if needed */
+select {
   padding: 4px 6px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  cursor: pointer;
-  background: #fff;
-  color: #333;
-}
-
-.nav-right .icon-btn {
   margin-left: 8px;
-  background: #eee;
-  color: #333;
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: none;
-}
-.nav-right .icon-btn:hover {
-  background: #ccc;
+  font-size: 0.9rem;
+  color: #000;
+  background: #fff;
+  cursor: pointer;
 }
 </style>
 

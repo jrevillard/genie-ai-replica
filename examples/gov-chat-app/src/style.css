@@ -71,7 +71,7 @@ h1 {
 }
 
 /* ------------------------------------------------------------------- */
-/* OVERRIDE BLOCK: Force certain classes to use Arial, ignoring local scope */
+/* EXISTING OVERRIDE BLOCK: Force certain classes to use Arial, ignoring local scope */
 .nav-bar,
 .side-bar,
 .service-tree-panel,
@@ -80,6 +80,22 @@ h1 {
 .nav-right,
 .brand-name,
 .brand-logo {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+/* ------------------------------------------------------------------- */
+/* NEW OVERRIDE BLOCK: Target the specific data-v attributes 
+   from your devtools for the nav bar and service tree. */
+
+[node-v-5d5c126d],
+[data-v-5d5c126d],
+[node-v-5d5c126d] * {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+[node-v-9c4dc7a8],
+[data-v-9c4dc7a8],
+[node-v-9c4dc7a8] * {
   font-family: Arial, Helvetica, sans-serif !important;
 }
 

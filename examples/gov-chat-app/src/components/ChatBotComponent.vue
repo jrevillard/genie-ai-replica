@@ -12,7 +12,7 @@
           <span>{{ msg.content }}</span>
         </div>
         <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-          <button @click="openFeedback(index)">Feedback</button>
+          <button @click="openFeedbackDialog(index)">Feedback</button>
         </div>
       </div>
     </div>
@@ -21,7 +21,7 @@
       <textarea
         v-model="newMessage"
         class="prompt-textarea"
-        rows="3"
+        rows="4"
         :placeholder="$t('chatbot.placeholder')"
         @keyup.enter.exact.prevent="sendMessage"
       ></textarea>
@@ -44,20 +44,34 @@
 
       <button class="send-btn" @click="sendMessage">{{ $t('chatbot.sendButton') }}</button>
     </div>
+
+    <!-- Feedback dialog, etc. -->
+    <chat-response-feedback-dialog
+      :visible="feedbackDialog.visible"
+      :message="feedbackDialog.message"
+      @close="feedbackDialog.visible = false"
+      @submit="handleFeedbackSubmit"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios'
+import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 
 export default {
   name: 'ChatBotComponent',
+  components: { ChatResponseFeedbackDialog },
   data() {
     return {
       chatMessages: [],
       newMessage: '',
       selectedFile: null,
-      filePreview: null
+      filePreview: null,
+      feedbackDialog: {
+        visible: false,
+        message: null
+      }
     }
   },
   computed: {
@@ -65,17 +79,12 @@ export default {
       return this.filePreview && this.filePreview.startsWith('blob:')
     }
   },
+  mounted() {
+    this.scrollToBottom()
+  },
   watch: {
-    chatMessages: {
-      handler() {
-        this.$nextTick(() => {
-          const container = this.$refs.chatWindow
-          if (container) {
-            container.scrollTop = container.scrollHeight
-          }
-        })
-      },
-      deep: true
+    chatMessages() {
+      this.scrollToBottom()
     }
   },
   methods: {
@@ -83,6 +92,7 @@ export default {
       const file = e.target.files[0]
       if (!file) return
       this.selectedFile = file
+
       if (file.type.includes('image')) {
         this.filePreview = URL.createObjectURL(file)
       } else if (file.type === 'application/pdf') {
@@ -96,7 +106,6 @@ export default {
     sendMessage() {
       const content = this.newMessage.trim()
       if (content) {
-        // user message
         this.chatMessages.push({ sender: 'user', content })
       }
       this.newMessage = ''
@@ -106,10 +115,16 @@ export default {
         formData.append('file', this.selectedFile)
         axios.post('/api/upload', formData)
           .then(() => {
-            this.chatMessages.push({ sender: 'bot', content: this.$t('chatbot.fileReceived') })
+            this.chatMessages.push({
+              sender: 'bot',
+              content: this.$t('chatbot.fileReceived')
+            })
           })
           .catch(() => {
-            this.chatMessages.push({ sender: 'bot', content: this.$t('chatbot.fileUploadError') })
+            this.chatMessages.push({
+              sender: 'bot',
+              content: this.$t('chatbot.fileUploadError')
+            })
           })
       }
 
@@ -119,14 +134,34 @@ export default {
             this.chatMessages.push({ sender: 'bot', content: res.data.reply })
           })
           .catch(() => {
-            this.chatMessages.push({ sender: 'bot', content: this.$t('chatbot.processingError') })
+            this.chatMessages.push({
+              sender: 'bot',
+              content: this.$t('chatbot.processingError')
+            })
           })
       }
 
       this.removeFile()
     },
-    openFeedback(index) {
-      alert(`Feedback for message #${index}`)
+    openFeedbackDialog(index) {
+      const botMessage = this.chatMessages[index]
+      this.feedbackDialog.visible = true
+      this.feedbackDialog.message = botMessage
+    },
+    handleFeedbackSubmit(feedback) {
+      console.log('Feedback submitted:', feedback)
+      // e.g. axios.post('/api/feedback', feedback)
+    },
+    scrollToBottom() {
+      this.$nextTick(() => {
+        // short delay so images, PDFs, etc. can size
+        setTimeout(() => {
+          const container = this.$refs.chatWindow
+          if (container) {
+            container.scrollTop = container.scrollHeight
+          }
+        }, 100)
+      })
     }
   }
 }
@@ -136,39 +171,41 @@ export default {
 .chatbot-container {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  overflow: hidden;
+  height: 100%;
+  min-height: 0;
 }
+
 .chat-window {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
   padding: 10px;
   background: #fafafa;
 }
+
 .chat-message {
   margin-bottom: 8px;
   display: flex;
   align-items: flex-start;
+}
+.chat-message.user {
+  justify-content: flex-end;
+}
+.chat-message.bot {
   justify-content: flex-start;
+}
+.message-bubble {
+  background: #e5e5ea;
+  color: #000;
+  padding: 8px 12px;
+  border-radius: 16px;
+  max-width: 60%;
+  line-height: 1.4;
 }
 .chat-message.user .message-bubble {
   background: #4e97d1;
   color: #fff;
 }
-.chat-message.bot .message-bubble {
-  background: #e5e5ea;
-  color: #000;
-}
-.message-bubble {
-  padding: 8px 12px;
-  border-radius: 16px;
-  line-height: 1.4;
-  max-width: 80%;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
+
 .feedback-trigger {
   margin-left: 8px;
   align-self: center;
@@ -184,6 +221,7 @@ export default {
 .feedback-trigger button:hover {
   background: #bbb;
 }
+
 .chat-input {
   display: flex;
   background: #fff;

@@ -12,6 +12,39 @@
         <div class="message-text">{{ message?.content }}</div>
       </div>
 
+      <!-- Thumbs up/down options with SVG icons -->
+      <div class="thumbs-container">
+        <button 
+          @click="selectThumbFeedback('up')" 
+          class="thumb-button" 
+          :class="{ 'selected': thumbFeedback === 'up' }"
+          :aria-label="$t('feedback.positive')"
+        >
+          <!-- SVG Thumbs Up -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="thumb-icon">
+            <path d="M7 10v12"></path>
+            <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"></path>
+          </svg>
+          <span class="thumb-label">{{ $t('feedback.positive') }}</span>
+        </button>
+        
+        <button 
+          @click="selectThumbFeedback('down')" 
+          class="thumb-button"
+          :class="{ 'selected': thumbFeedback === 'down' }"
+          :aria-label="$t('feedback.negative')"
+        >
+          <!-- SVG Thumbs Down -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="thumb-icon">
+            <path d="M17 14V2"></path>
+            <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z"></path>
+          </svg>
+          <span class="thumb-label">{{ $t('feedback.negative') }}</span>
+        </button>
+      </div>
+
+      <!-- Rating scale section -->
+      <p class="rating-title">{{ $t('feedback.promptText') }}</p>
       <div class="rating-group">
         <label
           v-for="rating in 5"
@@ -41,7 +74,7 @@
         <button 
           class="submit-btn" 
           @click="submitFeedback"
-          :disabled="!selectedRating"
+          :disabled="!(selectedRating || thumbFeedback)"
         >
           {{ $t('responseRating.submit') }}
         </button>
@@ -63,21 +96,34 @@ export default {
   data() {
     return {
       selectedRating: null,
+      thumbFeedback: null,
       feedbackText: ''
     }
   },
   methods: {
     closeDialog() {
       this.selectedRating = null;
+      this.thumbFeedback = null;
       this.feedbackText = '';
       this.$emit('close');
     },
+    selectThumbFeedback(type) {
+      this.thumbFeedback = type;
+      
+      // Auto-set rating based on thumb selection (optional)
+      if (type === 'up') {
+        this.selectedRating = 4; // Default "up" to a 4 rating
+      } else if (type === 'down') {
+        this.selectedRating = 2; // Default "down" to a 2 rating
+      }
+    },
     submitFeedback() {
-      // Validate that a rating is selected
-      if (!this.selectedRating) return;
+      // Validate that either a rating or thumb feedback is selected
+      if (!this.selectedRating && !this.thumbFeedback) return;
       
       this.$emit('submit', {
         rating: this.selectedRating,
+        thumbFeedback: this.thumbFeedback,
         text: this.feedbackText,
         message: this.message
       });
@@ -106,11 +152,11 @@ export default {
     };
     document.addEventListener('keydown', this.escHandler);
     
-    // Focus the first rating option when dialog opens
+    // Focus the first thumbs button when dialog opens
     this.$nextTick(() => {
       if (this.visible) {
-        const firstRadio = this.$el.querySelector('input[type="radio"]');
-        if (firstRadio) firstRadio.focus();
+        const firstButton = this.$el.querySelector('.thumb-button');
+        if (firstButton) firstButton.focus();
       }
     });
   },
@@ -122,12 +168,13 @@ export default {
       if (newVal) {
         // Reset state when dialog is opened
         this.selectedRating = null;
+        this.thumbFeedback = null;
         this.feedbackText = '';
         
         // Focus management
         this.$nextTick(() => {
-          const firstRadio = this.$el.querySelector('input[type="radio"]');
-          if (firstRadio) firstRadio.focus();
+          const firstButton = this.$el.querySelector('.thumb-button');
+          if (firstButton) firstButton.focus();
         });
       }
     }
@@ -181,11 +228,65 @@ h4 {
   padding: 12px;
   border-radius: 8px;
   margin-top: 4px;
-  max-height: 150px;
+  max-height: 120px;
   overflow-y: auto;
   font-size: 0.95rem;
   color: #444;
   border-left: 3px solid #e0e0e0;
+}
+
+/* Thumbs up/down section */
+.thumbs-container {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.thumb-button {
+  background: #f5f9ff;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 120px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.thumb-button .thumb-icon {
+  margin-bottom: 8px;
+  color: #555;
+  transition: color 0.2s ease;
+}
+.thumb-button .thumb-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+}
+.thumb-button:hover {
+  border-color: #bbbbbb;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.thumb-button.selected {
+  border-color: #4a90e2;
+  background-color: #f0f7ff;
+}
+.thumb-button.selected .thumb-icon {
+  color: #4a90e2;
+}
+.thumb-button.selected .thumb-label {
+  color: #4a90e2;
+  font-weight: 600;
+}
+
+/* Rating section */
+.rating-title {
+  font-weight: 500;
+  color: #555;
+  margin: 0 0 12px;
+  text-align: center;
 }
 .rating-group {
   display: flex;
@@ -196,7 +297,7 @@ h4 {
 .rating-option {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 12px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   cursor: pointer;
@@ -298,6 +399,23 @@ h4 {
   
   h4 {
     font-size: 18px;
+  }
+  
+  .thumbs-container {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .thumb-button {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    width: 100%;
+  }
+  
+  .thumb-button .thumb-icon {
+    margin-right: 12px;
+    margin-bottom: 0;
   }
   
   .actions {

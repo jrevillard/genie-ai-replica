@@ -21,10 +21,10 @@
           <span v-if="hasChildren(node.catKey)" class="toggle-icon">
             {{ node.expanded ? '▼' : '▶' }}
           </span>
-          <!-- Category name with highlight -->
+          <!-- Category name with highlight and without numbers -->
           <span
             class="node-name"
-            v-html="highlightMatch(getCatName(node.catKey), searchQuery)"
+            v-html="highlightMatch(removeNumberPrefix(getCatName(node.catKey)), searchQuery)"
           ></span>
         </div>
 
@@ -81,7 +81,7 @@ export default {
   },
   mounted() {
     // Debug: confirm which locale is active
-    console.log("ServiceTreePanel - mounted. Current locale:", this.$i18n.locale)
+    console.log("ServiceTreePanel - mounted. Current locale:", this.$i18n.locale);
 
     // Prefetch all category data to ensure it's available
     this.prefetchCategoryData();
@@ -114,6 +114,13 @@ export default {
           console.log(`${node.catKey} has ${children.length} children:`, children);
         }
       });
+    },
+
+    // Remove the number prefix from category names (e.g., "1. Identity & Civil Registration" -> "Identity & Civil Registration")
+    removeNumberPrefix(text) {
+      if (!text) return '';
+      // This regex matches patterns like "1. ", "12. ", etc., at the beginning of the string
+      return text.replace(/^\d+\.\s*/, '');
     },
 
     // Toggle expand/collapse for a node
@@ -195,7 +202,8 @@ export default {
       const q = this.searchQuery.trim().toLowerCase();
 
       this.nodes.forEach((node) => {
-        const catName = this.getCatName(node.catKey).toLowerCase();
+        // Use category name without number prefix for search
+        const catName = this.removeNumberPrefix(this.getCatName(node.catKey)).toLowerCase();
         const childList = this.getCatChildren(node.catKey).map(c => c.toLowerCase());
 
         if (!q) {

@@ -3,11 +3,9 @@
  * 
  * Full file, including:
  * - Importing your App.vue, router, and i18n.js
- * - Forcing the locale to "sw" (or change it to "en"/"fr" if you want)
- * - Logging all messages for each locale
+ * - Setting up locale based on user preference or browser
+ * - Logging all messages for each locale (only in development mode)
  * - Logging the active locale before and after mount
- * 
- * Nothing else is changed except these debug statements.
  *****************************************************************************************************/
 
 import { createApp } from 'vue'
@@ -15,28 +13,67 @@ import App from './App.vue'
 import router from './router'
 import i18n from './i18n.js'
 
-// 1) Force the locale to "sw" for debugging. 
-//    Change it to "en" or "fr" if you prefer.
-i18n.global.locale = 'sw'
+// Determine the initial locale - prioritize:
+// 1. Previously saved user preference
+// 2. Browser language
+// 3. Default to 'en'
+const getSavedLocale = () => {
+  try {
+    return localStorage.getItem('userLocale')
+  } catch (e) {
+    console.warn('Unable to access localStorage:', e)
+    return null
+  }
+}
 
-// 2) Log the entire messages for "en", "fr", and "sw".
-console.log("All messages in 'en':", i18n.global.getLocaleMessage('en'))
-console.log("All messages in 'fr':", i18n.global.getLocaleMessage('fr'))
-console.log("All messages in 'sw':", i18n.global.getLocaleMessage('sw'))
+const getBrowserLocale = () => {
+  // Get browser language (e.g. 'en-US' -> 'en')
+  const browserLang = navigator.language || navigator.userLanguage
+  const shortLang = browserLang.split('-')[0]
+  
+  // Check if we support this language
+  const supportedLocales = ['en', 'fr', 'sw']
+  return supportedLocales.includes(shortLang) ? shortLang : null
+}
 
-// 3) Check which locale is active now
-console.log("Active locale (forced):", i18n.global.locale)
+// Set the initial locale based on our prioritization logic
+const savedLocale = getSavedLocale()
+const browserLocale = getBrowserLocale()
+const initialLocale = savedLocale || browserLocale || 'en'
 
-// 4) Create the Vue app
+i18n.global.locale = initialLocale
+
+// Log information only in development mode
+if (process.env.NODE_ENV === 'development') {
+  console.log("Available messages:", {
+    'en': i18n.global.getLocaleMessage('en'),
+    'fr': i18n.global.getLocaleMessage('fr'),
+    'sw': i18n.global.getLocaleMessage('sw')
+  })
+  console.log("Active locale:", i18n.global.locale)
+}
+
+// Create the Vue app
 const app = createApp(App)
 
-// 5) Use router + i18n (if you have a router)
+// Use router + i18n
 app.use(router)
 app.use(i18n)
 
-// 6) Mount the app
+// Create a global method for changing locale
+app.config.globalProperties.$setLocale = function(locale) {
+  i18n.global.locale = locale
+  try {
+    localStorage.setItem('userLocale', locale)
+  } catch (e) {
+    console.warn('Unable to save locale preference:', e)
+  }
+}
+
+// Mount the app
 app.mount('#app')
 
-// 7) (Optional) Log the active locale after mount
-console.log("Active locale (after mount):", i18n.global.locale)
-
+// Log active locale after mount (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log("Active locale (after mount):", i18n.global.locale)
+}

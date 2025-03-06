@@ -1,16 +1,8 @@
 <!-- SideBarComponent.vue -->
 <template>
-  <!-- 
-    We add :class="{ 'side-bar-open': isOpen }" 
-    so the sidebar can expand/collapse based on the isOpen prop 
-  -->
   <aside class="side-bar" :class="{ 'side-bar-open': isOpen }">
     <div class="sidebar-inner">
-      <!-- 
-        Preserve all your existing child components/features here 
-        (e.g., the service tree, chat history, etc.). 
-        For example:
-      -->
+      <!-- Keep your existing child components (service tree, chat history, etc.) -->
       <service-tree-panel-component />
       <chat-history-component />
     </div>
@@ -28,20 +20,12 @@ export default {
     ChatHistoryComponent
   },
   props: {
-    // The boolean prop that toggles open/closed 
-    isOpen: {
-      type: Boolean,
-      default: true
-    }
+    isOpen: { type: Boolean, default: true }
   }
 }
 </script>
 
 <style scoped>
-/* 
-  Your existing CSS, plus 
-  the .side-bar-open class for toggling 
-*/
 .side-bar {
   width: 300px;
   background: #ffffff;
@@ -51,15 +35,11 @@ export default {
   transition: transform 0.3s ease, width 0.3s ease;
 }
 
-/* The inner container for your components */
 .sidebar-inner {
   padding: 10px;
 }
 
-/* 
-  For mobile: position absolute, 
-  transform to hide it if !isOpen
-*/
+/* Mobile: offscreen unless side-bar-open is set */
 @media screen and (max-width: 768px) {
   .side-bar {
     position: absolute;
@@ -73,14 +53,11 @@ export default {
   }
 }
 
-/* 
-  For desktop: 
-  either transform(0) or set width=0 if not open 
-*/
+/* Desktop: if not open, set width=0 or transform */
 @media screen and (min-width: 769px) {
   .side-bar {
     transform: translateX(0);
-    width: 250px; /* or 300px, if you prefer */
+    width: 250px;
   }
   .side-bar:not(.side-bar-open) {
     width: 0;

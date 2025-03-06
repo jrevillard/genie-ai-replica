@@ -10,7 +10,10 @@ const messages = {
     nav: {
       menu: 'Menu',
       analytics: 'Analytics',
-      userProfile: 'User Profile'
+      userProfile: 'User Profile',
+      settings: 'Settings',
+      logout: 'Log Out',
+      profile: 'My Profile'
     },
     sidebar: {
       governmentServices: 'Government Services',
@@ -77,7 +80,7 @@ const messages = {
       cat7: {
         name: '7. Transportation & Mobility',
         children: [
-          'Driver’s licenses and vehicle registration',
+          "Driver's licenses and vehicle registration",
           'Public transit and infrastructure',
           'Traffic violations and fines',
           'Road safety programs'
@@ -132,9 +135,55 @@ const messages = {
     analytics: {
       title: 'Data Analytics & Insights',
       note: 'Below are usage stats and user feedback summaries.',
-      usageStats: 'Usage Stats',
+      usageStats: 'Usage Statistics',
+      totalQueries: 'Total Queries',
+      avgResponseTime: 'Avg Response Time',
+      peakUsers: 'Peak Concurrent Users',
+      activeChats: 'Active Chats',
+      usageTrend: 'Usage Trend',
+      topQueries: 'Top Queries',
       feedbackSamples: 'User Feedback Samples',
-      close: 'Close'
+      close: 'Close',
+      loading: 'Loading analytics data...',
+      chartComingSoon: 'Interactive chart visualization coming soon...',
+      error: 'Failed to load analytics data',
+      retry: 'Retry',
+      dailyQueries: 'Daily Queries',
+      export: 'Export Data',
+      dateRange: 'Date Range',
+      startDate: 'Start Date',
+      endDate: 'End Date'
+    },
+    settings: {
+      title: 'Settings',
+      save: 'Save Settings',
+      close: 'Close',
+      saveSuccess: 'Settings saved successfully',
+      saveError: 'Error saving settings',
+      language: {
+        title: 'Language',
+        selectLabel: 'Display Language',
+      },
+      appearance: {
+        title: 'Appearance',
+        theme: 'Theme',
+        lightTheme: 'Light',
+        darkTheme: 'Dark',
+        systemTheme: 'System',
+        fontSize: 'Font Size'
+      },
+      notifications: {
+        title: 'Notifications',
+        emailUpdates: 'Email updates',
+        soundEnabled: 'Sound notifications'
+      },
+      account: {
+        title: 'Account',
+        resetUserData: 'Reset User Data',
+        resetDescription: 'This will clear all your profile data and chat history.',
+        confirmReset: 'Are you sure you want to reset all your data? This cannot be undone.',
+        resetComplete: 'Your data has been reset.'
+      }
     },
     userProfile: {
       title: 'User Profile',
@@ -180,7 +229,7 @@ const messages = {
         // Tab 4
         idCard: 'National ID card number',
         passport: 'Passport details',
-        driversLicense: 'Driver’s license',
+        driversLicense: "Driver's license",
         voterId: 'Voter ID',
         ssn: 'Social Security / National Insurance Number',
         militaryRecords: 'Military service records',
@@ -237,15 +286,58 @@ const messages = {
       },
       actions: {
         cancel: 'Cancel',
-        save: 'Save Profile'
-      }
+        save: 'Save Profile',
+        previous: 'Previous',
+        next: 'Next',
+        saving: 'Saving...'
+      },
+      tabComingSoon: 'This tab is under development and will be available soon.',
+      saveSuccess: 'Profile saved successfully',
+      loadError: 'Error loading profile data',
+      saveError: 'Error saving profile data',
+      confirmCancel: 'You have unsaved changes. Are you sure you want to cancel?',
+      uploadPhoto: 'Upload Photo',
+      uploadFile: 'Upload File',
+      photoRequirements: 'Photo must be clear, recent, and show your full face',
+      biometricRequirements: 'Only official biometric data files are accepted',
+      requiredFields: 'Required fields',
+      documentUpload: 'Document Upload',
+      validationTitle: 'Please correct the following errors:',
+      completionStatus: '{percent}% complete',
+      validation: {
+        nameRequired: 'Full name is required',
+        dobRequired: 'Date of birth is required',
+        dobFuture: 'Date of birth cannot be in the future'
+      },
+      placeholders: {
+        fullName: 'Enter your full legal name',
+        nationality: 'Enter your nationality'
+      },
+      gender: {
+        male: 'Male',
+        female: 'Female',
+        other: 'Other',
+        preferNot: 'Prefer not to say'
+      },
+      maritalStatus: {
+        single: 'Single',
+        married: 'Married',
+        divorced: 'Divorced',
+        widowed: 'Widowed',
+        other: 'Other'
+      },
+      select: 'Please select',
+      existingFile: 'Existing file'
     },
     chatbot: {
       placeholder: 'Type your query here...',
       sendButton: 'Send',
       fileReceived: 'File received successfully.',
       fileUploadError: 'Error uploading file.',
-      processingError: 'Error processing your request.'
+      processingError: 'Error processing your request.',
+      welcomeMessage: 'Welcome! How can I assist you with Kenya government services today?',
+      attachFile: 'Attach File',
+      fileTooLarge: 'File is too large. Maximum size is {maxSize}.'
     }
   },
 
@@ -256,7 +348,10 @@ const messages = {
     nav: {
       menu: 'Menu',
       analytics: 'Analytique',
-      userProfile: 'Profil Utilisateur'
+      userProfile: 'Profil Utilisateur',
+      settings: 'Paramètres',
+      logout: 'Déconnexion',
+      profile: 'Mon Profil'
     },
     sidebar: {
       governmentServices: 'Services gouvernementaux',
@@ -290,7 +385,7 @@ const messages = {
           'Écoles et universités publiques',
           'Bourses et prêts étudiants',
           "Programmes d'éducation pour adultes",
-          'Ressources d’apprentissage en ligne'
+          "Ressources d'apprentissage en ligne"
         ]
       },
       cat4: {
@@ -314,7 +409,7 @@ const messages = {
       cat6: {
         name: '6. Sécurité publique & Justice',
         children: [
-          'Police et services d’urgence',
+          "Police et services d'urgence",
           'Tribunaux et aide juridique',
           'Déclaration de crimes',
           'Lois de protection des consommateurs'
@@ -341,10 +436,10 @@ const messages = {
       cat9: {
         name: '9. Services publics & Environnement',
         children: [
-          "Services d’eau et d’électricité",
+          "Services d'eau et d'électricité",
           'Gestion des déchets et recyclage',
           'Réglementations environnementales',
-          'Initiatives d’énergie renouvelable'
+          "Initiatives d'énergie renouvelable"
         ]
       },
       cat10: {
@@ -369,29 +464,75 @@ const messages = {
         name: '12. Communauté & Participation civique',
         children: [
           'Élections et vote',
-          'Retour d’information et plaintes des citoyens',
+          "Retour d'information et plaintes des citoyens",
           'Bénévolat et programmes communautaires',
           'Participation au gouvernement local'
         ]
       }
     },
     analytics: {
-      title: 'Analyses & Informations',
-      note: 'Voici des statistiques d’utilisation et des retours utilisateurs.',
-      usageStats: 'Statistiques d’utilisation',
-      feedbackSamples: 'Exemples de commentaires',
-      close: 'Fermer'
+      title: 'Tableau de Bord Analytique',
+      note: 'Ce tableau de bord présente les statistiques d\'utilisation et les commentaires des utilisateurs du système de chat.',
+      usageStats: 'Statistiques d\'Utilisation',
+      totalQueries: 'Total des Requêtes',
+      avgResponseTime: 'Temps de Réponse Moyen',
+      peakUsers: 'Utilisateurs Simultanés',
+      activeChats: 'Chats Actifs',
+      usageTrend: 'Tendance d\'Utilisation',
+      topQueries: 'Requêtes Principales',
+      feedbackSamples: 'Commentaires des Utilisateurs',
+      close: 'Fermer',
+      loading: 'Chargement des données analytiques...',
+      chartComingSoon: 'Visualisation graphique interactive bientôt disponible...',
+      error: 'Échec du chargement des données',
+      retry: 'Réessayer',
+      dailyQueries: 'Requêtes Quotidiennes',
+      export: 'Exporter les Données',
+      dateRange: 'Période',
+      startDate: 'Date de début',
+      endDate: 'Date de fin'
+    },
+    settings: {
+      title: 'Paramètres',
+      save: 'Enregistrer',
+      close: 'Fermer',
+      saveSuccess: 'Paramètres enregistrés avec succès',
+      saveError: 'Erreur lors de l\'enregistrement des paramètres',
+      language: {
+        title: 'Langue',
+        selectLabel: 'Langue d\'affichage',
+      },
+      appearance: {
+        title: 'Apparence',
+        theme: 'Thème',
+        lightTheme: 'Clair',
+        darkTheme: 'Sombre',
+        systemTheme: 'Système',
+        fontSize: 'Taille de police'
+      },
+      notifications: {
+        title: 'Notifications',
+        emailUpdates: 'Mises à jour par email',
+        soundEnabled: 'Notifications sonores'
+      },
+      account: {
+        title: 'Compte',
+        resetUserData: 'Réinitialiser les données',
+        resetDescription: 'Cela effacera toutes vos données de profil et votre historique de chat.',
+        confirmReset: 'Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action ne peut pas être annulée.',
+        resetComplete: 'Vos données ont été réinitialisées.'
+      }
     },
     userProfile: {
       title: 'Profil Utilisateur',
       privacyInfo:
-        "En fournissant plus d’informations, vous obtiendrez des réponses plus précises. Veuillez consulter notre",
+        "En fournissant plus d'informations, vous obtiendrez des réponses plus précises. Veuillez consulter notre",
       privacyPolicyLink: 'Politique de Confidentialité',
       tabs: {
-        tab1: '1. Données d’identification personnelle',
+        tab1: '1. Données d\'identification personnelle',
         tab2: '2. Enregistrement civil & Documentation',
         tab3: '3. Adresse & Résidence',
-        tab4: '4. Documents d’identité & Voyage',
+        tab4: '4. Documents d\'identité & Voyage',
         tab5: '5. Dossiers de santé & médicaux',
         tab6: '6. Emploi & Économie',
         tab7: '7. Éducation & Académique',
@@ -410,19 +551,142 @@ const messages = {
         maritalStatus: 'État civil',
         photograph: 'Photographie',
         biometric: 'Empreintes / Données biométriques',
-        // ...
+        
+        // Tab 2
+        birthCert: 'Acte de naissance',
+        deathCert: 'Acte de décès',
+        marriageDivorce: 'Actes de mariage / divorce',
+        adoption: 'Documents d\'adoption',
+        citizenship: 'Documents de citoyenneté / naturalisation',
+        immigration: 'Historique d\'immigration et visas',
+        
+        // Tab 3
+        currentAddress: 'Adresse résidentielle actuelle',
+        previousAddresses: 'Adresses précédentes',
+        homeOrRental: 'Détails de propriété ou de location',
+        utilityBills: 'Factures de services liées à l\'adresse',
+        landRecords: 'Registres de propriété foncière',
+        
+        // Tab 4
+        idCard: 'Numéro de carte d\'identité nationale',
+        passport: 'Détails du passeport',
+        driversLicense: 'Permis de conduire',
+        voterId: 'Carte d\'électeur',
+        ssn: 'Numéro de sécurité sociale / assurance nationale',
+        militaryRecords: 'États de service militaire',
+        
+        // Tab 5
+        medicalHistory: 'Antécédents médicaux et conditions de santé',
+        vaccinations: 'Registre de vaccinations',
+        insuranceDetails: 'Détails d\'assurance santé',
+        disability: 'Statut d\'invalidité',
+        organDonor: 'Statut de donneur d\'organes',
+        prescriptions: 'Prescriptions et traitements reçus',
+        mentalHealth: 'Historique de santé mentale',
+        
+        // Tab 6
+        eHistory: 'Historique d\'emploi',
+        currentEmployer: 'Détails de l\'employeur actuel',
+        workPermits: 'Permis de travail et contrats',
+        certifications: 'Certifications et licences professionnelles',
+        unemployment: 'Statut de chômage et allocations reçues',
+        tin: 'Numéro d\'identification fiscale (NIF)',
+        businessAffiliations: 'Propriété d\'entreprise et affiliations',
+        
+        // Tab 7
+        schools: 'Écoles et universités fréquentées',
+        diplomas: 'Diplômes, grades et certifications',
+        performance: 'Performance académique et résultats de tests',
+        scholarships: 'Bourses et aides financières reçues',
+        
+        // Tab 8
+        incomeTax: 'Registres d\'impôt sur le revenu',
+        bankAccounts: 'Comptes bancaires et financiers',
+        propertyTax: 'Paiements de taxe foncière',
+        businessTax: 'Déclarations fiscales d\'entreprise',
+        pensionContrib: 'Contributions et retraits de pension',
+        loanAid: 'Registres de prêts et d\'aide gouvernementale',
+        
+        // Tab 9
+        pensionStatus: 'Statut de pension et contributions',
+        childcare: 'Aide à la garde d\'enfants',
+        foodAssistance: 'Programmes d\'aide alimentaire / sociale',
+        housingAssistance: 'Aide au logement',
+        
+        // Tab 10
+        policeRecords: 'Casier judiciaire (historique criminel, arrestations, accusations)',
+        courtCases: 'Historique des affaires judiciaires',
+        finesPenalties: 'Amendes et pénalités',
+        paroleProbation: 'Statut de libération conditionnelle ou probation',
+        citizenshipRevocation: 'Révocation de citoyenneté (si applicable)',
+        
+        // Tab 11
+        vehicleReg: 'Détails d\'immatriculation de véhicule',
+        trafficViolations: 'Infractions routières et amendes',
+        licenseHistory: 'Historique du permis de conduire et avenants',
+        publicTransportCard: 'Utilisation de carte de transport public',
+        
+        // Tab 12
+        voterRegistration: 'Détails d\'inscription électorale',
+        electionHistory: 'Historique de participation électorale',
+        partyMembership: 'Adhésion à un parti politique',
+        militaryStatus: 'Service militaire ou statut de conscription',
+        publicServiceRoles: 'Rôles de service public'
       },
       actions: {
         cancel: 'Annuler',
-        save: 'Enregistrer'
-      }
+        save: 'Enregistrer',
+        previous: 'Précédent',
+        next: 'Suivant',
+        saving: 'Enregistrement...'
+      },
+      tabComingSoon: 'Cet onglet est en cours de développement et sera bientôt disponible.',
+      saveSuccess: 'Profil enregistré avec succès',
+      loadError: 'Erreur lors du chargement du profil',
+      saveError: 'Erreur lors de l\'enregistrement du profil',
+      confirmCancel: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir annuler?',
+      uploadPhoto: 'Télécharger une photo',
+      uploadFile: 'Télécharger un fichier',
+      photoRequirements: 'La photo doit être claire, récente et montrer votre visage complet',
+      biometricRequirements: 'Seuls les fichiers de données biométriques officiels sont acceptés',
+      requiredFields: 'Champs obligatoires',
+      documentUpload: 'Téléchargement de Documents',
+      validationTitle: 'Veuillez corriger les erreurs suivantes:',
+      completionStatus: '{percent}% complété',
+      validation: {
+        nameRequired: 'Le nom complet est requis',
+        dobRequired: 'La date de naissance est requise',
+        dobFuture: 'La date de naissance ne peut pas être dans le futur'
+      },
+      placeholders: {
+        fullName: 'Entrez votre nom légal complet',
+        nationality: 'Entrez votre nationalité'
+      },
+      gender: {
+        male: 'Homme',
+        female: 'Femme',
+        other: 'Autre',
+        preferNot: 'Préfère ne pas dire'
+      },
+      maritalStatus: {
+        single: 'Célibataire',
+        married: 'Marié(e)',
+        divorced: 'Divorcé(e)',
+        widowed: 'Veuf/Veuve',
+        other: 'Autre'
+      },
+      select: 'Veuillez sélectionner',
+      existingFile: 'Fichier existant'
     },
     chatbot: {
       placeholder: 'Tapez votre requête ici...',
       sendButton: 'Envoyer',
       fileReceived: 'Fichier reçu avec succès.',
       fileUploadError: 'Erreur lors du téléversement du fichier.',
-      processingError: 'Erreur lors du traitement de votre demande.'
+      processingError: 'Erreur lors du traitement de votre demande.',
+      welcomeMessage: 'Bienvenue! Comment puis-je vous aider avec les services du gouvernement kenyan aujourd\'hui?',
+      attachFile: 'Joindre un fichier',
+      fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de {maxSize}.'
     }
   },
 
@@ -433,7 +697,10 @@ const messages = {
     nav: {
       menu: 'Menyu',
       analytics: 'Takwimu',
-      userProfile: 'Profaili'
+      userProfile: 'Profaili',
+      settings: 'Mipangilio',
+      logout: 'Ondoka',
+      profile: 'Profaili Yangu'
     },
     sidebar: {
       governmentServices: 'Huduma za Serikali',
@@ -553,14 +820,60 @@ const messages = {
       }
     },
     analytics: {
-      title: 'Takwimu & Maarifa',
-      note: 'Hapa kuna takwimu za utumiaji na maoni ya watumiaji.',
+      title: 'Dashibodi ya Takwimu',
+      note: 'Dashibodi hii inaonyesha takwimu za matumizi na maoni ya watumiaji wa mfumo wa mazungumzo.',
       usageStats: 'Takwimu za Matumizi',
-      feedbackSamples: 'Mifano ya Maoni ya Watumiaji',
-      close: 'Funga'
+      totalQueries: 'Jumla ya Maswali',
+      avgResponseTime: 'Wastani wa Muda wa Majibu',
+      peakUsers: 'Watumiaji wa Juu Zaidi',
+      activeChats: 'Mazungumzo Yanayoendelea',
+      usageTrend: 'Mwelekeo wa Matumizi',
+      topQueries: 'Maswali ya Juu',
+      feedbackSamples: 'Maoni ya Watumiaji',
+      close: 'Funga',
+      loading: 'Inapakia data za uchambuzi...',
+      chartComingSoon: 'Uonyeshaji wa chati unakuja hivi karibuni...',
+      error: 'Imeshindwa kupakia data za uchambuzi',
+      retry: 'Jaribu tena',
+      dailyQueries: 'Maswali ya Kila Siku',
+      export: 'Toa Data',
+      dateRange: 'Kipindi cha Tarehe',
+      startDate: 'Tarehe ya Kuanza',
+      endDate: 'Tarehe ya Mwisho'
+    },
+    settings: {
+      title: 'Mipangilio',
+      save: 'Hifadhi Mipangilio',
+      close: 'Funga',
+      saveSuccess: 'Mipangilio imehifadhiwa kwa mafanikio',
+      saveError: 'Hitilafu katika kuhifadhi mipangilio',
+      language: {
+        title: 'Lugha',
+        selectLabel: 'Lugha ya Onyesho',
+      },
+      appearance: {
+        title: 'Muonekano',
+        theme: 'Mandhari',
+        lightTheme: 'Angavu',
+        darkTheme: 'Giza',
+        systemTheme: 'Mfumo',
+        fontSize: 'Ukubwa wa Fonti'
+      },
+      notifications: {
+        title: 'Arifa',
+        emailUpdates: 'Arifa za barua pepe',
+        soundEnabled: 'Arifa za sauti'
+      },
+      account: {
+        title: 'Akaunti',
+        resetUserData: 'Rudisha Data za Mtumiaji',
+        resetDescription: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
+        confirmReset: 'Je, una uhakika unataka kufuta data zako zote? Hili halitaweza kutendeka tena.',
+        resetComplete: 'Data zako zimerudishwa.'
+      }
     },
     userProfile: {
-      title: 'Profaili ya Mtumiaji',
+      title: 'Wasifu wa Mtumiaji',
       privacyInfo:
         'Kwa kutoa taarifa zaidi, utapata majibu sahihi na muhimu. Tafadhali soma',
       privacyPolicyLink: 'Sera ya Faragha',
@@ -579,19 +892,150 @@ const messages = {
         tab12: '12. Ushiriki wa Kiraia & Kisiasa'
       },
       fields: {
-        // ...
+        // Tab 1
+        fullName: 'Jina Kamili',
+        dob: 'Tarehe ya Kuzaliwa',
+        gender: 'Jinsia',
+        nationality: 'Uraia',
+        maritalStatus: 'Hali ya Ndoa',
+        photograph: 'Picha',
+        biometric: 'Alama za Vidole / Data za Kibayometriki',
+        
+        // Tab 2
+        birthCert: 'Cheti cha Kuzaliwa',
+        deathCert: 'Cheti cha Kifo',
+        marriageDivorce: 'Rekodi za Ndoa / Talaka',
+        adoption: 'Rekodi za Kuasili',
+        citizenship: 'Nyaraka za Uraia / Uhamiaji',
+        immigration: 'Historia ya Uhamiaji na Visa',
+        
+        // Tab 3
+        currentAddress: 'Anwani ya Sasa ya Makazi',
+        previousAddresses: 'Anwani za Awali',
+        homeOrRental: 'Maelezo ya Umiliki au Upangaji',
+        utilityBills: 'Bili za Huduma Zinazohusiana na Anwani',
+        landRecords: 'Rekodi za Umiliki wa Ardhi na Mali',
+        
+        // Tab 4
+        idCard: 'Nambari ya Kitambulisho cha Taifa',
+        passport: 'Maelezo ya Pasipoti',
+        driversLicense: 'Leseni ya Udereva',
+        voterId: 'Kitambulisho cha Mpiga Kura',
+        ssn: 'Nambari ya Hifadhi ya Jamii / Bima ya Taifa',
+        militaryRecords: 'Rekodi za Huduma ya Jeshi',
+        
+        // Tab 5
+        medicalHistory: 'Historia ya Matibabu na Hali za Afya',
+        vaccinations: 'Rekodi za Chanjo',
+        insuranceDetails: 'Maelezo ya Bima ya Afya',
+        disability: 'Hali ya Ulemavu',
+        organDonor: 'Hali ya Mchango wa Viungo',
+        prescriptions: 'Maagizo ya Dawa na Matibabu Yaliyopokelewa',
+        mentalHealth: 'Historia ya Afya ya Akili',
+        
+        // Tab 6
+        eHistory: 'Historia ya Ajira',
+        currentEmployer: 'Maelezo ya Mwajiri wa Sasa',
+        workPermits: 'Vibali vya Kazi na Mikataba',
+        certifications: 'Vyeti na Leseni za Kitaaluma',
+        unemployment: 'Hali ya Ukosefu wa Ajira na Manufaa Yaliyopokelewa',
+        tin: 'Nambari ya Utambulisho wa Mlipa Kodi (TIN)',
+        businessAffiliations: 'Umiliki wa Biashara na Ushirikiano wa Kampuni',
+        
+        // Tab 7
+        schools: 'Shule na Vyuo Vilivyohudhiriwa',
+        diplomas: 'Diploma, Shahada, na Vyeti',
+        performance: 'Utendaji wa Kitaaluma na Alama za Mitihani',
+        scholarships: 'Ufadhili na Msaada wa Kifedha Uliopokelewa',
+        
+        // Tab 8
+        incomeTax: 'Rekodi za Kodi ya Mapato',
+        bankAccounts: 'Akaunti za Benki na Fedha',
+        propertyTax: 'Malipo ya Kodi ya Mali',
+        businessTax: 'Maelezo ya Kodi ya Biashara',
+        pensionContrib: 'Michango na Uondoaji wa Pensheni',
+        loanAid: 'Rekodi za Mikopo na Misaada ya Serikali',
+        
+        // Tab 9
+        pensionStatus: 'Hali ya Pensheni na Michango',
+        childcare: 'Msaada wa Utunzaji wa Watoto',
+        foodAssistance: 'Programu za Msaada wa Chakula / Ustawi',
+        housingAssistance: 'Msaada wa Nyumba',
+        
+        // Tab 10
+        policeRecords: 'Rekodi za Polisi (historia ya uhalifu, kukamatwa, mashtaka)',
+        courtCases: 'Historia ya Kesi za Mahakama',
+        finesPenalties: 'Faini na Adhabu',
+        paroleProbation: 'Hali ya Parole au Probesheni',
+        citizenshipRevocation: 'Kufutwa kwa Uraia (kama inatumika)',
+        
+        // Tab 11
+        vehicleReg: 'Maelezo ya Usajili wa Gari',
+        trafficViolations: 'Ukiukaji wa Sheria za Trafiki na Faini',
+        licenseHistory: 'Historia ya Leseni ya Udereva na Vidokezo',
+        publicTransportCard: 'Matumizi ya Kadi ya Usafiri wa Umma',
+        
+        // Tab 12
+        voterRegistration: 'Maelezo ya Usajili wa Mpiga Kura',
+        electionHistory: 'Historia ya Ushiriki wa Uchaguzi',
+        partyMembership: 'Uanachama wa Chama cha Kisiasa',
+        militaryStatus: 'Huduma ya Jeshi au Hali ya Utii',
+        publicServiceRoles: 'Majukumu ya Huduma za Umma'
       },
       actions: {
         cancel: 'Ghairi',
-        save: 'Hifadhi Profaili'
-      }
+        save: 'Hifadhi Profaili',
+        previous: 'Iliyopita',
+        next: 'Inayofuata',
+        saving: 'Inahifadhi...'
+      },
+      tabComingSoon: 'Kichupo hiki kipo katika maendeleo na kitapatikana hivi karibuni.',
+      saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
+      loadError: 'Hitilafu katika kupakia data ya wasifu',
+      saveError: 'Hitilafu katika kuhifadhi wasifu',
+      confirmCancel: 'Una mabadiliko ambayo hayajahifadhiwa. Je, una uhakika unataka kughairi?',
+      uploadPhoto: 'Pakia Picha',
+      uploadFile: 'Pakia Faili',
+      photoRequirements: 'Picha lazima iwe wazi, ya hivi karibuni, na ionyeshe uso wako kamili',
+      biometricRequirements: 'Ni faili rasmi za data za bayometriki pekee zinazokubaliwa',
+      requiredFields: 'Sehemu zinazohitajika',
+      documentUpload: 'Kupakia Nyaraka',
+      validationTitle: 'Tafadhali sahihisha makosa yafuatayo:',
+      completionStatus: 'Imekamilika {percent}%',
+      validation: {
+        nameRequired: 'Jina kamili linahitajika',
+        dobRequired: 'Tarehe ya kuzaliwa inahitajika',
+        dobFuture: 'Tarehe ya kuzaliwa haiwezi kuwa wakati ujao'
+      },
+      placeholders: {
+        fullName: 'Ingiza jina lako kamili la kisheria',
+        nationality: 'Ingiza uraia wako'
+      },
+      gender: {
+        male: 'Mwanaume',
+        female: 'Mwanamke',
+        other: 'Nyingine',
+        preferNot: 'Sipendelei kusema'
+      },
+      maritalStatus: {
+        single: 'Sijaoa/Sijaolewa',
+        married: 'Nimeoa/Nimeolewa',
+        divorced: 'Nimetalikiwa/Nimetaliki',
+        widowed: 'Mjane',
+        other: 'Nyingine'
+      },
+      select: 'Tafadhali chagua',
+      existingFile: 'Faili iliyopo'
     },
     chatbot: {
       placeholder: 'Andika swali lako hapa...',
       sendButton: 'Tuma',
       fileReceived: 'Faili imepokelewa.',
       fileUploadError: 'Hitilafu katika kupakia faili.',
-      processingError: 'Hitilafu katika kushughulikia ombi lako.'
+      processingError: 'Hitilafu katika kushughulikia ombi lako.',
+      welcomeMessage: 'Karibu! Nawezaje kukusaidia na huduma za serikali ya Kenya leo?',
+      attachFile: 'Ambatisha Faili',
+      fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.'
     }
   }
 }
@@ -601,4 +1045,3 @@ export default createI18n({
   fallbackLocale: 'en',
   messages
 })
-

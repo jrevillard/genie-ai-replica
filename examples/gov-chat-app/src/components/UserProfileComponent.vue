@@ -318,29 +318,29 @@
         <!-- 9) Social Security & Welfare -->
         <div v-else-if="activeTab === 8">
           <div class="field-group">
-            <label>Pension status and contributions</label>
+            <label>{{ $t('userProfile.fields.pensionStatus') }}</label>
             <textarea
               v-model="formData.socialSecurity.pensionStatus"
             ></textarea>
           </div>
           <div class="field-group">
-            <label>Unemployment benefits</label>
+            <label>{{ $t('userProfile.fields.unemployment') }}</label>
             <input v-model="formData.socialSecurity.unemployment" type="text" />
           </div>
           <div class="field-group">
-            <label>Disability benefits</label>
+            <label>{{ $t('userProfile.fields.disability') }}</label>
             <input v-model="formData.socialSecurity.disability" type="text" />
           </div>
           <div class="field-group">
-            <label>Childcare support</label>
+            <label>{{ $t('userProfile.fields.childcare') }}</label>
             <input v-model="formData.socialSecurity.childcare" type="text" />
           </div>
           <div class="field-group">
-            <label>Food assistance / welfare programs</label>
+            <label>{{ $t('userProfile.fields.foodAssistance') }}</label>
             <input v-model="formData.socialSecurity.foodAssistance" type="text" />
           </div>
           <div class="field-group">
-            <label>Housing assistance</label>
+            <label>{{ $t('userProfile.fields.housingAssistance') }}</label>
             <input v-model="formData.socialSecurity.housingAssistance" type="text" />
           </div>
         </div>
@@ -670,6 +670,7 @@ label {
   padding: 10px;
   border-radius: 0 4px 4px 4px;
   background: #fff;
+  min-height: 300px;
 }
 .field-group {
   margin-bottom: 12px;
@@ -710,4 +711,3 @@ label {
   background: #3a7da0;
 }
 </style>
-

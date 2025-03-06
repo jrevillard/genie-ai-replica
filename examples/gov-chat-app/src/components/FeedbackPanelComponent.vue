@@ -42,6 +42,11 @@
           {{ $t('feedback.close') }}
         </button>
       </div>
+      
+      <!-- Submission status message -->
+      <div v-if="submissionStatus" class="submission-status" :class="submissionStatus.type">
+        {{ submissionStatus.message }}
+      </div>
     </div>
   </div>
 </template>
@@ -52,7 +57,8 @@ export default {
   data() {
     return {
       feedbackType: null,
-      feedbackText: ''
+      feedbackText: '',
+      submissionStatus: null
     }
   },
   methods: {
@@ -62,20 +68,58 @@ export default {
     submit() {
       if (!this.feedbackType) return;
       
-      // Submit feedback to your backend
-      console.log('Feedback submitted:', this.feedbackType, this.feedbackText);
+      // Display loading state
+      this.submissionStatus = {
+        type: 'loading',
+        message: this.$t('feedback.submitting')
+      };
       
-      // Emit event with feedback data
-      this.$emit('submit', {
-        type: this.feedbackType,
-        text: this.feedbackText
-      });
-      
-      this.closePanel();
+      // Simulate API call with a timeout (replace with actual API call)
+      setTimeout(() => {
+        // Log feedback (for development)
+        console.log('Feedback submitted:', this.feedbackType, this.feedbackText);
+        
+        // Success status
+        this.submissionStatus = {
+          type: 'success',
+          message: this.$t('feedback.thankYouMessage')
+        };
+        
+        // Emit event with feedback data
+        this.$emit('submit', {
+          type: this.feedbackType,
+          text: this.feedbackText,
+          timestamp: new Date().toISOString(),
+          locale: this.$i18n.locale
+        });
+        
+        // Close after showing success message
+        setTimeout(() => {
+          this.closePanel();
+        }, 1500);
+      }, 600);
     },
     closePanel() {
       this.$emit('close');
     }
+  },
+  // Add focus trap and escape key handler
+  mounted() {
+    // Handle escape key press
+    this.escHandler = (e) => {
+      if (e.key === 'Escape') {
+        this.closePanel();
+      }
+    };
+    document.addEventListener('keydown', this.escHandler);
+    
+    // Focus trap (accessibility)
+    this.$nextTick(() => {
+      this.$el.querySelector('.feedback-button').focus();
+    });
+  },
+  beforeDestroy() {
+    document.removeEventListener('keydown', this.escHandler);
   }
 }
 </script>
@@ -175,7 +219,7 @@ export default {
   border-radius: 6px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
   border: none;
 }
 
@@ -207,5 +251,63 @@ h4 {
   text-align: center;
   font-size: 20px;
   color: #333;
+}
+
+/* Submission status styling */
+.submission-status {
+  margin-top: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+  animation: fadeIn 0.3s ease;
+}
+
+.submission-status.loading {
+  background-color: #f5f9ff;
+  color: #4a90e2;
+}
+
+.submission-status.success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.submission-status.error {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .feedback-content {
+    padding: 20px;
+  }
+  
+  .feedback-button {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  
+  .button-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .submit-button, .cancel-button {
+    width: 100%;
+  }
 }
 </style>

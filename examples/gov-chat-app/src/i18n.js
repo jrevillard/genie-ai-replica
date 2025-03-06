@@ -347,7 +347,9 @@ const messages = {
       placeholder: 'Additional comments...',
       submit: 'Submit Feedback',
       close: 'Cancel',
-      thankYouMessage: 'Thank you for your feedback!'
+      thankYouMessage: 'Thank you for your feedback!',
+      submitting: 'Submitting...',
+      error: 'Something went wrong. Please try again.'
     }
   },
 
@@ -706,7 +708,9 @@ const messages = {
       placeholder: 'Commentaires supplémentaires...',
       submit: 'Soumettre',
       close: 'Annuler',
-      thankYouMessage: 'Merci pour votre retour d\'information!'
+      thankYouMessage: 'Merci pour votre retour d\'information!',
+      submitting: 'Envoi en cours...',
+      error: 'Une erreur s\'est produite. Veuillez réessayer.'
     }
   },
 
@@ -1065,7 +1069,9 @@ const messages = {
       placeholder: 'Maoni ya ziada...',
       submit: 'Wasilisha Maoni',
       close: 'Ghairi',
-      thankYouMessage: 'Asante kwa maoni yako!'
+      thankYouMessage: 'Asante kwa maoni yako!',
+      submitting: 'Inawasilisha...',
+      error: 'Hitilafu imetokea. Tafadhali jaribu tena.'
     }
   }
 };

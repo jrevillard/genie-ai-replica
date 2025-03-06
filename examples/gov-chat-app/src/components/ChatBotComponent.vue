@@ -14,7 +14,7 @@
         </div>
         <!-- Feedback for bot messages -->
         <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-          <button @click="openFeedbackDialog(index)">Feedback</button>
+          <button @click="openFeedbackDialog(index)">{{ $t('feedback.button') }}</button>
         </div>
       </div>
       <!-- Auto-scroll anchor element -->

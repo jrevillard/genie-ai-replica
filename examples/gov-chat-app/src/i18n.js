@@ -162,7 +162,7 @@ const messages = {
       saveError: 'Error saving settings',
       language: {
         title: 'Language',
-        selectLabel: 'Display Language',
+        selectLabel: 'Display Language'
       },
       appearance: {
         title: 'Appearance',
@@ -350,6 +350,21 @@ const messages = {
       thankYouMessage: 'Thank you for your feedback!',
       submitting: 'Submitting...',
       error: 'Something went wrong. Please try again.'
+    },
+    responseRating: {
+      title: 'Help Us Improve',
+      note: 'Your feedback will be used to better tune the chatbot and improve responses over time.',
+      chatbotResponse: 'Chatbot Response:',
+      ratingLabels: {
+        1: 'Useless',
+        2: 'Slightly Helpful',
+        3: 'Moderately Helpful',
+        4: 'Very Helpful',
+        5: 'Life Changing'
+      },
+      additionalComments: 'Additional comments...',
+      submit: 'Submit',
+      cancel: 'Cancel'
     }
   },
 
@@ -512,7 +527,7 @@ const messages = {
       saveError: 'Erreur lors de l\'enregistrement des paramètres',
       language: {
         title: 'Langue',
-        selectLabel: 'Langue d\'affichage',
+        selectLabel: 'Langue d\'affichage'
       },
       appearance: {
         title: 'Apparence',
@@ -711,6 +726,21 @@ const messages = {
       thankYouMessage: 'Merci pour votre retour d\'information!',
       submitting: 'Envoi en cours...',
       error: 'Une erreur s\'est produite. Veuillez réessayer.'
+    },
+    responseRating: {
+      title: 'Aidez-nous à Améliorer',
+      note: 'Vos commentaires seront utilisés pour mieux ajuster le chatbot et améliorer les réponses au fil du temps.',
+      chatbotResponse: 'Réponse du Chatbot:',
+      ratingLabels: {
+        1: 'Inutile',
+        2: 'Légèrement Utile',
+        3: 'Modérément Utile',
+        4: 'Très Utile',
+        5: 'Révolutionnaire'
+      },
+      additionalComments: 'Commentaires supplémentaires...',
+      submit: 'Soumettre',
+      cancel: 'Annuler'
     }
   },
 
@@ -873,7 +903,7 @@ const messages = {
       saveError: 'Hitilafu katika kuhifadhi mipangilio',
       language: {
         title: 'Lugha',
-        selectLabel: 'Lugha ya Onyesho',
+        selectLabel: 'Lugha ya Onyesho'
       },
       appearance: {
         title: 'Muonekano',
@@ -1072,6 +1102,21 @@ const messages = {
       thankYouMessage: 'Asante kwa maoni yako!',
       submitting: 'Inawasilisha...',
       error: 'Hitilafu imetokea. Tafadhali jaribu tena.'
+    },
+    responseRating: {
+      title: 'Tusaidie Kuboresha',
+      note: 'Maoni yako yatatumika kuboresha chatbot na kuboresha majibu kwa muda.',
+      chatbotResponse: 'Jibu la Chatbot:',
+      ratingLabels: {
+        1: 'Haina msaada',
+        2: 'Msaada Kidogo',
+        3: 'Msaada wa Wastani',
+        4: 'Msaada Sana',
+        5: 'Inabadilisha Maisha'
+      },
+      additionalComments: 'Maoni ya ziada...',
+      submit: 'Wasilisha',
+      cancel: 'Ghairi'
     }
   }
 };

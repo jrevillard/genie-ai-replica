@@ -338,6 +338,16 @@ const messages = {
       welcomeMessage: 'Welcome! How can I assist you with Kenya government services today?',
       attachFile: 'Attach File',
       fileTooLarge: 'File is too large. Maximum size is {maxSize}.'
+    },
+    feedback: {
+      title: 'Feedback',
+      positive: 'Positive feedback',
+      negative: 'Negative feedback',
+      promptText: 'Was this response helpful?',
+      placeholder: 'Additional comments...',
+      submit: 'Submit Feedback',
+      close: 'Cancel',
+      thankYouMessage: 'Thank you for your feedback!'
     }
   },
 
@@ -687,6 +697,16 @@ const messages = {
       welcomeMessage: 'Bienvenue! Comment puis-je vous aider avec les services du gouvernement kenyan aujourd\'hui?',
       attachFile: 'Joindre un fichier',
       fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de {maxSize}.'
+    },
+    feedback: {
+      title: 'Retour d\'information',
+      positive: 'Avis positif',
+      negative: 'Avis négatif',
+      promptText: 'Cette réponse a-t-elle été utile?',
+      placeholder: 'Commentaires supplémentaires...',
+      submit: 'Soumettre',
+      close: 'Annuler',
+      thankYouMessage: 'Merci pour votre retour d\'information!'
     }
   },
 
@@ -1036,9 +1056,19 @@ const messages = {
       welcomeMessage: 'Karibu! Nawezaje kukusaidia na huduma za serikali ya Kenya leo?',
       attachFile: 'Ambatisha Faili',
       fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.'
+    },
+    feedback: {
+      title: 'Maoni',
+      positive: 'Maoni mazuri',
+      negative: 'Maoni hasi',
+      promptText: 'Je, jibu hili lilikuwa la msaada?',
+      placeholder: 'Maoni ya ziada...',
+      submit: 'Wasilisha Maoni',
+      close: 'Ghairi',
+      thankYouMessage: 'Asante kwa maoni yako!'
     }
   }
-}
+};
 
 export default createI18n({
   locale: 'sw', // or 'en', 'fr'

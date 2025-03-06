@@ -12,12 +12,29 @@
         <span class="hamburger-inner"></span>
       </button>
 
-      <!-- Brand text or logo -->
+      <!-- Government services logo -->
+      <div class="logo-container">
+        <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 22h18" stroke-linecap="round"/>
+          <path d="M12 2L2 8h20L12 2z" />
+          <rect x="4" y="10" width="16" height="12" stroke-linecap="round" stroke-linejoin="round" />
+          <line x1="4" y1="10" x2="4" y2="22" />
+          <line x1="20" y1="10" x2="20" y2="22" />
+          <line x1="8" y1="10" x2="8" y2="22" />
+          <line x1="12" y1="10" x2="12" y2="22" />
+          <line x1="16" y1="10" x2="16" y2="22" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Center area: Brand name is now in the center -->
+    <div class="nav-center">
       <h1 class="brand-name">{{ $t('brandName') }}</h1>
     </div>
 
-    <!-- Center area: language dropdown -->
-    <div class="nav-center">
+    <!-- Right side: language dropdown + analytics + settings + user profile buttons -->
+    <div class="nav-right">
+      <!-- Language dropdown moved to the right -->
       <div class="language-select-container">
         <select 
           v-model="currentLocale" 
@@ -31,10 +48,7 @@
         </select>
         <div class="select-arrow"></div>
       </div>
-    </div>
 
-    <!-- Right side: analytics + settings + user profile buttons -->
-    <div class="nav-right">
       <button 
         class="icon-btn" 
         @click="$emit('openAnalytics')"
@@ -134,11 +148,13 @@ export default {
 
 .nav-left {
   flex: 1;
+  min-width: 140px;
 }
 
 .nav-center {
-  flex: 1;
+  flex: 2;
   justify-content: center;
+  text-align: center;
 }
 
 .nav-right {
@@ -147,8 +163,22 @@ export default {
   position: relative;
 }
 
+/* Logo styling */
+.logo-container {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.govt-logo {
+  height: 32px;
+  width: 32px;
+  color: white;
+  margin-right: 8px;
+}
+
 .brand-name {
-  margin-left: 12px;
+  margin: 0 auto;
   font-size: 1.2rem;
   font-weight: 600;
   white-space: nowrap;
@@ -198,6 +228,7 @@ export default {
   visibility: hidden;
   transition: opacity 0.2s, visibility 0.2s;
   pointer-events: none;
+  z-index: 30;
 }
 
 .icon-btn:hover .tooltip {
@@ -263,6 +294,7 @@ export default {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   width: 120px;
+  margin-right: 8px;
 }
 
 .language-select {
@@ -296,18 +328,38 @@ export default {
 }
 
 /* Responsive adjustments */
-@media (max-width: 600px) {
-  .nav-center {
-    display: none;
+@media (max-width: 768px) {
+  .brand-name {
+    font-size: 1rem;
   }
   
-  .nav-right {
-    justify-content: flex-end;
+  .language-select-container {
+    width: 100px;
+  }
+}
+
+@media (max-width: 600px) {
+  .nav-left {
+    min-width: auto;
+  }
+  
+  .nav-center {
+    flex: 1;
   }
   
   .brand-name {
-    font-size: 1rem;
-    max-width: 150px;
+    font-size: 0.9rem;
+    max-width: 140px;
+  }
+  
+  .language-select-container {
+    width: 80px;
+  }
+  
+  .language-select {
+    font-size: 0.8rem;
+    padding: 4px 6px;
+    padding-right: 20px;
   }
 }
 </style>

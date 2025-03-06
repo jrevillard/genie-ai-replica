@@ -36,6 +36,8 @@
           <li
             v-for="(childName, cIndex) in getCatChildren(node.catKey)"
             :key="cIndex"
+            @click.stop="selectChild(node.catKey, childName, cIndex)"
+            :class="{ 'selected': isChildSelected(node.catKey, cIndex) }"
           >
             <div class="node-label child-row">
               <!-- Indent placeholder -->
@@ -73,74 +75,147 @@ export default {
         { catKey: 'cat11', expanded: false },
         { catKey: 'cat12', expanded: false }
       ],
-      searchQuery: ''
+      searchQuery: '',
+      selectedChildren: {} // Track selected children: { catKey: [selectedIndices] }
     }
   },
   mounted() {
     // Debug: confirm which locale is active
     console.log("ServiceTreePanel - mounted. Current locale:", this.$i18n.locale)
 
-    // Log the entire leftPanel data for the active locale
-    const fullLeftPanel = this.$i18n.getLocaleMessage(this.$i18n.locale)?.leftPanel
-    console.log("ServiceTreePanel - leftPanel data:", fullLeftPanel)
-
-    // Check each cat’s children
-    this.nodes.forEach(node => {
-      const raw = this.$t(`leftPanel.${node.catKey}.children`, { returnObjects: true })
-      console.log(`catKey=${node.catKey} =>`, raw)
-    })
+    // Prefetch all category data to ensure it's available
+    this.prefetchCategoryData();
   },
   methods: {
+    // Prefetch all category data to ensure proper loading
+    prefetchCategoryData() {
+      const locale = this.$i18n.locale;
+      const leftPanel = this.$i18n.messages[locale]?.leftPanel;
+      
+      if (!leftPanel) {
+        console.error("Left panel data not found for locale:", locale);
+        return;
+      }
+      
+      console.log("Full leftPanel data:", leftPanel);
+      
+      // Check each category's children
+      this.nodes.forEach(node => {
+        const catData = leftPanel[node.catKey];
+        if (!catData) {
+          console.warn(`Category data not found for ${node.catKey}`);
+          return;
+        }
+        
+        const children = catData.children;
+        if (!Array.isArray(children)) {
+          console.warn(`Children for ${node.catKey} is not an array:`, children);
+        } else {
+          console.log(`${node.catKey} has ${children.length} children:`, children);
+        }
+      });
+    },
+
     // Toggle expand/collapse for a node
     toggleNode(node) {
-      node.expanded = !node.expanded
+      node.expanded = !node.expanded;
     },
 
     // Retrieve localized category name
     getCatName(catKey) {
-      return this.$t(`leftPanel.${catKey}.name`)
+      try {
+        const locale = this.$i18n.locale;
+        const name = this.$i18n.messages[locale]?.leftPanel[catKey]?.name;
+        return name || `[Missing: leftPanel.${catKey}.name]`;
+      } catch (err) {
+        console.error(`Error getting name for ${catKey}:`, err);
+        return `[Error: ${catKey}]`;
+      }
     },
 
-    // Retrieve children from i18n with returnObjects: true
+    // Retrieve children directly from i18n messages
     getCatChildren(catKey) {
-      const raw = this.$t(`leftPanel.${catKey}.children`, { returnObjects: true })
-      if (!Array.isArray(raw)) {
-        console.warn(`getCatChildren for ${catKey} => not an array. raw=`, raw)
-        return []
+      try {
+        const locale = this.$i18n.locale;
+        const children = this.$i18n.messages[locale]?.leftPanel[catKey]?.children;
+        
+        if (!Array.isArray(children)) {
+          console.warn(`getCatChildren for ${catKey} => not an array. Value:`, children);
+          return [];
+        }
+        
+        return children;
+      } catch (err) {
+        console.error(`Error getting children for ${catKey}:`, err);
+        return [];
       }
-      return raw
     },
 
     // Check if node has any children
     hasChildren(catKey) {
-      return this.getCatChildren(catKey).length > 0
+      return this.getCatChildren(catKey).length > 0;
+    },
+
+    // Handle selection of a child item
+    selectChild(catKey, childName, childIndex) {
+      // Initialize the array for this category if it doesn't exist
+      if (!this.selectedChildren[catKey]) {
+        this.selectedChildren[catKey] = [];
+      }
+      
+      // Toggle selection of this child
+      const selectedIndices = this.selectedChildren[catKey];
+      const index = selectedIndices.indexOf(childIndex);
+      
+      if (index === -1) {
+        // Add to selection
+        selectedIndices.push(childIndex);
+      } else {
+        // Remove from selection
+        selectedIndices.splice(index, 1);
+      }
+      
+      // Emit an event with the selected item
+      this.$emit('selectService', {
+        category: catKey,
+        service: childName,
+        selected: index === -1 // true if just added, false if just removed
+      });
+      
+      console.log(`Selected child: ${childName} (${catKey}, ${childIndex})`);
+    },
+    
+    // Check if a child is currently selected
+    isChildSelected(catKey, childIndex) {
+      return this.selectedChildren[catKey]?.includes(childIndex) || false;
     },
 
     // Search logic: expand nodes if they match the query
     performSearch() {
-      const q = this.searchQuery.trim().toLowerCase()
+      const q = this.searchQuery.trim().toLowerCase();
 
       this.nodes.forEach((node) => {
-        const catName = this.getCatName(node.catKey).toLowerCase()
-        const childList = this.getCatChildren(node.catKey).map(c => c.toLowerCase())
+        const catName = this.getCatName(node.catKey).toLowerCase();
+        const childList = this.getCatChildren(node.catKey).map(c => c.toLowerCase());
 
         if (!q) {
           // If search is empty, collapse all
-          node.expanded = false
+          node.expanded = false;
         } else {
-          const nameMatch = catName.includes(q)
-          const childMatch = childList.some(child => child.includes(q))
-          node.expanded = nameMatch || childMatch
+          const nameMatch = catName.includes(q);
+          const childMatch = childList.some(child => child.includes(q));
+          node.expanded = nameMatch || childMatch;
         }
-      })
+      });
     },
 
     // Highlight matched text
     highlightMatch(text, query) {
-      if (!query) return text
-      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const re = new RegExp(escaped, 'gi')
-      return text.replace(re, match => `<mark>${match}</mark>`)
+      if (!query) return text;
+      const safeText = String(text || ''); // Ensure text is a string
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'gi');
+      return safeText.replace(re, match => `<mark>${match}</mark>`);
     }
   }
 }
@@ -208,7 +283,13 @@ ul {
   margin-top: 2px;
 }
 .child-row {
-  cursor: default; /* so clicking a child doesn't toggle anything */
+  cursor: pointer; /* Make child rows clickable */
+}
+
+/* Selected child items */
+.selected .node-label {
+  background-color: #e6f0ff;
+  border-left: 3px solid #1867c0;
 }
 
 /* highlight color for matched text */
@@ -217,4 +298,3 @@ mark {
   color: #000;
 }
 </style>
-

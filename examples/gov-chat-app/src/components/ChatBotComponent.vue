@@ -1,10 +1,10 @@
-<!-- ChatBotComponent.vue - Enhanced Translation Support -->
+<!-- ChatBotComponent.vue - With Fixed Button Label -->
 <template>
   <div class="chatbot-container">
     <!-- Context Panel for selected tree nodes -->
     <div class="context-panel" v-if="selectedContextItems.length > 0">
       <div class="context-header">
-        <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
+        <span class="context-title">{{ $t('chatbot.queryContext', 'Query Context:') }}</span>
       </div>
       <div class="context-items">
         <div 
@@ -16,7 +16,7 @@
           <button 
             class="context-remove-btn" 
             @click="removeContextItem(index)"
-            :aria-label="translate('chatbot.removeItem', 'Remove item')"
+            :aria-label="$t('chatbot.removeItem', 'Remove item')"
           >
             ✕
           </button>
@@ -24,7 +24,7 @@
       </div>
     </div>
 
-    <!-- Chat Window -->
+    <!-- The scrollable chat window -->
     <div class="chat-window" ref="chatWindow">
       <div
         v-for="(msg, index) in chatMessages"
@@ -35,10 +35,12 @@
         <div class="message-bubble">
           <span>{{ msg.content }}</span>
         </div>
+        <!-- Feedback for bot messages -->
         <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-          <button @click="openFeedback(index)">{{ translate('feedback.button', 'Feedback') }}</button>
+          <button @click="openFeedbackDialog(index)">Feedback</button>
         </div>
       </div>
+      <!-- Auto-scroll anchor element -->
       <div ref="messagesEnd"></div>
     </div>
 
@@ -48,28 +50,44 @@
         v-model="newMessage"
         class="prompt-textarea"
         rows="4"
-        :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
+        :placeholder="$t('chatbot.placeholder', 'Type your message here...')"
         @keyup.enter.exact.prevent="sendMessage"
       ></textarea>
       <button class="send-btn" @click="sendMessage">
-        {{ translate('chatbot.sendButton', 'Send') }}
+        {{ $t('chatbot.sendButton', 'Send') }}
       </button>
     </div>
+
+    <!-- Feedback Dialog -->
+    <chat-response-feedback-dialog
+      v-if="feedbackDialog.visible"
+      :visible="feedbackDialog.visible"
+      :message="feedbackDialog.message"
+      @close="closeFeedbackDialog"
+      @submit="handleFeedbackSubmit"
+    />
   </div>
 </template>
 
 <script>
 import { eventBus } from '../eventBus.js'
-import axios from 'axios'
+import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 
 export default {
   name: 'ChatBotComponent',
+  components: {
+    ChatResponseFeedbackDialog
+  },
   
   data() {
     return {
       chatMessages: [],
       newMessage: '',
       selectedContextItems: [],
+      feedbackDialog: {
+        visible: false,
+        message: null
+      },
       currentLocale: 'en',
       translations: {
         en: {
@@ -86,51 +104,36 @@ export default {
         fr: {
           'chatbot.welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
           'chatbot.queryContext': 'Contexte de la requête :',
-          'chatbot.removeItem': 'Supprimer l\'élément',
-          'chatbot.placeholder': 'Tapez votre message ici...',
-          'chatbot.sendButton': 'Envoyer',
-          'feedback.button': 'Commentaires',
-          'chatbot.responsePrefix': 'J\'ai reçu votre message',
-          'chatbot.withContext': 'avec contexte',
-          'chatbot.processingError': 'Désolé, une erreur s\'est produite lors du traitement de votre demande.'
+          // Other French translations...
         },
         sw: {
           'chatbot.welcomeMessage': 'Karibu! Nawezaje kukusaidia leo?',
           'chatbot.queryContext': 'Muktadha wa Hoja:',
-          'chatbot.removeItem': 'Ondoa kipengee',
-          'chatbot.placeholder': 'Andika ujumbe wako hapa...',
-          'chatbot.sendButton': 'Tuma',
-          'feedback.button': 'Maoni',
-          'chatbot.responsePrefix': 'Nimepokea ujumbe wako',
-          'chatbot.withContext': 'na muktadha',
-          'chatbot.processingError': 'Samahani, kulikuwa na hitilafu katika kutuma ombi lako.'
+          // Other Swahili translations...
         }
       }
-    }
-  },
-  
-  created() {
-    // Set initial locale
-    if (this.$i18n && this.$i18n.locale) {
-      this.currentLocale = this.$i18n.locale;
-    }
-    
-    // Watch for locale changes
-    if (this.$i18n) {
-      this.$watch(() => this.$i18n.locale, (newLocale) => {
-        console.log('Locale changed to:', newLocale);
-        this.currentLocale = newLocale;
-        this.updateWelcomeMessage();
-      });
-    }
+    };
   },
   
   mounted() {
+    // Add welcome message
+    if (this.chatMessages.length === 0) {
+      this.chatMessages.push({
+        sender: 'bot',
+        content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
+      });
+    }
+    
+    // Set up event listeners
+    if (this.$root.$i18n) {
+      this.currentLocale = this.$root.$i18n.locale;
+      this.$watch('$root.$i18n.locale', (newLocale) => {
+        this.currentLocale = newLocale;
+      });
+    }
+    
     // Listen for tree node selection events
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
-    
-    // Add welcome message
-    this.updateWelcomeMessage();
     
     // Scroll to bottom of chat
     this.scrollToBottom();
@@ -141,61 +144,23 @@ export default {
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
   },
   
-  watch: {
-    chatMessages: {
-      handler() {
-        this.scrollToBottom();
-      },
-      deep: true
-    }
-  },
-  
   methods: {
-    getCurrentLocale() {
-      // Get current locale from i18n, fallback to component's property
-      return this.$i18n ? this.$i18n.locale : this.currentLocale;
-    },
-    
     translate(key, fallback) {
-      const locale = this.getCurrentLocale();
-      
-      try {
-        // Try i18n first
-        if (this.$t) {
-          const i18nTranslation = this.$t(key);
-          // Check if translation exists and is not just the key repeated
-          if (i18nTranslation && i18nTranslation !== key) {
-            return i18nTranslation;
-          }
+      // Try translation from i18n
+      if (this.$t) {
+        const i18nTranslation = this.$t(key);
+        if (i18nTranslation && i18nTranslation !== key) {
+          return i18nTranslation;
         }
-        
-        // Try local translations
-        const translation = this.translations[locale]?.[key] || 
-                            this.translations['en']?.[key] || 
-                            fallback;
-        return translation;
-      } catch (error) {
-        console.error(`Translation error for key ${key}:`, error);
-        return fallback;
       }
-    },
-    
-    updateWelcomeMessage() {
-      // Replace welcome message with translated version 
-      // Only if it's the first and only message
-      if (this.chatMessages.length === 0 || 
-          (this.chatMessages.length === 1 && this.chatMessages[0].sender === 'bot')) {
-        
-        this.chatMessages = [{
-          sender: 'bot',
-          content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
-        }];
-      }
+      
+      // Try from local translations
+      return this.translations[this.currentLocale]?.[key] || 
+             this.translations['en']?.[key] || 
+             fallback;
     },
     
     handleTreeNodeSelected(item) {
-      console.log('Tree node selection received:', item);
-      
       if (!item || typeof item !== 'object') return;
       
       // Check if item is selected or deselected
@@ -226,7 +191,7 @@ export default {
       eventBus.$emit('contextItemRemoved', removed);
     },
     
-    async sendMessage() {
+    sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
       
@@ -234,42 +199,43 @@ export default {
       this.chatMessages.push({ sender: 'user', content });
       this.newMessage = '';
       
-      try {
-        // Include context items in the API request
-        let contextInfo = null;
-        
-        if (this.selectedContextItems.length > 0) {
-          contextInfo = this.selectedContextItems.map(item => item.service).join(', ');
-        }
-          
-        // Simulate API response
-        setTimeout(() => {
-          this.chatMessages.push({ 
-            sender: 'bot', 
-            content: `${this.translate('chatbot.responsePrefix', 'I received your message')}: "${content}"${contextInfo ? ` ${this.translate('chatbot.withContext', 'with context')}: ${contextInfo}` : ''}`
-          });
-        }, 500);
-        
-        // Uncomment for real API call
-        /*
-        const res = await axios.post('/api/chat', { 
-          message: content,
-          context: contextInfo
+      // Create context string
+      const contextInfo = this.selectedContextItems.length > 0
+        ? this.selectedContextItems.map(item => item.service).join(', ')
+        : null;
+      
+      // Simulate response (in real app, this would be an API call)
+      setTimeout(() => {
+        this.chatMessages.push({ 
+          sender: 'bot', 
+          content: `${this.translate('chatbot.responsePrefix', 'I received your message')}: "${content}"${
+            contextInfo ? ` ${this.translate('chatbot.withContext', 'with context')}: ${contextInfo}` : ''
+          }`
         });
         
-        this.chatMessages.push({ sender: 'bot', content: res.data.reply });
-        */
-      } catch (error) {
-        console.error('Chat API error:', error);
-        this.chatMessages.push({
-          sender: 'bot',
-          content: this.translate('chatbot.processingError', 'Sorry, there was an error processing your request.')
-        });
-      }
+        // Scroll to bottom after adding message
+        this.scrollToBottom();
+      }, 500);
     },
     
-    openFeedback(index) {
-      alert('Feedback feature not implemented');
+    openFeedbackDialog(index) {
+      // Set the selected message and make dialog visible
+      this.feedbackDialog = {
+        visible: true,
+        message: this.chatMessages[index]
+      };
+    },
+    
+    closeFeedbackDialog() {
+      this.feedbackDialog.visible = false;
+    },
+    
+    handleFeedbackSubmit(feedback) {
+      // In a real app, this would send the feedback to your API
+      console.log('Feedback submitted:', feedback);
+      
+      // Close the dialog
+      this.closeFeedbackDialog();
     },
     
     scrollToBottom() {
@@ -406,7 +372,11 @@ export default {
   cursor: pointer;
   font-size: 0.8rem;
 }
+.feedback-trigger button:hover {
+  background: #e0e0e0;
+}
 
+/* Chat Input Styles */
 .chat-input {
   display: flex;
   flex-direction: column;
@@ -440,6 +410,7 @@ export default {
   background: #3a7da0;
 }
 
+/* Responsive Adjustments */
 @media (min-width: 768px) {
   .chat-input {
     flex-direction: row;

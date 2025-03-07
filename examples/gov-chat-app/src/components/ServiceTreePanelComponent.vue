@@ -1,4 +1,4 @@
-<!-- ServiceTreePanelComponent.vue - Enhanced Translation Support -->
+<!-- ServiceTreePanelComponent.vue - Complete Translations -->
 <template>
   <div class="service-tree-panel">
     <h4>{{ $t('sidebar.governmentServices', 'Government Services') }}</h4>
@@ -43,7 +43,6 @@
 
 <script>
 import { eventBus } from '../eventBus.js'
-import { watch } from 'vue'
 
 export default {
   name: 'ServiceTreePanelComponent',
@@ -66,7 +65,7 @@ export default {
         { catKey: 'cat11', expanded: false },
         { catKey: 'cat12', expanded: false }
       ],
-      // Fallback data for English
+      // Comprehensive fallback data for all languages
       fallbackData: {
         en: {
           cat1: {
@@ -118,7 +117,7 @@ export default {
             children: ['Immigration Services', 'Citizenship Applications', 'Visas', 'Refugee Programs']
           }
         },
-        // French translations (basic examples)
+        // Complete French translations for all categories
         fr: {
           cat1: {
             name: 'Santé et services sociaux',
@@ -128,9 +127,48 @@ export default {
             name: 'Éducation et apprentissage',
             children: ['Écoles K-12', 'Enseignement supérieur', 'Formation des adultes', 'Ressources éducatives']
           },
-          // Add other categories with French translations
+          cat3: {
+            name: 'Affaires et économie',
+            children: ['Enregistrement d\'entreprise', 'Développement économique', 'Commerce', 'Soutien aux petites entreprises']
+          },
+          cat4: {
+            name: 'Environnement et ressources',
+            children: ['Ressources naturelles', 'Protection de l\'environnement', 'Parcs et loisirs', 'Faune']
+          },
+          cat5: {
+            name: 'Transport',
+            children: ['Services aux conducteurs', 'Transport en commun', 'Routes et autoroutes', 'Aviation']
+          },
+          cat6: {
+            name: 'Sécurité publique et droit',
+            children: ['Services de police', 'Tribunaux', 'Services juridiques', 'Services d\'urgence']
+          },
+          cat7: {
+            name: 'Logement et propriétés',
+            children: ['Programmes de logement', 'Évaluation des propriétés', 'Aide à la location', 'Accession à la propriété']
+          },
+          cat8: {
+            name: 'Emploi et travail',
+            children: ['Recherche d\'emploi', 'Droits du travail', 'Sécurité au travail', 'Développement de carrière']
+          },
+          cat9: {
+            name: 'Culture et loisirs',
+            children: ['Arts et culture', 'Patrimoine', 'Sports et loisirs', 'Tourisme']
+          },
+          cat10: {
+            name: 'Impôts et revenus',
+            children: ['Impôt sur le revenu', 'Taxe de vente', 'Impôt foncier', 'Crédits d\'impôt']
+          },
+          cat11: {
+            name: 'Gouvernement et démocratie',
+            children: ['Élections', 'Agences gouvernementales', 'Registres publics', 'Engagement civique']
+          },
+          cat12: {
+            name: 'Immigration et citoyenneté',
+            children: ['Services d\'immigration', 'Demandes de citoyenneté', 'Visas', 'Programmes pour réfugiés']
+          }
         },
-        // Swahili translations (basic examples)
+        // Complete Swahili translations for all categories
         sw: {
           cat1: {
             name: 'Afya na Huduma za Kijamii',
@@ -140,7 +178,46 @@ export default {
             name: 'Elimu na Mafunzo',
             children: ['Shule za K-12', 'Elimu ya Juu', 'Mafunzo ya Watu Wazima', 'Rasilimali za Elimu']
           },
-          // Add other categories with Swahili translations
+          cat3: {
+            name: 'Biashara na Uchumi',
+            children: ['Usajili wa Biashara', 'Maendeleo ya Kiuchumi', 'Biashara', 'Msaada wa Biashara Ndogo']
+          },
+          cat4: {
+            name: 'Mazingira na Rasilimali',
+            children: ['Rasilimali za Asili', 'Uhifadhi wa Mazingira', 'Mbuga na Burudani', 'Wanyamapori']
+          },
+          cat5: {
+            name: 'Usafiri',
+            children: ['Huduma za Dereva', 'Usafiri wa Umma', 'Barabara na Barabara Kuu', 'Usafiri wa Anga']
+          },
+          cat6: {
+            name: 'Usalama wa Umma na Sheria',
+            children: ['Huduma za Polisi', 'Mahakama', 'Huduma za Kisheria', 'Huduma za Dharura']
+          },
+          cat7: {
+            name: 'Nyumba na Mali',
+            children: ['Programu za Nyumba', 'Tathmini ya Mali', 'Msaada wa Kukodi', 'Umiliki wa Nyumba']
+          },
+          cat8: {
+            name: 'Ajira na Kazi',
+            children: ['Utafutaji wa Kazi', 'Haki za Wafanyakazi', 'Usalama Kazini', 'Maendeleo ya Kazi']
+          },
+          cat9: {
+            name: 'Utamaduni na Burudani',
+            children: ['Sanaa na Utamaduni', 'Urithi', 'Michezo na Burudani', 'Utalii']
+          },
+          cat10: {
+            name: 'Kodi na Mapato',
+            children: ['Kodi ya Mapato', 'Kodi ya Mauzo', 'Kodi ya Mali', 'Punguzo za Kodi']
+          },
+          cat11: {
+            name: 'Serikali na Demokrasia',
+            children: ['Uchaguzi', 'Mashirika ya Serikali', 'Kumbukumbu za Umma', 'Ushiriki wa Kiraia']
+          },
+          cat12: {
+            name: 'Uhamiaji na Uraia',
+            children: ['Huduma za Uhamiaji', 'Maombi ya Uraia', 'Visa', 'Programu za Wakimbizi']
+          }
         }
       },
       currentLocale: 'en'
@@ -204,7 +281,6 @@ export default {
     
     getCatName(catKey) {
       const locale = this.getCurrentLocale();
-      console.log('Getting category name:', catKey, 'Locale:', locale);
       
       try {
         // Try getting from i18n first
@@ -213,7 +289,6 @@ export default {
         
         // Check if it's a valid translation (not just the key repeated)
         if (i18nName && typeof i18nName === 'string' && i18nName !== i18nKey) {
-          console.log('Found i18n translation:', i18nName);
           return i18nName;
         }
         
@@ -222,12 +297,10 @@ export default {
                          this.fallbackData['en']?.[catKey]?.name;
         
         if (fallback) {
-          console.log('Using fallback translation:', fallback);
           return fallback;
         }
         
         // Last resort: return the key itself
-        console.log('No translation found, using key:', catKey);
         return catKey;
       } catch (error) {
         console.error(`Error getting name for ${catKey}:`, error);
@@ -248,12 +321,16 @@ export default {
           return i18nChildren;
         }
         
-        // Try getting from fallback data
-        const fallback = this.fallbackData[locale]?.[catKey]?.children || 
-                         this.fallbackData['en']?.[catKey]?.children;
+        // Try getting from fallback data for current locale
+        const currentLocaleFallback = this.fallbackData[locale]?.[catKey]?.children;
+        if (currentLocaleFallback && Array.isArray(currentLocaleFallback)) {
+          return currentLocaleFallback;
+        }
         
-        if (fallback && Array.isArray(fallback)) {
-          return fallback;
+        // Fallback to English
+        const englishFallback = this.fallbackData['en']?.[catKey]?.children;
+        if (englishFallback && Array.isArray(englishFallback)) {
+          return englishFallback;
         }
         
         // Last resort: return an empty array

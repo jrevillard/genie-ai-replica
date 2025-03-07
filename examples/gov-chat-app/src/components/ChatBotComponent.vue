@@ -1,4 +1,4 @@
-<!-- ChatBotComponent.vue - With Fixed Button Label -->
+<!-- ChatBotComponent.vue - With Chat History Integration -->
 <template>
   <div class="chatbot-container">
     <!-- Context Panel for selected tree nodes -->
@@ -53,9 +53,26 @@
         :placeholder="$t('chatbot.placeholder', 'Type your message here...')"
         @keyup.enter.exact.prevent="sendMessage"
       ></textarea>
-      <button class="send-btn" @click="sendMessage">
-        {{ $t('chatbot.sendButton', 'Send') }}
-      </button>
+      <div class="input-actions">
+        <button 
+          class="new-chat-btn" 
+          @click="startNewChat" 
+          title="Start New Chat"
+        >
+          <i class="fas fa-plus"></i>
+        </button>
+        <button 
+          v-if="chatMessages.length > 0" 
+          class="save-chat-btn" 
+          @click="saveChatToHistory" 
+          title="Save to Chat History"
+        >
+          <i class="fas fa-save"></i>
+        </button>
+        <button class="send-btn" @click="sendMessage">
+          {{ $t('chatbot.sendButton', 'Send') }}
+        </button>
+      </div>
     </div>
 
     <!-- Feedback Dialog -->
@@ -66,17 +83,62 @@
       @close="closeFeedbackDialog"
       @submit="handleFeedbackSubmit"
     />
+
+    <!-- Save Chat Dialog -->
+    <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
+      <template v-slot:header>
+        <h3>{{ $t('chatbot.saveChat', 'Save Chat') }}</h3>
+      </template>
+      <template v-slot:body>
+        <div class="form-group">
+          <label for="chatTitle">{{ $t('chatbot.chatTitle', 'Chat Title') }}</label>
+          <input 
+            type="text" 
+            id="chatTitle" 
+            v-model="saveChatDialog.title" 
+            :placeholder="$t('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')"
+          >
+        </div>
+        <div class="form-group">
+          <label for="chatFolder">{{ $t('chatbot.selectFolder', 'Select Folder') }}</label>
+          <select id="chatFolder" v-model="saveChatDialog.folderId">
+            <option 
+              v-for="folder in folders" 
+              :key="folder.id" 
+              :value="folder.id"
+            >
+              {{ folder.name }}
+            </option>
+          </select>
+        </div>
+      </template>
+      <template v-slot:footer>
+        <button @click="saveChatDialog.visible = false" class="cancel-btn">
+          {{ $t('common.cancel', 'Cancel') }}
+        </button>
+        <button 
+          @click="handleSaveChat" 
+          class="primary-btn" 
+          :disabled="!saveChatDialog.title.trim()"
+        >
+          {{ $t('common.save', 'Save') }}
+        </button>
+      </template>
+    </modal-dialog>
   </div>
 </template>
 
 <script>
 import { eventBus } from '../eventBus.js'
+import { mapGetters, mapActions } from 'vuex';
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
+import ModalDialog from './ModalDialog.vue'
 
 export default {
   name: 'ChatBotComponent',
   components: {
-    ChatResponseFeedbackDialog
+    ChatResponseFeedbackDialog,
+    ModalDialog
   },
   
   data() {
@@ -88,6 +150,12 @@ export default {
         visible: false,
         message: null
       },
+      saveChatDialog: {
+        visible: false,
+        title: '',
+        folderId: 'default'
+      },
+      currentChatId: null,
       currentLocale: 'en',
       translations: {
         en: {
@@ -99,20 +167,56 @@ export default {
           'feedback.button': 'Feedback',
           'chatbot.responsePrefix': 'I received your message',
           'chatbot.withContext': 'with context',
-          'chatbot.processingError': 'Sorry, there was an error processing your request.'
+          'chatbot.processingError': 'Sorry, there was an error processing your request.',
+          'chatbot.saveChat': 'Save Chat',
+          'chatbot.chatTitle': 'Chat Title',
+          'chatbot.chatTitlePlaceholder': 'Enter a title for this chat',
+          'chatbot.selectFolder': 'Select Folder',
+          'chatbot.chatSaved': 'Chat saved successfully!',
+          'chatbot.chatUpdated': 'Chat updated successfully!',
+          'chatbot.newChat': 'Start New Chat',
+          'chatbot.clearContext': 'Clear context and start a new conversation',
+          'chatbot.unsavedChanges': 'You have unsaved changes. Are you sure you want to start a new chat?'
         },
         fr: {
           'chatbot.welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
           'chatbot.queryContext': 'Contexte de la requête :',
           // Other French translations...
+          'chatbot.newChat': 'Nouvelle Conversation',
+          'chatbot.clearContext': 'Effacer le contexte et démarrer une nouvelle conversation'
         },
         sw: {
           'chatbot.welcomeMessage': 'Karibu! Nawezaje kukusaidia leo?',
           'chatbot.queryContext': 'Muktadha wa Hoja:',
           // Other Swahili translations...
+          'chatbot.newChat': 'Mazungumzo Mapya',
+          'chatbot.clearContext': 'Futa muktadha na anza mazungumzo mapya'
         }
       }
     };
+  },
+  
+  computed: {
+    ...mapGetters('chatHistory', [
+      'getAllFolders',
+      'getChatById'
+    ]),
+    
+    folders() {
+      return this.getAllFolders;
+    },
+    
+    // Get the first message from the user as a preview
+    chatPreview() {
+      const userMessage = this.chatMessages.find(msg => msg.sender === 'user');
+      if (userMessage) {
+        // Truncate to reasonable length (50 chars)
+        return userMessage.content.length > 50 
+          ? userMessage.content.substring(0, 47) + '...' 
+          : userMessage.content;
+      }
+      return 'New conversation';
+    }
   },
   
   mounted() {
@@ -135,6 +239,9 @@ export default {
     // Listen for tree node selection events
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
     
+    // Listen for open-chat events from the folder system
+    eventBus.$on('open-chat', this.loadChatFromHistory);
+    
     // Scroll to bottom of chat
     this.scrollToBottom();
   },
@@ -142,9 +249,15 @@ export default {
   beforeUnmount() {
     // Clean up event listeners
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
+    eventBus.$off('open-chat', this.loadChatFromHistory);
   },
   
   methods: {
+    ...mapActions('chatHistory', [
+      'createChat',
+      'updateChat'
+    ]),
+    
     translate(key, fallback) {
       // Try translation from i18n
       if (this.$t) {
@@ -215,6 +328,11 @@ export default {
         
         // Scroll to bottom after adding message
         this.scrollToBottom();
+        
+        // If this is an existing chat, update it
+        if (this.currentChatId) {
+          this.updateChatInHistory();
+        }
       }, 500);
     },
     
@@ -245,6 +363,136 @@ export default {
           container.scrollTop = container.scrollHeight;
         }
       });
+    },
+    
+    // Chat History Integration
+    
+    saveChatToHistory() {
+      // Open the save dialog
+      this.saveChatDialog = {
+        visible: true,
+        title: this.currentChatId ? 
+          (this.getChatById(this.currentChatId)?.title || '') : 
+          this.generateChatTitle(),
+        folderId: 'default'
+      };
+    },
+    
+    handleSaveChat() {
+      if (!this.saveChatDialog.title.trim()) return;
+      
+      if (this.currentChatId) {
+        // Update existing chat
+        this.updateChat({
+          chatId: this.currentChatId,
+          title: this.saveChatDialog.title.trim(),
+          preview: this.chatPreview
+        });
+        
+        // Show success message or notification
+        alert(this.translate('chatbot.chatUpdated', 'Chat updated successfully!'));
+      } else {
+        // Create new chat
+        const chatId = this.createChat({
+          title: this.saveChatDialog.title.trim(),
+          preview: this.chatPreview,
+          folderId: this.saveChatDialog.folderId,
+          // Store full chat data in localStorage or somewhere else
+          fullChatData: JSON.stringify(this.chatMessages)
+        });
+        
+        // Update current chat ID
+        this.currentChatId = chatId;
+        
+        // Show success message or notification
+        alert(this.translate('chatbot.chatSaved', 'Chat saved successfully!'));
+      }
+      
+      // Close dialog
+      this.saveChatDialog.visible = false;
+    },
+    
+    updateChatInHistory() {
+      // Only update if we have a current chat ID
+      if (this.currentChatId) {
+        this.updateChat({
+          chatId: this.currentChatId,
+          preview: this.chatPreview,
+          // Store full chat data in localStorage or somewhere else
+          fullChatData: JSON.stringify(this.chatMessages)
+        });
+      }
+    },
+    
+    loadChatFromHistory(chatId) {
+      // Get chat from store
+      const chat = this.getChatById(chatId);
+      if (!chat) return;
+      
+      try {
+        // Retrieve full chat data from storage
+        // This is a simplified example - in a real app, you'd store this in your backend
+        const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
+        if (storedChatData) {
+          // Load chat messages
+          this.chatMessages = JSON.parse(storedChatData);
+        } else {
+          // If no stored data, create a new chat with just the title
+          this.chatMessages = [
+            {
+              sender: 'bot',
+              content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
+            }
+          ];
+        }
+        
+        // Set current chat ID
+        this.currentChatId = chatId;
+        
+        // Scroll to bottom after loading
+        this.scrollToBottom();
+      } catch (error) {
+        console.error('Error loading chat:', error);
+        // Show error message
+      }
+    },
+    
+    generateChatTitle() {
+      // Generate a title based on the first user message or current date
+      const userMessage = this.chatMessages.find(msg => msg.sender === 'user');
+      if (userMessage) {
+        // Use first 20 chars of user message
+        return userMessage.content.length > 20 
+          ? userMessage.content.substring(0, 17) + '...' 
+          : userMessage.content;
+      }
+      
+      // Default to date-based title
+      const now = new Date();
+      return `Chat - ${now.toLocaleDateString()}`;
+    },
+    
+    startNewChat() {
+      // Confirm with user if there are unsaved changes
+      if (this.chatMessages.length > 1 && !this.currentChatId) {
+        if (!confirm(this.translate('chatbot.unsavedChanges', 'You have unsaved changes. Are you sure you want to start a new chat?'))) {
+          return;
+        }
+      }
+      
+      // Clear current chat
+      this.chatMessages = [
+        {
+          sender: 'bot',
+          content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
+        }
+      ];
+      this.currentChatId = null;
+      this.selectedContextItems = [];
+      this.newMessage = '';
+      
+      // Scroll to bottom after resetting
+      this.scrollToBottom();
     }
   }
 }
@@ -395,8 +643,42 @@ export default {
   max-height: 120px;
 }
 
+.input-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.new-chat-btn {
+  background: #f0f0f0;
+  color: #555;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: auto; /* This pushes it to the left */
+}
+
+.new-chat-btn:hover {
+  background: #e0e0e0;
+  color: #4e97d1;
+}
+
+.save-chat-btn {
+  background: #f0f0f0;
+  color: #555;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.save-chat-btn:hover {
+  background: #e0e0e0;
+}
+
 .send-btn {
-  align-self: flex-end;
   background: #4e97d1;
   color: #fff;
   border: none;
@@ -408,6 +690,60 @@ export default {
 
 .send-btn:hover {
   background: #3a7da0;
+}
+
+/* Form Styles for Save Dialog */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.form-group input, 
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.cancel-btn, 
+.primary-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cancel-btn {
+  background: none;
+  border: 1px solid #ddd;
+  color: #666;
+}
+
+.cancel-btn:hover {
+  background-color: #f5f5f5;
+}
+
+.primary-btn {
+  background-color: #4e97d1;
+  border: none;
+  color: white;
+}
+
+.primary-btn:hover {
+  background-color: #3a7cb5;
+}
+
+.primary-btn:disabled {
+  background-color: #a9cae8;
+  cursor: not-allowed;
 }
 
 /* Responsive Adjustments */

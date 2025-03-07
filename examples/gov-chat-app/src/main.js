@@ -2,7 +2,7 @@
  * main.js
  * 
  * Full file, including:
- * - Importing your App.vue, router, and i18n.js
+ * - Importing your App.vue, router, i18n.js, and store
  * - Setting up locale based on user preference or browser
  * - Logging all messages for each locale (only in development mode)
  * - Logging the active locale before and after mount
@@ -12,6 +12,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n.js'
+import store from './store' // Import the Vuex store
 
 // Determine the initial locale - prioritize:
 // 1. Previously saved user preference
@@ -56,9 +57,10 @@ if (process.env.NODE_ENV === 'development') {
 // Create the Vue app
 const app = createApp(App)
 
-// Use router + i18n
+// Use router, i18n, and store
 app.use(router)
 app.use(i18n)
+app.use(store) // Register the Vuex store
 
 // Create a global method for changing locale
 app.config.globalProperties.$setLocale = function(locale) {

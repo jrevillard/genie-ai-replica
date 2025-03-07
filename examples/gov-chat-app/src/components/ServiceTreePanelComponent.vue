@@ -1,4 +1,4 @@
-<!-- ServiceTreePanelComponent.vue - Complete Translations -->
+<!-- ServiceTreePanelComponent.vue - Updated for Tabbed Interface -->
 <template>
   <div class="service-tree-panel">
     <h4>{{ $t('sidebar.governmentServices', 'Government Services') }}</h4>
@@ -406,7 +406,11 @@ export default {
 <style scoped>
 .service-tree-panel {
   margin-bottom: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
+
 .service-tree-panel h4 {
   margin-bottom: 8px;
   font-weight: 600;
@@ -427,6 +431,8 @@ ul {
   list-style: none;
   padding: 0;
   margin: 0;
+  overflow-y: auto;
+  flex-grow: 1;
 }
 
 .node-label {

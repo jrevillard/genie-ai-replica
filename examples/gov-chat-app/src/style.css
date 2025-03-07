@@ -99,3 +99,166 @@ h1 {
   font-family: Arial, Helvetica, sans-serif !important;
 }
 
+/* ------------------------------------------------------------------- */
+/* Fix for dropdown/ellipsis menu positioning issues */
+.dropdown-menu,
+.context-menu,
+.ellipsis-menu,
+.chat-actions-menu,
+.folder-actions-menu {
+  position: absolute !important;
+  z-index: 9999 !important; /* Very high z-index to ensure it's on top of everything */
+  background-color: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: visible !important;
+}
+
+/* Fix for any parent containers that might be restricting the menu visibility */
+.chat-item,
+.folder-item,
+.chat-list-item,
+.chat-entry,
+.sidebar-section {
+  position: relative;
+  overflow: visible !important;
+}
+
+/* The ellipsis button itself */
+.actions-trigger,
+.more-options,
+.ellipsis-btn,
+.menu-trigger {
+  position: relative;
+  z-index: 1000;
+}
+
+/* Fix for any overflow issues in containers */
+.chat-container,
+.sidebar-container,
+.chatbot-container,
+.chat-window,
+.side-bar {
+  overflow: visible !important;
+}
+/* Target the specific action icons and container */
+.chat-item,
+.chat-entry,
+.chat-list-item {
+  position: relative;  /* Make sure parent has position relative */
+}
+
+/* Action buttons container */
+.chat-actions,
+.action-buttons,
+.action-icons {
+  position: absolute;
+  right: 0;
+  z-index: 10000 !important;  /* Extremely high z-index */
+  isolation: isolate;  /* Create a new stacking context */
+}
+
+/* Individual action buttons */
+.edit-icon,
+.move-icon,
+.delete-icon,
+.action-icon {
+  position: relative;
+  z-index: 10001 !important;  /* Even higher z-index */
+}
+
+/* The ChatBotComponent panel - make sure it doesn't overlap */
+.chatbot-container,
+.chat-panel,
+.chat-window {
+  z-index: 1;  /* Lower z-index than the action buttons */
+  position: relative;
+}
+
+/* Override any overflow hidden properties */
+#app,
+.main-container,
+.sidebar-container,
+.chat-history-container {
+  overflow: visible !important;
+}
+
+/* Specifically target the menu displayed when you click an action button */
+.dropdown-menu,
+.context-menu,
+.menu-dropdown {
+  position: fixed !important;  /* Use fixed instead of absolute */
+  z-index: 10002 !important;  /* Highest z-index */
+  top: auto !important;  /* Let the JS position it */
+  left: auto !important;  /* Let the JS position it */
+  transform: none !important;  /* Don't apply any transforms */
+}
+
+/* Add these styles to completely override the positioning of action icons */
+
+/* Target all possible action buttons and menus by their visual appearance */
+[class*="action"],
+[class*="icon"],
+[class*="menu"],
+[class*="dropdown"],
+[class*="btn"],
+img[src*="edit"],
+img[src*="move"],
+img[src*="delete"],
+svg {
+  /* Ensure icons are visible */
+  z-index: 99999 !important;
+  position: relative !important;
+}
+
+/* Target the edit icon that appears on the right */
+.chat-list-item > div:last-child,
+.chat-entry > div:last-child,
+.chat-item > div:last-child {
+  z-index: 99999 !important;
+  position: relative !important;
+}
+
+/* Force the panel to not overlap */
+.chatbot-container,
+.chat-panel,
+.chat-window,
+main > div:first-child {
+  overflow: visible !important;
+  z-index: 1 !important;
+}
+
+/* Target the ChatBotComponent specifically */
+[class*="ChatBot"],
+[class*="chat-bot"],
+[data-component="ChatBot"] {
+  z-index: 1 !important;
+  overflow: visible !important;
+}
+
+/* Create portal-like behavior for menus */
+.menu-container,
+.dropdown-container,
+.context-menu-container {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 100000 !important;
+}
+
+.menu-container > *,
+.dropdown-container > *,
+.context-menu-container > * {
+  pointer-events: auto;
+}
+
+/* Last resort: move all divs after chat items forward */
+.chat-item ~ div,
+.chat-entry ~ div,
+.chat-list-item ~ div {
+  z-index: 99999 !important;
+  position: relative !important;
+}

@@ -18,7 +18,23 @@ const messages = {
     sidebar: {
       governmentServices: 'Government Services',
       chatHistory: 'Chat History',
-      searchPlaceholder: 'Search services...'
+      searchPlaceholder: 'Search services...',
+      createFolder: 'Create Folder',
+      editFolder: 'Edit Folder',
+      folderName: 'Folder Name',
+      folderNamePlaceholder: 'Enter folder name',
+      moveChat: 'Move Chat',
+      moveChatTo: 'Move Chat To',
+      selectFolder: 'Select Folder',
+      deleteChat: 'Delete Chat',
+      deleteChatConfirm: 'Are you sure you want to delete this chat?',
+      deleteChatWarning: 'This action cannot be undone.',
+      renameChat: "Rename Chat",
+      chatTitle: "Chat Title",
+      chatTitlePlaceholder: "Enter a title for this chat",
+      deleteFolder: "Delete Folder",
+      deleteFolderConfirm: "Are you sure you want to delete '{name}' folder?",
+      chatsMoveWarning: "All chats in this folder will be moved to the default folder."
     },
     leftPanel: {
       cat1: {
@@ -351,7 +367,21 @@ const messages = {
       processingError: 'Error processing your request.',
       welcomeMessage: 'Welcome! How can I assist you with Kenya government services today?',
       attachFile: 'Attach File',
-      fileTooLarge: 'File is too large. Maximum size is {maxSize}.'
+      fileTooLarge: 'File is too large. Maximum size is {maxSize}.',
+      saveChat: 'Save Chat',
+      chatTitle: 'Chat Title',
+      chatTitlePlaceholder: 'Enter a title for this chat',
+      selectFolder: 'Select Folder',
+      newChat: 'New Chat',
+      clearContext: 'Clear context and start a new conversation',
+      unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?'
+    },
+    common: {
+      cancel: 'Cancel',
+      create: 'Create',
+      save: 'Save',
+      move: 'Move',
+      delete: 'Delete'
     },
     feedback: {
       title: 'Feedback',
@@ -397,7 +427,23 @@ const messages = {
     sidebar: {
       governmentServices: 'Services gouvernementaux',
       chatHistory: 'Historique de conversation',
-      searchPlaceholder: 'Rechercher un service...'
+      searchPlaceholder: 'Rechercher un service...',
+      createFolder: 'Créer un Dossier',
+      editFolder: 'Modifier le Dossier',
+      folderName: 'Nom du Dossier',
+      folderNamePlaceholder: 'Entrez le nom du dossier',
+      moveChat: 'Déplacer la Conversation',
+      moveChatTo: 'Déplacer Vers',
+      selectFolder: 'Sélectionner un Dossier',
+      deleteChat: 'Supprimer la Conversation',
+      deleteChatConfirm: 'Êtes-vous sûr de vouloir supprimer cette conversation?',
+      deleteChatWarning: 'Cette action ne peut pas être annulée.',
+      renameChat: "Renommer la conversation",
+      chatTitle: "Titre de la conversation",
+      chatTitlePlaceholder: "Entrez un titre pour cette conversation",
+      deleteFolder: "Supprimer le dossier",
+      deleteFolderConfirm: "Êtes-vous sûr de vouloir supprimer le dossier '{name}' ?",
+      chatsMoveWarning: "Toutes les conversations de ce dossier seront déplacées vers le dossier par défaut."
     },
     leftPanel: {
       cat1: {
@@ -741,7 +787,21 @@ const messages = {
       processingError: 'Erreur lors du traitement de votre demande.',
       welcomeMessage: 'Bienvenue! Comment puis-je vous aider avec les services du gouvernement kenyan aujourd\'hui?',
       attachFile: 'Joindre un fichier',
-      fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de {maxSize}.'
+      fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de {maxSize}.',
+      saveChat: 'Enregistrer la Conversation',
+      chatTitle: 'Titre de la Conversation',
+      chatTitlePlaceholder: 'Entrez un titre pour cette conversation',
+      selectFolder: 'Sélectionner un Dossier',
+      newChat: 'Nouvelle Conversation',
+      clearContext: 'Effacer le contexte et démarrer une nouvelle conversation',
+      unsavedChanges: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation?'
+    },
+    common: {
+      cancel: 'Annuler',
+      create: 'Créer',
+      save: 'Enregistrer',
+      move: 'Déplacer',
+      delete: 'Supprimer'
     },
     feedback: {
       title: 'Retour d\'information',
@@ -787,7 +847,23 @@ const messages = {
     sidebar: {
       governmentServices: 'Huduma za Serikali',
       chatHistory: 'Historia ya Gumzo',
-      searchPlaceholder: 'Tafuta huduma...'
+      searchPlaceholder: 'Tafuta huduma...',
+      createFolder: 'Unda Folda',
+      editFolder: 'Hariri Folda',
+      folderName: 'Jina la Folda',
+      folderNamePlaceholder: 'Ingiza jina la folda',
+      moveChat: 'Hamisha Mazungumzo',
+      moveChatTo: 'Hamisha Mazungumzo Kwenda',
+      selectFolder: 'Chagua Folda',
+      deleteChat: 'Futa Mazungumzo',
+      deleteChatConfirm: 'Je, una uhakika unataka kufuta mazungumzo haya?',
+      deleteChatWarning: 'Kitendo hiki hakiwezi kutenduliwa.',
+      renameChat: "Badilisha jina la mazungumzo",
+      chatTitle: "Kichwa cha mazungumzo",
+      chatTitlePlaceholder: "Ingiza kichwa cha mazungumzo haya",
+      deleteFolder: "Futa Folda",
+      deleteFolderConfirm: "Una uhakika unataka kufuta folda ya '{name}'?",
+      chatsMoveWarning: "Mazungumzo yote katika folda hii yatahamishwa kwenye folda ya chaguo-msingi."
     },
     leftPanel: {
       cat1: {
@@ -1131,7 +1207,21 @@ const messages = {
       processingError: 'Hitilafu katika kushughulikia ombi lako.',
       welcomeMessage: 'Karibu! Nawezaje kukusaidia na huduma za serikali ya Kenya leo?',
       attachFile: 'Ambatisha Faili',
-      fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.'
+      fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.',
+      saveChat: 'Hifadhi Mazungumzo',
+      chatTitle: 'Kichwa cha Mazungumzo',
+      chatTitlePlaceholder: 'Ingiza kichwa cha mazungumzo haya',
+      selectFolder: 'Chagua Folda',
+      newChat: 'Mazungumzo Mapya',
+      clearContext: 'Futa muktadha na anza mazungumzo mapya',
+      unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?'
+    },
+    common: {
+      cancel: 'Ghairi',
+      create: 'Unda',
+      save: 'Hifadhi',
+      move: 'Hamisha',
+      delete: 'Futa'
     },
     feedback: {
       title: 'Maoni',

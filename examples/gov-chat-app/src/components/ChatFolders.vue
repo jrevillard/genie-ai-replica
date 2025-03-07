@@ -371,10 +371,10 @@ export default {
     showChatActionsMenu(chat, event) {
       this.activeChat = chat;
       
-      // Position the context menu near the button
+      // Position the context menu to the left of the button instead of to the right
       const rect = event.target.getBoundingClientRect();
       this.menuPosition = {
-        x: rect.right,
+        x: rect.left - 184, // Offset by menu width (180px) plus a small gap (4px)
         y: rect.top
       };
       

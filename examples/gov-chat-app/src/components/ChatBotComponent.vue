@@ -1,7 +1,30 @@
-<!-- ChatBotComponent.vue -->
+<!-- ChatBotComponent.vue - Enhanced Translation Support -->
 <template>
   <div class="chatbot-container">
-    <!-- The scrollable chat window -->
+    <!-- Context Panel for selected tree nodes -->
+    <div class="context-panel" v-if="selectedContextItems.length > 0">
+      <div class="context-header">
+        <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
+      </div>
+      <div class="context-items">
+        <div 
+          v-for="(item, index) in selectedContextItems" 
+          :key="index" 
+          class="context-item"
+        >
+          <span class="context-text">{{ item.service }}</span>
+          <button 
+            class="context-remove-btn" 
+            @click="removeContextItem(index)"
+            :aria-label="translate('chatbot.removeItem', 'Remove item')"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Window -->
     <div class="chat-window" ref="chatWindow">
       <div
         v-for="(msg, index) in chatMessages"
@@ -12,273 +35,250 @@
         <div class="message-bubble">
           <span>{{ msg.content }}</span>
         </div>
-        <!-- Feedback for bot messages -->
         <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-          <button @click="openFeedbackDialog(index)">{{ $t('feedback.button') }}</button>
+          <button @click="openFeedback(index)">{{ translate('feedback.button', 'Feedback') }}</button>
         </div>
       </div>
-      <!-- Auto-scroll anchor element -->
       <div ref="messagesEnd"></div>
     </div>
 
-    <!-- Input row at bottom -->
+    <!-- Input Area -->
     <div class="chat-input">
       <textarea
         v-model="newMessage"
         class="prompt-textarea"
         rows="4"
-        :placeholder="$t('chatbot.placeholder')"
+        :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
         @keyup.enter.exact.prevent="sendMessage"
       ></textarea>
-
-      <div class="file-upload-wrapper">
-        <label for="file-upload" class="file-upload-button">
-          <span>{{ $t('chatbot.attachFile') }}</span>
-          <input 
-            id="file-upload" 
-            type="file" 
-            accept="image/*,.pdf" 
-            @change="onFileSelected"
-            class="hidden-input" 
-          />
-        </label>
-        <div v-if="filePreview" class="file-preview">
-          <img
-            v-if="isImagePreview"
-            :src="filePreview"
-            alt="Preview"
-            class="preview-img"
-          />
-          <div v-else class="pdf-preview">
-            <p>PDF: {{ selectedFile?.name }}</p>
-          </div>
-          <button @click="removeFile" class="remove-file-btn">x</button>
-        </div>
-      </div>
-
-      <!-- Upload progress indicator -->
-      <div v-if="uploadProgress > 0 && uploadProgress < 100" class="upload-progress">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
-        </div>
-        <span>{{ uploadProgress }}%</span>
-      </div>
-
-      <button class="send-btn" @click="sendMessage" :disabled="isUploading">
-        {{ $t('chatbot.sendButton') }}
+      <button class="send-btn" @click="sendMessage">
+        {{ translate('chatbot.sendButton', 'Send') }}
       </button>
     </div>
-
-    <chat-response-feedback-dialog
-      :visible="feedbackDialog.visible"
-      :message="feedbackDialog.message"
-      @close="feedbackDialog.visible = false"
-      @submit="handleFeedbackSubmit"
-    />
   </div>
 </template>
 
 <script>
+import { eventBus } from '../eventBus.js'
 import axios from 'axios'
-import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 
 export default {
   name: 'ChatBotComponent',
-  components: { ChatResponseFeedbackDialog },
+  
   data() {
     return {
       chatMessages: [],
       newMessage: '',
-      selectedFile: null,
-      filePreview: null,
-      uploadProgress: 0,
-      isUploading: false,
-      feedbackDialog: {
-        visible: false,
-        message: null
-      },
-      // For intersection observer
-      observer: null
-    }
-  },
-  computed: {
-    isImagePreview() {
-      return this.filePreview && this.filePreview.startsWith('blob:')
-    }
-  },
-  mounted() {
-    this.scrollToBottom(true)
-    this.setupScrollObserver()
-    
-    // Add welcome message if chat is empty
-    if (this.chatMessages.length === 0) {
-      this.chatMessages.push({
-        sender: 'bot',
-        content: this.$t('chatbot.welcomeMessage')
-      })
-    }
-  },
-  beforeDestroy() {
-    // Clean up observer
-    if (this.observer) {
-      this.observer.disconnect()
-    }
-    // Clean up any blob URLs to prevent memory leaks
-    if (this.filePreview && this.filePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(this.filePreview)
-    }
-  },
-  methods: {
-    setupScrollObserver() {
-      // Create an intersection observer to detect when we should auto-scroll
-      this.observer = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0]
-          if (entry.isIntersecting) {
-            // User is at bottom, we should auto-scroll for new messages
-            this.shouldAutoScroll = true
-          } else {
-            // User has scrolled up, don't auto-scroll
-            this.shouldAutoScroll = false
-          }
+      selectedContextItems: [],
+      currentLocale: 'en',
+      translations: {
+        en: {
+          'chatbot.welcomeMessage': 'Welcome! How can I help you today?',
+          'chatbot.queryContext': 'Query Context:',
+          'chatbot.removeItem': 'Remove item',
+          'chatbot.placeholder': 'Type your message here...',
+          'chatbot.sendButton': 'Send',
+          'feedback.button': 'Feedback',
+          'chatbot.responsePrefix': 'I received your message',
+          'chatbot.withContext': 'with context',
+          'chatbot.processingError': 'Sorry, there was an error processing your request.'
         },
-        { threshold: 0.5 }
-      )
-      
-      // Start observing our anchor element
-      if (this.$refs.messagesEnd) {
-        this.observer.observe(this.$refs.messagesEnd)
-      }
-    },
-    onFileSelected(e) {
-      const file = e.target.files[0]
-      if (!file) return
-      
-      // File size validation (10MB limit)
-      const maxSize = 10 * 1024 * 1024 // 10MB in bytes
-      if (file.size > maxSize) {
-        this.chatMessages.push({
-          sender: 'bot',
-          content: this.$t('chatbot.fileTooLarge', { maxSize: '10MB' })
-        })
-        return
-      }
-      
-      this.selectedFile = file
-
-      if (file.type.includes('image')) {
-        // Clean up previous blob URL if exists
-        if (this.filePreview && this.filePreview.startsWith('blob:')) {
-          URL.revokeObjectURL(this.filePreview)
-        }
-        this.filePreview = URL.createObjectURL(file)
-      } else if (file.type === 'application/pdf') {
-        this.filePreview = 'pdf'
-      }
-    },
-    removeFile() {
-      if (this.filePreview && this.filePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(this.filePreview)
-      }
-      this.selectedFile = null
-      this.filePreview = null
-    },
-    async sendMessage() {
-      const content = this.newMessage.trim()
-      if (!content && !this.selectedFile) return
-      
-      if (content) {
-        this.chatMessages.push({ sender: 'user', content })
-      }
-      this.newMessage = ''
-
-      if (this.selectedFile) {
-        await this.uploadFile()
-      }
-
-      if (content) {
-        try {
-          const res = await axios.post('/api/chat', { message: content })
-          this.chatMessages.push({ sender: 'bot', content: res.data.reply })
-        } catch (error) {
-          console.error('Chat API error:', error)
-          this.chatMessages.push({
-            sender: 'bot',
-            content: this.$t('chatbot.processingError')
-          })
+        fr: {
+          'chatbot.welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
+          'chatbot.queryContext': 'Contexte de la requête :',
+          'chatbot.removeItem': 'Supprimer l\'élément',
+          'chatbot.placeholder': 'Tapez votre message ici...',
+          'chatbot.sendButton': 'Envoyer',
+          'feedback.button': 'Commentaires',
+          'chatbot.responsePrefix': 'J\'ai reçu votre message',
+          'chatbot.withContext': 'avec contexte',
+          'chatbot.processingError': 'Désolé, une erreur s\'est produite lors du traitement de votre demande.'
+        },
+        sw: {
+          'chatbot.welcomeMessage': 'Karibu! Nawezaje kukusaidia leo?',
+          'chatbot.queryContext': 'Muktadha wa Hoja:',
+          'chatbot.removeItem': 'Ondoa kipengee',
+          'chatbot.placeholder': 'Andika ujumbe wako hapa...',
+          'chatbot.sendButton': 'Tuma',
+          'feedback.button': 'Maoni',
+          'chatbot.responsePrefix': 'Nimepokea ujumbe wako',
+          'chatbot.withContext': 'na muktadha',
+          'chatbot.processingError': 'Samahani, kulikuwa na hitilafu katika kutuma ombi lako.'
         }
       }
-    },
-    async uploadFile() {
-      this.isUploading = true
-      this.uploadProgress = 0
-      
-      try {
-        const formData = new FormData()
-        formData.append('file', this.selectedFile)
-        
-        await axios.post('/api/upload', formData, {
-          onUploadProgress: progressEvent => {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            )
-            this.uploadProgress = percentCompleted
-          }
-        })
-        
-        this.chatMessages.push({
-          sender: 'bot',
-          content: this.$t('chatbot.fileReceived')
-        })
-      } catch (error) {
-        console.error('File upload error:', error)
-        this.chatMessages.push({
-          sender: 'bot',
-          content: this.$t('chatbot.fileUploadError')
-        })
-      } finally {
-        this.isUploading = false
-        this.uploadProgress = 0
-        this.removeFile()
-      }
-    },
-    openFeedbackDialog(index) {
-      const botMessage = this.chatMessages[index]
-      this.feedbackDialog.visible = true
-      this.feedbackDialog.message = botMessage
-    },
-    handleFeedbackSubmit(feedback) {
-      console.log('Feedback submitted:', feedback)
-      
-      // Send feedback to server
-      axios.post('/api/feedback', {
-        messageContent: this.feedbackDialog.message.content,
-        feedback
-      }).catch(error => {
-        console.error('Error submitting feedback:', error)
-      })
-    },
-    scrollToBottom(force = false) {
-      // If force is true or we're near the bottom already, scroll down
-      this.$nextTick(() => {
-        const container = this.$refs.chatWindow
-        if (!container) return
-        
-        if (force || this.shouldAutoScroll) {
-          // Use requestAnimationFrame for smoother scrolling after layout
-          requestAnimationFrame(() => {
-            container.scrollTop = container.scrollHeight
-          })
-        }
-      })
     }
   },
+  
+  created() {
+    // Set initial locale
+    if (this.$i18n && this.$i18n.locale) {
+      this.currentLocale = this.$i18n.locale;
+    }
+    
+    // Watch for locale changes
+    if (this.$i18n) {
+      this.$watch(() => this.$i18n.locale, (newLocale) => {
+        console.log('Locale changed to:', newLocale);
+        this.currentLocale = newLocale;
+        this.updateWelcomeMessage();
+      });
+    }
+  },
+  
+  mounted() {
+    // Listen for tree node selection events
+    eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
+    
+    // Add welcome message
+    this.updateWelcomeMessage();
+    
+    // Scroll to bottom of chat
+    this.scrollToBottom();
+  },
+  
+  beforeUnmount() {
+    // Clean up event listeners
+    eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
+  },
+  
   watch: {
     chatMessages: {
       handler() {
-        this.scrollToBottom()
+        this.scrollToBottom();
       },
       deep: true
+    }
+  },
+  
+  methods: {
+    getCurrentLocale() {
+      // Get current locale from i18n, fallback to component's property
+      return this.$i18n ? this.$i18n.locale : this.currentLocale;
+    },
+    
+    translate(key, fallback) {
+      const locale = this.getCurrentLocale();
+      
+      try {
+        // Try i18n first
+        if (this.$t) {
+          const i18nTranslation = this.$t(key);
+          // Check if translation exists and is not just the key repeated
+          if (i18nTranslation && i18nTranslation !== key) {
+            return i18nTranslation;
+          }
+        }
+        
+        // Try local translations
+        const translation = this.translations[locale]?.[key] || 
+                            this.translations['en']?.[key] || 
+                            fallback;
+        return translation;
+      } catch (error) {
+        console.error(`Translation error for key ${key}:`, error);
+        return fallback;
+      }
+    },
+    
+    updateWelcomeMessage() {
+      // Replace welcome message with translated version 
+      // Only if it's the first and only message
+      if (this.chatMessages.length === 0 || 
+          (this.chatMessages.length === 1 && this.chatMessages[0].sender === 'bot')) {
+        
+        this.chatMessages = [{
+          sender: 'bot',
+          content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
+        }];
+      }
+    },
+    
+    handleTreeNodeSelected(item) {
+      console.log('Tree node selection received:', item);
+      
+      if (!item || typeof item !== 'object') return;
+      
+      // Check if item is selected or deselected
+      if (item.selected) {
+        // Add to context if not already present
+        const exists = this.selectedContextItems.some(existing => 
+            existing.category === item.category && 
+            existing.service === item.service);
+            
+        if (!exists) {
+          this.selectedContextItems.push(item);
+        }
+      } else {
+        // Remove from context if deselected
+        this.selectedContextItems = this.selectedContextItems.filter(existing => 
+          !(existing.category === item.category && existing.service === item.service)
+        );
+      }
+    },
+    
+    removeContextItem(index) {
+      if (index < 0 || index >= this.selectedContextItems.length) return;
+      
+      const removed = this.selectedContextItems[index];
+      this.selectedContextItems.splice(index, 1);
+      
+      // Emit event to notify tree component to update its selection
+      eventBus.$emit('contextItemRemoved', removed);
+    },
+    
+    async sendMessage() {
+      const content = this.newMessage.trim();
+      if (!content) return;
+      
+      // Add user message
+      this.chatMessages.push({ sender: 'user', content });
+      this.newMessage = '';
+      
+      try {
+        // Include context items in the API request
+        let contextInfo = null;
+        
+        if (this.selectedContextItems.length > 0) {
+          contextInfo = this.selectedContextItems.map(item => item.service).join(', ');
+        }
+          
+        // Simulate API response
+        setTimeout(() => {
+          this.chatMessages.push({ 
+            sender: 'bot', 
+            content: `${this.translate('chatbot.responsePrefix', 'I received your message')}: "${content}"${contextInfo ? ` ${this.translate('chatbot.withContext', 'with context')}: ${contextInfo}` : ''}`
+          });
+        }, 500);
+        
+        // Uncomment for real API call
+        /*
+        const res = await axios.post('/api/chat', { 
+          message: content,
+          context: contextInfo
+        });
+        
+        this.chatMessages.push({ sender: 'bot', content: res.data.reply });
+        */
+      } catch (error) {
+        console.error('Chat API error:', error);
+        this.chatMessages.push({
+          sender: 'bot',
+          content: this.translate('chatbot.processingError', 'Sorry, there was an error processing your request.')
+        });
+      }
+    },
+    
+    openFeedback(index) {
+      alert('Feedback feature not implemented');
+    },
+    
+    scrollToBottom() {
+      this.$nextTick(() => {
+        const container = this.$refs.chatWindow;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
     }
   }
 }
@@ -292,24 +292,83 @@ export default {
   min-height: 0;
 }
 
+/* Context Panel Styles */
+.context-panel {
+  background: #f5f9ff;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.context-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.context-title {
+  font-weight: 600;
+  color: #4a4a4a;
+}
+
+.context-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.context-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  padding: 4px 8px 4px 10px;
+  font-size: 0.85rem;
+  max-width: 200px;
+  overflow: hidden;
+}
+
+.context-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  margin-right: 4px;
+}
+
+.context-remove-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.context-remove-btn:hover {
+  color: #555;
+  background: #f0f0f0;
+}
+
+/* Chat Window Styles */
 .chat-window {
   flex: 1;
   overflow-y: auto;
   padding: 10px;
   background: #fafafa;
-  scroll-behavior: smooth;
 }
 
 .chat-message {
   margin-bottom: 12px;
   display: flex;
   align-items: flex-start;
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .chat-message.user {
@@ -325,8 +384,6 @@ export default {
   border-radius: 16px;
   max-width: 60%;
   line-height: 1.4;
-
-  /* Ensure long text/code wraps */
   white-space: pre-wrap;
   word-wrap: break-word;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -347,12 +404,7 @@ export default {
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
-  margin-top: 4px;
   font-size: 0.8rem;
-  transition: background-color 0.2s;
-}
-.feedback-trigger button:hover {
-  background: #e0e0e0;
 }
 
 .chat-input {
@@ -364,7 +416,6 @@ export default {
 }
 
 .prompt-textarea {
-  flex: 1;
   resize: vertical;
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -372,94 +423,6 @@ export default {
   font-size: 1rem;
   margin-bottom: 8px;
   max-height: 120px;
-}
-
-.file-upload-wrapper {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.file-upload-button {
-  display: inline-block;
-  padding: 6px 12px;
-  background: #f0f0f0;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.file-upload-button:hover {
-  background: #e0e0e0;
-}
-
-.hidden-input {
-  position: absolute;
-  opacity: 0;
-  width: 0.1px;
-  height: 0.1px;
-  overflow: hidden;
-}
-
-.file-preview {
-  display: flex;
-  align-items: center;
-  margin-left: 10px;
-  background: #f5f5f5;
-  padding: 4px;
-  border-radius: 4px;
-}
-
-.preview-img {
-  max-width: 40px;
-  max-height: 40px;
-  border-radius: 3px;
-}
-
-.pdf-preview {
-  padding: 4px 8px;
-  font-size: 0.9rem;
-}
-
-.remove-file-btn {
-  background: #ff5a5a;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.remove-file-btn:hover {
-  background: #e04545;
-}
-
-.upload-progress {
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: #eee;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-right: 8px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #4e97d1;
-  transition: width 0.3s;
 }
 
 .send-btn {
@@ -471,19 +434,12 @@ export default {
   border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s;
 }
 
 .send-btn:hover {
   background: #3a7da0;
 }
 
-.send-btn:disabled {
-  background: #a0c8e0;
-  cursor: not-allowed;
-}
-
-/* Responsive adjustments */
 @media (min-width: 768px) {
   .chat-input {
     flex-direction: row;
@@ -493,17 +449,7 @@ export default {
   .prompt-textarea {
     margin-bottom: 0;
     margin-right: 8px;
-  }
-  
-  .file-upload-wrapper {
-    margin-bottom: 0;
-    margin-right: 8px;
-  }
-  
-  .upload-progress {
-    margin-bottom: 0;
-    margin-right: 8px;
-    max-width: 150px;
+    flex: 1;
   }
 }
 </style>

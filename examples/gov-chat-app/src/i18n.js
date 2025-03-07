@@ -34,7 +34,14 @@ const messages = {
       chatTitlePlaceholder: "Enter a title for this chat",
       deleteFolder: "Delete Folder",
       deleteFolderConfirm: "Are you sure you want to delete '{name}' folder?",
-      chatsMoveWarning: "All chats in this folder will be moved to the default folder."
+      chatsMoveWarning: "All chats in this folder will be moved to the default folder.",
+      weatherTitle: "Weather Forecast",
+      weatherLoading: "Loading weather data...",
+      weatherError: "Unable to load weather data. Please try again.",
+      folders: "Folders",
+      emptyFolder: "No chats in this folder",
+      chatTitlePlaceholder: "Enter a title for this chat",
+      searchPlaceholder: "Search services..."
     },
     leftPanel: {
       cat1: {
@@ -443,7 +450,14 @@ const messages = {
       chatTitlePlaceholder: "Entrez un titre pour cette conversation",
       deleteFolder: "Supprimer le dossier",
       deleteFolderConfirm: "Êtes-vous sûr de vouloir supprimer le dossier '{name}' ?",
-      chatsMoveWarning: "Toutes les conversations de ce dossier seront déplacées vers le dossier par défaut."
+      chatsMoveWarning: "Toutes les conversations de ce dossier seront déplacées vers le dossier par défaut.",
+      weatherTitle: "Prévisions Météo",
+      weatherLoading: "Chargement des données météo...",
+      weatherError: "Impossible de charger les données météo. Veuillez réessayer.",
+      folders: "Dossiers",
+      emptyFolder: "Aucune conversation dans ce dossier",
+      chatTitlePlaceholder: "Entrez un titre pour cette conversation",
+      searchPlaceholder: "Rechercher des services..."
     },
     leftPanel: {
       cat1: {
@@ -863,7 +877,14 @@ const messages = {
       chatTitlePlaceholder: "Ingiza kichwa cha mazungumzo haya",
       deleteFolder: "Futa Folda",
       deleteFolderConfirm: "Una uhakika unataka kufuta folda ya '{name}'?",
-      chatsMoveWarning: "Mazungumzo yote katika folda hii yatahamishwa kwenye folda ya chaguo-msingi."
+      chatsMoveWarning: "Mazungumzo yote katika folda hii yatahamishwa kwenye folda ya chaguo-msingi.",
+      weatherTitle: "Utabiri wa Hali ya Hewa",
+      weatherLoading: "Inapakia data ya hali ya hewa...",
+      weatherError: "Imeshindwa kupakia data ya hali ya hewa. Tafadhali jaribu tena.",
+      folders: "Folda",
+      emptyFolder: "Hakuna mazungumzo katika folda hii",
+      chatTitlePlaceholder: "Ingiza kichwa cha mazungumzo haya",
+      searchPlaceholder: "Tafuta huduma..."
     },
     leftPanel: {
       cat1: {

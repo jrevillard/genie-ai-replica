@@ -409,19 +409,21 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
+  font-size: 8pt; /* Setting base font size to 8pt */
 }
 
 .service-tree-panel h4 {
   margin-bottom: 8px;
   font-weight: 600;
   color: #333;
+  font-size: 10pt; /* Keeping the header slightly larger for readability */
 }
 
 .search-box {
   width: 100%;
   margin-bottom: 8px;
   padding: 6px;
-  font-size: 0.95rem;
+  font-size: 8pt;
   border: 1px solid #ccc;
   border-radius: 4px;
   outline: none;
@@ -439,7 +441,7 @@ ul {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 3px 6px; /* Slightly reduced padding to fit smaller text */
   border-radius: 4px;
   transition: background-color 0.2s;
 }
@@ -447,11 +449,11 @@ ul {
   background-color: #f0f0f0;
 }
 .toggle-icon {
-  width: 20px;
+  width: 16px; /* Slightly reduced width */
   text-align: center;
   margin-right: 4px;
   color: #666;
-  font-size: 12px;
+  font-size: 8pt;
 }
 .toggle-icon.placeholder {
   visibility: hidden;
@@ -462,14 +464,14 @@ ul {
 }
 
 .child-list {
-  margin-left: 20px;
+  margin-left: 16px; /* Reduced margin */
   border-left: 1px dashed #ccc;
-  padding-left: 8px;
+  padding-left: 6px; /* Reduced padding */
   margin-top: 2px;
 }
 
 .selected .node-label {
   background-color: #e6f0ff;
-  border-left: 3px solid #1867c0;
+  border-left: 2px solid #1867c0; /* Reduced border */
 }
 </style>

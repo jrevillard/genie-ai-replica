@@ -26,6 +26,10 @@
       <div class="sidebar-content">
         <!-- Government Services Tab -->
         <div v-if="activeTab === 'services'" class="services-list">
+          <!-- Weather Panel placed above the tree -->
+          <weather-panel />
+          
+          <!-- Service Tree Panel -->
           <service-tree-panel-component />
         </div>
         
@@ -41,12 +45,14 @@
 <script>
 import ServiceTreePanelComponent from './ServiceTreePanelComponent.vue'
 import ChatFolders from './ChatFolders.vue'
+import WeatherPanel from './WeatherPanel.vue'
 
 export default {
   name: 'SideBarComponent',
   components: {
     ServiceTreePanelComponent,
-    ChatFolders
+    ChatFolders,
+    WeatherPanel
   },
   props: {
     isOpen: { type: Boolean, default: true }
@@ -129,7 +135,7 @@ export default {
 .services-list,
 .chat-history {
   flex-grow: 1;
-  overflow: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   height: 100%;

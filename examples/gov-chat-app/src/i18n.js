@@ -152,7 +152,21 @@ const messages = {
       export: 'Export Data',
       dateRange: 'Date Range',
       startDate: 'Start Date',
-      endDate: 'End Date'
+      endDate: 'End Date',
+      // Added for AnalyticsComponent.vue
+      rank: 'Rank',
+      query: 'Query',
+      count: 'Count',
+      avgTime: 'Avg. Time',
+      serviceUsage: 'Service Categories Usage',
+      // Added for UsageTrendChart.vue
+      usageTrends: 'Usage Trends',
+      week: 'Last Week',
+      month: 'Last Month',
+      quarter: 'Last Quarter',
+      year: 'Last Year',
+      uniqueUsers: 'Unique Users',
+      satisfactionRate: 'Satisfaction Rate'
     },
     settings: {
       title: 'Settings',
@@ -517,7 +531,21 @@ const messages = {
       export: 'Exporter les Données',
       dateRange: 'Période',
       startDate: 'Date de début',
-      endDate: 'Date de fin'
+      endDate: 'Date de fin',
+      // Added for AnalyticsComponent.vue
+      rank: 'Rang',
+      query: 'Requête',
+      count: 'Nombre',
+      avgTime: 'Temps Moyen',
+      serviceUsage: 'Utilisation des Catégories de Service',
+      // Added for UsageTrendChart.vue
+      usageTrends: 'Tendances d\'Utilisation',
+      week: 'Dernière Semaine',
+      month: 'Dernier Mois',
+      quarter: 'Dernier Trimestre',
+      year: 'Dernière Année',
+      uniqueUsers: 'Utilisateurs Uniques',
+      satisfactionRate: 'Taux de Satisfaction'
     },
     settings: {
       title: 'Paramètres',
@@ -893,7 +921,21 @@ const messages = {
       export: 'Toa Data',
       dateRange: 'Kipindi cha Tarehe',
       startDate: 'Tarehe ya Kuanza',
-      endDate: 'Tarehe ya Mwisho'
+      endDate: 'Tarehe ya Mwisho',
+      // Added for AnalyticsComponent.vue
+      rank: 'Nafasi',
+      query: 'Ombi',
+      count: 'Idadi',
+      avgTime: 'Wastani wa Muda',
+      serviceUsage: 'Matumizi ya Vikundi vya Huduma',
+      // Added for UsageTrendChart.vue
+      usageTrends: 'Mienendo ya Matumizi',
+      week: 'Wiki Iliyopita',
+      month: 'Mwezi Uliopita',
+      quarter: 'Robo Mwaka Iliyopita',
+      year: 'Mwaka Uliopita',
+      uniqueUsers: 'Watumiaji wa Kipekee',
+      satisfactionRate: 'Kiwango cha Kuridhika'
     },
     settings: {
       title: 'Mipangilio',
@@ -1122,7 +1164,7 @@ const messages = {
 };
 
 export default createI18n({
-  locale: 'sw', // or 'en', 'fr'
+  locale: 'en', // default locale
   fallbackLocale: 'en',
   messages
 })

@@ -1,27 +1,27 @@
-<!-- AnalyticsComponent.vue - Fixed Version -->
+<!-- AnalyticsComponent.vue - Updated Version with Translation Support -->
 <template>
   <div class="analytics-modal" @click.self="close">
     <div class="analytics-content">
       <div class="analytics-header">
-        <h2>{{ $t('analytics.title', 'Analytics Dashboard') }}</h2>
+        <h2>{{ $t('analytics.title') }}</h2>
         <button class="close-btn" @click="close" aria-label="Close">×</button>
       </div>
       
       <div class="analytics-body">
         <!-- Usage Trend Chart -->
-        <usage-trend-chart />
+        <usage-trend-chart ref="usageTrendChart" />
         
         <!-- Top Queries Section -->
         <div class="analytics-section">
-          <h3>{{ $t('analytics.topQueries', 'Top Queries') }}</h3>
+          <h3>{{ $t('analytics.topQueries') }}</h3>
           <div class="top-queries">
             <table>
               <thead>
                 <tr>
-                  <th>{{ $t('analytics.rank', 'Rank') }}</th>
-                  <th>{{ $t('analytics.query', 'Query') }}</th>
-                  <th>{{ $t('analytics.count', 'Count') }}</th>
-                  <th>{{ $t('analytics.avgTime', 'Avg. Time') }}</th>
+                  <th>{{ $t('analytics.rank') }}</th>
+                  <th>{{ $t('analytics.query') }}</th>
+                  <th>{{ $t('analytics.count') }}</th>
+                  <th>{{ $t('analytics.avgTime') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -38,11 +38,11 @@
         
         <!-- Service Categories Usage -->
         <div class="analytics-section">
-          <h3>{{ $t('analytics.serviceUsage', 'Service Categories Usage') }}</h3>
+          <h3>{{ $t('analytics.serviceUsage') }}</h3>
           <div class="category-chart-container">
             <div ref="categoryChart" class="category-usage"></div>
             <div v-if="loading" class="chart-loading">
-              {{ $t('analytics.loading', 'Loading chart data...') }}
+              {{ $t('analytics.loading') }}
             </div>
           </div>
         </div>
@@ -67,31 +67,32 @@ export default {
       loading: true,
       chart: null,
       
-      // Sample data for top queries
-      topQueries: [
-        { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
-        { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-        { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
-        { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
-        { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
-      ],
-      
-      // Sample data for category usage
-      categoryData: [
-        { category: "Business & Economy", value: 24 },
-        { category: "Transportation", value: 18 },
-        { category: "Taxes & Revenue", value: 16 },
-        { category: "Immigration & Citizenship", value: 12 },
-        { category: "Education & Learning", value: 10 },
-        { category: "Housing & Properties", value: 8 },
-        { category: "Others", value: 12 }
-      ]
+      // Sample data (will be translated)
+      topQueries: [],
+      categoryData: []
     };
+  },
+  
+  created() {
+    // Initialize translations
+    this.translateQueries();
+    this.translateCategories();
   },
   
   mounted() {
     this.initCategoryChart();
     window.addEventListener('resize', this.handleResize);
+    
+    // Listen for locale changes
+    this.$watch(() => this.$i18n.locale, (newLocale) => {
+      this.translateQueries();
+      this.translateCategories();
+      
+      // Also tell the usage chart to update
+      if (this.$refs.usageTrendChart) {
+        this.$refs.usageTrendChart.updateTranslations();
+      }
+    });
   },
   
   beforeUnmount() {
@@ -100,6 +101,77 @@ export default {
   },
   
   methods: {
+    translateQueries() {
+      const sampleQueriesPerLanguage = {
+        'en': [
+          { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
+          { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
+          { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
+          { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
+          { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
+        ],
+        'fr': [
+          { text: "Comment faire une demande de licence commerciale?", count: 2347, avgTime: 2.3 },
+          { text: "Où puis-je trouver des formulaires fiscaux?", count: 1982, avgTime: 1.8 },
+          { text: "Comment renouveler mon permis de conduire?", count: 1645, avgTime: 2.1 },
+          { text: "Quels documents me faut-il pour une demande de passeport?", count: 1423, avgTime: 3.4 },
+          { text: "Quand les taxes foncières sont-elles dues?", count: 1289, avgTime: 1.5 }
+        ],
+        'sw': [
+          { text: "Nawezaje kuomba leseni ya biashara?", count: 2347, avgTime: 2.3 },
+          { text: "Naweza kupata fomu za kodi wapi?", count: 1982, avgTime: 1.8 },
+          { text: "Jinsi ya kufanya upya leseni yangu ya udereva?", count: 1645, avgTime: 2.1 },
+          { text: "Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?", count: 1423, avgTime: 3.4 },
+          { text: "Kodi za mali hulipwa lini?", count: 1289, avgTime: 1.5 }
+        ]
+      };
+      
+      // Use current locale or fall back to English
+      const locale = this.$i18n.locale || 'en';
+      this.topQueries = sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage['en'];
+    },
+    
+    translateCategories() {
+      const categoryDataPerLanguage = {
+        'en': [
+          { category: "Business & Economy", value: 24 },
+          { category: "Transportation", value: 18 },
+          { category: "Taxes & Revenue", value: 16 },
+          { category: "Immigration & Citizenship", value: 12 },
+          { category: "Education & Learning", value: 10 },
+          { category: "Housing & Properties", value: 8 },
+          { category: "Others", value: 12 }
+        ],
+        'fr': [
+          { category: "Affaires & Économie", value: 24 },
+          { category: "Transport", value: 18 },
+          { category: "Impôts & Recettes", value: 16 },
+          { category: "Immigration & Citoyenneté", value: 12 },
+          { category: "Éducation & Apprentissage", value: 10 },
+          { category: "Logement & Propriétés", value: 8 },
+          { category: "Autres", value: 12 }
+        ],
+        'sw': [
+          { category: "Biashara & Uchumi", value: 24 },
+          { category: "Usafiri", value: 18 },
+          { category: "Kodi & Mapato", value: 16 },
+          { category: "Uhamiaji & Uraia", value: 12 },
+          { category: "Elimu & Mafunzo", value: 10 },
+          { category: "Makazi & Mali", value: 8 },
+          { category: "Nyinginezo", value: 12 }
+        ]
+      };
+      
+      // Use current locale or fall back to English
+      const locale = this.$i18n.locale || 'en';
+      this.categoryData = categoryDataPerLanguage[locale] || categoryDataPerLanguage['en'];
+      
+      // If the chart is already rendered, update it
+      if (this.chart) {
+        this.renderCategoryChart();
+      }
+    },
+    
     async initCategoryChart() {
       try {
         const echarts = await import('echarts');
@@ -141,7 +213,7 @@ export default {
             },
             series: [
               {
-                name: 'Usage',
+                name: this.$t('analytics.serviceUsage'),
                 type: 'pie',
                 radius: ['50%', '70%'],
                 avoidLabelOverlap: false,

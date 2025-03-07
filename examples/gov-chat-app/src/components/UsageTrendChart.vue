@@ -1,14 +1,14 @@
-<!-- UsageTrendChart.vue - Fixed Version -->
+<!-- UsageTrendChart.vue - Updated Version with Translation Support -->
 <template>
   <div class="usage-trend-chart">
     <div class="chart-header">
-      <h3>{{ $t('analytics.usageTrends', 'Usage Trends') }}</h3>
+      <h3>{{ $t('analytics.usageTrends') }}</h3>
       <div class="chart-controls">
         <select v-model="selectedPeriod" class="period-selector">
-          <option value="week">{{ $t('analytics.week', 'Last Week') }}</option>
-          <option value="month">{{ $t('analytics.month', 'Last Month') }}</option>
-          <option value="quarter">{{ $t('analytics.quarter', 'Last Quarter') }}</option>
-          <option value="year">{{ $t('analytics.year', 'Last Year') }}</option>
+          <option value="week">{{ $t('analytics.week') }}</option>
+          <option value="month">{{ $t('analytics.month') }}</option>
+          <option value="quarter">{{ $t('analytics.quarter') }}</option>
+          <option value="year">{{ $t('analytics.year') }}</option>
         </select>
       </div>
     </div>
@@ -16,26 +16,26 @@
     <div class="chart-container">
       <div ref="chartContainer" style="width: 100%; height: 100%;"></div>
       <div v-if="loading" class="chart-loading">
-        {{ $t('analytics.loading', 'Loading chart data...') }}
+        {{ $t('analytics.loading') }}
       </div>
     </div>
     
     <div class="chart-metrics">
       <div class="metric-card">
         <div class="metric-value">{{ totalQueries.toLocaleString() }}</div>
-        <div class="metric-label">{{ $t('analytics.totalQueries', 'Total Queries') }}</div>
+        <div class="metric-label">{{ $t('analytics.totalQueries') }}</div>
       </div>
       <div class="metric-card">
         <div class="metric-value">{{ uniqueUsers.toLocaleString() }}</div>
-        <div class="metric-label">{{ $t('analytics.uniqueUsers', 'Unique Users') }}</div>
+        <div class="metric-label">{{ $t('analytics.uniqueUsers') }}</div>
       </div>
       <div class="metric-card">
         <div class="metric-value">{{ averageResponseTime.toFixed(1) }}s</div>
-        <div class="metric-label">{{ $t('analytics.avgResponseTime', 'Avg Response Time') }}</div>
+        <div class="metric-label">{{ $t('analytics.avgResponseTime') }}</div>
       </div>
       <div class="metric-card">
         <div class="metric-value">{{ (satisfactionRate * 100).toFixed(1) }}%</div>
-        <div class="metric-label">{{ $t('analytics.satisfactionRate', 'Satisfaction Rate') }}</div>
+        <div class="metric-label">{{ $t('analytics.satisfactionRate') }}</div>
       </div>
     </div>
   </div>
@@ -55,39 +55,115 @@ export default {
       satisfactionRate: 0.91,
       chart: null,
       
-      // Sample chart data
+      // Sample chart data (will be translated)
       chartData: {
-        week: [
-          { date: '2025-03-01', queries: 420, users: 180 },
-          { date: '2025-03-02', queries: 380, users: 150 },
-          { date: '2025-03-03', queries: 510, users: 210 },
-          { date: '2025-03-04', queries: 530, users: 240 },
-          { date: '2025-03-05', queries: 590, users: 280 },
-          { date: '2025-03-06', queries: 480, users: 220 },
-          { date: '2025-03-07', queries: 390, users: 170 }
-        ],
-        month: [
-          { date: '2025-02-07', queries: 1800, users: 820 },
-          { date: '2025-02-14', queries: 2100, users: 950 },
-          { date: '2025-02-21', queries: 1950, users: 880 },
-          { date: '2025-02-28', queries: 2400, users: 1100 },
-          { date: '2025-03-07', queries: 2700, users: 1250 }
-        ],
-        quarter: [
-          { date: '2024-12', queries: 8200, users: 3800 },
-          { date: '2025-01', queries: 9500, users: 4200 },
-          { date: '2025-02', queries: 11200, users: 4700 },
-          { date: '2025-03', queries: 12800, users: 5300 }
-        ],
-        year: [
-          { date: '2024-04', queries: 5200, users: 2100 },
-          { date: '2024-07', queries: 6500, users: 2800 },
-          { date: '2024-10', queries: 7800, users: 3400 },
-          { date: '2025-01', queries: 9500, users: 4200 },
-          { date: '2025-04', queries: 12800, users: 5300 }
-        ]
+        week: [],
+        month: [],
+        quarter: [],
+        year: []
+      },
+      
+      // Original data for each language
+      chartDataByLanguage: {
+        en: {
+          week: [
+            { date: '2025-03-01', queries: 420, users: 180 },
+            { date: '2025-03-02', queries: 380, users: 150 },
+            { date: '2025-03-03', queries: 510, users: 210 },
+            { date: '2025-03-04', queries: 530, users: 240 },
+            { date: '2025-03-05', queries: 590, users: 280 },
+            { date: '2025-03-06', queries: 480, users: 220 },
+            { date: '2025-03-07', queries: 390, users: 170 }
+          ],
+          month: [
+            { date: '2025-02-07', queries: 1800, users: 820 },
+            { date: '2025-02-14', queries: 2100, users: 950 },
+            { date: '2025-02-21', queries: 1950, users: 880 },
+            { date: '2025-02-28', queries: 2400, users: 1100 },
+            { date: '2025-03-07', queries: 2700, users: 1250 }
+          ],
+          quarter: [
+            { date: '2024-12', queries: 8200, users: 3800 },
+            { date: '2025-01', queries: 9500, users: 4200 },
+            { date: '2025-02', queries: 11200, users: 4700 },
+            { date: '2025-03', queries: 12800, users: 5300 }
+          ],
+          year: [
+            { date: '2024-04', queries: 5200, users: 2100 },
+            { date: '2024-07', queries: 6500, users: 2800 },
+            { date: '2024-10', queries: 7800, users: 3400 },
+            { date: '2025-01', queries: 9500, users: 4200 },
+            { date: '2025-04', queries: 12800, users: 5300 }
+          ]
+        },
+        fr: {
+          week: [
+            { date: '01/03/2025', queries: 420, users: 180 },
+            { date: '02/03/2025', queries: 380, users: 150 },
+            { date: '03/03/2025', queries: 510, users: 210 },
+            { date: '04/03/2025', queries: 530, users: 240 },
+            { date: '05/03/2025', queries: 590, users: 280 },
+            { date: '06/03/2025', queries: 480, users: 220 },
+            { date: '07/03/2025', queries: 390, users: 170 }
+          ],
+          month: [
+            { date: '07/02/2025', queries: 1800, users: 820 },
+            { date: '14/02/2025', queries: 2100, users: 950 },
+            { date: '21/02/2025', queries: 1950, users: 880 },
+            { date: '28/02/2025', queries: 2400, users: 1100 },
+            { date: '07/03/2025', queries: 2700, users: 1250 }
+          ],
+          quarter: [
+            { date: 'Déc 2024', queries: 8200, users: 3800 },
+            { date: 'Jan 2025', queries: 9500, users: 4200 },
+            { date: 'Fév 2025', queries: 11200, users: 4700 },
+            { date: 'Mar 2025', queries: 12800, users: 5300 }
+          ],
+          year: [
+            { date: 'Avr 2024', queries: 5200, users: 2100 },
+            { date: 'Juil 2024', queries: 6500, users: 2800 },
+            { date: 'Oct 2024', queries: 7800, users: 3400 },
+            { date: 'Jan 2025', queries: 9500, users: 4200 },
+            { date: 'Avr 2025', queries: 12800, users: 5300 }
+          ]
+        },
+        sw: {
+          week: [
+            { date: '01/03/2025', queries: 420, users: 180 },
+            { date: '02/03/2025', queries: 380, users: 150 },
+            { date: '03/03/2025', queries: 510, users: 210 },
+            { date: '04/03/2025', queries: 530, users: 240 },
+            { date: '05/03/2025', queries: 590, users: 280 },
+            { date: '06/03/2025', queries: 480, users: 220 },
+            { date: '07/03/2025', queries: 390, users: 170 }
+          ],
+          month: [
+            { date: '07/02/2025', queries: 1800, users: 820 },
+            { date: '14/02/2025', queries: 2100, users: 950 },
+            { date: '21/02/2025', queries: 1950, users: 880 },
+            { date: '28/02/2025', queries: 2400, users: 1100 },
+            { date: '07/03/2025', queries: 2700, users: 1250 }
+          ],
+          quarter: [
+            { date: 'Des 2024', queries: 8200, users: 3800 },
+            { date: 'Jan 2025', queries: 9500, users: 4200 },
+            { date: 'Feb 2025', queries: 11200, users: 4700 },
+            { date: 'Mar 2025', queries: 12800, users: 5300 }
+          ],
+          year: [
+            { date: 'Apr 2024', queries: 5200, users: 2100 },
+            { date: 'Jul 2024', queries: 6500, users: 2800 },
+            { date: 'Okt 2024', queries: 7800, users: 3400 },
+            { date: 'Jan 2025', queries: 9500, users: 4200 },
+            { date: 'Apr 2025', queries: 12800, users: 5300 }
+          ]
+        }
       }
     };
+  },
+
+  created() {
+    this.updateTranslations();
   },
   
   watch: {
@@ -107,6 +183,27 @@ export default {
   },
   
   methods: {
+    updateTranslations() {
+      // Get the current locale or default to English
+      const locale = this.$i18n.locale || 'en';
+      
+      // Get the data for the current locale or default to English
+      const localeData = this.chartDataByLanguage[locale] || this.chartDataByLanguage['en'];
+      
+      // Update the chart data
+      this.chartData = {
+        week: localeData.week,
+        month: localeData.month,
+        quarter: localeData.quarter,
+        year: localeData.year
+      };
+      
+      // If chart is already initialized, re-render it
+      if (this.chart) {
+        this.renderChart();
+      }
+    },
+    
     async initChart() {
       try {
         // Import echarts library
@@ -148,7 +245,7 @@ export default {
               }
             },
             legend: {
-              data: ['Queries', 'Users'],
+              data: [this.$t('analytics.totalQueries'), this.$t('analytics.uniqueUsers')],
               bottom: 0
             },
             grid: {
@@ -170,7 +267,7 @@ export default {
             },
             series: [
               {
-                name: 'Queries',
+                name: this.$t('analytics.totalQueries'),
                 type: 'line',
                 smooth: true,
                 lineStyle: {
@@ -200,7 +297,7 @@ export default {
                 }
               },
               {
-                name: 'Users',
+                name: this.$t('analytics.uniqueUsers'),
                 type: 'bar',
                 barWidth: '40%',
                 data: data.map(item => item.users),

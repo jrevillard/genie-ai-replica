@@ -1,0 +1,149 @@
+// src/services/userProfileService.js - Connect UserProfileComponent to backend
+import api from './api';
+
+export default {
+  /**
+   * Get user profile by ID
+   * @param {String} userId - User ID
+   * @returns {Promise} User profile data
+   */
+  async getProfile(userId) {
+    try {
+      const response = await api.get(`/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new user profile
+   * @param {Object} profileData - Profile data from the form
+   * @returns {Promise} Created user profile
+   */
+  async createProfile(profileData) {
+    try {
+      // Handle file uploads and form data
+      const formData = this.prepareFormData(profileData);
+      
+      const response = await api.post('/users', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing user profile
+   * @param {String} userId - User ID
+   * @param {Object} profileData - Updated profile data
+   * @returns {Promise} Updated user profile
+   */
+  async updateProfile(userId, profileData) {
+    try {
+      // Handle file uploads and form data
+      const formData = this.prepareFormData(profileData);
+      
+      const response = await api.put(`/users/${userId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a user profile
+   * @param {String} userId - User ID
+   * @returns {Promise} Deletion result
+   */
+  async deleteProfile(userId) {
+    try {
+      const response = await api.delete(`/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting user profile:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Prepare form data for file uploads
+   * @param {Object} profileData - Profile data including files
+   * @returns {FormData} Form data for submission
+   */
+  prepareFormData(profileData) {
+    const formData = new FormData();
+    
+    // Clone the profile data to avoid modifying the original
+    const dataToSend = JSON.parse(JSON.stringify(profileData));
+    
+    // Process each section that might have file uploads
+    const sectionsWithFiles = [
+      'personalIdentification',
+      'civilRegistration',
+      'addressResidency',
+      'identityTravel',
+      'healthMedical',
+      'employment',
+      'financialTax',
+      'criminalLegal',
+      'transportation'
+    ];
+    
+    // Extract files and append them to form data
+    sectionsWithFiles.forEach(section => {
+      if (!dataToSend[section]) return;
+      
+      Object.keys(dataToSend[section]).forEach(field => {
+        const value = dataToSend[section][field];
+        
+        // Check if it's a File object
+        if (value instanceof File) {
+          formData.append(`${section}-${field}`, value);
+          // Remove the file from the data object
+          delete dataToSend[section][field];
+        }
+      });
+    });
+    
+    // Append the non-file data as JSON
+    formData.append('data', JSON.stringify(dataToSend));
+    
+    return formData;
+  },
+
+  /**
+   * Search for users based on criteria
+   * @param {Object} criteria - Search criteria
+   * @param {Number} page - Page number (starting from 1)
+   * @param {Number} limit - Results per page
+   * @returns {Promise} Search results with pagination
+   */
+  async searchUsers(criteria, page = 1, limit = 20) {
+    try {
+      const offset = (page - 1) * limit;
+      
+      const response = await api.get('/users/search', {
+        params: { ...criteria, limit, offset }
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error searching users:', error);
+      throw error;
+    }
+  }
+};

@@ -50,6 +50,7 @@
             <label>{{ $t('userProfile.fields.photograph') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'personalIdentification', 'photo')"
             />
           </div>
@@ -57,6 +58,7 @@
             <label>{{ $t('userProfile.fields.biometric') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'personalIdentification', 'biometric')"
             />
           </div>
@@ -68,6 +70,7 @@
             <label>{{ $t('userProfile.fields.birthCert') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'civilRegistration', 'birthCert')"
             />
           </div>
@@ -75,6 +78,7 @@
             <label>{{ $t('userProfile.fields.deathCert') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'civilRegistration', 'deathCert')"
             />
           </div>
@@ -82,6 +86,7 @@
             <label>{{ $t('userProfile.fields.marriageDivorce') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'civilRegistration', 'marriageDivorce')"
             />
           </div>
@@ -89,6 +94,7 @@
             <label>{{ $t('userProfile.fields.adoption') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'civilRegistration', 'adoption')"
             />
           </div>
@@ -96,6 +102,7 @@
             <label>{{ $t('userProfile.fields.citizenship') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'civilRegistration', 'citizenship')"
             />
           </div>
@@ -103,6 +110,7 @@
             <label>{{ $t('userProfile.fields.immigration') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'civilRegistration', 'immigration')"
             />
           </div>
@@ -128,6 +136,7 @@
             <label>{{ $t('userProfile.fields.utilityBills') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'addressResidency', 'utilityBills')"
             />
           </div>
@@ -135,6 +144,7 @@
             <label>{{ $t('userProfile.fields.landRecords') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'addressResidency', 'landRecords')"
             />
           </div>
@@ -166,6 +176,7 @@
             <label>{{ $t('userProfile.fields.militaryRecords') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'identityTravel', 'militaryRecords')"
             />
           </div>
@@ -183,6 +194,7 @@
             <label>{{ $t('userProfile.fields.vaccinations') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'healthMedical', 'vaccinations')"
             />
           </div>
@@ -226,6 +238,7 @@
             <label>{{ $t('userProfile.fields.workPermits') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'employment', 'workPermits')"
             />
           </div>
@@ -233,6 +246,7 @@
             <label>{{ $t('userProfile.fields.certifications') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'employment', 'certifications')"
             />
           </div>
@@ -278,6 +292,7 @@
             <label>{{ $t('userProfile.fields.incomeTax') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'financialTax', 'incomeTax')"
             />
           </div>
@@ -289,6 +304,7 @@
             <label>{{ $t('userProfile.fields.propertyTax') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'financialTax', 'propertyTax')"
             />
           </div>
@@ -296,6 +312,7 @@
             <label>{{ $t('userProfile.fields.businessTax') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'financialTax', 'businessTax')"
             />
           </div>
@@ -303,6 +320,7 @@
             <label>{{ $t('userProfile.fields.pensionContrib') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'financialTax', 'pensionContrib')"
             />
           </div>
@@ -310,6 +328,7 @@
             <label>{{ $t('userProfile.fields.loanAid') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'financialTax', 'loanAid')"
             />
           </div>
@@ -351,6 +370,7 @@
             <label>{{ $t('userProfile.fields.policeRecords') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'criminalLegal', 'policeRecords')"
             />
           </div>
@@ -358,6 +378,7 @@
             <label>{{ $t('userProfile.fields.courtCases') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'criminalLegal', 'courtCases')"
             />
           </div>
@@ -365,6 +386,7 @@
             <label>{{ $t('userProfile.fields.finesPenalties') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'criminalLegal', 'finesPenalties')"
             />
           </div>
@@ -394,6 +416,7 @@
             <label>{{ $t('userProfile.fields.trafficViolations') }}</label>
             <input
               type="file"
+              v-file-dialog-safe
               @change="onFileChange($event, 'transportation', 'trafficViolations')"
             />
           </div>
@@ -578,24 +601,24 @@ export default {
           publicServiceRoles: ''
         }
       }
-    }
+    };
   },
   methods: {
     cancel() {
-      this.$emit('cancel')
+      this.$emit('cancel');
     },
     saveProfile() {
       // Emit a deep copy to avoid direct mutation
-      const copy = JSON.parse(JSON.stringify(this.formData))
-      this.$emit('save', copy)
+      const copy = JSON.parse(JSON.stringify(this.formData));
+      this.$emit('save', copy);
     },
     onFileChange(e, section, fieldKey) {
-      const file = e.target.files[0]
-      if (!file) return
-      this.formData[section][fieldKey] = file
+      const file = e.target.files[0];
+      if (!file) return;
+      this.formData[section][fieldKey] = file;
     }
   }
-}
+};
 </script>
 
 <style scoped>

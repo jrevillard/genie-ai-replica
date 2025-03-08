@@ -26,11 +26,11 @@
       <div class="sidebar-content">
         <!-- Government Services Tab -->
         <div v-if="activeTab === 'services'" class="services-list">
-          <!-- Weather Panel placed above the tree -->
-          <weather-panel />
-          
           <!-- Service Tree Panel -->
           <service-tree-panel-component />
+          
+          <!-- Weather Panel placed at the bottom -->
+          <weather-panel />
         </div>
         
         <!-- Chat History Tab -->

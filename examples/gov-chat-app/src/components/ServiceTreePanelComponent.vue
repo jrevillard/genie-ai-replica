@@ -1,15 +1,24 @@
-<!-- ServiceTreePanelComponent.vue - Updated for Tabbed Interface -->
+<!-- ServiceTreePanelComponent.vue - Updated with Expand/Collapse All Button -->
 <template>
   <div class="service-tree-panel">
     <h4>{{ $t('sidebar.governmentServices', 'Government Services') }}</h4>
 
-    <input
-      v-model="searchQuery"
-      class="search-box"
-      type="text"
-      :placeholder="$t('sidebar.searchPlaceholder', 'Search services...')"
-      @input="performSearch"
-    />
+    <div class="search-container">
+      <input
+        v-model="searchQuery"
+        class="search-box"
+        type="text"
+        :placeholder="$t('sidebar.searchPlaceholder', 'Search services...')"
+        @input="performSearch"
+      />
+      <button 
+        class="expand-collapse-btn" 
+        @click="toggleAllNodes" 
+        :title="isAnyNodeExpanded ? 'Collapse All' : 'Expand All'"
+      >
+        {{ isAnyNodeExpanded ? '−' : '+' }}
+      </button>
+    </div>
 
     <ul>
       <li v-for="(node, index) in nodes" :key="index">
@@ -224,6 +233,12 @@ export default {
     }
   },
   
+  computed: {
+    isAnyNodeExpanded() {
+      return this.nodes.some(node => node.expanded);
+    }
+  },
+  
   created() {
     // Set initial locale
     if (this.$i18n && this.$i18n.locale) {
@@ -252,6 +267,13 @@ export default {
   methods: {
     toggleNode(node) {
       node.expanded = !node.expanded;
+    },
+    
+    toggleAllNodes() {
+      const shouldExpand = !this.isAnyNodeExpanded;
+      this.nodes.forEach(node => {
+        node.expanded = shouldExpand;
+      });
     },
     
     handleContextItemRemoved(item) {
@@ -409,24 +431,58 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  font-size: 8pt; /* Setting base font size to 8pt */
+  font-size: 10pt; /* Increased from 8pt to 10pt */
 }
 
 .service-tree-panel h4 {
   margin-bottom: 8px;
   font-weight: 600;
   color: #333;
-  font-size: 10pt; /* Keeping the header slightly larger for readability */
+  font-size: 12pt; /* Increased to match the body text change */
+}
+
+.search-container {
+  position: relative;
+  display: flex;
+  margin-bottom: 8px;
 }
 
 .search-box {
-  width: 100%;
-  margin-bottom: 8px;
+  flex: 1;
   padding: 6px;
-  font-size: 8pt;
+  font-size: 10pt; /* Increased from 8pt to 10pt */
   border: 1px solid #ccc;
   border-radius: 4px;
   outline: none;
+}
+
+.expand-collapse-btn {
+  position: absolute;
+  right: 0;
+  height: 100%;
+  width: 28px;
+  background: #f5f5f5;
+  border: 1px solid #ccc;
+  border-left: none;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #555;
+  padding: 0;
+  transition: background-color 0.2s;
+}
+
+.expand-collapse-btn:hover {
+  background-color: #e5e5e5;
+}
+
+.search-box {
+  padding-right: 30px; /* Make room for the button */
 }
 
 ul {
@@ -441,7 +497,7 @@ ul {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 3px 6px; /* Slightly reduced padding to fit smaller text */
+  padding: 4px 8px; /* Slightly increased padding for the larger text */
   border-radius: 4px;
   transition: background-color 0.2s;
 }
@@ -449,11 +505,11 @@ ul {
   background-color: #f0f0f0;
 }
 .toggle-icon {
-  width: 16px; /* Slightly reduced width */
+  width: 18px; /* Slightly increased width for better proportions */
   text-align: center;
   margin-right: 4px;
   color: #666;
-  font-size: 8pt;
+  font-size: 10pt; /* Increased from 8pt to 10pt */
 }
 .toggle-icon.placeholder {
   visibility: hidden;
@@ -464,14 +520,14 @@ ul {
 }
 
 .child-list {
-  margin-left: 16px; /* Reduced margin */
+  margin-left: 18px; /* Slightly increased margin for better spacing */
   border-left: 1px dashed #ccc;
-  padding-left: 6px; /* Reduced padding */
+  padding-left: 8px; /* Increased padding for larger text */
   margin-top: 2px;
 }
 
 .selected .node-label {
   background-color: #e6f0ff;
-  border-left: 2px solid #1867c0; /* Reduced border */
+  border-left: 2px solid #1867c0;
 }
 </style>

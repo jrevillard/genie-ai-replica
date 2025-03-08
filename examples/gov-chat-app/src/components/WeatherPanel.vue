@@ -211,13 +211,14 @@ export default {
 
 <style scoped>
 .weather-panel {
-  margin-bottom: 15px;
-  background: linear-gradient(135deg, #3a7cb5, #4e97d1);
+  margin-top: 15px;
+  background: #ffffff;
   border-radius: 10px;
-  color: white;
+  color: #333;
   padding: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  font-size: 7pt; /* Smaller text size as requested */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 7pt;
+  border: 1px solid #eeeeee;
 }
 
 .weather-header {
@@ -228,21 +229,22 @@ export default {
 
 .weather-header h4 {
   margin: 0 0 5px 0;
-  font-size: 0.9rem; /* Keep heading slightly larger */
+  font-size: 0.9rem;
   font-weight: 600;
+  color: #4e97d1;
 }
 
 .weather-location {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  opacity: 0.9;
+  color: #666;
 }
 
 .refresh-btn {
   background: none;
   border: none;
-  color: white;
+  color: #4e97d1;
   cursor: pointer;
   opacity: 0.8;
   transition: opacity 0.2s;
@@ -270,6 +272,7 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  color: #666;
 }
 
 .current-weather {
@@ -279,13 +282,13 @@ export default {
   justify-content: space-between;
   margin-bottom: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid #eeeeee;
 }
 
 .current-icon {
   font-size: 1.8rem;
   margin-right: 8px;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+  color: #4e97d1;
 }
 
 .current-details {
@@ -295,23 +298,28 @@ export default {
 .current-temp {
   font-size: 1.5rem;
   font-weight: 600;
+  color: #333;
 }
 
 .current-condition {
-  opacity: 0.9;
+  color: #666;
 }
 
 .current-info {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  opacity: 0.9;
+  color: #666;
 }
 
 .info-item {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.info-item i {
+  color: #4e97d1;
 }
 
 .forecast-list {
@@ -329,13 +337,14 @@ export default {
 }
 
 .day-name {
-  opacity: 0.9;
+  color: #666;
   margin-bottom: 3px;
 }
 
 .day-icon {
   font-size: 1rem;
   margin: 3px 0;
+  color: #4e97d1;
 }
 
 .day-temp {
@@ -345,9 +354,10 @@ export default {
 
 .temp-high {
   font-weight: 600;
+  color: #333;
 }
 
 .temp-low {
-  opacity: 0.8;
+  color: #999;
 }
 </style>

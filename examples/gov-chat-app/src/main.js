@@ -13,6 +13,7 @@ import App from './App.vue'
 import router from './router'
 import i18n from './i18n.js'
 import store from './store' // Import the Vuex store
+import FileDialogSafe from './fileDialogSafe' // Import our custom directive
 
 // Determine the initial locale - prioritize:
 // 1. Previously saved user preference
@@ -61,6 +62,7 @@ const app = createApp(App)
 app.use(router)
 app.use(i18n)
 app.use(store) // Register the Vuex store
+app.use(FileDialogSafe) // Register our custom directive
 
 // Create a global method for changing locale
 app.config.globalProperties.$setLocale = function(locale) {

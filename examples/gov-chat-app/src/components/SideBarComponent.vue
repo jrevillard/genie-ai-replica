@@ -28,15 +28,15 @@
         <div v-if="activeTab === 'services'" class="services-list">
           <!-- Service Tree Panel -->
           <service-tree-panel-component />
-          
-          <!-- Weather Panel placed at the bottom -->
-          <weather-panel />
         </div>
         
         <!-- Chat History Tab -->
         <div v-else-if="activeTab === 'history'" class="chat-history">
           <chat-folders @open-chat="openChat" />
         </div>
+        
+        <!-- Weather Panel placed outside the tab content so it's always visible -->
+        <weather-panel class="weather-panel-fixed" />
       </div>
     </div>
   </aside>
@@ -138,7 +138,13 @@ export default {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100% - 110px); /* Adjust height to make room for weather panel */
+}
+
+.weather-panel-fixed {
+  margin-top: 10px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
 }
 
 /* Mobile: offscreen unless side-bar-open is set */

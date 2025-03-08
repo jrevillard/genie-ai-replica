@@ -25,6 +25,25 @@
           <line x1="16" y1="10" x2="16" y2="22" />
         </svg>
       </div>
+      
+      <!-- Guided Assistance Dropdown moved next to logo -->
+      <div class="guided-assistance-container">
+        <select 
+          v-model="selectedTask" 
+          @change="handleTaskSelection"
+          class="guided-assistance-select"
+          :class="{ 'has-value': selectedTask }"
+        >
+          <option value="" disabled selected>{{ $t('quickHelp', 'How can I help?') }}</option>
+          <option value="id">ID & Passport Services</option>
+          <option value="tax">Tax Services</option>
+          <option value="business">Business Registration</option>
+          <option value="education">Education Services</option>
+          <option value="health">Healthcare Services</option>
+          <option value="other">Other Services</option>
+        </select>
+        <div class="select-arrow"></div>
+      </div>
     </div>
 
     <!-- Center area: Brand name is now in the center -->
@@ -91,7 +110,7 @@
 <script>
 export default {
   name: 'NavBarComponent',
-  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings'],
+  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'taskSelected'],
   props: {
     isSidebarOpen: {
       type: Boolean,
@@ -100,7 +119,8 @@ export default {
   },
   data() {
     return {
-      currentLocale: this.$i18n.locale
+      currentLocale: this.$i18n.locale,
+      selectedTask: ''
     }
   },
   methods: {
@@ -121,6 +141,16 @@ export default {
     },
     toggleSidebar() {
       this.$emit('toggleSidebar')
+    },
+    handleTaskSelection() {
+      // Emit the selected task to parent component
+      this.$emit('taskSelected', this.selectedTask);
+      
+      // Reset the dropdown after selection (optional)
+      // You can comment this out if you want the selection to remain visible
+      setTimeout(() => {
+        this.selectedTask = '';
+      }, 500);
     }
   }
 }
@@ -147,12 +177,12 @@ export default {
 }
 
 .nav-left {
-  flex: 1;
+  flex: 1.5; /* Increased to give more space for the guided assistance */
   min-width: 140px;
 }
 
 .nav-center {
-  flex: 2;
+  flex: 1;
   justify-content: center;
   text-align: center;
 }
@@ -168,13 +198,13 @@ export default {
   display: flex;
   align-items: center;
   margin-left: 8px;
+  margin-right: 10px; /* Added margin to separate from guided assistance */
 }
 
 .govt-logo {
   height: 32px;
   width: 32px;
   color: white;
-  margin-right: 8px;
 }
 
 .brand-name {
@@ -184,6 +214,39 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Guided Assistance Dropdown */
+.guided-assistance-container {
+  position: relative;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  min-width: 180px;
+  max-width: 250px;
+  flex-grow: 1;
+}
+
+.guided-assistance-select {
+  width: 100%;
+  padding: 6px 12px;
+  padding-right: 30px;
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: 0.9rem;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 4px;
+  height: 32px;
+}
+
+.guided-assistance-select.has-value {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.guided-assistance-select option {
+  background: #4E97D1;
+  color: white;
 }
 
 /* Improved button styling */
@@ -307,6 +370,7 @@ export default {
   font-size: 0.9rem;
   appearance: none;
   cursor: pointer;
+  height: 32px;
 }
 
 .language-select option {
@@ -328,6 +392,16 @@ export default {
 }
 
 /* Responsive adjustments */
+@media (max-width: 1024px) {
+  .guided-assistance-container {
+    min-width: 150px;
+  }
+  
+  .guided-assistance-select {
+    font-size: 0.85rem;
+  }
+}
+
 @media (max-width: 768px) {
   .brand-name {
     font-size: 1rem;
@@ -336,20 +410,31 @@ export default {
   .language-select-container {
     width: 100px;
   }
+  
+  .guided-assistance-container {
+    min-width: 120px;
+  }
+  
+  .guided-assistance-select {
+    padding: 4px 8px;
+    padding-right: 20px;
+    font-size: 0.8rem;
+  }
 }
 
 @media (max-width: 600px) {
   .nav-left {
     min-width: auto;
+    flex: 2;
   }
   
   .nav-center {
-    flex: 1;
+    display: none; /* Hide brand name on very small screens */
   }
   
-  .brand-name {
-    font-size: 0.9rem;
-    max-width: 140px;
+  .guided-assistance-container {
+    min-width: 110px;
+    max-width: none;
   }
   
   .language-select-container {

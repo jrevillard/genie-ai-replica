@@ -216,6 +216,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: dialogFadeIn 0.2s ease-out;
 }
 .overlay {
   position: absolute;
@@ -230,8 +231,9 @@ export default {
   max-width: 90%;
   margin: 0 auto;
   padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 25px rgba(0,0,0,0.2);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  overflow: hidden;
 }
 h4 {
   margin: 0 0 12px;
@@ -251,7 +253,7 @@ h4 {
 .message-text {
   background: #f7f7f7;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 12px;
   margin-top: 4px;
   max-height: 120px;
   overflow-y: auto;
@@ -270,7 +272,7 @@ h4 {
 .thumb-button {
   background: #f5f9ff;
   border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 12px;
   min-width: 120px;
   cursor: pointer;
@@ -358,7 +360,7 @@ h4 {
   align-items: center;
   padding: 12px;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -404,8 +406,8 @@ h4 {
 .feedback-text {
   width: 100%;
   border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 12px;
+  padding: 12px;
   font-size: 0.95rem;
   margin-bottom: 20px;
   resize: vertical;
@@ -422,10 +424,10 @@ h4 {
   gap: 12px;
 }
 .submit-btn, .cancel-btn {
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: none;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 10px;
   font-weight: 500;
   transition: all 0.2s ease;
 }
@@ -489,5 +491,10 @@ h4 {
   .submit-btn, .cancel-btn {
     width: 100%;
   }
+}
+
+@keyframes dialogFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

@@ -6,7 +6,7 @@ const messages = {
   // ----------------------------------------------------------------
   // ENGLISH
   en: {
-    brandName: 'Kenya eGovernment AI Services for Citizens',
+    brandName: 'Huduma AI: Your Digital Government Assistant',
     nav: {
       systemStatus: 'System Status',
       menu: 'Menu',
@@ -72,7 +72,13 @@ const messages = {
       folders: "Folders",
       emptyFolder: "No chats in this folder",
       chatTitlePlaceholder: "Enter a title for this chat",
-      searchPlaceholder: "Search services..."
+      searchPlaceholder: "Search services...",
+      title: 'Info & Resources',
+      chatHistory: 'Recent Chats',
+      noChats: 'No recent chats',
+      relatedDocs: 'Related Documents',
+      noDocuments: 'No related documents',
+      faq: 'Frequently Asked Questions'
     },
     leftPanel: {
       cat1: {
@@ -466,7 +472,7 @@ const messages = {
   // ----------------------------------------------------------------
   // FRENCH
   fr: {
-    brandName: 'Services IA du eGouvernement du Kenya pour les Citoyens',
+    brandName: 'Huduma AI: Votre Assistant Gouvernemental Numérique',
     nav: {
       systemStatus: 'État du Système',
       menu: 'Menu',
@@ -533,7 +539,13 @@ const messages = {
       folders: "Dossiers",
       emptyFolder: "Aucune conversation dans ce dossier",
       chatTitlePlaceholder: "Entrez un titre pour cette conversation",
-      searchPlaceholder: "Rechercher des services..."
+      searchPlaceholder: "Rechercher des services...",
+      title: 'Infos et ressources',
+      chatHistory: 'Conversations récentes',
+      noChats: 'Aucune conversation récente',
+      relatedDocs: 'Documents connexes',
+      noDocuments: 'Aucun document connexe',
+      faq: 'Questions fréquemment posées'
     },
     leftPanel: {
       cat1: {
@@ -939,7 +951,7 @@ const messages = {
   // ----------------------------------------------------------------
   // SWAHILI
   sw: {
-    brandName: 'Huduma za Kenya eGovernment AI kwa Wananchi',
+    brandName: 'Huduma AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
     nav: {
       systemStatus: 'Hali ya Mfumo',
       menu: 'Menyu',
@@ -1007,7 +1019,13 @@ const messages = {
       folders: "Folda",
       emptyFolder: "Hakuna mazungumzo katika folda hii",
       chatTitlePlaceholder: "Ingiza kichwa cha mazungumzo haya",
-      searchPlaceholder: "Tafuta huduma..."
+      searchPlaceholder: "Tafuta huduma...",
+      title: 'Taarifa na Rasilimali',
+      chatHistory: 'Mazungumzo ya Hivi Karibuni',
+      noChats: 'Hakuna mazungumzo ya hivi karibuni',
+      relatedDocs: 'Nyaraka Zinazohusiana',
+      noDocuments: 'Hakuna nyaraka zinazohusiana',
+      faq: 'Maswali Yanayoulizwa Mara kwa Mara'
     },
     leftPanel: {
       cat1: {

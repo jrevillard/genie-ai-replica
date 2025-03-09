@@ -1,6 +1,9 @@
 <!-- SideBarComponent.vue -->
 <template>
   <aside class="side-bar" :class="{ 'side-bar-open': isOpen }">
+    <!-- Overlay that only appears on mobile when sidebar is open -->
+    <div class="mobile-sidebar-overlay" v-if="isOpen" @click="closeOverlay"></div>
+    
     <div class="sidebar-inner">
       <!-- Tabbed navigation -->
       <div class="sidebar-tabs">
@@ -66,6 +69,10 @@ export default {
     openChat(chatId) {
       // Emit the event to parent component
       this.$emit('open-chat', chatId);
+    },
+    closeOverlay() {
+      // Just emit a close event that parent can listen to
+      this.$emit('close-sidebar');
     }
   }
 }
@@ -77,7 +84,7 @@ export default {
   background: #ffffff;
   border-right: 1px solid #ddd;
   height: 100%;
-  overflow: hidden; /* Changed from overflow-y: auto to handle inner scrolling */
+  overflow: hidden;
   transition: transform 0.3s ease, width 0.3s ease;
 }
 
@@ -85,6 +92,14 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1001; /* Higher than overlay */
+  background: white; /* Ensure background is solid */
+}
+
+/* Mobile overlay */
+.mobile-sidebar-overlay {
+  display: none; /* Hidden by default */
 }
 
 /* Tabs styling */
@@ -150,27 +165,63 @@ export default {
 /* Mobile: offscreen unless side-bar-open is set */
 @media screen and (max-width: 768px) {
   .side-bar {
-    position: absolute;
-    top: 0;
+    position: fixed;
+    top: 60px; /* Start below the navbar height */
     left: 0;
+    height: calc(100vh - 60px); /* Adjust height to account for navbar */
+    width: 85%;
+    max-width: 320px;
     transform: translateX(-100%);
-    z-index: 10;
+    z-index: 15; /* Higher than chat component but lower than navbar */
+    box-shadow: none;
   }
+  
   .side-bar.side-bar-open {
     transform: translateX(0);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Show overlay on mobile */
+  .mobile-sidebar-overlay {
+    display: block;
+    position: fixed;
+    top: 60px; /* Start below navbar */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 14; /* Lower than sidebar but higher than chat */
+  }
+  
+  /* Make sure the content scrolls properly on mobile */
+  .sidebar-content {
+    height: calc(100vh - 110px); /* Account for tabs and navbar */
+    overflow-y: auto;
+  }
+  
+  /* Adjust tab buttons for mobile */
+  .tab-button {
+    padding: 12px 0;
   }
 }
 
 /* Desktop: if not open, set width=0 or transform */
 @media screen and (min-width: 769px) {
   .side-bar {
+    position: relative;
     transform: translateX(0);
     width: 250px;
+    z-index: 5; /* Higher than chat component in desktop view */
   }
+  
   .side-bar:not(.side-bar-open) {
     width: 0;
     padding: 0;
     overflow: hidden;
+  }
+  
+  .mobile-sidebar-overlay {
+    display: none; /* Always hidden on desktop */
   }
 }
 </style>

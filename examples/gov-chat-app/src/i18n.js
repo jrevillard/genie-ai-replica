@@ -8,12 +8,43 @@ const messages = {
   en: {
     brandName: 'Kenya eGovernment AI Services for Citizens',
     nav: {
+      systemStatus: 'System Status',
       menu: 'Menu',
       analytics: 'Analytics',
       userProfile: 'User Profile',
       settings: 'Settings',
       logout: 'Log Out',
-      profile: 'My Profile'
+      profile: 'My Profile',
+      toggleSidebar: 'Toggle sidebar',
+      changeLanguage: 'Change language'
+    },
+    systemStatus: {
+      title: 'Service Status',
+      services: 'Services',
+      operational: 'Operational',
+      degraded: 'Degraded',
+      outage: 'Outage',
+      allOperational: 'All Systems',
+      someIssues: 'Some Issues',
+      majorIssues: 'Major Issues',
+      checking: 'Checking...',
+      nextDeadline: 'Next Deadline',
+      days: 'days',
+      viewDetails: 'View Details'
+    },
+    services: {
+      eCitizen: 'eCitizen Portal',
+      taxFiling: 'Tax Filing System',
+      idApplication: 'ID Application',
+      businessReg: 'Business Registration',
+      drivingLicense: 'Driving License'
+    },
+    // Deadline titles
+    deadlines: {
+      taxFiling: 'Tax Filing Deadline',
+      businessRenewal: 'Business License Renewal',
+      idRenewal: 'ID Card Renewal',
+      vehicleRegistration: 'Vehicle Registration Deadline'
     },
     sidebar: {
       governmentServices: 'Government Services',
@@ -437,12 +468,44 @@ const messages = {
   fr: {
     brandName: 'Services IA du eGouvernement du Kenya pour les Citoyens',
     nav: {
+      systemStatus: 'État du Système',
       menu: 'Menu',
       analytics: 'Analytique',
       userProfile: 'Profil Utilisateur',
       settings: 'Paramètres',
       logout: 'Déconnexion',
-      profile: 'Mon Profil'
+      profile: 'Mon Profil',
+      toggleSidebar: 'Basculer la barre latérale',
+      changeLanguage: 'Changer de langue'
+    },
+    systemStatus: {
+      title: 'État des Services',
+      services: 'Services',
+      operational: 'Opérationnel',
+      degraded: 'Dégradé',
+      outage: 'Panne',
+      allOperational: 'Tous les Systèmes',
+      someIssues: 'Quelques Problèmes',
+      majorIssues: 'Problèmes Majeurs',
+      checking: 'Vérification...',
+      nextDeadline: 'Prochaine Échéance',
+      days: 'jours',
+      viewDetails: 'Voir les Détails'
+    },
+    // Service names
+    services: {
+      eCitizen: 'Portail eCitoyen',
+      taxFiling: 'Système de Déclaration Fiscale',
+      idApplication: 'Demande de Carte d\'Identité',
+      businessReg: 'Enregistrement d\'Entreprise',
+      drivingLicense: 'Permis de Conduire'
+    },
+    // Deadline titles
+    deadlines: {
+      taxFiling: 'Date Limite de Déclaration Fiscale',
+      businessRenewal: 'Renouvellement de Licence Commerciale',
+      idRenewal: 'Renouvellement de Carte d\'Identité',
+      vehicleRegistration: 'Date Limite d\'Immatriculation de Véhicule'
     },
     sidebar: {
       governmentServices: 'Services gouvernementaux',
@@ -878,12 +941,45 @@ const messages = {
   sw: {
     brandName: 'Huduma za Kenya eGovernment AI kwa Wananchi',
     nav: {
+      systemStatus: 'Hali ya Mfumo',
       menu: 'Menyu',
       analytics: 'Takwimu',
       userProfile: 'Profaili',
       settings: 'Mipangilio',
       logout: 'Ondoka',
-      profile: 'Profaili Yangu'
+      profile: 'Profaili Yangu',
+      toggleSidebar: 'Geuza upau wa pembeni',
+      changeLanguage: 'Badilisha lugha'
+    },
+    systemStatus: {
+      title: 'Hali ya Huduma',
+      services: 'Huduma',
+      operational: 'Inafanya Kazi',
+      degraded: 'Ina Shida Ndogo',
+      outage: 'Haifanyi Kazi',
+      allOperational: 'Mifumo Yote',
+      someIssues: 'Shida Chache',
+      majorIssues: 'Shida Kubwa',
+      checking: 'Inakagua...',
+      nextDeadline: 'Tarehe ya Mwisho Ijayo',
+      days: 'siku',
+      viewDetails: 'Angalia Maelezo Zaidi'
+    },
+    // Service names
+    services: {
+      eCitizen: 'Tovuti ya eCitizen',
+      taxFiling: 'Mfumo wa Kutuma Kodi',
+      idApplication: 'Maombi ya Kitambulisho',
+      businessReg: 'Usajili wa Biashara',
+      drivingLicense: 'Leseni ya Udereva'
+    },
+    
+    // Deadline titles
+    deadlines: {
+      taxFiling: 'Tarehe ya Mwisho ya Kutuma Kodi',
+      businessRenewal: 'Kuhuisha Leseni ya Biashara',
+      idRenewal: 'Kuhuisha Kitambulisho',
+      vehicleRegistration: 'Tarehe ya Mwisho ya Usajili wa Gari'
     },
     sidebar: {
       governmentServices: 'Huduma za Serikali',

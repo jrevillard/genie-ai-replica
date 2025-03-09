@@ -14,7 +14,7 @@
         </button>
 
         <div class="logo-container">
-          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
             <path d="M3 22h18" stroke-linecap="round"/>
             <path d="M12 2L2 8h20L12 2z" />
             <rect x="4" y="10" width="16" height="12" stroke-linecap="round" stroke-linejoin="round" />
@@ -41,52 +41,52 @@
           >
             <span class="status-dot" :class="getStatusDotClass"></span>
             <span class="status-text">{{ statusText }}</span>
-            <span class="tooltip">{{ $t('nav.systemStatus', 'System Status') }}</span>
+            <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
           </button>
           
           <!-- Status Dropdown -->
           <div v-if="isStatusDropdownOpen" class="status-dropdown">
             <div class="status-dropdown-header">
-              <h4>{{ $t('systemStatus.title', 'Service Status') }}</h4>
+              <h4>{{ $t('systemStatus.title') }}</h4>
               <div class="status-summary">
-                <span>{{ totalServices }} {{ $t('systemStatus.services', 'Services') }}</span>
+                <span>{{ totalServices }} {{ $t('systemStatus.services') }}</span>
               </div>
             </div>
             
             <div class="status-counts">
               <div class="status-count-item">
                 <span class="status-dot status-operational"></span>
-                <span class="status-label">{{ $t('systemStatus.operational', 'Operational') }}</span>
+                <span class="status-label">{{ $t('systemStatus.operational') }}</span>
                 <span class="status-value">{{ operationalCount }}</span>
               </div>
               <div class="status-count-item">
                 <span class="status-dot status-degraded"></span>
-                <span class="status-label">{{ $t('systemStatus.degraded', 'Degraded') }}</span>
+                <span class="status-label">{{ $t('systemStatus.degraded') }}</span>
                 <span class="status-value">{{ degradedCount }}</span>
               </div>
               <div class="status-count-item">
                 <span class="status-dot status-outage"></span>
-                <span class="status-label">{{ $t('systemStatus.outage', 'Outage') }}</span>
+                <span class="status-label">{{ $t('systemStatus.outage') }}</span>
                 <span class="status-value">{{ outageCount }}</span>
               </div>
             </div>
             
             <div v-if="nextDeadline" class="next-deadline">
-              <h4>{{ $t('systemStatus.nextDeadline', 'Next Deadline') }}</h4>
+              <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
               <div class="deadline-info">
-                <span class="deadline-title">{{ nextDeadline.title }}</span>
+                <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
                 <span 
                   class="deadline-days"
                   :class="{'urgent': nextDeadline.daysRemaining < 7}"
                 >
-                  {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days', 'days') }}
+                  {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
                 </span>
               </div>
             </div>
             
             <div class="status-footer">
               <a href="#" @click.prevent="viewStatusPage">
-                {{ $t('systemStatus.viewDetails', 'View Details') }}
+                {{ $t('systemStatus.viewDetails') }}
               </a>
             </div>
           </div>
@@ -180,7 +180,7 @@ export default {
       },
       // Sample next deadline - would be personalized
       nextDeadline: {
-        title: 'Tax Filing Deadline',
+        titleKey: 'taxFiling',
         daysRemaining: 12
       }
     }
@@ -209,10 +209,33 @@ export default {
     statusText() {
       // Show in user's language
       switch(this.systemStatus.overall) {
-        case 'operational': return this.$t('systemStatus.allOperational', 'All Systems');
-        case 'degraded': return this.$t('systemStatus.someIssues', 'Some Issues');
-        case 'outage': return this.$t('systemStatus.majorIssues', 'Major Issues');
-        default: return this.$t('systemStatus.checking', 'Checking...');
+        case 'operational': return this.$t('systemStatus.allOperational');
+        case 'degraded': return this.$t('systemStatus.someIssues');
+        case 'outage': return this.$t('systemStatus.majorIssues');
+        default: return this.$t('systemStatus.checking');
+      }
+    }
+  },
+  watch: {
+    // Watch for locale changes and close/reopen dropdown to force refresh
+    '$i18n.locale'(newLocale) {
+      this.currentLocale = newLocale;
+      
+      // Only do this if the dropdown is open
+      if (this.isStatusDropdownOpen) {
+        // Briefly close and reopen to force re-render with new translations
+        const wasOpen = this.isStatusDropdownOpen;
+        this.isStatusDropdownOpen = false;
+        
+        // Use nextTick to ensure Vue updates the DOM first
+        this.$nextTick(() => {
+          if (wasOpen) {
+            // Small delay to ensure DOM updates
+            setTimeout(() => {
+              this.isStatusDropdownOpen = true;
+            }, 50);
+          }
+        });
       }
     }
   },
@@ -257,11 +280,6 @@ export default {
     viewStatusPage() {
       this.$emit('viewStatusPage');
       this.isStatusDropdownOpen = false;
-    },
-    // In a real app, you would implement this method
-    fetchSystemStatus() {
-      // Fetch status from API
-      // this.systemStatus = result;
     }
   }
 }

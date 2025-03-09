@@ -23,7 +23,6 @@
           </div>
         </div>
       </div>
-
       <!-- Context Panel for selected tree nodes -->
       <div class="context-panel" v-if="selectedContextItems.length > 0">
         <div class="context-header">
@@ -46,7 +45,6 @@
           </div>
         </div>
       </div>
-
       <!-- The scrollable chat window -->
       <div class="chat-window" ref="chatWindow">
         <div
@@ -66,7 +64,6 @@
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
       </div>
-
       <!-- Updated Quick Help Overlay with proper internationalization -->
       <div 
         class="quick-help-overlay" 
@@ -98,7 +95,6 @@
           </div>
         </div>
       </div>
-
       <!-- Input Area -->
       <div class="chat-input">
         <textarea
@@ -130,7 +126,6 @@
           </button>
         </div>
       </div>
-
       <!-- Feedback Dialog -->
       <chat-response-feedback-dialog
         v-if="feedbackDialog.visible"
@@ -139,7 +134,6 @@
         @close="closeFeedbackDialog"
         @submit="handleFeedbackSubmit"
       />
-
       <!-- Save Chat Dialog -->
       <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
         <template v-slot:header>
@@ -182,7 +176,6 @@
         </template>
       </modal-dialog>
     </div>
-
     <!-- Right Sidebar -->
     <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
@@ -191,7 +184,6 @@
           <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
         </button>
       </div>
-
       <!-- Chat History Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
@@ -215,7 +207,6 @@
           </div>
         </div>
       </div>
-
       <!-- Related Documents Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
@@ -242,7 +233,6 @@
           </div>
         </div>
       </div>
-
       <!-- FAQ Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
@@ -272,13 +262,11 @@
     </div>
   </div>
 </template>
-
 <script>
 import { eventBus } from '../eventBus.js'
 import { mapGetters, mapActions } from 'vuex';
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 import ModalDialog from './ModalDialog.vue'
-
 export default {
   name: 'ChatBotComponent',
   components: {
@@ -347,7 +335,6 @@ export default {
           answer: 'Standard business registration typically takes 3-5 business days after all required documents have been correctly submitted.' 
         }
       ],
-
       // Just Chat option defined separately so it can be referenced directly in the template
       justChatOption: { 
         text: "Just Chat", 
@@ -954,14 +941,12 @@ mounted() {
   }
 }
 </script>
-
 <style scoped>
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
 }
-
 .chatbot-container {
   display: flex;
   flex-direction: column;
@@ -971,7 +956,6 @@ mounted() {
   flex: 1;
   overflow: hidden;
 }
-
 /* System Status Panel */
 .system-status-panel {
   background: #f8fafc;
@@ -982,7 +966,6 @@ mounted() {
   justify-content: space-between;
   font-size: 0.85rem;
 }
-
 .status-indicator {
   display: flex;
   align-items: center;
@@ -990,45 +973,37 @@ mounted() {
   font-weight: 500;
   color: #64748b;
 }
-
 .status-indicator.online {
   color: #10b981;
 }
-
 .status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background-color: #cbd5e1;
 }
-
 .status-indicator.online .status-dot {
   background-color: #10b981;
 }
-
 .status-metrics {
   display: flex;
   gap: 20px;
 }
-
 .metric {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-
 .metric-label {
   font-size: 0.7rem;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
 .metric-value {
   font-weight: 600;
   color: #334155;
 }
-
 /* Context Panel Styles */
 .context-panel {
   background: #f5f9ff;
@@ -1036,24 +1011,20 @@ mounted() {
   padding: 8px 10px;
   font-size: 0.9rem;
 }
-
 .context-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 6px;
 }
-
 .context-title {
   font-weight: 600;
   color: #4a4a4a;
 }
-
 .context-items {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-
 .context-item {
   display: flex;
   align-items: center;
@@ -1065,7 +1036,6 @@ mounted() {
   max-width: 200px;
   overflow: hidden;
 }
-
 .context-text {
   white-space: nowrap;
   overflow: hidden;
@@ -1073,7 +1043,6 @@ mounted() {
   flex: 1;
   margin-right: 4px;
 }
-
 .context-remove-btn {
   background: none;
   border: none;
@@ -1088,12 +1057,10 @@ mounted() {
   justify-content: center;
   border-radius: 50%;
 }
-
 .context-remove-btn:hover {
   color: #555;
   background: #f0f0f0;
 }
-
 /* Chat Window Styles */
 .chat-window {
   flex: 1;
@@ -1102,13 +1069,11 @@ mounted() {
   background: #fafafa;
   position: relative;
 }
-
 .chat-message {
   margin-bottom: 12px;
   display: flex;
   align-items: flex-start;
 }
-
 .chat-message.user {
   justify-content: flex-end;
 }
@@ -1126,7 +1091,6 @@ mounted() {
   word-wrap: break-word;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
-
 .chat-message.user .message-bubble {
   background: #4e97d1;
   color: #fff;
@@ -1146,7 +1110,6 @@ mounted() {
 .feedback-trigger button:hover {
   background: #e0e0e0;
 }
-
 /* Quick Help Overlay */
 .quick-help-overlay {
   position: absolute;
@@ -1163,12 +1126,10 @@ mounted() {
   padding: 20px;
   overflow-y: auto;
 }
-
 .quick-help-content {
   max-width: 600px;
   width: 100%;
 }
-
 .quick-help-heading {
   text-align: center;
   font-size: 1.6rem;
@@ -1176,13 +1137,11 @@ mounted() {
   margin-bottom: 24px;
   color: #333;
 }
-
 .quick-help-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 12px;
 }
-
 .quick-help-item {
   display: flex;
   align-items: center;
@@ -1194,24 +1153,20 @@ mounted() {
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
-
 .quick-help-item:hover {
   background: #f9fafb;
   border-color: #d1d5db;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
 .quick-help-item.just-chat {
   background: #f0f7ff;
   border-color: #bcdcff;
 }
-
 .quick-help-item.just-chat:hover {
   background: #e1f0ff;
   border-color: #a3ceff;
 }
-
 .quick-help-icon {
   margin-right: 12px;
   display: flex;
@@ -1219,13 +1174,11 @@ mounted() {
   justify-content: center;
   width: 40px;
 }
-
 .quick-help-text {
   font-size: 0.95rem;
   color: #333;
   font-weight: 500;
 }
-
 /* Chat Input Styles */
 .chat-input {
   display: flex;
@@ -1234,7 +1187,6 @@ mounted() {
   border-top: 1px solid #ddd;
   padding: 8px;
 }
-
 .prompt-textarea {
   resize: vertical;
   border: 1px solid #ddd;
@@ -1244,14 +1196,12 @@ mounted() {
   margin-bottom:8px;
   max-height: 120px;
 }
-
 .input-actions {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   align-items: center;
 }
-
 .new-chat-btn {
   background: #f0f0f0;
   color: #555;
@@ -1261,12 +1211,10 @@ mounted() {
   cursor: pointer;
   margin-right: auto; /* This pushes it to the left */
 }
-
 .new-chat-btn:hover {
   background: #e0e0e0;
   color: #4e97d1;
 }
-
 .save-chat-btn {
   background: #f0f0f0;
   color: #555;
@@ -1275,11 +1223,9 @@ mounted() {
   border-radius: 4px;
   cursor: pointer;
 }
-
 .save-chat-btn:hover {
   background: #e0e0e0;
 }
-
 .send-btn {
   background: #4e97d1;
   color: #fff;
@@ -1289,11 +1235,9 @@ mounted() {
   cursor: pointer;
   font-weight: 500;
 }
-
 .send-btn:hover {
   background: #3a7da0;
 }
-
 /* Sidebar Styles */
 .sidebar {
   width: 320px;
@@ -1304,11 +1248,9 @@ mounted() {
   flex-direction: column;
   transition: width 0.3s ease;
 }
-
 .sidebar.collapsed {
   width: 50px;
 }
-
 .sidebar-header {
   padding: 16px;
   border-bottom: 1px solid #e2e8f0;
@@ -1316,13 +1258,11 @@ mounted() {
   justify-content: space-between;
   align-items: center;
 }
-
 .sidebar-header h3 {
   margin: 0;
   font-size: 1.1rem;
   color: #334155;
 }
-
 .sidebar-toggle {
   background: none;
   border: none;
@@ -1335,17 +1275,14 @@ mounted() {
   justify-content: center;
   border-radius: 4px;
 }
-
 .sidebar-toggle:hover {
   background: #e2e8f0;
   color: #334155;
 }
-
 .sidebar-section {
   padding: 16px;
   border-bottom: 1px solid #e2e8f0;
 }
-
 .section-title {
   margin: 0 0 16px 0;
   font-size: 0.95rem;
@@ -1355,19 +1292,16 @@ mounted() {
   align-items: center;
   gap: 8px;
 }
-
 .section-title i {
   font-size: 0.9rem;
   color: #64748b;
 }
-
 /* Chat History styles */
 .chat-history {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-
 .history-item {
   background: #fff;
   border-radius: 6px;
@@ -1376,19 +1310,16 @@ mounted() {
   transition: all 0.2s ease;
   border: 1px solid #e5e7eb;
 }
-
 .history-item:hover, .history-item.active {
   background: #f0f7ff;
   border-color: #bcdcff;
 }
-
 .history-item-title {
   font-weight: 500;
   font-size: 0.9rem;
   margin-bottom: 4px;
   color: #334155;
 }
-
 .history-item-preview {
   font-size: 0.8rem;
   color: #64748b;
@@ -1397,20 +1328,17 @@ mounted() {
   text-overflow: ellipsis;
   margin-bottom: 4px;
 }
-
 .history-item-date {
   font-size: 0.75rem;
   color: #94a3b8;
   text-align: right;
 }
-
 /* Document styles */
 .related-documents {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-
 .document-item {
   display: flex;
   align-items: center;
@@ -1422,12 +1350,10 @@ mounted() {
   border: 1px solid #e5e7eb;
   gap: 12px;
 }
-
 .document-item:hover {
   background: #f0f7ff;
   border-color: #bcdcff;
 }
-
 .document-icon {
   font-size: 1.2rem;
   color: #64748b;
@@ -1437,12 +1363,10 @@ mounted() {
   align-items: center;
   justify-content: center;
 }
-
 .document-info {
   flex: 1;
   overflow: hidden;
 }
-
 .document-title {
   font-size: 0.9rem;
   font-weight: 500;
@@ -1452,25 +1376,21 @@ mounted() {
   text-overflow: ellipsis;
   margin-bottom: 2px;
 }
-
 .document-meta {
   font-size: 0.75rem;
   color: #94a3b8;
 }
-
 /* FAQ styles */
 .faq-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-
 .faq-item {
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   overflow: hidden;
 }
-
 .faq-question {
   padding: 12px;
   background: #fff;
@@ -1482,16 +1402,13 @@ mounted() {
   justify-content: space-between;
   align-items: center;
 }
-
 .faq-question:hover, .faq-question.active {
   background: #f0f7ff;
 }
-
 .faq-question i {
   font-size: 0.8rem;
   color: #64748b;
 }
-
 .faq-answer {
   padding: 12px;
   font-size: 0.85rem;
@@ -1500,7 +1417,6 @@ mounted() {
   border-top: 1px solid #e2e8f0;
   line-height: 1.5;
 }
-
 .empty-state {
   text-align: center;
   padding: 16px;
@@ -1508,18 +1424,15 @@ mounted() {
   font-size: 0.9rem;
   font-style: italic;
 }
-
 /* Form Styles for Save Dialog */
 .form-group {
   margin-bottom: 16px;
 }
-
 .form-group label {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
 }
-
 .form-group input, 
 .form-group select {
   width: 100%;
@@ -1528,7 +1441,6 @@ mounted() {
   border-radius: 4px;
   font-size: 1rem;
 }
-
 .cancel-btn, 
 .primary-btn {
   padding: 8px 16px;
@@ -1537,32 +1449,26 @@ mounted() {
   cursor: pointer;
   transition: background-color 0.2s;
 }
-
 .cancel-btn {
   background: none;
   border: 1px solid #ddd;
   color: #666;
 }
-
 .cancel-btn:hover {
   background-color: #f5f5f5;
 }
-
 .primary-btn {
   background-color: #4e97d1;
   border: none;
   color: white;
 }
-
 .primary-btn:hover {
   background-color: #3a7cb5;
 }
-
 .primary-btn:disabled {
   background-color: #a9cae8;
   cursor: not-allowed;
 }
-
 /* Responsive Adjustments */
 @media (min-width: 768px) {
   .chat-input {
@@ -1580,13 +1486,11 @@ mounted() {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-
 @media (min-width: 1024px) {
   .quick-help-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
-
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -1613,7 +1517,6 @@ mounted() {
     justify-content: space-between;
   }
 }
-
 @media (max-width: 480px) {
   .quick-help-grid {
     grid-template-columns: 1fr;
@@ -1623,4 +1526,4 @@ mounted() {
     font-size: 1.4rem;
   }
 }
-</style> 
+</style>

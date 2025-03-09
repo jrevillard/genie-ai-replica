@@ -177,89 +177,94 @@
       </modal-dialog>
     </div>
     <!-- Right Sidebar -->
-    <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div class="sidebar-header">
-        <h3>{{ translate('sidebar.title', 'Info & Resources') }}</h3>
-        <button @click="toggleSidebar" class="sidebar-toggle">
-          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
-        </button>
-      </div>
-      <!-- Chat History Section -->
-      <div class="sidebar-section">
-        <h4 class="section-title">
-          <i class="fas fa-history"></i>
-          {{ translate('sidebar.chatHistory', 'Recent Chats') }}
-        </h4>
-        <div class="chat-history">
-          <div 
-            v-for="chat in recentChats" 
-            :key="chat.id" 
-            class="history-item"
-            :class="{ active: currentChatId === chat.id }"
-            @click="loadChatFromHistory(chat.id)"
-          >
-            <div class="history-item-title">{{ chat.title }}</div>
-            <div class="history-item-preview">{{ chat.preview }}</div>
-            <div class="history-item-date">{{ formatDate(chat.date) }}</div>
-          </div>
-          <div v-if="recentChats.length === 0" class="empty-state">
-            {{ translate('sidebar.noChats', 'No recent chats') }}
-          </div>
+<!-- Update the sidebar HTML in your template -->
+<div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+  <div class="sidebar-header">
+    <h3 v-if="!sidebarCollapsed">{{ translate('sidebar.title', 'Info & Resources') }}</h3>
+    <button @click="toggleSidebar" class="sidebar-toggle">
+      <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
+    </button>
+  </div>
+  
+  <!-- Only show these sections when sidebar is not collapsed -->
+  <div v-if="!sidebarCollapsed">
+    <!-- Chat History Section -->
+    <div class="sidebar-section">
+      <h4 class="section-title">
+        <i class="fas fa-history"></i>
+        {{ translate('sidebar.chatHistory', 'Recent Chats') }}
+      </h4>
+      <div class="chat-history">
+        <div 
+          v-for="chat in recentChats" 
+          :key="chat.id" 
+          class="history-item"
+          :class="{ active: currentChatId === chat.id }"
+          @click="loadChatFromHistory(chat.id)"
+        >
+          <div class="history-item-title">{{ chat.title }}</div>
+          <div class="history-item-preview">{{ chat.preview }}</div>
+          <div class="history-item-date">{{ formatDate(chat.date) }}</div>
+        </div>
+        <div v-if="recentChats.length === 0" class="empty-state">
+          {{ translate('sidebar.noChats', 'No recent chats') }}
         </div>
       </div>
-      <!-- Related Documents Section -->
-      <div class="sidebar-section">
-        <h4 class="section-title">
-          <i class="fas fa-file-alt"></i>
-          {{ translate('sidebar.relatedDocs', 'Related Documents') }}
-        </h4>
-        <div class="related-documents">
-          <div 
-            v-for="doc in relatedDocuments" 
-            :key="doc.id" 
-            class="document-item"
-            @click="openDocument(doc)"
-          >
-            <div class="document-icon">
-              <i :class="documentIconClass(doc.type)"></i>
-            </div>
-            <div class="document-info">
-              <div class="document-title">{{ doc.title }}</div>
-              <div class="document-meta">{{ doc.type }} • {{ formatFileSize(doc.size) }}</div>
-            </div>
+    </div>
+    <!-- Related Documents Section -->
+    <div class="sidebar-section">
+      <h4 class="section-title">
+        <i class="fas fa-file-alt"></i>
+        {{ translate('sidebar.relatedDocs', 'Related Documents') }}
+      </h4>
+      <div class="related-documents">
+        <div 
+          v-for="doc in relatedDocuments" 
+          :key="doc.id" 
+          class="document-item"
+          @click="openDocument(doc)"
+        >
+          <div class="document-icon">
+            <i :class="documentIconClass(doc.type)"></i>
           </div>
-          <div v-if="relatedDocuments.length === 0" class="empty-state">
-            {{ translate('sidebar.noDocuments', 'No related documents') }}
+          <div class="document-info">
+            <div class="document-title">{{ doc.title }}</div>
+            <div class="document-meta">{{ doc.type }} • {{ formatFileSize(doc.size) }}</div>
           </div>
         </div>
+        <div v-if="relatedDocuments.length === 0" class="empty-state">
+          {{ translate('sidebar.noDocuments', 'No related documents') }}
+        </div>
       </div>
-      <!-- FAQ Section -->
-      <div class="sidebar-section">
-        <h4 class="section-title">
-          <i class="fas fa-question-circle"></i>
-          {{ translate('sidebar.faq', 'Frequently Asked Questions') }}
-        </h4>
-        <div class="faq-list">
+    </div>
+    <!-- FAQ Section -->
+    <div class="sidebar-section">
+      <h4 class="section-title">
+        <i class="fas fa-question-circle"></i>
+        {{ translate('sidebar.faq', 'Frequently Asked Questions') }}
+      </h4>
+      <div class="faq-list">
+        <div 
+          v-for="(faq, index) in frequentlyAskedQuestions" 
+          :key="index" 
+          class="faq-item"
+        >
           <div 
-            v-for="(faq, index) in frequentlyAskedQuestions" 
-            :key="index" 
-            class="faq-item"
+            class="faq-question" 
+            @click="toggleFaq(index)"
+            :class="{ active: expandedFaqs.includes(index) }"
           >
-            <div 
-              class="faq-question" 
-              @click="toggleFaq(index)"
-              :class="{ active: expandedFaqs.includes(index) }"
-            >
-              {{ faq.question }}
-              <i class="fas" :class="expandedFaqs.includes(index) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            </div>
-            <div class="faq-answer" v-if="expandedFaqs.includes(index)">
-              {{ faq.answer }}
-            </div>
+            {{ faq.question }}
+            <i class="fas" :class="expandedFaqs.includes(index) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+          </div>
+          <div class="faq-answer" v-if="expandedFaqs.includes(index)">
+            {{ faq.answer }}
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
   </div>
 </template>
 <script>
@@ -1524,6 +1529,77 @@ mounted() {
   
   .quick-help-heading {
     font-size: 1.4rem;
+  }
+}
+
+/* Updated Sidebar Styles */
+.sidebar {
+  width: 320px;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 50px;
+  overflow: visible; /* Allow the toggle button to be visible */
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 16px 0;
+  justify-content: center;
+  border-bottom: none;
+}
+
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.sidebar-toggle:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* Mobile specific adjustments */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 100;
+    transform: translateX(100%);
+  }
+  
+  .sidebar.visible {
+    transform: translateX(0);
+  }
+  
+  .sidebar.collapsed {
+    transform: translateX(calc(100% - 50px));
   }
 }
 </style>

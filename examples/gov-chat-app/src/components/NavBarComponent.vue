@@ -14,18 +14,50 @@
         </button>
 
         <div class="logo-container">
-          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
-            <path d="M3 22h18" stroke-linecap="round"/>
-            <path d="M12 2L2 8h20L12 2z" />
-            <rect x="4" y="10" width="16" height="12" stroke-linecap="round" stroke-linejoin="round" />
-            <line x1="4" y1="10" x2="4" y2="22" />
-            <line x1="20" y1="10" x2="20" y2="22" />
-            <line x1="8" y1="10" x2="8" y2="22" />
-            <line x1="12" y1="10" x2="12" y2="22" />
-            <line x1="16" y1="10" x2="16" y2="22" />
+          <!-- Animated Government Logo - Larger and more visible -->
+          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="48" height="48">
+            <defs>
+              <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#4E97D1" />
+                <stop offset="100%" stop-color="#2C5F8A" />
+              </linearGradient>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+            
+            <!-- Background circle -->
+            <circle cx="50" cy="50" r="30" fill="#f0f9ff" class="logo-base" />
+            
+            <!-- Building base -->
+            <rect x="25" y="65" width="50" height="5" fill="#2C5F8A" class="logo-steps" />
+            
+            <!-- Steps -->
+            <rect x="30" y="60" width="40" height="5" fill="#3A7DA0" class="logo-steps" />
+            <rect x="35" y="55" width="30" height="5" fill="#4E97D1" class="logo-steps" />
+            
+            <!-- Pillars -->
+            <rect x="38" y="30" width="6" height="25" fill="#2C5F8A" class="logo-pillars" />
+            <rect x="47" y="30" width="6" height="25" fill="#3A7DA0" class="logo-pillars" />
+            <rect x="56" y="30" width="6" height="25" fill="#2C5F8A" class="logo-pillars" />
+            
+            <!-- Roof/Pediment -->
+            <path d="M32 30 L68 30 L50 18 Z" fill="#4E97D1" class="logo-roof" />
+            
+            <!-- Star symbolizing service -->
+            <g class="logo-star" filter="url(#glow)">
+              <path d="M50 12 L52 17 L58 17 L53 21 L55 26 L50 22 L45 26 L47 21 L42 17 L48 17 Z" fill="#FFD700" />
+            </g>
+            
+            <!-- Glow effect -->
+            <circle cx="50" cy="50" r="31" fill="none" stroke="#4E97D1" stroke-width="1.5" opacity="0.5" class="logo-glow" />
+            
+            <!-- Animated outline -->
+            <path d="M32 30 L68 30 L50 18 Z M38 30 L38 55 M47 30 L47 55 M56 30 L56 55" 
+                  fill="none" stroke="white" stroke-width="1.2" class="logo-outline" />
           </svg>
-        </div>
-        
+        </div>        
         <!-- Title moved to left, adjacent to logo -->
         <h1 class="brand-name">{{ $t('brandName') }}</h1>
       </div>
@@ -293,11 +325,11 @@ export default {
 .nav-bar {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, #4E97D1, #3A7DA0);
+  background: linear-gradient(135deg, #4E97D1, #2C5F8A);
   color: #fff;
   height: 60px;
   padding: 0 16px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.15);
   position: relative;
   z-index: 20;
 }
@@ -330,9 +362,11 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-/* Logo styling */
+/* Logo styling and animations - Enhanced */
 .logo-container {
   display: flex;
   align-items: center;
@@ -340,9 +374,75 @@ export default {
 }
 
 .govt-logo {
-  height: 32px;
-  width: 32px;
+  height: 48px;
+  width: 48px;
   color: white;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  transition: transform 0.3s ease;
+}
+
+.logo-container:hover .govt-logo {
+  transform: scale(1.08);
+}
+
+/* Logo animations - More noticeable */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse {
+  0% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 0.8; transform: scale(1); }
+}
+
+@keyframes rotateIn {
+  from { transform: rotate(-15deg); opacity: 0; }
+  to { transform: rotate(0deg); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.logo-base {
+  fill: url(#logoGradient);
+  animation: fadeIn 1.2s ease-out forwards;
+}
+
+.logo-roof {
+  animation: rotateIn 1s ease-out 0.3s both;
+  transform-origin: center;
+}
+
+.logo-pillars {
+  animation: slideDown 0.8s ease-out 0.6s both;
+}
+
+.logo-steps {
+  animation: slideDown 0.7s ease-out 0.9s both;
+}
+
+.logo-outline {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: shimmer 2s ease-out 1.2s forwards;
+}
+
+.logo-glow {
+  animation: pulse 3s ease-in-out infinite;
+}
+
+.logo-star {
+  animation: pulse 2s ease-in-out infinite;
+  transform-origin: center;
 }
 
 /* Status Indicator */
@@ -355,30 +455,40 @@ export default {
 .status-indicator-btn {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   color: white;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 4px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
   cursor: pointer;
   position: relative;
   font-size: 0.85rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .status-indicator-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  margin-right: 6px;
+  margin-right: 8px;
+  transition: transform 0.2s ease;
+  box-shadow: 0 0 4px rgba(0,0,0,0.2);
+}
+
+.status-indicator-btn:hover .status-dot {
+  transform: scale(1.1);
 }
 
 .status-text {
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .status-operational {
@@ -396,28 +506,35 @@ export default {
 /* Status Dropdown */
 .status-dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   right: 0;
-  width: 240px;
+  width: 260px;
   background: white;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   color: #333;
   font-size: 0.85rem;
   z-index: 30;
   overflow: hidden;
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .status-dropdown-header {
-  padding: 10px 12px;
+  padding: 14px 16px;
   border-bottom: 1px solid #eee;
+  background: #f8f9fa;
 }
 
 .status-dropdown-header h4 {
-  margin: 0 0 4px 0;
+  margin: 0 0 6px 0;
   font-weight: 600;
   color: #333;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .status-summary {
@@ -428,14 +545,21 @@ export default {
 }
 
 .status-counts {
-  padding: 8px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid #eee;
 }
 
 .status-count-item {
   display: flex;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
+  padding: 4px 0;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+}
+
+.status-count-item:hover {
+  background-color: #f8f9fa;
 }
 
 .status-count-item:last-child {
@@ -444,31 +568,45 @@ export default {
 
 .status-label {
   flex: 1;
-  margin-left: 6px;
+  margin-left: 8px;
   color: #555;
 }
 
 .status-value {
-  font-weight: 500;
+  font-weight: 600;
   color: #333;
+  background: #f5f5f5;
+  border-radius: 12px;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
 }
 
 .next-deadline {
-  padding: 10px 12px;
+  padding: 14px 16px;
   border-bottom: 1px solid #eee;
 }
 
 .next-deadline h4 {
-  margin: 0 0 6px 0;
+  margin: 0 0 8px 0;
   font-weight: 600;
   color: #333;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .deadline-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 4px 0;
+  border-radius: 4px;
+}
+
+.deadline-info:hover {
+  background-color: #f8f9fa;
 }
 
 .deadline-title {
@@ -476,16 +614,20 @@ export default {
 }
 
 .deadline-days {
-  font-weight: 500;
+  font-weight: 600;
   color: #2563eb; /* Blue */
+  background: #eef2ff;
+  padding: 4px 10px;
+  border-radius: 12px;
 }
 
 .deadline-days.urgent {
   color: #ef4444; /* Red */
+  background: #fee2e2;
 }
 
 .status-footer {
-  padding: 8px 12px;
+  padding: 12px 16px;
   text-align: center;
   background: #f9fafb;
 }
@@ -493,16 +635,22 @@ export default {
 .status-footer a {
   color: #2563eb;
   text-decoration: none;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: inline-block;
 }
 
 .status-footer a:hover {
-  text-decoration: underline;
+  text-decoration: none;
+  background-color: #e0e7ff;
 }
 
 /* Improved button styling */
 .icon-btn {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.1);
   border: none;
   cursor: pointer;
   width: 40px;
@@ -511,30 +659,42 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 8px;
+  margin-left: 10px;
   position: relative;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
   color: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .icon-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.icon-btn:active {
+  transform: translateY(0);
 }
 
 .icon-btn svg {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
+  transition: transform 0.2s ease;
+}
+
+.icon-btn:hover svg {
+  transform: scale(1.1);
 }
 
 /* Tooltip styling */
 .tooltip {
   position: absolute;
-  bottom: -30px;
+  bottom: -34px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.8);
   color: white;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-radius: 4px;
   font-size: 12px;
   white-space: nowrap;
@@ -542,7 +702,19 @@ export default {
   visibility: hidden;
   transition: opacity 0.2s, visibility 0.2s;
   pointer-events: none;
-  z-index: 30;
+  z-index: 40;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .icon-btn:hover .tooltip {
@@ -551,7 +723,7 @@ export default {
 }
 
 .status-indicator-btn .tooltip {
-  bottom: -30px;
+  bottom: -34px;
 }
 
 .status-indicator-btn:hover .tooltip {
@@ -559,18 +731,24 @@ export default {
   visibility: visible;
 }
 
-/* Hamburger menu styling */
+/* Improved hamburger menu styling with centered elements */
 .hamburger-btn {
   position: relative;
   width: 40px;
   height: 40px;
   padding: 0;
   border-radius: 50%;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.1);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.hamburger-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .hamburger-inner {
@@ -578,17 +756,18 @@ export default {
   width: 18px;
   height: 2px;
   background-color: white;
-  transition: background-color 0.2s;
+  transition: background-color 0.3s ease;
 }
 
 .hamburger-inner::before,
 .hamburger-inner::after {
   content: '';
   position: absolute;
+  left: 0;
   width: 18px;
   height: 2px;
   background-color: white;
-  transition: transform 0.3s;
+  transition: transform 0.3s ease;
 }
 
 .hamburger-inner::before {
@@ -599,48 +778,61 @@ export default {
   bottom: -5px;
 }
 
+/* Centered X state */
 .hamburger-btn.is-active .hamburger-inner {
   background-color: transparent;
+  transform: translateX(0); /* Ensure centered */
 }
 
 .hamburger-btn.is-active .hamburger-inner::before {
   transform: translateY(5px) rotate(45deg);
+  top: 0; /* Ensure centered */
 }
 
 .hamburger-btn.is-active .hamburger-inner::after {
   transform: translateY(-5px) rotate(-45deg);
+  bottom: 0; /* Ensure centered */
 }
 
 /* Language dropdown styling */
 .language-select-container {
   position: relative;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
   width: 120px;
-  margin-right: 8px;
+  margin-right: 10px;
+  transition: background-color 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.language-select-container:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .language-select {
   width: 100%;
-  padding: 6px 8px;
-  padding-right: 24px;
+  padding: 8px 10px;
+  padding-right: 28px;
   border: none;
   background: transparent;
   color: white;
   font-size: 0.9rem;
+  font-weight: 500;
   appearance: none;
   cursor: pointer;
-  height: 32px;
+  height: 36px;
 }
 
 .language-select option {
   background: #4E97D1;
   color: white;
+  padding: 8px;
+  font-weight: 500;
 }
 
 .select-arrow {
   position: absolute;
-  right: 8px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   width: 0;
@@ -668,8 +860,8 @@ export default {
   }
   
   .status-indicator-btn {
-    padding: 0 8px;
-    width: 32px;
+    padding: 0 10px;
+    width: 36px;
   }
   
   .status-dot {
@@ -679,6 +871,10 @@ export default {
   .brand-name {
     font-size: 1rem;
     max-width: 300px;
+  }
+  
+  .icon-btn {
+    margin-left: 8px;
   }
 }
 
@@ -691,11 +887,37 @@ export default {
   .language-select-container {
     width: 100px;
   }
+  
+  .govt-logo {
+    height: 36px;
+    width: 36px;
+  }
+  
+  .nav-bar {
+    padding: 0 12px;
+  }
+  
+  .status-dropdown {
+    width: 240px;
+    right: -40px;
+  }
+  
+  .status-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    right: 50px;
+    width: 8px;
+    height: 8px;
+    background: white;
+    transform: rotate(45deg);
+  }
 }
 
 @media (max-width: 600px) {
   .brand-name {
     max-width: 150px;
+    font-size: 0.85rem;
   }
   
   .language-select-container {
@@ -706,12 +928,64 @@ export default {
     font-size: 0.8rem;
     padding: 4px 6px;
     padding-right: 20px;
+    height: 32px;
+  }
+  
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .icon-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .hamburger-btn {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .status-indicator-btn {
+    height: 32px;
+  }
+  
+  .tooltip {
+    display: none;
   }
 }
 
 @media (max-width: 480px) {
   .brand-name {
     max-width: 120px;
+    font-size: 0.8rem;
+  }
+  
+  .govt-logo {
+    height: 32px;
+    width: 32px;
+  }
+  
+  .nav-right {
+    min-width: 180px;
+  }
+  
+  .language-select-container {
+    width: 70px;
+  }
+  
+  .nav-bar {
+    height: 54px;
+  }
+  
+  /* Stack status dropdown differently on very small screens */
+  .status-dropdown {
+    width: 220px;
+    right: -80px;
+  }
+  
+  .status-dropdown::before {
+    right: 90px;
   }
 }
 </style>

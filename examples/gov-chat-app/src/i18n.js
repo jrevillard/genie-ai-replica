@@ -381,8 +381,21 @@ const messages = {
       selectFolder: 'Select Folder',
       newChat: 'New Chat',
       clearContext: 'Clear context and start a new conversation',
-      unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?'
+      unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?',
+      whatCanIHelp: "How can I help you today?",
+      justChat: "Just Chat"
     },
+    quickhelp: {
+      applyForID: "Apply for ID",
+      payTaxes: "Pay taxes",
+      startBusiness: "Start a business",
+      findHealthcare: "Find healthcare",
+      educationServices: "Education services",
+      transportLicenses: "Transport & licenses",
+      housingPrograms: "Housing programs",
+      findJobs: "Find jobs"
+    },
+
     common: {
       cancel: 'Cancel',
       create: 'Create',
@@ -808,8 +821,22 @@ const messages = {
       selectFolder: 'Sélectionner un Dossier',
       newChat: 'Nouvelle Conversation',
       clearContext: 'Effacer le contexte et démarrer une nouvelle conversation',
-      unsavedChanges: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation?'
+      unsavedChanges: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation?',
+      whatCanIHelp: "Comment puis-je vous aider aujourd'hui ?",
+      justChat: "Simplement discuter"
     },
+    quickhelp: {
+      applyForID: "Demander une pièce d'identité",
+      payTaxes: "Payer des impôts",
+      startBusiness: "Créer une entreprise",
+      findHealthcare: "Trouver des soins de santé",
+      educationServices: "Services d'éducation",
+      transportLicenses: "Transport et permis",
+      housingPrograms: "Programmes de logement",
+      findJobs: "Trouver un emploi"
+    },
+
+
     common: {
       cancel: 'Annuler',
       create: 'Créer',
@@ -1235,7 +1262,19 @@ const messages = {
       selectFolder: 'Chagua Folda',
       newChat: 'Mazungumzo Mapya',
       clearContext: 'Futa muktadha na anza mazungumzo mapya',
-      unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?'
+      unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
+      whatCanIHelp: "Naweza kukusaidia vipi leo?",
+      justChat: "Ongea tu"
+    },
+    quickhelp: {
+      applyForID: "Omba kitambulisho",
+      payTaxes: "Lipa kodi",
+      startBusiness: "Anza biashara",
+      findHealthcare: "Pata huduma za afya",
+      educationServices: "Huduma za elimu",
+      transportLicenses: "Usafiri na leseni",
+      housingPrograms: "Programu za nyumba",
+      findJobs: "Tafuta kazi"
     },
     common: {
       cancel: 'Ghairi',

@@ -1,10 +1,10 @@
-<!-- ChatBotComponent.vue - With Chat History Integration -->
+<!-- ChatBotComponent.vue - With Quick Help Overlay -->
 <template>
   <div class="chatbot-container">
     <!-- Context Panel for selected tree nodes -->
     <div class="context-panel" v-if="selectedContextItems.length > 0">
       <div class="context-header">
-        <span class="context-title">{{ $t('chatbot.queryContext', 'Query Context:') }}</span>
+        <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
       </div>
       <div class="context-items">
         <div 
@@ -16,7 +16,7 @@
           <button 
             class="context-remove-btn" 
             @click="removeContextItem(index)"
-            :aria-label="$t('chatbot.removeItem', 'Remove item')"
+            :aria-label="translate('chatbot.removeItem', 'Remove item')"
           >
             ✕
           </button>
@@ -37,11 +37,43 @@
         </div>
         <!-- Feedback for bot messages -->
         <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-          <button @click="openFeedbackDialog(index)">Feedback</button>
+          <button @click="openFeedbackDialog(index)">{{ translate('feedback.button', 'Feedback') }}</button>
         </div>
       </div>
       <!-- Auto-scroll anchor element -->
       <div ref="messagesEnd"></div>
+    </div>
+
+    <!-- Updated Quick Help Overlay with proper internationalization -->
+    <div 
+      class="quick-help-overlay" 
+      v-if="showQuickHelp && chatMessages.length <= 1"
+    >
+      <div class="quick-help-content">
+        <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp', 'How can I help you today?') }}</h2>
+    
+        <div class="quick-help-grid">
+          <!-- Just Chat option with different styling -->
+          <div
+            class="quick-help-item just-chat"
+            @click="selectQuickHelpOption(justChatOption)"
+          >
+            <div class="quick-help-icon" v-html="justChatOption.icon"></div>
+            <div class="quick-help-text">{{ translate(justChatOption.textKey, justChatOption.text) }}</div>
+          </div>
+      
+          <!-- Other service options with proper i18n -->
+          <div
+            v-for="(option, index) in quickHelpOptions"
+            :key="index"
+            class="quick-help-item"
+            @click="selectQuickHelpOption(option)"
+          >
+            <div class="quick-help-icon" v-html="option.icon"></div>
+            <div class="quick-help-text">{{ translate(option.textKey, option.text) }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Input Area -->
@@ -50,8 +82,9 @@
         v-model="newMessage"
         class="prompt-textarea"
         rows="4"
-        :placeholder="$t('chatbot.placeholder', 'Type your message here...')"
+        :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
         @keyup.enter.exact.prevent="sendMessage"
+        @focus="handleTextareaFocus"
       ></textarea>
       <div class="input-actions">
         <button 
@@ -70,7 +103,7 @@
           <i class="fas fa-save"></i>
         </button>
         <button class="send-btn" @click="sendMessage">
-          {{ $t('chatbot.sendButton', 'Send') }}
+          {{ translate('chatbot.sendButton', 'Send') }}
         </button>
       </div>
     </div>
@@ -87,20 +120,20 @@
     <!-- Save Chat Dialog -->
     <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
       <template v-slot:header>
-        <h3>{{ $t('chatbot.saveChat', 'Save Chat') }}</h3>
+        <h3>{{ translate('chatbot.saveChat', 'Save Chat') }}</h3>
       </template>
       <template v-slot:body>
         <div class="form-group">
-          <label for="chatTitle">{{ $t('chatbot.chatTitle', 'Chat Title') }}</label>
+          <label for="chatTitle">{{ translate('chatbot.chatTitle', 'Chat Title') }}</label>
           <input 
             type="text" 
             id="chatTitle" 
             v-model="saveChatDialog.title" 
-            :placeholder="$t('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')"
+            :placeholder="translate('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')"
           >
         </div>
         <div class="form-group">
-          <label for="chatFolder">{{ $t('chatbot.selectFolder', 'Select Folder') }}</label>
+          <label for="chatFolder">{{ translate('chatbot.selectFolder', 'Select Folder') }}</label>
           <select id="chatFolder" v-model="saveChatDialog.folderId">
             <option 
               v-for="folder in folders" 
@@ -114,14 +147,14 @@
       </template>
       <template v-slot:footer>
         <button @click="saveChatDialog.visible = false" class="cancel-btn">
-          {{ $t('common.cancel', 'Cancel') }}
+          {{ translate('common.cancel', 'Cancel') }}
         </button>
         <button 
           @click="handleSaveChat" 
           class="primary-btn" 
           :disabled="!saveChatDialog.title.trim()"
         >
-          {{ $t('common.save', 'Save') }}
+          {{ translate('common.save', 'Save') }}
         </button>
       </template>
     </modal-dialog>
@@ -157,6 +190,65 @@ export default {
       },
       currentChatId: null,
       currentLocale: 'en',
+      showQuickHelp: true,
+      // Just Chat option defined separately so it can be referenced directly in the template
+      justChatOption: { 
+        text: "Just Chat", 
+        textKey: "chatbot.justChat",
+        prompt: "I'd like to chat about government services",
+        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'
+      },
+      // Other quick help options with translation keys
+      quickHelpOptions: [
+        { 
+          text: "Apply for ID", 
+          textKey: "quickHelp.applyForID",
+          prompt: "I need information on how to apply for a national ID card",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>'
+        },
+        { 
+          text: "Pay taxes", 
+          textKey: "quickHelp.payTaxes",
+          prompt: "What's the process for paying my taxes online?",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>'
+        },
+        { 
+          text: "Start a business", 
+          textKey: "quickHelp.startBusiness",
+          prompt: "Guide me through the steps to register a new business",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>'
+        },
+        { 
+          text: "Find healthcare", 
+          textKey: "quickHelp.findHealthcare",
+          prompt: "Where can I find information about public healthcare services?",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>'
+        },
+        { 
+          text: "Education services", 
+          textKey: "quickHelp.educationServices",
+          prompt: "What education services are available for my children?",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>'
+        },
+        { 
+          text: "Transport & licenses", 
+          textKey: "quickHelp.transportLicenses",
+          prompt: "How do I renew my driving license?",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>'
+        },
+        { 
+          text: "Housing programs", 
+          textKey: "quickHelp.housingPrograms",
+          prompt: "Tell me about affordable housing programs in Kenya",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
+        },
+        { 
+          text: "Find jobs", 
+          textKey: "quickHelp.findJobs",
+          prompt: "What government job opportunities are currently available?",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>'
+        }
+      ],
       translations: {
         en: {
           'chatbot.welcomeMessage': 'Welcome! How can I help you today?',
@@ -176,21 +268,83 @@ export default {
           'chatbot.chatUpdated': 'Chat updated successfully!',
           'chatbot.newChat': 'Start New Chat',
           'chatbot.clearContext': 'Clear context and start a new conversation',
-          'chatbot.unsavedChanges': 'You have unsaved changes. Are you sure you want to start a new chat?'
+          'chatbot.unsavedChanges': 'You have unsaved changes. Are you sure you want to start a new chat?',
+          'chatbot.whatCanIHelp': 'How can I help you today?',
+          'chatbot.justChat': 'Just Chat',
+          'quickHelp.applyForID': 'Apply for ID',
+          'quickHelp.payTaxes': 'Pay taxes',
+          'quickHelp.startBusiness': 'Start a business',
+          'quickHelp.findHealthcare': 'Find healthcare',
+          'quickHelp.educationServices': 'Education services',
+          'quickHelp.transportLicenses': 'Transport & licenses',
+          'quickHelp.housingPrograms': 'Housing programs',
+          'quickHelp.findJobs': 'Find jobs',
+          'common.cancel': 'Cancel',
+          'common.save': 'Save'
         },
         fr: {
           'chatbot.welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
           'chatbot.queryContext': 'Contexte de la requête :',
-          // Other French translations...
+          'chatbot.removeItem': 'Supprimer l\'élément',
+          'chatbot.placeholder': 'Tapez votre message ici...',
+          'chatbot.sendButton': 'Envoyer',
+          'feedback.button': 'Commentaires',
+          'chatbot.responsePrefix': 'J\'ai reçu votre message',
+          'chatbot.withContext': 'avec contexte',
+          'chatbot.processingError': 'Désolé, une erreur s\'est produite lors du traitement de votre demande.',
+          'chatbot.saveChat': 'Enregistrer la Conversation',
+          'chatbot.chatTitle': 'Titre de la Conversation',
+          'chatbot.chatTitlePlaceholder': 'Entrez un titre pour cette conversation',
+          'chatbot.selectFolder': 'Sélectionner un Dossier',
+          'chatbot.chatSaved': 'Conversation enregistrée avec succès !',
+          'chatbot.chatUpdated': 'Conversation mise à jour avec succès !',
           'chatbot.newChat': 'Nouvelle Conversation',
-          'chatbot.clearContext': 'Effacer le contexte et démarrer une nouvelle conversation'
+          'chatbot.clearContext': 'Effacer le contexte et démarrer une nouvelle conversation',
+          'chatbot.unsavedChanges': 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation ?',
+          'chatbot.whatCanIHelp': 'Comment puis-je vous aider aujourd\'hui ?',
+          'chatbot.justChat': 'Simplement discuter',
+          'quickHelp.applyForID': 'Demander une pièce d\'identité',
+          'quickHelp.payTaxes': 'Payer ses impôts',
+          'quickHelp.startBusiness': 'Créer une entreprise',
+          'quickHelp.findHealthcare': 'Trouver des soins de santé',
+          'quickHelp.educationServices': 'Services d\'éducation',
+          'quickHelp.transportLicenses': 'Transport et permis',
+          'quickHelp.housingPrograms': 'Programmes de logement',
+          'quickHelp.findJobs': 'Chercher un emploi',
+          'common.cancel': 'Annuler',
+          'common.save': 'Enregistrer'
         },
         sw: {
           'chatbot.welcomeMessage': 'Karibu! Nawezaje kukusaidia leo?',
           'chatbot.queryContext': 'Muktadha wa Hoja:',
-          // Other Swahili translations...
+          'chatbot.removeItem': 'Ondoa kipengee',
+          'chatbot.placeholder': 'Andika ujumbe wako hapa...',
+          'chatbot.sendButton': 'Tuma',
+          'feedback.button': 'Maoni',
+          'chatbot.responsePrefix': 'Nimepokea ujumbe wako',
+          'chatbot.withContext': 'na muktadha',
+          'chatbot.processingError': 'Samahani, kulikuwa na hitilafu katika kuchakata ombi lako.',
+          'chatbot.saveChat': 'Hifadhi Mazungumzo',
+          'chatbot.chatTitle': 'Kichwa cha Mazungumzo',
+          'chatbot.chatTitlePlaceholder': 'Weka kichwa cha mazungumzo haya',
+          'chatbot.selectFolder': 'Chagua Folda',
+          'chatbot.chatSaved': 'Mazungumzo yamehifadhiwa kikamilifu!',
+          'chatbot.chatUpdated': 'Mazungumzo yameboreshwa kikamilifu!',
           'chatbot.newChat': 'Mazungumzo Mapya',
-          'chatbot.clearContext': 'Futa muktadha na anza mazungumzo mapya'
+          'chatbot.clearContext': 'Futa muktadha na anza mazungumzo mapya',
+          'chatbot.unsavedChanges': 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
+          'chatbot.whatCanIHelp': 'Naweza kukusaidia vipi leo?',
+          'chatbot.justChat': 'Ongea tu',
+          'quickHelp.applyForID': 'Omba kitambulisho',
+          'quickHelp.payTaxes': 'Lipa kodi',
+          'quickHelp.startBusiness': 'Anza biashara',
+          'quickHelp.findHealthcare': 'Tafuta huduma za afya',
+          'quickHelp.educationServices': 'Huduma za elimu',
+          'quickHelp.transportLicenses': 'Usafiri na leseni',
+          'quickHelp.housingPrograms': 'Programu za nyumba',
+          'quickHelp.findJobs': 'Tafuta kazi',
+          'common.cancel': 'Ghairi',
+          'common.save': 'Hifadhi'
         }
       }
     };
@@ -259,18 +413,43 @@ export default {
     ]),
     
     translate(key, fallback) {
-      // Try translation from i18n
-      if (this.$t) {
+      // Try translation from i18n plugin first
+      if (this.$t && typeof this.$t === 'function') {
         const i18nTranslation = this.$t(key);
         if (i18nTranslation && i18nTranslation !== key) {
           return i18nTranslation;
         }
       }
       
-      // Try from local translations
-      return this.translations[this.currentLocale]?.[key] || 
-             this.translations['en']?.[key] || 
-             fallback;
+      // Then try from local translations
+      const localTranslation = this.translations[this.currentLocale]?.[key];
+      if (localTranslation) {
+        return localTranslation;
+      }
+      
+      // Finally, use English translation or fallback
+      return this.translations['en']?.[key] || fallback;
+    },
+    
+    selectQuickHelpOption(option) {
+      // Set the prompt text in the input field
+      this.newMessage = option.prompt;
+      
+      // Hide the quick help overlay
+      this.showQuickHelp = false;
+      
+      // Focus on the textarea
+      this.$nextTick(() => {
+        const textarea = document.querySelector('.prompt-textarea');
+        if (textarea) {
+          textarea.focus();
+        }
+      });
+    },
+    
+    handleTextareaFocus() {
+      // Hide quick help when user focuses on the textarea
+      this.showQuickHelp = false;
     },
     
     handleTreeNodeSelected(item) {
@@ -316,6 +495,9 @@ export default {
       const contextInfo = this.selectedContextItems.length > 0
         ? this.selectedContextItems.map(item => item.service).join(', ')
         : null;
+      
+      // Hide quick help when a message is sent
+      this.showQuickHelp = false;
       
       // Simulate response (in real app, this would be an API call)
       setTimeout(() => {
@@ -449,6 +631,9 @@ export default {
         // Set current chat ID
         this.currentChatId = chatId;
         
+        // Hide quick help when loading a chat
+        this.showQuickHelp = false;
+        
         // Scroll to bottom after loading
         this.scrollToBottom();
       } catch (error) {
@@ -491,6 +676,9 @@ export default {
       this.selectedContextItems = [];
       this.newMessage = '';
       
+      // Show quick help when starting a new chat
+      this.showQuickHelp = true;
+      
       // Scroll to bottom after resetting
       this.scrollToBottom();
     }
@@ -504,6 +692,7 @@ export default {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  position: relative;
 }
 
 /* Context Panel Styles */
@@ -577,6 +766,7 @@ export default {
   overflow-y: auto;
   padding: 10px;
   background: #fafafa;
+  position: relative;
 }
 
 .chat-message {
@@ -607,7 +797,6 @@ export default {
   background: #4e97d1;
   color: #fff;
 }
-
 .feedback-trigger {
   margin-left: 8px;
   align-self: center;
@@ -622,6 +811,85 @@ export default {
 }
 .feedback-trigger button:hover {
   background: #e0e0e0;
+}
+
+/* Quick Help Overlay */
+.quick-help-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(250, 250, 250, 0.97);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.quick-help-content {
+  max-width: 600px;
+  width: 100%;
+}
+
+.quick-help-heading {
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: #333;
+}
+
+.quick-help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.quick-help-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.quick-help-item:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.quick-help-item.just-chat {
+  background: #f0f7ff;
+  border-color: #bcdcff;
+}
+
+.quick-help-item.just-chat:hover {
+  background: #e1f0ff;
+  border-color: #a3ceff;
+}
+
+.quick-help-icon {
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+}
+
+.quick-help-text {
+  font-size: 0.95rem;
+  color: #333;
+  font-weight: 500;
 }
 
 /* Chat Input Styles */
@@ -639,7 +907,7 @@ export default {
   border-radius: 4px;
   padding: 10px;
   font-size: 1rem;
-  margin-bottom: 8px;
+  margin-bottom:8px;
   max-height: 120px;
 }
 
@@ -757,6 +1025,26 @@ export default {
     margin-bottom: 0;
     margin-right: 8px;
     flex: 1;
+  }
+  
+  .quick-help-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .quick-help-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-help-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quick-help-heading {
+    font-size: 1.4rem;
   }
 }
 </style>

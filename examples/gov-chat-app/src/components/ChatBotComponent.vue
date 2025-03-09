@@ -1,163 +1,275 @@
-<!-- ChatBotComponent.vue - With Quick Help Overlay -->
 <template>
-  <div class="chatbot-container">
-    <!-- Context Panel for selected tree nodes -->
-    <div class="context-panel" v-if="selectedContextItems.length > 0">
-      <div class="context-header">
-        <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
+  <div class="app-container">
+    <!-- Main chatbot container -->
+    <div class="chatbot-container">
+      <!-- System Status Panel -->
+      <div class="system-status-panel">
+        <div class="status-indicator" :class="{ online: systemStatus.online }">
+          <div class="status-dot"></div>
+          <span>{{ systemStatus.online ? translate('status.online', 'System Online') : translate('status.offline', 'System Offline') }}</span>
+        </div>
+        <div class="status-metrics">
+          <div class="metric">
+            <span class="metric-label">{{ translate('status.responseTime', 'Avg. Response Time') }}</span>
+            <span class="metric-value">{{ systemStatus.avgResponseTime }}ms</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">{{ translate('status.queueLength', 'Queue') }}</span>
+            <span class="metric-value">{{ systemStatus.requestQueue }}</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">{{ translate('status.uptime', 'Uptime') }}</span>
+            <span class="metric-value">{{ formatUptime(systemStatus.uptime) }}</span>
+          </div>
+        </div>
       </div>
-      <div class="context-items">
-        <div 
-          v-for="(item, index) in selectedContextItems" 
-          :key="index" 
-          class="context-item"
-        >
-          <span class="context-text">{{ item.service }}</span>
-          <button 
-            class="context-remove-btn" 
-            @click="removeContextItem(index)"
-            :aria-label="translate('chatbot.removeItem', 'Remove item')"
+
+      <!-- Context Panel for selected tree nodes -->
+      <div class="context-panel" v-if="selectedContextItems.length > 0">
+        <div class="context-header">
+          <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
+        </div>
+        <div class="context-items">
+          <div 
+            v-for="(item, index) in selectedContextItems" 
+            :key="index" 
+            class="context-item"
           >
-            ✕
+            <span class="context-text">{{ item.service }}</span>
+            <button 
+              class="context-remove-btn" 
+              @click="removeContextItem(index)"
+              :aria-label="translate('chatbot.removeItem', 'Remove item')"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- The scrollable chat window -->
+      <div class="chat-window" ref="chatWindow">
+        <div
+          v-for="(msg, index) in chatMessages"
+          :key="index"
+          class="chat-message"
+          :class="msg.sender"
+        >
+          <div class="message-bubble">
+            <span>{{ msg.content }}</span>
+          </div>
+          <!-- Feedback for bot messages -->
+          <div v-if="msg.sender === 'bot'" class="feedback-trigger">
+            <button @click="openFeedbackDialog(index)">{{ translate('feedback.button', 'Feedback') }}</button>
+          </div>
+        </div>
+        <!-- Auto-scroll anchor element -->
+        <div ref="messagesEnd"></div>
+      </div>
+
+      <!-- Updated Quick Help Overlay with proper internationalization -->
+      <div 
+        class="quick-help-overlay" 
+        v-if="showQuickHelp && chatMessages.length <= 1"
+      >
+        <div class="quick-help-content">
+          <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp', 'How can I help you today?') }}</h2>
+      
+          <div class="quick-help-grid">
+            <!-- Just Chat option with different styling -->
+            <div
+              class="quick-help-item just-chat"
+              @click="selectQuickHelpOption(justChatOption)"
+            >
+              <div class="quick-help-icon" v-html="justChatOption.icon"></div>
+              <div class="quick-help-text">{{ translate(justChatOption.textKey, justChatOption.text) }}</div>
+            </div>
+        
+            <!-- Other service options with proper i18n -->
+            <div
+              v-for="(option, index) in quickHelpOptions"
+              :key="index"
+              class="quick-help-item"
+              @click="selectQuickHelpOption(option)"
+            >
+              <div class="quick-help-icon" v-html="option.icon"></div>
+              <div class="quick-help-text">{{ translate(option.textKey, option.text) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="chat-input">
+        <textarea
+          v-model="newMessage"
+          class="prompt-textarea"
+          rows="4"
+          :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
+          @keyup.enter.exact.prevent="sendMessage"
+          @focus="handleTextareaFocus"
+        ></textarea>
+        <div class="input-actions">
+          <button 
+            class="new-chat-btn" 
+            @click="startNewChat" 
+            title="Start New Chat"
+          >
+            <i class="fas fa-plus"></i>
+          </button>
+          <button 
+            v-if="chatMessages.length > 0" 
+            class="save-chat-btn" 
+            @click="saveChatToHistory" 
+            title="Save to Chat History"
+          >
+            <i class="fas fa-save"></i>
+          </button>
+          <button class="send-btn" @click="sendMessage">
+            {{ translate('chatbot.sendButton', 'Send') }}
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- The scrollable chat window -->
-    <div class="chat-window" ref="chatWindow">
-      <div
-        v-for="(msg, index) in chatMessages"
-        :key="index"
-        class="chat-message"
-        :class="msg.sender"
-      >
-        <div class="message-bubble">
-          <span>{{ msg.content }}</span>
-        </div>
-        <!-- Feedback for bot messages -->
-        <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-          <button @click="openFeedbackDialog(index)">{{ translate('feedback.button', 'Feedback') }}</button>
-        </div>
-      </div>
-      <!-- Auto-scroll anchor element -->
-      <div ref="messagesEnd"></div>
-    </div>
+      <!-- Feedback Dialog -->
+      <chat-response-feedback-dialog
+        v-if="feedbackDialog.visible"
+        :visible="feedbackDialog.visible"
+        :message="feedbackDialog.message"
+        @close="closeFeedbackDialog"
+        @submit="handleFeedbackSubmit"
+      />
 
-    <!-- Updated Quick Help Overlay with proper internationalization -->
-    <div 
-      class="quick-help-overlay" 
-      v-if="showQuickHelp && chatMessages.length <= 1"
-    >
-      <div class="quick-help-content">
-        <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp', 'How can I help you today?') }}</h2>
-    
-        <div class="quick-help-grid">
-          <!-- Just Chat option with different styling -->
-          <div
-            class="quick-help-item just-chat"
-            @click="selectQuickHelpOption(justChatOption)"
-          >
-            <div class="quick-help-icon" v-html="justChatOption.icon"></div>
-            <div class="quick-help-text">{{ translate(justChatOption.textKey, justChatOption.text) }}</div>
-          </div>
-      
-          <!-- Other service options with proper i18n -->
-          <div
-            v-for="(option, index) in quickHelpOptions"
-            :key="index"
-            class="quick-help-item"
-            @click="selectQuickHelpOption(option)"
-          >
-            <div class="quick-help-icon" v-html="option.icon"></div>
-            <div class="quick-help-text">{{ translate(option.textKey, option.text) }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Input Area -->
-    <div class="chat-input">
-      <textarea
-        v-model="newMessage"
-        class="prompt-textarea"
-        rows="4"
-        :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
-        @keyup.enter.exact.prevent="sendMessage"
-        @focus="handleTextareaFocus"
-      ></textarea>
-      <div class="input-actions">
-        <button 
-          class="new-chat-btn" 
-          @click="startNewChat" 
-          title="Start New Chat"
-        >
-          <i class="fas fa-plus"></i>
-        </button>
-        <button 
-          v-if="chatMessages.length > 0" 
-          class="save-chat-btn" 
-          @click="saveChatToHistory" 
-          title="Save to Chat History"
-        >
-          <i class="fas fa-save"></i>
-        </button>
-        <button class="send-btn" @click="sendMessage">
-          {{ translate('chatbot.sendButton', 'Send') }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Feedback Dialog -->
-    <chat-response-feedback-dialog
-      v-if="feedbackDialog.visible"
-      :visible="feedbackDialog.visible"
-      :message="feedbackDialog.message"
-      @close="closeFeedbackDialog"
-      @submit="handleFeedbackSubmit"
-    />
-
-    <!-- Save Chat Dialog -->
-    <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
-      <template v-slot:header>
-        <h3>{{ translate('chatbot.saveChat', 'Save Chat') }}</h3>
-      </template>
-      <template v-slot:body>
-        <div class="form-group">
-          <label for="chatTitle">{{ translate('chatbot.chatTitle', 'Chat Title') }}</label>
-          <input 
-            type="text" 
-            id="chatTitle" 
-            v-model="saveChatDialog.title" 
-            :placeholder="translate('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')"
-          >
-        </div>
-        <div class="form-group">
-          <label for="chatFolder">{{ translate('chatbot.selectFolder', 'Select Folder') }}</label>
-          <select id="chatFolder" v-model="saveChatDialog.folderId">
-            <option 
-              v-for="folder in folders" 
-              :key="folder.id" 
-              :value="folder.id"
+      <!-- Save Chat Dialog -->
+      <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
+        <template v-slot:header>
+          <h3>{{ translate('chatbot.saveChat', 'Save Chat') }}</h3>
+        </template>
+        <template v-slot:body>
+          <div class="form-group">
+            <label for="chatTitle">{{ translate('chatbot.chatTitle', 'Chat Title') }}</label>
+            <input 
+              type="text" 
+              id="chatTitle" 
+              v-model="saveChatDialog.title" 
+              :placeholder="translate('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')"
             >
-              {{ folder.name }}
-            </option>
-          </select>
+          </div>
+          <div class="form-group">
+            <label for="chatFolder">{{ translate('chatbot.selectFolder', 'Select Folder') }}</label>
+            <select id="chatFolder" v-model="saveChatDialog.folderId">
+              <option 
+                v-for="folder in folders" 
+                :key="folder.id" 
+                :value="folder.id"
+              >
+                {{ folder.name }}
+              </option>
+            </select>
+          </div>
+        </template>
+        <template v-slot:footer>
+          <button @click="saveChatDialog.visible = false" class="cancel-btn">
+            {{ translate('common.cancel', 'Cancel') }}
+          </button>
+          <button 
+            @click="handleSaveChat" 
+            class="primary-btn" 
+            :disabled="!saveChatDialog.title.trim()"
+          >
+            {{ translate('common.save', 'Save') }}
+          </button>
+        </template>
+      </modal-dialog>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <div class="sidebar-header">
+        <h3>{{ translate('sidebar.title', 'Info & Resources') }}</h3>
+        <button @click="toggleSidebar" class="sidebar-toggle">
+          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
+        </button>
+      </div>
+
+      <!-- Chat History Section -->
+      <div class="sidebar-section">
+        <h4 class="section-title">
+          <i class="fas fa-history"></i>
+          {{ translate('sidebar.chatHistory', 'Recent Chats') }}
+        </h4>
+        <div class="chat-history">
+          <div 
+            v-for="chat in recentChats" 
+            :key="chat.id" 
+            class="history-item"
+            :class="{ active: currentChatId === chat.id }"
+            @click="loadChatFromHistory(chat.id)"
+          >
+            <div class="history-item-title">{{ chat.title }}</div>
+            <div class="history-item-preview">{{ chat.preview }}</div>
+            <div class="history-item-date">{{ formatDate(chat.date) }}</div>
+          </div>
+          <div v-if="recentChats.length === 0" class="empty-state">
+            {{ translate('sidebar.noChats', 'No recent chats') }}
+          </div>
         </div>
-      </template>
-      <template v-slot:footer>
-        <button @click="saveChatDialog.visible = false" class="cancel-btn">
-          {{ translate('common.cancel', 'Cancel') }}
-        </button>
-        <button 
-          @click="handleSaveChat" 
-          class="primary-btn" 
-          :disabled="!saveChatDialog.title.trim()"
-        >
-          {{ translate('common.save', 'Save') }}
-        </button>
-      </template>
-    </modal-dialog>
+      </div>
+
+      <!-- Related Documents Section -->
+      <div class="sidebar-section">
+        <h4 class="section-title">
+          <i class="fas fa-file-alt"></i>
+          {{ translate('sidebar.relatedDocs', 'Related Documents') }}
+        </h4>
+        <div class="related-documents">
+          <div 
+            v-for="doc in relatedDocuments" 
+            :key="doc.id" 
+            class="document-item"
+            @click="openDocument(doc)"
+          >
+            <div class="document-icon">
+              <i :class="documentIconClass(doc.type)"></i>
+            </div>
+            <div class="document-info">
+              <div class="document-title">{{ doc.title }}</div>
+              <div class="document-meta">{{ doc.type }} • {{ formatFileSize(doc.size) }}</div>
+            </div>
+          </div>
+          <div v-if="relatedDocuments.length === 0" class="empty-state">
+            {{ translate('sidebar.noDocuments', 'No related documents') }}
+          </div>
+        </div>
+      </div>
+
+      <!-- FAQ Section -->
+      <div class="sidebar-section">
+        <h4 class="section-title">
+          <i class="fas fa-question-circle"></i>
+          {{ translate('sidebar.faq', 'Frequently Asked Questions') }}
+        </h4>
+        <div class="faq-list">
+          <div 
+            v-for="(faq, index) in frequentlyAskedQuestions" 
+            :key="index" 
+            class="faq-item"
+          >
+            <div 
+              class="faq-question" 
+              @click="toggleFaq(index)"
+              :class="{ active: expandedFaqs.includes(index) }"
+            >
+              {{ faq.question }}
+              <i class="fas" :class="expandedFaqs.includes(index) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </div>
+            <div class="faq-answer" v-if="expandedFaqs.includes(index)">
+              {{ faq.answer }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -191,6 +303,51 @@ export default {
       currentChatId: null,
       currentLocale: 'en',
       showQuickHelp: true,
+      sidebarCollapsed: false,
+      expandedFaqs: [],
+      
+      // System status information
+      systemStatus: {
+        online: true,
+        avgResponseTime: 283,
+        requestQueue: 0,
+        uptime: 3659, // in seconds
+        lastUpdated: new Date()
+      },
+      
+      // Sidebar content
+      recentChats: [
+        { id: 'chat1', title: 'Tax Filing Help', preview: 'How do I file my business taxes?', date: new Date('2025-03-06T14:23:00') },
+        { id: 'chat2', title: 'License Renewal', preview: 'What documents do I need to renew my...', date: new Date('2025-03-04T09:15:00') },
+        { id: 'chat3', title: 'Business Registration', preview: 'I want to register a new business', date: new Date('2025-03-01T16:45:00') }
+      ],
+      
+      relatedDocuments: [
+        { id: 'doc1', title: 'Government Services FAQ', type: 'PDF', size: 1240000, url: '#' },
+        { id: 'doc2', title: 'Business Registration Form', type: 'DOCX', size: 350000, url: '#' },
+        { id: 'doc3', title: 'Tax Filing Guidelines 2024', type: 'PDF', size: 2800000, url: '#' },
+        { id: 'doc4', title: 'ID Application Process', type: 'PDF', size: 890000, url: '#' }
+      ],
+      
+      frequentlyAskedQuestions: [
+        { 
+          question: 'How do I reset my account password?', 
+          answer: 'To reset your password, go to the login page and click "Forgot Password". Follow the instructions sent to your registered email.' 
+        },
+        { 
+          question: 'Where can I find my tax ID number?', 
+          answer: 'Your tax ID number is listed on your tax registration certificate and on any correspondence from the tax authority.' 
+        },
+        { 
+          question: 'What documents are needed for ID application?', 
+          answer: 'You need your birth certificate, proof of address (not older than 3 months), two passport photos, and a completed application form.' 
+        },
+        { 
+          question: 'How long does business registration take?', 
+          answer: 'Standard business registration typically takes 3-5 business days after all required documents have been correctly submitted.' 
+        }
+      ],
+
       // Just Chat option defined separately so it can be referenced directly in the template
       justChatOption: { 
         text: "Just Chat", 
@@ -280,7 +437,18 @@ export default {
           'quickHelp.housingPrograms': 'Housing programs',
           'quickHelp.findJobs': 'Find jobs',
           'common.cancel': 'Cancel',
-          'common.save': 'Save'
+          'common.save': 'Save',
+          'status.online': 'System Online',
+          'status.offline': 'System Offline',
+          'status.responseTime': 'Avg. Response Time',
+          'status.queueLength': 'Queue',
+          'status.uptime': 'Uptime',
+          'sidebar.title': 'Info & Resources',
+          'sidebar.chatHistory': 'Recent Chats',
+          'sidebar.relatedDocs': 'Related Documents',
+          'sidebar.faq': 'Frequently Asked Questions',
+          'sidebar.noChats': 'No recent chats',
+          'sidebar.noDocuments': 'No related documents'
         },
         fr: {
           'chatbot.welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
@@ -312,7 +480,18 @@ export default {
           'quickHelp.housingPrograms': 'Programmes de logement',
           'quickHelp.findJobs': 'Chercher un emploi',
           'common.cancel': 'Annuler',
-          'common.save': 'Enregistrer'
+          'common.save': 'Enregistrer',
+          'status.online': 'Système en ligne',
+          'status.offline': 'Système hors ligne',
+          'status.responseTime': 'Temps de réponse moyen',
+          'status.queueLength': 'File d\'attente',
+          'status.uptime': 'Temps de fonctionnement',
+          'sidebar.title': 'Infos et ressources',
+          'sidebar.chatHistory': 'Conversations récentes',
+          'sidebar.relatedDocs': 'Documents connexes',
+          'sidebar.faq': 'Questions fréquemment posées',
+          'sidebar.noChats': 'Aucune conversation récente',
+          'sidebar.noDocuments': 'Aucun document connexe'
         },
         sw: {
           'chatbot.welcomeMessage': 'Karibu! Nawezaje kukusaidia leo?',
@@ -344,7 +523,18 @@ export default {
           'quickHelp.housingPrograms': 'Programu za nyumba',
           'quickHelp.findJobs': 'Tafuta kazi',
           'common.cancel': 'Ghairi',
-          'common.save': 'Hifadhi'
+          'common.save': 'Hifadhi',
+          'status.online': 'Mfumo Unapatikana',
+          'status.offline': 'Mfumo Haupatikani',
+          'status.responseTime': 'Muda wa Wastani wa Majibu',
+          'status.queueLength': 'Foleni',
+          'status.uptime': 'Muda wa Utendaji',
+          'sidebar.title': 'Taarifa na Rasilimali',
+          'sidebar.chatHistory': 'Mazungumzo ya Hivi Karibuni',
+          'sidebar.relatedDocs': 'Nyaraka Zinazohusiana',
+          'sidebar.faq': 'Maswali Yanayoulizwa Mara kwa Mara',
+          'sidebar.noChats': 'Hakuna mazungumzo ya hivi karibuni',
+          'sidebar.noDocuments': 'Hakuna nyaraka zinazohusiana'
         }
       }
     };
@@ -372,8 +562,8 @@ export default {
       return 'New conversation';
     }
   },
-  
-  mounted() {
+ 
+mounted() {
     // Add welcome message
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
@@ -398,12 +588,26 @@ export default {
     
     // Scroll to bottom of chat
     this.scrollToBottom();
+    
+    // Start system status update interval
+    this.statusUpdateInterval = setInterval(() => {
+      // Simulate status updates (in a real app, this would come from an API)
+      this.systemStatus.uptime += 30;
+      this.systemStatus.avgResponseTime = Math.max(200, Math.floor(this.systemStatus.avgResponseTime + (Math.random() * 20 - 10)));
+      this.systemStatus.requestQueue = Math.max(0, Math.floor(Math.random() * 3));
+      this.systemStatus.lastUpdated = new Date();
+    }, 30000); // Update every 30 seconds
   },
   
   beforeUnmount() {
     // Clean up event listeners
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
     eventBus.$off('open-chat', this.loadChatFromHistory);
+    
+    // Clear intervals
+    if (this.statusUpdateInterval) {
+      clearInterval(this.statusUpdateInterval);
+    }
   },
   
   methods: {
@@ -411,6 +615,71 @@ export default {
       'createChat',
       'updateChat'
     ]),
+    
+    // Additional helper methods for sidebar functionality
+    documentIconClass(type) {
+      switch(type.toLowerCase()) {
+        case 'pdf': return 'fas fa-file-pdf';
+        case 'docx': case 'doc': return 'fas fa-file-word';
+        case 'xlsx': case 'xls': return 'fas fa-file-excel';
+        case 'pptx': case 'ppt': return 'fas fa-file-powerpoint';
+        case 'txt': return 'fas fa-file-alt';
+        default: return 'fas fa-file';
+      }
+    },
+    
+    formatDate(date) {
+      // Returns relative time (Today, Yesterday) or formatted date
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (date >= today) {
+        return 'Today';
+      } else if (date >= yesterday) {
+        return 'Yesterday';
+      } else {
+        return date.toLocaleDateString();
+      }
+    },
+    
+    formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    },
+    
+    formatUptime(seconds) {
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      
+      if (days > 0) {
+        return `${days}d ${hours}h`;
+      } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else {
+        return `${minutes}m`;
+      }
+    },
+    
+    toggleSidebar() {
+      this.sidebarCollapsed = !this.sidebarCollapsed;
+    },
+    
+    toggleFaq(index) {
+      if (this.expandedFaqs.includes(index)) {
+        this.expandedFaqs = this.expandedFaqs.filter(i => i !== index);
+      } else {
+        this.expandedFaqs.push(index);
+      }
+    },
+    
+    openDocument(doc) {
+      // In a real application, this would open the document
+      window.open(doc.url, '_blank');
+    },
     
     translate(key, fallback) {
       // Try translation from i18n plugin first
@@ -687,12 +956,77 @@ export default {
 </script>
 
 <style scoped>
+.app-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .chatbot-container {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* System Status Panel */
+.system-status-panel {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.status-indicator.online {
+  color: #10b981;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+}
+
+.status-indicator.online .status-dot {
+  background-color: #10b981;
+}
+
+.status-metrics {
+  display: flex;
+  gap: 20px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.metric-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-weight: 600;
+  color: #334155;
 }
 
 /* Context Panel Styles */
@@ -960,6 +1294,221 @@ export default {
   background: #3a7da0;
 }
 
+/* Sidebar Styles */
+.sidebar {
+  width: 320px;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 50px;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #334155;
+}
+
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.sidebar-toggle:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.sidebar-section {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.section-title {
+  margin: 0 0 16px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title i {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+/* Chat History styles */
+.chat-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  background: #fff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #e5e7eb;
+}
+
+.history-item:hover, .history-item.active {
+  background: #f0f7ff;
+  border-color: #bcdcff;
+}
+
+.history-item-title {
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+  color: #334155;
+}
+
+.history-item-preview {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.history-item-date {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: right;
+}
+
+/* Document styles */
+.related-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.document-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #e5e7eb;
+  gap: 12px;
+}
+
+.document-item:hover {
+  background: #f0f7ff;
+  border-color: #bcdcff;
+}
+
+.document-icon {
+  font-size: 1.2rem;
+  color: #64748b;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.document-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.document-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.document-meta {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+/* FAQ styles */
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.faq-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.faq-question {
+  padding: 12px;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.faq-question:hover, .faq-question.active {
+  background: #f0f7ff;
+}
+
+.faq-question i {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.faq-answer {
+  padding: 12px;
+  font-size: 0.85rem;
+  color: #475569;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  line-height: 1.5;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 16px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
 /* Form Styles for Save Dialog */
 .form-group {
   margin-bottom: 16px;
@@ -1038,6 +1587,33 @@ export default {
   }
 }
 
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 100;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar.visible {
+    transform: translateX(0);
+  }
+  
+  .system-status-panel {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .status-metrics {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 @media (max-width: 480px) {
   .quick-help-grid {
     grid-template-columns: 1fr;
@@ -1047,4 +1623,4 @@ export default {
     font-size: 1.4rem;
   }
 }
-</style>
+</style> 

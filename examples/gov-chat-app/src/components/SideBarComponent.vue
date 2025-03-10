@@ -1,4 +1,4 @@
-<!-- SideBarComponent.vue with comprehensive scrollbar fix -->
+<!-- SideBarComponent.vue with fixed layout to prevent scroll overlap -->
 <template>
   <aside class="side-bar" :class="{ 'side-bar-open': isOpen }">
     <!-- Overlay that only appears on mobile when sidebar is open -->
@@ -25,21 +25,26 @@
         </button>
       </div>
       
-      <!-- Content based on active tab - single scrollable container -->
-      <div class="sidebar-content">
-        <!-- Government Services Tab -->
-        <div v-if="activeTab === 'services'" class="services-list">
-          <!-- Service Tree Panel -->
-          <service-tree-panel-component />
+      <!-- Main flex container for content -->
+      <div class="sidebar-content-wrapper">
+        <!-- Scrollable content area -->
+        <div class="sidebar-content">
+          <!-- Government Services Tab -->
+          <div v-if="activeTab === 'services'" class="services-list">
+            <!-- Service Tree Panel -->
+            <service-tree-panel-component />
+          </div>
+          
+          <!-- Chat History Tab -->
+          <div v-else-if="activeTab === 'history'" class="chat-history">
+            <chat-folders @open-chat="openChat" />
+          </div>
         </div>
         
-        <!-- Chat History Tab -->
-        <div v-else-if="activeTab === 'history'" class="chat-history">
-          <chat-folders @open-chat="openChat" />
+        <!-- Weather Panel in its own container, not part of the scroll area -->
+        <div class="weather-container">
+          <weather-panel class="weather-panel-fixed" />
         </div>
-        
-        <!-- Weather Panel placed outside the tab content so it's always visible -->
-        <weather-panel class="weather-panel-fixed" />
       </div>
     </div>
   </aside>
@@ -141,14 +146,25 @@ export default {
   color: white;
 }
 
-/* THIS IS THE MAIN SCROLLABLE CONTAINER */
+/* New wrapper to control the layout of content + weather */
+.sidebar-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 0; /* Force it to use flex grow */
+  overflow: hidden; /* Prevent any overflow here */
+}
+
+/* THIS IS THE SCROLLABLE CONTAINER - Modified to work with new layout */
 .sidebar-content {
   flex-grow: 1;
   overflow-y: auto !important; /* Force scrolling here */
   display: flex;
   flex-direction: column;
   padding: 10px;
-  height: 0; /* Force it to use flex grow */
+  /* Remove any margin/padding bottom that might be causing issues */
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .services-list,
@@ -157,18 +173,21 @@ export default {
   overflow: visible !important; /* Force no scrolling */
   display: flex;
   flex-direction: column;
-  margin-bottom: 110px; /* Make room for weather panel */
 }
 
-.weather-panel-fixed {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+/* Container for weather panel */
+.weather-container {
+  flex-shrink: 0; /* Don't allow shrinking */
   background: white;
-  margin-top: 10px;
   border-top: 1px solid #eee;
   padding: 10px;
+  margin-top: 5px; /* Small gap between content and weather */
+}
+
+/* Weather component styling */
+.weather-panel-fixed {
+  /* No longer needs to be positioned absolutely */
+  width: 100%;
 }
 
 /* Mobile: offscreen unless side-bar-open is set */
@@ -200,11 +219,6 @@ export default {
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 14; /* Lower than sidebar but higher than chat */
-  }
-  
-  /* Make sure the content scrolls properly on mobile */
-  .sidebar-content {
-    height: calc(100vh - 110px); /* Account for tabs and navbar */
   }
   
   /* Adjust tab buttons for mobile */

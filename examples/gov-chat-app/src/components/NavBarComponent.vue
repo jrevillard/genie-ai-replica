@@ -14,8 +14,8 @@
         </button>
 
         <div class="logo-container">
-          <!-- Animated Government Logo - Larger and more visible -->
-          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="48" height="48">
+          <!-- Animated Government Logo - Size adjusted to match control buttons -->
+          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40">
             <defs>
               <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#4E97D1" />
@@ -58,12 +58,126 @@
                   fill="none" stroke="white" stroke-width="1.2" class="logo-outline" />
           </svg>
         </div>        
-        <!-- Title moved to left, adjacent to logo -->
-        <h1 class="brand-name">{{ $t('brandName') }}</h1>
+        <!-- Title moved to left, adjacent to logo - Hide on mobile -->
+        <h1 class="brand-name hide-on-mobile">{{ $t('brandName') }}</h1>
+        
+        <!-- Mobile controls - Only shown on mobile devices -->
+        <div class="mobile-controls">
+          <!-- Status Indicator for Mobile -->
+          <div class="status-indicator-container" ref="mobileStatusContainer">
+            <button 
+              class="status-indicator-btn mobile-status-btn" 
+              @click="toggleStatusDropdown"
+              aria-label="System Status"
+            >
+              <span class="status-dot" :class="getStatusDotClass"></span>
+              <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
+            </button>
+            
+            <!-- Status Dropdown (shared with desktop version) -->
+            <div v-if="isStatusDropdownOpen" class="status-dropdown">
+              <div class="status-dropdown-header">
+                <h4>{{ $t('systemStatus.title') }}</h4>
+                <div class="status-summary">
+                  <span>{{ totalServices }} {{ $t('systemStatus.services') }}</span>
+                </div>
+              </div>
+              
+              <div class="status-counts">
+                <div class="status-count-item">
+                  <span class="status-dot status-operational"></span>
+                  <span class="status-label">{{ $t('systemStatus.operational') }}</span>
+                  <span class="status-value">{{ operationalCount }}</span>
+                </div>
+                <div class="status-count-item">
+                  <span class="status-dot status-degraded"></span>
+                  <span class="status-label">{{ $t('systemStatus.degraded') }}</span>
+                  <span class="status-value">{{ degradedCount }}</span>
+                </div>
+                <div class="status-count-item">
+                  <span class="status-dot status-outage"></span>
+                  <span class="status-label">{{ $t('systemStatus.outage') }}</span>
+                  <span class="status-value">{{ outageCount }}</span>
+                </div>
+              </div>
+              
+              <div v-if="nextDeadline" class="next-deadline">
+                <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
+                <div class="deadline-info">
+                  <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
+                  <span 
+                    class="deadline-days"
+                    :class="{'urgent': nextDeadline.daysRemaining < 7}"
+                  >
+                    {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
+                  </span>
+                </div>
+              </div>
+              
+              <div class="status-footer">
+                <a href="#" @click.prevent="viewStatusPage">
+                  {{ $t('systemStatus.viewDetails') }}
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Language Selector for Mobile -->
+          <div class="language-select-container mobile-language-select">
+            <select 
+              v-model="currentLocale" 
+              @change="changeLocale" 
+              aria-label="Change language"
+              class="language-select"
+            >
+              <option value="en">EN</option>
+              <option value="fr">FR</option>
+              <option value="sw">SW</option>
+            </select>
+            <div class="select-arrow"></div>
+          </div>
+          
+          <!-- Other mobile controls -->
+          <button 
+            class="icon-btn mobile-btn" 
+            @click="$emit('openAnalytics')"
+            aria-label="Analytics"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+              <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+            </svg>
+            <span class="tooltip">{{ $t('nav.analytics') }}</span>
+          </button>
+          
+          <button 
+            class="icon-btn mobile-btn"
+            @click="$emit('openSettings')"
+            aria-label="Settings"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span class="tooltip">{{ $t('nav.settings') }}</span>
+          </button>
+          
+          <button 
+            class="icon-btn user-btn mobile-btn" 
+            @click="$emit('openProfile')"
+            aria-label="User profile"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span class="tooltip">{{ $t('nav.userProfile') }}</span>
+          </button>
+        </div>
       </div>
       
-      <!-- Main navbar area with status -->
-      <div class="nav-main">
+      <!-- Main navbar area with status - Only visible on desktop -->
+      <div class="nav-main desktop-only">
         <!-- Status Indicator -->
         <div class="status-indicator-container" ref="statusContainer">
           <button 
@@ -125,8 +239,8 @@
         </div>
       </div>
 
-      <!-- Right section with language and user controls -->
-      <div class="nav-right">
+      <!-- Right section with language and user controls - Only visible on desktop -->
+      <div class="nav-right desktop-only">
         <div class="language-select-container">
           <select 
             v-model="currentLocale" 
@@ -304,8 +418,12 @@ export default {
       this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
     },
     handleClickOutside(event) {
-      const container = this.$refs.statusContainer;
-      if (container && !container.contains(event.target)) {
+      // Handle both desktop and mobile status containers
+      const desktopContainer = this.$refs.statusContainer;
+      const mobileContainer = this.$refs.mobileStatusContainer;
+      
+      if ((desktopContainer && !desktopContainer.contains(event.target)) && 
+          (mobileContainer && !mobileContainer.contains(event.target))) {
         this.isStatusDropdownOpen = false;
       }
     },
@@ -370,12 +488,17 @@ export default {
 .logo-container {
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   margin-left: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
 }
 
 .govt-logo {
-  height: 48px;
-  width: 48px;
+  height: 40px;
+  width: 40px;
   color: white;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
   transition: transform 0.3s ease;
@@ -843,6 +966,52 @@ export default {
   pointer-events: none;
 }
 
+/* Mobile controls and responsive styles */
+.mobile-controls {
+  display: none;
+  align-items: center;
+  margin-left: auto;
+}
+
+.mobile-status-btn {
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  justify-content: center;
+}
+
+.mobile-status-btn .status-dot {
+  margin-right: 0;
+}
+
+.mobile-language-select {
+  width: 60px;
+  margin-left: 8px;
+  margin-right: 0;
+}
+
+.mobile-btn {
+  width: 36px;
+  height: 36px;
+  margin-left: 8px;
+}
+
+.mobile-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Desktop vs Mobile display control */
+.desktop-only {
+  display: flex;
+}
+
+/* Hide elements on mobile */
+.hide-on-mobile {
+  display: block;
+}
+
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .brand-name {
@@ -879,13 +1048,17 @@ export default {
 }
 
 @media (max-width: 768px) {
-  .brand-name {
-    font-size: 0.9rem;
-    max-width: 200px;
+  /* Hide desktop controls and show mobile controls */
+  .desktop-only {
+    display: none;
   }
   
-  .language-select-container {
-    width: 100px;
+  .hide-on-mobile {
+    display: none;
+  }
+  
+  .mobile-controls {
+    display: flex;
   }
   
   .govt-logo {
@@ -915,20 +1088,9 @@ export default {
 }
 
 @media (max-width: 600px) {
-  .brand-name {
-    max-width: 150px;
-    font-size: 0.85rem;
-  }
-  
-  .language-select-container {
-    width: 80px;
-  }
-  
-  .language-select {
-    font-size: 0.8rem;
-    padding: 4px 6px;
-    padding-right: 20px;
+  .govt-logo {
     height: 32px;
+    width: 32px;
   }
   
   .icon-btn {
@@ -946,46 +1108,46 @@ export default {
     height: 36px;
   }
   
-  .status-indicator-btn {
-    height: 32px;
-  }
-  
   .tooltip {
     display: none;
   }
 }
 
 @media (max-width: 480px) {
-  .brand-name {
-    max-width: 120px;
-    font-size: 0.8rem;
-  }
-  
   .govt-logo {
     height: 32px;
     width: 32px;
-  }
-  
-  .nav-right {
-    min-width: 180px;
-  }
-  
-  .language-select-container {
-    width: 70px;
   }
   
   .nav-bar {
     height: 54px;
   }
   
-  /* Stack status dropdown differently on very small screens */
+  /* Position status dropdown on small screens */
   .status-dropdown {
     width: 220px;
-    right: -80px;
+    right: -30px;
   }
   
   .status-dropdown::before {
-    right: 90px;
+    right: 40px;
+  }
+  
+  /* Space mobile controls more compactly */
+  .mobile-btn {
+    margin-left: 6px;
+    width: 32px;
+    height: 32px;
+  }
+  
+  .mobile-status-btn {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .mobile-language-select {
+    width: 50px;
+    margin-left: 6px;
   }
 }
 </style>

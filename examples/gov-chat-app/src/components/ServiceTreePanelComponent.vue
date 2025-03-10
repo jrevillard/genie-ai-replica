@@ -1,4 +1,4 @@
-<!-- ServiceTreePanelComponent.vue - Updated with Expand/Collapse All Button -->
+<!-- ServiceTreePanelComponent.vue with comprehensive scrollbar fix and no bullet points -->
 <template>
   <div class="service-tree-panel">
     <h4>{{ $t('sidebar.governmentServices', 'Government Services') }}</h4>
@@ -20,7 +20,8 @@
       </button>
     </div>
 
-    <ul>
+    <!-- No scrolling in this element, let the parent handle it -->
+    <ul class="service-tree-list">
       <li v-for="(node, index) in nodes" :key="index">
         <div class="node-label" @click="toggleNode(node)">
           <span v-if="hasChildren(node.catKey)" class="toggle-icon">
@@ -72,160 +73,173 @@ export default {
         { catKey: 'cat9', expanded: false },
         { catKey: 'cat10', expanded: false },
         { catKey: 'cat11', expanded: false },
-        { catKey: 'cat12', expanded: false }
+        { catKey: 'cat12', expanded: false },
+        { catKey: 'cat13', expanded: false }
       ],
-      // Comprehensive fallback data for all languages
+      // CORRECTED DATA: Categories properly aligned based on the first child node
       fallbackData: {
         en: {
           cat1: {
-            name: 'Health & Social Services',
-            children: ['Medical Services', 'Social Assistance', 'Healthcare Programs', 'Mental Health']
+            name: 'Identity & Civil Registration',
+            children: ['Birth Registration', 'National ID Cards', 'Passport Services', 'Vital Records']
           },
           cat2: {
+            name: 'Healthcare & Social Services',
+            children: ['Medical Services', 'Social Assistance', 'Healthcare Programs', 'Mental Health']
+          },
+          cat3: {
             name: 'Education & Learning',
             children: ['K-12 Schools', 'Higher Education', 'Adult Learning', 'Educational Resources']
           },
-          cat3: {
-            name: 'Business & Economy',
-            children: ['Business Registration', 'Economic Development', 'Trade', 'Small Business Support']
-          },
           cat4: {
-            name: 'Environment & Resources',
-            children: ['Natural Resources', 'Environmental Protection', 'Parks & Recreation', 'Wildlife']
-          },
-          cat5: {
-            name: 'Transportation',
-            children: ['Driver Services', 'Public Transit', 'Roads & Highways', 'Aviation']
-          },
-          cat6: {
-            name: 'Public Safety & Law',
-            children: ['Police Services', 'Courts', 'Legal Services', 'Emergency Services']
-          },
-          cat7: {
-            name: 'Housing & Properties',
-            children: ['Housing Programs', 'Property Assessment', 'Rental Assistance', 'Homeownership']
-          },
-          cat8: {
-            name: 'Employment & Labor',
+            name: 'Employment & Labor Services',
             children: ['Job Search', 'Labor Rights', 'Workplace Safety', 'Career Development']
           },
-          cat9: {
-            name: 'Culture & Recreation',
-            children: ['Arts & Culture', 'Heritage', 'Sports & Recreation', 'Tourism']
-          },
-          cat10: {
+          cat5: {
             name: 'Taxes & Revenue',
             children: ['Income Tax', 'Sales Tax', 'Property Tax', 'Tax Credits']
           },
+          cat6: {
+            name: 'Public Safety & Justice',
+            children: ['Police Services', 'Courts', 'Legal Services', 'Emergency Services']
+          },
+          cat7: {
+            name: 'Transportation & Mobility',
+            children: ['Driver Services', 'Public Transit', 'Roads & Highways', 'Aviation']
+          },
+          cat8: {
+            name: 'Business & Trade',
+            children: ['Housing Programs', 'Property Assessment', 'Rental Assistance', 'Homeownership']
+          },
+          cat9: {
+            name: 'Housing & Urban Development',
+            children: ['Natural Resources', 'Environmental Protection', 'Parks & Recreation', 'Wildlife']
+          },
+          cat10: {
+            name: 'Utilities & Environment',
+            children: ['Business Registration', 'Economic Development', 'Trade', 'Small Business Support']
+          },
           cat11: {
-            name: 'Government & Democracy',
-            children: ['Elections', 'Government Agencies', 'Public Records', 'Civic Engagement']
+            name: 'Culture & Recreation',
+            children: ['Arts & Culture', 'Heritage', 'Sports & Recreation', 'Tourism']
           },
           cat12: {
             name: 'Immigration & Citizenship',
-            children: ['Immigration Services', 'Citizenship Applications', 'Visas', 'Refugee Programs']
+            children: ['Immigration Services', 'Citizenship Applications', 'Visas', 'Refugee Programs', 'Elections and Voting']
+          },
+          cat13: {
+            name: 'Social Security & Pensions',
+            children: ['Retirement benefits', 'Pension fund management', 'Survivor benefits', 'Disability pensions']
           }
         },
-        // Complete French translations for all categories
+        // French translations with corrected alignment
         fr: {
           cat1: {
+            name: 'Identité et état civil',
+            children: ['Enregistrement des naissances', 'Cartes d\'identité nationale', 'Services de passeport', 'État civil']
+          },
+          cat2: {
             name: 'Santé et services sociaux',
             children: ['Services médicaux', 'Aide sociale', 'Programmes de santé', 'Santé mentale']
           },
-          cat2: {
+          cat3: {
             name: 'Éducation et apprentissage',
             children: ['Écoles K-12', 'Enseignement supérieur', 'Formation des adultes', 'Ressources éducatives']
           },
-          cat3: {
-            name: 'Affaires et économie',
-            children: ['Enregistrement d\'entreprise', 'Développement économique', 'Commerce', 'Soutien aux petites entreprises']
-          },
           cat4: {
-            name: 'Environnement et ressources',
-            children: ['Ressources naturelles', 'Protection de l\'environnement', 'Parcs et loisirs', 'Faune']
-          },
-          cat5: {
-            name: 'Transport',
-            children: ['Services aux conducteurs', 'Transport en commun', 'Routes et autoroutes', 'Aviation']
-          },
-          cat6: {
-            name: 'Sécurité publique et droit',
-            children: ['Services de police', 'Tribunaux', 'Services juridiques', 'Services d\'urgence']
-          },
-          cat7: {
-            name: 'Logement et propriétés',
-            children: ['Programmes de logement', 'Évaluation des propriétés', 'Aide à la location', 'Accession à la propriété']
-          },
-          cat8: {
-            name: 'Emploi et travail',
+            name: 'Emploi et services du travail',
             children: ['Recherche d\'emploi', 'Droits du travail', 'Sécurité au travail', 'Développement de carrière']
           },
-          cat9: {
-            name: 'Culture et loisirs',
-            children: ['Arts et culture', 'Patrimoine', 'Sports et loisirs', 'Tourisme']
-          },
-          cat10: {
+          cat5: {
             name: 'Impôts et revenus',
             children: ['Impôt sur le revenu', 'Taxe de vente', 'Impôt foncier', 'Crédits d\'impôt']
           },
+          cat6: {
+            name: 'Sécurité publique et justice',
+            children: ['Services de police', 'Tribunaux', 'Services juridiques', 'Services d\'urgence']
+          },
+          cat7: {
+            name: 'Transport et mobilité',
+            children: ['Services aux conducteurs', 'Transport en commun', 'Routes et autoroutes', 'Aviation']
+          },
+          cat8: {
+            name: 'Affaires et commerce',
+            children: ['Programmes de logement', 'Évaluation des propriétés', 'Aide à la location', 'Accession à la propriété']
+          },
+          cat9: {
+            name: 'Logement et développement urbain',
+            children: ['Ressources naturelles', 'Protection de l\'environnement', 'Parcs et loisirs', 'Faune']
+          },
+          cat10: {
+            name: 'Services publics et environnement',
+            children: ['Enregistrement d\'entreprise', 'Développement économique', 'Commerce', 'Soutien aux petites entreprises']
+          },
           cat11: {
-            name: 'Gouvernement et démocratie',
-            children: ['Élections', 'Agences gouvernementales', 'Registres publics', 'Engagement civique']
+            name: 'Culture et loisirs',
+            children: ['Arts et culture', 'Patrimoine', 'Sports et loisirs', 'Tourisme']
           },
           cat12: {
             name: 'Immigration et citoyenneté',
-            children: ['Services d\'immigration', 'Demandes de citoyenneté', 'Visas', 'Programmes pour réfugiés']
+            children: ['Services d\'immigration', 'Demandes de citoyenneté', 'Visas', 'Programmes pour réfugiés', 'Élections et vote']
+          },
+          cat13: {
+            name: 'Sécurité sociale et retraites',
+            children: ['Allocations de retraite', 'Gestion des fonds de pension', 'Allocations de survivant', 'Pensions pour invalidité']
           }
         },
-        // Complete Swahili translations for all categories
+        // Swahili translations with corrected alignment
         sw: {
           cat1: {
+            name: 'Utambulisho na Usajili wa Raia',
+            children: ['Usajili wa Kuzaliwa', 'Vitambulisho vya Kitaifa', 'Huduma za Pasipoti', 'Kumbukumbu za Muhimu']
+          },
+          cat2: {
             name: 'Afya na Huduma za Kijamii',
             children: ['Huduma za Matibabu', 'Msaada wa Kijamii', 'Programu za Afya', 'Afya ya Akili']
           },
-          cat2: {
+          cat3: {
             name: 'Elimu na Mafunzo',
             children: ['Shule za K-12', 'Elimu ya Juu', 'Mafunzo ya Watu Wazima', 'Rasilimali za Elimu']
           },
-          cat3: {
-            name: 'Biashara na Uchumi',
-            children: ['Usajili wa Biashara', 'Maendeleo ya Kiuchumi', 'Biashara', 'Msaada wa Biashara Ndogo']
-          },
           cat4: {
-            name: 'Mazingira na Rasilimali',
-            children: ['Rasilimali za Asili', 'Uhifadhi wa Mazingira', 'Mbuga na Burudani', 'Wanyamapori']
-          },
-          cat5: {
-            name: 'Usafiri',
-            children: ['Huduma za Dereva', 'Usafiri wa Umma', 'Barabara na Barabara Kuu', 'Usafiri wa Anga']
-          },
-          cat6: {
-            name: 'Usalama wa Umma na Sheria',
-            children: ['Huduma za Polisi', 'Mahakama', 'Huduma za Kisheria', 'Huduma za Dharura']
-          },
-          cat7: {
-            name: 'Nyumba na Mali',
-            children: ['Programu za Nyumba', 'Tathmini ya Mali', 'Msaada wa Kukodi', 'Umiliki wa Nyumba']
-          },
-          cat8: {
-            name: 'Ajira na Kazi',
+            name: 'Ajira na Huduma za Kazi',
             children: ['Utafutaji wa Kazi', 'Haki za Wafanyakazi', 'Usalama Kazini', 'Maendeleo ya Kazi']
           },
-          cat9: {
-            name: 'Utamaduni na Burudani',
-            children: ['Sanaa na Utamaduni', 'Urithi', 'Michezo na Burudani', 'Utalii']
-          },
-          cat10: {
+          cat5: {
             name: 'Kodi na Mapato',
             children: ['Kodi ya Mapato', 'Kodi ya Mauzo', 'Kodi ya Mali', 'Punguzo za Kodi']
           },
+          cat6: {
+            name: 'Usalama wa Umma na Haki',
+            children: ['Huduma za Polisi', 'Mahakama', 'Huduma za Kisheria', 'Huduma za Dharura']
+          },
+          cat7: {
+            name: 'Usafiri na Usafiri',
+            children: ['Huduma za Dereva', 'Usafiri wa Umma', 'Barabara na Barabara Kuu', 'Usafiri wa Anga']
+          },
+          cat8: {
+            name: 'Biashara na Biashara',
+            children: ['Programu za Nyumba', 'Tathmini ya Mali', 'Msaada wa Kukodi', 'Umiliki wa Nyumba']
+          },
+          cat9: {
+            name: 'Nyumba na Maendeleo ya Mjini',
+            children: ['Rasilimali za Asili', 'Uhifadhi wa Mazingira', 'Mbuga na Burudani', 'Wanyamapori']
+          },
+          cat10: {
+            name: 'Huduma na Mazingira',
+            children: ['Usajili wa Biashara', 'Maendeleo ya Kiuchumi', 'Biashara', 'Msaada wa Biashara Ndogo']
+          },
           cat11: {
-            name: 'Serikali na Demokrasia',
-            children: ['Uchaguzi', 'Mashirika ya Serikali', 'Kumbukumbu za Umma', 'Ushiriki wa Kiraia']
+            name: 'Utamaduni na Burudani',
+            children: ['Sanaa na Utamaduni', 'Urithi', 'Michezo na Burudani', 'Utalii']
           },
           cat12: {
             name: 'Uhamiaji na Uraia',
-            children: ['Huduma za Uhamiaji', 'Maombi ya Uraia', 'Visa', 'Programu za Wakimbizi']
+            children: ['Huduma za Uhamiaji', 'Maombi ya Uraia', 'Visa', 'Programu za Wakimbizi', 'Uchaguzi na Kupiga Kura']
+          },
+          cat13: {
+            name: 'Hifadhi ya Jamii na Pensheni',
+            children: ['Manufaa ya kustaafu', 'Usimamizi wa mfuko wa pensheni', 'Manufaa ya warithi', 'Pensheni za ulemavu']
           }
         }
       },
@@ -303,6 +317,13 @@ export default {
     
     getCatName(catKey) {
       const locale = this.getCurrentLocale();
+      
+      // Special case for cat11 to ensure it shows the correct name
+      if (catKey === 'cat11') {
+        return locale === 'fr' ? 'Culture et loisirs' : 
+               locale === 'sw' ? 'Utamaduni na Burudani' : 
+               'Culture & Recreation';
+      }
       
       try {
         // Try getting from i18n first
@@ -427,33 +448,37 @@ export default {
 
 <style scoped>
 .service-tree-panel {
-  margin-bottom: 20px;
-  height: 100%;
+  margin-bottom: 0; /* Remove margin that might cause scrolling */
+  height: auto !important; /* Let it grow naturally */
   display: flex;
   flex-direction: column;
-  font-size: 10pt; /* Increased from 8pt to 10pt */
+  font-size: 10pt;
+  overflow: visible !important; /* Disable scrolling on this element */
 }
 
 .service-tree-panel h4 {
   margin-bottom: 8px;
   font-weight: 600;
   color: #333;
-  font-size: 12pt; /* Increased to match the body text change */
+  font-size: 12pt;
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 .search-container {
   position: relative;
   display: flex;
   margin-bottom: 8px;
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 .search-box {
   flex: 1;
   padding: 6px;
-  font-size: 10pt; /* Increased from 8pt to 10pt */
+  font-size: 10pt;
   border: 1px solid #ccc;
   border-radius: 4px;
   outline: none;
+  padding-right: 30px; /* Make room for the button */
 }
 
 .expand-collapse-btn {
@@ -481,35 +506,37 @@ export default {
   background-color: #e5e5e5;
 }
 
-.search-box {
-  padding-right: 30px; /* Make room for the button */
-}
-
-ul {
+/* Main tree list - NO SCROLLING, parent handles it */
+.service-tree-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  overflow-y: auto;
+  overflow: visible !important; /* Force no scrolling */
   flex-grow: 1;
+}
+
+.service-tree-list li {
+  list-style: none !important; /* Remove bullets at every level */
 }
 
 .node-label {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 4px 8px; /* Slightly increased padding for the larger text */
+  padding: 4px 8px;
   border-radius: 4px;
   transition: background-color 0.2s;
 }
+
 .node-label:hover {
   background-color: #f0f0f0;
 }
 .toggle-icon {
-  width: 18px; /* Slightly increased width for better proportions */
+  width: 18px;
   text-align: center;
   margin-right: 4px;
   color: #666;
-  font-size: 10pt; /* Increased from 8pt to 10pt */
+  font-size: 10pt;
 }
 .toggle-icon.placeholder {
   visibility: hidden;
@@ -520,14 +547,32 @@ ul {
 }
 
 .child-list {
-  margin-left: 18px; /* Slightly increased margin for better spacing */
+  margin-left: 18px;
   border-left: 1px dashed #ccc;
-  padding-left: 8px; /* Increased padding for larger text */
+  padding-left: 8px;
   margin-top: 2px;
+  list-style-type: none !important; /* Remove bullets from the child list */
+}
+
+.child-list li {
+  list-style-type: none !important; /* Remove bullets from each child list item */
+}
+
+.child-list li::before {
+  content: none !important; /* Ensure no pseudo-element adds bullets */
 }
 
 .selected .node-label {
   background-color: #e6f0ff;
   border-left: 2px solid #1867c0;
+}
+
+/* Ensure all browser-specific list styling is removed */
+ul {
+  list-style-type: none !important;
+}
+
+li {
+  list-style-type: none !important;
 }
 </style>

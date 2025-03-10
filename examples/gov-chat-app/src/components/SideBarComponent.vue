@@ -1,4 +1,4 @@
-<!-- SideBarComponent.vue -->
+<!-- SideBarComponent.vue with comprehensive scrollbar fix -->
 <template>
   <aside class="side-bar" :class="{ 'side-bar-open': isOpen }">
     <!-- Overlay that only appears on mobile when sidebar is open -->
@@ -25,7 +25,7 @@
         </button>
       </div>
       
-      <!-- Content based on active tab -->
+      <!-- Content based on active tab - single scrollable container -->
       <div class="sidebar-content">
         <!-- Government Services Tab -->
         <div v-if="activeTab === 'services'" class="services-list">
@@ -84,7 +84,7 @@ export default {
   background: #ffffff;
   border-right: 1px solid #ddd;
   height: 100%;
-  overflow: hidden;
+  overflow: hidden !important; /* Force no overflow */
   transition: transform 0.3s ease, width 0.3s ease;
 }
 
@@ -95,6 +95,7 @@ export default {
   position: relative;
   z-index: 1001; /* Higher than overlay */
   background: white; /* Ensure background is solid */
+  overflow: hidden !important; /* Force no overflow */
 }
 
 /* Mobile overlay */
@@ -108,6 +109,7 @@ export default {
   border-bottom: 1px solid #e9ecef;
   background-color: #f8f9fa;
   padding: 0;
+  flex-shrink: 0; /* Prevent tabs from shrinking */
 }
 
 .tab-button {
@@ -139,27 +141,34 @@ export default {
   color: white;
 }
 
+/* THIS IS THE MAIN SCROLLABLE CONTAINER */
 .sidebar-content {
   flex-grow: 1;
-  overflow: hidden;
+  overflow-y: auto !important; /* Force scrolling here */
   display: flex;
   flex-direction: column;
   padding: 10px;
+  height: 0; /* Force it to use flex grow */
 }
 
 .services-list,
 .chat-history {
   flex-grow: 1;
-  overflow-y: auto;
+  overflow: visible !important; /* Force no scrolling */
   display: flex;
   flex-direction: column;
-  height: calc(100% - 110px); /* Adjust height to make room for weather panel */
+  margin-bottom: 110px; /* Make room for weather panel */
 }
 
 .weather-panel-fixed {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
   margin-top: 10px;
   border-top: 1px solid #eee;
-  padding-top: 10px;
+  padding: 10px;
 }
 
 /* Mobile: offscreen unless side-bar-open is set */
@@ -196,7 +205,6 @@ export default {
   /* Make sure the content scrolls properly on mobile */
   .sidebar-content {
     height: calc(100vh - 110px); /* Account for tabs and navbar */
-    overflow-y: auto;
   }
   
   /* Adjust tab buttons for mobile */

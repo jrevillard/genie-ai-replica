@@ -1,14 +1,16 @@
 // analytics-service.js
+require('dotenv').config();
 const { Database, aql } = require('arangojs');
+const { v4: uuidv4 } = require('uuid');
 
 // Initialize ArangoDB connection
 const initDB = () => {
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'chatbot_analytics',
+    databaseName: process.env.ARANGO_DB || 'node-services',
     auth: {
       username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
+      password: process.env.ARANGO_PASSWORD || 'test'
     }
   });
 
@@ -18,556 +20,381 @@ const initDB = () => {
 class AnalyticsService {
   constructor() {
     this.db = initDB();
-    this.queries = this.db.collection('queries');
-    this.users = this.db.collection('users');
-    this.sessions = this.db.collection('sessions');
     this.analytics = this.db.collection('analytics');
-    this.serviceCategories = this.db.collection('serviceCategories');
+    this.events = this.db.collection('events');
+    this.queriesCollection = this.db.collection('queries');
+    this.usersCollection = this.db.collection('users');
+    this.sessionsCollection = this.db.collection('sessions');
+    
+    // Initialize collections
+    this.initialize().catch(err => console.error('Error initializing collections:', err));
   }
 
   /**
-   * Record a new chatbot query and update analytics
-   * @param {Object} queryData - The query data to record
-   * @returns {Promise<Object>} The recorded query document
+   * Initialize collections if they don't exist
+   * @returns {Promise<void>}
    */
-  async recordQuery(queryData) {
+  async initialize() {
     try {
-      // Ensure we have minimum required data
-      if (!queryData.userId || !queryData.sessionId || !queryData.text) {
-        throw new Error('Missing required query data');
-      }
+      // Check if collections exist and create them if they don't
+      const collections = await this.db.listCollections();
+      const collectionNames = collections.map(c => c.name);
+      
+      // Function to create a collection if it doesn't exist
+      const ensureCollection = async (name) => {
+        if (!collectionNames.includes(name)) {
+          console.log(`Creating ${name} collection...`);
+          try {
+            await this.db.createCollection(name);
+            console.log(`Created ${name} collection successfully`);
+          } catch (err) {
+            // If collection was created in the meantime, ignore the error
+            if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
+              throw err;
+            }
+          }
+        }
+      };
+      
+      // Ensure all required collections exist
+      await ensureCollection('analytics');
+      await ensureCollection('events');
+      
+      // Update local references to ensure they're valid
+      this.analytics = this.db.collection('analytics');
+      this.events = this.db.collection('events');
+      
+      console.log('Collections initialized successfully');
+    } catch (error) {
+      console.error('Error initializing collections:', error);
+      // Don't throw here, log the error but allow service to continue
+    }
+  }
 
-      // Create query document with timestamp and response time
-      const queryDoc = {
-        _key: `query_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        userId: queryData.userId,
-        sessionId: queryData.sessionId,
-        text: queryData.text,
+  /**
+   * Record a query in analytics
+   * @param {Object} queryDoc - Query document
+   * @returns {Promise<Object>} The created analytics record
+   */
+  async recordQuery(queryDoc) {
+    try {
+      // Create analytics document without specifying a key - let ArangoDB auto-generate it
+      const analyticsDoc = {
+        type: 'query',
+        queryId: queryDoc._key,
+        userId: queryDoc.userId,
+        sessionId: queryDoc.sessionId,
         timestamp: new Date().toISOString(),
-        responseTime: queryData.responseTime || 0,
-        categoryId: queryData.categoryId || null,
-        serviceId: queryData.serviceId || null,
-        isAnswered: queryData.isAnswered || true,
-        metadata: {
-          criteria: queryData.criteria || '',
-          tags: queryData.tags || []
+        data: {
+          text: queryDoc.text,
+          categoryId: queryDoc.categoryId,
+          serviceId: queryDoc.serviceId,
+          responseTime: queryDoc.responseTime || 0,
+          isAnswered: queryDoc.isAnswered || false
         }
       };
 
-      // Save the query document
-      const query = await this.queries.save(queryDoc);
+      console.log('Recording query analytics...');
+      const record = await this.analytics.save(analyticsDoc);
+      console.log(`Analytics record created with auto-generated key: ${record._key}`);
       
-      // Create edge between session and query if not exists
-      await this.db.collection('sessionQueries').save({
-        _from: `sessions/${queryData.sessionId}`,
-        _to: `queries/${query._key}`,
-        createdAt: new Date().toISOString()
-      }).catch(err => {
-        // Ignore duplicate key errors
-        if (err.errorNum !== 1210) throw err;
-      });
-
-      // If categoryId is provided, create edge between query and category
-      if (queryData.categoryId) {
-        await this.db.collection('queryCategories').save({
-          _from: `queries/${query._key}`,
-          _to: `serviceCategories/${queryData.categoryId}`,
-          confidence: queryData.confidence || 1.0
-        }).catch(err => {
-          // Ignore duplicate key errors
-          if (err.errorNum !== 1210) throw err;
-        });
-      }
-
-      // Update the real-time analytics for today
-      await this.updateDailyAnalytics();
-
-      return query;
+      return record;
     } catch (error) {
-      console.error('Error recording query:', error);
+      console.error('Error recording query analytics:', error);
       throw error;
     }
   }
 
   /**
-   * Record user feedback for a specific query
-   * @param {String} queryId - The ID of the query
-   * @param {Object} feedback - The feedback object
-   * @returns {Promise<Object>} The updated query document
+   * Record feedback in analytics
+   * @param {String} queryId - Query ID
+   * @param {Object} feedback - Feedback data
+   * @returns {Promise<Object>} The created analytics record
    */
   async recordFeedback(queryId, feedback) {
     try {
-      // Ensure feedback has required fields
-      if (!feedback.rating) {
-        throw new Error('Feedback rating is required');
-      }
-
-      // Update the query document with feedback
-      const userFeedback = {
-        rating: feedback.rating,
-        comment: feedback.comment || '',
-        providedAt: new Date().toISOString()
+      // Create feedback document without specifying a key - let ArangoDB auto-generate it
+      const analyticsDoc = {
+        type: 'feedback',
+        queryId: queryId,
+        timestamp: new Date().toISOString(),
+        data: feedback
       };
 
-      // Update the query with feedback
-      const updatedQuery = await this.queries.update(queryId, {
-        userFeedback
-      }, { returnNew: true });
-
-      // Update analytics after feedback
-      await this.updateDailyAnalytics();
-
-      return updatedQuery.new;
-    } catch (error) {
-      console.error('Error recording feedback:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update daily analytics with the latest data
-   * @returns {Promise<Object>} The updated analytics document
-   */
-  async updateDailyAnalytics() {
-    try {
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      const analyticsKey = `daily-${todayStr}`;
-
-      // Check if today's analytics document exists
-      let analyticsDoc = null;
-      try {
-        analyticsDoc = await this.analytics.document(analyticsKey);
-      } catch (err) {
-        // Document doesn't exist, create it
-        analyticsDoc = {
-          _key: analyticsKey,
-          period: 'daily',
-          startDate: `${todayStr}T00:00:00.000Z`,
-          endDate: `${todayStr}T23:59:59.999Z`,
-          totalQueries: 0,
-          uniqueUsers: 0,
-          averageResponseTime: 0,
-          satisfactionRate: 0,
-          queryDistribution: [],
-          topQueries: [],
-          lastUpdated: new Date().toISOString()
-        };
-      }
-
-      // Calculate analytics for today
-      const startOfDay = `${todayStr}T00:00:00.000Z`;
-      const endOfDay = `${todayStr}T23:59:59.999Z`;
-
-      // Get total queries for today
-      const totalQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startOfDay} && q.timestamp <= ${endOfDay}
-          COLLECT WITH COUNT INTO count
-          RETURN count
-      `);
-      const totalQueries = await totalQueriesResult.next() || 0;
-
-      // Get unique users for today
-      const uniqueUsersResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startOfDay} && q.timestamp <= ${endOfDay}
-          COLLECT userId = q.userId WITH COUNT INTO count
-          RETURN count
-      `);
-      const uniqueUsers = await uniqueUsersResult.next() || 0;
-
-      // Calculate average response time for today
-      const avgResponseTimeResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startOfDay} && q.timestamp <= ${endOfDay}
-          COLLECT AGGREGATE avgTime = AVG(q.responseTime)
-          RETURN avgTime
-      `);
-      const averageResponseTime = await avgResponseTimeResult.next() || 0;
-
-      // Calculate satisfaction rate from user feedback
-      const satisfactionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startOfDay} && q.timestamp <= ${endOfDay}
-          FILTER q.userFeedback != null
-          COLLECT AGGREGATE avgRating = AVG(q.userFeedback.rating)
-          RETURN avgRating
-      `);
-      const satisfactionRate = await satisfactionResult.next() || 0;
-
-      // Get query distribution by category
-      const queryDistributionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startOfDay} && q.timestamp <= ${endOfDay}
-          FILTER q.categoryId != null
-          COLLECT categoryId = q.categoryId WITH COUNT INTO count
-          SORT count DESC
-          RETURN { categoryId, count }
-      `);
-      const queryDistribution = await queryDistributionResult.all();
-
-      // Get top 5 queries for today
-      const topQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startOfDay} && q.timestamp <= ${endOfDay}
-          COLLECT text = q.text WITH COUNT INTO count
-          SORT count DESC
-          LIMIT 5
-          RETURN { text, count }
-      `);
-      const topQueries = await topQueriesResult.all();
-
-      // Update or create analytics document
-      analyticsDoc.totalQueries = totalQueries;
-      analyticsDoc.uniqueUsers = uniqueUsers;
-      analyticsDoc.averageResponseTime = averageResponseTime;
-      analyticsDoc.satisfactionRate = satisfactionRate;
-      analyticsDoc.queryDistribution = queryDistribution;
-      analyticsDoc.topQueries = topQueries;
-      analyticsDoc.lastUpdated = new Date().toISOString();
-
-      // Save the analytics document
-      return await this.analytics.save(analyticsDoc, { overwriteMode: 'replace' });
-    } catch (error) {
-      console.error('Error updating daily analytics:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get analytics for a specific period
-   * @param {String} period - The period to get analytics for ('daily', 'weekly', 'monthly', 'all-time')
-   * @param {String} date - The date for the period (ISO format)
-   * @returns {Promise<Object>} The analytics document
-   */
-  async getAnalytics(period = 'daily', date = new Date().toISOString().split('T')[0]) {
-    try {
-      let analyticsKey;
+      console.log('Recording feedback analytics...');
+      const record = await this.analytics.save(analyticsDoc);
+      console.log(`Feedback record created with auto-generated key: ${record._key}`);
       
-      if (period === 'all-time') {
-        analyticsKey = 'all-time';
-      } else {
-        const dateObj = new Date(date);
+      return record;
+    } catch (error) {
+      console.error('Error recording feedback analytics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Track an event
+   * @param {String} userId - User ID
+   * @param {String} eventType - Event type
+   * @param {Object} eventData - Event data
+   * @returns {Promise<Object>} The created event
+   */
+  async trackEvent(userId, eventType, eventData = {}) {
+    try {
+      // Ensure the events collection exists
+      await this.initialize();
+      
+      // Create event document without specifying a key - let ArangoDB auto-generate it
+      const eventDoc = {
+        userId,
+        eventType,
+        timestamp: new Date().toISOString(),
+        data: eventData
+      };
+
+      console.log('Tracking event...');
+      const event = await this.events.save(eventDoc);
+      console.log(`Event created with auto-generated key: ${event._key}`);
+      
+      return event;
+    } catch (error) {
+      console.error('Error tracking event:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get analytics for dashboard
+   * @param {String} startDate - Start date (ISO string)
+   * @param {String} endDate - End date (ISO string)
+   * @returns {Promise<Object>} Dashboard analytics
+   */
+  async getDashboardAnalytics(startDate, endDate) {
+    try {
+      const query = aql`
+        LET queryCount = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= ${startDate} && a.timestamp <= ${endDate}
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        )[0]
         
-        if (period === 'daily') {
-          analyticsKey = `daily-${date}`;
-        } else if (period === 'weekly') {
-          // Get start of the week (Sunday)
-          const startOfWeek = new Date(dateObj);
-          startOfWeek.setDate(dateObj.getDate() - dateObj.getDay());
-          const weekStr = startOfWeek.toISOString().split('T')[0];
-          analyticsKey = `weekly-${weekStr}`;
-        } else if (period === 'monthly') {
-          const monthStr = date.substring(0, 7); // YYYY-MM
-          analyticsKey = `monthly-${monthStr}`;
+        LET unansweredCount = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= ${startDate} && a.timestamp <= ${endDate}
+            FILTER a.data.isAnswered == false
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        )[0]
+        
+        LET avgResponseTime = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= ${startDate} && a.timestamp <= ${endDate}
+            FILTER a.data.responseTime > 0
+            COLLECT AGGREGATE avgTime = AVG(a.data.responseTime)
+            RETURN avgTime
+        )[0]
+        
+        LET categoryDistribution = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= ${startDate} && a.timestamp <= ${endDate}
+            FILTER a.data.categoryId != null
+            COLLECT categoryId = a.data.categoryId WITH COUNT INTO count
+            LET category = DOCUMENT(CONCAT('serviceCategories/', categoryId))
+            RETURN {
+              categoryId,
+              name: category.nameEN || category._key,
+              count
+            }
+        )
+        
+        LET feedbackStats = (
+          LET feedbacks = (
+            FOR a IN analytics
+              FILTER a.type == 'feedback'
+              FILTER a.timestamp >= ${startDate} && a.timestamp <= ${endDate}
+              RETURN a
+          )
+          
+          LET totalFeedback = LENGTH(feedbacks)
+          LET positiveCount = (
+            FOR f IN feedbacks
+              FILTER f.data.rating >= 4
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          )[0] || 0
+          
+          LET negativeCount = (
+            FOR f IN feedbacks
+              FILTER f.data.rating <= 2
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          )[0] || 0
+          
+          LET neutralCount = totalFeedback - positiveCount - negativeCount
+          
+          RETURN {
+            total: totalFeedback,
+            positive: positiveCount,
+            neutral: neutralCount,
+            negative: negativeCount,
+            positivePercentage: totalFeedback > 0 ? (positiveCount / totalFeedback) * 100 : 0,
+            negativePercentage: totalFeedback > 0 ? (negativeCount / totalFeedback) * 100 : 0
+          }
+        )
+        
+        LET userStats = (
+          LET activeUsers = (
+            FOR a IN analytics
+              FILTER a.type == 'query'
+              FILTER a.timestamp >= ${startDate} && a.timestamp <= ${endDate}
+              COLLECT userId = a.userId
+              RETURN userId
+          )
+          
+          RETURN {
+            activeCount: LENGTH(activeUsers)
+          }
+        )
+        
+        RETURN {
+          queries: {
+            total: queryCount,
+            unanswered: unansweredCount,
+            answeredPercentage: queryCount > 0 ? ((queryCount - unansweredCount) / queryCount) * 100 : 0,
+            avgResponseTime
+          },
+          categories: categoryDistribution,
+          feedback: feedbackStats,
+          users: userStats
+        }
+      `;
+      
+      const cursor = await this.db.query(query);
+      return await cursor.next() || {
+        queries: { total: 0, unanswered: 0, answeredPercentage: 0, avgResponseTime: null },
+        categories: [],
+        feedback: [{ total: 0, positive: 0, neutral: 0, negative: 0, positivePercentage: 0, negativePercentage: 0 }],
+        users: [{ activeCount: 0 }]
+      };
+    } catch (error) {
+      console.error('Error getting dashboard analytics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get general analytics
+   * @param {Object} filters - Filters to apply
+   * @param {String} startDate - Start date (ISO string)
+   * @param {String} endDate - End date (ISO string)
+   * @returns {Promise<Object>} General analytics data
+   */
+  async getAnalytics(filters = {}, startDate, endDate) {
+    try {
+      // Ensure we have valid dates
+      const validStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Default to 30 days ago
+      const validEndDate = endDate || new Date().toISOString(); // Default to now
+
+      // First make sure the collections exist
+      await this.initialize();
+
+      // Build a simple query that avoids complex filter building
+      const query = `
+        FOR a IN analytics
+          FILTER a.timestamp >= @startDate
+          FILTER a.timestamp <= @endDate
+          ${filters && filters.type ? 'FILTER a.type == @type' : ''}
+          ${filters && filters.userId ? 'FILTER a.userId == @userId' : ''}
+          ${filters && filters.categoryId ? 'FILTER a.data.categoryId == @categoryId' : ''}
+          ${filters && filters.serviceId ? 'FILTER a.data.serviceId == @serviceId' : ''}
+          SORT a.timestamp DESC
+          LIMIT 1000
+          RETURN a
+      `;
+      
+      // Prepare bind variables - always include dates
+      const bindVars = {
+        startDate: validStartDate,
+        endDate: validEndDate
+      };
+      
+      // Add optional filter values only if they exist
+      if (filters) {
+        if (filters.type) bindVars.type = filters.type;
+        if (filters.userId) bindVars.userId = filters.userId;
+        if (filters.categoryId) bindVars.categoryId = filters.categoryId;
+        if (filters.serviceId) bindVars.serviceId = filters.serviceId;
+      }
+      
+      console.log('Executing analytics query with bind vars:', JSON.stringify(bindVars));
+      
+      // Execute the query using string template with bind variables
+      const cursor = await this.db.query(query, bindVars);
+      const analyticsData = await cursor.all();
+      
+      // Process the data for different analytics types
+      const processedData = {
+        queryCount: 0,
+        feedbackCount: 0,
+        avgRating: 0,
+        timeDistribution: {},
+        categoryDistribution: {},
+        raw: analyticsData
+      };
+      
+      // Count queries and feedback
+      const queryData = analyticsData.filter(a => a && a.type === 'query');
+      const feedbackData = analyticsData.filter(a => a && a.type === 'feedback');
+      
+      processedData.queryCount = queryData.length;
+      processedData.feedbackCount = feedbackData.length;
+      
+      // Calculate average rating if there is feedback
+      if (feedbackData.length > 0) {
+        let totalRating = 0;
+        let ratingCount = 0;
+        
+        for (const item of feedbackData) {
+          if (item.data && typeof item.data.rating === 'number') {
+            totalRating += item.data.rating;
+            ratingCount++;
+          }
+        }
+        
+        processedData.avgRating = ratingCount > 0 ? totalRating / ratingCount : 0;
+      }
+      
+      // Calculate time distribution (by hour)
+      for (const item of analyticsData) {
+        if (item && item.timestamp) {
+          try {
+            const hour = new Date(item.timestamp).getHours();
+            if (!isNaN(hour)) {
+              processedData.timeDistribution[hour] = (processedData.timeDistribution[hour] || 0) + 1;
+            }
+          } catch (err) {
+            // Skip invalid timestamps
+            console.error('Invalid timestamp in analytics item:', item.timestamp);
+          }
         }
       }
-
-      // Try to get existing analytics document
-      try {
-        return await this.analytics.document(analyticsKey);
-      } catch (err) {
-        // If document doesn't exist, generate it
-        if (period === 'all-time') {
-          return await this.generateAllTimeAnalytics();
-        } else if (period === 'monthly') {
-          return await this.generateMonthlyAnalytics(date);
-        } else if (period === 'weekly') {
-          return await this.generateWeeklyAnalytics(date);
-        } else {
-          // For daily, update the daily analytics
-          return await this.updateDailyAnalytics();
+      
+      // Calculate category distribution
+      for (const item of queryData) {
+        if (item && item.data && item.data.categoryId) {
+          const catId = item.data.categoryId;
+          processedData.categoryDistribution[catId] = (processedData.categoryDistribution[catId] || 0) + 1;
         }
       }
+      
+      return processedData;
     } catch (error) {
-      console.error(`Error getting ${period} analytics:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate all-time analytics
-   * @returns {Promise<Object>} The all-time analytics document
-   */
-  async generateAllTimeAnalytics() {
-    try {
-      // Get total queries
-      const totalQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          COLLECT WITH COUNT INTO count
-          RETURN count
-      `);
-      const totalQueries = await totalQueriesResult.next() || 0;
-
-      // Get unique users
-      const uniqueUsersResult = await this.db.query(aql`
-        FOR q IN queries
-          COLLECT userId = q.userId WITH COUNT INTO count
-          RETURN count
-      `);
-      const uniqueUsers = await uniqueUsersResult.next() || 0;
-
-      // Calculate average response time
-      const avgResponseTimeResult = await this.db.query(aql`
-        FOR q IN queries
-          COLLECT AGGREGATE avgTime = AVG(q.responseTime)
-          RETURN avgTime
-      `);
-      const averageResponseTime = await avgResponseTimeResult.next() || 0;
-
-      // Calculate satisfaction rate from user feedback
-      const satisfactionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.userFeedback != null
-          COLLECT AGGREGATE avgRating = AVG(q.userFeedback.rating)
-          RETURN avgRating
-      `);
-      const satisfactionRate = await satisfactionResult.next() || 0;
-
-      // Get query distribution by category
-      const queryDistributionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.categoryId != null
-          COLLECT categoryId = q.categoryId WITH COUNT INTO count
-          SORT count DESC
-          RETURN { categoryId, count }
-      `);
-      const queryDistribution = await queryDistributionResult.all();
-
-      // Get top 5 queries of all time
-      const topQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          COLLECT text = q.text WITH COUNT INTO count
-          SORT count DESC
-          LIMIT 5
-          RETURN { text, count }
-      `);
-      const topQueries = await topQueriesResult.all();
-
-      // Create all-time analytics document
-      const analyticsDoc = {
-        _key: 'all-time',
-        period: 'all-time',
-        startDate: '1970-01-01T00:00:00.000Z', // Beginning of time
-        endDate: new Date().toISOString(),
-        totalQueries,
-        uniqueUsers,
-        averageResponseTime,
-        satisfactionRate,
-        queryDistribution,
-        topQueries,
-        lastUpdated: new Date().toISOString()
-      };
-
-      // Save the analytics document
-      return await this.analytics.save(analyticsDoc, { overwriteMode: 'replace' });
-    } catch (error) {
-      console.error('Error generating all-time analytics:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate monthly analytics for a specific month
-   * @param {String} date - Any date in the month (ISO format YYYY-MM-DD)
-   * @returns {Promise<Object>} The monthly analytics document
-   */
-  async generateMonthlyAnalytics(date) {
-    try {
-      const monthStr = date.substring(0, 7); // YYYY-MM
-      const year = parseInt(monthStr.split('-')[0]);
-      const month = parseInt(monthStr.split('-')[1]) - 1; // 0-based month
-      
-      const startOfMonth = new Date(year, month, 1);
-      const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
-      
-      const startDate = startOfMonth.toISOString();
-      const endDate = endOfMonth.toISOString();
-
-      // Get total queries for the month
-      const totalQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT WITH COUNT INTO count
-          RETURN count
-      `);
-      const totalQueries = await totalQueriesResult.next() || 0;
-
-      // Get unique users for the month
-      const uniqueUsersResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT userId = q.userId WITH COUNT INTO count
-          RETURN count
-      `);
-      const uniqueUsers = await uniqueUsersResult.next() || 0;
-
-      // Calculate average response time for the month
-      const avgResponseTimeResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT AGGREGATE avgTime = AVG(q.responseTime)
-          RETURN avgTime
-      `);
-      const averageResponseTime = await avgResponseTimeResult.next() || 0;
-
-      // Calculate satisfaction rate from user feedback for the month
-      const satisfactionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          FILTER q.userFeedback != null
-          COLLECT AGGREGATE avgRating = AVG(q.userFeedback.rating)
-          RETURN avgRating
-      `);
-      const satisfactionRate = await satisfactionResult.next() || 0;
-
-      // Get query distribution by category for the month
-      const queryDistributionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          FILTER q.categoryId != null
-          COLLECT categoryId = q.categoryId WITH COUNT INTO count
-          SORT count DESC
-          RETURN { categoryId, count }
-      `);
-      const queryDistribution = await queryDistributionResult.all();
-
-      // Get top 5 queries for the month
-      const topQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT text = q.text WITH COUNT INTO count
-          SORT count DESC
-          LIMIT 5
-          RETURN { text, count }
-      `);
-      const topQueries = await topQueriesResult.all();
-
-      // Create monthly analytics document
-      const analyticsDoc = {
-        _key: `monthly-${monthStr}`,
-        period: 'monthly',
-        startDate,
-        endDate,
-        totalQueries,
-        uniqueUsers,
-        averageResponseTime,
-        satisfactionRate,
-        queryDistribution,
-        topQueries,
-        lastUpdated: new Date().toISOString()
-      };
-
-      // Save the analytics document
-      return await this.analytics.save(analyticsDoc, { overwriteMode: 'replace' });
-    } catch (error) {
-      console.error(`Error generating monthly analytics for ${date}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Generate weekly analytics for a specific week
-   * @param {String} date - Any date in the week (ISO format YYYY-MM-DD)
-   * @returns {Promise<Object>} The weekly analytics document
-   */
-  async generateWeeklyAnalytics(date) {
-    try {
-      const dateObj = new Date(date);
-      
-      // Get start of the week (Sunday)
-      const startOfWeek = new Date(dateObj);
-      startOfWeek.setDate(dateObj.getDate() - dateObj.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-      
-      // Get end of the week (Saturday)
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      
-      const startDate = startOfWeek.toISOString();
-      const endDate = endOfWeek.toISOString();
-      const weekStr = startOfWeek.toISOString().split('T')[0];
-
-      // Get total queries for the week
-      const totalQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT WITH COUNT INTO count
-          RETURN count
-      `);
-      const totalQueries = await totalQueriesResult.next() || 0;
-
-      // Get unique users for the week
-      const uniqueUsersResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT userId = q.userId WITH COUNT INTO count
-          RETURN count
-      `);
-      const uniqueUsers = await uniqueUsersResult.next() || 0;
-
-      // Calculate average response time for the week
-      const avgResponseTimeResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT AGGREGATE avgTime = AVG(q.responseTime)
-          RETURN avgTime
-      `);
-      const averageResponseTime = await avgResponseTimeResult.next() || 0;
-
-      // Calculate satisfaction rate from user feedback for the week
-      const satisfactionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          FILTER q.userFeedback != null
-          COLLECT AGGREGATE avgRating = AVG(q.userFeedback.rating)
-          RETURN avgRating
-      `);
-      const satisfactionRate = await satisfactionResult.next() || 0;
-
-      // Get query distribution by category for the week
-      const queryDistributionResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          FILTER q.categoryId != null
-          COLLECT categoryId = q.categoryId WITH COUNT INTO count
-          SORT count DESC
-          RETURN { categoryId, count }
-      `);
-      const queryDistribution = await queryDistributionResult.all();
-
-      // Get top 5 queries for the week
-      const topQueriesResult = await this.db.query(aql`
-        FOR q IN queries
-          FILTER q.timestamp >= ${startDate} && q.timestamp <= ${endDate}
-          COLLECT text = q.text WITH COUNT INTO count
-          SORT count DESC
-          LIMIT 5
-          RETURN { text, count }
-      `);
-      const topQueries = await topQueriesResult.all();
-
-      // Create weekly analytics document
-      const analyticsDoc = {
-        _key: `weekly-${weekStr}`,
-        period: 'weekly',
-        startDate,
-        endDate,
-        totalQueries,
-        uniqueUsers,
-        averageResponseTime,
-        satisfactionRate,
-        queryDistribution,
-        topQueries,
-        lastUpdated: new Date().toISOString()
-      };
-
-      // Save the analytics document
-      return await this.analytics.save(analyticsDoc, { overwriteMode: 'replace' });
-    } catch (error) {
-      console.error(`Error generating weekly analytics for ${date}:`, error);
+      console.error('Error getting analytics:', error);
       throw error;
     }
   }

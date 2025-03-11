@@ -1,14 +1,15 @@
 // service-category-service.js
+require('dotenv').config();
 const { Database, aql } = require('arangojs');
 
 // Initialize ArangoDB connection
 const initDB = () => {
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'chatbot_analytics',
+    databaseName: process.env.ARANGO_DB || 'node-services',
     auth: {
       username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
+      password: process.env.ARANGO_PASSWORD || 'test'
     }
   });
 
@@ -21,6 +22,27 @@ class ServiceCategoryService {
     this.serviceCategories = this.db.collection('serviceCategories');
     this.services = this.db.collection('services');
     this.categoryServices = this.db.collection('categoryServices');
+  }
+
+  /**
+   * Sanitize a key to comply with ArangoDB requirements
+   * @param {String} key - The key to sanitize
+   * @returns {String} Sanitized key
+   */
+  sanitizeKey(key) {
+    if (!key) return '';
+    
+    // ArangoDB keys cannot begin with an underscore and must only contain valid characters
+    // Remove any leading underscores
+    let sanitized = key.replace(/^_+/, '');
+    
+    // Replace invalid characters with underscores
+    sanitized = sanitized.replace(/[^a-zA-Z0-9_\-:.@()+,=;$!*'%]/g, '_');
+    
+    // If the key is empty after sanitization, return empty string
+    if (!sanitized) return '';
+    
+    return sanitized;
   }
 
   /**
@@ -40,7 +62,7 @@ class ServiceCategoryService {
         
         // Prepare category document
         const categoryDoc = {
-          _key: categoryKey,
+          _key: this.sanitizeKey(categoryKey),
           order: i + 1
         };
         
@@ -48,7 +70,7 @@ class ServiceCategoryService {
         categoryDoc[nameField] = category.name;
         
         // Check if category already exists
-        const exists = await this.categoryExists(categoryKey);
+        const exists = await this.categoryExists(categoryDoc._key);
         
         if (exists) {
           // Update existing category
@@ -57,7 +79,7 @@ class ServiceCategoryService {
           updateData.order = i + 1;
           
           const updatedCategory = await this.serviceCategories.update(
-            categoryKey,
+            categoryDoc._key,
             updateData,
             { returnNew: true }
           );
@@ -71,7 +93,7 @@ class ServiceCategoryService {
         
         // Handle children (services)
         if (category.children && Array.isArray(category.children)) {
-          await this.upsertServices(categoryKey, category.children, locale);
+          await this.upsertServices(categoryDoc._key, category.children, locale);
         }
       }
       
@@ -109,7 +131,9 @@ class ServiceCategoryService {
       // Create a map of existing services by name for quick lookup
       const existingServicesByName = {};
       existingServices.forEach(service => {
-        existingServicesByName[service[nameField]] = service;
+        if (service[nameField]) {
+          existingServicesByName[service[nameField]] = service;
+        }
       });
       
       // Process each service
@@ -132,8 +156,9 @@ class ServiceCategoryService {
           results.push(updatedService.new);
         } else {
           // Create new service
+          const serviceKey = this.sanitizeKey(`service_${categoryKey}_${i + 1}`);
           const serviceDoc = {
-            _key: `service_${categoryKey}_${i + 1}`,
+            _key: serviceKey,
             categoryId: categoryKey,
             order: i + 1
           };
@@ -146,7 +171,7 @@ class ServiceCategoryService {
           // Create edge from category to service
           await this.categoryServices.save({
             _from: `serviceCategories/${categoryKey}`,
-            _to: `services/${newService._key}`,
+            _to: `services/${serviceKey}`,
             order: i + 1
           });
         }

@@ -1,0 +1,254 @@
+{
+  "timestamp": "2025-03-11T01:51:34.475Z",
+  "summary": {
+    "totalTests": 13,
+    "passedTests": 13,
+    "percentage": 100
+  },
+  "results": {
+    "userService": [
+      {
+        "test": "User Creation",
+        "success": true,
+        "data": {
+          "userId": "4"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.369Z"
+      },
+      {
+        "test": "Search Users",
+        "success": true,
+        "data": {
+          "count": 2,
+          "pagination": {
+            "total": 2,
+            "limit": 10,
+            "offset": 0,
+            "pages": 1,
+            "currentPage": 1
+          }
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.380Z"
+      }
+    ],
+    "serviceCategoriesService": [
+      {
+        "test": "Get All Categories",
+        "success": true,
+        "data": {
+          "count": 0,
+          "categories": []
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.387Z"
+      },
+      {
+        "test": "Search Categories",
+        "success": true,
+        "data": {
+          "categories": 0,
+          "services": 0
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.392Z"
+      }
+    ],
+    "queryService": [
+      {
+        "test": "Create Query",
+        "success": true,
+        "data": {
+          "queryId": "4",
+          "text": "How do I apply for a health insurance card?"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.416Z"
+      },
+      {
+        "test": "Search Queries",
+        "success": true,
+        "data": {
+          "count": 2,
+          "pagination": {
+            "total": 2,
+            "limit": 10,
+            "offset": 0,
+            "pages": 1,
+            "currentPage": 1
+          }
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.422Z"
+      },
+      {
+        "test": "Add Query Feedback",
+        "success": true,
+        "data": {
+          "queryId": "4",
+          "feedback": {
+            "rating": 4,
+            "comment": "This was a helpful response"
+          }
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.430Z"
+      },
+      {
+        "test": "Mark Query Answered",
+        "success": true,
+        "data": {
+          "queryId": "4",
+          "isAnswered": true,
+          "responseTime": 1500
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.435Z"
+      }
+    ],
+    "sessionService": [
+      {
+        "test": "Create Session",
+        "success": true,
+        "data": {
+          "sessionId": "4",
+          "startTime": "2025-03-11T01:51:34.437Z"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.448Z"
+      }
+    ],
+    "analyticsService": [
+      {
+        "test": "Get Dashboard Analytics",
+        "success": true,
+        "data": {
+          "queries": {
+            "total": 1,
+            "unanswered": 1,
+            "answeredPercentage": 0,
+            "avgResponseTime": null
+          },
+          "categories": [
+            {
+              "categoryId": "health",
+              "name": null,
+              "count": 1
+            }
+          ],
+          "feedback": [
+            {
+              "total": 1,
+              "positive": 1,
+              "neutral": 0,
+              "negative": 0,
+              "positivePercentage": 100,
+              "negativePercentage": 0
+            }
+          ],
+          "users": [
+            {
+              "activeCount": 1
+            }
+          ]
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.458Z"
+      },
+      {
+        "test": "Get General Analytics",
+        "success": true,
+        "data": {
+          "queryCount": 1,
+          "feedbackCount": 1,
+          "avgRating": 4,
+          "timeDistribution": {
+            "7": 2
+          },
+          "categoryDistribution": {
+            "health": 1
+          },
+          "raw": [
+            {
+              "_key": "2",
+              "_id": "analytics/2",
+              "_rev": "_jWJkZfq---",
+              "type": "feedback",
+              "queryId": "4",
+              "timestamp": "2025-03-11T01:51:34.426Z",
+              "data": {
+                "rating": 4,
+                "comment": "This was a helpful response",
+                "providedAt": "2025-03-11T01:51:34.424Z"
+              }
+            },
+            {
+              "_key": "1",
+              "_id": "analytics/1",
+              "_rev": "_jWJkZeu---",
+              "type": "query",
+              "queryId": "4",
+              "timestamp": "2025-03-11T01:51:34.411Z",
+              "data": {
+                "categoryId": "health",
+                "responseTime": 0,
+                "isAnswered": false
+              }
+            }
+          ]
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.465Z"
+      },
+      {
+        "test": "Track Event",
+        "success": true,
+        "data": {
+          "_id": "events/265838",
+          "_key": "265838",
+          "_rev": "_jWJkZiS---"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.470Z"
+      },
+      {
+        "test": "Get Analytics Records",
+        "success": true,
+        "data": {
+          "count": 2,
+          "records": [
+            {
+              "_key": "2",
+              "_id": "analytics/2",
+              "_rev": "_jWJkZfq---",
+              "type": "feedback",
+              "queryId": "4",
+              "timestamp": "2025-03-11T01:51:34.426Z",
+              "data": {
+                "rating": 4,
+                "comment": "This was a helpful response",
+                "providedAt": "2025-03-11T01:51:34.424Z"
+              }
+            },
+            {
+              "_key": "1",
+              "_id": "analytics/1",
+              "_rev": "_jWJkZeu---",
+              "type": "query",
+              "queryId": "4",
+              "timestamp": "2025-03-11T01:51:34.411Z",
+              "data": {
+                "categoryId": "health",
+                "responseTime": 0,
+                "isAnswered": false
+              }
+            }
+          ]
+        },
+        "error": null,
+        "timestamp": "2025-03-11T01:51:34.474Z"
+      }
+    ]
+  }
+}

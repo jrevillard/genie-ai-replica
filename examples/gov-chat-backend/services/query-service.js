@@ -1,4 +1,5 @@
 // query-service.js
+require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 
@@ -6,10 +7,10 @@ const { v4: uuidv4 } = require('uuid');
 const initDB = () => {
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'chatbot_analytics',
+    databaseName: process.env.ARANGO_DB || 'node-services',
     auth: {
       username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
+      password: process.env.ARANGO_PASSWORD || 'test'
     }
   });
 
@@ -45,61 +46,87 @@ class QueryService {
         throw new Error('Missing required query data');
       }
 
-      // Prepare query document
-      const queryDoc = {
-        _key: queryData._key || `query_${Date.now()}_${uuidv4().substring(0, 8)}`,
+      // Create basic query document - let ArangoDB generate the key
+      const basicQueryDoc = {
         userId: queryData.userId,
         sessionId: queryData.sessionId,
         text: queryData.text,
         timestamp: queryData.timestamp || new Date().toISOString(),
-        responseTime: queryData.responseTime || 0,
-        categoryId: queryData.categoryId || null,
-        serviceId: queryData.serviceId || null,
-        isAnswered: queryData.isAnswered || false,
-        metadata: {
-          criteria: queryData.criteria || '',
-          tags: queryData.tags || []
-        }
+        isAnswered: false
       };
-
-      // Save query document
-      const query = await this.queries.save(queryDoc);
+      
+      console.log('Creating basic query document...');
+      const query = await this.queries.save(basicQueryDoc);
+      const queryId = query._key;
+      console.log(`Query created with auto-generated key: ${queryId}`);
+      
+      // Now add additional data if needed
+      const updateData = {};
+      
+      if (queryData.categoryId) updateData.categoryId = queryData.categoryId;
+      if (queryData.serviceId) updateData.serviceId = queryData.serviceId;
+      if (queryData.responseTime) updateData.responseTime = queryData.responseTime;
+      if (queryData.isAnswered !== undefined) updateData.isAnswered = queryData.isAnswered;
+      
+      // Add metadata
+      if (queryData.criteria || queryData.tags) {
+        updateData.metadata = {
+          criteria: queryData.criteria || '',
+          tags: Array.isArray(queryData.tags) ? queryData.tags : []
+        };
+      }
+      
+      // Update with additional data if needed
+      if (Object.keys(updateData).length > 0) {
+        console.log(`Updating query ${queryId} with additional data...`);
+        await this.queries.update(queryId, updateData);
+      }
 
       // Create edge between session and query
       if (queryData.sessionId) {
-        await this.db.collection('sessionQueries').save({
-          _from: `sessions/${queryData.sessionId}`,
-          _to: `queries/${query._key}`,
-          createdAt: new Date().toISOString()
-        }).catch(err => {
+        try {
+          console.log(`Creating edge between session ${queryData.sessionId} and query ${queryId}`);
+          await this.db.collection('sessionQueries').save({
+            _from: `sessions/${queryData.sessionId}`,
+            _to: `queries/${queryId}`,
+            createdAt: new Date().toISOString()
+          });
+        } catch (err) {
           // Ignore duplicate key errors
-          if (err.errorNum !== 1210) throw err;
-        });
+          if (err.errorNum !== 1210) console.error('Error creating session-query edge:', err);
+        }
       }
 
       // Create edge between query and category (if provided)
       if (queryData.categoryId) {
-        await this.db.collection('queryCategories').save({
-          _from: `queries/${query._key}`,
-          _to: `serviceCategories/${queryData.categoryId}`,
-          confidence: queryData.confidence || 1.0
-        }).catch(err => {
+        try {
+          console.log(`Creating edge between query ${queryId} and category ${queryData.categoryId}`);
+          await this.db.collection('queryCategories').save({
+            _from: `queries/${queryId}`,
+            _to: `serviceCategories/${queryData.categoryId}`,
+            confidence: queryData.confidence || 1.0
+          });
+        } catch (err) {
           // Ignore duplicate key errors
-          if (err.errorNum !== 1210) throw err;
-        });
+          if (err.errorNum !== 1210) console.error('Error creating query-category edge:', err);
+        }
       }
 
       // Update analytics if service is set
       if (this.analyticsService) {
         try {
-          await this.analyticsService.recordQuery(queryDoc);
+          await this.analyticsService.recordQuery({
+            ...query,
+            ...updateData
+          });
         } catch (error) {
           console.error('Error updating analytics:', error);
           // Continue even if analytics update fails
         }
       }
 
-      return query;
+      // Return the complete query document
+      return await this.queries.document(queryId);
     } catch (error) {
       console.error('Error creating query:', error);
       throw error;
@@ -245,7 +272,6 @@ class QueryService {
    */
   async searchQueries(criteria, limit = 20, offset = 0) {
     try {
-      const bindVars = { limit, offset };
       let filterConditions = [];
 
       // Build filter conditions based on criteria
@@ -308,9 +334,19 @@ class QueryService {
       }
 
       // If no specific criteria provided, return all queries
-      const filterQuery = filterConditions.length > 0
-        ? aql`FILTER ${aql.join(filterConditions, ' AND ')}`
-        : aql``;
+      let filterQuery;
+      if (filterConditions.length > 0) {
+        // Manually join the filter conditions with ' AND ' since aql.join is problematic
+        filterQuery = aql`FILTER `;
+        for (let i = 0; i < filterConditions.length; i++) {
+          if (i > 0) {
+            filterQuery = aql`${filterQuery} AND `;
+          }
+          filterQuery = aql`${filterQuery} ${filterConditions[i]}`;
+        }
+      } else {
+        filterQuery = aql``;
+      }
 
       // Build and execute the query
       const query = aql`
@@ -444,25 +480,31 @@ class QueryService {
         throw new Error('Missing required query data');
       }
       
-      // Prepare query document with criteria
-      const queryDoc = {
-        _key: queryData._key || `saved_query_${Date.now()}_${uuidv4().substring(0, 8)}`,
+      // Create basic query document - let ArangoDB generate the key
+      const basicQueryDoc = {
         userId: queryData.userId,
         text: queryData.text,
-        timestamp: queryData.timestamp || new Date().toISOString(),
-        categoryId: queryData.categoryId || null,
-        serviceId: queryData.serviceId || null,
-        metadata: {
-          criteria: queryData.criteria || '',
-          tags: queryData.tags || [],
-          isSaved: true,
-          name: queryData.name || `Query ${new Date().toLocaleString()}`,
-          description: queryData.description || ''
-        }
+        timestamp: queryData.timestamp || new Date().toISOString()
       };
       
-      // Save query document
-      return await this.queries.save(queryDoc);
+      // Add category and service if provided
+      if (queryData.categoryId) basicQueryDoc.categoryId = queryData.categoryId;
+      if (queryData.serviceId) basicQueryDoc.serviceId = queryData.serviceId;
+      
+      // Add metadata with isSaved flag
+      basicQueryDoc.metadata = {
+        criteria: queryData.criteria || '',
+        tags: Array.isArray(queryData.tags) ? queryData.tags : [],
+        isSaved: true,
+        name: queryData.name || `Query ${new Date().toISOString()}`,
+        description: queryData.description || ''
+      };
+      
+      console.log('Saving query with criteria...');
+      const query = await this.queries.save(basicQueryDoc);
+      console.log(`Query saved with auto-generated key: ${query._key}`);
+      
+      return query;
     } catch (error) {
       console.error('Error saving query with criteria:', error);
       throw error;
@@ -552,6 +594,10 @@ class QueryService {
       const services = recentQueries
         .filter(q => q.serviceId)
         .map(q => q.serviceId);
+      
+      if (categories.length === 0 && services.length === 0) {
+        return await this.getPopularQueries(limit);
+      }
       
       // Find recommendations based on categories and services
       const recommendationsQuery = aql`

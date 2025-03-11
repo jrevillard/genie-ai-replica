@@ -8,10 +8,10 @@ const fs = require('fs');
 const initDB = () => {
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'chatbot_analytics',
+    databaseName: process.env.ARANGO_DB || 'node-services',
     auth: {
       username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
+      password: process.env.ARANGO_PASSWORD || 'test'
     }
   });
 
@@ -38,18 +38,46 @@ class UserProfileService {
    */
   async createUserProfile(profileData, files = {}) {
     try {
-      const userId = profileData._key || `user_${uuidv4()}`;
+      // Ensure profileData is an object
+      if (typeof profileData === 'string') {
+        try {
+          profileData = JSON.parse(profileData);
+        } catch (error) {
+          console.error('Error parsing profile data string:', error);
+          profileData = {};
+        }
+      }
       
-      // Process and store file uploads
+      console.log('Creating user profile with data:', JSON.stringify(profileData).substring(0, 100) + '...');
+      
+      // Create a minimal document first - let ArangoDB generate the key
+      const basicDoc = {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Add essential user data if available
+      if (profileData.personalIdentification) {
+        basicDoc.personalIdentification = profileData.personalIdentification;
+      }
+      
+      console.log('Creating basic user document...');
+      const user = await this.users.save(basicDoc);
+      const userId = user._key;
+      console.log(`User created with auto-generated key: ${userId}`);
+      
+      // Process and store file uploads if any
       const processedData = await this.processProfileData(profileData, files, userId);
       
-      // Set creation and update timestamps
-      processedData._key = userId;
-      processedData.createdAt = new Date().toISOString();
-      processedData.updatedAt = new Date().toISOString();
-
-      // Create the user document
-      const user = await this.users.save(processedData);
+      // Remove any _key property to avoid conflicts
+      delete processedData._key;
+      
+      // Update with full processed data
+      if (Object.keys(processedData).length > 0) {
+        console.log(`Updating user ${userId} with full profile data...`);
+        const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
+        return updatedUser.new;
+      }
       
       return user;
     } catch (error) {
@@ -67,6 +95,16 @@ class UserProfileService {
    */
   async updateUserProfile(userId, profileData, files = {}) {
     try {
+      // Ensure profileData is an object
+      if (typeof profileData === 'string') {
+        try {
+          profileData = JSON.parse(profileData);
+        } catch (error) {
+          console.error('Error parsing profile data string:', error);
+          profileData = {};
+        }
+      }
+      
       // Check if user exists
       const userExists = await this.userExists(userId);
       if (!userExists) {
@@ -78,6 +116,9 @@ class UserProfileService {
       
       // Update the timestamp
       processedData.updatedAt = new Date().toISOString();
+
+      // Don't include _key in update data
+      delete processedData._key;
 
       // Update the user document
       const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
@@ -152,8 +193,25 @@ class UserProfileService {
    * @returns {Promise<Object>} Processed profile data
    */
   async processProfileData(profileData, files, userId) {
-    // Deep clone the profile data to avoid mutations
-    const processedData = JSON.parse(JSON.stringify(profileData));
+    // Ensure profileData is an object
+    if (typeof profileData === 'string') {
+      try {
+        profileData = JSON.parse(profileData);
+      } catch (error) {
+        console.error('Error parsing profile data in processProfileData:', error);
+        profileData = {};
+      }
+    }
+    
+    // Create a new object to avoid mutations
+    const processedData = {};
+    
+    // Copy all properties except _key
+    for (const key in profileData) {
+      if (key !== '_key') {
+        processedData[key] = profileData[key];
+      }
+    }
     
     // Process each section that might contain file uploads
     const sections = [
@@ -168,19 +226,37 @@ class UserProfileService {
       'transportation'
     ];
 
+    // Make sure each section exists in processedData if it exists in profileData
     for (const section of sections) {
+      if (profileData[section] && !processedData[section]) {
+        processedData[section] = {};
+      }
+    }
+
+    // Process files for each section
+    for (const section of sections) {
+      // Skip if section doesn't exist in processed data
       if (!processedData[section]) continue;
       
       // Process each field in the section
-      for (const field in processedData[section]) {
-        // Check if this field has a file upload
-        const fileKey = `${section}-${field}`;
-        if (files[fileKey]) {
-          // Store the file and set URL in profile data
-          const fileUrl = await this.storeFile(files[fileKey], userId, fileKey);
-          processedData[section][`${field}Url`] = fileUrl;
-          // Remove the file object from the data
-          delete processedData[section][field];
+      if (files && (Array.isArray(files) || typeof files === 'object')) {
+        const fileArray = Array.isArray(files) ? files : Object.values(files);
+        
+        for (const file of fileArray) {
+          // Check if this file belongs to this section
+          const fileNameParts = (file.fieldname || file.name || '').split('-');
+          if (fileNameParts.length >= 2 && fileNameParts[0] === section) {
+            const fieldName = fileNameParts[1];
+            try {
+              // Store the file and set URL in profile data
+              const fileUrl = await this.storeFile(file, userId, `${section}-${fieldName}`);
+              if (fileUrl) {
+                processedData[section][`${fieldName}Url`] = fileUrl;
+              }
+            } catch (error) {
+              console.error(`Error storing file for field ${section}-${fieldName}:`, error);
+            }
+          }
         }
       }
     }
@@ -196,22 +272,36 @@ class UserProfileService {
    * @returns {Promise<String>} File URL
    */
   async storeFile(file, userId, fieldName) {
-    // Create user directory if it doesn't exist
-    const userDir = path.join(this.uploadDir, userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
+    try {
+      // Create user directory if it doesn't exist
+      const userDir = path.join(this.uploadDir, userId);
+      if (!fs.existsSync(userDir)) {
+        fs.mkdirSync(userDir, { recursive: true });
+      }
+  
+      // Generate a unique filename
+      const fileExt = path.extname(file.originalname || file.name || 'unknown');
+      const fileName = `${fieldName}-${Date.now()}${fileExt}`;
+      const filePath = path.join(userDir, fileName);
+  
+      // Save the file - handle different file object formats
+      if (file.buffer) {
+        // If file has buffer property (multer memory storage)
+        await fs.promises.writeFile(filePath, file.buffer);
+      } else if (file.path) {
+        // If file has path property (multer disk storage)
+        const fileContent = await fs.promises.readFile(file.path);
+        await fs.promises.writeFile(filePath, fileContent);
+      } else {
+        throw new Error('Unsupported file object format');
+      }
+  
+      // Return file URL (relative to upload dir)
+      return `/uploads/${userId}/${fileName}`;
+    } catch (error) {
+      console.error(`Error storing file for user ${userId}:`, error);
+      return null; // Return null instead of throwing to prevent the entire process from failing
     }
-
-    // Generate a unique filename
-    const fileExt = path.extname(file.originalname);
-    const fileName = `${fieldName}-${Date.now()}${fileExt}`;
-    const filePath = path.join(userDir, fileName);
-
-    // Save the file
-    await fs.promises.writeFile(filePath, file.buffer);
-
-    // Return file URL (relative to upload dir)
-    return `/uploads/${userId}/${fileName}`;
   }
 
   /**
@@ -268,9 +358,19 @@ class UserProfileService {
       }
 
       // If no specific criteria provided, return all users
-      const filterQuery = filterConditions.length > 0
-        ? aql`FILTER ${aql.join(filterConditions, ' AND ')}`
-        : aql``;
+      let filterQuery;
+      if (filterConditions.length > 0) {
+        // Manually join the filter conditions with ' AND ' since aql.join is problematic
+        filterQuery = aql`FILTER `;
+        for (let i = 0; i < filterConditions.length; i++) {
+          if (i > 0) {
+            filterQuery = aql`${filterQuery} AND `;
+          }
+          filterQuery = aql`${filterQuery} ${filterConditions[i]}`;
+        }
+      } else {
+        filterQuery = aql``;
+      }
 
       // Build and execute the query
       const query = aql`

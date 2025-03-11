@@ -1,4 +1,5 @@
 // session-service.js
+require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 
@@ -6,10 +7,10 @@ const { v4: uuidv4 } = require('uuid');
 const initDB = () => {
   const db = new Database({
     url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'chatbot_analytics',
+    databaseName: process.env.ARANGO_DB || 'node-services',
     auth: {
       username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || ''
+      password: process.env.ARANGO_PASSWORD || 'test'
     }
   });
 
@@ -33,27 +34,50 @@ class SessionService {
    */
   async createSession(userId, deviceInfo = {}, ipAddress = '') {
     try {
-      // Create session document
-      const sessionDoc = {
-        _key: `session_${uuidv4()}`,
+      // Create basic session document - let ArangoDB generate the key
+      const basicSessionDoc = {
         userId,
         startTime: new Date().toISOString(),
-        deviceInfo,
-        ipAddress,
         active: true
       };
-
-      // Save the session
-      const session = await this.sessions.save(sessionDoc);
+      
+      console.log(`Creating session for user ${userId}...`);
+      const session = await this.sessions.save(basicSessionDoc);
+      const sessionId = session._key;
+      console.log(`Session created with auto-generated key: ${sessionId}`);
+      
+      // Add additional information if provided
+      const updateData = {};
+      
+      if (deviceInfo && typeof deviceInfo === 'object' && Object.keys(deviceInfo).length > 0) {
+        updateData.deviceInfo = deviceInfo;
+      }
+      
+      if (ipAddress && typeof ipAddress === 'string') {
+        updateData.ipAddress = ipAddress;
+      }
+      
+      // Update with additional data if needed
+      if (Object.keys(updateData).length > 0) {
+        console.log(`Updating session ${sessionId} with additional data...`);
+        await this.sessions.update(sessionId, updateData);
+      }
 
       // Create edge between user and session
-      await this.userSessions.save({
-        _from: `users/${userId}`,
-        _to: `sessions/${session._key}`,
-        createdAt: new Date().toISOString()
-      });
+      try {
+        console.log(`Creating edge between user ${userId} and session ${sessionId}`);
+        await this.userSessions.save({
+          _from: `users/${userId}`,
+          _to: `sessions/${sessionId}`,
+          createdAt: new Date().toISOString()
+        });
+      } catch (error) {
+        // If creating the edge fails, we'll log but continue
+        console.error(`Error creating user-session edge for user ${userId}:`, error);
+      }
 
-      return session;
+      // Return the full session document
+      return await this.sessions.document(sessionId);
     } catch (error) {
       console.error(`Error creating session for user ${userId}:`, error);
       throw error;

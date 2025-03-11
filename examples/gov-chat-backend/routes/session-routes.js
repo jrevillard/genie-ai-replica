@@ -7,6 +7,8 @@ const sessionService = new SessionService();
 // Create a new session
 router.post('/', async (req, res) => {
   try {
+    // In your route handler before calling the service
+    console.log("Request body:", JSON.stringify(req.body));
     const session = await sessionService.createSession(req.body.userId, req.body.deviceInfo, req.ip);
     res.status(201).json(session);
   } catch (error) {
@@ -17,6 +19,8 @@ router.post('/', async (req, res) => {
 // Get session by ID
 router.get('/:sessionId', async (req, res) => {
   try {
+    // In your route handler before calling the service
+    console.log("Request body:", JSON.stringify(req.body));
     const session = await sessionService.getSession(req.params.sessionId);
     res.json(session);
   } catch (error) {
@@ -27,6 +31,8 @@ router.get('/:sessionId', async (req, res) => {
 // End a session
 router.patch('/:sessionId/end', async (req, res) => {
   try {
+    // In your route handler before calling the service
+    console.log("Request body:", JSON.stringify(req.body));
     const session = await sessionService.endSession(req.params.sessionId);
     res.json(session);
   } catch (error) {
@@ -37,6 +43,8 @@ router.patch('/:sessionId/end', async (req, res) => {
 // Keep a session alive
 router.patch('/:sessionId/keepalive', async (req, res) => {
   try {
+    // In your route handler before calling the service
+    console.log("Request body:", JSON.stringify(req.body));
     const session = await sessionService.keepSessionAlive(req.params.sessionId);
     res.json(session);
   } catch (error) {
@@ -48,6 +56,8 @@ router.patch('/:sessionId/keepalive', async (req, res) => {
 router.get('/user/:userId', async (req, res) => {
   try {
     const activeOnly = req.query.activeOnly === 'true';
+    // In your route handler before calling the service
+    console.log("Request body:", JSON.stringify(req.body));
     const sessions = await sessionService.getUserSessions(req.params.userId, activeOnly);
     res.json(sessions);
   } catch (error) {

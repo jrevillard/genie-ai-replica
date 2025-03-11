@@ -4,7 +4,83 @@ const AnalyticsService = require('../services/analytics-service');
 
 const analyticsService = new AnalyticsService();
 
-// Get dashboard analytics
+/**
+ * @swagger
+ * /analytics/dashboard:
+ *   get:
+ *     summary: Get dashboard analytics
+ *     description: Retrieves analytics data for the dashboard within a date range
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Start date (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date (ISO format)
+ *     responses:
+ *       200:
+ *         description: Dashboard analytics data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 queries:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     unanswered:
+ *                       type: integer
+ *                     answeredPercentage:
+ *                       type: number
+ *                     avgResponseTime:
+ *                       type: number
+ *                 categories:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       categoryId:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       count:
+ *                         type: integer
+ *                 feedback:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       total:
+ *                         type: integer
+ *                       positive:
+ *                         type: integer
+ *                       neutral:
+ *                         type: integer
+ *                       negative:
+ *                         type: integer
+ *                       positivePercentage:
+ *                         type: number
+ *                       negativePercentage:
+ *                         type: number
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       activeCount:
+ *                         type: integer
+ *       500:
+ *         description: Server error
+ */
 router.get('/dashboard', async (req, res) => {
   try {
     const startDate = req.query.startDate || new Date().toISOString().split('T')[0];
@@ -20,7 +96,56 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// Get analytics for all periods
+/**
+ * @swagger
+ * /analytics:
+ *   get:
+ *     summary: Get general analytics
+ *     description: Retrieves general analytics data with optional filters and date range
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date (ISO format)
+ *       - in: query
+ *         name: filters
+ *         schema:
+ *           type: string
+ *         description: JSON string of filter criteria
+ *     responses:
+ *       200:
+ *         description: General analytics data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 queryCount:
+ *                   type: integer
+ *                 feedbackCount:
+ *                   type: integer
+ *                 avgRating:
+ *                   type: number
+ *                 timeDistribution:
+ *                   type: object
+ *                 categoryDistribution:
+ *                   type: object
+ *                 raw:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       500:
+ *         description: Server error
+ */
 router.get('/', async (req, res) => {
   try {
     const startDate = req.query.startDate;
@@ -37,7 +162,57 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get time series data
+/**
+ * @swagger
+ * /analytics/timeseries:
+ *   get:
+ *     summary: Get time series data
+ *     description: Retrieves time series data for a specific metric, interval, and date range
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: metric
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Metric name (e.g., queries, feedback)
+ *       - in: query
+ *         name: interval
+ *         schema:
+ *           type: string
+ *           enum: [hourly, daily, weekly, monthly]
+ *           default: daily
+ *         description: Time interval for grouping
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date (ISO format)
+ *     responses:
+ *       200:
+ *         description: Time series data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   date:
+ *                     type: string
+ *                     format: date-time
+ *                   value:
+ *                     type: number
+ *       500:
+ *         description: Server error
+ */
 router.get('/timeseries', async (req, res) => {
   try {
     const { metric, interval = 'daily', startDate, endDate } = req.query;
@@ -49,7 +224,44 @@ router.get('/timeseries', async (req, res) => {
   }
 });
 
-// Record an event
+/**
+ * @swagger
+ * /analytics/events:
+ *   post:
+ *     summary: Track an event
+ *     description: Records a user event for analytics
+ *     tags: [Analytics]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - eventType
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: ID of the user
+ *               eventType:
+ *                 type: string
+ *                 description: Type of event (e.g., pageView, buttonClick)
+ *               eventData:
+ *                 type: object
+ *                 description: Additional event data
+ *     responses:
+ *       201:
+ *         description: Event tracked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Event'
+ *       400:
+ *         description: Missing required fields
+ *       500:
+ *         description: Server error
+ */
 router.post('/events', async (req, res) => {
   try {
     const { userId, eventType, eventData } = req.body;
@@ -67,7 +279,38 @@ router.post('/events', async (req, res) => {
   }
 });
 
-// Get analytics records - new endpoint for testing
+/**
+ * @swagger
+ * /analytics/records:
+ *   get:
+ *     summary: Get analytics records
+ *     description: Retrieves analytics records with pagination
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Maximum number of results to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of results to skip for pagination
+ *     responses:
+ *       200:
+ *         description: Analytics records
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Analytics'
+ *       500:
+ *         description: Server error
+ */
 router.get('/records', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
@@ -91,7 +334,38 @@ router.get('/records', async (req, res) => {
   }
 });
 
-// Get events records - new endpoint for testing
+/**
+ * @swagger
+ * /analytics/events:
+ *   get:
+ *     summary: Get events records
+ *     description: Retrieves event records with pagination
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Maximum number of results to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of results to skip for pagination
+ *     responses:
+ *       200:
+ *         description: Event records
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Event'
+ *       500:
+ *         description: Server error
+ */
 router.get('/events', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;

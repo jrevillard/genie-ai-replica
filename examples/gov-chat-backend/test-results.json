@@ -1,8 +1,8 @@
 {
-  "timestamp": "2025-03-11T01:51:34.475Z",
+  "timestamp": "2025-03-11T03:24:47.702Z",
   "summary": {
-    "totalTests": 13,
-    "passedTests": 13,
+    "totalTests": 19,
+    "passedTests": 19,
     "percentage": 100
   },
   "results": {
@@ -11,18 +11,18 @@
         "test": "User Creation",
         "success": true,
         "data": {
-          "userId": "4"
+          "userId": "6"
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.369Z"
+        "timestamp": "2025-03-11T03:24:47.050Z"
       },
       {
         "test": "Search Users",
         "success": true,
         "data": {
-          "count": 2,
+          "count": 4,
           "pagination": {
-            "total": 2,
+            "total": 4,
             "limit": 10,
             "offset": 0,
             "pages": 1,
@@ -30,7 +30,105 @@
           }
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.380Z"
+        "timestamp": "2025-03-11T03:24:47.061Z"
+      }
+    ],
+    "serviceCategoryService": [
+      {
+        "test": "Initialize Default Categories",
+        "success": true,
+        "data": {
+          "message": "Categories already initialized",
+          "categoriesCount": 13
+        },
+        "error": null,
+        "timestamp": "2025-03-11T03:24:47.067Z"
+      },
+      {
+        "test": "Get All Service Categories",
+        "success": true,
+        "data": {
+          "count": 13,
+          "categories": [
+            {
+              "catKey": "13",
+              "catCode": "identity",
+              "name": "Identity & Civil Registration",
+              "children": [
+                "Birth Registration",
+                "National ID Cards",
+                "Passport Services",
+                "Vital Records"
+              ]
+            },
+            {
+              "catKey": "14",
+              "catCode": "health",
+              "name": "Healthcare & Social Services",
+              "children": [
+                "Medical Services",
+                "Social Assistance",
+                "Healthcare Programs",
+                "Mental Health"
+              ]
+            },
+            {
+              "catKey": "15",
+              "catCode": "education",
+              "name": "Education & Learning",
+              "children": [
+                "K-12 Schools",
+                "Higher Education",
+                "Adult Learning",
+                "Educational Resources"
+              ]
+            }
+          ]
+        },
+        "error": null,
+        "timestamp": "2025-03-11T03:24:47.072Z"
+      },
+      {
+        "test": "Get Category by Key",
+        "success": true,
+        "data": {
+          "catKey": "13",
+          "name": "Identity & Civil Registration",
+          "childrenCount": 4
+        },
+        "error": null,
+        "timestamp": "2025-03-11T03:24:47.076Z"
+      },
+      {
+        "test": "Search Service Categories",
+        "success": true,
+        "data": {
+          "categories": 0,
+          "services": 0,
+          "searchTerm": "Healthcare"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T03:24:47.080Z"
+      },
+      {
+        "test": "Create/Update Categories",
+        "success": true,
+        "data": {
+          "categoriesCount": 1,
+          "testCategoryKey": "test_cat_1741663487080"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T03:24:47.103Z"
+      },
+      {
+        "test": "Delete Category",
+        "success": true,
+        "data": {
+          "message": "Category 26 deleted successfully",
+          "deletedKey": "26"
+        },
+        "error": null,
+        "timestamp": "2025-03-11T03:24:47.621Z"
       }
     ],
     "serviceCategoriesService": [
@@ -38,21 +136,55 @@
         "test": "Get All Categories",
         "success": true,
         "data": {
-          "count": 0,
-          "categories": []
+          "count": 13,
+          "categories": [
+            {
+              "catKey": "13",
+              "catCode": "identity",
+              "name": "Identity & Civil Registration",
+              "children": [
+                "Birth Registration",
+                "National ID Cards",
+                "Passport Services",
+                "Vital Records"
+              ]
+            },
+            {
+              "catKey": "14",
+              "catCode": "health",
+              "name": "Healthcare & Social Services",
+              "children": [
+                "Medical Services",
+                "Social Assistance",
+                "Healthcare Programs",
+                "Mental Health"
+              ]
+            },
+            {
+              "catKey": "15",
+              "catCode": "education",
+              "name": "Education & Learning",
+              "children": [
+                "K-12 Schools",
+                "Higher Education",
+                "Adult Learning",
+                "Educational Resources"
+              ]
+            }
+          ]
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.387Z"
+        "timestamp": "2025-03-11T03:24:47.629Z"
       },
       {
         "test": "Search Categories",
         "success": true,
         "data": {
-          "categories": 0,
-          "services": 0
+          "categories": 1,
+          "services": 2
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.392Z"
+        "timestamp": "2025-03-11T03:24:47.634Z"
       }
     ],
     "queryService": [
@@ -60,19 +192,20 @@
         "test": "Create Query",
         "success": true,
         "data": {
-          "queryId": "4",
-          "text": "How do I apply for a health insurance card?"
+          "queryId": "6",
+          "text": "How do I apply for a health insurance card?",
+          "categoryId": "14"
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.416Z"
+        "timestamp": "2025-03-11T03:24:47.651Z"
       },
       {
         "test": "Search Queries",
         "success": true,
         "data": {
-          "count": 2,
+          "count": 4,
           "pagination": {
-            "total": 2,
+            "total": 4,
             "limit": 10,
             "offset": 0,
             "pages": 1,
@@ -80,31 +213,31 @@
           }
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.422Z"
+        "timestamp": "2025-03-11T03:24:47.657Z"
       },
       {
         "test": "Add Query Feedback",
         "success": true,
         "data": {
-          "queryId": "4",
+          "queryId": "6",
           "feedback": {
             "rating": 4,
             "comment": "This was a helpful response"
           }
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.430Z"
+        "timestamp": "2025-03-11T03:24:47.664Z"
       },
       {
         "test": "Mark Query Answered",
         "success": true,
         "data": {
-          "queryId": "4",
+          "queryId": "6",
           "isAnswered": true,
           "responseTime": 1500
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.435Z"
+        "timestamp": "2025-03-11T03:24:47.669Z"
       }
     ],
     "sessionService": [
@@ -112,11 +245,11 @@
         "test": "Create Session",
         "success": true,
         "data": {
-          "sessionId": "4",
-          "startTime": "2025-03-11T01:51:34.437Z"
+          "sessionId": "6",
+          "startTime": "2025-03-11T03:24:47.670Z"
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.448Z"
+        "timestamp": "2025-03-11T03:24:47.680Z"
       }
     ],
     "analyticsService": [
@@ -125,22 +258,27 @@
         "success": true,
         "data": {
           "queries": {
-            "total": 1,
-            "unanswered": 1,
+            "total": 3,
+            "unanswered": 3,
             "answeredPercentage": 0,
             "avgResponseTime": null
           },
           "categories": [
             {
+              "categoryId": "14",
+              "name": "Healthcare & Social Services",
+              "count": 1
+            },
+            {
               "categoryId": "health",
               "name": null,
-              "count": 1
+              "count": 2
             }
           ],
           "feedback": [
             {
-              "total": 1,
-              "positive": 1,
+              "total": 3,
+              "positive": 3,
               "neutral": 0,
               "negative": 0,
               "positivePercentage": 100,
@@ -154,22 +292,76 @@
           ]
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.458Z"
+        "timestamp": "2025-03-11T03:24:47.690Z"
       },
       {
         "test": "Get General Analytics",
         "success": true,
         "data": {
-          "queryCount": 1,
-          "feedbackCount": 1,
+          "queryCount": 3,
+          "feedbackCount": 3,
           "avgRating": 4,
           "timeDistribution": {
-            "7": 2
+            "7": 2,
+            "8": 4
           },
           "categoryDistribution": {
-            "health": 1
+            "14": 1,
+            "health": 2
           },
           "raw": [
+            {
+              "_key": "6",
+              "_id": "analytics/6",
+              "_rev": "_jWK5vo2---",
+              "type": "feedback",
+              "queryId": "6",
+              "timestamp": "2025-03-11T03:24:47.661Z",
+              "data": {
+                "rating": 4,
+                "comment": "This was a helpful response",
+                "providedAt": "2025-03-11T03:24:47.658Z"
+              }
+            },
+            {
+              "_key": "5",
+              "_id": "analytics/5",
+              "_rev": "_jWK5vo----",
+              "type": "query",
+              "queryId": "6",
+              "timestamp": "2025-03-11T03:24:47.647Z",
+              "data": {
+                "categoryId": "14",
+                "responseTime": 0,
+                "isAnswered": false
+              }
+            },
+            {
+              "_key": "4",
+              "_id": "analytics/4",
+              "_rev": "_jWKNHbq---",
+              "type": "feedback",
+              "queryId": "5",
+              "timestamp": "2025-03-11T02:36:02.907Z",
+              "data": {
+                "rating": 4,
+                "comment": "This was a helpful response",
+                "providedAt": "2025-03-11T02:36:02.904Z"
+              }
+            },
+            {
+              "_key": "3",
+              "_id": "analytics/3",
+              "_rev": "_jWKNHau---",
+              "type": "query",
+              "queryId": "5",
+              "timestamp": "2025-03-11T02:36:02.892Z",
+              "data": {
+                "categoryId": "health",
+                "responseTime": 0,
+                "isAnswered": false
+              }
+            },
             {
               "_key": "2",
               "_id": "analytics/2",
@@ -199,55 +391,68 @@
           ]
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.465Z"
+        "timestamp": "2025-03-11T03:24:47.695Z"
       },
       {
         "test": "Track Event",
         "success": true,
         "data": {
-          "_id": "events/265838",
-          "_key": "265838",
-          "_rev": "_jWJkZiS---"
+          "_id": "events/268762",
+          "_key": "268762",
+          "_rev": "_jWK5vrG---"
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.470Z"
+        "timestamp": "2025-03-11T03:24:47.699Z"
       },
       {
         "test": "Get Analytics Records",
         "success": true,
         "data": {
-          "count": 2,
+          "count": 6,
           "records": [
             {
-              "_key": "2",
-              "_id": "analytics/2",
-              "_rev": "_jWJkZfq---",
+              "_key": "6",
+              "_id": "analytics/6",
+              "_rev": "_jWK5vo2---",
               "type": "feedback",
-              "queryId": "4",
-              "timestamp": "2025-03-11T01:51:34.426Z",
+              "queryId": "6",
+              "timestamp": "2025-03-11T03:24:47.661Z",
               "data": {
                 "rating": 4,
                 "comment": "This was a helpful response",
-                "providedAt": "2025-03-11T01:51:34.424Z"
+                "providedAt": "2025-03-11T03:24:47.658Z"
               }
             },
             {
-              "_key": "1",
-              "_id": "analytics/1",
-              "_rev": "_jWJkZeu---",
+              "_key": "5",
+              "_id": "analytics/5",
+              "_rev": "_jWK5vo----",
               "type": "query",
-              "queryId": "4",
-              "timestamp": "2025-03-11T01:51:34.411Z",
+              "queryId": "6",
+              "timestamp": "2025-03-11T03:24:47.647Z",
               "data": {
-                "categoryId": "health",
+                "categoryId": "14",
                 "responseTime": 0,
                 "isAnswered": false
+              }
+            },
+            {
+              "_key": "4",
+              "_id": "analytics/4",
+              "_rev": "_jWKNHbq---",
+              "type": "feedback",
+              "queryId": "5",
+              "timestamp": "2025-03-11T02:36:02.907Z",
+              "data": {
+                "rating": 4,
+                "comment": "This was a helpful response",
+                "providedAt": "2025-03-11T02:36:02.904Z"
               }
             }
           ]
         },
         "error": null,
-        "timestamp": "2025-03-11T01:51:34.474Z"
+        "timestamp": "2025-03-11T03:24:47.702Z"
       }
     ]
   }

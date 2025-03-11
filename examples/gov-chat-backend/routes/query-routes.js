@@ -19,6 +19,55 @@ router.use((req, res, next) => {
   next();
 });
 
+/**
+ * @swagger
+ * /queries:
+ *   post:
+ *     summary: Create a new query
+ *     description: Creates a new query and records it in analytics
+ *     tags: [Queries]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - sessionId
+ *               - text
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: ID of the user making the query
+ *               sessionId:
+ *                 type: string
+ *                 description: ID of the current session
+ *               text:
+ *                 type: string
+ *                 description: The query text
+ *               categoryId:
+ *                 type: string
+ *                 description: Category ID for the query
+ *               serviceId:
+ *                 type: string
+ *                 description: Service ID for the query
+ *               timestamp:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Timestamp for the query (defaults to now)
+ *     responses:
+ *       201:
+ *         description: Query created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Query'
+ *       400:
+ *         description: Missing required fields
+ *       500:
+ *         description: Server error
+ */
 // Submit a query
 router.post('/', async (req, res) => {
   try {
@@ -31,6 +80,32 @@ router.post('/', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /queries/{queryId}:
+ *   get:
+ *     summary: Get query by ID
+ *     description: Retrieves a query by its unique identifier
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *     responses:
+ *       200:
+ *         description: Query retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Query'
+ *       404:
+ *         description: Query not found
+ *       500:
+ *         description: Server error
+ */
 // Get query by ID
 router.get('/:queryId', async (req, res) => {
   try {
@@ -43,6 +118,51 @@ router.get('/:queryId', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /queries/{queryId}/feedback:
+ *   post:
+ *     summary: Add feedback to a query
+ *     description: Adds user feedback to a query and records it in analytics
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - rating
+ *             properties:
+ *               rating:
+ *                 type: number
+ *                 minimum: 1
+ *                 maximum: 5
+ *                 description: Rating from 1 to 5
+ *               comment:
+ *                 type: string
+ *                 description: Optional feedback comment
+ *     responses:
+ *       200:
+ *         description: Feedback added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Query'
+ *       400:
+ *         description: Missing required fields
+ *       404:
+ *         description: Query not found
+ *       500:
+ *         description: Server error
+ */
 // Add feedback to a query
 router.post('/:queryId/feedback', async (req, res) => {
   try {
@@ -55,6 +175,41 @@ router.post('/:queryId/feedback', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /queries/{queryId}/answered:
+ *   patch:
+ *     summary: Mark a query as answered (PATCH)
+ *     description: Updates a query to mark it as answered with response time
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               responseTime:
+ *                 type: number
+ *                 description: Response time in milliseconds
+ *     responses:
+ *       200:
+ *         description: Query marked as answered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Query'
+ *       404:
+ *         description: Query not found
+ *       500:
+ *         description: Server error
+ */
 // Mark a query as answered - support both PATCH and PUT
 router.patch('/:queryId/answered', async (req, res) => {
   try {
@@ -67,6 +222,41 @@ router.patch('/:queryId/answered', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /queries/{queryId}/answered:
+ *   put:
+ *     summary: Mark a query as answered (PUT)
+ *     description: Updates a query to mark it as answered with response time
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               responseTime:
+ *                 type: number
+ *                 description: Response time in milliseconds
+ *     responses:
+ *       200:
+ *         description: Query marked as answered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Query'
+ *       404:
+ *         description: Query not found
+ *       500:
+ *         description: Server error
+ */
 // Mark a query as answered (PUT method for test compatibility)
 router.put('/:queryId/answered', async (req, res) => {
   try {
@@ -83,6 +273,96 @@ router.put('/:queryId/answered', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /queries:
+ *   get:
+ *     summary: Search queries
+ *     description: Search for queries based on various criteria with pagination
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Maximum number of results to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of results to skip for pagination
+ *       - in: query
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         description: Filter by user ID
+ *       - in: query
+ *         name: sessionId
+ *         schema:
+ *           type: string
+ *         description: Filter by session ID
+ *       - in: query
+ *         name: text
+ *         schema:
+ *           type: string
+ *         description: Filter by query text (partial match)
+ *       - in: query
+ *         name: categoryId
+ *         schema:
+ *           type: string
+ *         description: Filter by category ID
+ *       - in: query
+ *         name: serviceId
+ *         schema:
+ *           type: string
+ *         description: Filter by service ID
+ *       - in: query
+ *         name: isAnswered
+ *         schema:
+ *           type: boolean
+ *         description: Filter by answered status
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter by start date
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter by end date
+ *     responses:
+ *       200:
+ *         description: Search results with pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 queries:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Query'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     pages:
+ *                       type: integer
+ *                     currentPage:
+ *                       type: integer
+ *       500:
+ *         description: Server error
+ */
 // Search queries
 router.get('/', async (req, res) => {
   try {

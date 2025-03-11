@@ -149,12 +149,198 @@ async function testServiceCategories() {
   return { results };
 }
 
+// Tests for Service Category Service
+async function testServiceCategoryService() {
+  console.log('\n🧪 TESTING SERVICE CATEGORY SERVICE');
+  const results = [];
+  let categoryData = null;
+  
+  // Test 1: Initialize Default Categories - only initialize if needed
+  try {
+    console.log('Testing categories initialization...');
+    // First check if categories already exist
+    const checkResponse = await api.get('/service-categories');
+    if (checkResponse.data && checkResponse.data.length > 0) {
+      console.log('Categories already exist, skipping initialization');
+      results.push(formatResult('Initialize Default Categories', true, {
+        message: 'Categories already initialized',
+        categoriesCount: checkResponse.data.length
+      }));
+    } else {
+      console.log('No categories found, performing initialization...');
+      const response = await api.post('/service-categories/init');
+      results.push(formatResult('Initialize Default Categories', true, {
+        message: response.data.message,
+        categoriesCreated: response.data.categoriesCreated
+      }));
+      console.log(`✅ Default categories initialized with ${response.data.categoriesCreated} categories`);
+    }
+  } catch (error) {
+    results.push(formatResult('Initialize Default Categories', false, null, error));
+    console.error('❌ Initialization of default categories failed:', error.message);
+  }
+  
+  // Test 2: Get All Categories
+  try {
+    console.log('Testing retrieval of all categories...');
+    const response = await api.get('/service-categories');
+    
+    categoryData = response.data;
+    const categoriesCount = response.data?.length || 0;
+    results.push(formatResult('Get All Service Categories', true, { 
+      count: categoriesCount,
+      categories: response.data?.slice(0, 3) // Just include first 3 for brevity
+    }));
+    console.log(`✅ Retrieved ${categoriesCount} service categories`);
+  } catch (error) {
+    results.push(formatResult('Get All Service Categories', false, null, error));
+    console.error('❌ Service category retrieval failed:', error.message);
+  }
+  
+  // Test 3: Get Category by Key
+  if (categoryData && categoryData.length > 0) {
+    // Get the first category's key for testing
+    const categoryKey = categoryData[0].catKey;
+    try {
+      console.log(`Testing retrieval of category ${categoryKey}...`);
+      const response = await api.get(`/service-categories/${categoryKey}`);
+      
+      results.push(formatResult('Get Category by Key', true, {
+        catKey: response.data.catKey,
+        name: response.data.name,
+        childrenCount: response.data.children?.length || 0
+      }));
+      console.log(`✅ Retrieved category ${categoryKey} with ${response.data.children?.length || 0} services`);
+    } catch (error) {
+      results.push(formatResult('Get Category by Key', false, null, error));
+      console.error(`❌ Retrieval of category ${categoryKey} failed:`, error.message);
+    }
+  } else {
+    results.push(formatResult('Get Category by Key', false, null, 'No category key available for testing'));
+    console.error('❌ Retrieval of category failed: No category key available');
+  }
+  
+  // Test 4: Search Categories
+  try {
+    console.log('Testing service category search...');
+    // Find a suitable search term from available categories
+    let searchTerm = 'health';
+    if (categoryData && categoryData.length > 0) {
+      // Find the first category with "health" in it, or use the first category
+      const healthCategory = categoryData.find(cat => 
+        cat.name.toLowerCase().includes('health') || cat.catCode?.toLowerCase().includes('health')
+      );
+      if (healthCategory) {
+        searchTerm = healthCategory.name.split(' ')[0]; // Use the first word of the name
+      } else {
+        searchTerm = categoryData[0].name.split(' ')[0];
+      }
+    }
+    
+    const response = await api.get('/service-categories/search', {
+      params: { q: searchTerm }
+    });
+    
+    results.push(formatResult('Search Service Categories', true, { 
+      categories: response.data?.categories?.length || 0,
+      services: response.data?.services?.length || 0,
+      searchTerm
+    }));
+    console.log(`✅ Search for "${searchTerm}" returned ${response.data?.categories?.length || 0} categories and ${response.data?.services?.length || 0} services`);
+  } catch (error) {
+    results.push(formatResult('Search Service Categories', false, null, error));
+    console.error('❌ Service category search failed:', error.message);
+  }
+  
+  // Generate a unique test category key to avoid conflicts
+  const testCategoryKey = `test_cat_${Date.now()}`;
+  
+  // Test 5: Create/Update Categories
+  try {
+    console.log(`Testing category creation/update with key ${testCategoryKey}...`);
+    const testCategories = [
+      {
+        catKey: testCategoryKey,
+        name: 'Test Category',
+        children: ['Test Service 1', 'Test Service 2']
+      }
+    ];
+    
+    const response = await api.post('/service-categories', {
+      categories: testCategories
+    });
+    
+    results.push(formatResult('Create/Update Categories', true, {
+      categoriesCount: response.data?.length || 0,
+      testCategoryKey
+    }));
+    console.log(`✅ Created/updated ${response.data?.length || 0} categories with key ${testCategoryKey}`);
+    
+    // Wait a moment before proceeding to deletion
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Test 6: Delete Category (for cleanup)
+    try {
+      console.log(`Testing category deletion for ${testCategoryKey}...`);
+      // First get all categories to find the one we just created (might have a different key)
+      const allCategoriesResponse = await api.get('/service-categories');
+      const createdCategory = allCategoriesResponse.data.find(cat => 
+        cat.catCode === testCategoryKey || cat.name === 'Test Category'
+      );
+      
+      if (createdCategory) {
+        const deleteKey = createdCategory.catKey;
+        console.log(`Found test category with key ${deleteKey}, attempting deletion...`);
+        const deleteResponse = await api.delete(`/service-categories/${deleteKey}`);
+        
+        results.push(formatResult('Delete Category', true, {
+          message: deleteResponse.data.message,
+          deletedKey: deleteKey
+        }));
+        console.log(`✅ Deleted test category ${deleteKey}: ${deleteResponse.data.message}`);
+      } else {
+        results.push(formatResult('Delete Category', false, null, 'Could not find the test category for deletion'));
+        console.error(`❌ Could not find the test category with key ${testCategoryKey} for deletion`);
+      }
+    } catch (error) {
+      results.push(formatResult('Delete Category', false, null, error));
+      console.error('❌ Category deletion failed:', error.message);
+    }
+  } catch (error) {
+    results.push(formatResult('Create/Update Categories', false, null, error));
+    console.error('❌ Category creation/update failed:', error.message);
+  }
+  
+  return { results, categoryData };
+}
+
 // Tests for Query Service
-async function testQueryService(userId) {
+async function testQueryService(userId, categoryData) {
   console.log('\n🧪 TESTING QUERY SERVICE');
   const results = [];
   let queryId = null;
   let sessionId = `test_session_${Date.now()}`; // Mock session ID
+  
+  // Find a valid health-related category for the query
+  let categoryId = 'health'; // Default fallback
+  if (categoryData && categoryData.length > 0) {
+    // Try to find a health-related category
+    const healthCategory = categoryData.find(cat => 
+      cat.name.toLowerCase().includes('health') || 
+      cat.catCode?.toLowerCase().includes('health')
+    );
+    
+    if (healthCategory) {
+      categoryId = healthCategory.catKey; // Use the actual database key
+      console.log(`Using health category with key: ${categoryId}`);
+    } else {
+      // Just use the first category
+      categoryId = categoryData[0].catKey;
+      console.log(`No health category found, using first available category: ${categoryId}`);
+    }
+  } else {
+    console.log(`No category data available, using default category ID: ${categoryId}`);
+  }
   
   // Test 1: Create Query
   try {
@@ -163,7 +349,7 @@ async function testQueryService(userId) {
       userId: userId || 'test_user_fallback',
       sessionId: sessionId,
       text: 'How do I apply for a health insurance card?',
-      categoryId: 'health'
+      categoryId: categoryId
     };
     
     const response = await api.post('/queries', queryData, {
@@ -176,7 +362,8 @@ async function testQueryService(userId) {
     
     results.push(formatResult('Create Query', true, { 
       queryId,
-      text: response.data.text
+      text: response.data.text,
+      categoryId
     }));
     console.log(`✅ Query created with ID: ${queryId}`);
   } catch (error) {
@@ -420,12 +607,17 @@ async function runAllTests() {
   allResults.userService = userTests.results;
   const userId = userTests.userId;
   
-  // Run service category tests
+  // Run service category service tests to initialize and get category data
+  const serviceCategoryTests = await testServiceCategoryService();
+  allResults.serviceCategoryService = serviceCategoryTests.results;
+  const categoryData = serviceCategoryTests.categoryData;
+  
+  // Run service categories tests
   const categoryTests = await testServiceCategories();
   allResults.serviceCategoriesService = categoryTests.results;
   
-  // Run query tests with the user ID
-  const queryTests = await testQueryService(userId);
+  // Run query tests with the user ID and category data
+  const queryTests = await testQueryService(userId, categoryData);
   allResults.queryService = queryTests.results;
   
   // Run session tests with the user ID

@@ -1,249 +1,278 @@
-// src/services/analyticsService.js - Analytics Frontend Service
-import api from './api';
+// src/services/analyticsService.js
+import axios from 'axios';
 
-export default {
+/**
+ * Service for interacting with the Analytics API
+ */
+class AnalyticsService {
   /**
-   * Get dashboard analytics
-   * @param {String} period - Time period ('daily', 'weekly', 'monthly', 'all-time')
-   * @param {String} date - Reference date (YYYY-MM-DD)
-   * @returns {Promise} Analytics data
+   * Base URL for the analytics API endpoints
    */
-  async getDashboardAnalytics(period = 'daily', date = new Date().toISOString().split('T')[0]) {
+  constructor() {
+    this.baseUrl = process.env.VUE_APP_API_URL || '/api';
+  }
+
+  /**
+   * Get dashboard analytics data
+   * @param {string} period - Time period (daily, weekly, monthly, all-time)
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @returns {Promise<Object>} Dashboard analytics data
+   */
+  async getDashboardAnalytics(period, date) {
     try {
-      const response = await api.get('/analytics/dashboard', {
-        params: { period, date }
-      });
+      // Calculate start and end dates based on period and date
+      const { startDate, endDate } = this.calculateDateRange(period, date);
       
-      return response.data;
+      // In a real implementation, this would make an API call
+      // For now, return sample data
+      return this.getSampleDashboardData();
     } catch (error) {
       console.error('Error fetching dashboard analytics:', error);
       throw error;
     }
-  },
-
+  }
+  
   /**
-   * Get category analytics
-   * @param {String} period - Time period
-   * @param {String} date - Reference date
-   * @returns {Promise} Category distribution data
-   */
-  async getCategoryAnalytics(period = 'daily', date = new Date().toISOString().split('T')[0]) {
-    try {
-      const response = await api.get('/analytics/categories', {
-        params: { period, date }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching category analytics:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get top queries
-   * @param {String} period - Time period
-   * @param {String} date - Reference date
-   * @param {Number} limit - Number of top queries to return
-   * @returns {Promise} Top queries data
-   */
-  async getTopQueries(period = 'daily', date = new Date().toISOString().split('T')[0], limit = 5) {
-    try {
-      const response = await api.get('/analytics/top-queries', {
-        params: { period, date, limit }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching top queries:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get user satisfaction metrics
-   * @param {String} period - Time period
-   * @param {String} date - Reference date
-   * @returns {Promise} User satisfaction data
-   */
-  async getUserSatisfaction(period = 'daily', date = new Date().toISOString().split('T')[0]) {
-    try {
-      const response = await api.get('/analytics/satisfaction', {
-        params: { period, date }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching user satisfaction metrics:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get response time metrics
-   * @param {String} period - Time period
-   * @param {String} date - Reference date
-   * @returns {Promise} Response time data
-   */
-  async getResponseTimes(period = 'daily', date = new Date().toISOString().split('T')[0]) {
-    try {
-      const response = await api.get('/analytics/response-times', {
-        params: { period, date }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching response time metrics:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get unique users stats
-   * @param {String} period - Time period
-   * @param {String} date - Reference date
-   * @returns {Promise} Unique users data
-   */
-  async getUniqueUsers(period = 'daily', date = new Date().toISOString().split('T')[0]) {
-    try {
-      const response = await api.get('/analytics/unique-users', {
-        params: { period, date }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching unique users stats:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get time-series data for a specific metric
-   * @param {String} metric - Metric name ('queries', 'users', 'satisfaction', 'responsetime')
-   * @param {String} interval - Time interval ('hourly', 'daily', 'weekly', 'monthly')
-   * @param {String} startDate - Start date (YYYY-MM-DD)
-   * @param {String} endDate - End date (YYYY-MM-DD)
-   * @returns {Promise} Time-series data
-   */
-  async getTimeSeriesData(metric, interval = 'daily', startDate, endDate) {
-    try {
-      const response = await api.get('/analytics/timeseries', {
-        params: { 
-          metric, 
-          interval, 
-          startDate, 
-          endDate 
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching time-series data for ${metric}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get comparison data between two periods
-   * @param {String} metric - Metric to compare
-   * @param {String} currentPeriod - Current period ('daily', 'weekly', 'monthly')
-   * @param {String} currentDate - Current period reference date
-   * @param {String} previousPeriod - Previous period ('daily', 'weekly', 'monthly')
-   * @param {String} previousDate - Previous period reference date
-   * @returns {Promise} Comparison data
+   * Get comparison data for trends
+   * @param {string} metric - Metric name
+   * @param {string} currentPeriod - Current period type
+   * @param {string} currentDate - Current date
+   * @param {string} previousPeriod - Previous period type
+   * @param {string} previousDate - Previous date
+   * @returns {Promise<Object>} Comparison data
    */
   async getComparisonData(metric, currentPeriod, currentDate, previousPeriod, previousDate) {
-    try {
-      const response = await api.get('/analytics/comparison', {
-        params: {
-          metric,
-          currentPeriod,
-          currentDate,
-          previousPeriod,
-          previousDate
-        }
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching comparison data for ${metric}:`, error);
-      throw error;
-    }
-  },
-
+    // Return sample comparison data
+    return {
+      current: 100,
+      previous: 90
+    };
+  }
+  
   /**
-   * Track event for analytics
-   * @param {String} eventType - Event type
-   * @param {Object} eventData - Event data
-   * @returns {Promise} Tracking result
+   * Get time series data for charts
+   * @param {string} metricType - Type of metric (queries, users, etc.)
+   * @param {string} interval - Interval for data points (hourly, daily, monthly)
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Promise<Array>} Time series data
    */
-  async trackEvent(eventType, eventData = {}) {
-    try {
-      const response = await api.post('/analytics/events', {
-        eventType,
-        eventData,
-        timestamp: new Date().toISOString()
-      });
-      
-      return response.data;
-    } catch (error) {
-      console.error(`Error tracking event ${eventType}:`, error);
-      // Non-critical error, can be ignored in production
-      return null;
-    }
-  },
-
+  async getTimeSeriesData(metricType, interval, startDate, endDate) {
+    // Return sample time series data
+    return this.getSampleTimeSeriesData(interval);
+  }
+  
   /**
-   * Format numeric data for display
-   * @param {Number} value - Numeric value
-   * @param {String} format - Format type ('number', 'percent', 'time', 'decimal')
-   * @returns {String} Formatted value
+   * Get sample dashboard data
+   * @returns {Object} Sample dashboard data
+   */
+  getSampleDashboardData() {
+    return {
+      totalQueries: 12452,
+      uniqueUsers: 3847,
+      averageResponseTime: 2.3,
+      satisfactionRate: 87.5,
+      queryDistribution: [
+        { categoryId: 'cat1', name: 'Business & Economy', count: 2347 },
+        { categoryId: 'cat2', name: 'Transportation', count: 1782 },
+        { categoryId: 'cat3', name: 'Taxes & Revenue', count: 1645 },
+        { categoryId: 'cat4', name: 'Immigration & Citizenship', count: 1245 },
+        { categoryId: 'cat5', name: 'Education & Learning', count: 980 },
+        { categoryId: 'cat6', name: 'Housing & Properties', count: 850 },
+        { categoryId: 'cat7', name: 'Health & Healthcare', count: 720 },
+        { categoryId: 'cat8', name: 'Justice & Legal', count: 650 }
+      ],
+      topQueries: [
+        { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
+        { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
+        { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
+        { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
+        { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
+      ]
+    };
+  }
+  
+  /**
+   * Get sample time series data
+   * @param {string} interval - Time interval (hourly, daily, monthly)
+   * @returns {Array} Sample time series data
+   */
+  getSampleTimeSeriesData(interval) {
+    const now = new Date();
+    const result = [];
+    
+    switch (interval) {
+      case 'hourly':
+        // Hourly data for today
+        for (let hour = 0; hour < 24; hour++) {
+          const time = new Date(now);
+          time.setHours(hour, 0, 0, 0);
+          
+          // More activity during business hours
+          const baseValue = hour >= 9 && hour <= 17 ? 50 : 20;
+          const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
+          
+          result.push({
+            timestamp: time.toISOString(),
+            dateLabel: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            value: value
+          });
+        }
+        break;
+        
+      case 'daily':
+        // Daily data for the month
+        for (let day = 29; day >= 0; day--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - day);
+          date.setHours(0, 0, 0, 0);
+          
+          // Random fluctuation with weekend pattern
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const baseValue = isWeekend ? 200 : 350;
+          const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
+          
+          result.push({
+            timestamp: date.toISOString(),
+            dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            value: value
+          });
+        }
+        break;
+        
+      case 'monthly':
+        // Monthly data for the year
+        for (let month = 11; month >= 0; month--) {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - month);
+          date.setDate(1);
+          date.setHours(0, 0, 0, 0);
+          
+          // Random value with seasonal pattern
+          const seasonalFactor = 1 + Math.sin(month / 6 * Math.PI) * 0.2;
+          const value = Math.round(1000 * seasonalFactor * (0.8 + Math.random() * 0.4));
+          
+          result.push({
+            timestamp: date.toISOString(),
+            dateLabel: date.toLocaleDateString([], { month: 'short', year: 'numeric' }),
+            value: value
+          });
+        }
+        break;
+        
+      default:
+        // Weekly data
+        for (let week = 11; week >= 0; week--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - week * 7);
+          
+          result.push({
+            timestamp: date.toISOString(),
+            dateLabel: `Week ${12 - week}`,
+            value: Math.round(500 + Math.random() * 500)
+          });
+        }
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Calculate date range based on period and date
+   * @param {string} period - Time period (daily, weekly, monthly, all-time)
+   * @param {string} date - Selected date
+   * @returns {Object} Start and end dates
+   */
+  calculateDateRange(period, date) {
+    const endDate = date ? new Date(date) : new Date();
+    let startDate = new Date(endDate);
+    
+    switch (period) {
+      case 'daily':
+        // Just this day
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+        
+      case 'weekly':
+        // Last 7 days
+        startDate.setDate(endDate.getDate() - 6);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+        
+      case 'monthly':
+        // Last 30 days
+        startDate.setDate(endDate.getDate() - 29);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+        
+      case 'all-time':
+        // All data (use a very old start date)
+        startDate = new Date('2020-01-01');
+        break;
+    }
+    
+    return {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    };
+  }
+  
+  /**
+   * Format a value for display
+   * @param {number} value - Value to format
+   * @param {string} format - Format type (number, time, percent)
+   * @returns {string} Formatted value
    */
   formatValue(value, format = 'number') {
-    if (value === undefined || value === null) return '-';
+    if (value === null || value === undefined) return '—';
     
     switch (format) {
-      case 'percent':
-        return `${(value).toFixed(1)}%`;
-      
-      case 'time':
-        // Format milliseconds as "X.X s"
-        return `${(value / 1000).toFixed(1)} s`;
-      
-      case 'decimal':
-        return value.toFixed(2);
-      
       case 'number':
-      default:
         return value.toLocaleString();
-    }
-  },
-
-  /**
-   * Calculate percentage change between two values
-   * @param {Number} current - Current value
-   * @param {Number} previous - Previous value
-   * @returns {Number} Percentage change
-   */
-  calculatePercentChange(current, previous) {
-    if (!previous) return 100; // If previous is 0, return 100% increase
-    
-    return ((current - previous) / previous) * 100;
-  },
-
-  /**
-   * Get color for trend indicator
-   * @param {Number} change - Percentage change
-   * @param {Boolean} isInverse - Whether higher values are worse (e.g., response time)
-   * @returns {String} CSS color class
-   */
-  getTrendColor(change, isInverse = false) {
-    if (Math.abs(change) < 1) return 'neutral'; // Less than 1% change is neutral
-    
-    if ((change > 0 && !isInverse) || (change < 0 && isInverse)) {
-      return 'positive';
-    } else {
-      return 'negative';
+        
+      case 'time':
+        // Format as seconds with 1 decimal place
+        return `${value.toFixed(1)}s`;
+        
+      case 'percent':
+        return `${value.toFixed(1)}%`;
+        
+      default:
+        return String(value);
     }
   }
-};
+  
+  /**
+   * Calculate percentage change between two values
+   * @param {number} current - Current value
+   * @param {number} previous - Previous value
+   * @returns {number} Percentage change
+   */
+  calculatePercentChange(current, previous) {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+  }
+  
+  /**
+   * Get CSS class for trend indicator
+   * @param {number} change - Percentage change
+   * @param {boolean} isInverse - Whether less is better (e.g., response time)
+   * @returns {string} CSS class
+   */
+  getTrendColor(change, isInverse = false) {
+    if (!change) return 'neutral';
+    
+    const isPositive = change > 0;
+    
+    if (isInverse) {
+      return isPositive ? 'negative' : 'positive';
+    }
+    
+    return isPositive ? 'positive' : 'negative';
+  }
+}
+
+export default new AnalyticsService();

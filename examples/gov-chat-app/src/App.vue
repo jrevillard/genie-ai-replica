@@ -21,9 +21,10 @@
     </div>
 
     <!-- Modal Dialogs -->
-    <analytics-component 
+
+    <unified-analytics-component 
       v-if="showAnalytics" 
-      @close="showAnalytics = false" 
+      @close="showAnalytics = false"
     />
     
     <user-profile-component 
@@ -42,7 +43,7 @@
 <script>
 import NavBarComponent from './components/NavBarComponent.vue'
 import SideBarComponent from './components/SideBarComponent.vue'
-import AnalyticsComponent from './components/AnalyticsComponent.vue'
+import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue'
 import UserProfileComponent from './components/UserProfileComponent.vue'
 import SettingsComponent from './components/SettingsComponent.vue'
 
@@ -51,7 +52,7 @@ export default {
   components: {
     NavBarComponent,
     SideBarComponent,
-    AnalyticsComponent,
+    UnifiedAnalyticsComponent,
     UserProfileComponent,
     SettingsComponent
   },

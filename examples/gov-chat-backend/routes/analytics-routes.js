@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AnalyticsService = require('../services/analytics-service');
+const analyticsController = require('../controllers/analyticsController');
 
 const analyticsService = new AnalyticsService();
 
@@ -55,29 +56,36 @@ const analyticsService = new AnalyticsService();
  *                       count:
  *                         type: integer
  *                 feedback:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       total:
- *                         type: integer
- *                       positive:
- *                         type: integer
- *                       neutral:
- *                         type: integer
- *                       negative:
- *                         type: integer
- *                       positivePercentage:
- *                         type: number
- *                       negativePercentage:
- *                         type: number
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     positive:
+ *                       type: integer
+ *                     neutral:
+ *                       type: integer
+ *                     negative:
+ *                       type: integer
+ *                     positivePercentage:
+ *                       type: number
+ *                     negativePercentage:
+ *                       type: number
  *                 users:
+ *                   type: object
+ *                   properties:
+ *                     activeCount:
+ *                       type: integer
+ *                 topQueries:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
- *                       activeCount:
+ *                       text:
+ *                         type: string
+ *                       count:
  *                         type: integer
+ *                       avgTime:
+ *                         type: number
  *       500:
  *         description: Server error
  */
@@ -95,6 +103,54 @@ router.get('/dashboard', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+/**
+ * @swagger
+ * /analytics/metric/{metric}:
+ *   get:
+ *     summary: Get specific metric data
+ *     description: Retrieves data for a specific analytics metric
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: path
+ *         name: metric
+ *         schema:
+ *           type: string
+ *           enum: [totalQueries, uniqueUsers, averageResponseTime, satisfactionRate]
+ *         required: true
+ *         description: Metric name
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         required: true
+ *         description: Start date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         required: true
+ *         description: End date (ISO format)
+ *     responses:
+ *       200:
+ *         description: Metric data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 metric:
+ *                   type: string
+ *                 value:
+ *                   type: number
+ *       400:
+ *         description: Bad request
+ *       500:
+ *         description: Server error
+ */
+router.get('/metric/:metric', analyticsController.getMetric);
 
 /**
  * @swagger
@@ -164,18 +220,19 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
- * /analytics/timeseries:
+ * /analytics/timeseries/{metricType}:
  *   get:
  *     summary: Get time series data
  *     description: Retrieves time series data for a specific metric, interval, and date range
  *     tags: [Analytics]
  *     parameters:
- *       - in: query
- *         name: metric
+ *       - in: path
+ *         name: metricType
  *         required: true
  *         schema:
  *           type: string
- *         description: Metric name (e.g., queries, feedback)
+ *           enum: [queries, users]
+ *         description: Metric type name (e.g., queries, users)
  *       - in: query
  *         name: interval
  *         schema:
@@ -205,24 +262,17 @@ router.get('/', async (req, res) => {
  *               items:
  *                 type: object
  *                 properties:
- *                   date:
+ *                   timestamp:
  *                     type: string
  *                     format: date-time
  *                   value:
  *                     type: number
+ *       400:
+ *         description: Bad request
  *       500:
  *         description: Server error
  */
-router.get('/timeseries', async (req, res) => {
-  try {
-    const { metric, interval = 'daily', startDate, endDate } = req.query;
-    const data = await analyticsService.getTimeSeriesData(metric, interval, startDate, endDate);
-    res.json(data);
-  } catch (error) {
-    console.error('Error getting time series data:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
+router.get('/timeseries/:metricType', analyticsController.getTimeSeriesData);
 
 /**
  * @swagger

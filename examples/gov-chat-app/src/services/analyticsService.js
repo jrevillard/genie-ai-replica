@@ -23,9 +23,11 @@ class AnalyticsService {
       // Calculate start and end dates based on period and date
       const { startDate, endDate } = this.calculateDateRange(period, date);
       
-      // In a real implementation, this would make an API call
-      // For now, return sample data
-      return this.getSampleDashboardData();
+      const response = await axios.get(`${this.baseUrl}/analytics/dashboard`, {
+        params: { startDate, endDate }
+      });
+      
+      return this.transformDashboardData(response.data);
     } catch (error) {
       console.error('Error fetching dashboard analytics:', error);
       throw error;
@@ -42,11 +44,29 @@ class AnalyticsService {
    * @returns {Promise<Object>} Comparison data
    */
   async getComparisonData(metric, currentPeriod, currentDate, previousPeriod, previousDate) {
-    // Return sample comparison data
-    return {
-      current: 100,
-      previous: 90
-    };
+    try {
+      // Calculate date ranges for current and previous periods
+      const current = this.calculateDateRange(currentPeriod, currentDate);
+      const previous = this.calculateDateRange(previousPeriod, previousDate);
+      
+      // Get current period data
+      const currentResponse = await axios.get(`${this.baseUrl}/analytics/metric/${metric}`, {
+        params: { startDate: current.startDate, endDate: current.endDate }
+      });
+      
+      // Get previous period data
+      const previousResponse = await axios.get(`${this.baseUrl}/analytics/metric/${metric}`, {
+        params: { startDate: previous.startDate, endDate: previous.endDate }
+      });
+      
+      return {
+        current: currentResponse.data.value,
+        previous: previousResponse.data.value
+      };
+    } catch (error) {
+      console.error(`Error fetching comparison data for ${metric}:`, error);
+      return { current: null, previous: null };
+    }
   }
   
   /**
@@ -58,130 +78,23 @@ class AnalyticsService {
    * @returns {Promise<Array>} Time series data
    */
   async getTimeSeriesData(metricType, interval, startDate, endDate) {
-    // Return sample time series data
-    return this.getSampleTimeSeriesData(interval);
-  }
-  
-  /**
-   * Get sample dashboard data
-   * @returns {Object} Sample dashboard data
-   */
-  getSampleDashboardData() {
-    return {
-      totalQueries: 12452,
-      uniqueUsers: 3847,
-      averageResponseTime: 2.3,
-      satisfactionRate: 87.5,
-      queryDistribution: [
-        { categoryId: 'cat1', name: 'Business & Economy', count: 2347 },
-        { categoryId: 'cat2', name: 'Transportation', count: 1782 },
-        { categoryId: 'cat3', name: 'Taxes & Revenue', count: 1645 },
-        { categoryId: 'cat4', name: 'Immigration & Citizenship', count: 1245 },
-        { categoryId: 'cat5', name: 'Education & Learning', count: 980 },
-        { categoryId: 'cat6', name: 'Housing & Properties', count: 850 },
-        { categoryId: 'cat7', name: 'Health & Healthcare', count: 720 },
-        { categoryId: 'cat8', name: 'Justice & Legal', count: 650 }
-      ],
-      topQueries: [
-        { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
-        { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-        { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
-        { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
-        { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
-      ]
-    };
-  }
-  
-  /**
-   * Get sample time series data
-   * @param {string} interval - Time interval (hourly, daily, monthly)
-   * @returns {Array} Sample time series data
-   */
-  getSampleTimeSeriesData(interval) {
-    const now = new Date();
-    const result = [];
-    
-    switch (interval) {
-      case 'hourly':
-        // Hourly data for today
-        for (let hour = 0; hour < 24; hour++) {
-          const time = new Date(now);
-          time.setHours(hour, 0, 0, 0);
-          
-          // More activity during business hours
-          const baseValue = hour >= 9 && hour <= 17 ? 50 : 20;
-          const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
-          
-          result.push({
-            timestamp: time.toISOString(),
-            dateLabel: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            value: value
-          });
-        }
-        break;
-        
-      case 'daily':
-        // Daily data for the month
-        for (let day = 29; day >= 0; day--) {
-          const date = new Date(now);
-          date.setDate(date.getDate() - day);
-          date.setHours(0, 0, 0, 0);
-          
-          // Random fluctuation with weekend pattern
-          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const baseValue = isWeekend ? 200 : 350;
-          const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
-          
-          result.push({
-            timestamp: date.toISOString(),
-            dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-            value: value
-          });
-        }
-        break;
-        
-      case 'monthly':
-        // Monthly data for the year
-        for (let month = 11; month >= 0; month--) {
-          const date = new Date(now);
-          date.setMonth(date.getMonth() - month);
-          date.setDate(1);
-          date.setHours(0, 0, 0, 0);
-          
-          // Random value with seasonal pattern
-          const seasonalFactor = 1 + Math.sin(month / 6 * Math.PI) * 0.2;
-          const value = Math.round(1000 * seasonalFactor * (0.8 + Math.random() * 0.4));
-          
-          result.push({
-            timestamp: date.toISOString(),
-            dateLabel: date.toLocaleDateString([], { month: 'short', year: 'numeric' }),
-            value: value
-          });
-        }
-        break;
-        
-      default:
-        // Weekly data
-        for (let week = 11; week >= 0; week--) {
-          const date = new Date(now);
-          date.setDate(date.getDate() - week * 7);
-          
-          result.push({
-            timestamp: date.toISOString(),
-            dateLabel: `Week ${12 - week}`,
-            value: Math.round(500 + Math.random() * 500)
-          });
-        }
+    try {
+      const response = await axios.get(`${this.baseUrl}/analytics/timeseries/${metricType}`, {
+        params: { interval, startDate, endDate }
+      });
+      
+      return this.transformTimeSeriesData(response.data, interval);
+    } catch (error) {
+      console.error('Error fetching time series data:', error);
+      return [];
     }
-    
-    return result;
   }
   
   /**
-   * Calculate date range based on period and date
+   * Calculate start and end date for a given period
    * @param {string} period - Time period (daily, weekly, monthly, all-time)
-   * @param {string} date - Selected date
-   * @returns {Object} Start and end dates
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @returns {Object} Start and end date
    */
   calculateDateRange(period, date) {
     const endDate = date ? new Date(date) : new Date();
@@ -218,6 +131,82 @@ class AnalyticsService {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString()
     };
+  }
+  
+  /**
+   * Transform dashboard data for UI display
+   * @param {Object} data - Raw API response data
+   * @returns {Object} Transformed dashboard data
+   */
+  transformDashboardData(data) {
+    // Default values if data is missing
+    const defaultData = {
+      totalQueries: 0,
+      uniqueUsers: 0,
+      averageResponseTime: 0,
+      satisfactionRate: 0,
+      queryDistribution: [],
+      topQueries: []
+    };
+    
+    if (!data) return defaultData;
+    
+    // Transform the data from the API response structure
+    return {
+      totalQueries: data.queries?.total || 0,
+      uniqueUsers: data.users?.activeCount || 0,
+      averageResponseTime: data.queries?.avgResponseTime || 0,
+      satisfactionRate: data.feedback?.positivePercentage || 0,
+      
+      // Transform category distribution
+      queryDistribution: (data.categories || []).map(cat => ({
+        categoryId: cat.categoryId,
+        name: cat.name,
+        count: cat.count
+      })),
+      
+      // We don't have top queries in the original response, but we could add them
+      topQueries: []
+    };
+  }
+  
+  /**
+   * Transform time series data for charts
+   * @param {Array} data - Raw time series data
+   * @param {string} interval - Data interval
+   * @returns {Array} Transformed time series data
+   */
+  transformTimeSeriesData(data, interval) {
+    if (!Array.isArray(data)) return [];
+    
+    return data.map(item => {
+      // Format date label based on interval
+      let dateLabel;
+      const date = new Date(item.timestamp);
+      
+      switch (interval) {
+        case 'hourly':
+          dateLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          break;
+          
+        case 'daily':
+          dateLabel = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+          break;
+          
+        case 'monthly':
+          dateLabel = date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+          break;
+          
+        default:
+          dateLabel = date.toLocaleDateString();
+      }
+      
+      return {
+        timestamp: item.timestamp,
+        dateLabel,
+        value: item.value
+      };
+    });
   }
   
   /**

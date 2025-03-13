@@ -249,10 +249,23 @@ class AnalyticsService {
       const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
       
-      // Setup query with bind parameters instead of string interpolation for better security
-      // and to avoid AQL syntax issues
+      // Execute a much simpler query first to check if we can reach the database
+      try {
+        const testCursor = await this.db.query(`
+          RETURN {
+            test: "Connection is working"
+          }
+        `);
+        const testResult = await testCursor.next();
+        console.log("Test query result:", testResult);
+      } catch (testError) {
+        console.error("Test query failed:", testError);
+      }
+      
+      // Setup query with bind parameters
+      // Using descriptive variable names to avoid conflicts
       const query = `
-        LET queryCount = (
+        LET totalQueriesCount = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
@@ -260,7 +273,7 @@ class AnalyticsService {
             RETURN count
         )[0]
         
-        LET unansweredCount = (
+        LET unansweredQueriesCount = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
@@ -269,7 +282,7 @@ class AnalyticsService {
             RETURN count
         )[0]
         
-        LET avgResponseTime = (
+        LET averageResponseTimeValue = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
@@ -278,12 +291,12 @@ class AnalyticsService {
             RETURN avgTime
         )[0]
         
-        LET categoryDistribution = (
+        LET categoryDistributionData = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
             FILTER a.data.categoryId != null
-            COLLECT categoryId = a.data.categoryId WITH COUNT INTO categoryCount
+            COLLECT categoryId = a.data.categoryId WITH COUNT INTO catCount
             
             LET categoryName = (
               FOR cat IN serviceCategories
@@ -294,48 +307,48 @@ class AnalyticsService {
             RETURN {
               categoryId: categoryId,
               name: categoryName || CONCAT('Category ', categoryId),
-              count: categoryCount,
-              value: categoryCount  // Add value field for chart compatibility
+              count: catCount,
+              value: catCount  // Add value field for chart compatibility
             }
         )
         
-        LET feedbackStats = (
-          LET feedbacks = (
+        LET feedbackStatsData = (
+          LET feedbacksData = (
             FOR a IN analytics
               FILTER a.type == 'feedback'
               FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
               RETURN a
           )
           
-          LET totalFeedback = LENGTH(feedbacks)
-          LET positiveCount = (
-            FOR f IN feedbacks
+          LET totalFeedbackCount = LENGTH(feedbacksData)
+          LET positiveFeedbackCount = (
+            FOR f IN feedbacksData
               FILTER f.data.rating >= 4
               COLLECT WITH COUNT INTO count
               RETURN count
           )[0] || 0
           
-          LET negativeCount = (
-            FOR f IN feedbacks
+          LET negativeFeedbackCount = (
+            FOR f IN feedbacksData
               FILTER f.data.rating <= 2
               COLLECT WITH COUNT INTO count
               RETURN count
           )[0] || 0
           
-          LET neutralCount = totalFeedback - positiveCount - negativeCount
+          LET neutralFeedbackCount = totalFeedbackCount - positiveFeedbackCount - negativeFeedbackCount
           
           RETURN {
-            total: totalFeedback,
-            positive: positiveCount,
-            neutral: neutralCount,
-            negative: negativeCount,
-            positivePercentage: totalFeedback > 0 ? (positiveCount / totalFeedback) * 100 : 0,
-            negativePercentage: totalFeedback > 0 ? (negativeCount / totalFeedback) * 100 : 0
+            total: totalFeedbackCount,
+            positive: positiveFeedbackCount,
+            neutral: neutralFeedbackCount,
+            negative: negativeFeedbackCount,
+            positivePercentage: totalFeedbackCount > 0 ? (positiveFeedbackCount / totalFeedbackCount) * 100 : 0,
+            negativePercentage: totalFeedbackCount > 0 ? (negativeFeedbackCount / totalFeedbackCount) * 100 : 0
           }
         )
         
-        LET userStats = (
-          LET activeUsers = (
+        LET userStatsData = (
+          LET activeUsersData = (
             FOR a IN analytics
               FILTER a.type == 'query'
               FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
@@ -344,19 +357,19 @@ class AnalyticsService {
           )
           
           RETURN {
-            activeCount: LENGTH(activeUsers)
+            activeCount: LENGTH(activeUsersData)
           }
         )
         
         // Get top queries for the dashboard
-        LET topQueries = (
+        LET topQueriesData = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
             
             // Group by query text
-            COLLECT queryText = a.data.text WITH COUNT INTO queryCount
-            LET avgTime = (
+            COLLECT queryText = a.data.text WITH COUNT INTO queryTextCount
+            LET responseTimeData = (
               FOR q IN analytics
                 FILTER q.type == 'query'
                 FILTER q.data.text == queryText
@@ -365,33 +378,35 @@ class AnalyticsService {
             )
             
             // Calculate average response time for this query
-            LET avgResponseTime = LENGTH(avgTime) > 0 ? 
-              AVERAGE(avgTime) : 0
+            LET avgResponseTimeForQuery = LENGTH(responseTimeData) > 0 ? 
+              AVERAGE(responseTimeData) : 0
               
             // Sort by count in descending order
-            SORT queryCount DESC
+            SORT queryTextCount DESC
             LIMIT 5
             
             RETURN {
               text: queryText,
-              count: queryCount,
-              avgTime: ROUND(avgResponseTime * 10) / 10  // Round to 1 decimal place
+              count: queryTextCount,
+              avgTime: ROUND(avgResponseTimeForQuery * 10) / 10  // Round to 1 decimal place
             }
         )
         
         RETURN {
           queries: {
-            total: queryCount || 0,
-            unanswered: unansweredCount || 0,
-            answeredPercentage: queryCount > 0 ? ((queryCount - unansweredCount) / queryCount) * 100 : 0,
-            avgResponseTime: avgResponseTime || 0
+            total: totalQueriesCount || 0,
+            unanswered: unansweredQueriesCount || 0,
+            answeredPercentage: totalQueriesCount > 0 ? ((totalQueriesCount - unansweredQueriesCount) / totalQueriesCount) * 100 : 0,
+            avgResponseTime: averageResponseTimeValue || 0
           },
-          categories: categoryDistribution,
-          feedback: feedbackStats,
-          users: userStats,
-          topQueries: topQueries
+          categories: categoryDistributionData,
+          feedback: feedbackStatsData,
+          users: userStatsData,
+          topQueries: topQueriesData
         }
       `;
+      
+      console.log("Executing dashboard analytics query...");
       
       // Execute the query with bind parameters
       const cursor = await this.db.query(query, {
@@ -400,14 +415,14 @@ class AnalyticsService {
       });
       
       const result = await cursor.next();
+      console.log("Dashboard analytics query completed successfully");
       
       // If no data or empty result, return default structure with sample data
       if (!result) {
-        // Generate sample data for the dashboard
+        console.log("No data found, returning sample data");
         return this.generateSampleDashboardData();
       }
       
-      // Post-process the results for better display
       return result;
     } catch (error) {
       console.error('Error getting dashboard analytics:', error);
@@ -630,13 +645,13 @@ class AnalyticsService {
               COLLECT dateGroup = ${groupingExpression}
               
               // Count items in each group
-              WITH COUNT INTO count
+              WITH COUNT INTO timeSeriesCount
               
               SORT dateGroup ASC
               
               RETURN {
                 timestamp: dateGroup,
-                value: count
+                value: timeSeriesCount
               }
           `;
         } else if (metricType === 'users') {
@@ -651,13 +666,13 @@ class AnalyticsService {
               
               // Group by date only to count unique users
               COLLECT dateValue = dateGroup
-              WITH COUNT INTO uniqueUsers
+              WITH COUNT INTO uniqueUserCount
               
               SORT dateValue ASC
               
               RETURN {
                 timestamp: dateValue,
-                value: uniqueUsers
+                value: uniqueUserCount
               }
           `;
         } else {

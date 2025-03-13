@@ -245,3 +245,479 @@
 }
 2025-03-12T13:47:59.779Z - SUCCESS: Database contains 515703 queries, 2000 users, 514878 sessions
 2025-03-12T13:47:59.779Z - Data validation complete.
+2025-03-12T16:14:15.136Z - Starting data validation...
+2025-03-12T16:14:15.139Z - Checking collection sizes and status...
+2025-03-12T16:14:15.151Z - Collection serviceCategories: 8 documents
+2025-03-12T16:14:15.152Z - Collection users: 2000 documents
+2025-03-12T16:14:15.153Z - Collection sessions: 544895 documents
+2025-03-12T16:14:15.154Z - Collection queries: 546012 documents
+2025-03-12T16:14:15.154Z - Collection analytics: 709582 documents
+2025-03-12T16:14:15.155Z - Collection analyticsMetrics: 1145 documents
+2025-03-12T16:14:15.156Z - Collection events: 10000 documents
+2025-03-12T16:14:15.156Z - Collection userSessions: 544895 documents
+2025-03-12T16:14:15.157Z - Collection sessionQueries: 546012 documents
+2025-03-12T16:14:15.158Z - Collection queryCategories: 409309 documents
+2025-03-12T16:14:15.158Z - Collection size check complete
+2025-03-12T16:14:15.158Z - Checking data distribution over time...
+2025-03-12T16:14:15.158Z - Checking query distribution by month...
+2025-03-12T16:14:16.267Z - Query distribution by month (12 months):
+2025-03-12T16:14:16.267Z - Month Y-1: 55239 queries
+2025-03-12T16:14:16.267Z - Month Y-10: 47978 queries
+2025-03-12T16:14:16.267Z - Month Y-11: 50259 queries
+2025-03-12T16:14:16.267Z - Month Y-12: 51850 queries
+2025-03-12T16:14:16.267Z - Month Y-2: 54867 queries
+2025-03-12T16:14:16.267Z - Month Y-3: 45714 queries
+2025-03-12T16:14:16.267Z - Month Y-4: 35065 queries
+2025-03-12T16:14:16.267Z - Month Y-5: 36421 queries
+2025-03-12T16:14:16.267Z - Month Y-6: 38601 queries
+2025-03-12T16:14:16.267Z - Month Y-7: 41765 queries
+2025-03-12T16:14:16.267Z - Month Y-8: 43289 queries
+2025-03-12T16:14:16.267Z - Month Y-9: 44964 queries
+2025-03-12T16:14:16.267Z - Has data for current month (2025-03): false
+2025-03-12T16:14:16.267Z - Checking user activity distribution...
+2025-03-12T16:14:17.367Z - User activity by month (12 months):
+2025-03-12T16:14:17.367Z - Month Y-1: 1995 active users
+2025-03-12T16:14:17.367Z - Month Y-10: 1968 active users
+2025-03-12T16:14:17.367Z - Month Y-11: 1976 active users
+2025-03-12T16:14:17.367Z - Month Y-12: 1995 active users
+2025-03-12T16:14:17.367Z - Month Y-2: 1972 active users
+2025-03-12T16:14:17.367Z - Month Y-3: 1994 active users
+2025-03-12T16:14:17.367Z - Month Y-4: 1937 active users
+2025-03-12T16:14:17.367Z - Month Y-5: 1952 active users
+2025-03-12T16:14:17.367Z - Month Y-6: 1949 active users
+2025-03-12T16:14:17.367Z - Month Y-7: 1923 active users
+2025-03-12T16:14:17.367Z - Month Y-8: 1961 active users
+2025-03-12T16:14:17.367Z - Month Y-9: 1964 active users
+2025-03-12T16:14:17.367Z - Checking data for the last 3 months...
+2025-03-12T16:14:17.370Z - Recent data summary:
+2025-03-12T16:14:17.370Z - {
+  "period": "Y-12-12 to Y-3-12",
+  "queryCount": 0,
+  "uniqueUserCount": 0,
+  "categoriesWithData": 0,
+  "queryByCategoryCount": []
+}
+2025-03-12T16:14:17.370Z - WARNING: No queries found in the last 3 months
+2025-03-12T16:14:17.370Z - Verifying and creating indexes...
+2025-03-12T16:14:17.371Z - Index idx_queries_timestamp already exists on queries
+2025-03-12T16:14:17.372Z - Index idx_queries_categoryId already exists on queries
+2025-03-12T16:14:17.372Z - Index idx_queries_userId already exists on queries
+2025-03-12T16:14:17.372Z - Index idx_queries_sessionId already exists on queries
+2025-03-12T16:14:17.373Z - Index idx_analytics_timestamp already exists on analytics
+2025-03-12T16:14:17.374Z - Index idx_analytics_type already exists on analytics
+2025-03-12T16:14:17.374Z - Index idx_analytics_userId already exists on analytics
+2025-03-12T16:14:17.374Z - Index idx_sessions_startTime already exists on sessions
+2025-03-12T16:14:17.375Z - Index idx_sessions_userId already exists on sessions
+2025-03-12T16:14:17.375Z - Index verification complete
+2025-03-12T16:14:17.375Z - Checking data consistency...
+2025-03-12T16:14:17.375Z - Checking for queries without valid sessionId...
+2025-03-12T16:14:20.490Z - No orphaned queries found (all queries have valid sessionId)
+2025-03-12T16:14:20.490Z - Checking for queries with invalid categoryId...
+2025-03-12T16:14:22.238Z - No queries with invalid categoryId found
+2025-03-12T16:14:22.238Z - Checking timestamp formats...
+2025-03-12T16:14:22.239Z - All checked timestamps are in valid ISO format
+2025-03-12T16:14:22.240Z - Testing queries with different date formats...
+2025-03-12T16:14:22.240Z - Testing with ISO with Z
+2025-03-12T16:14:22.240Z - Query: 
+          FOR q IN queries
+            FILTER q.timestamp >= '2025-02-10T16:14:22.240Z' AND q.timestamp <= '2025-03-12T16:14:22.240Z'
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-12T16:14:22.248Z - Result with ISO with Z: 28982
+2025-03-12T16:14:22.248Z - Testing with ISO without Z
+2025-03-12T16:14:22.248Z - Query: 
+          FOR q IN queries
+            FILTER q.timestamp >= '2025-02-10T16:14:22.240' AND q.timestamp <= '2025-03-12T16:14:22.240'
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-12T16:14:22.255Z - Result with ISO without Z: 28982
+2025-03-12T16:14:22.255Z - Testing with Date only
+2025-03-12T16:14:22.255Z - Query: 
+          FOR q IN queries
+            FILTER q.timestamp >= '2025-02-10' AND q.timestamp <= '2025-03-12'
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-12T16:14:22.261Z - Result with Date only: 28786
+2025-03-12T16:14:22.261Z - Testing with Date timestamp in milliseconds
+2025-03-12T16:14:22.261Z - Query: 
+            FOR q IN queries
+              FILTER DATE_TIMESTAMP(q.timestamp) >= 1739204062240 AND DATE_TIMESTAMP(q.timestamp) <= 1741796062240
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          
+2025-03-12T16:14:22.403Z - Result with Date timestamp in milliseconds: 28982
+2025-03-12T16:14:22.403Z - Testing with DATE_ISO8601
+2025-03-12T16:14:22.403Z - Query: 
+          LET startDate = DATE_ISO8601('2025-02-10T16:14:22.240Z')
+          LET endDate = DATE_ISO8601('2025-03-12T16:14:22.240Z')
+          
+          FOR q IN queries
+            FILTER q.timestamp >= startDate AND q.timestamp <= endDate
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-12T16:14:22.411Z - Result with DATE_ISO8601: 28982
+2025-03-12T16:14:22.411Z - Testing with DATE_NOW
+2025-03-12T16:14:22.411Z - Query: 
+          LET startDate = DATE_ISO8601('2025-02-10T16:14:22.240Z')
+          LET endDate = DATE_NOW()
+          
+          FOR q IN queries
+            FILTER q.timestamp >= startDate AND q.timestamp <= endDate
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-12T16:14:22.412Z - Result with DATE_NOW: 0
+2025-03-12T16:14:22.412Z - Testing dashboard queries with wider date ranges...
+2025-03-12T16:14:22.412Z - Testing dashboard query with range: Last 7 days
+2025-03-12T16:14:22.420Z - Dashboard query results for Last 7 days:
+2025-03-12T16:14:22.420Z - {
+  "dateRange": {
+    "start": "Y-3-5",
+    "end": "Y-3-12",
+    "name": "Last 7 days"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-12T16:14:22.420Z - WARNING: No queries found for range Last 7 days
+2025-03-12T16:14:22.420Z - Testing dashboard query with range: Last 30 days
+2025-03-12T16:14:22.427Z - Dashboard query results for Last 30 days:
+2025-03-12T16:14:22.427Z - {
+  "dateRange": {
+    "start": "Y-2-10",
+    "end": "Y-3-12",
+    "name": "Last 30 days"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-12T16:14:22.427Z - WARNING: No queries found for range Last 30 days
+2025-03-12T16:14:22.427Z - Testing dashboard query with range: Last 90 days
+2025-03-12T16:14:22.434Z - Dashboard query results for Last 90 days:
+2025-03-12T16:14:22.434Z - {
+  "dateRange": {
+    "start": "Y-12-12",
+    "end": "Y-3-12",
+    "name": "Last 90 days"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-12T16:14:22.434Z - WARNING: No queries found for range Last 90 days
+2025-03-12T16:14:22.434Z - Testing dashboard query with range: All time
+2025-03-12T16:14:22.441Z - Dashboard query results for All time:
+2025-03-12T16:14:22.441Z - {
+  "dateRange": {
+    "start": "Y-3-15",
+    "end": "Y-3-12",
+    "name": "All time"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-12T16:14:22.441Z - WARNING: No queries found for range All time
+2025-03-12T16:14:22.441Z - Testing simple count query to verify data access...
+2025-03-12T16:14:22.584Z - Simple count query results:
+2025-03-12T16:14:22.584Z - {
+  "totalQueries": 546012,
+  "totalUsers": 2000,
+  "totalSessions": 544895,
+  "totalAnalytics": 709582,
+  "totalServiceCategories": 8
+}
+2025-03-12T16:14:22.584Z - SUCCESS: Database contains 546012 queries, 2000 users, 544895 sessions
+2025-03-12T16:14:22.584Z - Data validation complete.
+2025-03-13T03:18:33.326Z - Starting data validation...
+2025-03-13T03:18:33.329Z - Checking collection sizes and status...
+2025-03-13T03:18:33.340Z - Collection serviceCategories: 8 documents
+2025-03-13T03:18:33.341Z - Collection users: 2000 documents
+2025-03-13T03:18:33.342Z - Collection sessions: 545762 documents
+2025-03-13T03:18:33.343Z - Collection queries: 546919 documents
+2025-03-13T03:18:33.344Z - Collection analytics: 710133 documents
+2025-03-13T03:18:33.344Z - Collection analyticsMetrics: 1146 documents
+2025-03-13T03:18:33.345Z - Collection events: 10000 documents
+2025-03-13T03:18:33.346Z - Collection userSessions: 545762 documents
+2025-03-13T03:18:33.347Z - Collection sessionQueries: 546919 documents
+2025-03-13T03:18:33.348Z - Collection queryCategories: 410250 documents
+2025-03-13T03:18:33.348Z - Collection size check complete
+2025-03-13T03:18:33.348Z - Checking data distribution over time...
+2025-03-13T03:18:33.348Z - Checking query distribution by month...
+2025-03-13T03:18:34.517Z - Query distribution by month (12 months):
+2025-03-13T03:18:34.518Z - Month Y-1: 54124 queries
+2025-03-13T03:18:34.518Z - Month Y-10: 47055 queries
+2025-03-13T03:18:34.518Z - Month Y-11: 48933 queries
+2025-03-13T03:18:34.518Z - Month Y-12: 52330 queries
+2025-03-13T03:18:34.518Z - Month Y-2: 54493 queries
+2025-03-13T03:18:34.518Z - Month Y-3: 46319 queries
+2025-03-13T03:18:34.518Z - Month Y-4: 35772 queries
+2025-03-13T03:18:34.518Z - Month Y-5: 37422 queries
+2025-03-13T03:18:34.518Z - Month Y-6: 39029 queries
+2025-03-13T03:18:34.518Z - Month Y-7: 41467 queries
+2025-03-13T03:18:34.518Z - Month Y-8: 44251 queries
+2025-03-13T03:18:34.518Z - Month Y-9: 45724 queries
+2025-03-13T03:18:34.518Z - Has data for current month (2025-03): false
+2025-03-13T03:18:34.518Z - Checking user activity distribution...
+2025-03-13T03:18:35.630Z - User activity by month (12 months):
+2025-03-13T03:18:35.631Z - Month Y-1: 1997 active users
+2025-03-13T03:18:35.631Z - Month Y-10: 1992 active users
+2025-03-13T03:18:35.631Z - Month Y-11: 1981 active users
+2025-03-13T03:18:35.631Z - Month Y-12: 1982 active users
+2025-03-13T03:18:35.631Z - Month Y-2: 1983 active users
+2025-03-13T03:18:35.631Z - Month Y-3: 1923 active users
+2025-03-13T03:18:35.631Z - Month Y-4: 1990 active users
+2025-03-13T03:18:35.631Z - Month Y-5: 1999 active users
+2025-03-13T03:18:35.631Z - Month Y-6: 1952 active users
+2025-03-13T03:18:35.631Z - Month Y-7: 1977 active users
+2025-03-13T03:18:35.631Z - Month Y-8: 1969 active users
+2025-03-13T03:18:35.631Z - Month Y-9: 1992 active users
+2025-03-13T03:18:35.631Z - Checking data for the last 3 months...
+2025-03-13T03:18:35.637Z - Recent data summary:
+2025-03-13T03:18:35.637Z - {
+  "period": "Y-12-13 to Y-3-13",
+  "queryCount": 0,
+  "uniqueUserCount": 0,
+  "categoriesWithData": 0,
+  "queryByCategoryCount": []
+}
+2025-03-13T03:18:35.637Z - WARNING: No queries found in the last 3 months
+2025-03-13T03:18:35.637Z - Verifying and creating indexes...
+2025-03-13T03:18:35.639Z - Index idx_queries_timestamp already exists on queries
+2025-03-13T03:18:35.639Z - Index idx_queries_categoryId already exists on queries
+2025-03-13T03:18:35.640Z - Index idx_queries_userId already exists on queries
+2025-03-13T03:18:35.640Z - Index idx_queries_sessionId already exists on queries
+2025-03-13T03:18:35.641Z - Index idx_analytics_timestamp already exists on analytics
+2025-03-13T03:18:35.641Z - Index idx_analytics_type already exists on analytics
+2025-03-13T03:18:35.642Z - Index idx_analytics_userId already exists on analytics
+2025-03-13T03:18:35.642Z - Index idx_sessions_startTime already exists on sessions
+2025-03-13T03:18:35.643Z - Index idx_sessions_userId already exists on sessions
+2025-03-13T03:18:35.643Z - Index verification complete
+2025-03-13T03:18:35.643Z - Checking data consistency...
+2025-03-13T03:18:35.643Z - Checking for queries without valid sessionId...
+2025-03-13T03:18:38.777Z - No orphaned queries found (all queries have valid sessionId)
+2025-03-13T03:18:38.777Z - Checking for queries with invalid categoryId...
+2025-03-13T03:18:40.411Z - No queries with invalid categoryId found
+2025-03-13T03:18:40.411Z - Checking timestamp formats...
+2025-03-13T03:18:40.412Z - All checked timestamps are in valid ISO format
+2025-03-13T03:18:40.413Z - Testing queries with different date formats...
+2025-03-13T03:18:40.413Z - Testing with ISO with Z
+2025-03-13T03:18:40.413Z - Query: 
+          FOR q IN queries
+            FILTER q.timestamp >= '2025-02-11T03:18:40.413Z' AND q.timestamp <= '2025-03-13T03:18:40.413Z'
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-13T03:18:40.421Z - Result with ISO with Z: 29060
+2025-03-13T03:18:40.422Z - Testing with ISO without Z
+2025-03-13T03:18:40.422Z - Query: 
+          FOR q IN queries
+            FILTER q.timestamp >= '2025-02-11T03:18:40.413' AND q.timestamp <= '2025-03-13T03:18:40.413'
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-13T03:18:40.429Z - Result with ISO without Z: 29060
+2025-03-13T03:18:40.429Z - Testing with Date only
+2025-03-13T03:18:40.429Z - Query: 
+          FOR q IN queries
+            FILTER q.timestamp >= '2025-02-11' AND q.timestamp <= '2025-03-13'
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-13T03:18:40.437Z - Result with Date only: 29063
+2025-03-13T03:18:40.437Z - Testing with Date timestamp in milliseconds
+2025-03-13T03:18:40.437Z - Query: 
+            FOR q IN queries
+              FILTER DATE_TIMESTAMP(q.timestamp) >= 1739243920413 AND DATE_TIMESTAMP(q.timestamp) <= 1741835920413
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          
+2025-03-13T03:18:40.580Z - Result with Date timestamp in milliseconds: 29060
+2025-03-13T03:18:40.580Z - Testing with DATE_ISO8601
+2025-03-13T03:18:40.580Z - Query: 
+          LET startDate = DATE_ISO8601('2025-02-11T03:18:40.413Z')
+          LET endDate = DATE_ISO8601('2025-03-13T03:18:40.413Z')
+          
+          FOR q IN queries
+            FILTER q.timestamp >= startDate AND q.timestamp <= endDate
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-13T03:18:40.587Z - Result with DATE_ISO8601: 29060
+2025-03-13T03:18:40.587Z - Testing with DATE_NOW
+2025-03-13T03:18:40.587Z - Query: 
+          LET startDate = DATE_ISO8601('2025-02-11T03:18:40.413Z')
+          LET endDate = DATE_NOW()
+          
+          FOR q IN queries
+            FILTER q.timestamp >= startDate AND q.timestamp <= endDate
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        
+2025-03-13T03:18:40.588Z - Result with DATE_NOW: 0
+2025-03-13T03:18:40.588Z - Testing dashboard queries with wider date ranges...
+2025-03-13T03:18:40.588Z - Testing dashboard query with range: Last 7 days
+2025-03-13T03:18:40.596Z - Dashboard query results for Last 7 days:
+2025-03-13T03:18:40.596Z - {
+  "dateRange": {
+    "start": "Y-3-6",
+    "end": "Y-3-13",
+    "name": "Last 7 days"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-13T03:18:40.596Z - WARNING: No queries found for range Last 7 days
+2025-03-13T03:18:40.596Z - Testing dashboard query with range: Last 30 days
+2025-03-13T03:18:40.604Z - Dashboard query results for Last 30 days:
+2025-03-13T03:18:40.604Z - {
+  "dateRange": {
+    "start": "Y-2-11",
+    "end": "Y-3-13",
+    "name": "Last 30 days"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-13T03:18:40.604Z - WARNING: No queries found for range Last 30 days
+2025-03-13T03:18:40.604Z - Testing dashboard query with range: Last 90 days
+2025-03-13T03:18:40.611Z - Dashboard query results for Last 90 days:
+2025-03-13T03:18:40.611Z - {
+  "dateRange": {
+    "start": "Y-12-13",
+    "end": "Y-3-13",
+    "name": "Last 90 days"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-13T03:18:40.611Z - WARNING: No queries found for range Last 90 days
+2025-03-13T03:18:40.611Z - Testing dashboard query with range: All time
+2025-03-13T03:18:40.618Z - Dashboard query results for All time:
+2025-03-13T03:18:40.618Z - {
+  "dateRange": {
+    "start": "Y-3-16",
+    "end": "Y-3-13",
+    "name": "All time"
+  },
+  "queries": {
+    "total": 0,
+    "avgResponseTime": 0
+  },
+  "users": {
+    "activeCount": 0
+  },
+  "feedback": {
+    "positivePercentage": 0,
+    "totalFeedback": 0
+  },
+  "categories": {
+    "totalCategories": 0,
+    "sampleCategories": []
+  }
+}
+2025-03-13T03:18:40.618Z - WARNING: No queries found for range All time
+2025-03-13T03:18:40.618Z - Testing simple count query to verify data access...
+2025-03-13T03:18:40.785Z - Simple count query results:
+2025-03-13T03:18:40.785Z - {
+  "totalQueries": 546919,
+  "totalUsers": 2000,
+  "totalSessions": 545762,
+  "totalAnalytics": 710133,
+  "totalServiceCategories": 8
+}
+2025-03-13T03:18:40.785Z - SUCCESS: Database contains 546919 queries, 2000 users, 545762 sessions
+2025-03-13T03:18:40.785Z - Data validation complete.

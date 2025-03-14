@@ -87,124 +87,336 @@ const debugDateFormats = async (db) => {
   }
 };
 
-// Modified service categories with purely numeric keys for maximum compatibility
+// Updated service categories based on the ServiceTreePanelComponent.vue
 const SERVICE_CATEGORIES = [
-  { _key: '1', nameEN: 'Business & Economy', nameFR: 'Affaires & Économie', nameSW: 'Biashara & Uchumi', order: 1 },
-  { _key: '2', nameEN: 'Transportation', nameFR: 'Transport', nameSW: 'Usafiri', order: 2 },
-  { _key: '3', nameEN: 'Taxes & Revenue', nameFR: 'Impôts & Recettes', nameSW: 'Kodi & Mapato', order: 3 },
-  { _key: '4', nameEN: 'Immigration & Citizenship', nameFR: 'Immigration & Citoyenneté', nameSW: 'Uhamiaji & Uraia', order: 4 },
-  { _key: '5', nameEN: 'Education & Learning', nameFR: 'Éducation & Apprentissage', nameSW: 'Elimu & Mafunzo', order: 5 },
-  { _key: '6', nameEN: 'Housing & Properties', nameFR: 'Logement & Propriétés', nameSW: 'Makazi & Mali', order: 6 },
-  { _key: '7', nameEN: 'Health & Healthcare', nameFR: 'Santé & Soins Médicaux', nameSW: 'Afya & Huduma za Afya', order: 7 },
-  { _key: '8', nameEN: 'Justice & Legal', nameFR: 'Justice & Juridique', nameSW: 'Haki & Sheria', order: 8 }
+  { 
+    _key: '1', 
+    nameEN: 'Identity & Civil Registration', 
+    nameFR: 'Identité et état civil', 
+    nameSW: 'Utambulisho na Usajili wa Raia', 
+    order: 1 
+  },
+  { 
+    _key: '2', 
+    nameEN: 'Healthcare & Social Services', 
+    nameFR: 'Santé et services sociaux', 
+    nameSW: 'Afya na Huduma za Kijamii', 
+    order: 2 
+  },
+  { 
+    _key: '3', 
+    nameEN: 'Education & Learning', 
+    nameFR: 'Éducation et apprentissage', 
+    nameSW: 'Elimu na Mafunzo', 
+    order: 3 
+  },
+  { 
+    _key: '4', 
+    nameEN: 'Employment & Labor Services', 
+    nameFR: 'Emploi et services du travail', 
+    nameSW: 'Ajira na Huduma za Kazi', 
+    order: 4 
+  },
+  { 
+    _key: '5', 
+    nameEN: 'Taxes & Revenue', 
+    nameFR: 'Impôts et revenus', 
+    nameSW: 'Kodi na Mapato', 
+    order: 5 
+  },
+  { 
+    _key: '6', 
+    nameEN: 'Public Safety & Justice', 
+    nameFR: 'Sécurité publique et justice', 
+    nameSW: 'Usalama wa Umma na Haki', 
+    order: 6 
+  },
+  { 
+    _key: '7', 
+    nameEN: 'Transportation & Mobility', 
+    nameFR: 'Transport et mobilité', 
+    nameSW: 'Usafiri na Usafiri', 
+    order: 7 
+  },
+  { 
+    _key: '8', 
+    nameEN: 'Business & Trade', 
+    nameFR: 'Affaires et commerce', 
+    nameSW: 'Biashara na Biashara', 
+    order: 8 
+  },
+  { 
+    _key: '9', 
+    nameEN: 'Housing & Urban Development', 
+    nameFR: 'Logement et développement urbain', 
+    nameSW: 'Nyumba na Maendeleo ya Mjini', 
+    order: 9 
+  },
+  { 
+    _key: '10', 
+    nameEN: 'Utilities & Environment', 
+    nameFR: 'Services publics et environnement', 
+    nameSW: 'Huduma na Mazingira', 
+    order: 10 
+  },
+  { 
+    _key: '11', 
+    nameEN: 'Culture & Recreation', 
+    nameFR: 'Culture et loisirs', 
+    nameSW: 'Utamaduni na Burudani', 
+    order: 11 
+  },
+  { 
+    _key: '12', 
+    nameEN: 'Immigration & Citizenship', 
+    nameFR: 'Immigration et citoyenneté', 
+    nameSW: 'Uhamiaji na Uraia', 
+    order: 12 
+  },
+  { 
+    _key: '13', 
+    nameEN: 'Social Security & Pensions', 
+    nameFR: 'Sécurité sociale et retraites', 
+    nameSW: 'Hifadhi ya Jamii na Pensheni', 
+    order: 13 
+  }
 ];
+
+// Updated category services mapping based on the ServiceTreePanelComponent.vue fallbackData
+const CATEGORY_SERVICES = {
+  '1': {
+    en: ['Birth Registration', 'National ID Cards', 'Passport Services', 'Vital Records'],
+    fr: ['Enregistrement des naissances', 'Cartes d\'identité nationale', 'Services de passeport', 'État civil'],
+    sw: ['Usajili wa Kuzaliwa', 'Vitambulisho vya Kitaifa', 'Huduma za Pasipoti', 'Kumbukumbu za Muhimu']
+  },
+  '2': {
+    en: ['Medical Services', 'Social Assistance', 'Healthcare Programs', 'Mental Health'],
+    fr: ['Services médicaux', 'Aide sociale', 'Programmes de santé', 'Santé mentale'],
+    sw: ['Huduma za Matibabu', 'Msaada wa Kijamii', 'Programu za Afya', 'Afya ya Akili']
+  },
+  '3': {
+    en: ['K-12 Schools', 'Higher Education', 'Adult Learning', 'Educational Resources'],
+    fr: ['Écoles K-12', 'Enseignement supérieur', 'Formation des adultes', 'Ressources éducatives'],
+    sw: ['Shule za K-12', 'Elimu ya Juu', 'Mafunzo ya Watu Wazima', 'Rasilimali za Elimu']
+  },
+  '4': {
+    en: ['Job Search', 'Labor Rights', 'Workplace Safety', 'Career Development'],
+    fr: ['Recherche d\'emploi', 'Droits du travail', 'Sécurité au travail', 'Développement de carrière'],
+    sw: ['Utafutaji wa Kazi', 'Haki za Wafanyakazi', 'Usalama Kazini', 'Maendeleo ya Kazi']
+  },
+  '5': {
+    en: ['Income Tax', 'Sales Tax', 'Property Tax', 'Tax Credits'],
+    fr: ['Impôt sur le revenu', 'Taxe de vente', 'Impôt foncier', 'Crédits d\'impôt'],
+    sw: ['Kodi ya Mapato', 'Kodi ya Mauzo', 'Kodi ya Mali', 'Punguzo za Kodi']
+  },
+  '6': {
+    en: ['Police Services', 'Courts', 'Legal Services', 'Emergency Services'],
+    fr: ['Services de police', 'Tribunaux', 'Services juridiques', 'Services d\'urgence'],
+    sw: ['Huduma za Polisi', 'Mahakama', 'Huduma za Kisheria', 'Huduma za Dharura']
+  },
+  '7': {
+    en: ['Driver Services', 'Public Transit', 'Roads & Highways', 'Aviation'],
+    fr: ['Services aux conducteurs', 'Transport en commun', 'Routes et autoroutes', 'Aviation'],
+    sw: ['Huduma za Dereva', 'Usafiri wa Umma', 'Barabara na Barabara Kuu', 'Usafiri wa Anga']
+  },
+  '8': {
+    en: ['Business Registration', 'Economic Development', 'Trade', 'Small Business Support'],
+    fr: ['Enregistrement d\'entreprise', 'Développement économique', 'Commerce', 'Soutien aux petites entreprises'],
+    sw: ['Usajili wa Biashara', 'Maendeleo ya Kiuchumi', 'Biashara', 'Msaada wa Biashara Ndogo']
+  },
+  '9': {
+    en: ['Housing Programs', 'Property Assessment', 'Rental Assistance', 'Homeownership'],
+    fr: ['Programmes de logement', 'Évaluation des propriétés', 'Aide à la location', 'Accession à la propriété'],
+    sw: ['Programu za Nyumba', 'Tathmini ya Mali', 'Msaada wa Kukodi', 'Umiliki wa Nyumba']
+  },
+  '10': {
+    en: ['Natural Resources', 'Environmental Protection', 'Parks & Recreation', 'Wildlife'],
+    fr: ['Ressources naturelles', 'Protection de l\'environnement', 'Parcs et loisirs', 'Faune'],
+    sw: ['Rasilimali za Asili', 'Uhifadhi wa Mazingira', 'Mbuga na Burudani', 'Wanyamapori']
+  },
+  '11': {
+    en: ['Arts & Culture', 'Heritage', 'Sports & Recreation', 'Tourism'],
+    fr: ['Arts et culture', 'Patrimoine', 'Sports et loisirs', 'Tourisme'],
+    sw: ['Sanaa na Utamaduni', 'Urithi', 'Michezo na Burudani', 'Utalii']
+  },
+  '12': {
+    en: ['Immigration Services', 'Citizenship Applications', 'Visas', 'Refugee Programs', 'Elections and Voting'],
+    fr: ['Services d\'immigration', 'Demandes de citoyenneté', 'Visas', 'Programmes pour réfugiés', 'Élections et vote'],
+    sw: ['Huduma za Uhamiaji', 'Maombi ya Uraia', 'Visa', 'Programu za Wakimbizi', 'Uchaguzi na Kupiga Kura']
+  },
+  '13': {
+    en: ['Retirement benefits', 'Pension fund management', 'Survivor benefits', 'Disability pensions'],
+    fr: ['Allocations de retraite', 'Gestion des fonds de pension', 'Allocations de survivant', 'Pensions pour invalidité'],
+    sw: ['Manufaa ya kustaafu', 'Usimamizi wa mfuko wa pensheni', 'Manufaa ya warithi', 'Pensheni za ulemavu']
+  }
+};
 
 // Top queries mapping to the new numeric category keys
 const TOP_QUERIES = [
-  { text: 'How do I apply for a business license?', categoryKey: '1', count: 2347, avgTime: 2.3 },
-  { text: 'Where can I find tax forms?', categoryKey: '3', count: 1982, avgTime: 1.8 },
-  { text: 'How to renew my driver\'s license?', categoryKey: '2', count: 1645, avgTime: 2.1 },
-  { text: 'What documents do I need for passport application?', categoryKey: '4', count: 1423, avgTime: 3.4 },
-  { text: 'When are property taxes due?', categoryKey: '3', count: 1289, avgTime: 1.9 }
+  { text: 'How do I apply for a national ID card?', categoryKey: '1', count: 2347, avgTime: 2.3 },
+  { text: 'Where can I find tax forms?', categoryKey: '5', count: 1982, avgTime: 1.8 },
+  { text: 'How to renew my driver\'s license?', categoryKey: '7', count: 1645, avgTime: 2.1 },
+  { text: 'What documents do I need for passport application?', categoryKey: '1', count: 1423, avgTime: 3.4 },
+  { text: 'When are property taxes due?', categoryKey: '5', count: 1289, avgTime: 1.9 }
 ];
 
-// Common questions for each category
+// Common questions for each category - expanded to include relevant questions for each service
 const CATEGORY_QUESTIONS = {
   '1': [
-    'How do I register a new business?',
-    'What permits do I need for a small business?',
-    'How can I apply for a business loan?',
-    'What are the requirements for business tax filing?',
-    'How to renew a business license?',
-    'What is the process for obtaining a commercial license?',
-    'How do I register for a business tax ID?',
-    'What are the business regulation requirements?',
-    'How can I export my products internationally?',
-    'What government grants are available for small businesses?'
+    'How do I get a birth certificate for my newborn?',
+    'What documents are needed for a national ID application?',
+    'How long does passport processing take?',
+    'Can I get a replacement for a lost birth certificate?',
+    'How do I register the death of a family member?',
+    'What is the fee for a new passport?',
+    'How do I correct errors on my national ID card?',
+    'Can I apply for an emergency passport?',
+    'Where are the nearest vital records offices?',
+    'What is the process for name change on official documents?'
   ],
   '2': [
-    'How do I renew my driver\'s license?',
-    'What documents do I need for vehicle registration?',
-    'How can I pay a traffic ticket?',
-    'How to apply for a commercial driving permit?',
-    'What are the vehicle inspection requirements?',
-    'What is the process for getting a vehicle title transfer?',
-    'How do I get a license plate replacement?',
-    'What are the requirements for an international driving permit?',
-    'How do I register an imported vehicle?',
-    'What are the restrictions for learner drivers?'
+    'How do I register for public healthcare services?',
+    'What vaccination programs are available for children?',
+    'How can I apply for health insurance subsidies?',
+    'Where are the nearest public hospitals?',
+    'What mental health services are covered by government insurance?',
+    'How do I qualify for disability benefits?',
+    'What food assistance programs are available?',
+    'How do I find a doctor in the public healthcare system?',
+    'What are the operating hours for public health clinics?',
+    'How can I access emergency medical services?'
   ],
   '3': [
-    'When are income taxes due?',
-    'How do I file my tax return?',
-    'Can I get an extension for tax filing?',
-    'How to check my tax refund status?',
-    'What tax deductions are available for small businesses?',
-    'How do I pay property taxes online?',
-    'What is the deadline for business tax filing?',
-    'How do I apply for a tax exemption?',
-    'What tax credits am I eligible for?',
-    'How do I report foreign income on my tax return?'
+    'How do I enroll my child in public school?',
+    'What are the government university application deadlines?',
+    'Are there adult education programs available in rural areas?',
+    'How can I access digital learning resources provided by the government?',
+    'What scholarships are available for higher education?',
+    'How do I transfer my child between public schools?',
+    'What vocational training programs does the government offer?',
+    'Are there literacy programs for adults?',
+    'How do I validate foreign educational qualifications?',
+    'What special education services are available in public schools?'
   ],
   '4': [
-    'How do I apply for a passport?',
-    'What documents do I need for citizenship application?',
-    'How long does visa processing take?',
-    'What are the requirements for permanent residency?',
-    'How can I renew my work permit?',
-    'What is the process for family reunification visas?',
-    'How do I check my immigration application status?',
-    'What are the fees for citizenship applications?',
-    'How do I extend my visitor visa?',
-    'What are the requirements for a student visa?'
+    'How do I register for unemployment benefits?',
+    'What are my rights regarding minimum wage?',
+    'How do I report unsafe working conditions?',
+    'What government career development programs are available?',
+    'How do I file a complaint against my employer?',
+    'Are there government-sponsored apprenticeship programs?',
+    'What are the legal working hours regulations?',
+    'How do I get job training through government programs?',
+    'What are the maternity leave regulations?',
+    'How do I find public sector job openings?'
   ],
   '5': [
-    'How do I enroll my child in public school?',
-    'What financial aid is available for college?',
-    'How can I apply for a student loan?',
-    'What continuing education programs are offered?',
-    'How do I transfer school credits?',
-    'What are the requirements for homeschooling?',
-    'How do I apply for a scholarship?',
-    'What standardized tests are required for college admission?',
-    'How do I get my foreign degree recognized?',
-    'What vocational training programs are available?'
+    'When is the deadline for filing income tax returns?',
+    'How do I calculate sales tax for my business?',
+    'How can I pay my property taxes online?',
+    'What tax credits are available for small businesses?',
+    'How do I get a tax identification number?',
+    'Can I get an extension for tax filing?',
+    'How do I appeal a property tax assessment?',
+    'What are the penalties for late tax payments?',
+    'How do I report tax fraud?',
+    'Are there tax exemptions for senior citizens?'
   ],
   '6': [
-    'How do I apply for public housing?',
-    'What permits do I need for home renovation?',
-    'How can I file a complaint against a landlord?',
-    'What are the property tax rates?',
-    'How do I contest a property assessment?',
-    'What are the first-time homebuyer programs?',
-    'How do I apply for a housing subsidy?',
-    'What are my rights as a tenant?',
-    'How do I register a property deed?',
-    'What are the zoning regulations in my area?'
+    'How do I file a police report?',
+    'How do I find out about court dates?',
+    'Where can I get legal aid services?',
+    'What is the process for calling emergency services?',
+    'How do I get a background check?',
+    'What should I do if I receive a court summons?',
+    'How do I apply for a restraining order?',
+    'What are the procedures for reporting domestic violence?',
+    'How do I contact the nearest police station?',
+    'What consumer protection laws apply to online purchases?'
   ],
   '7': [
-    'How do I sign up for health insurance?',
-    'What vaccinations are required for school?',
-    'How can I find a local healthcare provider?',
-    'What mental health services are available?',
-    'How do I access my medical records?',
-    'What is the process for medical license renewal?',
-    'How do I apply for disability benefits?',
-    'What preventive healthcare services are covered?',
-    'How do I find low-cost healthcare options?',
-    'What are the healthcare options for seniors?'
+    'How do I renew my driver\'s license?',
+    'What is the schedule for public transit in the city?',
+    'How do I report road damage or potholes?',
+    'What are the aviation regulations for domestic flights?',
+    'How do I get a vehicle registration certificate?',
+    'What are the fares for public transportation?',
+    'How do I book a driving test?',
+    'What are the highway toll rates?',
+    'How do I report a traffic accident?',
+    'What are the requirements for a commercial driving license?'
   ],
   '8': [
-    'How do I file a small claims case?',
-    'What is the process for jury duty?',
-    'How can I obtain court records?',
-    'What legal aid services are available?',
-    'How do I get a document notarized?',
-    'How do I file for child custody?',
-    'What are the requirements for a marriage license?',
-    'How do I file a restraining order?',
-    'What are the steps to contest a will?',
-    'How do I change my legal name?'
+    'How do I register a new business?',
+    'What economic development incentives are available for new businesses?',
+    'What are the export regulations for local products?',
+    'How do I apply for small business loans or grants?',
+    'What are the requirements for business tax registration?',
+    'How do I get a business operating license?',
+    'What trade agreements affect local businesses?',
+    'How do I participate in government procurement opportunities?',
+    'What support is available for women-owned businesses?',
+    'How do I register intellectual property for my business?'
+  ],
+  '9': [
+    'How do I apply for government housing programs?',
+    'How is property value assessed for tax purposes?',
+    'What rental assistance programs are available?',
+    'How do I qualify for first-time homebuyer programs?',
+    'What are the requirements for housing subsidies?',
+    'How do I apply for home renovation grants?',
+    'What are tenant rights regarding eviction?',
+    'How do I register a property deed?',
+    'Are there housing programs for veterans?',
+    'What zoning regulations apply to residential properties?'
+  ],
+  '10': [
+    'How do I report illegal logging or mining?',
+    'What environmental protection regulations apply to businesses?',
+    'How do I get a permit for a park event?',
+    'What wildlife conservation programs exist?',
+    'How do I report polluted water sources?',
+    'What are the regulations for waste disposal?',
+    'How do I apply for a hunting or fishing license?',
+    'What are the protected natural areas in the region?',
+    'How can I participate in community tree planting?',
+    'What are the camping regulations in national parks?'
+  ],
+  '11': [
+    'What cultural grants are available for artists?',
+    'How do I register a historical building for heritage status?',
+    'What public sports facilities are available in my area?',
+    'How do I get a tourism operator license?',
+    'What cultural events are sponsored by the government?',
+    'How do I apply for arts funding?',
+    'What are the regulations for accessing historical archives?',
+    'How do I register a sports club or team?',
+    'What are the opening hours for public museums?',
+    'How do I get permission for filming at heritage sites?'
+  ],
+  '12': [
+    'How do I apply for a work visa?',
+    'What is the process for citizenship application?',
+    'How long does visa processing take?',
+    'What services are available for refugees?',
+    'How do I register to vote?',
+    'What are the requirements for permanent residency?',
+    'How do I renew my visa?',
+    'What is the process for sponsoring a family member for immigration?',
+    'How do I check my immigration application status?',
+    'What are the voting procedures for upcoming elections?'
+  ],
+  '13': [
+    'How do I apply for retirement benefits?',
+    'How do I check my pension fund balance?',
+    'What are the requirements for survivor benefits?',
+    'How do I apply for disability pension?',
+    'At what age can I start receiving social security benefits?',
+    'How do I report changes that might affect my pension?',
+    'What documents are needed for pension applications?',
+    'How are pension benefits calculated?',
+    'Can I collect pension while working part-time?',
+    'How do I update my banking information for pension payments?'
   ]
 };
 
@@ -246,15 +458,40 @@ const calculateUsersForMonth = (monthIndex, totalMonths) => {
   return users;
 };
 
-// Calculate queries per user (between 5 and 50)
-const calculateQueriesPerUser = () => {
-  // Normal distribution around mean of 20 queries
-  const mean = 20;
-  const stdDev = 10;
-  let queries = Math.floor(mean + (stdDev * (Math.random() + Math.random() + Math.random() - 1.5)));
+// NEW: Get a more realistic distribution of queries per user that follows natural chat patterns
+const getQueriesPerSession = (monthIndex, totalMonths) => {
+  // As time progresses, users tend to have more complex conversations
+  // This creates a gradual increase in average session length over time
+  const progressFactor = monthIndex / totalMonths; // 0 to 1 based on time progression
   
-  // Ensure within bounds 5-50
-  return Math.min(50, Math.max(5, queries));
+  // Use different distributions based on user types
+  const userType = Math.random();
+  
+  if (userType < 0.6) {
+    // 60% are casual users with short sessions (5-15 queries)
+    // These increase slightly over time
+    const baseMin = 5;
+    const baseMax = 15;
+    const min = Math.round(baseMin * (1 + progressFactor * 0.5));
+    const max = Math.round(baseMax * (1 + progressFactor * 0.5));
+    return randomInt(min, max);
+  } else if (userType < 0.9) {
+    // 30% are moderate users (15-40 queries)
+    // These increase moderately over time
+    const baseMin = 15;
+    const baseMax = 40;
+    const min = Math.round(baseMin * (1 + progressFactor * 0.7));
+    const max = Math.round(baseMax * (1 + progressFactor * 0.7));
+    return randomInt(min, max);
+  } else {
+    // 10% are power users with long chat sessions (40-100 queries)
+    // These increase significantly over time
+    const baseMin = 40;
+    const baseMax = 80;
+    const min = Math.round(baseMin * (1 + progressFactor * 0.8));
+    const max = Math.round(baseMax * (1 + progressFactor));
+    return randomInt(min, Math.min(100, max)); // Cap at 100
+  }
 };
 
 // Create sample event data for the events collection
@@ -349,6 +586,54 @@ const createIndexes = async (db) => {
   console.log('Index creation complete');
 };
 
+// Generate and save individual services
+const createServices = async (db, serviceCategories) => {
+  console.log('Creating services for each category...');
+  
+  const services = db.collection('services');
+  const categoryServicesEdge = db.collection('categoryServices');
+  let serviceCount = 0;
+  
+  for (const category of SERVICE_CATEGORIES) {
+    const categoryKey = category._key;
+    const enServices = CATEGORY_SERVICES[categoryKey].en;
+    const frServices = CATEGORY_SERVICES[categoryKey].fr;
+    const swServices = CATEGORY_SERVICES[categoryKey].sw;
+    
+    for (let i = 0; i < enServices.length; i++) {
+      const serviceKey = generateKey();
+      
+      try {
+        // Save service
+        await services.save({
+          _key: serviceKey,
+          categoryId: `serviceCategories/${categoryKey}`,
+          nameEN: enServices[i],
+          nameFR: frServices[i],
+          nameSW: swServices[i],
+          description: `${enServices[i]} service under ${category.nameEN} category`,
+          order: i + 1
+        });
+        
+        // Create edge from category to service
+        await categoryServicesEdge.save({
+          _from: `serviceCategories/${categoryKey}`,
+          _to: `services/${serviceKey}`,
+          _key: generateKey(),
+          order: i + 1
+        });
+        
+        serviceCount++;
+      } catch (err) {
+        console.error(`Error creating service ${enServices[i]} for category ${categoryKey}:`, err.message);
+      }
+    }
+  }
+  
+  console.log(`Created ${serviceCount} services across all categories`);
+  return serviceCount;
+};
+
 // Fix DATE_NOW() compatibility in test queries
 const runTestQueriesWithWorkaround = async (db, startDate, endDate) => {
   try {
@@ -384,6 +669,59 @@ const runTestQueriesWithWorkaround = async (db, startDate, endDate) => {
     debug(`Error in test query: ${err.message}`);
     return { error: err.message };
   }
+};
+
+// NEW: Generate follow-up queries that simulate natural conversation
+const generateFollowUpQueries = (baseCategory, previousQuery, count) => {
+  // Create a set of follow-up questions based on the category and previous query
+  const followUps = [];
+  
+  // Generic follow-ups that work for any category
+  const genericFollowUps = [
+    "Can you explain that in more detail?",
+    "What documents do I need to provide?",
+    "How long does this process take?",
+    "Is there an online option for this service?",
+    "Where is the nearest office to get this done?",
+    "What are the fees involved?",
+    "Do I need to make an appointment?",
+    "What are the office hours?",
+    "Can someone else submit this on my behalf?",
+    "What if I'm not a citizen?",
+    "Is there a deadline I should be aware of?",
+    "What happens after I submit everything?",
+    "Are there any alternatives to this process?",
+    "Why is this requirement necessary?",
+    "What's the fastest way to get this done?"
+  ];
+  
+  // First, try to add some category-specific follow-ups
+  if (baseCategory) {
+    const categoryQuestions = CATEGORY_QUESTIONS[baseCategory];
+    // Select a few random questions from the same category
+    for (let i = 0; i < Math.min(count, categoryQuestions.length); i++) {
+      const randomIndex = randomInt(0, categoryQuestions.length - 1);
+      followUps.push(categoryQuestions[randomIndex]);
+      
+      // Remove the selected question to avoid duplicates
+      categoryQuestions.splice(randomIndex, 1);
+      
+      if (categoryQuestions.length === 0) break;
+    }
+  }
+  
+  // Fill the rest with generic follow-ups
+  while (followUps.length < count) {
+    const randomIndex = randomInt(0, genericFollowUps.length - 1);
+    followUps.push(genericFollowUps[randomIndex]);
+    
+    // Remove the selected question to avoid duplicates
+    genericFollowUps.splice(randomIndex, 1);
+    
+    if (genericFollowUps.length === 0) break;
+  }
+  
+  return followUps;
 };
 
 // Main function to generate and save test data
@@ -423,6 +761,7 @@ const generateTestData = async () => {
     
     // Ensure all required collections exist
     const serviceCategories = await ensureCollection('serviceCategories');
+    const services = await ensureCollection('services');
     const users = await ensureCollection('users');
     const sessions = await ensureCollection('sessions');
     const queries = await ensureCollection('queries');
@@ -434,10 +773,12 @@ const generateTestData = async () => {
     const userSessions = await ensureCollection('userSessions', 'edge');
     const sessionQueries = await ensureCollection('sessionQueries', 'edge');
     const queryCategories = await ensureCollection('queryCategories', 'edge');
+    const categoryServices = await ensureCollection('categoryServices', 'edge');
     
     // Clear all collections first
     console.log('Clearing existing data...');
     await serviceCategories.truncate();
+    await services.truncate();
     await users.truncate();
     await sessions.truncate();
     await queries.truncate();
@@ -447,6 +788,7 @@ const generateTestData = async () => {
     await userSessions.truncate();
     await sessionQueries.truncate();
     await queryCategories.truncate();
+    await categoryServices.truncate();
     
     // Create service categories
     console.log('Creating service categories...');
@@ -458,6 +800,9 @@ const generateTestData = async () => {
         console.error(`Error saving category ${category._key}:`, err.message);
       }
     }
+    
+    // Create services for each category
+    const serviceCount = await createServices(db, serviceCategories);
     
     // Create required indexes for better query performance
     await createIndexes(db);
@@ -621,29 +966,45 @@ const generateTestData = async () => {
               createdAt: createCompatibleTimestamp(sessionDate)
             });
             
-            // Create queries for this session
-            // More recent sessions tend to have more queries
-            const recencyBoost = monthData.month / totalMonths; // 0 to 1 based on how recent the month is
-            const baseQueriesPerSession = calculateQueriesPerUser() / 30; // Split monthly queries across days
-            const queriesPerSession = Math.max(1, Math.floor(baseQueriesPerSession * (1 + recencyBoost)));
+            // NEW: Get a more realistic number of queries per session that follows chat patterns
+            // This now ranges from 5-100 queries depending on user type and time
+            const queriesPerSession = getQueriesPerSession(monthData.month, totalMonths);
             
+            // Track the current category to help generate related follow-up questions
+            let currentCategory = null;
+            let previousQuery = null;
+            
+            // Generate initial queries and follow-ups for this session
             for (let j = 0; j < queriesPerSession; j++) {
-              // 75% of queries should have a category assigned
-              const hasCategoryAssigned = Math.random() < 0.75;
-              
-              // Select a random category
-              const categoryIdx = randomInt(0, SERVICE_CATEGORIES.length - 1);
-              const category = SERVICE_CATEGORIES[categoryIdx];
+              // Start a new topic every 5-10 queries
+              if (j === 0 || (j % randomInt(5, 10) === 0 && j < queriesPerSession - 3)) {
+                // 75% of queries should have a category assigned
+                const hasCategoryAssigned = Math.random() < 0.75;
+                
+                // Select a random category
+                const categoryIdx = randomInt(0, SERVICE_CATEGORIES.length - 1);
+                const category = SERVICE_CATEGORIES[categoryIdx];
+                
+                currentCategory = hasCategoryAssigned ? category._key : null;
+                
+                // Get a seed question based on the category
+                previousQuery = hasCategoryAssigned ? getRandomQuery(currentCategory) : getRandomQuery();
+              } else {
+                // This is a follow-up question in the same conversation
+                // Generate a related follow-up based on the current topic
+                const followUps = generateFollowUpQueries(currentCategory, previousQuery, 5);
+                previousQuery = followUps[randomInt(0, followUps.length - 1)];
+              }
               
               const queryKey = generateKey();
-              const queryTimestamp = new Date(sessionDate.getTime() + j * randomInt(30, 300) * 1000); // Spread queries 30-300 seconds apart
+              const queryTimestamp = new Date(sessionDate.getTime() + j * randomInt(10, 60) * 1000); // Spread queries 10-60 seconds apart
               
               const query = {
                 _key: queryKey,
                 userId: session.userId,
                 sessionId: `sessions/${sessionKey}`,
-                text: hasCategoryAssigned ? getRandomQuery(category._key) : getRandomQuery(),
-                categoryId: hasCategoryAssigned ? `serviceCategories/${category._key}` : null,
+                text: previousQuery,
+                categoryId: currentCategory ? `serviceCategories/${currentCategory}` : null,
                 timestamp: createCompatibleTimestamp(queryTimestamp),
                 responseTime: parseFloat((Math.random() * 3 + 0.5).toFixed(1)),
                 isAnswered: Math.random() > 0.1 // 90% are answered
@@ -665,11 +1026,11 @@ const generateTestData = async () => {
               });
               
               // Create edge from query to category if category is assigned
-              if (hasCategoryAssigned) {
+              if (currentCategory) {
                 await queryCategories.save({
                   _key: generateKey(),
                   _from: `queries/${queryKey}`,
-                  _to: `serviceCategories/${category._key}`,
+                  _to: `serviceCategories/${currentCategory}`,
                   confidence: 0.7 + Math.random() * 0.3
                 });
               }
@@ -844,6 +1205,7 @@ const generateTestData = async () => {
     console.log(`
 Summary:
 - Service Categories: ${SERVICE_CATEGORIES.length}
+- Services: ${serviceCount}
 - Users: ${totalUsers}
 - Sessions: ${totalSessions}
 - Queries: ${totalQueries}
@@ -922,6 +1284,71 @@ Summary:
       } else {
         console.log(`⚠️ Categorization target not met: ${catResult.percentage.toFixed(1)}% of queries have categories (target: 75%).`);
       }
+      
+      // NEW: Test query distribution per user/session
+      const userQueryDistributionQuery = `
+        FOR s IN sessions
+          LET queryCount = (
+            FOR q IN queries
+              FILTER q.sessionId == CONCAT('sessions/', s._key)
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          )[0]
+          
+          FILTER queryCount > 0
+          
+          COLLECT numQueries = queryCount WITH COUNT INTO countSessions
+          
+          SORT numQueries ASC
+          RETURN {
+            queriesPerSession: numQueries,
+            numberOfSessions: countSessions
+          }
+      `;
+      
+      console.log('Testing query distribution per session...');
+      const distCursor = await db.query(userQueryDistributionQuery);
+      const distribution = await distCursor.all();
+      
+      // Group by ranges for better readability
+      const ranges = {
+        '5-15': 0,
+        '16-30': 0,
+        '31-50': 0,
+        '51-80': 0,
+        '81-100': 0,
+        '100+': 0
+      };
+      
+      let totalSessions = 0;
+      let totalQueriesInSample = 0;
+      
+      for (const item of distribution) {
+        totalSessions += item.numberOfSessions;
+        totalQueriesInSample += (item.queriesPerSession * item.numberOfSessions);
+        
+        if (item.queriesPerSession <= 15) {
+          ranges['5-15'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 30) {
+          ranges['16-30'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 50) {
+          ranges['31-50'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 80) {
+          ranges['51-80'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 100) {
+          ranges['81-100'] += item.numberOfSessions;
+        } else {
+          ranges['100+'] += item.numberOfSessions;
+        }
+      }
+      
+      console.log('Query distribution by range:');
+      for (const [range, count] of Object.entries(ranges)) {
+        const percentage = ((count / totalSessions) * 100).toFixed(1);
+        console.log(`${range} queries: ${count} sessions (${percentage}%)`);
+      }
+      
+      console.log(`Average queries per session: ${(totalQueriesInSample / totalSessions).toFixed(1)}`);
       
       // Test with different date formats to debug DATE_NOW() issue
       const dateFormatTests = [
@@ -1042,7 +1469,7 @@ Summary:
   }
 };
 
-// Run the script
+// Export the module with the generateTestData function
 module.exports = { generateTestData };
 
 // If this script is run directly (not imported as a module)

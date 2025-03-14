@@ -51,32 +51,29 @@ class AnalyticsController {
         });
       }
       
-      // Get analytics with specific filters to extract just the needed metric
-      const filters = {};
-      const analyticsData = await analyticsService.getAnalytics(filters, startDate, endDate);
-      
-      // Extract the requested metric
+      // Variable to store the metric value
       let value = null;
       
+      // Get the requested metric
       switch (metric) {
         case 'totalQueries':
+          // Get analytics with specific filters to extract just the needed metric
+          const analyticsData = await analyticsService.getAnalytics({type: 'query'}, startDate, endDate);
           value = analyticsData.queryCount;
           break;
-          
+        
         case 'uniqueUsers':
-          // Count unique users from the raw data
-          const userIds = new Set();
-          analyticsData.raw.forEach(item => {
-            if (item.userId) userIds.add(item.userId);
-          });
-          value = userIds.size;
+          // Use the dedicated method for counting unique users
+          value = await analyticsService.getUniqueUsersCount(startDate, endDate);
           break;
           
         case 'averageResponseTime':
-          // Calculate from query data if available
-          if (analyticsData.raw && analyticsData.raw.length > 0) {
-            const queries = analyticsData.raw.filter(item => 
-              item.type === 'query' && item.data && item.data.responseTime
+          // Get query data and calculate average response time
+          const queryAnalytics = await analyticsService.getAnalytics({type: 'query'}, startDate, endDate);
+          
+          if (queryAnalytics.raw && queryAnalytics.raw.length > 0) {
+            const queries = queryAnalytics.raw.filter(item => 
+              item.data && typeof item.data.responseTime === 'number'
             );
             
             if (queries.length > 0) {
@@ -94,8 +91,10 @@ class AnalyticsController {
           
         case 'satisfactionRate':
           // Calculate from feedback data
-          if (analyticsData.feedbackCount > 0) {
-            value = analyticsData.avgRating * 20; // Convert 1-5 scale to percentage
+          const feedbackAnalytics = await analyticsService.getAnalytics({type: 'feedback'}, startDate, endDate);
+          
+          if (feedbackAnalytics.feedbackCount > 0) {
+            value = feedbackAnalytics.avgRating * 20; // Convert 1-5 scale to percentage
           } else {
             // No feedback data available, provide a default
             value = 85.0; // Default satisfaction rate percentage
@@ -159,7 +158,17 @@ class AnalyticsController {
       // Call the analytics service to get the time series data
       const timeSeriesData = await analyticsService.getTimeSeriesData(metricType, interval, startDate, endDate);
       
-      res.json(timeSeriesData);
+      // If formatDateLabel is not available on the service, use a simple date formatting
+      const processedData = timeSeriesData.map(item => ({
+        timestamp: item.timestamp || '',
+        dateLabel: analyticsService.formatDateLabel 
+          ? analyticsService.formatDateLabel(item.timestamp, interval) 
+          : item.timestamp,
+        value: item.value || 0,
+        userCount: item.userCount || 0
+      }));
+      
+      res.json(processedData);
     } catch (error) {
       console.error(`Error in getTimeSeriesData for ${req.params.metricType}:`, error);
       res.status(500).json({ error: 'Failed to retrieve time series data' });

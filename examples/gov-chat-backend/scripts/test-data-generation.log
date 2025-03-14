@@ -139546,3 +139546,25 @@
   },
   "count": 29063
 }
+2025-03-13T14:53:19.702Z - Starting enhanced test data generation...
+2025-03-13T16:16:17.346Z - Testing DATE_NOW() compatibility with sample timestamps...
+2025-03-13T16:16:17.494Z - Error in debug date query: cursor.hasNext is not a function
+2025-03-13T16:16:17.494Z - Running test queries with DATE_NOW() workaround...
+2025-03-13T16:16:17.499Z - Test query results: {
+  "dateRange": {
+    "start": "2025-02-11",
+    "end": "2025-03-13"
+  },
+  "count": 28583
+}
+2025-03-14T03:54:58.866Z - Starting enhanced test data generation...
+2025-03-14T05:18:41.246Z - Testing DATE_NOW() compatibility with sample timestamps...
+2025-03-14T05:18:41.387Z - Error in debug date query: cursor.hasNext is not a function
+2025-03-14T05:18:41.388Z - Running test queries with DATE_NOW() workaround...
+2025-03-14T05:18:41.394Z - Test query results: {
+  "dateRange": {
+    "start": "2025-02-12",
+    "end": "2025-03-14"
+  },
+  "count": 29506
+}

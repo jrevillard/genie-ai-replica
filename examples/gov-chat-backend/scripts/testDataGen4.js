@@ -96,6 +96,7 @@ const SERVICE_CATEGORIES = [
     nameSW: 'Utambulisho na Usajili wa Raia', 
     order: 1 
   },
+  // Keeping all categories, as they represent the structure, not volume
   { 
     _key: '2', 
     nameEN: 'Healthcare & Social Services', 
@@ -103,6 +104,7 @@ const SERVICE_CATEGORIES = [
     nameSW: 'Afya na Huduma za Kijamii', 
     order: 2 
   },
+  // ... remaining categories are preserved
   { 
     _key: '3', 
     nameEN: 'Education & Learning', 
@@ -183,12 +185,14 @@ const SERVICE_CATEGORIES = [
 ];
 
 // Updated category services mapping based on the ServiceTreePanelComponent.vue fallbackData
+// Keeping all services, as they represent the structure, not volume
 const CATEGORY_SERVICES = {
   '1': {
     en: ['Birth Registration', 'National ID Cards', 'Passport Services', 'Vital Records'],
     fr: ['Enregistrement des naissances', 'Cartes d\'identité nationale', 'Services de passeport', 'État civil'],
     sw: ['Usajili wa Kuzaliwa', 'Vitambulisho vya Kitaifa', 'Huduma za Pasipoti', 'Kumbukumbu za Muhimu']
   },
+  // ... remaining services kept the same
   '2': {
     en: ['Medical Services', 'Social Assistance', 'Healthcare Programs', 'Mental Health'],
     fr: ['Services médicaux', 'Aide sociale', 'Programmes de santé', 'Santé mentale'],
@@ -260,7 +264,7 @@ const TOP_QUERIES = [
   { text: 'When are property taxes due?', categoryKey: '5', count: 1289, avgTime: 1.9 }
 ];
 
-// Common questions for each category - expanded to include relevant questions for each service
+// Common questions for each category - keeping all questions, as they represent the variety, not volume
 const CATEGORY_QUESTIONS = {
   '1': [
     'How do I get a birth certificate for my newborn?',
@@ -274,6 +278,7 @@ const CATEGORY_QUESTIONS = {
     'Where are the nearest vital records offices?',
     'What is the process for name change on official documents?'
   ],
+  // ... remaining questions kept the same
   '2': [
     'How do I register for public healthcare services?',
     'What vaccination programs are available for children?',
@@ -450,15 +455,16 @@ const getRandomQuery = (categoryKey = null) => {
   }
 };
 
-// Calculate users per month based on growth from 100 to 1000 over 3 years
+// Calculate users per month based on growth from 10 to 100 over 3 years (reduced by 10x)
 const calculateUsersForMonth = (monthIndex, totalMonths) => {
-  // Linear growth formula
-  const growth = (1000 - 100) / totalMonths;
-  const users = Math.floor(100 + (growth * monthIndex));
+  // Linear growth formula - reduced by 10x from original
+  const growth = (100 - 10) / totalMonths;
+  const users = Math.floor(10 + (growth * monthIndex));
   return users;
 };
 
-// NEW: Get a more realistic distribution of queries per user that follows natural chat patterns
+// Get a more realistic distribution of queries per session that follows natural chat patterns
+// Keeping the distribution pattern but reducing absolute numbers
 const getQueriesPerSession = (monthIndex, totalMonths) => {
   // As time progresses, users tend to have more complex conversations
   // This creates a gradual increase in average session length over time
@@ -468,33 +474,33 @@ const getQueriesPerSession = (monthIndex, totalMonths) => {
   const userType = Math.random();
   
   if (userType < 0.6) {
-    // 60% are casual users with short sessions (5-15 queries)
+    // 60% are casual users with short sessions (2-5 queries) - reduced from 5-15
     // These increase slightly over time
-    const baseMin = 5;
-    const baseMax = 15;
+    const baseMin = 2;
+    const baseMax = 5;
     const min = Math.round(baseMin * (1 + progressFactor * 0.5));
     const max = Math.round(baseMax * (1 + progressFactor * 0.5));
     return randomInt(min, max);
   } else if (userType < 0.9) {
-    // 30% are moderate users (15-40 queries)
+    // 30% are moderate users (5-10 queries) - reduced from 15-40
     // These increase moderately over time
-    const baseMin = 15;
-    const baseMax = 40;
+    const baseMin = 5;
+    const baseMax = 10;
     const min = Math.round(baseMin * (1 + progressFactor * 0.7));
     const max = Math.round(baseMax * (1 + progressFactor * 0.7));
     return randomInt(min, max);
   } else {
-    // 10% are power users with long chat sessions (40-100 queries)
+    // 10% are power users with long chat sessions (10-20 queries) - reduced from 40-100
     // These increase significantly over time
-    const baseMin = 40;
-    const baseMax = 80;
+    const baseMin = 10;
+    const baseMax = 15;
     const min = Math.round(baseMin * (1 + progressFactor * 0.8));
     const max = Math.round(baseMax * (1 + progressFactor));
-    return randomInt(min, Math.min(100, max)); // Cap at 100
+    return randomInt(min, Math.min(20, max)); // Cap at 20 (reduced from 100)
   }
 };
 
-// Create sample event data for the events collection
+// Create sample event data for the events collection - reduced by 10x
 const createSampleEvents = async (db, userCount, startDate, endDate) => {
   const eventTypes = [
     'pageView', 'buttonClick', 'formSubmission', 'download', 
@@ -502,7 +508,8 @@ const createSampleEvents = async (db, userCount, startDate, endDate) => {
   ];
   
   const eventCollection = db.collection('events');
-  const totalEvents = userCount * 5; // Average 5 events per user
+  // Reduced from 5 events per user to 2 events per user on average
+  const totalEvents = Math.ceil(userCount * 2); 
   
   console.log(`Creating ${totalEvents} sample events...`);
   
@@ -525,7 +532,7 @@ const createSampleEvents = async (db, userCount, startDate, endDate) => {
         createdAt: createCompatibleTimestamp(eventDate)
       });
       
-      if (i % 1000 === 0) {
+      if (i % 100 === 0) { // Reduced from 1000 to 100
         console.log(`Created ${i} events so far...`);
       }
     } catch (err) {
@@ -536,7 +543,7 @@ const createSampleEvents = async (db, userCount, startDate, endDate) => {
   console.log(`Created ${totalEvents} events.`);
 };
 
-// Create required indexes for improved query performance
+// Create required indexes for improved query performance - no changes needed here
 const createIndexes = async (db) => {
   console.log('Creating necessary indexes for query performance...');
   
@@ -586,7 +593,7 @@ const createIndexes = async (db) => {
   console.log('Index creation complete');
 };
 
-// Generate and save individual services
+// Generate and save individual services - no changes needed since services represent structure not volume
 const createServices = async (db, serviceCategories) => {
   console.log('Creating services for each category...');
   
@@ -671,7 +678,7 @@ const runTestQueriesWithWorkaround = async (db, startDate, endDate) => {
   }
 };
 
-// NEW: Generate follow-up queries that simulate natural conversation
+// Generate follow-up queries that simulate natural conversation
 const generateFollowUpQueries = (baseCategory, previousQuery, count) => {
   // Create a set of follow-up questions based on the category and previous query
   const followUps = [];
@@ -727,7 +734,7 @@ const generateFollowUpQueries = (baseCategory, previousQuery, count) => {
 // Main function to generate and save test data
 const generateTestData = async () => {
   try {
-    debug('Starting enhanced test data generation...');
+    debug('Starting reduced test data generation (10% of original volume)...');
     console.log('Connecting to ArangoDB...');
     const db = initDB();
     
@@ -820,7 +827,7 @@ const generateTestData = async () => {
       const currentDate = new Date(startDate);
       currentDate.setMonth(startDate.getMonth() + i);
       
-      // Calculate number of users for this month (growing from 100 to 1000)
+      // Calculate number of users for this month (growing from 10 to 100) - reduced by 10x
       const activeUsers = calculateUsersForMonth(i, totalMonths);
       
       // Generate month data
@@ -828,15 +835,15 @@ const generateTestData = async () => {
         month: i,
         date: currentDate,
         activeUsers: activeUsers,
-        // On average, each user makes queries on 3-5 different days per month
-        activeDays: Math.min(28, activeUsers * randomInt(3, 5)), 
+        // On average, each user makes queries on 2-3 different days per month (reduced from 3-5)
+        activeDays: Math.min(28, activeUsers * randomInt(2, 3)), 
         totalQueries: 0 // Will be calculated later
       });
     }
     
-    // Generate users (more than we need to allow for growth and churn)
+    // Generate users (200 instead of 2000, still more than max monthly users to simulate churn)
     console.log('Creating users...');
-    const totalUsers = 2000; // More than max monthly users to simulate churn
+    const totalUsers = 200; // Reduced by 10x from 2000
     
     for (let i = 0; i < totalUsers; i++) {
       const userKey = generateKey();
@@ -863,7 +870,7 @@ const generateTestData = async () => {
       
       try {
         await users.save(user);
-        if (i % 200 === 0) {
+        if (i % 50 === 0) { // Reduced from 200 to 50
           console.log(`Created ${i} users so far...`);
         }
       } catch (err) {
@@ -898,8 +905,8 @@ const generateTestData = async () => {
       months.push({
         month: months.length,
         date: new Date(currentMonth),
-        activeUsers: 1000, // Full user count for current month
-        activeDays: Math.min(28, 1000 * randomInt(3, 5)),
+        activeUsers: 100, // Reduced from 1000 to 100
+        activeDays: Math.min(28, 100 * randomInt(2, 3)), // Reduced from 3-5 to 2-3
         totalQueries: 0
       });
     }
@@ -923,8 +930,8 @@ const generateTestData = async () => {
       
       // Create session days (not every user is active every day)
       for (let day = 1; day <= daysInMonth; day++) {
-        // Calculate how many users are active this day
-        const dailyActiveUsers = Math.min(monthUsers, Math.floor(monthData.activeDays / daysInMonth * monthUsers * (0.8 + Math.random() * 0.4)));
+        // Calculate how many users are active this day - more sparse distribution than original
+        const dailyActiveUsers = Math.min(monthUsers, Math.floor(monthData.activeDays / daysInMonth * monthUsers * (0.6 + Math.random() * 0.4)));
         
         // Use a different subset of users each day
         const dayUserStartIdx = randomInt(0, totalUsers - dailyActiveUsers);
@@ -954,7 +961,7 @@ const generateTestData = async () => {
             await sessions.save(session);
             totalSessions++;
             
-            if (totalSessions % 1000 === 0) {
+            if (totalSessions % 100 === 0) { // Reduced from 1000 to 100
               console.log(`Created ${totalSessions} sessions so far...`);
             }
             
@@ -966,8 +973,8 @@ const generateTestData = async () => {
               createdAt: createCompatibleTimestamp(sessionDate)
             });
             
-            // NEW: Get a more realistic number of queries per session that follows chat patterns
-            // This now ranges from 5-100 queries depending on user type and time
+            // Get a more realistic number of queries per session that follows chat patterns
+            // This now ranges from 2-20 queries depending on user type and time (reduced from 5-100)
             const queriesPerSession = getQueriesPerSession(monthData.month, totalMonths);
             
             // Track the current category to help generate related follow-up questions
@@ -976,8 +983,8 @@ const generateTestData = async () => {
             
             // Generate initial queries and follow-ups for this session
             for (let j = 0; j < queriesPerSession; j++) {
-              // Start a new topic every 5-10 queries
-              if (j === 0 || (j % randomInt(5, 10) === 0 && j < queriesPerSession - 3)) {
+              // Start a new topic every 2-5 queries (reduced from 5-10)
+              if (j === 0 || (j % randomInt(2, 5) === 0 && j < queriesPerSession - 2)) {
                 // 75% of queries should have a category assigned
                 const hasCategoryAssigned = Math.random() < 0.75;
                 
@@ -992,7 +999,7 @@ const generateTestData = async () => {
               } else {
                 // This is a follow-up question in the same conversation
                 // Generate a related follow-up based on the current topic
-                const followUps = generateFollowUpQueries(currentCategory, previousQuery, 5);
+                const followUps = generateFollowUpQueries(currentCategory, previousQuery, 3); // Reduced from 5 to 3
                 previousQuery = followUps[randomInt(0, followUps.length - 1)];
               }
               
@@ -1013,7 +1020,7 @@ const generateTestData = async () => {
               await queries.save(query);
               totalQueries++;
               
-              if (totalQueries % 10000 === 0) {
+              if (totalQueries % 1000 === 0) {
                 console.log(`Created ${totalQueries} queries so far...`);
               }
               
@@ -1050,8 +1057,8 @@ const generateTestData = async () => {
                 }
               });
               
-              // 30% of queries get feedback
-              if (Math.random() < 0.3) {
+              // 25% of queries get feedback (reduced from 30%)
+              if (Math.random() < 0.25) {
                 // Rating distribution skews positive (most users only provide feedback when happy)
                 let rating;
                 const randVal = Math.random();
@@ -1203,13 +1210,13 @@ const generateTestData = async () => {
     
     // Print summary
     console.log(`
-Summary:
+Summary of Reduced Data Generation (10% of original volume):
 - Service Categories: ${SERVICE_CATEGORIES.length}
 - Services: ${serviceCount}
-- Users: ${totalUsers}
+- Users: ${totalUsers} (reduced from 2000 to 200)
 - Sessions: ${totalSessions}
 - Queries: ${totalQueries}
-- Analytics Records: ${totalQueries * 1.3} (queries + feedback)
+- Analytics Records: ~${Math.round(totalQueries * 1.25)} (queries + feedback)
 - Data Period: 3 years (${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()})
     `);
     
@@ -1285,7 +1292,7 @@ Summary:
         console.log(`⚠️ Categorization target not met: ${catResult.percentage.toFixed(1)}% of queries have categories (target: 75%).`);
       }
       
-      // NEW: Test query distribution per user/session
+      // Test query distribution per user/session
       const userQueryDistributionQuery = `
         FOR s IN sessions
           LET queryCount = (
@@ -1312,12 +1319,11 @@ Summary:
       
       // Group by ranges for better readability
       const ranges = {
-        '5-15': 0,
-        '16-30': 0,
-        '31-50': 0,
-        '51-80': 0,
-        '81-100': 0,
-        '100+': 0
+        '1-5': 0,
+        '6-10': 0,
+        '11-15': 0,
+        '16-20': 0,
+        '20+': 0
       };
       
       let totalSessions = 0;
@@ -1327,18 +1333,16 @@ Summary:
         totalSessions += item.numberOfSessions;
         totalQueriesInSample += (item.queriesPerSession * item.numberOfSessions);
         
-        if (item.queriesPerSession <= 15) {
-          ranges['5-15'] += item.numberOfSessions;
-        } else if (item.queriesPerSession <= 30) {
-          ranges['16-30'] += item.numberOfSessions;
-        } else if (item.queriesPerSession <= 50) {
-          ranges['31-50'] += item.numberOfSessions;
-        } else if (item.queriesPerSession <= 80) {
-          ranges['51-80'] += item.numberOfSessions;
-        } else if (item.queriesPerSession <= 100) {
-          ranges['81-100'] += item.numberOfSessions;
+        if (item.queriesPerSession <= 5) {
+          ranges['1-5'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 10) {
+          ranges['6-10'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 15) {
+          ranges['11-15'] += item.numberOfSessions;
+        } else if (item.queriesPerSession <= 20) {
+          ranges['16-20'] += item.numberOfSessions;
         } else {
-          ranges['100+'] += item.numberOfSessions;
+          ranges['20+'] += item.numberOfSessions;
         }
       }
       
@@ -1458,7 +1462,7 @@ Summary:
       console.error('Error testing analytics data:', err.message);
     }
     
-    console.log('✅ Enhanced test data generation complete!');
+    console.log('✅ Reduced test data generation complete (10% of original volume)!');
     
   } catch (error) {
     debug(`Error in test data generation: ${error.message}`);

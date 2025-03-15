@@ -1,17 +1,16 @@
-// src/components/AnalyticsDashboard.vue
 <template>
   <div class="analytics-dashboard">
     <div class="dashboard-header">
-      <h2>{{ $t('analytics.title', 'Chatbot Analytics Dashboard') }}</h2>
+      <h2>{{ $t('analytics.title') }}</h2>
       
       <!-- Period selector -->
       <div class="period-selector">
-        <label>{{ $t('analytics.period', 'Time Period:') }}</label>
+        <label>{{ $t('analytics.period') }}:</label>
         <select v-model="selectedPeriod" @change="loadAnalytics">
-          <option value="daily">{{ $t('analytics.periods.daily', 'Daily') }}</option>
-          <option value="weekly">{{ $t('analytics.periods.weekly', 'Weekly') }}</option>
-          <option value="monthly">{{ $t('analytics.periods.monthly', 'Monthly') }}</option>
-          <option value="all-time">{{ $t('analytics.periods.allTime', 'All Time') }}</option>
+          <option value="daily">{{ $t('analytics.periods.daily') }}</option>
+          <option value="weekly">{{ $t('analytics.periods.weekly') }}</option>
+          <option value="monthly">{{ $t('analytics.periods.monthly') }}</option>
+          <option value="all-time">{{ $t('analytics.periods.allTime') }}</option>
         </select>
         
         <!-- Date picker (hidden for all-time) -->
@@ -21,6 +20,7 @@
             v-model="selectedDate" 
             @change="loadAnalytics"
             :max="todayStr"
+            :placeholder="$t('analytics.tooltips.selectDate')"
           />
         </div>
       </div>
@@ -29,14 +29,14 @@
     <!-- Loading state -->
     <div v-if="isLoading" class="loading-container">
       <div class="spinner"></div>
-      <p>{{ $t('analytics.loading', 'Loading analytics data...') }}</p>
+      <p>{{ $t('analytics.status.loading') }}</p>
     </div>
     
     <!-- Error state -->
     <div v-else-if="error" class="error-container">
       <p class="error-message">{{ error }}</p>
       <button @click="loadAnalytics" class="retry-button">
-        {{ $t('analytics.retry', 'Retry') }}
+        {{ $t('analytics.retry') }}
       </button>
     </div>
     
@@ -45,7 +45,7 @@
       <!-- Key metrics summary -->
       <div class="metrics-summary">
         <div class="metric-card">
-          <h3>{{ $t('analytics.metrics.totalQueries', 'Total Queries') }}</h3>
+          <h3>{{ $t('analytics.metrics.totalQueries') }}</h3>
           <div class="metric-value">{{ formatValue(analytics.totalQueries) }}</div>
           <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
             {{ formatTrend(comparison.totalQueries) }}
@@ -53,7 +53,7 @@
         </div>
         
         <div class="metric-card">
-          <h3>{{ $t('analytics.metrics.uniqueUsers', 'Unique Users') }}</h3>
+          <h3>{{ $t('analytics.metrics.uniqueUsers') }}</h3>
           <div class="metric-value">{{ formatValue(analytics.uniqueUsers) }}</div>
           <div v-if="comparison.uniqueUsers" class="trend" :class="getTrendClass(comparison.uniqueUsers)">
             {{ formatTrend(comparison.uniqueUsers) }}
@@ -61,7 +61,7 @@
         </div>
         
         <div class="metric-card">
-          <h3>{{ $t('analytics.metrics.avgResponseTime', 'Avg Response Time') }}</h3>
+          <h3>{{ $t('analytics.metrics.avgResponseTime') }}</h3>
           <div class="metric-value">{{ formatValue(analytics.averageResponseTime, 'time') }}</div>
           <div v-if="comparison.averageResponseTime" class="trend" :class="getTrendClass(comparison.averageResponseTime, true)">
             {{ formatTrend(comparison.averageResponseTime, true) }}
@@ -69,7 +69,7 @@
         </div>
         
         <div class="metric-card">
-          <h3>{{ $t('analytics.metrics.satisfaction', 'User Satisfaction') }}</h3>
+          <h3>{{ $t('analytics.metrics.satisfaction') }}</h3>
           <div class="metric-value">{{ formatValue(analytics.satisfactionRate, 'percent') }}</div>
           <div v-if="comparison.satisfactionRate" class="trend" :class="getTrendClass(comparison.satisfactionRate)">
             {{ formatTrend(comparison.satisfactionRate) }}
@@ -79,39 +79,39 @@
       
       <!-- Category distribution chart -->
       <div class="chart-container half-width">
-        <h3>{{ $t('analytics.charts.categoryDistribution', 'Query Categories') }}</h3>
+        <h3>{{ $t('analytics.charts.categoryDistribution') }}</h3>
         <CategoryDistributionChart 
           v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
           :data="analytics.queryDistribution" 
           :externalData="true"
         />
         <div v-else class="no-data">
-          {{ $t('analytics.noData', 'No data available for this period') }}
+          {{ $t('analytics.status.noData') }}
         </div>
       </div>
       
       <!-- Top queries -->
       <div class="chart-container half-width">
-        <h3>{{ $t('analytics.charts.topQueries', 'Top Queries') }}</h3>
+        <h3>{{ $t('analytics.charts.topQueries') }}</h3>
         <TopQueriesChart 
           v-if="analytics.topQueries && analytics.topQueries.length > 0"
           :data="analytics.topQueries" 
         />
         <div v-else class="no-data">
-          {{ $t('analytics.noData', 'No data available for this period') }}
+          {{ $t('analytics.status.noData') }}
         </div>
       </div>
       
       <!-- Usage trend chart -->
       <div class="chart-container full-width">
-        <h3>{{ $t('analytics.charts.usageTrend', 'Usage Trend') }}</h3>
+        <h3>{{ $t('analytics.charts.usageTrend') }}</h3>
         <UsageTrendChart 
           v-if="timeSeriesData && timeSeriesData.length > 0"
           :data="timeSeriesData"
           :externalData="true"
         />
         <div v-else class="no-data">
-          {{ $t('analytics.noData', 'No data available for this period') }}
+          {{ $t('analytics.status.noData') }}
         </div>
       </div>
     </div>
@@ -258,121 +258,126 @@ export default {
       }
     },
     
-/**
- * Load time series data for charts
- */
- async loadTimeSeriesData() {
-  try {
-    this.timeSeriesData = []; // Clear existing data
+    /**
+     * Load time series data for charts
+     */
+    async loadTimeSeriesData() {
+      try {
+        this.timeSeriesData = []; // Clear existing data
+        
+        // Get time series parameters
+        const params = this.calculateTimeSeriesParams();
+        
+        // Make API request
+        const url = `/api/analytics/timeseries/queries`;
+        
+        console.log(`Fetching time series data from ${url} with params:`, params);
+        
+        const response = await fetch(`${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`);
+        
+        if (!response.ok) {
+          throw new Error(`API request failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (Array.isArray(data) && data.length > 0) {
+          console.log('Time series data loaded successfully:', data);
+          
+          // Process the data to ensure it has the expected format
+          this.timeSeriesData = data.map(item => ({
+            timestamp: item.timestamp || '',
+            dateLabel: this.formatDate(item.timestamp),
+            value: typeof item.value === 'number' ? item.value : 0,
+            userCount: typeof item.userCount === 'number' ? item.userCount : 0
+          }));
+        } else {
+          console.warn('Empty or invalid time series data received:', data);
+          this.timeSeriesData = this.generateSampleData();
+        }
+      } catch (error) {
+        console.error('Error loading time series data:', error);
+        this.timeSeriesData = this.generateSampleData();
+      }
+    },
     
-    // Get time series parameters
-    const params = this.calculateTimeSeriesParams();
-    
-    // Make API request
-    const url = `/api/analytics/timeseries/queries`;
-    
-    console.log(`Fetching time series data from ${url} with params:`, params);
-    
-    const response = await fetch(`${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`);
-    
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (Array.isArray(data) && data.length > 0) {
-      console.log('Time series data loaded successfully:', data);
+    /**
+     * Format date for display
+     */
+    formatDate(dateString) {
+      if (!dateString) return '';
       
-      // Process the data to ensure it has the expected format
-      this.timeSeriesData = data.map(item => ({
-        timestamp: item.timestamp || '',
-        dateLabel: this.formatDate(item.timestamp),
-        value: typeof item.value === 'number' ? item.value : 0
-      }));
-    } else {
-      console.warn('Empty or invalid time series data received:', data);
-      this.timeSeriesData = this.generateSampleData();
-    }
-  } catch (error) {
-    console.error('Error loading time series data:', error);
-    this.timeSeriesData = this.generateSampleData();
-  }
-},
-
-/**
- * Format date for display
- */
-formatDate(dateString) {
-  if (!dateString) return '';
-  
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  } catch (e) {
-    return dateString;
-  }
-},
-
-/**
- * Generate sample data for fallback
- */
-generateSampleData() {
-  const result = [];
-  const today = new Date();
-  
-  for (let i = 30; i > 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString();
+      } catch (e) {
+        return dateString;
+      }
+    },
     
-    result.push({
-      timestamp: date.toISOString(),
-      dateLabel: date.toLocaleDateString(),
-      value: Math.floor(Math.random() * 1000)
-    });
-  }
-  
-  console.log('Generated sample data for chart:', result);
-  return result;
-},
-/**
- * Format date label based on interval
- * @param {string} timestamp - ISO date string
- * @param {string} interval - Time interval
- * @returns {string} Formatted date label
- */
-formatDateLabel(timestamp, interval) {
-  if (!timestamp) return '';
-  
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) return timestamp;
-  
-  switch (interval) {
-    case 'hourly':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    case 'daily':
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    case 'weekly':
-      return `W${this.getWeekNumber(date)} ${date.toLocaleDateString([], { month: 'short' })}`;
-    case 'monthly':
-      return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
-    default:
-      return date.toLocaleDateString();
-  }
-},
-
-/**
- * Get week number of the year
- * @param {Date} date - Date object
- * @returns {number} Week number
- */
-getWeekNumber(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-},    /**
+    /**
+     * Generate sample data for fallback
+     */
+    generateSampleData() {
+      const result = [];
+      const today = new Date();
+      
+      for (let i = 30; i > 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        
+        result.push({
+          timestamp: date.toISOString(),
+          dateLabel: date.toLocaleDateString(),
+          value: Math.floor(Math.random() * 1000),
+          userCount: Math.floor(Math.random() * 200)
+        });
+      }
+      
+      console.log('Generated sample data for chart:', result);
+      return result;
+    },
+    
+    /**
+     * Format date label based on interval
+     * @param {string} timestamp - ISO date string
+     * @param {string} interval - Time interval
+     * @returns {string} Formatted date label
+     */
+    formatDateLabel(timestamp, interval) {
+      if (!timestamp) return '';
+      
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return timestamp;
+      
+      switch (interval) {
+        case 'hourly':
+          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        case 'daily':
+          return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        case 'weekly':
+          return `W${this.getWeekNumber(date)} ${date.toLocaleDateString([], { month: 'short' })}`;
+        case 'monthly':
+          return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+        default:
+          return date.toLocaleDateString();
+      }
+    },
+    
+    /**
+     * Get week number of the year
+     * @param {Date} date - Date object
+     * @returns {number} Week number
+     */
+    getWeekNumber(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    },    
+    
+    /**
      * Format numeric values for display
      */
     formatValue(value, format = 'number') {
@@ -385,7 +390,7 @@ getWeekNumber(date) {
     formatTrend(percentChange, isInverse = false) {
       const prefix = percentChange > 0 ? '+' : '';
       const suffix = isInverse 
-        ? (percentChange > 0 ? ' slower' : ' faster')
+        ? (percentChange > 0 ? ' ' + this.$t('analytics.slower', 'slower') : ' ' + this.$t('analytics.faster', 'faster'))
         : '';
       
       return `${prefix}${percentChange.toFixed(1)}%${suffix}`;
@@ -452,14 +457,14 @@ getWeekNumber(date) {
         averageResponseTime: 2.3,
         satisfactionRate: 87.5,
         queryDistribution: [
-          { categoryId: 'cat1', name: 'Business & Economy', count: 2347 },
-          { categoryId: 'cat2', name: 'Transportation', count: 1782 },
-          { categoryId: 'cat3', name: 'Taxes & Revenue', count: 1645 },
-          { categoryId: 'cat4', name: 'Immigration & Citizenship', count: 1245 },
-          { categoryId: 'cat5', name: 'Education & Learning', count: 980 },
-          { categoryId: 'cat6', name: 'Housing & Properties', count: 850 },
-          { categoryId: 'cat7', name: 'Health & Healthcare', count: 720 },
-          { categoryId: 'cat8', name: 'Justice & Legal', count: 650 }
+          { categoryId: 'cat1', name: this.$t('leftPanel.cat1.name'), count: 2347 },
+          { categoryId: 'cat2', name: this.$t('leftPanel.cat2.name'), count: 1782 },
+          { categoryId: 'cat3', name: this.$t('leftPanel.cat3.name'), count: 1645 },
+          { categoryId: 'cat4', name: this.$t('leftPanel.cat4.name'), count: 1245 },
+          { categoryId: 'cat5', name: this.$t('leftPanel.cat5.name'), count: 980 },
+          { categoryId: 'cat6', name: this.$t('leftPanel.cat6.name'), count: 850 },
+          { categoryId: 'cat7', name: this.$t('leftPanel.cat7.name'), count: 720 },
+          { categoryId: 'cat8', name: this.$t('leftPanel.cat8.name'), count: 650 }
         ],
         topQueries: [
           { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
@@ -490,11 +495,13 @@ getWeekNumber(date) {
             // More activity during business hours
             const baseValue = hour >= 9 && hour <= 17 ? 50 : 20;
             const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
+            const userCount = Math.round(value / 3);
             
             result.push({
               timestamp: time.toISOString(),
               dateLabel: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              value: value
+              value: value,
+              userCount: userCount
             });
           }
           break;
@@ -510,11 +517,13 @@ getWeekNumber(date) {
             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
             const baseValue = isWeekend ? 200 : 350;
             const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
+            const userCount = Math.round(value / 4);
             
             result.push({
               timestamp: date.toISOString(),
               dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-              value: value
+              value: value,
+              userCount: userCount
             });
           }
           break;
@@ -530,11 +539,13 @@ getWeekNumber(date) {
             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
             const baseValue = isWeekend ? 200 : 350;
             const value = Math.round(baseValue * (0.8 + Math.random() * 0.4));
+            const userCount = Math.round(value / 4);
             
             result.push({
               timestamp: date.toISOString(),
               dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
-              value: value
+              value: value,
+              userCount: userCount
             });
           }
           break;
@@ -551,11 +562,13 @@ getWeekNumber(date) {
             const seasonalFactor = 1 + Math.sin(month / 6 * Math.PI) * 0.2;
             const growthFactor = 1 + (11 - month) * 0.05;
             const value = Math.round(300 * seasonalFactor * growthFactor);
+            const userCount = Math.round(value / 4);
             
             result.push({
               timestamp: date.toISOString(),
               dateLabel: date.toLocaleDateString([], { month: 'short', year: 'numeric' }),
-              value: value
+              value: value,
+              userCount: userCount
             });
           }
           break;

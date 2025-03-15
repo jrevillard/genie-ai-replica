@@ -1,10 +1,9 @@
-// src/components/charts/CategoryDistributionChart.vue - Improved spacing version
 <template>
   <div class="chart-wrapper">
     <div ref="chart" class="chart-container"></div>
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t('analytics.loadingChart', 'Loading chart data...') }}</span>
+      <span>{{ $t('analytics.status.loading') }}</span>
     </div>
     <div v-if="error" class="error-message">
       {{ error }}
@@ -125,7 +124,7 @@ export default {
           this.chartData = dashboardData.queryDistribution;
           this.renderChart();
         } else {
-          this.error = this.$t('analytics.errors.noData', 'No data available for this period');
+          this.error = this.$t('analytics.status.noData');
         }
       } catch (error) {
         console.error('Error fetching category distribution data:', error);
@@ -184,12 +183,18 @@ export default {
      * Format category ID for display
      */
     formatCategoryId(categoryId) {
-      if (!categoryId) return 'Unknown';
+      if (!categoryId) return this.$t('charts.notAvailable');
       
       // Convert format like "cat1" to "Category 1"
       const match = categoryId.match(/cat(\d+)/i);
       if (match) {
-        return `Category ${match[1]}`;
+        return `${this.$t('analytics.chartLabels.category')} ${match[1]}`;
+      }
+      
+      // For serviceCategorie format, extract the ID
+      const serviceMatch = categoryId.match(/serviceCategorie(\d+)/i);
+      if (serviceMatch) {
+        return `${this.$t('analytics.chartLabels.category')} ${serviceMatch[1]}`;
       }
       
       // If not in expected format, just return the ID
@@ -355,12 +360,12 @@ export default {
         .attr('y', -10)
         .style('font-size', '12px')
         .style('font-weight', 'bold')
-        .text('Service Categories');
+        .text(this.$t('analytics.chartLabels.serviceCategories'));
       
       centerText.append('text')
         .attr('y', 10)
         .style('font-size', '12px')
-        .text('by Usage');
+        .text(this.$t('analytics.chartLabels.byUsage'));
       
       // Create a legend container - positioned to the right with proper spacing
       const legend = svg.append('g')
@@ -373,7 +378,7 @@ export default {
         .attr('y', -20)
         .style('font-size', '14px')
         .style('font-weight', 'bold')
-        .text('Categories');
+        .text(this.$t('analytics.chartLabels.categories'));
       
       // Add legend items
       const legendItems = legend.selectAll('.legend-item')
@@ -426,7 +431,7 @@ export default {
         
         tooltip.html(`
           <div><strong>${d.data.categoryName}</strong></div>
-          <div>${this.$t('analytics.queries', 'Queries')}: ${d.data.count ? d.data.count.toLocaleString() : 'N/A'}</div>
+          <div>${this.$t('analytics.table.count')}: ${d.data.count ? d.data.count.toLocaleString() : 'N/A'}</div>
           <div>${this.$t('analytics.percentage', 'Percentage')}: ${percent}%</div>
         `)
           .style('left', (event.pageX + 10) + 'px')

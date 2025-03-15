@@ -19,56 +19,56 @@ const messages = {
       categoryDistribution: 'Service Categories Usage',
       usageTrend: 'Usage Trend'
     },
-  analytics: {
-  // Dashboard header and controls
-  title: 'Data Analytics & Insights',
-  period: 'Time Period',
+    analytics: {
+    // Dashboard header and controls
+    title: 'Data Analytics & Insights',
+    period: 'Time Period',
   
-  // Period dropdown options
-  periods: {
-    daily: 'Daily',
-    weekly: 'Weekly',
-    monthly: 'Monthly',
-    allTime: 'All Time'
-  },
+    // Period dropdown options
+    periods: {
+      daily: 'Daily',
+      weekly: 'Weekly',
+      monthly: 'Monthly',
+      allTime: 'All Time'
+    },
   
-  // Metrics section titles and values
-  metrics: {
-    totalQueries: 'Total Queries',
-    uniqueUsers: 'Unique Users',
-    avgResponseTime: 'Avg Response Time',
-    satisfaction: 'User Satisfaction'
-  },
+    // Metrics section titles and values
+    metrics: {
+      totalQueries: 'Total Queries',
+      uniqueUsers: 'Unique Users',
+      avgResponseTime: 'Avg Response Time',
+      satisfaction: 'User Satisfaction'
+    },
   
-  // Table headers and labels
-  table: {
-    rank: 'Rank',
-    query: 'Query',
-    count: 'Count',
-    avgTime: 'Avg. Time'
-  },
+    // Table headers and labels
+    table: {
+      rank: 'Rank',
+      query: 'Query',
+      count: 'Count',
+      avgTime: 'Avg. Time'
+    },
   
-  // Chart labels and legends
-  chartLabels: {
-    categories: 'Categories',
-    serviceCategories: 'Service Categories',
-    byUsage: 'by Usage',
-    category: 'Category'
-  },
+    // Chart labels and legends
+    chartLabels: {
+      categories: 'Categories',
+      serviceCategories: 'Service Categories',
+      byUsage: 'by Usage',
+      category: 'Category'
+    },
   
-  // Tooltips and hints
-  tooltips: {
-    selectPeriod: 'Select time period',
-    selectDate: 'Select date',
-    exportData: 'Export data'
-  },
+    // Tooltips and hints
+    tooltips: {
+      selectPeriod: 'Select time period',
+      selectDate: 'Select date',
+      exportData: 'Export data'
+    },
   
-  // Status messages
-  status: {
-    loading: 'Loading analytics data...',
-    noData: 'No data available for this period',
-    error: 'Failed to load analytics data'
-  },
+    // Status messages
+    status: {
+      loading: 'Loading analytics data...',
+      noData: 'No data available for this period',
+      error: 'Failed to load analytics data'
+    },
     brandName: 'Huduma AI: Your Digital Government Assistant',
     nav: {
       systemStatus: 'System Status',
@@ -548,56 +548,56 @@ const messages = {
       categoryDistribution: 'Utilisation des Catégories de Service',
       usageTrend: 'Tendance d\'Utilisation'
     },
-analytics: {
-  // Dashboard header and controls
-  title: 'Données Analytiques & Aperçus',
-  period: 'Période',
+    analytics: {
+      // Dashboard header and controls
+      title: 'Données Analytiques & Aperçus',
+      period: 'Période',
   
-  // Period dropdown options
-  periods: {
-    daily: 'Quotidien',
-    weekly: 'Hebdomadaire',
-    monthly: 'Mensuel',
-    allTime: 'Tout Temps'
-  },
+      // Period dropdown options
+      periods: {
+        daily: 'Quotidien',
+        weekly: 'Hebdomadaire',
+        monthly: 'Mensuel',
+        allTime: 'Tout Temps'
+      },
   
-  // Metrics section titles and values
-  metrics: {
-    totalQueries: 'Requêtes Totales',
-    uniqueUsers: 'Utilisateurs Uniques',
-    avgResponseTime: 'Temps de Réponse Moyen',
-    satisfaction: 'Satisfaction des Utilisateurs'
-  },
+      // Metrics section titles and values
+      metrics: {
+        totalQueries: 'Requêtes Totales',
+        uniqueUsers: 'Utilisateurs Uniques',
+        avgResponseTime: 'Temps de Réponse Moyen',
+        satisfaction: 'Satisfaction des Utilisateurs'
+      },
   
-  // Table headers and labels
-  table: {
-    rank: 'Rang',
-    query: 'Requête',
-    count: 'Nombre',
-    avgTime: 'Temps Moyen'
-  },
+      // Table headers and labels
+      table: {
+        rank: 'Rang',
+        query: 'Requête',
+        count: 'Nombre',
+        avgTime: 'Temps Moyen'
+      },
   
-  // Chart labels and legends
-  chartLabels: {
-    categories: 'Catégories',
-    serviceCategories: 'Catégories de Service',
-    byUsage: 'par Utilisation',
-    category: 'Catégorie'
-  },
+      // Chart labels and legends
+      chartLabels: {
+        categories: 'Catégories',
+        serviceCategories: 'Catégories de Service',
+        byUsage: 'par Utilisation',
+        category: 'Catégorie'
+      },
   
-  // Tooltips and hints
-  tooltips: {
-    selectPeriod: 'Sélectionner la période',
-    selectDate: 'Sélectionner la date',
-    exportData: 'Exporter les données'
-  },
+      // Tooltips and hints
+      tooltips: {
+        selectPeriod: 'Sélectionner la période',
+        selectDate: 'Sélectionner la date',
+        exportData: 'Exporter les données'
+      },
   
-  // Status messages
-  status: {
-    loading: 'Chargement des données analytiques...',
-    noData: 'Aucune donnée disponible pour cette période',
-    error: 'Échec du chargement des données analytiques'
-  },
+      // Status messages
+      status: {
+        loading: 'Chargement des données analytiques...',
+        noData: 'Aucune donnée disponible pour cette période',
+        error: 'Échec du chargement des données analytiques'
+      },
     brandName: 'Huduma AI: Votre Assistant Gouvernemental Numérique',
     nav: {
       systemStatus: 'État du Système',
@@ -1614,8 +1614,7 @@ analytics: {
       cancel: 'Ghairi'
     }
   }
-};
-
+  };
 export default createI18n({
   locale: 'en', // default locale
   fallbackLocale: 'en',

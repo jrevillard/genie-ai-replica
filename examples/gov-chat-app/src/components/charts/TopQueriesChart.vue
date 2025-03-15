@@ -1,15 +1,14 @@
-// src/components/charts/TopQueriesChart.vue - Compressed with stacked bar
 <template>
   <div class="top-queries-chart">
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t('analytics.loadingChart', 'Loading chart data...') }}</span>
+      <span>{{ $t('analytics.status.loading') }}</span>
     </div>
     <div v-else-if="error" class="error-message">
       {{ error }}
     </div>
     <div v-else-if="!data || data.length === 0" class="no-data">
-      {{ $t('analytics.noData', 'No data available for this period') }}
+      {{ $t('analytics.status.noData') }}
     </div>
     <div v-else>
       <!-- Compressed table view -->
@@ -17,10 +16,10 @@
         <table class="top-queries-table">
           <thead>
             <tr>
-              <th class="rank">{{ $t('analytics.rank', '#') }}</th>
-              <th>{{ $t('analytics.query', 'Query') }}</th>
-              <th class="count">{{ $t('analytics.count', 'Count') }}</th>
-              <th class="avg-time">{{ $t('analytics.avgTime', 'Avg') }}</th>
+              <th class="rank">{{ $t('analytics.table.rank') }}</th>
+              <th>{{ $t('analytics.table.query') }}</th>
+              <th class="count">{{ $t('analytics.table.count') }}</th>
+              <th class="avg-time">{{ $t('analytics.table.avgTime') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -138,7 +137,7 @@ export default {
           if (dashboardData && dashboardData.topQueries) {
             this.chartData = dashboardData.topQueries;
           } else {
-            throw new Error('No top queries data available');
+            throw new Error(this.$t('analytics.status.noData'));
           }
         } catch (apiError) {
           console.error('Error calling API:', apiError);
@@ -152,7 +151,7 @@ export default {
         });
       } catch (error) {
         console.error('Error fetching top queries data:', error);
-        this.error = this.$t('analytics.errors.chartData', 'Failed to load chart data');
+        this.error = this.$t('analytics.status.error');
       } finally {
         this.loading = false;
       }
@@ -201,7 +200,7 @@ export default {
       // Process data for the stacked bar chart
       // Combine into "groups" - count and avgTime
       const stackData = this.chartData.map((d, i) => ({
-        query: `Query ${i + 1}`,
+        query: this.$t('analytics.query') + ' ' + (i + 1),
         shortText: this.truncateText(d.text, 15),
         count: d.count,
         avgTime: d.avgTime,
@@ -330,8 +329,8 @@ export default {
         
         tooltip.html(`
           <div><strong>${d.shortText}</strong></div>
-          <div>Count: ${d3.format(',')(d.count)}</div>
-          <div>Avg Time: ${d.avgTime}s</div>
+          <div>${this.$t('analytics.table.count')}: ${d3.format(',')(d.count)}</div>
+          <div>${this.$t('analytics.table.avgTime')}: ${d.avgTime}s</div>
         `)
           .style('left', (event.pageX + 10) + 'px')
           .style('top', (event.pageY - 28) + 'px');

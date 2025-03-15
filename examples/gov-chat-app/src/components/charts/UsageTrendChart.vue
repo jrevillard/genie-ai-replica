@@ -13,11 +13,11 @@
     >
       <div class="tooltip-title">{{ tooltipData.date }}</div>
       <div class="tooltip-item queries">
-        <span class="label">Total Queries:</span>
+        <span class="label">{{ $t('charts.tooltip.totalQueries') }}:</span>
         <span class="value">{{ tooltipData.queries }}</span>
       </div>
       <div class="tooltip-item users">
-        <span class="label">Unique Users:</span>
+        <span class="label">{{ $t('charts.tooltip.uniqueUsers') }}:</span>
         <span class="value">{{ tooltipData.users }}</span>
       </div>
     </div>
@@ -99,7 +99,7 @@ export default {
             this.data.forEach((item, index) => {
               try {
                 // Safely extract properties with fallbacks
-                const dateLabel = (item && item.dateLabel) ? item.dateLabel : `Day ${index + 1}`;
+                const dateLabel = (item && item.dateLabel) ? item.dateLabel : `${this.$t('charts.day')} ${index + 1}`;
                 const value = (item && typeof item.value === 'number') ? item.value : 0;
                 const userCount = (item && typeof item.userCount === 'number') ? item.userCount : 0;
                 
@@ -116,11 +116,12 @@ export default {
               } catch (itemError) {
                 console.error('Error processing data item:', itemError);
                 // Add fallback data if item processing fails
-                xAxisData.push(`Day ${index + 1}`);
+                const fallbackLabel = `${this.$t('charts.day')} ${index + 1}`;
+                xAxisData.push(fallbackLabel);
                 queryData.push(0);
                 userData.push(0);
                 this.chartData.push({
-                  date: `Day ${index + 1}`,
+                  date: fallbackLabel,
                   queries: 0,
                   users: 0
                 });
@@ -152,11 +153,12 @@ export default {
           console.error('Error processing chart data:', dataError);
           // Ensure we have some data even if processing fails
           for (let i = 0; i < 5; i++) {
-            xAxisData.push(`Day ${i + 1}`);
+            const fallbackLabel = `${this.$t('charts.day')} ${i + 1}`;
+            xAxisData.push(fallbackLabel);
             queryData.push(1000);
             userData.push(100);
             this.chartData.push({
-              date: `Day ${i + 1}`,
+              date: fallbackLabel,
               queries: 1000,
               users: 100
             });
@@ -165,11 +167,12 @@ export default {
         
         // Guard against empty data
         if (xAxisData.length === 0) {
-          xAxisData.push('No Data');
+          const noDataLabel = this.$t('charts.noData');
+          xAxisData.push(noDataLabel);
           queryData.push(0);
           userData.push(0);
           this.chartData.push({
-            date: 'No Data',
+            date: noDataLabel,
             queries: 0,
             users: 0
           });
@@ -240,6 +243,12 @@ export default {
                 min: 0,
                 max: Math.ceil(maxQuery * 1.1),
                 position: 'left',
+                name: this.$t('analytics.metrics.totalQueries'),
+                nameTextStyle: {
+                  color: '#666',
+                  fontSize: 10,
+                  padding: [0, 0, 0, -30]
+                },
                 axisLine: {
                   lineStyle: {
                     color: '#ddd'
@@ -257,6 +266,12 @@ export default {
                 min: 0,
                 max: Math.ceil(maxUser * 1.1),
                 position: 'right',
+                name: this.$t('analytics.metrics.uniqueUsers'),
+                nameTextStyle: {
+                  color: '#666',
+                  fontSize: 10,
+                  padding: [0, -30, 0, 0]
+                },
                 axisLine: {
                   lineStyle: {
                     color: '#ddd'
@@ -269,7 +284,7 @@ export default {
             ],
             series: [
               {
-                name: 'Total Queries',
+                name: this.$t('analytics.metrics.totalQueries'),
                 type: 'line',
                 data: queryData,
                 smooth: true,
@@ -290,7 +305,7 @@ export default {
                 }
               },
               {
-                name: 'Unique Users',
+                name: this.$t('analytics.metrics.uniqueUsers'),
                 type: 'bar',
                 yAxisIndex: 1,
                 data: userData,
@@ -301,7 +316,10 @@ export default {
               }
             ],
             legend: {
-              data: ['Total Queries', 'Unique Users'],
+              data: [
+                this.$t('analytics.metrics.totalQueries'),
+                this.$t('analytics.metrics.uniqueUsers')
+              ],
               bottom: 0,
               icon: 'circle',
               itemWidth: 8,
@@ -325,7 +343,7 @@ export default {
               series: [{ 
                 type: 'line', 
                 data: queryData,
-                name: 'Total Queries'
+                name: this.$t('analytics.metrics.totalQueries')
               }]
             };
             this.chartInstance.setOption(simpleOption);
@@ -373,7 +391,7 @@ export default {
               if (index >= 0 && index < this.chartData.length) {
                 // Update tooltip data
                 this.tooltipData = {
-                  date: this.chartData[index].date || 'N/A',
+                  date: this.chartData[index].date || this.$t('charts.notAvailable'),
                   queries: this.chartData[index].queries || 0,
                   users: this.chartData[index].users || 0
                 };

@@ -1,5 +1,3 @@
-
-
 import random
 import pandas as pd
 import json
@@ -26,8 +24,20 @@ column_mapping = {
     }
 }
 
+def sample_and_check(df, num_samples, column_name, mixture_bench):
+    """
+    Explanation for mixture_bench:
+    This is targeted for sampling data that has specific 'annotation' column. For example, there is one .csv data file that has a column named 'class' and contains values 0 and 1. The mixture_bench is the baseline of the proportion of 1 in that column.
+    """
+    while True:
+    # Sample rows from the dataframe
+    sample_result = df.sample(n=min(num_samples, len(df)))
+        
+    # Check if the mixture_bench is reached or not
+    if (sample_result[column_name] == 1).sum() / len(sample_result) >= mixture_bench:
+      return sample_result  # Return the sample if condition is met
 
-def load_dataset(source, column_mapping, split="train", num_samples=10):
+def load_dataset_and_sample(source, column_mapping, split="train", num_samples=10, mixture_bench=0.5):
     """
     Load a dataset from Hugging Face or a local file.
 
@@ -36,6 +46,8 @@ def load_dataset(source, column_mapping, split="train", num_samples=10):
         column_mapping (dict): Mapping of dataset columns to standardized names.
         split (str): Dataset split (e.g., 'train', 'test', 'validation') for Hugging Face datasets.
         num_samples (int): Number of random samples to select.
+        mixture_bench (float): Proportion of samples to select from all data. Set to 0 for random sampling. Default is 0.5, which refers to at least half of the data are marked as 1.
+
 
     Returns:
         pd.DataFrame: Processed dataset as a Pandas DataFrame.
@@ -64,11 +76,16 @@ def load_dataset(source, column_mapping, split="train", num_samples=10):
     standardized_columns = ["question_test", "context_test", "answer_test"]
     df = df[[col for col in standardized_columns if col in df.columns]]
 
-    # Take random samples
-    return df.sample(n=min(num_samples, len(df)), random_state=42)
+    if mixture_bench == 0:
+        # fully random sampling
+        sample_result =  df.sample(n=min(num_samples, len(df)), random_state=42)
+    else:
+        sample_result = sample_and_check(df, num_samples, "answer", mixture_bench)
+
+    return sample_result
 
 
-def assemble_custom_dataset(dataset_sources, column_mappings, num_samples=10):
+def assemble_custom_dataset(dataset_sources, column_mappings, num_samples=10, mixture_bench=0.5):
     """
     Load, sample, and merge datasets into a single DataFrame.
 
@@ -84,7 +101,7 @@ def assemble_custom_dataset(dataset_sources, column_mappings, num_samples=10):
 
     for source in dataset_sources:
         column_mapping = column_mappings.get(source, {})
-        sampled_df = load_dataset(source, column_mapping, num_samples=num_samples)
+        sampled_df = load_dataset_and_sample(source, column_mapping, num_samples=num_samples, mixture_bench=mixture_bench)
         all_samples.append(sampled_df)
 
     # Concatenate all datasets

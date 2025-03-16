@@ -1,6 +1,24 @@
 // src/i18n/locales/fr.js
 
 export default {
+  // Login section
+  login: {
+    appTitle: 'Huduma AI',
+    username: 'Nom d\'utilisateur',
+    password: 'Mot de passe',
+    loginButton: 'Connexion',
+    or: 'ou',
+    savedAccounts: 'Comptes enregistrés',
+    loginSuccess: 'Connexion réussie',
+    loginError: 'Échec de la connexion. Veuillez vérifier vos identifiants.',
+    googleLogin: 'Continuer avec Google',
+    facebookLogin: 'Continuer avec Facebook',
+    rememberMe: 'Se souvenir de moi',
+    forgotPassword: 'Mot de passe oublié?',
+    noAccount: 'Vous n\'avez pas de compte?',
+    createAccount: 'Créer un compte',
+    termsAndPolicy: 'En vous connectant, vous acceptez nos Conditions d\'Utilisation et notre Politique de Confidentialité'
+  },
   charts: {
     tooltip: {
       title: 'Date',
@@ -18,7 +36,7 @@ export default {
     // Dashboard header and controls
     title: 'Données Analytiques & Aperçus',
     period: 'Période',
-    
+
     // Period dropdown options
     periods: {
       daily: 'Quotidien',
@@ -26,7 +44,7 @@ export default {
       monthly: 'Mensuel',
       allTime: 'Tout Temps'
     },
-    
+
     // Metrics section titles and values
     metrics: {
       totalQueries: 'Requêtes Totales',
@@ -34,7 +52,7 @@ export default {
       avgResponseTime: 'Temps de Réponse Moyen',
       satisfaction: 'Satisfaction des Utilisateurs'
     },
-    
+
     // Table headers and labels
     table: {
       rank: 'Rang',
@@ -42,7 +60,7 @@ export default {
       count: 'Nombre',
       avgTime: 'Temps Moyen'
     },
-    
+
     // Chart labels and legends
     chartLabels: {
       categories: 'Catégories',
@@ -50,26 +68,26 @@ export default {
       byUsage: 'par Utilisation',
       category: 'Catégorie'
     },
-    
+
     // Tooltips and hints
     tooltips: {
       selectPeriod: 'Sélectionner la période',
       selectDate: 'Sélectionner la date',
       exportData: 'Exporter les données'
     },
-    
+
     // Status messages
     status: {
       loading: 'Chargement des données analytiques...',
       noData: 'Aucune donnée disponible pour cette période',
       error: 'Échec du chargement des données analytiques'
     },
-    
+
     // Trend indicators
     slower: 'plus lent',
     faster: 'plus rapide',
     percentage: 'Pourcentage',
-    
+
     // Additional analytics fields
     note: 'Ce tableau de bord présente les statistiques d\'utilisation et les commentaires des utilisateurs du système de chat.',
     usageStats: 'Statistiques d\'Utilisation',
@@ -89,14 +107,14 @@ export default {
     dateRange: 'Période',
     startDate: 'Date de début',
     endDate: 'Date de fin',
-    
+
     // Added for AnalyticsComponent.vue
     rank: 'Rang',
     query: 'Requête',
     count: 'Nombre',
     avgTime: 'Temps Moyen',
     serviceUsage: 'Utilisation des Catégories de Service',
-    
+
     // Added for UsageTrendChart.vue
     usageTrends: 'Tendances d\'Utilisation',
     week: 'Dernière Semaine',

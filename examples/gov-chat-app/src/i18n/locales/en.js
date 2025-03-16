@@ -1,6 +1,25 @@
 // src/i18n/locales/en.js
 
 export default {
+
+  // Login section
+  login: {
+    appTitle: 'Huduma AI',
+    username: 'Username',
+    password: 'Password',
+    loginButton: 'Login',
+    or: 'or',
+    savedAccounts: 'Saved Accounts',
+    loginSuccess: 'Login successful',
+    loginError: 'Login failed. Please check your credentials.',
+    googleLogin: 'Continue with Google',
+    facebookLogin: 'Continue with Facebook',
+    rememberMe: 'Remember me',
+    forgotPassword: 'Forgot password?',
+    noAccount: 'Don\'t have an account?',
+    createAccount: 'Create account',
+    termsAndPolicy: 'By logging in, you agree to our Terms of Service and Privacy Policy'
+  },
   charts: {
     tooltip: {
       title: 'Date',
@@ -18,7 +37,7 @@ export default {
     // Dashboard header and controls
     title: 'Data Analytics & Insights',
     period: 'Time Period',
-    
+
     // Period dropdown options
     periods: {
       daily: 'Daily',
@@ -26,7 +45,7 @@ export default {
       monthly: 'Monthly',
       allTime: 'All Time'
     },
-    
+
     // Metrics section titles and values
     metrics: {
       totalQueries: 'Total Queries',
@@ -34,7 +53,7 @@ export default {
       avgResponseTime: 'Avg Response Time',
       satisfaction: 'User Satisfaction'
     },
-    
+
     // Table headers and labels
     table: {
       rank: 'Rank',
@@ -42,7 +61,7 @@ export default {
       count: 'Count',
       avgTime: 'Avg. Time'
     },
-    
+
     // Chart labels and legends
     chartLabels: {
       categories: 'Categories',
@@ -50,26 +69,26 @@ export default {
       byUsage: 'by Usage',
       category: 'Category'
     },
-    
+
     // Tooltips and hints
     tooltips: {
       selectPeriod: 'Select time period',
       selectDate: 'Select date',
       exportData: 'Export data'
     },
-    
+
     // Status messages
     status: {
       loading: 'Loading analytics data...',
       noData: 'No data available for this period',
       error: 'Failed to load analytics data'
     },
-    
+
     // Trend indicators
     slower: 'slower',
     faster: 'faster',
     percentage: 'Percentage',
-    
+
     // Additional analytics fields
     note: 'Below are usage stats and user feedback summaries.',
     usageStats: 'Usage Statistics',
@@ -86,14 +105,14 @@ export default {
     dateRange: 'Date Range',
     startDate: 'Start Date',
     endDate: 'End Date',
-    
+
     // Added for AnalyticsComponent.vue
     rank: 'Rank',
     query: 'Query',
     count: 'Count',
     avgTime: 'Avg. Time',
     serviceUsage: 'Service Categories Usage',
-    
+
     // Added for UsageTrendChart.vue
     usageTrends: 'Usage Trends',
     week: 'Last Week',

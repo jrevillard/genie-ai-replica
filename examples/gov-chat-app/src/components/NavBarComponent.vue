@@ -1,9 +1,10 @@
-<!-- NavBarComponent.vue -->
+<!-- NavBarComponent.vue with logout button -->
 <template>
   <div class="nav-container">
     <header class="nav-bar">
       <!-- Left section with hamburger menu, logo, and title -->
       <div class="nav-left">
+        <!-- Existing code for hamburger menu, logo, and title -->
         <button 
           class="icon-btn hamburger-btn" 
           @click="toggleSidebar"
@@ -63,6 +64,7 @@
         
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
+          <!-- Existing mobile controls code -->
           <!-- Status Indicator for Mobile -->
           <div class="status-indicator-container" ref="mobileStatusContainer">
             <button 
@@ -76,6 +78,7 @@
             
             <!-- Status Dropdown (shared with desktop version) -->
             <div v-if="isStatusDropdownOpen" class="status-dropdown">
+              <!-- Existing dropdown content -->
               <div class="status-dropdown-header">
                 <h4>{{ $t('systemStatus.title') }}</h4>
                 <div class="status-summary">
@@ -173,6 +176,20 @@
             </svg>
             <span class="tooltip">{{ $t('nav.userProfile') }}</span>
           </button>
+          
+          <!-- ADDED: Logout button for mobile -->
+          <button 
+            class="icon-btn logout-btn mobile-btn" 
+            @click="handleLogout"
+            aria-label="Log out"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span class="tooltip">{{ $t('nav.logout') }}</span>
+          </button>
         </div>
       </div>
       
@@ -192,6 +209,7 @@
           
           <!-- Status Dropdown -->
           <div v-if="isStatusDropdownOpen" class="status-dropdown">
+            <!-- Existing dropdown content -->
             <div class="status-dropdown-header">
               <h4>{{ $t('systemStatus.title') }}</h4>
               <div class="status-summary">
@@ -290,6 +308,20 @@
           </svg>
           <span class="tooltip">{{ $t('nav.userProfile') }}</span>
         </button>
+        
+        <!-- ADDED: Logout button -->
+        <button 
+          class="icon-btn logout-btn" 
+          @click="handleLogout"
+          aria-label="Log out"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span class="tooltip">{{ $t('nav.logout') }}</span>
+        </button>
       </div>
     </header>
   </div>
@@ -298,7 +330,7 @@
 <script>
 export default {
   name: 'NavBarComponent',
-  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage'],
+  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout'],
   props: {
     isSidebarOpen: {
       type: Boolean,
@@ -396,6 +428,17 @@ export default {
     document.removeEventListener('click', this.handleClickOutside);
   },
   methods: {
+    // ADDED: Logout handler
+    handleLogout() {
+      // Dispatch logout action to store
+      this.$store.dispatch('logout');
+      
+      // Navigate to login page
+      this.$router.push('/login');
+      
+      // Emit logout event for parent components
+      this.$emit('logout');
+    },
     changeLocale() {
       // Use the global method defined in main.js if available
       if (this.$setLocale) {
@@ -436,6 +479,7 @@ export default {
 </script>
 
 <style scoped>
+/* All existing styles */
 .nav-container {
   position: relative;
 }
@@ -807,6 +851,15 @@ export default {
 
 .icon-btn:hover svg {
   transform: scale(1.1);
+}
+
+/* ADDED: Logout button styling */
+.logout-btn {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.logout-btn:hover {
+  background-color: rgba(239, 68, 68, 0.25); /* Subtle red on hover */
 }
 
 /* Tooltip styling */

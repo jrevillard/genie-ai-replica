@@ -1,6 +1,23 @@
 // src/i18n/locales/sw.js
 
 export default {
+  login: {
+    appTitle: 'Huduma AI',
+    username: 'Jina la mtumiaji',
+    password: 'Nywila',
+    loginButton: 'Ingia',
+    or: 'au',
+    savedAccounts: 'Akaunti Zilizohifadhiwa',
+    loginSuccess: 'Umefanikiwa kuingia',
+    loginError: 'Imeshindwa kuingia. Tafadhali angalia taarifa zako.',
+    googleLogin: 'Endelea na Google',
+    facebookLogin: 'Endelea na Facebook',
+    rememberMe: 'Nikumbuke',
+    forgotPassword: 'Umesahau nywila?',
+    noAccount: 'Huna akaunti?',
+    createAccount: 'Fungua akaunti',
+    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha'
+  },
   charts: {
     tooltip: {
       title: 'Tarehe',
@@ -18,7 +35,7 @@ export default {
     // Dashboard header and controls
     title: 'Data za Uchanganuzi & Maoni',
     period: 'Kipindi cha Muda',
-    
+
     // Period dropdown options
     periods: {
       daily: 'Kila Siku',
@@ -26,7 +43,7 @@ export default {
       monthly: 'Kila Mwezi',
       allTime: 'Wakati Wote'
     },
-    
+
     // Metrics section titles and values
     metrics: {
       totalQueries: 'Jumla ya Maswali',
@@ -34,7 +51,7 @@ export default {
       avgResponseTime: 'Wastani wa Muda wa Majibu',
       satisfaction: 'Kuridhika kwa Watumiaji'
     },
-    
+
     // Table headers and labels
     table: {
       rank: 'Nafasi',
@@ -42,7 +59,7 @@ export default {
       count: 'Idadi',
       avgTime: 'Wastani wa Muda'
     },
-    
+
     // Chart labels and legends
     chartLabels: {
       categories: 'Vikundi',
@@ -50,26 +67,26 @@ export default {
       byUsage: 'kwa Matumizi',
       category: 'Kikundi'
     },
-    
+
     // Tooltips and hints
     tooltips: {
       selectPeriod: 'Chagua kipindi',
       selectDate: 'Chagua tarehe',
       exportData: 'Toa data'
     },
-    
+
     // Status messages
     status: {
       loading: 'Inapakia data za uchanganuzi...',
       noData: 'Hakuna data inayopatikana kwa kipindi hiki',
       error: 'Imeshindwa kupakia data za uchanganuzi'
     },
-    
+
     // Trend indicators
     slower: 'polepole zaidi',
     faster: 'haraka zaidi',
     percentage: 'Asilimia',
-    
+
     // Additional analytics fields
     note: 'Dashibodi hii inaonyesha takwimu za matumizi na maoni ya watumiaji wa mfumo wa mazungumzo.',
     usageStats: 'Takwimu za Matumizi',
@@ -89,14 +106,14 @@ export default {
     dateRange: 'Kipindi cha Tarehe',
     startDate: 'Tarehe ya Kuanza',
     endDate: 'Tarehe ya Mwisho',
-    
+
     // Added for AnalyticsComponent.vue
     rank: 'Nafasi',
     query: 'Ombi',
     count: 'Idadi',
     avgTime: 'Wastani wa Muda',
     serviceUsage: 'Matumizi ya Vikundi vya Huduma',
-    
+
     // Added for UsageTrendChart.vue
     usageTrends: 'Mienendo ya Matumizi',
     week: 'Wiki Iliyopita',
@@ -145,7 +162,7 @@ export default {
     businessReg: 'Usajili wa Biashara',
     drivingLicense: 'Leseni ya Udereva'
   },
-  
+
   // Deadline titles
   deadlines: {
     taxFiling: 'Tarehe ya Mwisho ya Kutuma Kodi',
@@ -356,7 +373,7 @@ export default {
       maritalStatus: 'Hali ya Ndoa',
       photograph: 'Picha',
       biometric: 'Alama za Vidole / Data za Kibayometriki',
-      
+
       // Tab 2
       birthCert: 'Cheti cha Kuzaliwa',
       deathCert: 'Cheti cha Kifo',
@@ -364,14 +381,14 @@ export default {
       adoption: 'Rekodi za Kuasili',
       citizenship: 'Nyaraka za Uraia / Uhamiaji',
       immigration: 'Historia ya Uhamiaji na Visa',
-      
+
       // Tab 3
       currentAddress: 'Anwani ya Sasa ya Makazi',
       previousAddresses: 'Anwani za Awali',
       homeOrRental: 'Maelezo ya Umiliki au Upangaji',
       utilityBills: 'Bili za Huduma Zinazohusiana na Anwani',
       landRecords: 'Rekodi za Umiliki wa Ardhi na Mali',
-      
+
       // Tab 4
       idCard: 'Nambari ya Kitambulisho cha Taifa',
       passport: 'Maelezo ya Pasipoti',
@@ -379,7 +396,7 @@ export default {
       voterId: 'Kitambulisho cha Mpiga Kura',
       ssn: 'Nambari ya Hifadhi ya Jamii / Bima ya Taifa',
       militaryRecords: 'Rekodi za Huduma ya Jeshi',
-      
+
       // Tab 5
       medicalHistory: 'Historia ya Matibabu na Hali za Afya',
       vaccinations: 'Rekodi za Chanjo',
@@ -388,7 +405,7 @@ export default {
       organDonor: 'Hali ya Mchango wa Viungo',
       prescriptions: 'Maagizo ya Dawa na Matibabu Yaliyopokelewa',
       mentalHealth: 'Historia ya Afya ya Akili',
-      
+
       // Tab 6
       eHistory: 'Historia ya Ajira',
       currentEmployer: 'Maelezo ya Mwajiri wa Sasa',
@@ -397,13 +414,13 @@ export default {
       unemployment: 'Hali ya Ukosefu wa Ajira na Manufaa Yaliyopokelewa',
       tin: 'Nambari ya Utambulisho wa Mlipa Kodi (TIN)',
       businessAffiliations: 'Umiliki wa Biashara na Ushirikiano wa Kampuni',
-      
+
       // Tab 7
       schools: 'Shule na Vyuo Vilivyohudhiriwa',
       diplomas: 'Diploma, Shahada, na Vyeti',
       performance: 'Utendaji wa Kitaaluma na Alama za Mitihani',
       scholarships: 'Ufadhili na Msaada wa Kifedha Uliopokelewa',
-      
+
       // Tab 8
       incomeTax: 'Rekodi za Kodi ya Mapato',
       bankAccounts: 'Akaunti za Benki na Fedha',
@@ -411,26 +428,26 @@ export default {
       businessTax: 'Maelezo ya Kodi ya Biashara',
       pensionContrib: 'Michango na Uondoaji wa Pensheni',
       loanAid: 'Rekodi za Mikopo na Misaada ya Serikali',
-      
+
       // Tab 9
       pensionStatus: 'Hali ya Pensheni na Michango',
       childcare: 'Msaada wa Utunzaji wa Watoto',
       foodAssistance: 'Programu za Msaada wa Chakula / Ustawi',
       housingAssistance: 'Msaada wa Nyumba',
-      
+
       // Tab 10
       policeRecords: 'Rekodi za Polisi (historia ya uhalifu, kukamatwa, mashtaka)',
       courtCases: 'Historia ya Kesi za Mahakama',
       finesPenalties: 'Faini na Adhabu',
       paroleProbation: 'Hali ya Parole au Probesheni',
       citizenshipRevocation: 'Kufutwa kwa Uraia (kama inatumika)',
-      
+
       // Tab 11
       vehicleReg: 'Maelezo ya Usajili wa Gari',
       trafficViolations: 'Ukiukaji wa Sheria za Trafiki na Faini',
       licenseHistory: 'Historia ya Leseni ya Udereva na Vidokezo',
       publicTransportCard: 'Matumizi ya Kadi ya Usafiri wa Umma',
-      
+
       // Tab 12
       voterRegistration: 'Maelezo ya Usajili wa Mpiga Kura',
       electionHistory: 'Historia ya Ushiriki wa Uchaguzi',

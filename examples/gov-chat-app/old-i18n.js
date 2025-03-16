@@ -6,69 +6,6 @@ const messages = {
   // ----------------------------------------------------------------
   // ENGLISH
   en: {
-    charts: {
-      tooltip: {
-        title: 'Date',
-        totalQueries: 'Total Queries',
-        uniqueUsers: 'Unique Users'
-      },
-      day: 'Day',
-      noData: 'No Data',
-      notAvailable: 'N/A',
-      topQueries: 'Top Queries',
-      categoryDistribution: 'Service Categories Usage',
-      usageTrend: 'Usage Trend'
-    },
-  analytics: {
-  // Dashboard header and controls
-  title: 'Data Analytics & Insights',
-  period: 'Time Period',
-  
-  // Period dropdown options
-  periods: {
-    daily: 'Daily',
-    weekly: 'Weekly',
-    monthly: 'Monthly',
-    allTime: 'All Time'
-  },
-  
-  // Metrics section titles and values
-  metrics: {
-    totalQueries: 'Total Queries',
-    uniqueUsers: 'Unique Users',
-    avgResponseTime: 'Avg Response Time',
-    satisfaction: 'User Satisfaction'
-  },
-  
-  // Table headers and labels
-  table: {
-    rank: 'Rank',
-    query: 'Query',
-    count: 'Count',
-    avgTime: 'Avg. Time'
-  },
-  
-  // Chart labels and legends
-  chartLabels: {
-    categories: 'Categories',
-    serviceCategories: 'Service Categories',
-    byUsage: 'by Usage',
-    category: 'Category'
-  },
-  
-  // Tooltips and hints
-  tooltips: {
-    selectPeriod: 'Select time period',
-    selectDate: 'Select date',
-    exportData: 'Export data'
-  },
-  
-  // Status messages
-  status: {
-    loading: 'Loading analytics data...',
-    noData: 'No data available for this period',
-    error: 'Failed to load analytics data'
-  },
     brandName: 'Huduma AI: Your Digital Government Assistant',
     nav: {
       systemStatus: 'System Status',
@@ -236,16 +173,16 @@ const messages = {
           'E-commerce and digital business support'
         ]
       },
-      cat11: {
-        name: '11. Social Security & Pensions',
-        children: [
-          'Retirement benefits',
-          'Pension fund management',
-          'Survivor benefits',
-          'Disability pensions'
-        ]
-      },
-      cat12: {
+     cat11: {
+      name: '11. Culture & Recreation',
+      children: [
+        'Arts & Culture',
+        'Heritage',
+        'Sports & Recreation',
+        'Tourism'
+      ]
+    },      
+    cat12: {
         name: '12. Community & Civic Engagement',
         children: [
           'Voting and elections',
@@ -535,69 +472,6 @@ const messages = {
   // ----------------------------------------------------------------
   // FRENCH
   fr: {
-    charts: {
-      tooltip: {
-        title: 'Date',
-        totalQueries: 'Requêtes Totales',
-        uniqueUsers: 'Utilisateurs Uniques'
-      },
-      day: 'Jour',
-      noData: 'Aucune Donnée',
-      notAvailable: 'N/D',
-      topQueries: 'Principales Requêtes',
-      categoryDistribution: 'Utilisation des Catégories de Service',
-      usageTrend: 'Tendance d\'Utilisation'
-    },
-analytics: {
-  // Dashboard header and controls
-  title: 'Données Analytiques & Aperçus',
-  period: 'Période',
-  
-  // Period dropdown options
-  periods: {
-    daily: 'Quotidien',
-    weekly: 'Hebdomadaire',
-    monthly: 'Mensuel',
-    allTime: 'Tout Temps'
-  },
-  
-  // Metrics section titles and values
-  metrics: {
-    totalQueries: 'Requêtes Totales',
-    uniqueUsers: 'Utilisateurs Uniques',
-    avgResponseTime: 'Temps de Réponse Moyen',
-    satisfaction: 'Satisfaction des Utilisateurs'
-  },
-  
-  // Table headers and labels
-  table: {
-    rank: 'Rang',
-    query: 'Requête',
-    count: 'Nombre',
-    avgTime: 'Temps Moyen'
-  },
-  
-  // Chart labels and legends
-  chartLabels: {
-    categories: 'Catégories',
-    serviceCategories: 'Catégories de Service',
-    byUsage: 'par Utilisation',
-    category: 'Catégorie'
-  },
-  
-  // Tooltips and hints
-  tooltips: {
-    selectPeriod: 'Sélectionner la période',
-    selectDate: 'Sélectionner la date',
-    exportData: 'Exporter les données'
-  },
-  
-  // Status messages
-  status: {
-    loading: 'Chargement des données analytiques...',
-    noData: 'Aucune donnée disponible pour cette période',
-    error: 'Échec du chargement des données analytiques'
-  },
     brandName: 'Huduma AI: Votre Assistant Gouvernemental Numérique',
     nav: {
       systemStatus: 'État du Système',
@@ -766,16 +640,16 @@ analytics: {
           'Soutien au commerce électronique'
         ]
       },
-      cat11: {
-        name: '11. Sécurité sociale & Retraites',
-        children: [
-          'Allocations de retraite',
-          'Gestion des fonds de pension',
-          'Allocations de survivant',
-          'Pensions pour invalidité'
-        ]
-      },
-      cat12: {
+     cat11: {
+      name: '11. Culture et loisirs',
+      children: [
+        'Arts et culture',
+        'Patrimoine',
+        'Sports et loisirs',
+        'Tourisme'
+      ]
+     },      
+     cat12: {
         name: '12. Communauté & Participation civique',
         children: [
           'Élections et vote',
@@ -1077,69 +951,6 @@ analytics: {
   // ----------------------------------------------------------------
   // SWAHILI
   sw: {
-    charts: {
-      tooltip: {
-        title: 'Tarehe',
-        totalQueries: 'Jumla ya Maswali',
-        uniqueUsers: 'Watumiaji wa Kipekee'
-      },
-      day: 'Siku',
-      noData: 'Hakuna Data',
-      notAvailable: 'Haipatikani',
-      topQueries: 'Maswali ya Juu',
-      categoryDistribution: 'Matumizi ya Vikundi vya Huduma',
-      usageTrend: 'Mwelekeo wa Matumizi'
-    },
-  analytics: {
-  // Dashboard header and controls
-  title: 'Data za Uchanganuzi & Maoni',
-  period: 'Kipindi cha Muda',
-  
-  // Period dropdown options
-  periods: {
-    daily: 'Kila Siku',
-    weekly: 'Kila Wiki',
-    monthly: 'Kila Mwezi',
-    allTime: 'Wakati Wote'
-  },
-  
-  // Metrics section titles and values
-  metrics: {
-    totalQueries: 'Jumla ya Maswali',
-    uniqueUsers: 'Watumiaji wa Kipekee',
-    avgResponseTime: 'Wastani wa Muda wa Majibu',
-    satisfaction: 'Kuridhika kwa Watumiaji'
-  },
-  
-  // Table headers and labels
-  table: {
-    rank: 'Nafasi',
-    query: 'Swali',
-    count: 'Idadi',
-    avgTime: 'Wastani wa Muda'
-  },
-  
-  // Chart labels and legends
-  chartLabels: {
-    categories: 'Vikundi',
-    serviceCategories: 'Vikundi vya Huduma',
-    byUsage: 'kwa Matumizi',
-    category: 'Kikundi'
-  },
-  
-  // Tooltips and hints
-  tooltips: {
-    selectPeriod: 'Chagua kipindi',
-    selectDate: 'Chagua tarehe',
-    exportData: 'Toa data'
-  },
-  
-  // Status messages
-  status: {
-    loading: 'Inapakia data za uchanganuzi...',
-    noData: 'Hakuna data inayopatikana kwa kipindi hiki',
-    error: 'Imeshindwa kupakia data za uchanganuzi'
-  },
     brandName: 'Huduma AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
     nav: {
       systemStatus: 'Hali ya Mfumo',
@@ -1310,12 +1121,12 @@ analytics: {
         ]
       },
       cat11: {
-        name: '11. Hifadhi ya Jamii & Pensheni',
+        name: '11. Utamaduni na Burudani',
         children: [
-          'Manufaa ya kustaafu',
-          'Usimamizi wa mfuko wa pensheni',
-          'Manufaa ya warithi',
-          'Pensheni za ulemavu'
+          'Sanaa na Utamaduni',
+          'Urithi',
+          'Michezo na Burudani',
+          'Utalii'
         ]
       },
       cat12: {

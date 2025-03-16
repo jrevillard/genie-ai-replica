@@ -65,6 +65,11 @@ export default {
       error: 'Failed to load analytics data'
     },
     
+    // Trend indicators
+    slower: 'slower',
+    faster: 'faster',
+    percentage: 'Percentage',
+    
     // Additional analytics fields
     note: 'Below are usage stats and user feedback summaries.',
     usageStats: 'Usage Statistics',

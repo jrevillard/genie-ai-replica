@@ -1,21 +1,21 @@
 <!-- UnifiedAnalytics.vue - Fixed version -->
 <template>
   <div class="analytics-modal" @click.self="close">
-    <div class="analytics-content">
+    <div class="analytics-content" :key="'analytics-content-' + currentLocale">
       <div class="analytics-header">
-        <h2>{{ $t('analytics.title', 'Data Analytics & Insights') }}</h2>
+        <h2>{{ translate('analytics.title') }}</h2>
         <button class="close-btn" @click="close" aria-label="Close">×</button>
       </div>
       
       <div class="analytics-body">
         <!-- Period selector (for dynamic mode) -->
         <div v-if="useDynamicData" class="period-selector">
-          <label>{{ $t('analytics.period', 'Time Period:') }}</label>
+          <label>{{ translate('analytics.period') }}</label>
           <select v-model="selectedPeriod" @change="loadAnalytics">
-            <option value="daily">{{ $t('analytics.periods.daily', 'Daily') }}</option>
-            <option value="weekly">{{ $t('analytics.periods.weekly', 'Weekly') }}</option>
-            <option value="monthly">{{ $t('analytics.periods.monthly', 'Monthly') }}</option>
-            <option value="all-time">{{ $t('analytics.periods.allTime', 'All Time') }}</option>
+            <option value="daily">{{ translate('analytics.periods.daily') }}</option>
+            <option value="weekly">{{ translate('analytics.periods.weekly') }}</option>
+            <option value="monthly">{{ translate('analytics.periods.monthly') }}</option>
+            <option value="all-time">{{ translate('analytics.periods.allTime') }}</option>
           </select>
           
           <!-- Date picker (hidden for all-time) -->
@@ -32,14 +32,14 @@
         <!-- Loading state -->
         <div v-if="isLoading" class="loading-container">
           <div class="spinner"></div>
-          <p>{{ $t('analytics.loading', 'Loading analytics data...') }}</p>
+          <p>{{ translate('analytics.loading') }}</p>
         </div>
         
         <!-- Error state -->
         <div v-else-if="error" class="error-container">
           <p class="error-message">{{ error }}</p>
           <button @click="loadAnalytics" class="retry-button">
-            {{ $t('analytics.retry', 'Retry') }}
+            {{ translate('analytics.retry') }}
           </button>
         </div>
         
@@ -60,7 +60,7 @@
           <!-- Key metrics summary -->
           <div class="metrics-summary">
             <div class="metric-card">
-              <h3>{{ $t('analytics.metrics.totalQueries', 'Total Queries') }}</h3>
+              <h3>{{ translate('analytics.metrics.totalQueries') }}</h3>
               <div class="metric-value">{{ formatValue(analytics.totalQueries) }}</div>
               <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
                 {{ formatTrend(comparison.totalQueries) }}
@@ -68,7 +68,7 @@
             </div>
             
             <div class="metric-card">
-              <h3>{{ $t('analytics.metrics.uniqueUsers', 'Unique Users') }}</h3>
+              <h3>{{ translate('analytics.metrics.uniqueUsers') }}</h3>
               <div class="metric-value">{{ formatValue(analytics.uniqueUsers) }}</div>
               <div v-if="comparison.uniqueUsers" class="trend" :class="getTrendClass(comparison.uniqueUsers)">
                 {{ formatTrend(comparison.uniqueUsers) }}
@@ -76,7 +76,7 @@
             </div>
             
             <div class="metric-card">
-              <h3>{{ $t('analytics.metrics.avgResponseTime', 'Avg Response Time') }}</h3>
+              <h3>{{ translate('analytics.metrics.avgResponseTime') }}</h3>
               <div class="metric-value">{{ formatValue(analytics.averageResponseTime, 'time') }}</div>
               <div v-if="comparison.averageResponseTime" class="trend" :class="getTrendClass(comparison.averageResponseTime, true)">
                 {{ formatTrend(comparison.averageResponseTime, true) }}
@@ -84,7 +84,7 @@
             </div>
             
             <div class="metric-card">
-              <h3>{{ $t('analytics.metrics.satisfaction', 'User Satisfaction') }}</h3>
+              <h3>{{ translate('analytics.metrics.satisfaction') }}</h3>
               <div class="metric-value">{{ formatValue(analytics.satisfactionRate, 'percent') }}</div>
               <div v-if="comparison.satisfactionRate" class="trend" :class="getTrendClass(comparison.satisfactionRate)">
                 {{ formatTrend(comparison.satisfactionRate) }}
@@ -95,20 +95,20 @@
           <div class="charts-container">
             <!-- Top Queries Section -->
             <div class="analytics-section half-width">
-              <h3>{{ $t('analytics.topQueries', 'Top Queries') }}</h3>
+              <h3>{{ translate('analytics.topQueries') }}</h3>
               <top-queries-chart 
                 v-if="analytics.topQueries && analytics.topQueries.length > 0"
                 :data="analytics.topQueries"
                 :externalData="true"
               />
               <div v-else class="no-data">
-                {{ $t('analytics.noData', 'No data available for this period') }}
+                {{ translate('analytics.noData') }}
               </div>
             </div>
             
             <!-- Service Categories Usage -->
             <div class="analytics-section half-width">
-              <h3>{{ $t('analytics.serviceUsage', 'Service Categories Usage') }}</h3>
+              <h3>{{ translate('analytics.serviceUsage') }}</h3>
               <category-distribution-chart 
                 v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
                 :data="analytics.queryDistribution"
@@ -116,10 +116,10 @@
               />
               <div v-else class="category-chart-container">
                 <div v-if="categoryLoading" class="chart-loading">
-                  {{ $t('analytics.loading', 'Loading...') }}
+                  {{ translate('analytics.loading') }}
                 </div>
                 <div v-else class="no-data">
-                  {{ $t('analytics.noData', 'No data available for this period') }}
+                  {{ translate('analytics.noData') }}
                 </div>
               </div>
             </div>
@@ -156,6 +156,7 @@ export default {
       error: null,
       selectedPeriod: 'monthly',
       selectedDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
+      currentLocale: this.$i18n ? this.$i18n.locale : 'en',
       
       // Analytics data
       analytics: {
@@ -223,20 +224,26 @@ export default {
     }
     
     // Listen for locale changes
-    this.$watch(() => this.$i18n.locale, (newLocale) => {
-      this.translateQueries();
-      this.translateCategories();
-      
-      // Also tell the usage chart to update
-      if (this.$refs.usageTrendChart) {
-        this.$refs.usageTrendChart.updateTranslations();
-      }
-    });
+    if (this.$i18n) {
+      this.currentLocale = this.$i18n.locale;
+      this.$watch('$i18n.locale', (newLocale) => {
+        this.currentLocale = newLocale;
+        console.log('Locale changed in UnifiedAnalytics:', newLocale);
+        this.translateQueries();
+        this.translateCategories();
+        
+        // Also tell the usage chart to update
+        if (this.$refs.usageTrendChart) {
+          this.$refs.usageTrendChart.updateTranslations();
+        }
+      });
+    }
   },
   
   mounted() {
     // Add resize listener
     window.addEventListener('resize', this.handleResize);
+    console.log('UnifiedAnalytics mounted with locale:', this.currentLocale);
   },
   
   beforeUnmount() {
@@ -244,6 +251,25 @@ export default {
   },
   
   methods: {
+    /**
+     * Custom translation method to ensure correct locale is used
+     */
+    translate(key, fallback = '') {
+      if (!this.$i18n) return fallback;
+      
+      try {
+        // Force the correct locale
+        const translation = this.$i18n.t(key, { locale: this.currentLocale });
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      } catch (e) {
+        console.error('Translation error:', e);
+        return fallback || key;
+      }
+    },
+    
     /**
      * Handle period change from usage trend chart
      */
@@ -283,7 +309,7 @@ export default {
       };
       
       // Use current locale or fall back to English
-      const locale = this.$i18n?.locale || 'en';
+      const locale = this.currentLocale || 'en';
       this.translatedTopQueries = sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage['en'];
     },
     
@@ -322,7 +348,7 @@ export default {
       };
       
       // Use current locale or fall back to English
-      const locale = this.$i18n?.locale || 'en';
+      const locale = this.currentLocale || 'en';
       this.translatedCategories = categoryDataPerLanguage[locale] || categoryDataPerLanguage['en'];
       
       // Update static data with translated categories
@@ -412,7 +438,7 @@ export default {
         await this.loadTimeSeriesData();
       } catch (error) {
         console.error('Error loading analytics data:', error);
-        this.error = this.$t('analytics.errors.loading', 'Failed to load analytics data. Please try again.');
+        this.error = this.translate('analytics.errors.loading', 'Failed to load analytics data. Please try again.');
         
         // Fallback to static data if API fails
         this.loadStaticData();
@@ -559,7 +585,7 @@ export default {
       
       switch (format) {
         case 'number':
-          return value.toLocaleString();
+          return value.toLocaleString(this.currentLocale);
           
         case 'time':
           // Format as seconds with 1 decimal place
@@ -579,7 +605,7 @@ export default {
     formatTrend(percentChange, isInverse = false) {
       const prefix = percentChange > 0 ? '+' : '';
       const suffix = isInverse 
-        ? (percentChange > 0 ? ' slower' : ' faster')
+        ? (percentChange > 0 ? ' ' + this.translate('analytics.slower') : ' ' + this.translate('analytics.faster'))
         : '';
       
       return `${prefix}${percentChange.toFixed(1)}%${suffix}`;

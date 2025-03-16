@@ -65,6 +65,11 @@ export default {
       error: 'Imeshindwa kupakia data za uchanganuzi'
     },
     
+    // Trend indicators
+    slower: 'polepole zaidi',
+    faster: 'haraka zaidi',
+    percentage: 'Asilimia',
+    
     // Additional analytics fields
     note: 'Dashibodi hii inaonyesha takwimu za matumizi na maoni ya watumiaji wa mfumo wa mazungumzo.',
     usageStats: 'Takwimu za Matumizi',

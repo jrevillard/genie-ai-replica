@@ -37,6 +37,11 @@ export default {
     selectedDate: {
       type: String,
       default: () => new Date().toISOString().split('T')[0]
+    },
+    // Added to force re-render when language changes
+    renderKey: {
+      type: String,
+      default: null
     }
   },
   data() {
@@ -75,22 +80,38 @@ export default {
           this.fetchData();
         }
       }
+    },
+    // Watch for renderKey (locale) changes to force complete re-render
+    renderKey: {
+      handler() {
+        // First clean up old tooltips
+        d3.selectAll('.d3-tooltip').remove();
+        
+        // Then reload category names with new locale
+        this.loadCategoryNames().then(() => {
+          if (this.chartData && this.chartData.length > 0) {
+            // Force complete recreation of chart
+            d3.select(this.$refs.chart).selectAll('*').remove();
+            this.renderChart();
+          }
+        });
+      }
     }
   },
-  async mounted() {
+  mounted() {
     // Load category names first
-    await this.loadCategoryNames();
-    
-    // Set up chart dimensions
-    this.initChartDimensions();
-    
-    // Use data from props or fetch from API
-    if (this.externalData && this.data.length > 0) {
-      this.chartData = this.data;
-      this.renderChart();
-    } else if (!this.externalData) {
-      this.fetchData();
-    }
+    this.loadCategoryNames().then(() => {
+      // Set up chart dimensions
+      this.initChartDimensions();
+      
+      // Use data from props or fetch from API
+      if (this.externalData && this.data.length > 0) {
+        this.chartData = this.data;
+        this.renderChart();
+      } else if (!this.externalData) {
+        this.fetchData();
+      }
+    });
     
     // Add resize listener
     window.addEventListener('resize', this.handleResize);
@@ -104,39 +125,46 @@ export default {
     /**
      * Fetch category distribution data from API
      */
-    async fetchData() {
-      if (this.externalData) return;
-      
-      this.loading = true;
-      this.error = null;
-      
-      try {
-        // Calculate date range based on period
-        const { startDate, endDate } = analyticsService.calculateDateRange(
-          this.period, 
-          this.selectedDate
-        );
-        
-        // Fetch dashboard analytics which includes category distribution
-        const dashboardData = await analyticsService.getDashboardAnalytics(this.period, this.selectedDate);
-        
-        if (dashboardData && dashboardData.queryDistribution) {
-          this.chartData = dashboardData.queryDistribution;
-          this.renderChart();
-        } else {
-          this.error = this.$t('analytics.status.noData');
-        }
-      } catch (error) {
-        console.error('Error fetching category distribution data:', error);
-        console.log('Falling back to sample category data...');
-        // Fall back to hard-coded data
-        this.chartData = this.getFallbackData();
-        this.renderChart();
-      } finally {
-        this.loading = false;
-      }
-    },
+// In CategoryDistributionChart.vue
+async fetchData() {
+  if (this.externalData) return;
+  
+  this.loading = true;
+  this.error = null;
+  
+  try {
+    // Calculate date range based on period
+    const { startDate, endDate } = analyticsService.calculateDateRange(
+      this.period, 
+      this.selectedDate
+    );
     
+    // Get current locale from i18n
+    const locale = this.$i18n.locale;
+    console.log(`Fetching analytics with locale: ${locale}`);
+    
+    // Fetch dashboard analytics which includes category distribution
+    const dashboardData = await analyticsService.getDashboardAnalytics(
+      this.period, 
+      this.selectedDate
+    );
+    
+    if (dashboardData && dashboardData.queryDistribution) {
+      this.chartData = dashboardData.queryDistribution;
+      this.renderChart();
+    } else {
+      this.error = this.$t('analytics.status.noData');
+    }
+  } catch (error) {
+    console.error('Error fetching category distribution data:', error);
+    console.log('Falling back to sample category data...');
+    // Fall back to hard-coded data
+    this.chartData = this.getFallbackData();
+    this.renderChart();
+  } finally {
+    this.loading = false;
+  }
+},    
     /**
      * Load category names from the service
      */
@@ -144,31 +172,174 @@ export default {
       try {
         const categories = await serviceTreeService.getAllCategories();
         
-        // Create a lookup object for category names
+        // Create a lookup object for category names by ID
         categories.forEach(category => {
-          this.categories[category.catKey] = this.getCategoryName(category.catKey);
+          // First store the raw data for debugging
+          console.log('Category from service:', category);
+          
+          // Extract the numeric ID from serviceCategories/123 (full path)
+          // or just use the raw _key (which is typically just the number) 
+          const id = category._key || 
+                     (category._id && category._id.split('/')[1]) || 
+                     category.catKey || 
+                     category.categoryId;
+          
+          if (id) {
+            // Use the appropriate translation based on current locale
+            const currentLocale = this.$i18n.locale;
+            
+            // Use nameXX based on locale or fall back to nameEN
+            let name = null;
+            if (currentLocale === 'fr' && category.nameFR) {
+              name = category.nameFR;
+            } else if (currentLocale === 'sw' && category.nameSW) {
+              name = category.nameSW;
+            } else {
+              name = category.nameEN || category.name || null;
+            }
+            
+            // Store the name with various ID formats for flexible lookup
+            if (name) {
+              // Store with numeric ID (most important - this is the _key in ArangoDB)
+              this.categories[id] = name;
+              
+              // Store with full path from _id (serviceCategories/X)
+              if (category._id) {
+                this.categories[category._id] = name;
+              } else if (id.match(/^\d+$/)) {
+                this.categories[`serviceCategories/${id}`] = name;
+              }
+              
+              // Store with s/X short format
+              if (id.match(/^\d+$/)) {
+                this.categories[`s/${id}`] = name;
+              }
+              
+              // Store with serviceCategorie format
+              if (id.match(/^\d+$/)) {
+                this.categories[`serviceCategorie${id}`] = name;
+              }
+              
+              // Store with cat format
+              if (id.match(/^\d+$/)) {
+                this.categories[`cat${id}`] = name; 
+              }
+            }
+          }
         });
+        
+        console.log('Loaded category names with all formats:', this.categories);
       } catch (error) {
         console.error('Error loading category names:', error);
-        // Use fallback approach - will use formatCategoryId instead
+        // Populate with fallback data in case of error
+        this.populateFallbackCategories();
       }
     },
     
     /**
-     * Get category name, with fallback if not found
+     * Populate with fallback category names when service fails
      */
-    getCategoryName(categoryId) {
-      // Try to look up the name from translations
-      const translationKey = `leftPanel.${categoryId}.name`;
-      const translated = this.$t(translationKey);
+    populateFallbackCategories() {
+      // Based on the schema/sample data, provide fallback names
+      const fallbackCategories = {
+        '1': { nameEN: 'Identity & Civil Registration', nameFR: 'Identité et état civil', nameSW: 'Utambulisho na Usajili wa Kiraia' },
+        '2': { nameEN: 'Transportation', nameFR: 'Transport', nameSW: 'Usafiri' },
+        '3': { nameEN: 'Taxes & Revenue', nameFR: 'Impôts et Revenus', nameSW: 'Kodi na Mapato' },
+        '4': { nameEN: 'Immigration & Citizenship', nameFR: 'Immigration et Citoyenneté', nameSW: 'Uhamiaji na Uraia' },
+        '5': { nameEN: 'Education & Learning', nameFR: 'Éducation et Apprentissage', nameSW: 'Elimu na Mafunzo' },
+        '6': { nameEN: 'Housing & Properties', nameFR: 'Logement et Propriétés', nameSW: 'Nyumba na Mali' },
+        '7': { nameEN: 'Health & Healthcare', nameFR: 'Santé et Soins Médicaux', nameSW: 'Afya na Huduma za Afya' },
+        '8': { nameEN: 'Public Safety', nameFR: 'Sécurité Publique', nameSW: 'Usalama wa Umma' },
+        '9': { nameEN: 'Business & Economy', nameFR: 'Entreprise et Économie', nameSW: 'Biashara na Uchumi' },
+        '10': { nameEN: 'Social Services', nameFR: 'Services Sociaux', nameSW: 'Huduma za Kijamii' },
+        '11': { nameEN: 'Environment', nameFR: 'Environnement', nameSW: 'Mazingira' },
+        '12': { nameEN: 'Culture & Recreation', nameFR: 'Culture et Loisirs', nameSW: 'Utamaduni na Burudani' },
+        '13': { nameEN: 'Legal Services', nameFR: 'Services Juridiques', nameSW: 'Huduma za Kisheria' }
+      };
       
-      // Check if we got a valid translation
-      if (translated && typeof translated === 'string' && translated !== translationKey) {
-        return this.removeNumberPrefix(translated);
+      // Determine the current locale
+      const currentLocale = this.$i18n.locale;
+      
+      // Add entries for each format with the appropriate language
+      Object.entries(fallbackCategories).forEach(([id, names]) => {
+        // Choose the right language name
+        let name = names.nameEN;
+        if (currentLocale === 'fr' && names.nameFR) {
+          name = names.nameFR;
+        } else if (currentLocale === 'sw' && names.nameSW) {
+          name = names.nameSW;
+        }
+        
+        // Add entries with all possible ID formats for maximum compatibility
+        this.categories[id] = name;
+        this.categories[`serviceCategories/${id}`] = name;
+        this.categories[`s/${id}`] = name;
+        this.categories[`serviceCategorie${id}`] = name;
+        this.categories[`cat${id}`] = name;
+      });
+      
+      console.log('Populated fallback categories with all formats:', this.categories);
+    },
+    
+    /**
+     * Format category ID for display when no name is found
+     */
+    formatCategoryId(categoryId) {
+      if (!categoryId) return this.$t('charts.notAvailable');
+      
+      // Extract the numeric ID from different formats
+      let numericId = null;
+      
+      // Try serviceCategories/X format (from database _id)
+      const serviceCategoriesMatch = categoryId.match(/serviceCategories\/(\d+)/i);
+      if (serviceCategoriesMatch) {
+        numericId = serviceCategoriesMatch[1];
       }
       
-      // Fallback to category ID
-      return this.formatCategoryId(categoryId);
+      // Try s/X format 
+      if (!numericId) {
+        const sMatch = categoryId.match(/s\/(\d+)/i);
+        if (sMatch) {
+          numericId = sMatch[1];
+        }
+      }
+      
+      // Try serviceCategorie format
+      if (!numericId) {
+        const serviceCatMatch = categoryId.match(/serviceCategorie(\d+)/i);
+        if (serviceCatMatch) {
+          numericId = serviceCatMatch[1];
+        }
+      }
+      
+      // Try cat format
+      if (!numericId) {
+        const catMatch = categoryId.match(/cat(\d+)/i);
+        if (catMatch) {
+          numericId = catMatch[1];
+        }
+      }
+      
+      // Try to parse the ID itself if it's a number
+      if (!numericId && /^\d+$/.test(categoryId)) {
+        numericId = categoryId;
+      }
+      
+      // If we found a numeric ID, check our fallback data
+      if (numericId && this.categories[numericId]) {
+        return this.categories[numericId];
+      }
+      
+      // Default fallback - just format the ID nicely
+      // Extract the relevant part of the ID for display
+      let idDisplay = categoryId;
+      if (categoryId.includes('/')) {
+        idDisplay = categoryId.split('/').pop();
+      } else {
+        idDisplay = categoryId.replace(/^(serviceCategorie|cat)/i, '');
+      }
+      
+      return `${this.$t('analytics.chartLabels.category')} ${idDisplay}`;
     },
     
     /**
@@ -177,28 +348,6 @@ export default {
     removeNumberPrefix(text) {
       if (!text) return '';
       return text.replace(/^\d+\.\s*/, '');
-    },
-    
-    /**
-     * Format category ID for display
-     */
-    formatCategoryId(categoryId) {
-      if (!categoryId) return this.$t('charts.notAvailable');
-      
-      // Convert format like "cat1" to "Category 1"
-      const match = categoryId.match(/cat(\d+)/i);
-      if (match) {
-        return `${this.$t('analytics.chartLabels.category')} ${match[1]}`;
-      }
-      
-      // For serviceCategorie format, extract the ID
-      const serviceMatch = categoryId.match(/serviceCategorie(\d+)/i);
-      if (serviceMatch) {
-        return `${this.$t('analytics.chartLabels.category')} ${serviceMatch[1]}`;
-      }
-      
-      // If not in expected format, just return the ID
-      return categoryId;
     },
     
     /**
@@ -227,15 +376,67 @@ export default {
      * @returns {Array} Sample category distribution data
      */
     getFallbackData() {
+      // Get current locale
+      const currentLocale = this.$i18n.locale;
+      
+      // Define multi-language names
+      const categoryNames = {
+        'cat1': {
+          en: 'Identity & Civil Registry',
+          fr: 'Identité et Registre Civil',
+          sw: 'Utambulisho na Usajili wa Kiraia'
+        },
+        'cat2': {
+          en: 'Healthcare & Social Services',
+          fr: 'Santé et Services Sociaux',
+          sw: 'Huduma za Afya na Jamii'
+        },
+        'cat3': {
+          en: 'Education & Learning',
+          fr: 'Éducation et Apprentissage',
+          sw: 'Elimu na Mafunzo'
+        },
+        'cat4': {
+          en: 'Employment & Labor Services',
+          fr: 'Emploi et Services du Travail',
+          sw: 'Ajira na Huduma za Kazi'
+        },
+        'cat5': {
+          en: 'Taxes & Revenue',
+          fr: 'Impôts et Revenus',
+          sw: 'Kodi na Mapato'
+        },
+        'cat6': {
+          en: 'Public Safety & Justice',
+          fr: 'Sécurité Publique et Justice',
+          sw: 'Usalama wa Umma na Haki'
+        },
+        'cat7': {
+          en: 'Transportation & Mobility',
+          fr: 'Transport et Mobilité',
+          sw: 'Usafiri na Uhamaji'
+        },
+        'cat8': {
+          en: 'Housing & Urban Development',
+          fr: 'Logement et Développement Urbain',
+          sw: 'Nyumba na Maendeleo ya Miji'
+        }
+      };
+      
+      // Select language based on locale
+      const lang = currentLocale === 'fr' ? 'fr' : 
+                  (currentLocale === 'sw' ? 'sw' : 'en');
+      
+      // Create fallback data with appropriate language
       return [
-        { categoryId: 'cat1', name: 'Identity & Civil Registry', count: 2347, value: 23 },
-        { categoryId: 'cat2', name: 'Healthcare & Social Services', count: 1782, value: 17 },
-        { categoryId: 'cat3', name: 'Education & Learning', count: 1645, value: 16 },
-        { categoryId: 'cat4', name: 'Employment & Labor Services', count: 1245, value: 12 },
-        { categoryId: 'cat5', name: 'Taxes & Revenue', count: 980, value: 10 },
-        { categoryId: 'cat6', name: 'Public Safety & Justice', count: 850, value: 8 },
-        { categoryId: 'cat7', name: 'Transportation & Mobility', count: 720, value: 7 },
-        { categoryId: 'cat8', name: 'Housing & Urban Development', count: 650, value: 6 }
+        { categoryId: 'cat1', name: categoryNames.cat1[lang], count: 2347, value: 23 },
+        { categoryId: 'cat2', name: categoryNames.cat2[lang], count: 1782, value: 17 },
+        { categoryId: 'cat3', name: categoryNames.cat3[lang], count: 1645, value: 16 },
+        { categoryId: 'cat4', name: categoryNames.cat4[lang], count: 1245, value: 12 },
+        { categoryId: 'cat5', name: categoryNames.cat5[lang], count: 980, value: 10 },
+        { categoryId: 'cat6', name: categoryNames.cat6[lang], count: 850, value: 8 },
+        { categoryId: 'cat7', name: categoryNames.cat7[lang], count: 720, value: 7 },
+        { categoryId: 'cat8', name: categoryNames.cat8[lang], count: 650, value: 6 }
       ];
     },
     
@@ -245,6 +446,43 @@ export default {
     truncateText(text, maxLength) {
       if (!text) return '';
       return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+    },
+    
+    /**
+     * Get localized category name based on ID
+     */
+    getCategoryDisplayName(categoryId) {
+      // First check if the exact ID exists in our categories lookup
+      if (this.categories[categoryId]) {
+        return this.categories[categoryId];
+      }
+      
+      // Handle "serviceCategories/X" format (format from the database _id field)
+      const serviceCategoriesMatch = categoryId.match(/serviceCategories\/(\d+)/i);
+      if (serviceCategoriesMatch && this.categories[serviceCategoriesMatch[1]]) {
+        return this.categories[serviceCategoriesMatch[1]];
+      }
+      
+      // Handle "s/X" format (shorthand format used in some places)
+      const sMatch = categoryId.match(/s\/(\d+)/i);
+      if (sMatch && this.categories[sMatch[1]]) {
+        return this.categories[sMatch[1]];
+      }
+      
+      // Then try extracting numeric part if it's a serviceCategorie format
+      const serviceMatch = categoryId.match(/serviceCategorie(\d+)/i);
+      if (serviceMatch && this.categories[serviceMatch[1]]) {
+        return this.categories[serviceMatch[1]];
+      }
+      
+      // Then try extracting numeric part if it's a cat format
+      const catMatch = categoryId.match(/cat(\d+)/i);
+      if (catMatch && this.categories[catMatch[1]]) {
+        return this.categories[catMatch[1]];
+      }
+      
+      // Fallback to formatting the ID
+      return this.formatCategoryId(categoryId);
     },
     
     /**
@@ -261,9 +499,21 @@ export default {
         // Ensure the value property exists and is a valid number
         const value = Number(item.value) || Number(item.count) || 1;
         
+        // Get the best display name for the category
+        let displayName = '';
+        
+        // Try to use the name directly from the item if it seems valid
+        if (item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')) {
+          displayName = item.name;
+        } 
+        // Otherwise look up the name using our helper method
+        else {
+          displayName = this.getCategoryDisplayName(item.categoryId);
+        }
+        
         return {
           categoryId: item.categoryId,
-          categoryName: this.categories[item.categoryId] || item.name || this.formatCategoryId(item.categoryId),
+          categoryName: displayName,
           count: Number(item.count) || 0,
           value: value
         };

@@ -3,21 +3,21 @@
     <div class="modal-content" @click.stop>
       <div class="modal-header">
         <slot name="header">
-          <h3>{{ title }}</h3>
+          <h3>{{ translateIfKey(title) }}</h3>
         </slot>
         <button class="close-button" @click="$emit('close')" aria-label="Close">×</button>
       </div>
       
       <div class="modal-body">
         <slot name="body">
-          <p>{{ message }}</p>
+          <p>{{ translateIfKey(message) }}</p>
         </slot>
       </div>
       
       <div class="modal-footer">
         <slot name="footer">
-          <button @click="$emit('close')" class="cancel-btn">{{ cancelText }}</button>
-          <button @click="$emit('confirm')" class="primary-btn">{{ confirmText }}</button>
+          <button @click="$emit('close')" class="cancel-btn">{{ translateIfKey(cancelText) }}</button>
+          <button @click="$emit('confirm')" class="primary-btn">{{ translateIfKey(confirmText) }}</button>
         </slot>
       </div>
     </div>
@@ -44,6 +44,19 @@ export default {
     confirmText: {
       type: String,
       default: 'Confirm'
+    },
+    useTranslation: {
+      type: Boolean,
+      default: false
+    }
+  },
+  
+  methods: {
+    translateIfKey(key) {
+      if (this.useTranslation && key) {
+        return this.$t(key);
+      }
+      return key;
     }
   },
   

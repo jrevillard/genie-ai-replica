@@ -100,6 +100,21 @@ export default {
           this.fetchData();
         }
       }
+    },
+    // Watch for locale changes
+    '$i18n.locale': {
+      handler() {
+        // Force chart re-render when locale changes
+        this.$nextTick(() => {
+          if (this.$refs.stackedBarChart) {
+            // Clear existing tooltip to prevent duplicates
+            d3.selectAll('.d3-tooltip').remove();
+            
+            this.renderStackedBarChart();
+          }
+        });
+      },
+      immediate: false
     }
   },
   mounted() {

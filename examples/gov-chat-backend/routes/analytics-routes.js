@@ -25,6 +25,13 @@ const analyticsService = new AnalyticsService();
  *           type: string
  *           format: date-time
  *         description: End date (ISO format)
+ *       - in: query
+ *         name: locale
+ *         schema:
+ *           type: string
+ *           enum: [en, fr, sw]
+ *           default: en
+ *         description: Language locale for category names
  *     responses:
  *       200:
  *         description: Dashboard analytics data
@@ -93,9 +100,10 @@ router.get('/dashboard', async (req, res) => {
   try {
     const startDate = req.query.startDate || new Date().toISOString().split('T')[0];
     const endDate = req.query.endDate || new Date().toISOString();
+    const locale = req.query.locale || 'en';
     
-    console.log(`Getting dashboard analytics from ${startDate} to ${endDate}`);
-    const analytics = await analyticsService.getDashboardAnalytics(startDate, endDate);
+    console.log(`Getting dashboard analytics from ${startDate} to ${endDate} with locale ${locale}`);
+    const analytics = await analyticsService.getDashboardAnalytics(startDate, endDate, locale);
     
     res.json(analytics);
   } catch (error) {
@@ -177,6 +185,13 @@ router.get('/metric/:metric', analyticsController.getMetric);
  *         schema:
  *           type: string
  *         description: JSON string of filter criteria
+ *       - in: query
+ *         name: locale
+ *         schema:
+ *           type: string
+ *           enum: [en, fr, sw]
+ *           default: en
+ *         description: Language locale for category names
  *     responses:
  *       200:
  *         description: General analytics data
@@ -207,8 +222,10 @@ router.get('/', async (req, res) => {
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
     const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
+    const locale = req.query.locale || 'en';
     
     console.log(`Getting analytics from ${startDate} to ${endDate} with filters:`, filters);
+    console.log(`Using locale: ${locale}`);
     const analytics = await analyticsService.getAnalytics(filters, startDate, endDate);
     
     res.json(analytics);

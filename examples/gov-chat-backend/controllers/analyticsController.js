@@ -15,7 +15,7 @@ class AnalyticsController {
    */
   async getDashboardAnalytics(req, res) {
     try {
-      const { startDate, endDate } = req.query;
+      const { startDate, endDate, locale } = req.query;
       
       // Validate required parameters
       if (!startDate || !endDate) {
@@ -24,8 +24,9 @@ class AnalyticsController {
         });
       }
       
-      // Get dashboard analytics from service
-      const dashboardData = await analyticsService.getDashboardAnalytics(startDate, endDate);
+      // Get dashboard analytics from service with locale
+      // Pass through the locale from the request (it will default to 'en' in the service if not provided)
+      const dashboardData = await analyticsService.getDashboardAnalytics(startDate, endDate, locale);
       
       res.json(dashboardData);
     } catch (error) {

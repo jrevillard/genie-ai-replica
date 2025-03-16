@@ -1,5 +1,5 @@
 <template>
-  <div class="analytics-dashboard">
+  <div class="analytics-dashboard" :key="'dashboard-' + currentLocale">
     <div class="dashboard-header">
       <h2>{{ $t('analytics.title') }}</h2>
       
@@ -78,12 +78,13 @@
       </div>
       
       <!-- Category distribution chart -->
-      <div class="chart-container half-width">
-        <h3>{{ $t('analytics.charts.categoryDistribution') }}</h3>
+      <div class="chart-container half-width" :key="'cat-container-' + currentLocale">
+        <h3>{{ $t('charts.categoryDistribution') }}</h3>
         <CategoryDistributionChart 
           v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
           :data="analytics.queryDistribution" 
           :externalData="true"
+          :renderKey="currentLocale"
         />
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
@@ -91,11 +92,12 @@
       </div>
       
       <!-- Top queries -->
-      <div class="chart-container half-width">
-        <h3>{{ $t('analytics.charts.topQueries') }}</h3>
+      <div class="chart-container half-width" :key="'top-queries-container-' + currentLocale">
+        <h3>{{ $t('charts.topQueries') }}</h3>
         <TopQueriesChart 
           v-if="analytics.topQueries && analytics.topQueries.length > 0"
-          :data="analytics.topQueries" 
+          :data="analytics.topQueries"
+          :renderKey="currentLocale"
         />
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
@@ -103,12 +105,13 @@
       </div>
       
       <!-- Usage trend chart -->
-      <div class="chart-container full-width">
-        <h3>{{ $t('analytics.charts.usageTrend') }}</h3>
+      <div class="chart-container full-width" :key="'usage-trend-container-' + currentLocale">
+        <h3>{{ $t('charts.usageTrend') }}</h3>
         <UsageTrendChart 
           v-if="timeSeriesData && timeSeriesData.length > 0"
           :data="timeSeriesData"
           :externalData="true"
+          :renderKey="currentLocale"
         />
         <div v-else class="no-data">
           {{ $t('analytics.status.noData') }}
@@ -156,6 +159,12 @@ export default {
   },
   computed: {
     /**
+     * Current locale - used to trigger reactivity on language change
+     */
+    currentLocale() {
+      return this.$i18n.locale;
+    },
+    /**
      * Today's date in YYYY-MM-DD format
      */
     todayStr() {
@@ -163,7 +172,19 @@ export default {
     }
   },
   created() {
+    console.log('Analytics dashboard created with locale:', this.$i18n.locale);
     this.loadAnalytics();
+  },
+  watch: {
+    // Watch for language changes - force complete refresh
+    '$i18n.locale': {
+      handler() {
+        console.log('Language changed, reloading dashboard:', this.$i18n.locale);
+        // Force full reload of data when language changes
+        this.loadAnalytics();
+      },
+      immediate: true
+    }
   },
   methods: {
     /**
@@ -287,7 +308,7 @@ export default {
           // Process the data to ensure it has the expected format
           this.timeSeriesData = data.map(item => ({
             timestamp: item.timestamp || '',
-            dateLabel: this.formatDate(item.timestamp),
+            dateLabel: this.formatDateLabel(item.timestamp, params.interval),
             value: typeof item.value === 'number' ? item.value : 0,
             userCount: typeof item.userCount === 'number' ? item.userCount : 0
           }));
@@ -309,7 +330,7 @@ export default {
       
       try {
         const date = new Date(dateString);
-        return date.toLocaleDateString();
+        return date.toLocaleDateString(this.$i18n.locale);
       } catch (e) {
         return dateString;
       }
@@ -328,7 +349,7 @@ export default {
         
         result.push({
           timestamp: date.toISOString(),
-          dateLabel: date.toLocaleDateString(),
+          dateLabel: date.toLocaleDateString(this.$i18n.locale),
           value: Math.floor(Math.random() * 1000),
           userCount: Math.floor(Math.random() * 200)
         });
@@ -350,17 +371,19 @@ export default {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) return timestamp;
       
+      const options = { locale: this.$i18n.locale };
+      
       switch (interval) {
         case 'hourly':
-          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return date.toLocaleTimeString(this.$i18n.locale, { hour: '2-digit', minute: '2-digit' });
         case 'daily':
-          return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+          return date.toLocaleDateString(this.$i18n.locale, { month: 'short', day: 'numeric' });
         case 'weekly':
-          return `W${this.getWeekNumber(date)} ${date.toLocaleDateString([], { month: 'short' })}`;
+          return `W${this.getWeekNumber(date)} ${date.toLocaleDateString(this.$i18n.locale, { month: 'short' })}`;
         case 'monthly':
-          return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+          return date.toLocaleDateString(this.$i18n.locale, { month: 'short', year: 'numeric' });
         default:
-          return date.toLocaleDateString();
+          return date.toLocaleDateString(this.$i18n.locale);
       }
     },
     
@@ -381,7 +404,19 @@ export default {
      * Format numeric values for display
      */
     formatValue(value, format = 'number') {
-      return analyticsService.formatValue(value, format);
+      if (value === null || value === undefined) return '-';
+      
+      // Use current locale for number formatting
+      switch (format) {
+        case 'number':
+          return value.toLocaleString(this.$i18n.locale);
+        case 'time':
+          return `${value.toLocaleString(this.$i18n.locale)}s`;
+        case 'percent':
+          return `${value.toLocaleString(this.$i18n.locale)}%`;
+        default:
+          return value.toString();
+      }
     },
     
     /**
@@ -390,7 +425,7 @@ export default {
     formatTrend(percentChange, isInverse = false) {
       const prefix = percentChange > 0 ? '+' : '';
       const suffix = isInverse 
-        ? (percentChange > 0 ? ' ' + this.$t('analytics.slower', 'slower') : ' ' + this.$t('analytics.faster', 'faster'))
+        ? (percentChange > 0 ? ' ' + this.$t('analytics.slower') : ' ' + this.$t('analytics.faster'))
         : '';
       
       return `${prefix}${percentChange.toFixed(1)}%${suffix}`;
@@ -499,7 +534,7 @@ export default {
             
             result.push({
               timestamp: time.toISOString(),
-              dateLabel: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              dateLabel: time.toLocaleTimeString(this.$i18n.locale, { hour: '2-digit', minute: '2-digit' }),
               value: value,
               userCount: userCount
             });
@@ -521,7 +556,7 @@ export default {
             
             result.push({
               timestamp: date.toISOString(),
-              dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+              dateLabel: date.toLocaleDateString(this.$i18n.locale, { month: 'short', day: 'numeric' }),
               value: value,
               userCount: userCount
             });
@@ -543,7 +578,7 @@ export default {
             
             result.push({
               timestamp: date.toISOString(),
-              dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+              dateLabel: date.toLocaleDateString(this.$i18n.locale, { month: 'short', day: 'numeric' }),
               value: value,
               userCount: userCount
             });
@@ -566,7 +601,7 @@ export default {
             
             result.push({
               timestamp: date.toISOString(),
-              dateLabel: date.toLocaleDateString([], { month: 'short', year: 'numeric' }),
+              dateLabel: date.toLocaleDateString(this.$i18n.locale, { month: 'short', year: 'numeric' }),
               value: value,
               userCount: userCount
             });

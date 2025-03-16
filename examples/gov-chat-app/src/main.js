@@ -43,6 +43,7 @@ const savedLocale = getSavedLocale()
 const browserLocale = getBrowserLocale()
 const initialLocale = savedLocale || browserLocale || 'en'
 
+// Set the locale directly as a string (not as a ref)
 i18n.global.locale = initialLocale
 
 // Log information only in development mode
@@ -72,6 +73,9 @@ app.config.globalProperties.$setLocale = function(locale) {
   } catch (e) {
     console.warn('Unable to save locale preference:', e)
   }
+  
+  // Update HTML lang attribute for accessibility
+  document.documentElement.setAttribute('lang', locale)
 }
 
 // Mount the app

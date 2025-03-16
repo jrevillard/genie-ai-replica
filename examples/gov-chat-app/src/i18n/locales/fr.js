@@ -65,6 +65,11 @@ export default {
       error: 'Échec du chargement des données analytiques'
     },
     
+    // Trend indicators
+    slower: 'plus lent',
+    faster: 'plus rapide',
+    percentage: 'Pourcentage',
+    
     // Additional analytics fields
     note: 'Ce tableau de bord présente les statistiques d\'utilisation et les commentaires des utilisateurs du système de chat.',
     usageStats: 'Statistiques d\'Utilisation',
@@ -350,7 +355,7 @@ export default {
       maritalStatus: 'État civil',
       photograph: 'Photographie',
       biometric: 'Empreintes / Données biométriques',
-      
+
       // Tab 2
       birthCert: 'Acte de naissance',
       deathCert: 'Acte de décès',
@@ -358,14 +363,14 @@ export default {
       adoption: 'Documents d\'adoption',
       citizenship: 'Documents de citoyenneté / naturalisation',
       immigration: 'Historique d\'immigration et visas',
-      
+
       // Tab 3
       currentAddress: 'Adresse résidentielle actuelle',
       previousAddresses: 'Adresses précédentes',
       homeOrRental: 'Détails de propriété ou de location',
       utilityBills: 'Factures de services liées à l\'adresse',
       landRecords: 'Registres de propriété foncière',
-      
+
       // Tab 4
       idCard: 'Numéro de carte d\'identité nationale',
       passport: 'Détails du passeport',
@@ -373,7 +378,7 @@ export default {
       voterId: 'Carte d\'électeur',
       ssn: 'Numéro de sécurité sociale / assurance nationale',
       militaryRecords: 'États de service militaire',
-      
+
       // Tab 5
       medicalHistory: 'Antécédents médicaux et conditions de santé',
       vaccinations: 'Registre de vaccinations',
@@ -382,7 +387,7 @@ export default {
       organDonor: 'Statut de donneur d\'organes',
       prescriptions: 'Prescriptions et traitements reçus',
       mentalHealth: 'Historique de santé mentale',
-      
+
       // Tab 6
       eHistory: 'Historique d\'emploi',
       currentEmployer: 'Détails de l\'employeur actuel',
@@ -391,13 +396,13 @@ export default {
       unemployment: 'Statut de chômage et allocations reçues',
       tin: 'Numéro d\'identification fiscale (NIF)',
       businessAffiliations: 'Propriété d\'entreprise et affiliations',
-      
+
       // Tab 7
       schools: 'Écoles et universités fréquentées',
       diplomas: 'Diplômes, grades et certifications',
       performance: 'Performance académique et résultats de tests',
       scholarships: 'Bourses et aides financières reçues',
-      
+
       // Tab 8
       incomeTax: 'Registres d\'impôt sur le revenu',
       bankAccounts: 'Comptes bancaires et financiers',
@@ -405,26 +410,26 @@ export default {
       businessTax: 'Déclarations fiscales d\'entreprise',
       pensionContrib: 'Contributions et retraits de pension',
       loanAid: 'Registres de prêts et d\'aide gouvernementale',
-      
+
       // Tab 9
       pensionStatus: 'Statut de pension et contributions',
       childcare: 'Aide à la garde d\'enfants',
       foodAssistance: 'Programmes d\'aide alimentaire / sociale',
       housingAssistance: 'Aide au logement',
-      
+
       // Tab 10
       policeRecords: 'Casier judiciaire (historique criminel, arrestations, accusations)',
       courtCases: 'Historique des affaires judiciaires',
       finesPenalties: 'Amendes et pénalités',
       paroleProbation: 'Statut de libération conditionnelle ou probation',
       citizenshipRevocation: 'Révocation de citoyenneté (si applicable)',
-      
+
       // Tab 11
       vehicleReg: 'Détails d\'immatriculation de véhicule',
       trafficViolations: 'Infractions routières et amendes',
       licenseHistory: 'Historique du permis de conduire et avenants',
       publicTransportCard: 'Utilisation de carte de transport public',
-      
+
       // Tab 12
       voterRegistration: 'Détails d\'inscription électorale',
       electionHistory: 'Historique de participation électorale',

@@ -26,7 +26,7 @@ class AnalyticsService {
     this.usersCollection = this.db.collection('users');
     this.sessionsCollection = this.db.collection('sessions');
     this.serviceCategoriesCollection = this.db.collection('serviceCategories');
-    
+
     // Initialize collections
     this.initialize()
       .then(() => this.ensureServiceCategories())
@@ -42,7 +42,7 @@ class AnalyticsService {
       // Check if collections exist and create them if they don't
       const collections = await this.db.listCollections();
       const collectionNames = collections.map(c => c.name);
-      
+
       // Function to create a collection if it doesn't exist
       const ensureCollection = async (name) => {
         if (!collectionNames.includes(name)) {
@@ -58,15 +58,15 @@ class AnalyticsService {
           }
         }
       };
-      
+
       // Ensure all required collections exist
       await ensureCollection('analytics');
       await ensureCollection('events');
-      
+
       // Update local references to ensure they're valid
       this.analytics = this.db.collection('analytics');
       this.events = this.db.collection('events');
-      
+
       console.log('Collections initialized successfully');
     } catch (error) {
       console.error('Error initializing collections:', error);
@@ -83,7 +83,7 @@ class AnalyticsService {
       // Check if serviceCategories collection exists
       const collections = await this.db.listCollections();
       const collectionNames = collections.map(c => c.name);
-      
+
       // Create the collection if it doesn't exist
       if (!collectionNames.includes('serviceCategories')) {
         console.log('Creating serviceCategories collection...');
@@ -96,35 +96,40 @@ class AnalyticsService {
           }
         }
       }
-      
+
       // Reference to the serviceCategories collection
       const serviceCategories = this.db.collection('serviceCategories');
-      
+
       // Check if the collection is empty
       const cursor = await this.db.query(`
         FOR doc IN serviceCategories
         LIMIT 1
         RETURN doc
       `);
-      
+
       const existingCategories = await cursor.all();
-      
+
       // If the collection is empty, add sample service categories
       if (existingCategories.length === 0) {
         console.log('Adding sample service categories...');
-        
+
         // Sample categories with meaningful names
         const sampleCategories = [
-          { _key: "cat1", nameEN: "Business & Economy", order: 1 },
-          { _key: "cat2", nameEN: "Transportation", order: 2 },
-          { _key: "cat3", nameEN: "Taxes & Revenue", order: 3 },
-          { _key: "cat4", nameEN: "Immigration & Citizenship", order: 4 },
-          { _key: "cat5", nameEN: "Education & Learning", order: 5 },
-          { _key: "cat6", nameEN: "Housing & Properties", order: 6 },
-          { _key: "cat7", nameEN: "Health & Healthcare", order: 7 },
-          { _key: "cat8", nameEN: "Public Safety", order: 8 }
+          { _key: "1", nameEN: "Identity & Civil Registration", nameFR: "Identité et état civil", nameSW: "Utambulisho na Usajili wa Raia", order: 1 },
+          { _key: "2", nameEN: "Transportation", nameFR: "Transport", nameSW: "Usafiri", order: 2 },
+          { _key: "3", nameEN: "Taxes & Revenue", nameFR: "Impôts et Revenus", nameSW: "Kodi na Mapato", order: 3 },
+          { _key: "4", nameEN: "Immigration & Citizenship", nameFR: "Immigration et Citoyenneté", nameSW: "Uhamiaji na Uraia", order: 4 },
+          { _key: "5", nameEN: "Education & Learning", nameFR: "Éducation et Apprentissage", nameSW: "Elimu na Mafunzo", order: 5 },
+          { _key: "6", nameEN: "Housing & Properties", nameFR: "Logement et Propriétés", nameSW: "Nyumba na Mali", order: 6 },
+          { _key: "7", nameEN: "Health & Healthcare", nameFR: "Santé et Soins Médicaux", nameSW: "Afya na Huduma za Afya", order: 7 },
+          { _key: "8", nameEN: "Public Safety", nameFR: "Sécurité Publique", nameSW: "Usalama wa Umma", order: 8 },
+          { _key: "9", nameEN: "Business & Economy", nameFR: "Entreprise et Économie", nameSW: "Biashara na Uchumi", order: 9 },
+          { _key: "10", nameEN: "Social Services", nameFR: "Services Sociaux", nameSW: "Huduma za Kijamii", order: 10 },
+          { _key: "11", nameEN: "Environment", nameFR: "Environnement", nameSW: "Mazingira", order: 11 },
+          { _key: "12", nameEN: "Culture & Recreation", nameFR: "Culture et Loisirs", nameSW: "Utamaduni na Burudani", order: 12 },
+          { _key: "13", nameEN: "Legal Services", nameFR: "Services Juridiques", nameSW: "Huduma za Kisheria", order: 13 }
         ];
-        
+
         // Insert the sample categories
         for (const category of sampleCategories) {
           try {
@@ -134,10 +139,10 @@ class AnalyticsService {
             // Continue with the next category on error
           }
         }
-        
+
         console.log('Sample service categories added successfully');
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error ensuring service categories:', error);
@@ -171,7 +176,7 @@ class AnalyticsService {
       console.log('Recording query analytics...');
       const record = await this.analytics.save(analyticsDoc);
       console.log(`Analytics record created with auto-generated key: ${record._key}`);
-      
+
       return record;
     } catch (error) {
       console.error('Error recording query analytics:', error);
@@ -198,7 +203,7 @@ class AnalyticsService {
       console.log('Recording feedback analytics...');
       const record = await this.analytics.save(analyticsDoc);
       console.log(`Feedback record created with auto-generated key: ${record._key}`);
-      
+
       return record;
     } catch (error) {
       console.error('Error recording feedback analytics:', error);
@@ -217,7 +222,7 @@ class AnalyticsService {
     try {
       // Ensure the events collection exists
       await this.initialize();
-      
+
       // Create event document without specifying a key - let ArangoDB auto-generate it
       const eventDoc = {
         userId,
@@ -229,7 +234,7 @@ class AnalyticsService {
       console.log('Tracking event...');
       const event = await this.events.save(eventDoc);
       console.log(`Event created with auto-generated key: ${event._key}`);
-      
+
       return event;
     } catch (error) {
       console.error('Error tracking event:', error);
@@ -237,269 +242,326 @@ class AnalyticsService {
     }
   }
 
-/**
- * Get count of unique users for a specific period
- * @param {String} startDate - Start date (ISO string)
- * @param {String} endDate - End date (ISO string)
- * @returns {Promise<Number>} Count of unique users
- */
-async getUniqueUsersCount(startDate, endDate) {
-  try {
-    // Ensure dates are valid
-    const validStartDate = startDate ? new Date(startDate).toISOString() : 
-      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const validEndDate = endDate ? new Date(endDate).toISOString() : 
-      new Date().toISOString();
-    
-    console.log(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
-    
-    // Run a simpler query first to test
-    try {
-      const testCursor = await this.db.query(`
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          LIMIT 5
-          RETURN a.userId
-      `);
-      const testResult = await testCursor.all();
-      console.log("Sample user IDs:", testResult);
-    } catch (testError) {
-      console.error("Test query failed:", testError);
-    }
-    
-    // Modified query to be more resilient
-    const query = `
-      LET usersList = (
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          FILTER a.userId != null AND a.userId != ""
-          RETURN DISTINCT a.userId
-      )
-      
-      RETURN LENGTH(usersList)
-    `;
-    
-    console.log("Executing unique users count query...");
-    const cursor = await this.db.query(query, {
-      startDate: validStartDate,
-      endDate: validEndDate
-    });
-    
-    const result = await cursor.next();
-    console.log("Unique users query result:", result);
-    return result || 0;
-  } catch (error) {
-    console.error('Error getting unique users count:', error);
-    console.log("Returning fixed sample count of 60 instead");
-    // Return a sample count that matches what we see in the chart
-    return 60;
-  }
-}
   /**
-   * Get analytics for dashboard
+   * Get count of unique users for a specific period
    * @param {String} startDate - Start date (ISO string)
    * @param {String} endDate - End date (ISO string)
-   * @returns {Promise<Object>} Dashboard analytics
+   * @returns {Promise<Number>} Count of unique users
    */
-  async getDashboardAnalytics(startDate, endDate) {
+  async getUniqueUsersCount(startDate, endDate) {
     try {
-      // Ensure valid date formats
-      const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
-      
-      // Execute a much simpler query first to check if we can reach the database
+      // Ensure dates are valid
+      const validStartDate = startDate ? new Date(startDate).toISOString() :
+        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() :
+        new Date().toISOString();
+
+      console.log(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
+
+      // Run a simpler query first to test
       try {
         const testCursor = await this.db.query(`
-          RETURN {
-            test: "Connection is working"
-          }
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            LIMIT 5
+            RETURN a.userId
         `);
-        const testResult = await testCursor.next();
-        console.log("Test query result:", testResult);
+        const testResult = await testCursor.all();
+        console.log("Sample user IDs:", testResult);
       } catch (testError) {
         console.error("Test query failed:", testError);
       }
-      
-      // Setup query with bind parameters
-      // Using descriptive variable names to avoid conflicts
+
+      // Modified query to be more resilient
       const query = `
-        LET totalQueriesCount = (
+        LET usersList = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            COLLECT WITH COUNT INTO count
-            RETURN count
-        )[0]
-        
-        LET unansweredQueriesCount = (
-          FOR a IN analytics
-            FILTER a.type == 'query'
-            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            FILTER a.data.isAnswered == false
-            COLLECT WITH COUNT INTO count
-            RETURN count
-        )[0]
-        
-        LET averageResponseTimeValue = (
-          FOR a IN analytics
-            FILTER a.type == 'query'
-            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            FILTER a.data.responseTime > 0
-            COLLECT AGGREGATE avgTime = AVG(a.data.responseTime)
-            RETURN avgTime
-        )[0]
-        
-        LET categoryDistributionData = (
-          FOR a IN analytics
-            FILTER a.type == 'query'
-            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            FILTER a.data.categoryId != null
-            COLLECT categoryId = a.data.categoryId WITH COUNT INTO catCount
-            
-            LET categoryName = (
-              FOR cat IN serviceCategories
-                FILTER cat._key == categoryId
-                RETURN cat.nameEN || cat.name || categoryId
-            )[0]
-            
-            RETURN {
-              categoryId: categoryId,
-              name: categoryName || CONCAT('Category ', categoryId),
-              count: catCount,
-              value: catCount  // Add value field for chart compatibility
-            }
+            FILTER a.userId != null AND a.userId != ""
+            RETURN DISTINCT a.userId
         )
         
-        LET feedbackStatsData = (
-          LET feedbacksData = (
-            FOR a IN analytics
-              FILTER a.type == 'feedback'
-              FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-              RETURN a
-          )
-          
-          LET totalFeedbackCount = LENGTH(feedbacksData)
-          LET positiveFeedbackCount = (
-            FOR f IN feedbacksData
-              FILTER f.data.rating >= 4
-              COLLECT WITH COUNT INTO count
-              RETURN count
-          )[0] || 0
-          
-          LET negativeFeedbackCount = (
-            FOR f IN feedbacksData
-              FILTER f.data.rating <= 2
-              COLLECT WITH COUNT INTO count
-              RETURN count
-          )[0] || 0
-          
-          LET neutralFeedbackCount = totalFeedbackCount - positiveFeedbackCount - negativeFeedbackCount
-          
-          RETURN {
-            total: totalFeedbackCount,
-            positive: positiveFeedbackCount,
-            neutral: neutralFeedbackCount,
-            negative: negativeFeedbackCount,
-            positivePercentage: totalFeedbackCount > 0 ? (positiveFeedbackCount / totalFeedbackCount) * 100 : 0,
-            negativePercentage: totalFeedbackCount > 0 ? (negativeFeedbackCount / totalFeedbackCount) * 100 : 0
-          }
-        )
-        
-        LET userStatsData = (
-          LET activeUsersData = (
-            FOR a IN analytics
-              FILTER a.type == 'query'
-              FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-              FILTER a.userId != null
-              
-              // Collect unique userId values
-              COLLECT userId = a.userId
-              
-              RETURN userId
-          )
-          
-          RETURN {
-            activeCount: LENGTH(activeUsersData)
-          }
-        )
-        
-        // Get top queries for the dashboard
-        LET topQueriesData = (
-          FOR a IN analytics
-            FILTER a.type == 'query'
-            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            
-            // Group by query text
-            COLLECT queryText = a.data.text WITH COUNT INTO queryTextCount
-            LET responseTimeData = (
-              FOR q IN analytics
-                FILTER q.type == 'query'
-                FILTER q.data.text == queryText
-                FILTER q.data.responseTime > 0
-                RETURN q.data.responseTime
-            )
-            
-            // Calculate average response time for this query
-            LET avgResponseTimeForQuery = LENGTH(responseTimeData) > 0 ? 
-              AVERAGE(responseTimeData) : 0
-              
-            // Sort by count in descending order
-            SORT queryTextCount DESC
-            LIMIT 5
-            
-            RETURN {
-              text: queryText,
-              count: queryTextCount,
-              avgTime: ROUND(avgResponseTimeForQuery * 10) / 10  // Round to 1 decimal place
-            }
-        )
-        
-        RETURN {
-          queries: {
-            total: totalQueriesCount || 0,
-            unanswered: unansweredQueriesCount || 0,
-            answeredPercentage: totalQueriesCount > 0 ? ((totalQueriesCount - unansweredQueriesCount) / totalQueriesCount) * 100 : 0,
-            avgResponseTime: averageResponseTimeValue || 0
-          },
-          categories: categoryDistributionData,
-          feedback: feedbackStatsData,
-          users: userStatsData,
-          topQueries: topQueriesData
-        }
+        RETURN LENGTH(usersList)
       `;
-      
-      console.log("Executing dashboard analytics query...");
-      
-      // Execute the query with bind parameters
+
+      console.log("Executing unique users count query...");
       const cursor = await this.db.query(query, {
         startDate: validStartDate,
         endDate: validEndDate
       });
-      
+
       const result = await cursor.next();
-      console.log("Dashboard analytics query completed successfully");
-      
-      // If no data or empty result, return default structure with sample data
-      if (!result) {
-        console.log("No data found, returning sample data");
-        return this.generateSampleDashboardData();
+      console.log("Unique users query result:", result);
+      return result || 0;
+    } catch (error) {
+      console.error('Error getting unique users count:', error);
+      console.log("Returning fixed sample count of 60 instead");
+      // Return a sample count that matches what we see in the chart
+      return 60;
+    }
+  }
+
+
+  /**
+   * Get analytics for dashboard
+   * @param {String} startDate - Start date (ISO string)
+   * @param {String} endDate - End date (ISO string)
+   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
+   * @returns {Promise<Object>} Dashboard analytics
+   */
+  async getDashboardAnalytics(startDate, endDate, locale = 'en') {
+    try {
+      // Ensure valid date formats
+      const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
+
+      console.log(`Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`);
+
+      // Execute a much simpler query first to check if we can reach the database
+      try {
+        const testCursor = await this.db.query(`
+        RETURN {
+          test: "Connection is working"
+        }
+      `);
+        const testResult = await testCursor.next();
+        console.log("Test query result:", testResult);
+      } catch (testError) {
+        console.error("Test query failed:", testError);
+        return this.generateSampleDashboardData(locale);
       }
+
+      // Get analytics data
+      const analyticsQuery = `
+      LET totalQueriesCount = (
+        FOR a IN analytics
+          FILTER a.type == 'query'
+          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+          COLLECT WITH COUNT INTO count
+          RETURN count
+      )[0]
       
-      return result;
+      LET unansweredQueriesCount = (
+        FOR a IN analytics
+          FILTER a.type == 'query'
+          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+          FILTER a.data.isAnswered == false
+          COLLECT WITH COUNT INTO count
+          RETURN count
+      )[0]
+      
+      LET averageResponseTimeValue = (
+        FOR a IN analytics
+          FILTER a.type == 'query'
+          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+          FILTER a.data.responseTime > 0
+          COLLECT AGGREGATE avgTime = AVG(a.data.responseTime)
+          RETURN avgTime
+      )[0]
+      
+      LET categoryDistributionData = (
+        FOR a IN analytics
+          FILTER a.type == 'query'
+          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+          FILTER a.data.categoryId != null
+          COLLECT categoryId = a.data.categoryId WITH COUNT INTO catCount
+          
+          RETURN {
+            categoryId: categoryId,
+            count: catCount,
+            value: catCount  // Add value field for chart compatibility
+          }
+      )
+      
+      LET feedbackStatsData = (
+        LET feedbacksData = (
+          FOR a IN analytics
+            FILTER a.type == 'feedback'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+            RETURN a
+        )
+        
+        LET totalFeedbackCount = LENGTH(feedbacksData)
+        LET positiveFeedbackCount = (
+          FOR f IN feedbacksData
+            FILTER f.data.rating >= 4
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        )[0] || 0
+        
+        LET negativeFeedbackCount = (
+          FOR f IN feedbacksData
+            FILTER f.data.rating <= 2
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        )[0] || 0
+        
+        LET neutralFeedbackCount = totalFeedbackCount - positiveFeedbackCount - negativeFeedbackCount
+        
+        RETURN {
+          total: totalFeedbackCount,
+          positive: positiveFeedbackCount,
+          neutral: neutralFeedbackCount,
+          negative: negativeFeedbackCount,
+          positivePercentage: totalFeedbackCount > 0 ? (positiveFeedbackCount / totalFeedbackCount) * 100 : 0,
+          negativePercentage: totalFeedbackCount > 0 ? (negativeFeedbackCount / totalFeedbackCount) * 100 : 0
+        }
+      )
+      
+      LET userStatsData = (
+        LET activeUsersData = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+            FILTER a.userId != null
+            
+            // Collect unique userId values
+            COLLECT userId = a.userId
+            
+            RETURN userId
+        )
+        
+        RETURN {
+          activeCount: LENGTH(activeUsersData)
+        }
+      )
+      
+      // Get top queries for the dashboard
+      LET topQueriesData = (
+        FOR a IN analytics
+          FILTER a.type == 'query'
+          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+          
+          // Group by query text
+          COLLECT queryText = a.data.text WITH COUNT INTO queryTextCount
+          LET responseTimeData = (
+            FOR q IN analytics
+              FILTER q.type == 'query'
+              FILTER q.data.text == queryText
+              FILTER q.data.responseTime > 0
+              RETURN q.data.responseTime
+          )
+          
+          // Calculate average response time for this query
+          LET avgResponseTimeForQuery = LENGTH(responseTimeData) > 0 ? 
+            AVERAGE(responseTimeData) : 0
+            
+          // Sort by count in descending order
+          SORT queryTextCount DESC
+          LIMIT 5
+          
+          RETURN {
+            text: queryText,
+            count: queryTextCount,
+            avgTime: ROUND(avgResponseTimeForQuery * 10) / 10  // Round to 1 decimal place
+          }
+      )
+      
+      RETURN {
+        queries: {
+          total: totalQueriesCount || 0,
+          unanswered: unansweredQueriesCount || 0,
+          answeredPercentage: totalQueriesCount > 0 ? ((totalQueriesCount - unansweredQueriesCount) / totalQueriesCount) * 100 : 0,
+          avgResponseTime: averageResponseTimeValue || 0
+        },
+        categories: categoryDistributionData,
+        feedback: feedbackStatsData,
+        users: userStatsData,
+        topQueries: topQueriesData
+      }
+    `;
+
+      console.log("Executing dashboard analytics query...");
+
+      // Get analytics data
+      const analyticsData = await this.db.query(analyticsQuery, {
+        startDate: validStartDate,
+        endDate: validEndDate
+      }).then(cursor => cursor.next());
+
+      if (!analyticsData) {
+        console.log("No analytics data found, returning sample data");
+        return this.generateSampleDashboardData(locale);
+      }
+
+      // Now get all service categories
+      console.log("Getting service categories for name localization...");
+      const categoriesQuery = `
+      FOR cat IN serviceCategories
+      RETURN {
+        id: CONCAT("serviceCategories/", cat._key),
+        key: cat._key,
+        nameEN: cat.nameEN,
+        nameFR: cat.nameFR,
+        nameSW: cat.nameSW
+      }
+    `;
+
+      const categories = await this.db.query(categoriesQuery).then(cursor => cursor.all());
+      console.log(`Found ${categories.length} service categories for localization`);
+
+      // Debug: log first few categories
+      if (categories.length > 0) {
+        console.log("Sample categories:", categories.slice(0, 3));
+      }
+
+      // Map the category IDs to the proper localized names
+      if (analyticsData.categories && analyticsData.categories.length > 0) {
+        analyticsData.categories = analyticsData.categories.map(category => {
+          // Extract ID from path format
+          const idParts = category.categoryId.split('/');
+          const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
+
+          console.log(`Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
+
+          // Find matching category by key or full ID
+          const matchingCategory = categories.find(cat =>
+            cat.key === categoryKey || cat.id === category.categoryId
+          );
+
+          if (matchingCategory) {
+            console.log(`Found matching category: ${JSON.stringify(matchingCategory)}`);
+
+            // Select name based on locale
+            let name;
+            if (locale === 'fr' && matchingCategory.nameFR) {
+              name = matchingCategory.nameFR;
+            } else if (locale === 'sw' && matchingCategory.nameSW) {
+              name = matchingCategory.nameSW;
+            } else {
+              name = matchingCategory.nameEN;
+            }
+
+            console.log(`Selected name for locale ${locale}: ${name}`);
+
+            return {
+              ...category,
+              name: name
+            };
+          } else {
+            console.log(`No matching category found for ID: ${category.categoryId}`);
+            return category;
+          }
+        });
+      }
+
+      console.log("Dashboard analytics processing completed successfully");
+      return analyticsData;
     } catch (error) {
       console.error('Error getting dashboard analytics:', error);
       // Return sample data on error
-      return this.generateSampleDashboardData();
+      return this.generateSampleDashboardData(locale);
     }
   }
 
   /**
    * Generate sample dashboard data for development and fallback
    * @private
+   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Object} Sample dashboard data
    */
-  generateSampleDashboardData() {
+  generateSampleDashboardData(locale = 'en') {
     // Sample top queries with realistic data
     const sampleTopQueries = [
       { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
@@ -508,19 +570,96 @@ async getUniqueUsersCount(startDate, endDate) {
       { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
       { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
     ];
-    
-    // Sample category distribution with meaningful names
+
+    // Define category names with translations
+    const categoryNames = {
+      "1": {
+        en: "Identity & Civil Registration",
+        fr: "Identité et état civil",
+        sw: "Utambulisho na Usajili wa Raia"
+      },
+      "2": {
+        en: "Transportation",
+        fr: "Transport",
+        sw: "Usafiri"
+      },
+      "3": {
+        en: "Taxes & Revenue",
+        fr: "Impôts et Revenus",
+        sw: "Kodi na Mapato"
+      },
+      "4": {
+        en: "Immigration & Citizenship",
+        fr: "Immigration et Citoyenneté",
+        sw: "Uhamiaji na Uraia"
+      },
+      "5": {
+        en: "Education & Learning",
+        fr: "Éducation et Apprentissage",
+        sw: "Elimu na Mafunzo"
+      },
+      "6": {
+        en: "Housing & Properties",
+        fr: "Logement et Propriétés",
+        sw: "Nyumba na Mali"
+      },
+      "7": {
+        en: "Health & Healthcare",
+        fr: "Santé et Soins Médicaux",
+        sw: "Afya na Huduma za Afya"
+      },
+      "8": {
+        en: "Public Safety",
+        fr: "Sécurité Publique",
+        sw: "Usalama wa Umma"
+      },
+      "9": {
+        en: "Business & Economy",
+        fr: "Entreprise et Économie",
+        sw: "Biashara na Uchumi"
+      },
+      "10": {
+        en: "Social Services",
+        fr: "Services Sociaux",
+        sw: "Huduma za Kijamii"
+      },
+      "11": {
+        en: "Environment",
+        fr: "Environnement",
+        sw: "Mazingira"
+      },
+      "12": {
+        en: "Culture & Recreation",
+        fr: "Culture et Loisirs",
+        sw: "Utamaduni na Burudani"
+      },
+      "13": {
+        en: "Legal Services",
+        fr: "Services Juridiques",
+        sw: "Huduma za Kisheria"
+      }
+    };
+
+    // Select the appropriate language based on locale
+    const language = locale === 'fr' ? 'fr' : (locale === 'sw' ? 'sw' : 'en');
+
+    // Sample category distribution with localized names
     const sampleCategories = [
-      { categoryId: "cat1", name: "Business & Economy", count: 2347, value: 15 },
-      { categoryId: "cat2", name: "Transportation", count: 1782, value: 12 },
-      { categoryId: "cat3", name: "Taxes & Revenue", count: 1645, value: 15 },
-      { categoryId: "cat4", name: "Immigration & Citizenship", count: 1245, value: 12 },
-      { categoryId: "cat5", name: "Education & Learning", count: 980, value: 12 },
-      { categoryId: "cat6", name: "Housing & Properties", count: 850, value: 12 },
-      { categoryId: "cat7", name: "Health & Healthcare", count: 720, value: 12 },
-      { categoryId: "cat8", name: "Public Safety", count: 650, value: 14 }
+      { categoryId: "1", name: categoryNames["1"][language], count: 2347, value: 15 },
+      { categoryId: "2", name: categoryNames["2"][language], count: 1782, value: 12 },
+      { categoryId: "3", name: categoryNames["3"][language], count: 1645, value: 15 },
+      { categoryId: "4", name: categoryNames["4"][language], count: 1245, value: 12 },
+      { categoryId: "5", name: categoryNames["5"][language], count: 980, value: 12 },
+      { categoryId: "6", name: categoryNames["6"][language], count: 850, value: 12 },
+      { categoryId: "7", name: categoryNames["7"][language], count: 720, value: 12 },
+      { categoryId: "8", name: categoryNames["8"][language], count: 650, value: 14 },
+      { categoryId: "9", name: categoryNames["9"][language], count: 550, value: 9 },
+      { categoryId: "10", name: categoryNames["10"][language], count: 520, value: 8 },
+      { categoryId: "11", name: categoryNames["11"][language], count: 490, value: 8 },
+      { categoryId: "12", name: categoryNames["12"][language], count: 480, value: 8 },
+      { categoryId: "13", name: categoryNames["13"][language], count: 470, value: 9 }
     ];
-    
+
     return {
       queries: {
         total: 12452,
@@ -573,13 +712,13 @@ async getUniqueUsersCount(startDate, endDate) {
           LIMIT 1000
           RETURN a
       `;
-      
+
       // Prepare bind variables - always include dates
       const bindVars = {
         startDate: validStartDate,
         endDate: validEndDate
       };
-      
+
       // Add optional filter values only if they exist
       if (filters) {
         if (filters.type) bindVars.type = filters.type;
@@ -587,13 +726,13 @@ async getUniqueUsersCount(startDate, endDate) {
         if (filters.categoryId) bindVars.categoryId = filters.categoryId;
         if (filters.serviceId) bindVars.serviceId = filters.serviceId;
       }
-      
+
       console.log('Executing analytics query with bind vars:', JSON.stringify(bindVars));
-      
+
       // Execute the query using string template with bind variables
       const cursor = await this.db.query(query, bindVars);
       const analyticsData = await cursor.all();
-      
+
       // Process the data for different analytics types
       const processedData = {
         queryCount: 0,
@@ -603,29 +742,29 @@ async getUniqueUsersCount(startDate, endDate) {
         categoryDistribution: {},
         raw: analyticsData
       };
-      
+
       // Count queries and feedback
       const queryData = analyticsData.filter(a => a && a.type === 'query');
       const feedbackData = analyticsData.filter(a => a && a.type === 'feedback');
-      
+
       processedData.queryCount = queryData.length;
       processedData.feedbackCount = feedbackData.length;
-      
+
       // Calculate average rating if there is feedback
       if (feedbackData.length > 0) {
         let totalRating = 0;
         let ratingCount = 0;
-        
+
         for (const item of feedbackData) {
           if (item.data && typeof item.data.rating === 'number') {
             totalRating += item.data.rating;
             ratingCount++;
           }
         }
-        
+
         processedData.avgRating = ratingCount > 0 ? totalRating / ratingCount : 0;
       }
-      
+
       // Calculate time distribution (by hour)
       for (const item of analyticsData) {
         if (item && item.timestamp) {
@@ -640,7 +779,7 @@ async getUniqueUsersCount(startDate, endDate) {
           }
         }
       }
-      
+
       // Calculate category distribution
       for (const item of queryData) {
         if (item && item.data && item.data.categoryId) {
@@ -648,7 +787,7 @@ async getUniqueUsersCount(startDate, endDate) {
           processedData.categoryDistribution[catId] = (processedData.categoryDistribution[catId] || 0) + 1;
         }
       }
-      
+
       return processedData;
     } catch (error) {
       console.error('Error getting analytics:', error);
@@ -656,105 +795,110 @@ async getUniqueUsersCount(startDate, endDate) {
     }
   }
 
-/**
- * Get time series data for analytics
- * @param {string} metricType - Type of metric (queries, users)
- * @param {string} interval - Time interval (hourly, daily, monthly)
- * @param {string} startDate - Start date (ISO string or YYYY-MM-DD)
- * @param {string} endDate - End date (ISO string or YYYY-MM-DD)
- * @param {boolean} deduplicateUsers - Whether to deduplicate users (only for users metric)
- * @returns {Promise<Array>} Time series data
- */
-async getTimeSeriesData(metricType, interval, startDate, endDate) {
-  try {
-    // Ensure dates are valid and parse them
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    // Convert dates to ISO strings
-    const startDateISO = start.toISOString();
-    const endDateISO = end.toISOString();
+  /**
+   * Get time series data for analytics
+   * @param {string} metricType - Type of metric (queries, users)
+   * @param {string} interval - Time interval (hourly, daily, monthly)
+   * @param {string} startDate - Start date (ISO string or YYYY-MM-DD)
+   * @param {string} endDate - End date (ISO string or YYYY-MM-DD)
+   * @returns {Promise<Array>} Time series data
+   */
+  async getTimeSeriesData(metricType, interval, startDate, endDate) {
+    try {
+      // Ensure dates are valid and parse them
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate) : new Date();
 
-    // Comprehensive query to get time series data
-    const baseQuery = `
-      LET dailyBreakdown = (
-        FOR q IN queries
-          FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
-          
-          // Group by formatted date
-          COLLECT dateGroup = DATE_FORMAT(q.timestamp, '%Y-%m-%d')
-          
-          // Count queries and collect user IDs
-          LET dayQueries = (
-            FOR query IN queries
-              FILTER query.timestamp >= @startDate AND query.timestamp <= @endDate
-              FILTER DATE_FORMAT(query.timestamp, '%Y-%m-%d') == dateGroup
-              RETURN query
-          )
-          
-          RETURN {
-            date: dateGroup,
-            totalQueries: LENGTH(dayQueries),
-            uniqueUsers: LENGTH(UNIQUE(dayQueries[*].userId))
-          }
-      )
-      
-      RETURN dailyBreakdown
-    `;
-    
-    const cursor = await this.db.query(baseQuery, { 
-      startDate: startDateISO, 
-      endDate: endDateISO 
-    });
-    
-    const results = await cursor.all();
-    const dailyBreakdown = results[0] || [];
+      // Convert dates to ISO strings
+      const startDateISO = start.toISOString();
+      const endDateISO = end.toISOString();
 
-    // Transform data for chart
-    const chartData = dailyBreakdown.map(day => ({
-      timestamp: day.date,
-      dateLabel: day.date,
-      value: day.totalQueries,
-      userCount: day.uniqueUsers
-    }));
+      // Comprehensive query to get time series data
+      const baseQuery = `
+        LET dailyBreakdown = (
+          FOR q IN queries
+            FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
+            
+            // Group by formatted date
+            COLLECT dateGroup = DATE_FORMAT(q.timestamp, '%Y-%m-%d')
+            
+            // Count queries and collect user IDs
+            LET dayQueries = (
+              FOR query IN queries
+                FILTER query.timestamp >= @startDate AND query.timestamp <= @endDate
+                FILTER DATE_FORMAT(query.timestamp, '%Y-%m-%d') == dateGroup
+                RETURN query
+            )
+            
+            RETURN {
+              date: dateGroup,
+              totalQueries: LENGTH(dayQueries),
+              uniqueUsers: LENGTH(UNIQUE(dayQueries[*].userId))
+            }
+        )
+        
+        RETURN dailyBreakdown
+      `;
 
-    // If no results, generate sample data
-    if (chartData.length === 0) {
+      const cursor = await this.db.query(baseQuery, {
+        startDate: startDateISO,
+        endDate: endDateISO
+      });
+
+      const results = await cursor.all();
+      const dailyBreakdown = results[0] || [];
+
+      // Transform data for chart
+      const chartData = dailyBreakdown.map(day => ({
+        timestamp: day.date,
+        dateLabel: day.date,
+        value: day.totalQueries,
+        userCount: day.uniqueUsers
+      }));
+
+      // If no results, generate sample data
+      if (chartData.length === 0) {
+        return this.generateSampleTimeSeriesData(metricType, interval, start, end);
+      }
+
+      return chartData;
+    } catch (error) {
+      console.error('Error in getTimeSeriesData:', error);
       return this.generateSampleTimeSeriesData(metricType, interval, start, end);
     }
-
-    return chartData;
-  } catch (error) {
-    console.error('Error in getTimeSeriesData:', error);
-    return this.generateSampleTimeSeriesData(metricType, interval, start, end);
   }
-}
 
-// Add this method to the service if it doesn't exist
-formatDateLabel(timestamp, interval) {
-  if (!timestamp) return '';
-  
-  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-  if (isNaN(date.getTime())) return String(timestamp);
-  
-  try {
-    switch (interval) {
-      case 'hourly':
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      case 'daily':
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      case 'weekly':
-        return `Week ${Math.ceil((date.getDate() + 6 - date.getDay()) / 7)} ${date.toLocaleDateString([], { month: 'short' })}`;
-      case 'monthly':
-        return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
-      default:
-        return date.toLocaleDateString();
+  /**
+   * Format date label based on interval
+   * @param {string|Date} timestamp - Date to format
+   * @param {string} interval - Time interval
+   * @returns {string} Formatted date label
+   */
+  formatDateLabel(timestamp, interval) {
+    if (!timestamp) return '';
+
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    if (isNaN(date.getTime())) return String(timestamp);
+
+    try {
+      switch (interval) {
+        case 'hourly':
+          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        case 'daily':
+          return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        case 'weekly':
+          return `Week ${Math.ceil((date.getDate() + 6 - date.getDay()) / 7)} ${date.toLocaleDateString([], { month: 'short' })}`;
+        case 'monthly':
+          return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+        default:
+          return date.toLocaleDateString();
+      }
+    } catch (error) {
+      console.warn('Error formatting date label:', error);
+      return String(timestamp);
     }
-  } catch (error) {
-    console.warn('Error formatting date label:', error);
-    return String(timestamp);
   }
-}
+
   /**
    * Generate sample time series data for development
    * @param {string} metricType - Type of metric
@@ -767,7 +911,7 @@ formatDateLabel(timestamp, interval) {
     const data = [];
     const current = new Date(startDate);
     const end = new Date(endDate);
-    
+
     // Determine step size based on interval
     let step;
     switch (interval) {
@@ -786,7 +930,7 @@ formatDateLabel(timestamp, interval) {
       default:
         step = 24 * 60 * 60 * 1000; // Default to daily
     }
-    
+
     // Base value range depends on metric type
     let baseValue;
     switch (metricType) {
@@ -799,29 +943,29 @@ formatDateLabel(timestamp, interval) {
       default:
         baseValue = 50;
     }
-    
+
     // Generate data points
     while (current <= end) {
       // Create time-based fluctuations
       let fluctuation = 0.75 + (Math.random() * 0.5); // Random factor between 0.75 and 1.25
-      
+
       // Apply time patterns for more realistic data
       const hour = current.getHours();
       const day = current.getDay();
       const month = current.getMonth();
-      
+
       // Business hours have more activity
       if (interval === 'hourly' && hour >= 9 && hour <= 17) {
         fluctuation *= 1.5;
       } else if (interval === 'hourly' && hour >= 0 && hour <= 5) {
         fluctuation *= 0.3; // Low activity overnight
       }
-      
+
       // Lower activity on weekends
       if ((interval === 'daily' || interval === 'weekly') && (day === 0 || day === 6)) {
         fluctuation *= 0.6;
       }
-      
+
       // Seasonal variations
       if (interval === 'monthly') {
         if (month >= 5 && month <= 7) {
@@ -830,14 +974,14 @@ formatDateLabel(timestamp, interval) {
           fluctuation *= 1.2; // Fall/winter increase
         }
       }
-      
+
       // Add a slight upward trend over time
       const timeProgress = (current.getTime() - startDate.getTime()) / (endDate.getTime() - startDate.getTime());
       const trendFactor = 1 + (timeProgress * 0.2); // Up to 20% increase over time
-      
+
       // Calculate the final value
       const value = Math.round(baseValue * fluctuation * trendFactor);
-      
+
       // Format timestamp based on interval
       let formattedTimestamp;
       if (interval === 'hourly') {
@@ -853,19 +997,19 @@ formatDateLabel(timestamp, interval) {
       } else {
         formattedTimestamp = current.toISOString();
       }
-      
+
       data.push({
         timestamp: formattedTimestamp,
         value: value
       });
-      
+
       // Move to next interval
       current.setTime(current.getTime() + step);
     }
-    
+
     return data;
   }
 }
 
-// Export the class, not an instance
+// Export the class (not an instance)
 module.exports = AnalyticsService;

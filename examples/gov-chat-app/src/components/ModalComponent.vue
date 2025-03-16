@@ -12,7 +12,7 @@
     >
       <!-- Header section with title and close button -->
       <div class="modal-header">
-        <h2 class="modal-title" v-if="title">{{ title }}</h2>
+        <h2 class="modal-title" v-if="title">{{ isTranslationKey ? $t(title) : title }}</h2>
         <button 
           class="close-button" 
           @click="$emit('close')" 
@@ -54,6 +54,10 @@ export default {
     scrollable: {
       type: Boolean,
       default: true
+    },
+    isTranslationKey: {
+      type: Boolean,
+      default: false
     }
   },
   data() {

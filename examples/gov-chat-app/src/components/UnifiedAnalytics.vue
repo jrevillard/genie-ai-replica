@@ -1,4 +1,4 @@
-<!-- UnifiedAnalytics.vue - Fixed version -->
+<!-- UnifiedAnalytics.vue - Fixed version with proper locale handling -->
 <template>
   <div class="analytics-modal" @click.self="close">
     <div class="analytics-content" :key="'analytics-content-' + currentLocale">
@@ -113,6 +113,7 @@
                 v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
                 :data="analytics.queryDistribution"
                 :externalData="true"
+                :renderKey="currentLocale"
               />
               <div v-else class="category-chart-container">
                 <div v-if="categoryLoading" class="chart-loading">
@@ -210,6 +211,9 @@ export default {
   },
   
   created() {
+    // Initialize analytics service with i18n instance
+    analyticsService.setI18n(this.$i18n);
+    
     // Initialize translations
     this.translateQueries();
     this.translateCategories();
@@ -227,10 +231,22 @@ export default {
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
       this.$watch('$i18n.locale', (newLocale) => {
-        this.currentLocale = newLocale;
         console.log('Locale changed in UnifiedAnalytics:', newLocale);
+        
+        // Update current locale
+        this.currentLocale = newLocale;
+        
+        // Update i18n in analytics service
+        analyticsService.setI18n(this.$i18n);
+        
+        // Update translations
         this.translateQueries();
         this.translateCategories();
+        
+        // Reload analytics with new locale
+        if (this.useDynamicData) {
+          this.loadAnalytics();
+        }
         
         // Also tell the usage chart to update
         if (this.$refs.usageTrendChart) {
@@ -418,10 +434,13 @@ export default {
       this.error = null;
       
       try {
-        // Get main analytics data
+        console.log(`Loading analytics with locale: ${this.currentLocale}`);
+        
+        // Get main analytics data, explicitly passing the current locale
         const analyticsData = await analyticsService.getDashboardAnalytics(
           this.selectedPeriod,
-          this.selectedDate
+          this.selectedDate,
+          this.currentLocale
         );
         
         this.analytics = analyticsData;
@@ -467,7 +486,7 @@ export default {
           
           result.push({
             timestamp: time.toISOString(),
-            dateLabel: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            dateLabel: time.toLocaleTimeString(this.currentLocale, { hour: '2-digit', minute: '2-digit' }),
             value: value
           });
         }
@@ -485,7 +504,7 @@ export default {
           
           result.push({
             timestamp: date.toISOString(),
-            dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            dateLabel: date.toLocaleDateString(this.currentLocale, { month: 'short', day: 'numeric' }),
             value: value
           });
         }
@@ -505,7 +524,7 @@ export default {
           
           result.push({
             timestamp: date.toISOString(),
-            dateLabel: date.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+            dateLabel: date.toLocaleDateString(this.currentLocale, { month: 'short', day: 'numeric' }),
             value: value
           });
         }
@@ -532,7 +551,8 @@ export default {
             this.selectedPeriod,
             this.selectedDate,
             previousPeriod,
-            previousDate
+            previousDate,
+            this.currentLocale // Pass the current locale
           );
           
           // Calculate percentage change
@@ -569,7 +589,8 @@ export default {
           'queries',
           interval,
           startDate,
-          endDate
+          endDate,
+          this.currentLocale // Pass the current locale
         );
       } catch (error) {
         console.error('Error loading time series data:', error);
@@ -581,22 +602,7 @@ export default {
      * Format numeric values for display
      */
     formatValue(value, format = 'number') {
-      if (value === null || value === undefined) return '—';
-      
-      switch (format) {
-        case 'number':
-          return value.toLocaleString(this.currentLocale);
-          
-        case 'time':
-          // Format as seconds with 1 decimal place
-          return `${value.toFixed(1)}s`;
-          
-        case 'percent':
-          return `${value.toFixed(1)}%`;
-          
-        default:
-          return String(value);
-      }
+      return analyticsService.formatValue(value, format, this.currentLocale);
     },
     
     /**
@@ -615,15 +621,7 @@ export default {
      * Get CSS class for trend indicator
      */
     getTrendClass(change, isInverse = false) {
-      if (!change) return 'neutral';
-      
-      const isPositive = change > 0;
-      
-      if (isInverse) {
-        return isPositive ? 'negative' : 'positive';
-      }
-      
-      return isPositive ? 'positive' : 'negative';
+      return analyticsService.getTrendColor(change, isInverse);
     },
     
     /**
@@ -711,8 +709,7 @@ export default {
      * Calculate percentage change between two values
      */
     calculatePercentChange(current, previous) {
-      if (previous === 0) return current > 0 ? 100 : 0;
-      return ((current - previous) / Math.abs(previous)) * 100;
+      return analyticsService.calculatePercentChange(current, previous);
     }
   }
 };

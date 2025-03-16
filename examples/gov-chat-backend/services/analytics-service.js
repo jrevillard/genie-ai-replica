@@ -485,13 +485,19 @@ class AnalyticsService {
         return this.generateSampleDashboardData(locale);
       }
 
-      // Now get all service categories
+      // ======= DEBUG START =======
+      console.log("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
+      console.log(`DEBUG: Processing locale "${locale}" for category name localization`);
+      // ======= DEBUG END =======
+
+      // Now get all service categories - MODIFIED TO FIX THE ISSUE
       console.log("Getting service categories for name localization...");
+      // FIXED QUERY - Modified to return _key and _id directly
       const categoriesQuery = `
       FOR cat IN serviceCategories
       RETURN {
-        id: CONCAT("serviceCategories/", cat._key),
-        key: cat._key,
+        _id: cat._id,
+        _key: cat._key,
         nameEN: cat.nameEN,
         nameFR: cat.nameFR,
         nameSW: cat.nameSW
@@ -503,49 +509,57 @@ class AnalyticsService {
 
       // Debug: log first few categories
       if (categories.length > 0) {
-        console.log("Sample categories:", categories.slice(0, 3));
+        console.log("DEBUG: First few categories from database:", JSON.stringify(categories.slice(0, 3), null, 2));
       }
 
       // Map the category IDs to the proper localized names
       if (analyticsData.categories && analyticsData.categories.length > 0) {
+        console.log(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
+        console.log("DEBUG: First category from analytics:", JSON.stringify(analyticsData.categories[0], null, 2));
+        
         analyticsData.categories = analyticsData.categories.map(category => {
           // Extract ID from path format
           const idParts = category.categoryId.split('/');
           const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
 
-          console.log(`Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
+          console.log(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
 
-          // Find matching category by key or full ID
+          // FIXED MATCHING LOGIC - Use _key and _id from our custom query
           const matchingCategory = categories.find(cat =>
-            cat.key === categoryKey || cat.id === category.categoryId
+            cat._key === categoryKey || cat._id === category.categoryId
           );
 
           if (matchingCategory) {
-            console.log(`Found matching category: ${JSON.stringify(matchingCategory)}`);
+            console.log(`DEBUG: Found matching category: ${JSON.stringify(matchingCategory, null, 2)}`);
 
             // Select name based on locale
             let name;
             if (locale === 'fr' && matchingCategory.nameFR) {
               name = matchingCategory.nameFR;
+              console.log(`DEBUG: Using French name: "${name}"`);
             } else if (locale === 'sw' && matchingCategory.nameSW) {
               name = matchingCategory.nameSW;
+              console.log(`DEBUG: Using Swahili name: "${name}"`);
             } else {
               name = matchingCategory.nameEN;
+              console.log(`DEBUG: Using English name: "${name}" (default)`);
             }
 
-            console.log(`Selected name for locale ${locale}: ${name}`);
+            console.log(`DEBUG: Final name selected for locale ${locale}: "${name}"`);
 
             return {
               ...category,
               name: name
             };
           } else {
-            console.log(`No matching category found for ID: ${category.categoryId}`);
+            console.log(`DEBUG: No matching category found for ID: ${category.categoryId}`);
+            console.log(`DEBUG: Available category keys: ${categories.map(c => c._key).slice(0, 5).join(', ')}`);
             return category;
           }
         });
       }
 
+      console.log("======= END DEBUG: CATEGORY NAMES LOCALIZATION =======");
       console.log("Dashboard analytics processing completed successfully");
       return analyticsData;
     } catch (error) {

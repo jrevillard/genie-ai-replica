@@ -15,16 +15,43 @@ class AnalyticsService {
   }
 
   /**
+   * Set i18n instance for localization
+   * @param {Object} i18n - Vue i18n instance
+   */
+  setI18n(i18n) {
+    this.$i18n = i18n;
+  }
+
+  /**
+   * Get current locale or fallback to default
+   * @param {string} overrideLocale - Optional locale to override the service's locale
+   * @returns {string} Current locale
+   */
+  getCurrentLocale(overrideLocale = null) {
+    if (overrideLocale) {
+      return overrideLocale;
+    }
+    return this.$i18n ? this.$i18n.locale : 'en';
+  }
+
+  /**
    * Get unique users count directly
    * @param {string} startDate - Start date (ISO string)
    * @param {string} endDate - End date (ISO string)
+   * @param {string} locale - Locale override (optional)
    * @returns {Promise<number>} Count of unique users
    */
-  async getUniqueUsersCount(startDate, endDate) {
+  async getUniqueUsersCount(startDate, endDate, locale = null) {
     try {
-      console.log(`Directly getting unique users count from ${startDate} to ${endDate}`);
+      const currentLocale = this.getCurrentLocale(locale);
+      console.log(`Directly getting unique users count from ${startDate} to ${endDate} with locale: ${currentLocale}`);
+      
       const response = await axios.get(`${this.baseUrl}/analytics/metric/uniqueUsers`, {
-        params: { startDate, endDate }
+        params: { 
+          startDate, 
+          endDate,
+          locale: currentLocale 
+        }
       });
 
       console.log("Unique users direct response:", response.data);
@@ -45,25 +72,25 @@ class AnalyticsService {
    * Get dashboard analytics data
    * @param {string} period - Time period (daily, weekly, monthly, all-time)
    * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {string} locale - Locale override (optional)
    * @returns {Promise<Object>} Dashboard analytics data
    */
-
-  async getDashboardAnalytics(period, date) {
+  async getDashboardAnalytics(period, date, locale = null) {
     try {
       // Calculate start and end dates based on period and date
       const { startDate, endDate } = this.calculateDateRange(period, date);
 
-      // Get current locale from i18n if available
-      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      // Get current locale from parameter, instance, or fallback
+      const currentLocale = this.getCurrentLocale(locale);
 
-      console.log(`Fetching dashboard analytics with locale: ${locale}`);
+      console.log(`Fetching dashboard analytics with locale: ${currentLocale}`);
 
       // Change this URL to include /analytics/
       const response = await axios.get(`${this.baseUrl}/analytics/dashboard`, {
         params: {
           startDate,
           endDate,
-          locale // Pass locale to the API
+          locale: currentLocale // Pass locale to the API
         }
       });
 
@@ -81,13 +108,17 @@ class AnalyticsService {
    * @param {string} currentDate - Current date
    * @param {string} previousPeriod - Previous period type
    * @param {string} previousDate - Previous date
+   * @param {string} locale - Locale override (optional)
    * @returns {Promise<Object>} Comparison data
    */
-  async getComparisonData(metric, currentPeriod, currentDate, previousPeriod, previousDate) {
+  async getComparisonData(metric, currentPeriod, currentDate, previousPeriod, previousDate, locale = null) {
     try {
       // Calculate date ranges for current and previous periods
       const current = this.calculateDateRange(currentPeriod, currentDate);
       const previous = this.calculateDateRange(previousPeriod, previousDate);
+
+      // Get current locale
+      const currentLocale = this.getCurrentLocale(locale);
 
       // Map frontend metric names to backend API metric names
       const metricMap = {
@@ -101,12 +132,20 @@ class AnalyticsService {
 
       // Get current period data
       const currentResponse = await axios.get(`${this.baseUrl}/analytics/metric/${apiMetric}`, {
-        params: { startDate: current.startDate, endDate: current.endDate }
+        params: { 
+          startDate: current.startDate, 
+          endDate: current.endDate,
+          locale: currentLocale
+        }
       });
 
       // Get previous period data
       const previousResponse = await axios.get(`${this.baseUrl}/analytics/metric/${apiMetric}`, {
-        params: { startDate: previous.startDate, endDate: previous.endDate }
+        params: { 
+          startDate: previous.startDate, 
+          endDate: previous.endDate,
+          locale: currentLocale
+        }
       });
 
       console.log(`Response for ${metric}:`, {
@@ -136,14 +175,23 @@ class AnalyticsService {
    * @param {string} interval - Interval for data points (hourly, daily, monthly)
    * @param {string} startDate - Start date (YYYY-MM-DD)
    * @param {string} endDate - End date (YYYY-MM-DD)
+   * @param {string} locale - Locale override (optional)
    * @returns {Promise<Array>} Time series data
    */
-  async getTimeSeriesData(metricType, interval, startDate, endDate) {
+  async getTimeSeriesData(metricType, interval, startDate, endDate, locale = null) {
     try {
-      console.log(`Fetching time series data for ${metricType}, interval ${interval}`);
+      // Get current locale
+      const currentLocale = this.getCurrentLocale(locale);
+      
+      console.log(`Fetching time series data for ${metricType}, interval ${interval}, locale: ${currentLocale}`);
 
       const response = await axios.get(`${this.baseUrl}/analytics/timeseries/${metricType}`, {
-        params: { interval, startDate, endDate }
+        params: { 
+          interval, 
+          startDate, 
+          endDate,
+          locale: currentLocale
+        }
       });
 
       if (!response.data || !Array.isArray(response.data)) {
@@ -245,23 +293,27 @@ class AnalyticsService {
     if (isNaN(date.getTime())) return String(timestamp);
 
     try {
+      // Get current locale for formatting
+      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      
       switch (interval) {
         case 'hourly':
-          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         case 'daily':
-          return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+          return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
         case 'weekly':
-          return `Week ${Math.ceil((date.getDate() + 6 - date.getDay()) / 7)} ${date.toLocaleDateString([], { month: 'short' })}`;
+          return `Week ${Math.ceil((date.getDate() + 6 - date.getDay()) / 7)} ${date.toLocaleDateString(locale, { month: 'short' })}`;
         case 'monthly':
-          return date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+          return date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
         default:
-          return date.toLocaleDateString();
+          return date.toLocaleDateString(locale);
       }
     } catch (error) {
       console.warn('Error formatting date label:', error);
       return String(timestamp);
     }
   }
+  
   /**
    * Transform time series data for charts
    * @param {Array} data - Raw time series data
@@ -274,6 +326,9 @@ class AnalyticsService {
 
     // Filter out invalid entries
     const validData = data.filter(item => item && item.timestamp);
+    
+    // Get current locale for formatting
+    const locale = this.$i18n ? this.$i18n.locale : 'en';
 
     return validData.map(item => {
       // Format date label based on interval
@@ -284,24 +339,24 @@ class AnalyticsService {
         if (!isNaN(date.getTime())) {
           switch (interval) {
             case 'hourly':
-              dateLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              dateLabel = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
               break;
 
             case 'daily':
-              dateLabel = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+              dateLabel = date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
               break;
 
             case 'weekly':
               const weekNum = this.getWeekNumber(date);
-              dateLabel = `W${weekNum} ${date.toLocaleDateString([], { month: 'short' })}`;
+              dateLabel = `W${weekNum} ${date.toLocaleDateString(locale, { month: 'short' })}`;
               break;
 
             case 'monthly':
-              dateLabel = date.toLocaleDateString([], { month: 'short', year: 'numeric' });
+              dateLabel = date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
               break;
 
             default:
-              dateLabel = date.toLocaleDateString();
+              dateLabel = date.toLocaleDateString(locale);
           }
         } else {
           dateLabel = item.timestamp;
@@ -331,6 +386,7 @@ class AnalyticsService {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
+  
   /**
    * Calculate start and end date for a given period
    * @param {string} period - Time period (daily, weekly, monthly, all-time)
@@ -429,56 +485,21 @@ class AnalyticsService {
   }
 
   /**
-   * Transform time series data for charts
-   * @param {Array} data - Raw time series data
-   * @param {string} interval - Data interval
-   * @returns {Array} Transformed time series data
-   */
-  transformTimeSeriesData(data, interval) {
-    if (!Array.isArray(data)) return [];
-
-    return data.map(item => {
-      // Format date label based on interval
-      let dateLabel;
-      const date = new Date(item.timestamp);
-
-      switch (interval) {
-        case 'hourly':
-          dateLabel = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          break;
-
-        case 'daily':
-          dateLabel = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-          break;
-
-        case 'monthly':
-          dateLabel = date.toLocaleDateString([], { month: 'short', year: 'numeric' });
-          break;
-
-        default:
-          dateLabel = date.toLocaleDateString();
-      }
-
-      return {
-        timestamp: item.timestamp,
-        dateLabel,
-        value: item.value
-      };
-    });
-  }
-
-  /**
    * Format a value for display
    * @param {number} value - Value to format
    * @param {string} format - Format type (number, time, percent)
+   * @param {string} locale - Locale for formatting
    * @returns {string} Formatted value
    */
-  formatValue(value, format = 'number') {
+  formatValue(value, format = 'number', locale = null) {
     if (value === null || value === undefined) return '—';
+
+    // Get current locale
+    const currentLocale = locale || (this.$i18n ? this.$i18n.locale : 'en');
 
     switch (format) {
       case 'number':
-        return value.toLocaleString();
+        return value.toLocaleString(currentLocale);
 
       case 'time':
         // Format as seconds with 1 decimal place

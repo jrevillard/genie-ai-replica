@@ -125,46 +125,65 @@ export default {
     /**
      * Fetch category distribution data from API
      */
-// In CategoryDistributionChart.vue
-async fetchData() {
-  if (this.externalData) return;
-  
-  this.loading = true;
-  this.error = null;
-  
-  try {
-    // Calculate date range based on period
-    const { startDate, endDate } = analyticsService.calculateDateRange(
-      this.period, 
-      this.selectedDate
-    );
+    async fetchData() {
+      if (this.externalData) return;
+      
+      this.loading = true;
+      this.error = null;
+      
+      try {
+        // Calculate date range based on period
+        const { startDate, endDate } = analyticsService.calculateDateRange(
+          this.period, 
+          this.selectedDate
+        );
+        
+        // Get current locale from i18n and ensure it's passed to the service
+        const locale = this.$i18n.locale;
+        console.log(`[DEBUG] fetchData: Current locale is "${locale}"`);
+        
+        // Make sure analyticsService has the locale information
+        if (!analyticsService.$i18n) {
+          console.log(`[DEBUG] Setting i18n instance on analyticsService`);
+          analyticsService.$i18n = this.$i18n;
+        }
+        
+        // Fetch dashboard analytics with explicit locale
+        const dashboardData = await analyticsService.getDashboardAnalytics(
+          this.period, 
+          this.selectedDate
+        );
+        
+        if (dashboardData && dashboardData.queryDistribution) {
+          // Debug: Log category names from API
+          console.log(`[DEBUG] Category data received from API:`, 
+            dashboardData.queryDistribution.map(item => ({
+              id: item.categoryId,
+              name: item.name,
+              count: item.count
+            }))
+          );
+          
+          this.chartData = dashboardData.queryDistribution;
+          this.renderChart();
+          
+          // Debug: Check language of received category names
+          this.logCategoryLanguageInfo();
+        } else {
+          console.error(`[DEBUG] No queryDistribution in response`);
+          this.error = this.$t('analytics.status.noData');
+        }
+      } catch (error) {
+        console.error('Error fetching category distribution data:', error);
+        console.log('Falling back to sample category data...');
+        // Fall back to hard-coded data
+        this.chartData = this.getFallbackData();
+        this.renderChart();
+      } finally {
+        this.loading = false;
+      }
+    },
     
-    // Get current locale from i18n
-    const locale = this.$i18n.locale;
-    console.log(`Fetching analytics with locale: ${locale}`);
-    
-    // Fetch dashboard analytics which includes category distribution
-    const dashboardData = await analyticsService.getDashboardAnalytics(
-      this.period, 
-      this.selectedDate
-    );
-    
-    if (dashboardData && dashboardData.queryDistribution) {
-      this.chartData = dashboardData.queryDistribution;
-      this.renderChart();
-    } else {
-      this.error = this.$t('analytics.status.noData');
-    }
-  } catch (error) {
-    console.error('Error fetching category distribution data:', error);
-    console.log('Falling back to sample category data...');
-    // Fall back to hard-coded data
-    this.chartData = this.getFallbackData();
-    this.renderChart();
-  } finally {
-    this.loading = false;
-  }
-},    
     /**
      * Load category names from the service
      */
@@ -174,9 +193,6 @@ async fetchData() {
         
         // Create a lookup object for category names by ID
         categories.forEach(category => {
-          // First store the raw data for debugging
-          console.log('Category from service:', category);
-          
           // Extract the numeric ID from serviceCategories/123 (full path)
           // or just use the raw _key (which is typically just the number) 
           const id = category._key || 
@@ -192,10 +208,13 @@ async fetchData() {
             let name = null;
             if (currentLocale === 'fr' && category.nameFR) {
               name = category.nameFR;
+              console.log(`[DEBUG] Using French name for category ${id}: ${name}`);
             } else if (currentLocale === 'sw' && category.nameSW) {
               name = category.nameSW;
+              console.log(`[DEBUG] Using Swahili name for category ${id}: ${name}`);
             } else {
               name = category.nameEN || category.name || null;
+              console.log(`[DEBUG] Using default/English name for category ${id}: ${name}`);
             }
             
             // Store the name with various ID formats for flexible lookup
@@ -228,7 +247,7 @@ async fetchData() {
           }
         });
         
-        console.log('Loaded category names with all formats:', this.categories);
+        console.log(`[DEBUG] Loaded ${Object.keys(this.categories).length} category names for locale: ${this.$i18n.locale}`);
       } catch (error) {
         console.error('Error loading category names:', error);
         // Populate with fallback data in case of error
@@ -259,6 +278,7 @@ async fetchData() {
       
       // Determine the current locale
       const currentLocale = this.$i18n.locale;
+      console.log(`[DEBUG] Using fallback categories for locale: ${currentLocale}`);
       
       // Add entries for each format with the appropriate language
       Object.entries(fallbackCategories).forEach(([id, names]) => {
@@ -277,8 +297,6 @@ async fetchData() {
         this.categories[`serviceCategorie${id}`] = name;
         this.categories[`cat${id}`] = name;
       });
-      
-      console.log('Populated fallback categories with all formats:', this.categories);
     },
     
     /**
@@ -427,6 +445,8 @@ async fetchData() {
       const lang = currentLocale === 'fr' ? 'fr' : 
                   (currentLocale === 'sw' ? 'sw' : 'en');
       
+      console.log(`[DEBUG] Using fallback data with language: ${lang}`);
+      
       // Create fallback data with appropriate language
       return [
         { categoryId: 'cat1', name: categoryNames.cat1[lang], count: 2347, value: 23 },
@@ -486,29 +506,99 @@ async fetchData() {
     },
     
     /**
+     * Analyze if category names are in the correct language
+     * Helps debug if the API is returning names in the wrong language
+     */
+    logCategoryLanguageInfo() {
+      if (!this.chartData || !this.chartData.length) {
+        console.log('[DEBUG] No chart data available to check language');
+        return;
+      }
+      
+      const locale = this.$i18n.locale;
+      console.log(`[DEBUG] Analyzing category names for locale: "${locale}"`);
+      
+      // Simple word patterns to detect language
+      const patterns = {
+        en: ['and', 'of', 'services', 'identity', 'civil', 'education', 'business'],
+        sw: ['na', 'ya', 'huduma', 'utambulisho', 'elimu', 'biashara'],
+        fr: ['et', 'de', 'services', 'identité', 'civil', 'éducation']
+      };
+      
+      let matchCount = 0;
+      let totalWithNames = 0;
+      
+      this.chartData.forEach(cat => {
+        if (!cat.name) {
+          console.log(`[DEBUG] Missing name for category: ${cat.categoryId}`);
+          return;
+        }
+        
+        totalWithNames++;
+        
+        // Check each language
+        const results = {};
+        Object.entries(patterns).forEach(([lang, words]) => {
+          const nameLower = cat.name.toLowerCase();
+          const matches = words.filter(word => nameLower.includes(word.toLowerCase()));
+          results[lang] = matches.length;
+        });
+        
+        // Determine likely language
+        let likelyLang = 'unknown';
+        let highestCount = 0;
+        
+        Object.entries(results).forEach(([lang, count]) => {
+          if (count > highestCount) {
+            highestCount = count;
+            likelyLang = lang;
+          }
+        });
+        
+        const isMatch = likelyLang === locale;
+        if (isMatch) {
+          matchCount++;
+        }
+        
+        console.log(`[DEBUG] Category "${cat.categoryId}" name: "${cat.name}" - likely language: ${likelyLang} (match with current locale: ${isMatch ? 'YES' : 'NO'})`);
+      });
+      
+      // Summary statistics
+      if (totalWithNames > 0) {
+        const matchPercent = Math.round((matchCount / totalWithNames) * 100);
+        console.log(`[DEBUG] Language match summary: ${matchCount}/${totalWithNames} (${matchPercent}%) names match current locale "${locale}"`);
+      }
+    },
+    
+    /**
      * Render the pie chart
      */
     renderChart() {
       if (!this.chartData || this.chartData.length === 0 || !this.$refs.chart) return;
       
+      console.log(`[DEBUG] Rendering chart with locale: ${this.$i18n.locale}`);
+      
       // Clear previous chart
       d3.select(this.$refs.chart).selectAll('*').remove();
       
-      // Process the data and ensure values are valid numbers
+      // CRITICAL FIX: Process the data and ensure we prioritize names from the API directly
       const chartData = this.chartData.map(item => {
         // Ensure the value property exists and is a valid number
         const value = Number(item.value) || Number(item.count) || 1;
         
-        // Get the best display name for the category
+        // CRITICAL FIX: Prioritize the name directly from the API response
+        // instead of trying to translate or look up from categories
         let displayName = '';
         
-        // Try to use the name directly from the item if it seems valid
         if (item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')) {
+          // Use the name directly from the API which should already be in the correct language
           displayName = item.name;
+          console.log(`[DEBUG] Using API-provided name: "${displayName}" for ${item.categoryId}`);
         } 
-        // Otherwise look up the name using our helper method
+        // Only fall back to category lookup if API didn't provide a usable name
         else {
           displayName = this.getCategoryDisplayName(item.categoryId);
+          console.log(`[DEBUG] Using looked-up name: "${displayName}" for ${item.categoryId}`);
         }
         
         return {
@@ -578,7 +668,7 @@ async fetchData() {
             .style('opacity', 0.8)
             .attr('transform', 'scale(1)');
         });
-        
+          
       // Add percentage labels inside the donut slices
       chartGroup.selectAll('.percent-label')
         .data(pie(chartData))
@@ -644,7 +734,7 @@ async fetchData() {
         .attr('height', 14)
         .attr('fill', d => colorScale(d.categoryId));
       
-      // Add category names
+      // CRITICAL FIX: Add category names using the direct API-provided names
       legendItems.append('text')
         .attr('x', 20)
         .attr('y', 12)
@@ -652,6 +742,9 @@ async fetchData() {
         .text(d => {
           // Calculate percentage for display
           const percent = Math.round((d.value / total) * 100);
+          
+          // Log the category name being used in the legend
+          console.log(`[DEBUG] Legend showing for ${d.categoryId}: "${d.categoryName}"`);
           
           // Truncate long names and add percentage
           const nameMaxLength = 25;
@@ -672,12 +765,16 @@ async fetchData() {
         .style('opacity', 0)
         .style('z-index', 1000);
       
+      // CRITICAL FIX: Update tooltip to use direct API-provided names
       slices.on('mouseover', (event, d) => {
         tooltip.transition()
           .duration(200)
           .style('opacity', 0.9);
         
         const percent = Math.round((d.data.value / total) * 100);
+        
+        // Log the tooltip content for debugging
+        console.log(`[DEBUG] Tooltip showing for ${d.data.categoryId}: "${d.data.categoryName}"`);
         
         tooltip.html(`
           <div><strong>${d.data.categoryName}</strong></div>

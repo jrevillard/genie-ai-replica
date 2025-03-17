@@ -1,6 +1,43 @@
 // src/i18n/locales/sw.js
 
 export default {
+  passwordResetConfirm: {
+    appTitle: 'Huduma AI',
+    resetPassword: 'Tengeneza Nenosiri Mpya',
+    tokenLabel: 'Tokeni ya Kubadilisha',
+    tokenPlaceholder: 'Ingiza tokeni ya kubadilisha',
+    validateButton: 'Thibitisha Tokeni',
+    newPasswordLabel: 'Nenosiri Mpya',
+    newPasswordPlaceholder: 'Tengeneza nenosiri mpya',
+    confirmNewPasswordLabel: 'Thibitisha Nenosiri Mpya',
+    confirmNewPasswordPlaceholder: 'Thibitisha nenosiri lako mpya',
+    resetButton: 'Weka Nenosiri Upya',
+    processing: 'Inabadilisha...',
+    rememberedPassword: 'Unakumbuka nenosiri lako?',
+    backToLogin: 'Rudi Kuingia',
+    supportMessage: 'Unahitaji msaada? Wasiliana na timu yetu ya usaidizi',
+    passwordRequirements: 'Nenosiri lazima liwe na angalau herufi 8 zenye angalau namba 1, herufi kubwa 1 na herufi maalum 1',
+    passwordsDoNotMatch: 'Maneno ya siri hayalingani',
+    resetSuccess: 'Nenosiri lako limebadilishwa kwa mafanikio',
+    resetFailed: 'Imeshindwa kubadilisha nenosiri. Tafadhali jaribu tena.',
+    noTokenProvided: 'Tafadhali utoe tokeni ya kubadilisha',
+    expiredToken: 'Tokeni hii ya kubadilisha imekwisha. Tafadhali omba mpya.',
+    invalidToken: 'Tokeni batili au isiyojulikana'
+  },
+  passwordReset: {
+    appTitle: 'Huduma AI',
+    resetPassword: 'Weka Nenosiri Upya',
+    emailLabel: 'Anwani ya Barua Pepe',
+    emailPlaceholder: 'Ingiza barua pepe yako',
+    resetButton: 'Tuma Kiunga cha Kubadilisha',
+    processing: 'Inatuma...',
+    rememberPassword: 'Unakumbuka nenosiri lako?',
+    backToLogin: 'Rudi Kuingia',
+    supportMessage: 'Unahitaji msaada? Wasiliana na timu yetu ya usaidizi',
+    invalidEmail: 'Tafadhali ingiza anwani halali ya barua pepe',
+    resetRequestSuccess: 'Kiunga cha kubadilisha nenosiri kimeletwa kwenye barua pepe yako',
+    resetRequestFailed: 'Imeshindwa kutuma kiunga cha kubadilisha. Tafadhali jaribu tena.'
+  },
   register: {
     appTitle: "Vue Gov Chat",
     createAccount: "Tengeneza Akaunti Mpya",

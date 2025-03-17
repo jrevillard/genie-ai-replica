@@ -35,7 +35,9 @@
             <input type="checkbox" v-model="rememberMe">
             <span>{{ $t('login.rememberMe') }}</span>
           </label>
-          <a href="#" class="forgot-link">{{ $t('login.forgotPassword') }}</a>
+          <a href="#" @click.prevent="goToForgotPassword" class="forgot-link">
+            {{ $t('login.forgotPassword') }}
+          </a>
         </div>
         
         <button type="submit" class="login-button">
@@ -206,6 +208,11 @@ export default {
       }
     },
     
+    // Navigate to forgot password page
+    goToForgotPassword() {
+      this.$router.push('/forgot-password');
+    },
+    
     handleLogin() {
       // Simulate login success with any credentials
       const userData = {
@@ -285,6 +292,8 @@ export default {
   }
 }
 </script>
+
+<!-- Style remains unchanged from previous version -->
 
 <style scoped>
 .login-container {

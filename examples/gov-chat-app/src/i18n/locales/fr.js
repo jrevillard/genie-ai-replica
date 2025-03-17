@@ -1,6 +1,43 @@
 // src/i18n/locales/fr.js
 
 export default {
+  passwordResetConfirm: {
+    appTitle: 'Huduma AI',
+    resetPassword: 'Créer un nouveau mot de passe',
+    tokenLabel: 'Jeton de réinitialisation',
+    tokenPlaceholder: 'Entrez le jeton de réinitialisation',
+    validateButton: 'Valider le jeton',
+    newPasswordLabel: 'Nouveau mot de passe',
+    newPasswordPlaceholder: 'Créez un nouveau mot de passe',
+    confirmNewPasswordLabel: 'Confirmez le nouveau mot de passe',
+    confirmNewPasswordPlaceholder: 'Confirmez votre nouveau mot de passe',
+    resetButton: 'Réinitialiser le mot de passe',
+    processing: 'Réinitialisation...',
+    rememberedPassword: 'Vous rappelez-vous de votre mot de passe ?',
+    backToLogin: 'Retour à la connexion',
+    supportMessage: 'Besoin d\'aide ? Contactez notre équipe de support',
+    passwordRequirements: 'Le mot de passe doit comporter au moins 8 caractères avec au moins 1 chiffre, 1 lettre majuscule et 1 caractère spécial',
+    passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
+    resetSuccess: 'Votre mot de passe a été réinitialisé avec succès',
+    resetFailed: 'Impossible de réinitialiser le mot de passe. Veuillez réessayer.',
+    noTokenProvided: 'Veuillez fournir un jeton de réinitialisation',
+    expiredToken: 'Ce jeton de réinitialisation a expiré. Veuillez en demander un nouveau.',
+    invalidToken: 'Jeton invalide ou non reconnu'
+  },
+  passwordReset: {
+    appTitle: 'Huduma AI',
+    resetPassword: 'Réinitialiser votre mot de passe',
+    emailLabel: 'Adresse email',
+    emailPlaceholder: 'Entrez votre email',
+    resetButton: 'Envoyer le lien de réinitialisation',
+    processing: 'Envoi...',
+    rememberPassword: 'Vous vous souvenez de votre mot de passe?',
+    backToLogin: 'Retour à la connexion',
+    supportMessage: 'Besoin d\'aide? Contactez notre équipe de support',
+    invalidEmail: 'Veuillez entrer une adresse email valide',
+    resetRequestSuccess: 'Un lien de réinitialisation de mot de passe a été envoyé à votre email',
+    resetRequestFailed: 'Impossible d\'envoyer le lien de réinitialisation. Veuillez réessayer.'
+  },
 
   register: {
     appTitle: "Vue Gov Chat",

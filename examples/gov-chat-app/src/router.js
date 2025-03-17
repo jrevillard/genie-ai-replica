@@ -3,6 +3,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
 import LoginScreen from '@/components/LoginScreen.vue'
 import RegisterScreen from '@/components/RegisterScreen.vue'
+import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue'
+import PasswordResetConfirmScreen from '@/components/PasswordResetConfirmScreen.vue'
 import store from '@/store'
 
 import UserProfileComponent from '@/components/UserProfileComponent.vue'
@@ -19,6 +21,19 @@ const routes = [
     path: '/register',
     name: 'Register',
     component: RegisterScreen,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/forgot-password',
+    name: 'PasswordResetInitiate',
+    component: PasswordResetInitiateScreen,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/reset-password/:token',
+    name: 'PasswordResetConfirm',
+    component: PasswordResetConfirmScreen,
+    props: true, // Allow passing route params as props
     meta: { requiresAuth: false }
   },
   {
@@ -61,13 +76,8 @@ const router = createRouter({
   routes
 })
 
-// Authentication navigation guard (more strict implementation)
-// Authentication navigation guard (more strict implementation)
+// Authentication navigation guard
 router.beforeEach((to, from, next) => {
-
-  console.log('Navigating to:', to.path)
-  console.log('Route matched:', to.matched)
-  
   // Initialize authentication if not already done
   if (store.state.auth && store.state.auth.user === null) {
     store.dispatch('initAuth')
@@ -82,8 +92,8 @@ router.beforeEach((to, from, next) => {
   if (requiresAuth && !isAuthenticated) {
     // Route requires auth but user is not authenticated
     next({ name: 'Login' })
-  } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
-    // User is authenticated but trying to access login or register page
+  } else if ((to.path === '/login' || to.path === '/register' || to.path === '/forgot-password') && isAuthenticated) {
+    // User is authenticated but trying to access login, register, or forgot password page
     next({ name: 'Dashboard' })
   } else {
     // Either route doesn't require auth, or user is authenticated

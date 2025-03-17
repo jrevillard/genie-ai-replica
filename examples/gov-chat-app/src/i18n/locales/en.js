@@ -1,6 +1,43 @@
 // src/i18n/locales/en.js
 
 export default {
+  passwordResetConfirm: {
+    appTitle: 'Huduma AI',
+    resetPassword: 'Create New Password',
+    tokenLabel: 'Reset Token',
+    tokenPlaceholder: 'Enter reset token',
+    validateButton: 'Validate Token',
+    newPasswordLabel: 'New Password',
+    newPasswordPlaceholder: 'Create a new password',
+    confirmNewPasswordLabel: 'Confirm New Password',
+    confirmNewPasswordPlaceholder: 'Confirm your new password',
+    resetButton: 'Reset Password',
+    processing: 'Resetting...',
+    rememberedPassword: 'Remember your password?',
+    backToLogin: 'Back to Login',
+    supportMessage: 'Need help? Contact our support team',
+    passwordRequirements: 'Password must be at least 8 characters with at least 1 number, 1 uppercase letter, and 1 special character',
+    passwordsDoNotMatch: 'Passwords do not match',
+    resetSuccess: 'Your password has been successfully reset',
+    resetFailed: 'Unable to reset password. Please try again.',
+    noTokenProvided: 'Please provide a reset token',
+    expiredToken: 'This reset token has expired. Please request a new one.',
+    invalidToken: 'Invalid or unrecognized reset token'
+  },
+  passwordReset: {
+    appTitle: 'Huduma AI',
+    resetPassword: 'Reset Your Password',
+    emailLabel: 'Email Address',
+    emailPlaceholder: 'Enter your email',
+    resetButton: 'Send Reset Link',
+    processing: 'Sending...',
+    rememberPassword: 'Remember your password?',
+    backToLogin: 'Back to Login',
+    supportMessage: 'Need help? Contact our support team',
+    invalidEmail: 'Please enter a valid email address',
+    resetRequestSuccess: 'Password reset link has been sent to your email',
+    resetRequestFailed: 'Unable to send password reset link. Please try again.'
+  },
 
   register: {
     appTitle: "Vue Gov Chat",

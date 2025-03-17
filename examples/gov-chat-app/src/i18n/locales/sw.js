@@ -1,6 +1,31 @@
 // src/i18n/locales/sw.js
 
 export default {
+  register: {
+    appTitle: "Vue Gov Chat",
+    createAccount: "Tengeneza Akaunti Mpya",
+    username: "Jina la mtumiaji",
+    usernamePlaceholder: "Ingiza jina la mtumiaji",
+    email: "Barua pepe",
+    emailPlaceholder: "Ingiza barua pepe yako",
+    password: "Nenosiri",
+    passwordPlaceholder: "Tengeneza nenosiri",
+    confirmPassword: "Thibitisha Nenosiri",
+    confirmPasswordPlaceholder: "Thibitisha nenosiri lako",
+    acceptTerms: "Ninakubali",
+    termsOfService: "Masharti ya Huduma",
+    registerButton: "Tengeneza Akaunti",
+    processing: "Inachakata...",
+    alreadyHaveAccount: "Una akaunti tayari?",
+    loginNow: "Ingia",
+    privacyNotice: "Kwa kujiandikisha, unakubali Masharti ya Huduma na Sera ya Faragha",
+    usernameMinLength: "Jina la mtumiaji lazima liwe na angalau herufi 3",
+    invalidEmail: "Tafadhali ingiza anwani halali ya barua pepe",
+    passwordRequirements: "Nenosiri lazima liwe na angalau herufi 8 na angalau namba 1 na herufi kubwa 1",
+    passwordsDoNotMatch: "Nenosiri hazilingani",
+    mustAcceptTerms: "Lazima ukubali Masharti ya Huduma",
+    registrationFailed: "Usajili umeshindwa. Tafadhali jaribu tena."
+  },
   login: {
     appTitle: 'Huduma AI',
     username: 'Jina la mtumiaji',
@@ -16,7 +41,9 @@ export default {
     forgotPassword: 'Umesahau nywila?',
     noAccount: 'Huna akaunti?',
     createAccount: 'Fungua akaunti',
-    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha'
+    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha',
+    noAccount: "Huna akaunti?",
+    registerNow: "Jiandikishe sasa"
   },
   charts: {
     tooltip: {

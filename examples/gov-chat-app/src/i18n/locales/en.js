@@ -2,6 +2,32 @@
 
 export default {
 
+  register: {
+    appTitle: "Vue Gov Chat",
+    createAccount: "Create New Account",
+    username: "Username",
+    usernamePlaceholder: "Enter a username",
+    email: "Email",
+    emailPlaceholder: "Enter your email",
+    password: "Password",
+    passwordPlaceholder: "Create a password",
+    confirmPassword: "Confirm Password",
+    confirmPasswordPlaceholder: "Confirm your password",
+    acceptTerms: "I accept the",
+    termsOfService: "Terms of Service",
+    registerButton: "Create Account",
+    processing: "Processing...",
+    alreadyHaveAccount: "Already have an account?",
+    loginNow: "Log in",
+    privacyNotice: "By registering, you agree to our Terms of Service and Privacy Policy",
+    usernameMinLength: "Username must be at least 3 characters",
+    invalidEmail: "Please enter a valid email address",
+    passwordRequirements: "Password must be at least 8 characters with at least 1 number and 1 uppercase letter",
+    passwordsDoNotMatch: "Passwords do not match",
+    mustAcceptTerms: "You must accept the Terms of Service",
+    registrationFailed: "Registration failed. Please try again."
+  },
+
   // Login section
   login: {
     appTitle: 'Huduma AI',
@@ -18,7 +44,9 @@ export default {
     forgotPassword: 'Forgot password?',
     noAccount: 'Don\'t have an account?',
     createAccount: 'Create account',
-    termsAndPolicy: 'By logging in, you agree to our Terms of Service and Privacy Policy'
+    termsAndPolicy: 'By logging in, you agree to our Terms of Service and Privacy Policy',
+    noAccount: "Don't have an account?",
+    registerNow: "Register now"
   },
   charts: {
     tooltip: {

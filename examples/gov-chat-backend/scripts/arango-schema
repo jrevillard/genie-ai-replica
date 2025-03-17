@@ -1,9 +1,10 @@
 // ArangoDB Schema Definition
 
-// 1. Users Collection
+// 1. Users Collection - MODIFIED to include loginName and accessToken
 /*
   Stores user profile information from all the tabs in the UserProfileComponent.
   Each document represents a unique user with comprehensive profile data.
+  Now includes authentication information for the Vue.js application.
 */
 const usersCollection = {
   name: "users",
@@ -12,6 +13,9 @@ const usersCollection = {
       type: "object",
       properties: {
         _key: { type: "string" },  // Unique identifier for the user
+        loginName: { type: "string" }, // Added for authentication
+        accessToken: { type: "string", optional: true }, // Added for authentication
+        email: { type: "string" }, // Added as seen in the document screenshot
         personalIdentification: {
           type: "object",
           properties: {
@@ -143,18 +147,15 @@ const usersCollection = {
         createdAt: { type: "string" },
         updatedAt: { type: "string" }
       },
-      required: ["_key", "personalIdentification", "addressResidency"]
+      required: ["_key", "loginName", "email", "personalIdentification", "addressResidency"]
     },
     level: "moderate",
     message: "User profile document does not match schema"
   }
 };
 
+// The rest of the collections remain unchanged
 // 2. Sessions Collection
-/*
-  Tracks active user sessions, which helps identify unique users
-  for analytics purposes.
-*/
 const sessionsCollection = {
   name: "sessions",
   schema: {
@@ -177,10 +178,6 @@ const sessionsCollection = {
 };
 
 // 3. ServiceCategories Collection
-/*
-  Stores the service categories from the ServiceTreePanelComponent.
-  This represents the top-level nodes in the service tree.
-*/
 const serviceCategoriesCollection = {
   name: "serviceCategories",
   schema: {
@@ -202,10 +199,6 @@ const serviceCategoriesCollection = {
 };
 
 // 4. Services Collection
-/*
-  Stores the individual services under each category.
-  These are the child nodes in the service tree.
-*/
 const servicesCollection = {
   name: "services",
   schema: {
@@ -229,10 +222,6 @@ const servicesCollection = {
 };
 
 // 5. Queries Collection
-/*
-  Stores user queries to the chatbot.
-  Each document represents a single user query with detailed information.
-*/
 const queriesCollection = {
   name: "queries",
   schema: {
@@ -274,10 +263,6 @@ const queriesCollection = {
 };
 
 // 6. Analytics Collection
-/*
-  Stores pre-aggregated analytics data for faster dashboard rendering.
-  Updated regularly by a background process.
-*/
 const analyticsCollection = {
   name: "analytics",
   schema: {
@@ -321,7 +306,7 @@ const analyticsCollection = {
   }
 };
 
-// 7. Edges Collection - UserSessions (connects users to their sessions)
+// Edge Collections remain unchanged
 const userSessionsEdgeCollection = {
   name: "userSessions",
   type: "edge",
@@ -338,7 +323,6 @@ const userSessionsEdgeCollection = {
   }
 };
 
-// 8. Edges Collection - SessionQueries (connects sessions to queries)
 const sessionQueriesEdgeCollection = {
   name: "sessionQueries",
   type: "edge",
@@ -355,7 +339,6 @@ const sessionQueriesEdgeCollection = {
   }
 };
 
-// 9. Edges Collection - CategoryServices (connects service categories to services)
 const categoryServicesEdgeCollection = {
   name: "categoryServices",
   type: "edge",
@@ -372,7 +355,6 @@ const categoryServicesEdgeCollection = {
   }
 };
 
-// 10. Edges Collection - QueryCategories (connects queries to their categories)
 const queryCategoriesEdgeCollection = {
   name: "queryCategories",
   type: "edge",

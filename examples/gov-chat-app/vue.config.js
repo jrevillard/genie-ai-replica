@@ -7,5 +7,6 @@ module.exports = {
     // or if you want to serve on a different port, specify it:
     port: 8090
   }
-}
+};
+
 

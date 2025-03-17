@@ -1,6 +1,32 @@
 // src/i18n/locales/fr.js
 
 export default {
+
+  register: {
+    appTitle: "Vue Gov Chat",
+    createAccount: "Créer un nouveau compte",
+    username: "Nom d'utilisateur",
+    usernamePlaceholder: "Entrez un nom d'utilisateur",
+    email: "Email",
+    emailPlaceholder: "Entrez votre email",
+    password: "Mot de passe",
+    passwordPlaceholder: "Créez un mot de passe",
+    confirmPassword: "Confirmez le mot de passe",
+    confirmPasswordPlaceholder: "Confirmez votre mot de passe",
+    acceptTerms: "J'accepte les",
+    termsOfService: "conditions d'utilisation",
+    registerButton: "Créer un compte",
+    processing: "Traitement en cours...",
+    alreadyHaveAccount: "Vous avez déjà un compte?",
+    loginNow: "Connectez-vous",
+    privacyNotice: "En vous inscrivant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité",
+    usernameMinLength: "Le nom d'utilisateur doit comporter au moins 3 caractères",
+    invalidEmail: "Veuillez entrer une adresse email valide",
+    passwordRequirements: "Le mot de passe doit comporter au moins 8 caractères avec au moins 1 chiffre et 1 lettre majuscule",
+    passwordsDoNotMatch: "Les mots de passe ne correspondent pas",
+    mustAcceptTerms: "Vous devez accepter les conditions d'utilisation",
+    registrationFailed: "L'inscription a échoué. Veuillez réessayer."
+  },
   // Login section
   login: {
     appTitle: 'Huduma AI',
@@ -17,7 +43,9 @@ export default {
     forgotPassword: 'Mot de passe oublié?',
     noAccount: 'Vous n\'avez pas de compte?',
     createAccount: 'Créer un compte',
-    termsAndPolicy: 'En vous connectant, vous acceptez nos Conditions d\'Utilisation et notre Politique de Confidentialité'
+    termsAndPolicy: 'En vous connectant, vous acceptez nos Conditions d\'Utilisation et notre Politique de Confidentialité',
+    noAccount: "Vous n'avez pas de compte?",
+    registerNow: "Inscrivez-vous"
   },
   charts: {
     tooltip: {

@@ -40,7 +40,7 @@ export default {
   },
 
   register: {
-    appTitle: "Vue Gov Chat",
+    appTitle: "Huduma AI",
     createAccount: "Create New Account",
     username: "Username",
     usernamePlaceholder: "Enter a username",

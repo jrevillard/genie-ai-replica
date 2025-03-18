@@ -39,7 +39,7 @@ export default {
     resetRequestFailed: 'Imeshindwa kutuma kiunga cha kubadilisha. Tafadhali jaribu tena.'
   },
   register: {
-    appTitle: "Vue Gov Chat",
+    appTitle: "Huduma AI",
     createAccount: "Tengeneza Akaunti Mpya",
     username: "Jina la mtumiaji",
     usernamePlaceholder: "Ingiza jina la mtumiaji",

@@ -1,6 +1,6 @@
 // ArangoDB Schema Definition
 
-// 1. Users Collection - MODIFIED to include loginName and accessToken
+// 1. Users Collection - MODIFIED to include loginName, accessToken, and encPassword
 /*
   Stores user profile information from all the tabs in the UserProfileComponent.
   Each document represents a unique user with comprehensive profile data.
@@ -15,6 +15,7 @@ const usersCollection = {
         _key: { type: "string" },  // Unique identifier for the user
         loginName: { type: "string" }, // Added for authentication
         accessToken: { type: "string", optional: true }, // Added for authentication
+        encPassword: { type: "string" }, // Added for encrypted password storage
         email: { type: "string" }, // Added as seen in the document screenshot
         personalIdentification: {
           type: "object",
@@ -147,7 +148,7 @@ const usersCollection = {
         createdAt: { type: "string" },
         updatedAt: { type: "string" }
       },
-      required: ["_key", "loginName", "email", "personalIdentification", "addressResidency"]
+      required: ["_key", "loginName", "email", "encPassword", "personalIdentification", "addressResidency"]
     },
     level: "moderate",
     message: "User profile document does not match schema"

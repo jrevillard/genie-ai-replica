@@ -1,15 +1,20 @@
 // src/services/authService.js
 
-import axios from 'axios';
+import httpService from './httpService';
 import crypto from 'crypto';
-
-// Base API URL - update with your actual API endpoint
-const API_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
 
 /**
  * Service to handle authentication with the backend
  */
 class AuthService {
+  /**
+   * Initialize the AuthService
+   */
+  constructor() {
+    this.tokenKey = 'user';
+    this.authEndpoint = 'auth';
+  }
+
   /**
    * Authenticate user with username and password
    * @param {string} username The username
@@ -22,13 +27,13 @@ class AuthService {
       // before sending it over the network
       const hashedPassword = this.hashPassword(password);
       
-      const response = await axios.post(`${API_URL}/auth/login`, {
+      const response = await httpService.post(`${this.authEndpoint}/login`, {
         loginName: username,
         encPassword: hashedPassword
       });
       
       if (response.data.accessToken) {
-        localStorage.setItem('user', JSON.stringify(response.data));
+        localStorage.setItem(this.tokenKey, JSON.stringify(response.data));
       }
       
       return response.data;
@@ -50,7 +55,7 @@ class AuthService {
       // Hash password before sending to server
       const hashedPassword = this.hashPassword(password);
       
-      const response = await axios.post(`${API_URL}/auth/register`, {
+      const response = await httpService.post(`${this.authEndpoint}/register`, {
         loginName: username,
         email: email,
         encPassword: hashedPassword
@@ -58,7 +63,7 @@ class AuthService {
       
       // If registration includes auto login, store token
       if (response.data.accessToken) {
-        localStorage.setItem('user', JSON.stringify(response.data));
+        localStorage.setItem(this.tokenKey, JSON.stringify(response.data));
       }
       
       return response.data;
@@ -72,7 +77,14 @@ class AuthService {
    * Log out the user
    */
   logout() {
-    localStorage.removeItem('user');
+    localStorage.removeItem(this.tokenKey);
+    // Optional: Call backend to invalidate token server-side
+    try {
+      return httpService.post(`${this.authEndpoint}/logout`);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Continue with client-side logout even if server request fails
+    }
   }
   
   /**
@@ -80,7 +92,7 @@ class AuthService {
    * @returns {Object|null} The user data or null if not authenticated
    */
   getCurrentUser() {
-    const userStr = localStorage.getItem('user');
+    const userStr = localStorage.getItem(this.tokenKey);
     if (!userStr) return null;
     
     try {
@@ -123,17 +135,127 @@ class AuthService {
    */
   async socialLogin(provider) {
     try {
-      // In a real app, this would redirect to OAuth flow
-      // For demo purposes, we're just simulating the process
-      const response = await axios.get(`${API_URL}/auth/${provider}`);
+      const response = await httpService.get(`${this.authEndpoint}/${provider}`);
       
       if (response.data.accessToken) {
-        localStorage.setItem('user', JSON.stringify(response.data));
+        localStorage.setItem(this.tokenKey, JSON.stringify(response.data));
       }
       
       return response.data;
     } catch (error) {
       console.error(`${provider} login error:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initiate password reset process
+   * @param {string} email User's email address
+   * @returns {Promise} Promise with reset request result
+   */
+  async initiatePasswordReset(email) {
+    try {
+      const response = await httpService.post(`${this.authEndpoint}/reset-password`, { email });
+      return response.data;
+    } catch (error) {
+      console.error('Password reset initiation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate a password reset token
+   * @param {string} token Reset token from email
+   * @returns {Promise} Promise with token validation result
+   */
+  async validateResetToken(token) {
+    try {
+      const response = await httpService.post(`${this.authEndpoint}/validate-token`, { token });
+      return response.data;
+    } catch (error) {
+      console.error('Token validation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset password with token
+   * @param {string} token Reset token from email
+   * @param {string} newPassword New password
+   * @returns {Promise} Promise with password reset result
+   */
+  async resetPassword(token, newPassword) {
+    try {
+      // Hash the new password before sending
+      const hashedPassword = this.hashPassword(newPassword);
+      
+      const response = await httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
+        token,
+        newPassword: hashedPassword
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Password reset error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Change password for authenticated user
+   * @param {string} currentPassword Current password
+   * @param {string} newPassword New password
+   * @returns {Promise} Promise with password change result
+   */
+  async changePassword(currentPassword, newPassword) {
+    try {
+      // Hash both passwords before sending
+      const hashedCurrentPassword = this.hashPassword(currentPassword);
+      const hashedNewPassword = this.hashPassword(newPassword);
+      
+      const response = await httpService.post(`${this.authEndpoint}/change-password`, {
+        currentPassword: hashedCurrentPassword,
+        newPassword: hashedNewPassword
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Password change error:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Refresh the authentication token
+   * @returns {Promise} Promise with new token
+   */
+  async refreshToken() {
+    try {
+      const user = this.getCurrentUser();
+      if (!user || !user.refreshToken) {
+        throw new Error('No refresh token available');
+      }
+      
+      const response = await httpService.post(`${this.authEndpoint}/refresh-token`, {
+        refreshToken: user.refreshToken
+      });
+      
+      if (response.data.accessToken) {
+        // Update stored user data with new tokens
+        const updatedUser = {
+          ...user,
+          accessToken: response.data.accessToken,
+          refreshToken: response.data.refreshToken || user.refreshToken
+        };
+        
+        localStorage.setItem(this.tokenKey, JSON.stringify(updatedUser));
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      // If token refresh fails, log out the user
+      this.logout();
       throw error;
     }
   }

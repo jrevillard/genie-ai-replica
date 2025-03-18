@@ -1,7 +1,10 @@
 // src/services/userProfileService.js - Connect UserProfileComponent to backend
-import api from './api';
+import httpService from './httpService';
 
-export default {
+/**
+ * Service for managing detailed user profiles
+ */
+class UserProfileService {
   /**
    * Get user profile by ID
    * @param {String} userId - User ID
@@ -9,13 +12,13 @@ export default {
    */
   async getProfile(userId) {
     try {
-      const response = await api.get(`/users/${userId}`);
+      const response = await httpService.get(`users/${userId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching user profile:', error);
       throw error;
     }
-  },
+  }
 
   /**
    * Create a new user profile
@@ -27,7 +30,7 @@ export default {
       // Handle file uploads and form data
       const formData = this.prepareFormData(profileData);
       
-      const response = await api.post('/users', formData, {
+      const response = await httpService.post('users', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -38,7 +41,7 @@ export default {
       console.error('Error creating user profile:', error);
       throw error;
     }
-  },
+  }
 
   /**
    * Update an existing user profile
@@ -51,7 +54,7 @@ export default {
       // Handle file uploads and form data
       const formData = this.prepareFormData(profileData);
       
-      const response = await api.put(`/users/${userId}`, formData, {
+      const response = await httpService.put(`users/${userId}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -62,7 +65,7 @@ export default {
       console.error('Error updating user profile:', error);
       throw error;
     }
-  },
+  }
 
   /**
    * Delete a user profile
@@ -71,13 +74,13 @@ export default {
    */
   async deleteProfile(userId) {
     try {
-      const response = await api.delete(`/users/${userId}`);
+      const response = await httpService.delete(`users/${userId}`);
       return response.data;
     } catch (error) {
       console.error('Error deleting user profile:', error);
       throw error;
     }
-  },
+  }
 
   /**
    * Prepare form data for file uploads
@@ -123,7 +126,7 @@ export default {
     formData.append('data', JSON.stringify(dataToSend));
     
     return formData;
-  },
+  }
 
   /**
    * Search for users based on criteria
@@ -136,7 +139,7 @@ export default {
     try {
       const offset = (page - 1) * limit;
       
-      const response = await api.get('/users/search', {
+      const response = await httpService.get('users/search', {
         params: { ...criteria, limit, offset }
       });
       
@@ -146,4 +149,6 @@ export default {
       throw error;
     }
   }
-};
+}
+
+export default new UserProfileService();

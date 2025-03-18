@@ -85,7 +85,8 @@ async function setupDatabase() {
       'serviceCategories',
       'services',
       'queries',
-      'analytics'
+      'analytics',
+      'passwordResetTokens' // Added new collection for password reset tokens
     ];
     
     const edgeCollections = [
@@ -103,6 +104,36 @@ async function setupDatabase() {
     // Create edge collections (using same method but specifying type)
     for (const collectionName of edgeCollections) {
       await createCollection(dbConn, collectionName, true);
+    }
+    
+    // Create indexes on passwordResetTokens collection
+    console.log('Creating indexes for passwordResetTokens collection...');
+    try {
+      const passwordResetTokensCollection = dbConn.collection('passwordResetTokens');
+      
+      // Create index on userId for faster lookups
+      const userIdIndex = await passwordResetTokensCollection.ensureIndex({
+        type: 'persistent',
+        fields: ['userId']
+      });
+      console.log(`Index on userId field: ${userIdIndex.isNewlyCreated ? 'created' : 'already exists'}`);
+      
+      // Create index on token for faster lookups
+      const tokenIndex = await passwordResetTokensCollection.ensureIndex({
+        type: 'persistent',
+        fields: ['token'],
+        unique: true
+      });
+      console.log(`Index on token field: ${tokenIndex.isNewlyCreated ? 'created' : 'already exists'}`);
+      
+      // Create index on expiresAt for efficient cleanup of expired tokens
+      const expiresAtIndex = await passwordResetTokensCollection.ensureIndex({
+        type: 'persistent',
+        fields: ['expiresAt']
+      });
+      console.log(`Index on expiresAt field: ${expiresAtIndex.isNewlyCreated ? 'created' : 'already exists'}`);
+    } catch (error) {
+      console.error('Error creating indexes for passwordResetTokens collection:', error);
     }
     
     console.log('Database setup completed successfully!');

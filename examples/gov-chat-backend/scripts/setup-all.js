@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const setupDatabase = require('./setup-db');
 const initializeServiceCategories = require('./init-service-categories');
+const createPasswordResetCollection = require('./create-password-reset-collection');
 
 /**
  * Run the complete database setup
@@ -19,6 +20,10 @@ async function setupAll() {
     // Step 2: Initialize service categories
     console.log('\n=== STEP 2: Initializing service categories ===');
     await initializeServiceCategories();
+    
+    // Step 3: Ensure password reset collection exists (added)
+    console.log('\n=== STEP 3: Setting up password reset tokens collection ===');
+    await createPasswordResetCollection();
     
     console.log('\n=== Setup completed successfully! ===');
     return { success: true };

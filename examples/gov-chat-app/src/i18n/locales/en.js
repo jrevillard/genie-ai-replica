@@ -1,6 +1,18 @@
 // src/i18n/locales/en.js
 
 export default {
+  verification: {
+    verifying: 'Verifying your email...',
+    success: 'Email Verified Successfully!',
+    failed: 'Verification Failed',
+    accountVerified: 'Your account has been successfully verified. You can now log in to your account.',
+    invalidLink: 'The verification link is invalid or has expired.',
+    missingToken: 'Verification token is missing.',
+    generalError: 'An error occurred during verification. Please try again later.',
+    proceedToLogin: 'Proceed to Login',
+    backToLogin: 'Back to Login'
+  },
+
   passwordResetConfirm: {
     appTitle: 'Huduma AI',
     resetPassword: 'Create New Password',
@@ -62,7 +74,22 @@ export default {
     passwordRequirements: "Password must be at least 8 characters with at least 1 number and 1 uppercase letter",
     passwordsDoNotMatch: "Passwords do not match",
     mustAcceptTerms: "You must accept the Terms of Service",
-    registrationFailed: "Registration failed. Please try again."
+    registrationFailed: "Registration failed. Please try again.",
+    usernameExists: "Username already exists",
+    emailExists: "Email already exists",
+    registrationSuccess: "Registration Successful!",
+    verificationEmailSent: "A verification email has been sent to {email}",
+    checkEmailInstructions: "Please check your email and follow the instructions to verify your account before logging in.",
+    backToLogin: "Back to Login",
+    noEmailReceived: "Didn't receive an email?",
+    resendVerification: "Resend verification email",
+    verificationResent: "Verification email has been resent",
+    verificationResendFailed: "Failed to resend verification email. Please try again.",
+    usernameInvalidChars: 'Username can only contain letters, numbers, underscores, dots and hyphens',
+    networkError: 'Network error. Please check your connection and try again.',
+    registrationFailed: 'Registration failed. Please try again.',
+    usernameExists: 'Username already exists',
+    emailExists: 'Email already exists'
   },
 
   // Login section

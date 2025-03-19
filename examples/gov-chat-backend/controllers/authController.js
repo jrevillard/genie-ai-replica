@@ -23,7 +23,14 @@ class AuthController {
       }
       
       const result = await authService.register(userData);
-      res.status(201).json(result);
+      
+      // Return success without accessToken for email verification flow
+      const { accessToken, ...userWithoutToken } = result;
+      res.status(201).json({
+        success: true,
+        message: 'Registration successful. Please check your email to verify your account.',
+        user: userWithoutToken
+      });
     } catch (error) {
       console.error('Registration error:', error);
       
@@ -61,6 +68,12 @@ class AuthController {
       // Handle specific errors
       if (error.message === 'User not found' || error.message === 'Invalid password') {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      } else if (error.message === 'Email not verified') {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Email not verified. Please check your email for verification instructions.',
+          requiresVerification: true
+        });
       }
       
       res.status(500).json({ success: false, message: 'Login failed' });
@@ -85,6 +98,68 @@ class AuthController {
     } catch (error) {
       console.error('Logout error:', error);
       res.status(500).json({ success: false, message: 'Logout failed' });
+    }
+  }
+
+  /**
+   * Verify email with token
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async verifyEmail(req, res) {
+    try {
+      const { token } = req.params;
+      
+      if (!token) {
+        return res.redirect('/login?verificationError=noToken');
+      }
+      
+      const result = await authService.verifyEmail(token);
+      
+      if (result.success) {
+        // Redirect to login with success message
+        return res.redirect('/login?verified=true');
+      } else {
+        // Redirect with appropriate error
+        let errorType = 'invalid';
+        
+        if (result.expired) {
+          errorType = 'expired';
+        } else if (result.used) {
+          errorType = 'used';
+        }
+        
+        return res.redirect(`/login?verificationError=${errorType}`);
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      res.redirect('/login?verificationError=unknown');
+    }
+  }
+
+  /**
+   * Resend verification email
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async resendVerificationEmail(req, res) {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email is required' });
+      }
+      
+      const result = await authService.resendVerificationEmail(email);
+      res.json(result);
+    } catch (error) {
+      console.error('Resend verification email error:', error);
+      
+      // For security, don't reveal specific errors
+      res.status(500).json({ 
+        success: true, 
+        message: 'If your email exists in our system, a verification email has been sent' 
+      });
     }
   }
 

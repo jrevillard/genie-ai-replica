@@ -74,6 +74,7 @@
 </template>
 
 <script>
+import authService from '@/services/authService';
 export default {
     name: 'RegisterScreen',
     props: {
@@ -167,6 +168,22 @@ export default {
             this.$router.push('/login');
         },
 
+        // Username validation - check for special characters and spaces
+        validateUsername(username) {
+            // Check for minimum length
+            if (username.length < 3) {
+                return this.$t('register.usernameMinLength');
+            }
+            
+            // Check for invalid characters
+            const validUsernameRegex = /^[a-zA-Z0-9_.-]+$/;
+            if (!validUsernameRegex.test(username)) {
+                return this.$t('register.usernameInvalidChars') || 'Username can only contain letters, numbers, underscores, dots and hyphens';
+            }
+            
+            return '';
+        },
+
         // Validate the form inputs
         validateForm() {
             let isValid = true;
@@ -178,9 +195,10 @@ export default {
             this.confirmPasswordError = '';
             this.termsError = '';
 
-            // Username validation (at least 3 characters)
-            if (this.username.length < 3) {
-                this.usernameError = this.$t('register.usernameMinLength');
+            // Username validation using our new method
+            const usernameError = this.validateUsername(this.username);
+            if (usernameError) {
+                this.usernameError = usernameError;
                 isValid = false;
             }
 
@@ -223,42 +241,65 @@ export default {
             this.isSubmitting = true;
 
             try {
-                // In a real application, this would be an API call to register the user
-                // For this example, we'll simulate an API call with a timeout
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Create user object with data to be stored
+                // Create user object with the required data for registration
                 const userData = {
-                    username: this.username,
+                    loginName: this.username,
                     email: this.email,
-                    // In a real application, the password would be encrypted on the server
-                    // For now we're just simulating the process
-                    id: Date.now(),
-                    isAuthenticated: true,
-                    createdAt: new Date().toISOString()
+                    password: this.password,
+                    // Optional field
+                    fullName: this.fullName // If you have a fullName field in your form
                 };
 
-                // Log the registration (in a real app this would go to the server)
-                console.log('User registered:', userData);
+                // Call the auth service to register the user
+                const response = await authService.register(userData);
 
-                // Store user in the store
-                this.$store.dispatch('initAuth');
-                this.$store.commit('setUser', userData);
+                // Don't automatically log in - just redirect to verification page
+                console.log('User registered successfully:', response);
 
-                // Emit registration success event
-                this.$emit('register-success', userData);
-
-                // Navigate to home or dashboard
-                this.$router.push('/');
+                // Redirect to registration success page
+                this.$router.push({
+                    path: '/registration-success',
+                    query: { email: this.email }
+                });
             } catch (error) {
                 console.error('Registration error:', error);
-                // In a real app, you would handle specific error messages from the API
-                alert(this.$t('register.registrationFailed'));
+
+                // Handle specific error cases
+                if (error.response) {
+                    const { status, data } = error.response;
+
+                    if (status === 409 || status === 400) {
+                        // Check response data for specific error information
+                        const errorMessage = data.message || '';
+                        
+                        // Check if the error is about username
+                        if (errorMessage.toLowerCase().includes('username') || 
+                            (data.field && data.field.toLowerCase() === 'username') ||
+                            errorMessage.toLowerCase().includes('loginname')) {
+                            this.usernameError = this.$t('register.usernameExists') || 'Username already exists';
+                        } 
+                        // Check if the error is about email
+                        else if (errorMessage.toLowerCase().includes('email') || 
+                                (data.field && data.field.toLowerCase() === 'email')) {
+                            this.emailError = this.$t('register.emailExists') || 'Email already exists';
+                        } 
+                        // Generic conflict error
+                        else {
+                            alert(this.$t('register.registrationFailed') || 'Registration failed. Please try again.');
+                        }
+                    } else {
+                        // Generic error handling for other status codes
+                        alert(this.$t('register.registrationFailed') || 'Registration failed. Please try again.');
+                    }
+                } else {
+                    // Network error or unexpected error
+                    alert(this.$t('register.networkError') || 'Network error. Please check your connection and try again.');
+                }
             } finally {
                 this.isSubmitting = false;
             }
         },
-
+        
         changeLocale() {
             // Update locale using your global method
             this.$setLocale(this.selectedLocale);
@@ -266,7 +307,6 @@ export default {
     }
 }
 </script>
-
 
 <style scoped>
 .register-container {

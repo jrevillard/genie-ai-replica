@@ -1,6 +1,17 @@
 // src/i18n/locales/fr.js
 
 export default {
+  verification: {
+    verifying: 'Vérification de votre email...',
+    success: 'Email vérifié avec succès !',
+    failed: 'Échec de la vérification',
+    accountVerified: 'Votre compte a été vérifié avec succès. Vous pouvez maintenant vous connecter à votre compte.',
+    invalidLink: 'Le lien de vérification est invalide ou a expiré.',
+    missingToken: 'Le jeton de vérification est manquant.',
+    generalError: 'Une erreur s\'est produite lors de la vérification. Veuillez réessayer plus tard.',
+    proceedToLogin: 'Continuer vers la connexion',
+    backToLogin: 'Retour à la connexion'
+  },
   passwordResetConfirm: {
     appTitle: 'Huduma AI',
     resetPassword: 'Créer un nouveau mot de passe',
@@ -62,7 +73,24 @@ export default {
     passwordRequirements: "Le mot de passe doit comporter au moins 8 caractères avec au moins 1 chiffre et 1 lettre majuscule",
     passwordsDoNotMatch: "Les mots de passe ne correspondent pas",
     mustAcceptTerms: "Vous devez accepter les conditions d'utilisation",
-    registrationFailed: "L'inscription a échoué. Veuillez réessayer."
+    registrationFailed: "L'inscription a échoué. Veuillez réessayer.",
+    usernameExists: "Ce nom d'utilisateur existe déjà",
+    emailExists: "Cette adresse email existe déjà",
+    registrationSuccess: "Inscription réussie !",
+    verificationEmailSent: "Un email de vérification a été envoyé à {email}",
+    checkEmailInstructions: "Veuillez vérifier votre email et suivre les instructions pour valider votre compte avant de vous connecter.",
+    backToLogin: "Retour à la connexion",
+    noEmailReceived: "Vous n'avez pas reçu d'email ?",
+    resendVerification: "Renvoyer l'email de vérification",
+    verificationResent: "L'email de vérification a été renvoyé",
+    verificationResendFailed: "Échec du renvoi de l'email de vérification. Veuillez réessayer.",
+    usernameExists: "Ce nom d'utilisateur existe déjà",
+    emailExists: "Cette adresse email existe déjà",
+    usernameInvalidChars: 'Le nom d\'utilisateur ne peut contenir que des lettres, des chiffres, des traits de soulignement, des points et des traits d\'union',
+    networkError: 'Erreur réseau. Veuillez vérifier votre connexion et réessayer.',
+    registrationFailed: 'L\'inscription a échoué. Veuillez réessayer.',
+    usernameExists: 'Ce nom d\'utilisateur existe déjà',
+    emailExists: 'Cet email existe déjà'
   },
   // Login section
   login: {

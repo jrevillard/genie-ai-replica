@@ -1,5 +1,4 @@
 // src/services/authService.js
-
 import httpService from './httpService';
 import crypto from 'crypto';
 
@@ -25,23 +24,25 @@ class AuthService {
     try {
       // Hash the password client-side before sending
       const encPassword = this.hashPassword(password);
-      
+
       const response = await httpService.post(`${this.authEndpoint}/login`, {
         loginName,
         encPassword
       });
-      
+
       if (response.data && response.data.accessToken) {
         this.setUserData(response.data);
       }
-      
+
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
     }
   }
-  
+
+  // Updated register method for authService.js
+
   /**
    * Register a new user
    * @param {Object} userData User registration data
@@ -53,32 +54,35 @@ class AuthService {
    */
   async register(userData) {
     try {
-      // Create payload with hashed password
+      // Hash the password before sending (same as done in login method)
+      const encPassword = this.hashPassword(userData.password);
+
+      // Create the request payload with the expected field names
       const payload = {
         loginName: userData.loginName,
         email: userData.email,
-        encPassword: this.hashPassword(userData.password)
+        encPassword: encPassword // Use the hashed password with the field name server expects
       };
-      
-      // Add optional fields if provided
+
+      // Add optional fields if they exist
       if (userData.fullName) {
         payload.fullName = userData.fullName;
       }
-      
+
+      // Make the API request with the correctly formatted payload
       const response = await httpService.post(`${this.authEndpoint}/register`, payload);
-      
-      // If registration includes auto login, store token
-      if (response.data && response.data.accessToken) {
-        this.setUserData(response.data);
-      }
-      
+
+      // Important: Do NOT set authentication tokens or user data here
+      // The user should not be considered logged in after registration
+      // until they verify their email
+
       return response.data;
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
     }
   }
-  
+
   /**
    * Log out the user
    * @returns {Promise} Promise with logout result
@@ -87,22 +91,22 @@ class AuthService {
     try {
       // Call the server to invalidate the token
       const response = await httpService.post(`${this.authEndpoint}/logout`);
-      
+
       // Remove user data from local storage regardless of server response
       this.clearUserData();
-      
+
       return response.data;
     } catch (error) {
       console.error('Logout error:', error);
-      
+
       // Even if the server request fails, clear local user data
       this.clearUserData();
-      
+
       // Re-throw the error so the UI can handle it
       throw error;
     }
   }
-  
+
   /**
    * Get the currently authenticated user from the server
    * @returns {Promise} Promise with current user data
@@ -116,7 +120,7 @@ class AuthService {
       throw error;
     }
   }
-  
+
   /**
    * Get the currently authenticated user from local storage
    * @returns {Object|null} The user data or null if not authenticated
@@ -125,14 +129,14 @@ class AuthService {
     try {
       const userStr = localStorage.getItem(this.tokenKey);
       if (!userStr) return null;
-      
+
       return JSON.parse(userStr);
     } catch (e) {
       console.error('Error parsing user data:', e);
       return null;
     }
   }
-  
+
   /**
    * Check if user is authenticated
    * @returns {boolean} True if authenticated, false otherwise
@@ -141,7 +145,7 @@ class AuthService {
     const user = this.getCurrentUser();
     return !!user && !!user.accessToken;
   }
-  
+
   /**
    * Set user data in local storage
    * @param {Object} userData User data with accessToken
@@ -150,7 +154,7 @@ class AuthService {
   setUserData(userData) {
     localStorage.setItem(this.tokenKey, JSON.stringify(userData));
   }
-  
+
   /**
    * Clear user data from local storage
    * @private
@@ -158,7 +162,7 @@ class AuthService {
   clearUserData() {
     localStorage.removeItem(this.tokenKey);
   }
-  
+
   /**
    * Hash a password using SHA-256
    * Note: This is done for demonstration. In production, HTTPS should be used
@@ -172,7 +176,7 @@ class AuthService {
       .update(password)
       .digest('hex');
   }
-  
+
   /**
    * Initiate password reset process
    * @param {string} email User's email address
@@ -213,12 +217,12 @@ class AuthService {
     try {
       // Hash the new password before sending
       const encPassword = this.hashPassword(newPassword);
-      
+
       const response = await httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
         token,
         newPassword: encPassword
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Password reset error:', error);
@@ -237,15 +241,47 @@ class AuthService {
       // Hash both passwords before sending
       const encCurrentPassword = this.hashPassword(currentPassword);
       const encNewPassword = this.hashPassword(newPassword);
-      
+
       const response = await httpService.post(`${this.authEndpoint}/change-password`, {
         currentPassword: encCurrentPassword,
         newPassword: encNewPassword
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Password change error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify email with token
+   * @param {string} token Verification token from email
+   * @returns {Promise} Promise with verification result
+   */
+  async verifyEmail(token) {
+    try {
+      // Use httpService instead of api
+      const response = await httpService.post(`${this.authEndpoint}/verify-email`, { token });
+      return response.data;
+    } catch (error) {
+      console.error('Email verification error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resend verification email
+   * @param {string} email User's email address
+   * @returns {Promise} Promise with resend result
+   */
+  async resendVerificationEmail(email) {
+    try {
+      // Use httpService instead of api
+      const response = await httpService.post(`${this.authEndpoint}/resend-verification`, { email });
+      return response.data;
+    } catch (error) {
+      console.error('Resend verification error:', error);
       throw error;
     }
   }

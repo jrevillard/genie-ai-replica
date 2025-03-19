@@ -124,6 +124,56 @@ router.get('/me', authMiddleware.authenticate, authController.getCurrentUser);
 
 /**
  * @swagger
+ * /auth/verify-email/{token}:
+ *   get:
+ *     summary: Verify email
+ *     description: Verify user's email address using token
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: path
+ *         name: token
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Email verification token
+ *     responses:
+ *       302:
+ *         description: Redirects to login page with verification status
+ */
+router.get('/verify-email/:token', authController.verifyEmail);
+
+/**
+ * @swagger
+ * /auth/resend-verification:
+ *   post:
+ *     summary: Resend verification email
+ *     description: Resend verification email to user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User's email address
+ *     responses:
+ *       200:
+ *         description: Verification email sent if user exists
+ *       400:
+ *         description: Missing email
+ *       500:
+ *         description: Failed to send verification email
+ */
+router.post('/resend-verification', authController.resendVerificationEmail);
+
+/**
+ * @swagger
  * /auth/reset-password:
  *   post:
  *     summary: Initiate password reset

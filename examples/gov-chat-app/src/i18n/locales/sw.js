@@ -1,6 +1,17 @@
 // src/i18n/locales/sw.js
 
 export default {
+  verification: {
+    verifying: 'Inathibitisha barua pepe yako...',
+    success: 'Barua pepe Imethibitishwa Kikamilifu!',
+    failed: 'Uthibitishaji Umeshindwa',
+    accountVerified: 'Akaunti yako imethibitishwa kikamilifu. Sasa unaweza kuingia kwenye akaunti yako.',
+    invalidLink: 'Kiungo cha uthibitishaji ni batili au kimeisha muda wake.',
+    missingToken: 'Tokeni ya uthibitishaji inakosekana.',
+    generalError: 'Hitilafu ilitokea wakati wa uthibitishaji. Tafadhali jaribu tena baadaye.',
+    proceedToLogin: 'Endelea kwa Kuingia',
+    backToLogin: 'Rudi kwa Kuingia'
+  },
   passwordResetConfirm: {
     appTitle: 'Huduma AI',
     resetPassword: 'Tengeneza Nenosiri Mpya',
@@ -61,7 +72,24 @@ export default {
     passwordRequirements: "Nenosiri lazima liwe na angalau herufi 8 na angalau namba 1 na herufi kubwa 1",
     passwordsDoNotMatch: "Nenosiri hazilingani",
     mustAcceptTerms: "Lazima ukubali Masharti ya Huduma",
-    registrationFailed: "Usajili umeshindwa. Tafadhali jaribu tena."
+    registrationFailed: "Usajili umeshindwa. Tafadhali jaribu tena.",
+    usernameExists: "Jina la mtumiaji tayari lipo",
+    emailExists: "Barua pepe tayari ipo",
+    registrationSuccess: "Usajili Umefanikiwa!",
+    verificationEmailSent: "Barua pepe ya uthibitisho imetumwa kwa {email}",
+    checkEmailInstructions: "Tafadhali angalia barua pepe yako na fuata maagizo ili kuthibitisha akaunti yako kabla ya kuingia.",
+    backToLogin: "Rudi kwa Kuingia",
+    noEmailReceived: "Hujapokea barua pepe?",
+    resendVerification: "Tuma tena barua pepe ya uthibitisho",
+    verificationResent: "Barua pepe ya uthibitisho imetumwa tena",
+    verificationResendFailed: "Imeshindwa kutuma tena barua pepe ya uthibitisho. Tafadhali jaribu tena.",
+    usernameExists: "Jina la mtumiaji tayari lipo",
+    emailExists: "Barua pepe tayari ipo",
+    usernameInvalidChars: 'Jina la mtumiaji linaweza kuwa na herufi, nambari, alama za chini, madoti na hyphen pekee',
+    networkError: 'Hitilafu ya mtandao. Tafadhali angalia muunganisho wako na ujaribu tena.',
+    registrationFailed: 'Usajili umeshindwa. Tafadhali jaribu tena.',
+    usernameExists: 'Jina la mtumiaji lipo tayari',
+    emailExists: 'Barua pepe ipo tayari'
   },
   login: {
     appTitle: 'Huduma AI',

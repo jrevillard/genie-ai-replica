@@ -1,11 +1,11 @@
 <!-- App.vue -->
 <template>
   <div id="app" :class="{ 'sidebar-collapsed': !isSidebarOpen }" :data-theme="theme">
-    <!-- Always show router-view for non-authenticated routes -->
-    <router-view v-if="!isAuthenticated" @login-success="handleLoginSuccess" :theme="theme" />
+    <!-- Always show public routes without authentication requirement -->
+    <router-view v-if="$route.meta.requiresAuth === false" :theme="theme" />
 
-    <!-- Only show main app when authenticated -->
-    <template v-else>
+    <!-- Only show main app when authenticated and route requires auth -->
+    <template v-else-if="isAuthenticated">
       <!-- Top navigation bar -->
       <nav-bar-component :is-sidebar-open="isSidebarOpen" @toggleSidebar="toggleSidebar"
         @openAnalytics="showAnalytics = true" @openProfile="showUserProfile = true" @openSettings="showSettings = true"
@@ -28,6 +28,9 @@
 
       <settings-component v-if="showSettings" @close="showSettings = false" @themeChanged="handleThemeChange" />
     </template>
+
+    <!-- Show login screen if not authenticated and route requires auth -->
+    <login-screen v-else @login-success="handleLoginSuccess" :theme="theme" />
   </div>
 </template>
 

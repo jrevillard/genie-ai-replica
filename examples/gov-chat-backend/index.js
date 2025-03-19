@@ -1,3 +1,4 @@
+// index.js (Updated with Auth Routes)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -46,6 +47,19 @@ const swaggerOptions = {
             _key: {
               type: 'string',
               description: 'Unique identifier'
+            },
+            loginName: {
+              type: 'string',
+              description: 'Username for authentication'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              description: 'User email address' 
+            },
+            accessToken: {
+              type: 'string',
+              description: 'JWT access token'
             },
             personalIdentification: {
               type: 'object',
@@ -120,6 +134,17 @@ const swaggerOptions = {
             lastActiveTime: { type: 'string', format: 'date-time' }
           }
         },
+        PasswordResetToken: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string' },
+            userId: { type: 'string' },
+            token: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            expiresAt: { type: 'string', format: 'date-time' },
+            used: { type: 'boolean' }
+          }
+        },
         Analytics: {
           type: 'object',
           properties: {
@@ -152,6 +177,13 @@ const swaggerOptions = {
               items: { type: 'string' }
             }
           }
+        }
+      },
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
         }
       }
     }
@@ -197,7 +229,8 @@ const routeFiles = [
   'service-routes', 
   'analytics-routes', 
   'session-routes',
-  'service-category-routes' // Add the new route file
+  'service-category-routes',
+  'auth-routes' // Added auth routes
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -214,6 +247,7 @@ if (routes['service-routes']) app.use('/api/services', routes['service-routes'])
 if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
 if (routes['session-routes']) app.use('/api/sessions', routes['session-routes']);
 if (routes['service-category-routes']) app.use('/api/service-categories', routes['service-category-routes']);
+if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']); // Added auth routes
 
 // Root route
 app.get('/', (req, res) => {

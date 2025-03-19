@@ -1,58 +1,80 @@
 // src/store/modules/auth.js
-export default {
-  state: () => ({
-    user: null,
-    isAuthenticated: false
-  }),
+// Update your Vuex store auth module to integrate with userService
+
+import userService from '@/services/userService'
+
+const state = {
+  user: null,
+  isInitialized: false
+}
+
+const getters = {
+  isAuthenticated: state => !!state.user,
+  currentUser: state => state.user
+}
+
+const actions = {
+  // Initialize authentication state from localStorage
+  initAuth({ commit }) {
+    const user = userService.getCurrentUser()
+    
+    if (user) {
+      commit('setUser', user)
+    } else {
+      commit('clearUser')
+    }
+    
+    commit('setInitialized')
+  },
   
-  getters: {
-    currentUser: state => state.user,
-    isAuthenticated: state => state.isAuthenticated,
-    userInitials: state => {
-      if (!state.user || !state.user.name) return '?';
-      return state.user.name
-        .split(' ')
-        .map(name => name.charAt(0))
-        .join('')
-        .toUpperCase();
+  // Perform login
+  async login({ commit }, { username, password }) {
+    try {
+      const userData = await userService.login(username, password)
+      commit('setUser', userData)
+      return userData
+    } catch (error) {
+      console.error('Login error:', error)
+      throw error
     }
   },
   
-  mutations: {
-    setUser(state, userData) {
-      state.user = userData;
-      state.isAuthenticated = Boolean(userData);
-    },
-    
-    logout(state) {
-      state.user = null;
-      state.isAuthenticated = false;
+  // Perform logout
+  async logout({ commit }) {
+    try {
+      await userService.logout()
+      commit('clearUser')
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Still clear the user from the store even if the API call fails
+      commit('clearUser')
+      throw error
     }
   },
   
-  actions: {
-    initAuth({ commit }) {
-      // Check if user is already logged in from localStorage
-      try {
-        const userData = localStorage.getItem('userData');
-        if (userData) {
-          commit('setUser', JSON.parse(userData));
-        }
-      } catch (e) {
-        console.warn('Unable to retrieve user data:', e);
-      }
-    },
-    
-    logout({ commit }) {
-      // Remove user data from localStorage
-      try {
-        localStorage.removeItem('userData');
-      } catch (e) {
-        console.warn('Unable to clear user data:', e);
-      }
-      
-      // Update state
-      commit('logout');
-    }
+  // Update user profile
+  updateUser({ commit }, userData) {
+    commit('setUser', userData)
   }
-};
+}
+
+const mutations = {
+  setUser(state, user) {
+    state.user = user
+  },
+  
+  clearUser(state) {
+    state.user = null
+  },
+  
+  setInitialized(state) {
+    state.isInitialized = true
+  }
+}
+
+export default {
+  state,
+  getters,
+  actions,
+  mutations
+}

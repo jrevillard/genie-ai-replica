@@ -17,23 +17,22 @@ class AuthService {
 
   /**
    * Authenticate user with username and password
-   * @param {string} username The username
+   * @param {string} loginName The username or email
    * @param {string} password The password
    * @returns {Promise} Promise with user data or error
    */
-  async login(username, password) {
+  async login(loginName, password) {
     try {
-      // In a real app, you would hash the password client-side 
-      // before sending it over the network
-      const hashedPassword = this.hashPassword(password);
+      // Hash the password client-side before sending
+      const encPassword = this.hashPassword(password);
       
       const response = await httpService.post(`${this.authEndpoint}/login`, {
-        loginName: username,
-        encPassword: hashedPassword
+        loginName,
+        encPassword
       });
       
-      if (response.data.accessToken) {
-        localStorage.setItem(this.tokenKey, JSON.stringify(response.data));
+      if (response.data && response.data.accessToken) {
+        this.setUserData(response.data);
       }
       
       return response.data;
@@ -45,25 +44,32 @@ class AuthService {
   
   /**
    * Register a new user
-   * @param {string} username The username
-   * @param {string} email The email
-   * @param {string} password The password
+   * @param {Object} userData User registration data
+   * @param {string} userData.loginName Username
+   * @param {string} userData.email Email address
+   * @param {string} userData.password Password (will be hashed)
+   * @param {string} [userData.fullName] Full name (optional)
    * @returns {Promise} Promise with registration result or error
    */
-  async register(username, email, password) {
+  async register(userData) {
     try {
-      // Hash password before sending to server
-      const hashedPassword = this.hashPassword(password);
+      // Create payload with hashed password
+      const payload = {
+        loginName: userData.loginName,
+        email: userData.email,
+        encPassword: this.hashPassword(userData.password)
+      };
       
-      const response = await httpService.post(`${this.authEndpoint}/register`, {
-        loginName: username,
-        email: email,
-        encPassword: hashedPassword
-      });
+      // Add optional fields if provided
+      if (userData.fullName) {
+        payload.fullName = userData.fullName;
+      }
+      
+      const response = await httpService.post(`${this.authEndpoint}/register`, payload);
       
       // If registration includes auto login, store token
-      if (response.data.accessToken) {
-        localStorage.setItem(this.tokenKey, JSON.stringify(response.data));
+      if (response.data && response.data.accessToken) {
+        this.setUserData(response.data);
       }
       
       return response.data;
@@ -75,27 +81,51 @@ class AuthService {
   
   /**
    * Log out the user
+   * @returns {Promise} Promise with logout result
    */
-  logout() {
-    localStorage.removeItem(this.tokenKey);
-    // Optional: Call backend to invalidate token server-side
+  async logout() {
     try {
-      return httpService.post(`${this.authEndpoint}/logout`);
+      // Call the server to invalidate the token
+      const response = await httpService.post(`${this.authEndpoint}/logout`);
+      
+      // Remove user data from local storage regardless of server response
+      this.clearUserData();
+      
+      return response.data;
     } catch (error) {
       console.error('Logout error:', error);
-      // Continue with client-side logout even if server request fails
+      
+      // Even if the server request fails, clear local user data
+      this.clearUserData();
+      
+      // Re-throw the error so the UI can handle it
+      throw error;
     }
   }
   
   /**
-   * Get the currently authenticated user
+   * Get the currently authenticated user from the server
+   * @returns {Promise} Promise with current user data
+   */
+  async fetchCurrentUser() {
+    try {
+      const response = await httpService.get(`${this.authEndpoint}/me`);
+      return response.data.user;
+    } catch (error) {
+      console.error('Fetch current user error:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get the currently authenticated user from local storage
    * @returns {Object|null} The user data or null if not authenticated
    */
   getCurrentUser() {
-    const userStr = localStorage.getItem(this.tokenKey);
-    if (!userStr) return null;
-    
     try {
+      const userStr = localStorage.getItem(this.tokenKey);
+      if (!userStr) return null;
+      
       return JSON.parse(userStr);
     } catch (e) {
       console.error('Error parsing user data:', e);
@@ -113,41 +143,36 @@ class AuthService {
   }
   
   /**
+   * Set user data in local storage
+   * @param {Object} userData User data with accessToken
+   * @private
+   */
+  setUserData(userData) {
+    localStorage.setItem(this.tokenKey, JSON.stringify(userData));
+  }
+  
+  /**
+   * Clear user data from local storage
+   * @private
+   */
+  clearUserData() {
+    localStorage.removeItem(this.tokenKey);
+  }
+  
+  /**
    * Hash a password using SHA-256
-   * Note: In a production app, you'd use a more secure method with proper salting
-   * This is just for demonstration purposes
+   * Note: This is done for demonstration. In production, HTTPS should be used
+   * rather than client-side hashing, or a more secure method should be employed.
    * @param {string} password The password to hash
    * @returns {string} The hashed password
    */
   hashPassword(password) {
-    // In a real app, you would use a proper password hashing library
-    // This is a simple hash for demonstration
     return crypto
       .createHash('sha256')
       .update(password)
       .digest('hex');
   }
   
-  /**
-   * Handle social login (Google, Facebook)
-   * @param {string} provider The provider (google, facebook)
-   * @returns {Promise} Promise with login result
-   */
-  async socialLogin(provider) {
-    try {
-      const response = await httpService.get(`${this.authEndpoint}/${provider}`);
-      
-      if (response.data.accessToken) {
-        localStorage.setItem(this.tokenKey, JSON.stringify(response.data));
-      }
-      
-      return response.data;
-    } catch (error) {
-      console.error(`${provider} login error:`, error);
-      throw error;
-    }
-  }
-
   /**
    * Initiate password reset process
    * @param {string} email User's email address
@@ -181,17 +206,17 @@ class AuthService {
   /**
    * Reset password with token
    * @param {string} token Reset token from email
-   * @param {string} newPassword New password
+   * @param {string} newPassword New password (will be hashed)
    * @returns {Promise} Promise with password reset result
    */
   async resetPassword(token, newPassword) {
     try {
       // Hash the new password before sending
-      const hashedPassword = this.hashPassword(newPassword);
+      const encPassword = this.hashPassword(newPassword);
       
       const response = await httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
         token,
-        newPassword: hashedPassword
+        newPassword: encPassword
       });
       
       return response.data;
@@ -203,59 +228,24 @@ class AuthService {
 
   /**
    * Change password for authenticated user
-   * @param {string} currentPassword Current password
-   * @param {string} newPassword New password
+   * @param {string} currentPassword Current password (will be hashed)
+   * @param {string} newPassword New password (will be hashed)
    * @returns {Promise} Promise with password change result
    */
   async changePassword(currentPassword, newPassword) {
     try {
       // Hash both passwords before sending
-      const hashedCurrentPassword = this.hashPassword(currentPassword);
-      const hashedNewPassword = this.hashPassword(newPassword);
+      const encCurrentPassword = this.hashPassword(currentPassword);
+      const encNewPassword = this.hashPassword(newPassword);
       
       const response = await httpService.post(`${this.authEndpoint}/change-password`, {
-        currentPassword: hashedCurrentPassword,
-        newPassword: hashedNewPassword
+        currentPassword: encCurrentPassword,
+        newPassword: encNewPassword
       });
       
       return response.data;
     } catch (error) {
       console.error('Password change error:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Refresh the authentication token
-   * @returns {Promise} Promise with new token
-   */
-  async refreshToken() {
-    try {
-      const user = this.getCurrentUser();
-      if (!user || !user.refreshToken) {
-        throw new Error('No refresh token available');
-      }
-      
-      const response = await httpService.post(`${this.authEndpoint}/refresh-token`, {
-        refreshToken: user.refreshToken
-      });
-      
-      if (response.data.accessToken) {
-        // Update stored user data with new tokens
-        const updatedUser = {
-          ...user,
-          accessToken: response.data.accessToken,
-          refreshToken: response.data.refreshToken || user.refreshToken
-        };
-        
-        localStorage.setItem(this.tokenKey, JSON.stringify(updatedUser));
-      }
-      
-      return response.data;
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      // If token refresh fails, log out the user
-      this.logout();
       throw error;
     }
   }

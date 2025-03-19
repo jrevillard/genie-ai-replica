@@ -1,8 +1,8 @@
 // verify-integration.js
 // Run this script to verify the integration between query service and analytics service
 require('dotenv').config();
-const QueryService = require('./services/query-service');
-const AnalyticsService = require('./services/analytics-service');
+const QueryService = require('../services/query-service');
+const AnalyticsService = require('../services/analytics-service');
 
 async function verifyIntegration() {
   try {

@@ -83,7 +83,14 @@ export default {
     createAccount: 'Create account',
     termsAndPolicy: 'By logging in, you agree to our Terms of Service and Privacy Policy',
     noAccount: "Don't have an account?",
-    registerNow: "Register now"
+    registerNow: "Register now",
+    loggingIn: "Logging in...",
+    fieldsRequired: "Username and password are required",
+    invalidCredentials: "Invalid username or password",
+    tooManyAttempts: "Too many login attempts. Please try again later.",
+    loginFailed: "Login failed. Please try again.",
+    oauthNotImplemented: "Social login is not yet implemented",
+    savedLoginNotImplemented: "Saved account login is not yet implemented"
   },
   charts: {
     tooltip: {

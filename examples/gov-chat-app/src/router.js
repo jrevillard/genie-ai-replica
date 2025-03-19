@@ -6,6 +6,7 @@ import RegisterScreen from '@/components/RegisterScreen.vue'
 import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue'
 import PasswordResetConfirmScreen from '@/components/PasswordResetConfirmScreen.vue'
 import store from '@/store'
+import userService from '@/services/userService' // Import userService
 
 import UserProfileComponent from '@/components/UserProfileComponent.vue'
 import UnifiedAnalytics from '@/components/UnifiedAnalytics.vue'
@@ -59,14 +60,20 @@ const routes = [
     path: '/',
     name: 'Root',
     redirect: to => {
-      return store.getters.isAuthenticated ? '/dashboard' : '/login'
+      // Use both store and userService to check authentication
+      return (store.getters.isAuthenticated || userService.isAuthenticated()) 
+        ? '/dashboard' 
+        : '/login'
     }
   },
   // catch-all -> login if not authenticated, otherwise dashboard
   {
     path: '/:pathMatch(.*)*',
     redirect: to => {
-      return store.getters.isAuthenticated ? '/dashboard' : '/login'
+      // Use both store and userService to check authentication
+      return (store.getters.isAuthenticated || userService.isAuthenticated()) 
+        ? '/dashboard' 
+        : '/login'
     }
   }
 ]
@@ -81,17 +88,30 @@ router.beforeEach((to, from, next) => {
   // Initialize authentication if not already done
   if (store.state.auth && store.state.auth.user === null) {
     store.dispatch('initAuth')
+    
+    // If userService has authentication but store doesn't, sync them
+    if (userService.isAuthenticated()) {
+      const userData = userService.getCurrentUser();
+      store.commit('setUser', userData);
+    }
   }
   
-  // Check if the user is authenticated
-  const isAuthenticated = store.getters.isAuthenticated
+  // Check if the user is authenticated (check both store and userService)
+  const isAuthenticated = store.getters.isAuthenticated || userService.isAuthenticated()
   
   // Check if the route requires authentication
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
   
   if (requiresAuth && !isAuthenticated) {
     // Route requires auth but user is not authenticated
-    next({ name: 'Login' })
+    // Redirect to login with error message and save intended destination
+    next({ 
+      name: 'Login',
+      query: { 
+        redirect: to.fullPath,
+        error: 'Please log in to access this page' 
+      }
+    })
   } else if ((to.path === '/login' || to.path === '/register' || to.path === '/forgot-password') && isAuthenticated) {
     // User is authenticated but trying to access login, register, or forgot password page
     next({ name: 'Dashboard' })

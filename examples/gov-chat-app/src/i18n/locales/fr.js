@@ -82,7 +82,14 @@ export default {
     createAccount: 'Créer un compte',
     termsAndPolicy: 'En vous connectant, vous acceptez nos Conditions d\'Utilisation et notre Politique de Confidentialité',
     noAccount: "Vous n'avez pas de compte?",
-    registerNow: "Inscrivez-vous"
+    registerNow: "Inscrivez-vous",
+    loggingIn: "Connexion en cours...",
+    fieldsRequired: "Nom d'utilisateur et mot de passe requis",
+    invalidCredentials: "Nom d'utilisateur ou mot de passe invalide",
+    tooManyAttempts: "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
+    loginFailed: "Échec de la connexion. Veuillez réessayer.",
+    oauthNotImplemented: "La connexion sociale n'est pas encore implémentée",
+    savedLoginNotImplemented: "La connexion avec compte enregistré n'est pas encore implémentée"
   },
   charts: {
     tooltip: {

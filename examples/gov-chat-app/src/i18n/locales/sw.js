@@ -80,7 +80,14 @@ export default {
     createAccount: 'Fungua akaunti',
     termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha',
     noAccount: "Huna akaunti?",
-    registerNow: "Jiandikishe sasa"
+    registerNow: "Jiandikishe sasa",
+    loggingIn: "Inaingia...",
+    fieldsRequired: "Jina la mtumiaji na nenosiri zinahitajika",
+    invalidCredentials: "Jina la mtumiaji au nenosiri batili",
+    tooManyAttempts: "Majaribio mengi ya kuingia. Tafadhali jaribu tena baadaye.",
+    loginFailed: "Kuingia kumeshindwa. Tafadhali jaribu tena.",
+    oauthNotImplemented: "Kuingia kwa mitandao ya kijamii bado haijatekelezwa",
+    savedLoginNotImplemented: "Kuingia kwa akaunti iliyohifadhiwa bado haijatekelezwa"
   },
   charts: {
     tooltip: {

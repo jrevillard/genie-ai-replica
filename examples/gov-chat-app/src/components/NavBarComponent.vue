@@ -5,12 +5,8 @@
       <!-- Left section with hamburger menu, logo, and title -->
       <div class="nav-left">
         <!-- Existing code for hamburger menu, logo, and title -->
-        <button 
-          class="icon-btn hamburger-btn" 
-          @click="toggleSidebar"
-          :class="{ 'is-active': isSidebarOpen }"
-          aria-label="Toggle sidebar"
-        >
+        <button class="icon-btn hamburger-btn" @click="toggleSidebar" :class="{ 'is-active': isSidebarOpen }"
+          aria-label="Toggle sidebar">
           <span class="hamburger-inner"></span>
         </button>
 
@@ -27,55 +23,53 @@
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
-            
+
             <!-- Background circle -->
             <circle cx="50" cy="50" r="30" fill="#f0f9ff" class="logo-base" />
-            
+
             <!-- Building base -->
             <rect x="25" y="65" width="50" height="5" fill="#2C5F8A" class="logo-steps" />
-            
+
             <!-- Steps -->
             <rect x="30" y="60" width="40" height="5" fill="#3A7DA0" class="logo-steps" />
             <rect x="35" y="55" width="30" height="5" fill="#4E97D1" class="logo-steps" />
-            
+
             <!-- Pillars -->
             <rect x="38" y="30" width="6" height="25" fill="#2C5F8A" class="logo-pillars" />
             <rect x="47" y="30" width="6" height="25" fill="#3A7DA0" class="logo-pillars" />
             <rect x="56" y="30" width="6" height="25" fill="#2C5F8A" class="logo-pillars" />
-            
+
             <!-- Roof/Pediment -->
             <path d="M32 30 L68 30 L50 18 Z" fill="#4E97D1" class="logo-roof" />
-            
+
             <!-- Star symbolizing service -->
             <g class="logo-star" filter="url(#glow)">
               <path d="M50 12 L52 17 L58 17 L53 21 L55 26 L50 22 L45 26 L47 21 L42 17 L48 17 Z" fill="#FFD700" />
             </g>
-            
+
             <!-- Glow effect -->
-            <circle cx="50" cy="50" r="31" fill="none" stroke="#4E97D1" stroke-width="1.5" opacity="0.5" class="logo-glow" />
-            
+            <circle cx="50" cy="50" r="31" fill="none" stroke="#4E97D1" stroke-width="1.5" opacity="0.5"
+              class="logo-glow" />
+
             <!-- Animated outline -->
-            <path d="M32 30 L68 30 L50 18 Z M38 30 L38 55 M47 30 L47 55 M56 30 L56 55" 
-                  fill="none" stroke="white" stroke-width="1.2" class="logo-outline" />
+            <path d="M32 30 L68 30 L50 18 Z M38 30 L38 55 M47 30 L47 55 M56 30 L56 55" fill="none" stroke="white"
+              stroke-width="1.2" class="logo-outline" />
           </svg>
-        </div>        
+        </div>
         <!-- Title moved to left, adjacent to logo - Hide on mobile -->
         <h1 class="brand-name hide-on-mobile">{{ $t('brandName') }}</h1>
-        
+
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
           <!-- Existing mobile controls code -->
           <!-- Status Indicator for Mobile -->
           <div class="status-indicator-container" ref="mobileStatusContainer">
-            <button 
-              class="status-indicator-btn mobile-status-btn" 
-              @click="toggleStatusDropdown"
-              aria-label="System Status"
-            >
+            <button class="status-indicator-btn mobile-status-btn" @click="toggleStatusDropdown"
+              aria-label="System Status">
               <span class="status-dot" :class="getStatusDotClass"></span>
               <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
             </button>
-            
+
             <!-- Status Dropdown (shared with desktop version) -->
             <div v-if="isStatusDropdownOpen" class="status-dropdown">
               <!-- Existing dropdown content -->
@@ -85,7 +79,7 @@
                   <span>{{ totalServices }} {{ $t('systemStatus.services') }}</span>
                 </div>
               </div>
-              
+
               <div class="status-counts">
                 <div class="status-count-item">
                   <span class="status-dot status-operational"></span>
@@ -103,20 +97,17 @@
                   <span class="status-value">{{ outageCount }}</span>
                 </div>
               </div>
-              
+
               <div v-if="nextDeadline" class="next-deadline">
                 <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
                 <div class="deadline-info">
                   <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                  <span 
-                    class="deadline-days"
-                    :class="{'urgent': nextDeadline.daysRemaining < 7}"
-                  >
+                  <span class="deadline-days" :class="{ 'urgent': nextDeadline.daysRemaining < 7 }">
                     {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
                   </span>
                 </div>
               </div>
-              
+
               <div class="status-footer">
                 <a href="#" @click.prevent="viewStatusPage">
                   {{ $t('systemStatus.viewDetails') }}
@@ -124,66 +115,51 @@
               </div>
             </div>
           </div>
-          
+
           <!-- Language Selector for Mobile -->
           <div class="language-select-container mobile-language-select">
-            <select 
-              v-model="currentLocale" 
-              @change="changeLocale" 
-              aria-label="Change language"
-              class="language-select"
-            >
+            <select v-model="currentLocale" @change="changeLocale" aria-label="Change language" class="language-select">
               <option value="en">EN</option>
               <option value="fr">FR</option>
               <option value="sw">SW</option>
             </select>
             <div class="select-arrow"></div>
           </div>
-          
+
           <!-- Other mobile controls -->
-          <button 
-            class="icon-btn mobile-btn" 
-            @click="$emit('openAnalytics')"
-            aria-label="Analytics"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="icon-btn mobile-btn" @click="$emit('openAnalytics')" aria-label="Analytics">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
               <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
             </svg>
             <span class="tooltip">{{ $t('nav.analytics') }}</span>
           </button>
-          
-          <button 
-            class="icon-btn mobile-btn"
-            @click="$emit('openSettings')"
-            aria-label="Settings"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+          <button class="icon-btn mobile-btn" @click="$emit('openSettings')" aria-label="Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              </path>
             </svg>
             <span class="tooltip">{{ $t('nav.settings') }}</span>
           </button>
-          
-          <button 
-            class="icon-btn user-btn mobile-btn" 
-            @click="$emit('openProfile')"
-            aria-label="User profile"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+          <button class="icon-btn user-btn mobile-btn" @click="$emit('openProfile')" aria-label="User profile">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
             <span class="tooltip">{{ $t('nav.userProfile') }}</span>
           </button>
-          
+
           <!-- ADDED: Logout button for mobile -->
-          <button 
-            class="icon-btn logout-btn mobile-btn" 
-            @click="handleLogout"
-            aria-label="Log out"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="icon-btn logout-btn mobile-btn" @click="handleLogout" aria-label="Log out">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -192,21 +168,17 @@
           </button>
         </div>
       </div>
-      
+
       <!-- Main navbar area with status - Only visible on desktop -->
       <div class="nav-main desktop-only">
         <!-- Status Indicator -->
         <div class="status-indicator-container" ref="statusContainer">
-          <button 
-            class="status-indicator-btn" 
-            @click="toggleStatusDropdown"
-            aria-label="System Status"
-          >
+          <button class="status-indicator-btn" @click="toggleStatusDropdown" aria-label="System Status">
             <span class="status-dot" :class="getStatusDotClass"></span>
             <span class="status-text">{{ statusText }}</span>
             <span class="tooltip">{{ $t('nav.systemStatus') }}</span>
           </button>
-          
+
           <!-- Status Dropdown -->
           <div v-if="isStatusDropdownOpen" class="status-dropdown">
             <!-- Existing dropdown content -->
@@ -216,7 +188,7 @@
                 <span>{{ totalServices }} {{ $t('systemStatus.services') }}</span>
               </div>
             </div>
-            
+
             <div class="status-counts">
               <div class="status-count-item">
                 <span class="status-dot status-operational"></span>
@@ -234,20 +206,17 @@
                 <span class="status-value">{{ outageCount }}</span>
               </div>
             </div>
-            
+
             <div v-if="nextDeadline" class="next-deadline">
               <h4>{{ $t('systemStatus.nextDeadline') }}</h4>
               <div class="deadline-info">
                 <span class="deadline-title">{{ $t('deadlines.taxFiling') }}</span>
-                <span 
-                  class="deadline-days"
-                  :class="{'urgent': nextDeadline.daysRemaining < 7}"
-                >
+                <span class="deadline-days" :class="{ 'urgent': nextDeadline.daysRemaining < 7 }">
                   {{ nextDeadline.daysRemaining }} {{ $t('systemStatus.days') }}
                 </span>
               </div>
             </div>
-            
+
             <div class="status-footer">
               <a href="#" @click.prevent="viewStatusPage">
                 {{ $t('systemStatus.viewDetails') }}
@@ -260,12 +229,7 @@
       <!-- Right section with language and user controls - Only visible on desktop -->
       <div class="nav-right desktop-only">
         <div class="language-select-container">
-          <select 
-            v-model="currentLocale" 
-            @change="changeLocale" 
-            aria-label="Change language"
-            class="language-select"
-          >
+          <select v-model="currentLocale" @change="changeLocale" aria-label="Change language" class="language-select">
             <option value="en">English</option>
             <option value="fr">Français</option>
             <option value="sw">Kiswahili</option>
@@ -273,49 +237,39 @@
           <div class="select-arrow"></div>
         </div>
 
-        <button 
-          class="icon-btn" 
-          @click="$emit('openAnalytics')"
-          aria-label="Analytics"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn" @click="$emit('openAnalytics')" aria-label="Analytics">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
             <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
           </svg>
           <span class="tooltip">{{ $t('nav.analytics') }}</span>
         </button>
-        
-        <button 
-          class="icon-btn"
-          @click="$emit('openSettings')"
-          aria-label="Settings"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        <button class="icon-btn" @click="$emit('openSettings')" aria-label="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
           </svg>
           <span class="tooltip">{{ $t('nav.settings') }}</span>
         </button>
-        
-        <button 
-          class="icon-btn user-btn" 
-          @click="$emit('openProfile')"
-          aria-label="User profile"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        <button class="icon-btn user-btn" @click="$emit('openProfile')" aria-label="User profile">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
           <span class="tooltip">{{ $t('nav.userProfile') }}</span>
         </button>
-        
+
         <!-- ADDED: Logout button -->
-        <button 
-          class="icon-btn logout-btn" 
-          @click="handleLogout"
-          aria-label="Log out"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="icon-btn logout-btn" @click="handleLogout" aria-label="Log out">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>
             <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -377,7 +331,7 @@ export default {
       return this.systemStatus.services.length;
     },
     getStatusDotClass() {
-      switch(this.systemStatus.overall) {
+      switch (this.systemStatus.overall) {
         case 'operational': return 'status-operational';
         case 'degraded': return 'status-degraded';
         case 'outage': return 'status-outage';
@@ -386,7 +340,7 @@ export default {
     },
     statusText() {
       // Show in user's language
-      switch(this.systemStatus.overall) {
+      switch (this.systemStatus.overall) {
         case 'operational': return this.$t('systemStatus.allOperational');
         case 'degraded': return this.$t('systemStatus.someIssues');
         case 'outage': return this.$t('systemStatus.majorIssues');
@@ -398,13 +352,13 @@ export default {
     // Watch for locale changes and close/reopen dropdown to force refresh
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
-      
+
       // Only do this if the dropdown is open
       if (this.isStatusDropdownOpen) {
         // Briefly close and reopen to force re-render with new translations
         const wasOpen = this.isStatusDropdownOpen;
         this.isStatusDropdownOpen = false;
-        
+
         // Use nextTick to ensure Vue updates the DOM first
         this.$nextTick(() => {
           if (wasOpen) {
@@ -420,7 +374,7 @@ export default {
   mounted() {
     // Close dropdown when clicking outside
     document.addEventListener('click', this.handleClickOutside);
-    
+
     // In a real app, you would fetch the system status from an API here
     // this.fetchSystemStatus();
   },
@@ -428,54 +382,77 @@ export default {
     document.removeEventListener('click', this.handleClickOutside);
   },
   methods: {
-    // ADDED: Logout handler
-    handleLogout() {
-      // Dispatch logout action to store
-      this.$store.dispatch('logout');
-      
-      // Navigate to login page
-      this.$router.push('/login');
-      
-      // Emit logout event for parent components
-      this.$emit('logout');
-    },
-    changeLocale() {
-      // Use the global method defined in main.js if available
-      if (this.$setLocale) {
-        this.$setLocale(this.currentLocale);
-      } else {
-        this.$i18n.locale = this.currentLocale;
-        
-        // Save preference
+  // FIXED: Logout handler that properly handles errors
+  async handleLogout() {
+  try {
+    console.log('Logout started');
+    
+    // Clear local storage first - this is the most important part
+    localStorage.removeItem('user');
+    
+    // Try to call the logout API, but don't await it to prevent navigation issues
+    if (this.$store && this.$store.dispatch) {
+      // Use a timeout to prevent blocking the UI
+      setTimeout(() => {
         try {
-          localStorage.setItem('userLocale', this.currentLocale);
+          this.$store.dispatch('logout').catch(err => console.error('API logout error:', err));
         } catch (e) {
-          console.warn('Unable to save locale preference:', e);
+          console.error('Store dispatch error:', e);
         }
-      }
-    },
-    toggleSidebar() {
-      this.$emit('toggleSidebar')
-    },
-    toggleStatusDropdown() {
-      this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
-    },
-    handleClickOutside(event) {
-      // Handle both desktop and mobile status containers
-      const desktopContainer = this.$refs.statusContainer;
-      const mobileContainer = this.$refs.mobileStatusContainer;
+      }, 0);
+    }
+    
+    // Emit the event before navigation
+    this.$emit('logout');
+    
+    // Navigate using window.location instead of Vue Router for a cleaner break
+    console.log('Redirecting to login page');
+    window.location.href = '/login';
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    
+    // Still clear storage and redirect on error
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  }
+},
+  changeLocale() {
+    // Use the global method defined in main.js if available
+    if (this.$setLocale) {
+      this.$setLocale(this.currentLocale);
+    } else {
+      this.$i18n.locale = this.currentLocale;
       
-      if ((desktopContainer && !desktopContainer.contains(event.target)) && 
-          (mobileContainer && !mobileContainer.contains(event.target))) {
-        this.isStatusDropdownOpen = false;
+      // Save preference
+      try {
+        localStorage.setItem('userLocale', this.currentLocale);
+      } catch (e) {
+        console.warn('Unable to save locale preference:', e);
       }
-    },
-    viewStatusPage() {
-      this.$emit('viewStatusPage');
+    }
+  },
+  toggleSidebar() {
+    this.$emit('toggleSidebar')
+  },
+  toggleStatusDropdown() {
+    this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
+  },
+  handleClickOutside(event) {
+    // Handle both desktop and mobile status containers
+    const desktopContainer = this.$refs.statusContainer;
+    const mobileContainer = this.$refs.mobileStatusContainer;
+    
+    if ((desktopContainer && !desktopContainer.contains(event.target)) && 
+        (mobileContainer && !mobileContainer.contains(event.target))) {
       this.isStatusDropdownOpen = false;
     }
+  },
+  viewStatusPage() {
+    this.$emit('viewStatusPage');
+    this.isStatusDropdownOpen = false;
   }
-}
+}}
 </script>
 
 <style scoped>
@@ -491,7 +468,7 @@ export default {
   color: #fff;
   height: 60px;
   padding: 0 16px;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
   position: relative;
   z-index: 20;
 }
@@ -525,7 +502,7 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.5px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 /* Logo styling and animations - Enhanced */
@@ -544,7 +521,7 @@ export default {
   height: 40px;
   width: 40px;
   color: white;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
   transition: transform 0.3s ease;
 }
 
@@ -554,29 +531,64 @@ export default {
 
 /* Logo animations - More noticeable */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideDown {
-  from { transform: translateY(-10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.08); }
-  100% { opacity: 0.8; transform: scale(1); }
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
 }
 
 @keyframes rotateIn {
-  from { transform: rotate(-15deg); opacity: 0; }
-  to { transform: rotate(0deg); opacity: 1; }
+  from {
+    transform: rotate(-15deg);
+    opacity: 0;
+  }
+
+  to {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
 }
 
 @keyframes shimmer {
-  0% { stroke-dashoffset: 200; }
-  100% { stroke-dashoffset: 0; }
+  0% {
+    stroke-dashoffset: 200;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+  }
 }
 
 .logo-base {
@@ -632,7 +644,7 @@ export default {
   position: relative;
   font-size: 0.85rem;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .status-indicator-btn:hover {
@@ -646,7 +658,7 @@ export default {
   border-radius: 50%;
   margin-right: 8px;
   transition: transform 0.2s ease;
-  box-shadow: 0 0 4px rgba(0,0,0,0.2);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
 .status-indicator-btn:hover .status-dot {
@@ -659,15 +671,18 @@ export default {
 }
 
 .status-operational {
-  background-color: #10b981; /* Green */
+  background-color: #10b981;
+  /* Green */
 }
 
 .status-degraded {
-  background-color: #f59e0b; /* Yellow/Orange */
+  background-color: #f59e0b;
+  /* Yellow/Orange */
 }
 
 .status-outage {
-  background-color: #ef4444; /* Red */
+  background-color: #ef4444;
+  /* Red */
 }
 
 /* Status Dropdown */
@@ -687,8 +702,15 @@ export default {
 }
 
 @keyframes dropdownFadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .status-dropdown-header {
@@ -782,14 +804,16 @@ export default {
 
 .deadline-days {
   font-weight: 600;
-  color: #2563eb; /* Blue */
+  color: #2563eb;
+  /* Blue */
   background: #eef2ff;
   padding: 4px 10px;
   border-radius: 12px;
 }
 
 .deadline-days.urgent {
-  color: #ef4444; /* Red */
+  color: #ef4444;
+  /* Red */
   background: #fee2e2;
 }
 
@@ -830,13 +854,13 @@ export default {
   position: relative;
   transition: all 0.2s ease;
   color: white;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .icon-btn:hover {
   background-color: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
 .icon-btn:active {
@@ -859,7 +883,8 @@ export default {
 }
 
 .logout-btn:hover {
-  background-color: rgba(239, 68, 68, 0.25); /* Subtle red on hover */
+  background-color: rgba(239, 68, 68, 0.25);
+  /* Subtle red on hover */
 }
 
 /* Tooltip styling */
@@ -879,7 +904,7 @@ export default {
   transition: opacity 0.2s, visibility 0.2s;
   pointer-events: none;
   z-index: 40;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .tooltip::before {
@@ -920,7 +945,7 @@ export default {
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .hamburger-btn:hover {
@@ -957,17 +982,20 @@ export default {
 /* Centered X state */
 .hamburger-btn.is-active .hamburger-inner {
   background-color: transparent;
-  transform: translateX(0); /* Ensure centered */
+  transform: translateX(0);
+  /* Ensure centered */
 }
 
 .hamburger-btn.is-active .hamburger-inner::before {
   transform: translateY(5px) rotate(45deg);
-  top: 0; /* Ensure centered */
+  top: 0;
+  /* Ensure centered */
 }
 
 .hamburger-btn.is-active .hamburger-inner::after {
   transform: translateY(-5px) rotate(-45deg);
-  bottom: 0; /* Ensure centered */
+  bottom: 0;
+  /* Ensure centered */
 }
 
 /* Language dropdown styling */
@@ -978,7 +1006,7 @@ export default {
   width: 120px;
   margin-right: 10px;
   transition: background-color 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .language-select-container:hover {
@@ -1070,7 +1098,7 @@ export default {
   .brand-name {
     font-size: 1.1rem;
   }
-  
+
   .status-text {
     font-size: 0.8rem;
   }
@@ -1080,54 +1108,55 @@ export default {
   .status-text {
     display: none;
   }
-  
+
   .status-indicator-btn {
     padding: 0 10px;
     width: 36px;
   }
-  
+
   .status-dot {
     margin-right: 0;
   }
-  
+
   .brand-name {
     font-size: 1rem;
     max-width: 300px;
   }
-  
+
   .icon-btn {
     margin-left: 8px;
   }
 }
 
 @media (max-width: 768px) {
+
   /* Hide desktop controls and show mobile controls */
   .desktop-only {
     display: none;
   }
-  
+
   .hide-on-mobile {
     display: none;
   }
-  
+
   .mobile-controls {
     display: flex;
   }
-  
+
   .govt-logo {
     height: 36px;
     width: 36px;
   }
-  
+
   .nav-bar {
     padding: 0 12px;
   }
-  
+
   .status-dropdown {
     width: 240px;
     right: -40px;
   }
-  
+
   .status-dropdown::before {
     content: '';
     position: absolute;
@@ -1145,22 +1174,22 @@ export default {
     height: 32px;
     width: 32px;
   }
-  
+
   .icon-btn {
     width: 36px;
     height: 36px;
   }
-  
+
   .icon-btn svg {
     width: 20px;
     height: 20px;
   }
-  
+
   .hamburger-btn {
     width: 36px;
     height: 36px;
   }
-  
+
   .tooltip {
     display: none;
   }
@@ -1171,33 +1200,33 @@ export default {
     height: 32px;
     width: 32px;
   }
-  
+
   .nav-bar {
     height: 54px;
   }
-  
+
   /* Position status dropdown on small screens */
   .status-dropdown {
     width: 220px;
     right: -30px;
   }
-  
+
   .status-dropdown::before {
     right: 40px;
   }
-  
+
   /* Space mobile controls more compactly */
   .mobile-btn {
     margin-left: 6px;
     width: 32px;
     height: 32px;
   }
-  
+
   .mobile-status-btn {
     width: 32px;
     height: 32px;
   }
-  
+
   .mobile-language-select {
     width: 50px;
     margin-left: 6px;

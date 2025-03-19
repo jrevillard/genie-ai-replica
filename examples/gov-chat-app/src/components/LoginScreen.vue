@@ -9,6 +9,10 @@
         <h1 class="app-name">{{ $t('login.appTitle') }}</h1>
       </div>
       
+      <div v-if="error" class="error-message">
+        {{ error }}
+      </div>
+      
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
           <input 
@@ -40,8 +44,9 @@
           </a>
         </div>
         
-        <button type="submit" class="login-button">
-          {{ $t('login.loginButton') }}
+        <button type="submit" class="login-button" :disabled="isLoading">
+          <span v-if="isLoading">{{ $t('login.loggingIn') }}</span>
+          <span v-else>{{ $t('login.loginButton') }}</span>
         </button>
       </form>
       
@@ -57,7 +62,7 @@
       </div>
       
       <div class="social-login">
-        <button @click="handleGoogleLogin" class="social-button google-button">
+        <button @click="handleGoogleLogin" class="social-button google-button" :disabled="isLoading">
           <div class="button-content">
             <svg class="social-icon" viewBox="0 0 24 24" width="18" height="18">
               <g transform="matrix(1, 0, 0, 1, 0, 0)">
@@ -71,7 +76,7 @@
           </div>
         </button>
         
-        <button @click="handleFacebookLogin" class="social-button facebook-button">
+        <button @click="handleFacebookLogin" class="social-button facebook-button" :disabled="isLoading">
           <div class="button-content">
             <svg class="social-icon" width="18" height="18" viewBox="0 0 24 24">
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" 
@@ -138,6 +143,8 @@
 </template>
 
 <script>
+import userService from '@/services/userService';
+
 export default {
   name: 'LoginScreen',
   props: {
@@ -152,6 +159,8 @@ export default {
       password: '',
       rememberMe: false,
       selectedLocale: this.$i18n.locale,
+      isLoading: false,
+      error: '',
       savedAccounts: [
         {
           id: 1,
@@ -174,6 +183,14 @@ export default {
     
     // Add viewport meta tag to ensure proper mobile rendering if not already present
     this.ensureViewportMeta();
+    
+    // Clear any previous error messages when navigating to login page
+    this.error = '';
+    
+    // Check for redirect with error message
+    if (this.$route.query.error) {
+      this.error = this.$route.query.error;
+    }
   },
   mounted() {
     // Fix for full-height issues on mobile browsers
@@ -213,76 +230,111 @@ export default {
       this.$router.push('/forgot-password');
     },
     
-    handleLogin() {
-      // Simulate login success with any credentials
-      const userData = {
-        name: this.username,
-        email: `${this.username}@example.com`,
-        id: Date.now(),
-        isAuthenticated: true
-      }
-      
-      this.loginSuccess(userData);
-    },
-    
-    handleGoogleLogin() {
-      // Normally this would open Google OAuth
-      // For demo, we'll simulate successful login
-      const userData = {
-        name: 'Google User',
-        email: 'user@gmail.com',
-        provider: 'Google',
-        id: Date.now(),
-        isAuthenticated: true
-      }
-      
-      this.loginSuccess(userData);
-    },
-    
-    handleFacebookLogin() {
-      // Normally this would open Facebook OAuth
-      // For demo, we'll simulate successful login
-      const userData = {
-        name: 'Facebook User',
-        email: 'user@facebook.com',
-        provider: 'Facebook',
-        id: Date.now(),
-        isAuthenticated: true
-      }
-      
-      this.loginSuccess(userData);
-    },
-    
-    loginWithSavedAccount(account) {
-      // Add authentication flag to account data
-      const userData = {
-        ...account,
-        isAuthenticated: true
-      }
-      
-      // Auto-login with saved account data
-      this.loginSuccess(userData);
-    },
-    
-    loginSuccess(userData) {
-      // Store user data in localStorage if remember me is checked
-      if (this.rememberMe) {
-        try {
-          localStorage.setItem('userData', JSON.stringify(userData));
-        } catch (e) {
-          console.warn('Unable to save user data:', e);
+    async handleLogin() {
+      try {
+        // Clear any previous errors
+        this.error = '';
+        this.isLoading = true;
+        
+        // Validate inputs
+        if (!this.username || !this.password) {
+          this.error = this.$t('login.fieldsRequired');
+          return;
         }
+        
+        // Call userService to authenticate
+        const result = await userService.login(this.username, this.password);
+        
+        // Verify we got a valid response with access token
+        if (!result || !result.accessToken) {
+          this.error = this.$t('login.invalidCredentials');
+          return;
+        }
+        
+        // If remember me is checked, this is handled by userService storing in localStorage
+        
+        // Dispatch auth action to store
+        this.$store.dispatch('initAuth');
+        this.$store.commit('setUser', result);
+        
+        // Emit login success event
+        this.$emit('login-success', result);
+        
+        // Navigate to home or dashboard or redirect URL if it exists
+        const redirectPath = this.$route.query.redirect || '/';
+        this.$router.push(redirectPath);
+      } catch (error) {
+        console.error('Login error:', error);
+        
+        // Handle specific error cases
+        if (error.status === 401) {
+          this.error = this.$t('login.invalidCredentials');
+        } else if (error.status === 429) {
+          this.error = this.$t('login.tooManyAttempts');
+        } else {
+          this.error = this.$t('login.loginFailed');
+        }
+      } finally {
+        this.isLoading = false;
       }
-      
-      // Dispatch auth action to store
-      this.$store.dispatch('initAuth');
-      this.$store.commit('setUser', userData);
-      
-      // Emit login success event
-      this.$emit('login-success', userData);
-      
-      // Navigate to home or dashboard
-      this.$router.push('/');
+    },
+    
+    async handleGoogleLogin() {
+      try {
+        this.error = '';
+        this.isLoading = true;
+        
+        // This would normally call your OAuth implementation
+        // For now, we'll just show a message that it's not implemented
+        this.error = this.$t('login.oauthNotImplemented');
+        
+        // In a real implementation, you would:
+        // 1. Call an OAuth service
+        // 2. Get a token back
+        // 3. Verify the token with your backend
+        // 4. Get user info and auth token
+        // 5. Store the token and proceed as with normal login
+      } catch (error) {
+        console.error('Google login error:', error);
+        this.error = this.$t('login.loginFailed');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    
+    async handleFacebookLogin() {
+      try {
+        this.error = '';
+        this.isLoading = true;
+        
+        // This would normally call your OAuth implementation
+        // For now, we'll just show a message that it's not implemented
+        this.error = this.$t('login.oauthNotImplemented');
+      } catch (error) {
+        console.error('Facebook login error:', error);
+        this.error = this.$t('login.loginFailed');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    
+    async loginWithSavedAccount(account) {
+      try {
+        this.error = '';
+        this.isLoading = true;
+        
+        // In a real implementation, you would:
+        // 1. Look up the saved credentials securely
+        // 2. Use them to authenticate
+        
+        // For now, we'll just show a message that it's not implemented
+        this.error = this.$t('login.savedLoginNotImplemented');
+      } catch (error) {
+        console.error('Saved account login error:', error);
+        this.error = this.$t('login.loginFailed');
+      } finally {
+        this.isLoading = false;
+      }
     },
     
     changeLocale() {
@@ -292,8 +344,6 @@ export default {
   }
 }
 </script>
-
-<!-- Style remains unchanged from previous version -->
 
 <style scoped>
 .login-container {
@@ -322,6 +372,17 @@ export default {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+}
+
+.error-message {
+  background-color: rgba(255, 77, 77, 0.2);
+  border: 1px solid rgba(255, 77, 77, 0.4);
+  color: #ff4d4d;
+  padding: 10px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
 }
 
 .logo {
@@ -420,8 +481,14 @@ export default {
   transition: background-color 0.2s;
 }
 
-.login-button:hover {
+.login-button:hover:not(:disabled) {
   background-color: #4589c0;
+}
+
+.login-button:disabled {
+  background-color: #3a7da8;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 /* Added styles for registration link */
@@ -482,6 +549,11 @@ export default {
   font-weight: 500;
 }
 
+.social-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .button-content {
   display: flex;
   align-items: center;
@@ -501,7 +573,7 @@ export default {
   color: white;
 }
 
-.google-button:hover {
+.google-button:hover:not(:disabled) {
   opacity: 0.9;
 }
 
@@ -510,7 +582,7 @@ export default {
   color: white;
 }
 
-.facebook-button:hover {
+.facebook-button:hover:not(:disabled) {
   opacity: 0.9;
 }
 

@@ -217,3 +217,16 @@ td {
   background-color: var(--bg-button-primary) !important;
   color: var(--text-button-primary) !important;
 }
+
+.app-name {
+  color: white !important;
+}
+
+.node-name {
+  color: var(--text-primary, white);
+}
+
+.node-name {
+  flex: 1;
+  color: var(--text-primary, white) !important;
+}

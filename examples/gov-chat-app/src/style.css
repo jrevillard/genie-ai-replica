@@ -438,3 +438,11 @@ text.value {
   font-weight: 600 !important;
   text-shadow: 0 0 0 #000 !important;
 }
+
+/* Add this to the bottom of styles.css */
+[data-theme="dark"] .app-name,
+[data-theme="dark"] .register-heading,
+[data-theme="dark"] .password-reset-confirm-heading,
+[data-theme="dark"] .registration-success-card .heading {
+  color: rgba(255, 255, 255, 0.9) !important;
+}

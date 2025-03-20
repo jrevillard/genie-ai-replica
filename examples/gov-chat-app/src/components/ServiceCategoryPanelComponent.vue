@@ -69,5 +69,46 @@ export default {
   height: 24px;
   margin-right: 8px;
 }
+
+.category-panel h4 {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .category-panel h4,
+html[data-theme="dark"] .category-panel h4 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+[data-theme="dark"] .toggle-icon {
+  color: rgba(255, 255, 255, 0.6); /* Slightly muted for visual hierarchy */
+}
+
+[data-theme="dark"] .service-tree-list,
+[data-theme="dark"] .service-tree-list * {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+[data-theme="dark"] .node-name {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme="dark"] .node-label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme="dark"] .node-label:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] .toggle-icon {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+[data-theme="dark"] .service-tree-panel h4 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
 </style>
 

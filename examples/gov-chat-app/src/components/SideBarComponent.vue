@@ -1,6 +1,10 @@
-<!-- SideBarComponent.vue with fixed layout to prevent scroll overlap -->
+<!-- SideBarComponent.vue with improved theme compatibility -->
 <template>
-  <aside class="side-bar" :class="{ 'side-bar-open': isOpen }">
+  <aside 
+    class="side-bar" 
+    :class="{ 'side-bar-open': isOpen }"
+    :data-theme="$route.meta.theme || 'light'"
+  >
     <!-- Overlay that only appears on mobile when sidebar is open -->
     <div class="mobile-sidebar-overlay" v-if="isOpen" @click="closeOverlay"></div>
     
@@ -9,7 +13,7 @@
       <div class="sidebar-tabs">
         <button 
           class="tab-button" 
-          :class="{ active: activeTab === 'services' }"
+          :class="{ 'tab-button-active': activeTab === 'services' }"
           @click="activeTab = 'services'"
         >
           <i class="fas fa-list"></i>
@@ -17,7 +21,7 @@
         </button>
         <button 
           class="tab-button" 
-          :class="{ active: activeTab === 'history' }"
+          :class="{ 'tab-button-active': activeTab === 'history' }"
           @click="activeTab = 'history'"
         >
           <i class="fas fa-history"></i>
@@ -86,10 +90,11 @@ export default {
 <style scoped>
 .side-bar {
   width: 300px;
-  background: #ffffff;
-  border-right: 1px solid #ddd;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
   height: 100%;
-  overflow: hidden !important; /* Force no overflow */
+  color: var(--text-primary);
+  overflow: hidden !important;
   transition: transform 0.3s ease, width 0.3s ease;
 }
 
@@ -98,23 +103,65 @@ export default {
   display: flex;
   flex-direction: column;
   position: relative;
-  z-index: 1001; /* Higher than overlay */
-  background: white; /* Ensure background is solid */
-  overflow: hidden !important; /* Force no overflow */
+  z-index: 1001;
+  background: var(--bg-sidebar);
+  color: var(--text-primary);
+  overflow: hidden !important;
+}
+
+.sidebar-section-title,
+.sidebar-header h3 {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .sidebar-section-title,
+html[data-theme="dark"] .sidebar-section-title,
+[data-theme="dark"] .sidebar-header h3,
+html[data-theme="dark"] .sidebar-header h3 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.sidebar-section h3,
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 16px;
+}
+
+[data-theme="dark"] .sidebar-section h3,
+[data-theme="dark"] .sidebar-header h3,
+html[data-theme="dark"] .sidebar-section h3,
+html[data-theme="dark"] .sidebar-header h3 {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 /* Mobile overlay */
 .mobile-sidebar-overlay {
-  display: none; /* Hidden by default */
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
 }
 
 /* Tabs styling */
 .sidebar-tabs {
   display: flex;
-  border-bottom: 1px solid #e9ecef;
-  background-color: #f8f9fa;
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-tertiary);
   padding: 0;
-  flex-shrink: 0; /* Prevent tabs from shrinking */
+  flex-shrink: 0;
 }
 
 .tab-button {
@@ -124,7 +171,7 @@ export default {
   border: none;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -134,16 +181,21 @@ export default {
 
 .tab-button i {
   font-size: 1rem;
+  color: var(--text-tertiary);
 }
 
 .tab-button:hover {
-  background-color: #e9ecef;
-  color: #333;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
-.tab-button.active {
-  background-color: #4e97d1;
-  color: white;
+.tab-button-active {
+  background-color: var(--accent-color);
+  color: var(--text-button-primary);
+}
+
+.tab-button-active i {
+  color: var(--text-button-primary);
 }
 
 /* New wrapper to control the layout of content + weather */
@@ -151,42 +203,41 @@ export default {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  height: 0; /* Force it to use flex grow */
-  overflow: hidden; /* Prevent any overflow here */
+  height: 0;
+  overflow: hidden;
 }
 
-/* THIS IS THE SCROLLABLE CONTAINER - Modified to work with new layout */
+/* Scrollable container */
 .sidebar-content {
   flex-grow: 1;
-  overflow-y: auto !important; /* Force scrolling here */
+  overflow-y: auto !important;
   display: flex;
   flex-direction: column;
   padding: 10px;
-  /* Remove any margin/padding bottom that might be causing issues */
   padding-bottom: 0;
   margin-bottom: 0;
+  background: var(--bg-sidebar);
+  color: var(--text-primary);
 }
 
 .services-list,
 .chat-history {
   flex-grow: 1;
-  overflow: visible !important; /* Force no scrolling */
+  overflow: visible !important;
   display: flex;
   flex-direction: column;
 }
 
 /* Container for weather panel */
 .weather-container {
-  flex-shrink: 0; /* Don't allow shrinking */
-  background: white;
-  border-top: 1px solid #eee;
+  flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border-light);
   padding: 10px;
-  margin-top: 5px; /* Small gap between content and weather */
+  margin-top: 5px;
 }
 
-/* Weather component styling */
 .weather-panel-fixed {
-  /* No longer needs to be positioned absolutely */
   width: 100%;
 }
 
@@ -194,13 +245,13 @@ export default {
 @media screen and (max-width: 768px) {
   .side-bar {
     position: fixed;
-    top: 60px; /* Start below the navbar height */
+    top: 60px;
     left: 0;
-    height: calc(100vh - 60px); /* Adjust height to account for navbar */
+    height: calc(100vh - 60px);
     width: 85%;
     max-width: 320px;
     transform: translateX(-100%);
-    z-index: 15; /* Higher than chat component but lower than navbar */
+    z-index: 15;
     box-shadow: none;
   }
   
@@ -209,19 +260,10 @@ export default {
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
   }
   
-  /* Show overlay on mobile */
   .mobile-sidebar-overlay {
     display: block;
-    position: fixed;
-    top: 60px; /* Start below navbar */
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 14; /* Lower than sidebar but higher than chat */
   }
   
-  /* Adjust tab buttons for mobile */
   .tab-button {
     padding: 12px 0;
   }
@@ -233,7 +275,7 @@ export default {
     position: relative;
     transform: translateX(0);
     width: 250px;
-    z-index: 5; /* Higher than chat component in desktop view */
+    z-index: 5;
   }
   
   .side-bar:not(.side-bar-open) {
@@ -243,7 +285,49 @@ export default {
   }
   
   .mobile-sidebar-overlay {
-    display: none; /* Always hidden on desktop */
+    display: none;
   }
+}
+
+/* Dark mode scrollbar - more aggressive styling */
+[data-theme="dark"] *::-webkit-scrollbar {
+  width: 8px;
+  background-color: #2a2a2a; /* Ensure it matches dark sidebar background */
+}
+
+[data-theme="dark"] *::-webkit-scrollbar-track {
+  background-color: #2a2a2a;
+}
+
+[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 100, 100, 0.3);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(150, 150, 150, 0.4);
+}
+
+/* Dark mode search input and add button */
+[data-theme="dark"] .search-box,
+[data-theme="dark"] .search-container input {
+  background-color: #333 !important;
+  color: var(--text-primary) !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .search-container .add-btn,
+[data-theme="dark"] .search-container .plus-btn,
+[data-theme="dark"] .search-container button.add-btn {
+  background-color: #444 !important;
+  color: var(--text-primary) !important;
+  border: none;
+  border-radius: 4px;
+}
+
+/* Ensure Firefox scrollbar is consistent */
+[data-theme="dark"] * {
+  scrollbar-color: rgba(100, 100, 100, 0.3) #2a2a2a;
+  scrollbar-width: thin;
 }
 </style>

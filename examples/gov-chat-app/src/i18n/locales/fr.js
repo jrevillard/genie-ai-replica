@@ -129,7 +129,7 @@ export default {
     noData: 'Aucune Donnée',
     notAvailable: 'N/D',
     topQueries: 'Principales Requêtes',
-    categoryDistribution: 'Utilisation des Catégories de Service',
+    categoryDistribution: 'Utilisation des Domaines de Connaissance',
     usageTrend: 'Tendance d\'Utilisation'
   },
   analytics: {
@@ -163,10 +163,10 @@ export default {
 
     // Chart labels and legends
     chartLabels: {
-      categories: 'Catégories',
-      serviceCategories: 'Catégories de Service',
-      byUsage: 'par Utilisation',
-      category: 'Catégorie'
+      categories: 'Domaines',  // Changed from 'Catégories'
+      serviceCategories: 'Domaines de Connaissance',  // Changed from 'Catégories de Service'
+      byUsage: 'par Utilisation',  // No change
+      category: 'Domaine'  // Changed from 'Catégorie'
     },
 
     // Tooltips and hints
@@ -213,7 +213,7 @@ export default {
     query: 'Requête',
     count: 'Nombre',
     avgTime: 'Temps Moyen',
-    serviceUsage: 'Utilisation des Catégories de Service',
+    serviceUsage: 'Utilisation des Domaines de Connaissance',
 
     // Added for UsageTrendChart.vue
     usageTrends: 'Tendances d\'Utilisation',
@@ -271,9 +271,9 @@ export default {
     vehicleRegistration: 'Date Limite d\'Immatriculation de Véhicule'
   },
   sidebar: {
-    governmentServices: 'Services gouvernementaux',
+    governmentServices: 'Domaines de Connaissance', // Changed from 'Services gouvernementaux'
     chatHistory: 'Historique de conversation',
-    searchPlaceholder: 'Rechercher un service...',
+    searchPlaceholder: 'Rechercher des domaines de connaissance...', // Changed from 'Rechercher un service...'
     createFolder: 'Créer un Dossier',
     editFolder: 'Modifier le Dossier',
     folderName: 'Nom du Dossier',

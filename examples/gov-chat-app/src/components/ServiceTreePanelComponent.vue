@@ -448,12 +448,28 @@ export default {
 
 <style scoped>
 .service-tree-panel {
-  margin-bottom: 0; /* Remove margin that might cause scrolling */
-  height: auto !important; /* Let it grow naturally */
+  margin-bottom: 0;
+  height: 100%; /* Change from auto to 100% */
   display: flex;
   flex-direction: column;
   font-size: 10pt;
-  overflow: visible !important; /* Disable scrolling on this element */
+  overflow-y: auto; /* Changed from visible to auto */
+}
+
+/* Dark mode specific scrollbar */
+[data-theme="dark"] .service-tree-panel::-webkit-scrollbar {
+  width: 8px;
+  background-color: var(--bg-sidebar);
+}
+
+[data-theme="dark"] .service-tree-panel::-webkit-scrollbar-thumb {
+  background-color: rgba(150, 150, 150, 0.2);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .service-tree-panel {
+  scrollbar-color: rgba(150, 150, 150, 0.2) var(--bg-sidebar);
+  scrollbar-width: thin;
 }
 
 .service-tree-panel h4 {
@@ -574,5 +590,74 @@ ul {
 
 li {
   list-style-type: none !important;
+}
+
+/* Add these styles to the component's scoped CSS */
+h4,
+.service-tree-panel h4,
+.service-categories-title,
+.knowledge-areas-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 16px;
+}
+
+[data-theme="dark"] h4,
+[data-theme="dark"] .service-tree-panel h4,
+[data-theme="dark"] .service-categories-title,
+[data-theme="dark"] .knowledge-areas-title,
+html[data-theme="dark"] h4,
+html[data-theme="dark"] .service-tree-panel h4,
+html[data-theme="dark"] .service-categories-title,
+html[data-theme="dark"] .knowledge-areas-title {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.service-tree-panel h4 {
+  color: #333; /* Replace with var(--text-primary) */
+}
+
+[data-theme="dark"] .service-tree-panel {
+  scrollbar-color: rgba(100, 100, 100, 0.3) var(--bg-sidebar);
+  scrollbar-width: thin;
+}
+
+[data-theme="dark"] .service-tree-panel::-webkit-scrollbar {
+  width: 8px;
+  background-color: var(--bg-sidebar);
+}
+
+[data-theme="dark"] .service-tree-panel::-webkit-scrollbar-thumb {
+  background-color: rgba(150, 150, 150, 0.2);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .search-container {
+  background-color: transparent;
+}
+
+[data-theme="dark"] .search-box {
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-input) !important;
+}
+
+[data-theme="dark"] .expand-collapse-btn,
+[data-theme="dark"] .search-container .add-btn,
+[data-theme="dark"] .search-container .plus-btn {
+  background-color: var(--bg-button-secondary) !important;
+  color: var(--text-button-secondary) !important;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .search-container .expand-collapse-btn:hover,
+[data-theme="dark"] .search-container .add-btn:hover,
+[data-theme="dark"] .search-container .plus-btn:hover {
+  background-color: rgba(150, 150, 150, 0.2) !important;
 }
 </style>

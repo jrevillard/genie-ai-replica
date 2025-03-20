@@ -127,7 +127,7 @@ export default {
     noData: 'Hakuna Data',
     notAvailable: 'Haipatikani',
     topQueries: 'Maswali ya Juu',
-    categoryDistribution: 'Matumizi ya Vikundi vya Huduma',
+    categoryDistribution: 'Matumizi ya Maeneo ya Maarifa',
     usageTrend: 'Mwelekeo wa Matumizi'
   },
   analytics: {
@@ -161,10 +161,10 @@ export default {
 
     // Chart labels and legends
     chartLabels: {
-      categories: 'Vikundi',
-      serviceCategories: 'Vikundi vya Huduma',
-      byUsage: 'kwa Matumizi',
-      category: 'Kikundi'
+      categories: 'Maeneo',  // Changed from 'Vikundi'
+      serviceCategories: 'Maeneo ya Maarifa',  // Changed from 'Vikundi vya Huduma'
+      byUsage: 'kwa Matumizi',  // No change
+      category: 'Eneo'  // Changed from 'Kikundi'
     },
 
     // Tooltips and hints
@@ -211,7 +211,7 @@ export default {
     query: 'Ombi',
     count: 'Idadi',
     avgTime: 'Wastani wa Muda',
-    serviceUsage: 'Matumizi ya Vikundi vya Huduma',
+    serviceUsage: 'Matumizi ya Maeneo ya Maarifa',  // Changed from 'Matumizi ya Vikundi vya Huduma'
 
     // Added for UsageTrendChart.vue
     usageTrends: 'Mienendo ya Matumizi',
@@ -270,9 +270,9 @@ export default {
     vehicleRegistration: 'Tarehe ya Mwisho ya Usajili wa Gari'
   },
   sidebar: {
-    governmentServices: 'Huduma za Serikali',
+    governmentServices: 'Maeneo ya Maarifa', // Changed from 'Huduma za Serikali'
     chatHistory: 'Historia ya Gumzo',
-    searchPlaceholder: 'Tafuta huduma...',
+    searchPlaceholder: 'Tafuta maeneo ya maarifa...', // Changed from 'Tafuta huduma...'
     createFolder: 'Unda Folda',
     editFolder: 'Hariri Folda',
     folderName: 'Jina la Folda',

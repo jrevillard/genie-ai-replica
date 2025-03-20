@@ -1,5 +1,5 @@
 <template>
-  <div class="weather-panel">
+  <div class="weather-panel" :data-theme="$route.meta.theme || 'light'">
     <div class="weather-header">
       <h4>{{ $t('sidebar.weatherTitle', 'Weather Forecast') }}</h4>
       <div class="weather-location">
@@ -212,44 +212,44 @@ export default {
 <style scoped>
 .weather-panel {
   margin-top: 15px;
-  background: #ffffff;
+  background-color: var(--bg-card);
   border-radius: 10px;
-  color: #333;
+  color: var(--text-primary);
   padding: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  font-size: 7pt;
-  border: 1px solid #eeeeee;
-}
-
-.weather-header {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 8px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  font-size: 0.9rem;
 }
 
 .weather-header h4 {
-  margin: 0 0 5px 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #4e97d1;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .weather-header h4,
+html[data-theme="dark"] .weather-header h4 {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 .weather-location {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .refresh-btn {
   background: none;
   border: none;
-  color: #4e97d1;
+  color: var(--accent-color);
   cursor: pointer;
   opacity: 0.8;
   transition: opacity 0.2s;
   padding: 3px;
-  font-size: 7pt;
 }
 
 .refresh-btn:hover {
@@ -272,7 +272,7 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .current-weather {
@@ -282,13 +282,13 @@ export default {
   justify-content: space-between;
   margin-bottom: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #eeeeee;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .current-icon {
   font-size: 1.8rem;
   margin-right: 8px;
-  color: #4e97d1;
+  color: var(--accent-color);
 }
 
 .current-details {
@@ -298,18 +298,18 @@ export default {
 .current-temp {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .current-condition {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .current-info {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .info-item {
@@ -319,7 +319,7 @@ export default {
 }
 
 .info-item i {
-  color: #4e97d1;
+  color: var(--accent-color);
 }
 
 .forecast-list {
@@ -337,14 +337,14 @@ export default {
 }
 
 .day-name {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 3px;
 }
 
 .day-icon {
   font-size: 1rem;
   margin: 3px 0;
-  color: #4e97d1;
+  color: var(--accent-color);
 }
 
 .day-temp {
@@ -354,10 +354,10 @@ export default {
 
 .temp-high {
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .temp-low {
-  color: #999;
+  color: var(--text-secondary);
 }
 </style>

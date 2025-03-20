@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-folders">
+  <div class="chat-folders" :data-theme="$route.meta.theme || 'light'">
     <!-- Folders Section -->
     <div class="folders-header">
       <h3>{{ $t('sidebar.folders') }}</h3>
@@ -7,21 +7,19 @@
         <i class="fas fa-folder-plus"></i>
       </button>
     </div>
-    
+
     <!-- Folder List -->
     <div class="folders-list">
-      <div
-        v-for="folder in folders"
-        :key="folder.id"
-        :class="['folder-item', { active: selectedFolderId === folder.id }]"
-        @click="selectFolder(folder.id)"
-      >
+      <div v-for="folder in folders" :key="folder.id"
+        :class="['folder-item', { 'folder-item-active': selectedFolderId === folder.id }]"
+        @click="selectFolder(folder.id)">
         <div class="folder-icon">
           <i class="fas fa-folder"></i>
         </div>
         <div class="folder-details">
           <div class="folder-name">{{ folder.name }}</div>
-          <div class="folder-count">{{ getChatCount(folder.id) }} {{ getChatCount(folder.id) === 1 ? 'chat' : 'chats' }}</div>
+          <div class="folder-count">{{ getChatCount(folder.id) }} {{ getChatCount(folder.id) === 1 ? 'chat' : 'chats' }}
+          </div>
         </div>
         <div class="folder-actions" v-if="!folder.isDefault">
           <button @click.stop="openEditFolderDialog(folder)" class="edit-btn" title="Edit Folder">
@@ -33,18 +31,13 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Chats in Selected Folder -->
     <div class="folder-chats" v-if="selectedFolder">
       <h3>{{ selectedFolder.name }}</h3>
-      
+
       <div class="chats-list" v-if="folderChats.length > 0">
-        <div
-          v-for="chat in folderChats"
-          :key="chat.id"
-          class="chat-item"
-          @click="openChat(chat.id)"
-        >
+        <div v-for="chat in folderChats" :key="chat.id" class="chat-item" @click="openChat(chat.id)">
           <div class="chat-icon">
             <i class="fas fa-comment"></i>
           </div>
@@ -60,12 +53,12 @@
           </div>
         </div>
       </div>
-      
+
       <div class="empty-folder" v-else>
         <p>{{ $t('sidebar.emptyFolder') }}</p>
       </div>
     </div>
-    
+
     <!-- Create Folder Dialog -->
     <modal-dialog v-if="showCreateFolderDialog" @close="showCreateFolderDialog = false">
       <template v-slot:header>
@@ -74,13 +67,8 @@
       <template v-slot:body>
         <div class="form-group">
           <label for="folderName">{{ $t('sidebar.folderName') }}</label>
-          <input 
-            type="text" 
-            id="folderName" 
-            v-model="newFolderName" 
-            :placeholder="$t('sidebar.folderNamePlaceholder')"
-            @keyup.enter="handleCreateFolder"
-          >
+          <input type="text" id="folderName" v-model="newFolderName" :placeholder="$t('sidebar.folderNamePlaceholder')"
+            @keyup.enter="handleCreateFolder">
         </div>
       </template>
       <template v-slot:footer>
@@ -90,7 +78,7 @@
         </button>
       </template>
     </modal-dialog>
-    
+
     <!-- Edit Folder Dialog -->
     <modal-dialog v-if="showEditFolderDialog" @close="editingFolder = null; showEditFolderDialog = false;">
       <template v-slot:header>
@@ -99,13 +87,8 @@
       <template v-slot:body>
         <div class="form-group">
           <label for="editFolderName">{{ $t('sidebar.folderName') }}</label>
-          <input 
-            type="text" 
-            id="editFolderName" 
-            v-model="editingFolderName" 
-            :placeholder="$t('sidebar.folderNamePlaceholder')"
-            @keyup.enter="handleUpdateFolder"
-          >
+          <input type="text" id="editFolderName" v-model="editingFolderName"
+            :placeholder="$t('sidebar.folderNamePlaceholder')" @keyup.enter="handleUpdateFolder">
         </div>
       </template>
       <template v-slot:footer>
@@ -117,7 +100,7 @@
         </button>
       </template>
     </modal-dialog>
-    
+
     <!-- Delete Folder Confirmation -->
     <modal-dialog v-if="showDeleteFolderDialog" @close="editingFolder = null; showDeleteFolderDialog = false;">
       <template v-slot:header>
@@ -136,7 +119,7 @@
         </button>
       </template>
     </modal-dialog>
-    
+
     <!-- Chat Action Menu -->
     <context-menu v-if="showChatMenu" :position="menuPosition" @close="showChatMenu = false">
       <button @click="promptRenameChat" class="menu-item">
@@ -149,7 +132,7 @@
         <i class="fas fa-trash"></i> {{ $t('sidebar.deleteChat') }}
       </button>
     </context-menu>
-    
+
     <!-- Move Chat Dialog -->
     <modal-dialog v-if="showMoveChatDialog" @close="showMoveChatDialog = false">
       <template v-slot:header>
@@ -160,12 +143,8 @@
         <div class="form-group">
           <label for="destinationFolder">{{ $t('sidebar.selectFolder') }}</label>
           <select id="destinationFolder" v-model="destinationFolderId">
-            <option 
-              v-for="folder in availableFolders" 
-              :key="folder.id" 
-              :value="folder.id"
-              :disabled="selectedFolderId === folder.id"
-            >
+            <option v-for="folder in availableFolders" :key="folder.id" :value="folder.id"
+              :disabled="selectedFolderId === folder.id">
               {{ folder.name }}
             </option>
           </select>
@@ -175,16 +154,13 @@
         <button @click="showMoveChatDialog = false" class="cancel-btn">
           {{ $t('common.cancel') }}
         </button>
-        <button 
-          @click="handleMoveChat" 
-          class="primary-btn" 
-          :disabled="!destinationFolderId || selectedFolderId === destinationFolderId"
-        >
+        <button @click="handleMoveChat" class="primary-btn"
+          :disabled="!destinationFolderId || selectedFolderId === destinationFolderId">
           {{ $t('common.move') }}
         </button>
       </template>
     </modal-dialog>
-    
+
     <!-- Rename Chat Dialog -->
     <modal-dialog v-if="showRenameChatDialog" @close="showRenameChatDialog = false">
       <template v-slot:header>
@@ -193,13 +169,8 @@
       <template v-slot:body>
         <div class="form-group">
           <label for="chatTitle">{{ $t('sidebar.chatTitle') }}</label>
-          <input 
-            type="text" 
-            id="chatTitle" 
-            v-model="newChatTitle" 
-            :placeholder="$t('sidebar.chatTitlePlaceholder')"
-            @keyup.enter="handleRenameChat"
-          >
+          <input type="text" id="chatTitle" v-model="newChatTitle" :placeholder="$t('sidebar.chatTitlePlaceholder')"
+            @keyup.enter="handleRenameChat">
         </div>
       </template>
       <template v-slot:footer>
@@ -211,7 +182,7 @@
         </button>
       </template>
     </modal-dialog>
-    
+
     <!-- Delete Chat Confirmation -->
     <modal-dialog v-if="showDeleteChatDialog" @close="showDeleteChatDialog = false">
       <template v-slot:header>
@@ -240,26 +211,26 @@ import ContextMenu from './ContextMenu.vue';
 
 export default {
   name: 'ChatFolders',
-  
+
   components: {
     ModalDialog,
     ContextMenu
   },
-  
+
   data() {
     return {
       selectedFolderId: 'default',
-      
+
       // For creating folders
       showCreateFolderDialog: false,
       newFolderName: '',
-      
+
       // For editing folders
       editingFolder: null,
       editingFolderName: '',
       showEditFolderDialog: false,
       showDeleteFolderDialog: false,
-      
+
       // For chat actions
       activeChat: null,
       showChatMenu: false,
@@ -271,7 +242,7 @@ export default {
       showDeleteChatDialog: false
     };
   },
-  
+
   computed: {
     ...mapGetters('chatHistory', [
       'getAllFolders',
@@ -279,24 +250,24 @@ export default {
       'getFolderById',
       'getChatById'
     ]),
-    
+
     folders() {
       return this.getAllFolders;
     },
-    
+
     selectedFolder() {
       return this.getFolderById(this.selectedFolderId);
     },
-    
+
     folderChats() {
       return this.getChatsByFolderId(this.selectedFolderId);
     },
-    
+
     availableFolders() {
       return this.folders.filter(folder => !folder.isDefault);
     }
   },
-  
+
   methods: {
     ...mapActions('chatHistory', [
       'createFolder',
@@ -306,27 +277,27 @@ export default {
       'deleteChat',
       'moveChat'
     ]),
-    
+
     // Folder management
     selectFolder(folderId) {
       this.selectedFolderId = folderId;
     },
-    
+
     getChatCount(folderId) {
       return this.getChatsByFolderId(folderId).length;
     },
-    
+
     openEditFolderDialog(folder) {
       this.editingFolder = folder;
       this.editingFolderName = folder.name;
       this.showEditFolderDialog = true;
     },
-    
+
     openDeleteFolderDialog(folder) {
       this.editingFolder = folder;
       this.showDeleteFolderDialog = true;
     },
-    
+
     // These methods were renamed to avoid conflicts with Vuex actions
     handleCreateFolder() {
       if (this.newFolderName.trim()) {
@@ -335,7 +306,7 @@ export default {
         this.showCreateFolderDialog = false;
       }
     },
-    
+
     handleUpdateFolder() {
       if (this.editingFolder && this.editingFolderName.trim()) {
         this.updateFolder({
@@ -347,49 +318,47 @@ export default {
         this.showEditFolderDialog = false;
       }
     },
-    
+
     handleDeleteFolder() {
       if (this.editingFolder) {
         this.deleteFolder(this.editingFolder.id);
-        
+
         // If we're currently viewing the deleted folder, switch to default
         if (this.selectedFolderId === this.editingFolder.id) {
           this.selectedFolderId = 'default';
         }
-        
+
         this.editingFolder = null;
         this.showDeleteFolderDialog = false;
       }
     },
-    
+
     // Chat management
     openChat(chatId) {
       // Emit event to open chat in the main chat area
       this.$emit('open-chat', chatId);
     },
-    
+
     showChatActionsMenu(chat, event) {
       this.activeChat = chat;
-      
+
       // Position the context menu to the left of the button instead of to the right
       const rect = event.target.getBoundingClientRect();
       this.menuPosition = {
         x: rect.left - 184, // Offset by menu width (180px) plus a small gap (4px)
         y: rect.top
       };
-      
+
       this.showChatMenu = true;
     },
-    
+
     promptRenameChat() {
       if (this.activeChat) {
         this.newChatTitle = this.activeChat.title;
         this.showRenameChatDialog = true;
         this.showChatMenu = false;
       }
-    },
-    
-    handleRenameChat() {
+    }, handleRenameChat() {
       if (this.activeChat && this.newChatTitle.trim()) {
         this.updateChat({
           chatId: this.activeChat.id,
@@ -398,12 +367,12 @@ export default {
         this.showRenameChatDialog = false;
       }
     },
-    
+
     promptDeleteChat() {
       this.showDeleteChatDialog = true;
       this.showChatMenu = false;
     },
-    
+
     handleDeleteChat() {
       if (this.activeChat) {
         this.deleteChat(this.activeChat.id);
@@ -411,7 +380,7 @@ export default {
         this.activeChat = null;
       }
     },
-    
+
     handleMoveChat() {
       if (this.activeChat && this.destinationFolderId) {
         this.moveChat({
@@ -419,27 +388,27 @@ export default {
           fromFolderId: this.selectedFolderId,
           toFolderId: this.destinationFolderId
         });
-        
+
         this.showMoveChatDialog = false;
         this.destinationFolderId = null;
       }
     },
-    
+
     // Utility methods
     formatDate(dateStr) {
       const date = new Date(dateStr);
-      
+
       // If today, show only time
       const today = new Date();
       if (date.toDateString() === today.toDateString()) {
         return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       }
-      
+
       // If this year, show month and day
       if (date.getFullYear() === today.getFullYear()) {
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       }
-      
+
       // Otherwise show full date
       return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     }
@@ -453,6 +422,8 @@ export default {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  background-color: var(--bg-sidebar);
+  color: var(--text-primary);
 }
 
 .folders-header {
@@ -460,19 +431,27 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .folders-header h3 {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .folders-header h3,
+html[data-theme="dark"] .folders-header h3 {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 .add-folder-btn {
   background: none;
   border: none;
-  color: #4e97d1;
+  color: var(--accent-color);
   cursor: pointer;
   font-size: 1rem;
   padding: 4px 8px;
@@ -495,19 +474,20 @@ export default {
   padding: 10px 16px;
   cursor: pointer;
   transition: background-color 0.2s;
+  color: var(--text-primary);
 }
 
 .folder-item:hover {
-  background-color: #f5f7fa;
+  background-color: var(--bg-tertiary);
 }
 
-.folder-item.active {
-  background-color: #e6f2ff;
+.folder-item-active {
+  background-color: var(--bg-secondary);
 }
 
 .folder-icon {
   margin-right: 12px;
-  color: #4e97d1;
+  color: var(--accent-color);
 }
 
 .folder-details {
@@ -516,11 +496,12 @@ export default {
 
 .folder-name {
   font-weight: 500;
+  color: var(--text-primary);
 }
 
 .folder-count {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .folder-actions {
@@ -534,17 +515,18 @@ export default {
   opacity: 1;
 }
 
-.edit-btn, .delete-btn {
+.edit-btn,
+.delete-btn {
   background: none;
   border: none;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 4px;
   border-radius: 4px;
 }
 
 .edit-btn:hover {
-  color: #4e97d1;
+  color: var(--accent-color);
   background: rgba(78, 151, 209, 0.1);
 }
 
@@ -555,15 +537,17 @@ export default {
 
 .folder-chats {
   padding: 12px 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-light);
   overflow-y: auto;
   flex-grow: 1;
+  background-color: var(--bg-sidebar);
 }
 
 .folder-chats h3 {
   margin: 0 0 12px 0;
   font-size: 1.1rem;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .chats-list {
@@ -577,20 +561,21 @@ export default {
   align-items: flex-start;
   padding: 12px;
   border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  color: var(--text-primary);
 }
 
 .chat-item:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .chat-icon {
   margin-right: 12px;
-  color: #4e97d1;
+  color: var(--accent-color);
   padding-top: 2px;
 }
 
@@ -601,11 +586,12 @@ export default {
 .chat-title {
   font-weight: 500;
   margin-bottom: 4px;
+  color: var(--text-primary);
 }
 
 .chat-preview {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 4px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -615,7 +601,7 @@ export default {
 
 .chat-date {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .chat-actions {
@@ -631,13 +617,13 @@ export default {
   background: none;
   border: none;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 4px;
   border-radius: 4px;
 }
 
 .action-btn:hover {
-  color: #4e97d1;
+  color: var(--accent-color);
   background: rgba(78, 151, 209, 0.1);
 }
 
@@ -647,7 +633,7 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 32px 16px;
-  color: #999;
+  color: var(--text-tertiary);
   text-align: center;
 }
 
@@ -659,15 +645,18 @@ export default {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
+  color: var(--text-primary);
 }
 
-.form-group input, 
+.form-group input,
 .form-group select {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-input);
   border-radius: 4px;
   font-size: 1rem;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .warning-text {
@@ -676,8 +665,8 @@ export default {
   margin-top: 8px;
 }
 
-.cancel-btn, 
-.primary-btn, 
+.cancel-btn,
+.primary-btn,
 .danger-btn {
   padding: 8px 16px;
   border-radius: 4px;
@@ -687,27 +676,28 @@ export default {
 }
 
 .cancel-btn {
-  background: none;
-  border: 1px solid #ddd;
-  color: #666;
+  background-color: var(--bg-button-secondary);
+  color: var(--text-button-secondary);
+  border: 1px solid var(--border-light);
 }
 
 .cancel-btn:hover {
-  background-color: #f5f5f5;
+  background-color: var(--bg-tertiary);
 }
 
 .primary-btn {
-  background-color: #4e97d1;
+  background-color: var(--bg-button-primary);
   border: none;
-  color: white;
+  color: var(--text-button-primary);
 }
 
 .primary-btn:hover {
-  background-color: #3a7cb5;
+  background-color: var(--accent-hover);
 }
 
 .primary-btn:disabled {
-  background-color: #a9cae8;
+  background-color: var(--bg-button-secondary);
+  color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
@@ -732,14 +722,16 @@ export default {
   border: none;
   cursor: pointer;
   transition: background-color 0.2s;
+  color: var(--text-primary);
 }
 
 .menu-item:hover {
-  background-color: #f5f7fa;
+  background-color: var(--bg-tertiary);
 }
 
 .menu-item i {
   width: 16px;
+  color: var(--text-secondary);
 }
 
 .text-danger {

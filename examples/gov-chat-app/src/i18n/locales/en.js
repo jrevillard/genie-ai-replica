@@ -129,7 +129,7 @@ export default {
     noData: 'No Data',
     notAvailable: 'N/A',
     topQueries: 'Top Queries',
-    categoryDistribution: 'Service Categories Usage',
+    categoryDistribution: 'Knowledge Area Usage',  
     usageTrend: 'Usage Trend'
   },
   analytics: {
@@ -163,10 +163,10 @@ export default {
 
     // Chart labels and legends
     chartLabels: {
-      categories: 'Categories',
-      serviceCategories: 'Service Categories',
-      byUsage: 'by Usage',
-      category: 'Category'
+      categories: 'Areas',  // Changed from 'Categories'
+      serviceCategories: 'Knowledge Areas',  // Changed from 'Service Categories'
+      byUsage: 'by Usage',  // No change
+      category: 'Area'  // Changed from 'Category'  
     },
 
     // Tooltips and hints
@@ -210,7 +210,7 @@ export default {
     query: 'Query',
     count: 'Count',
     avgTime: 'Avg. Time',
-    serviceUsage: 'Service Categories Usage',
+    serviceUsage: 'Knowledge Area Usage',
 
     // Added for UsageTrendChart.vue
     usageTrends: 'Usage Trends',
@@ -262,9 +262,9 @@ export default {
     vehicleRegistration: 'Vehicle Registration Deadline'
   },
   sidebar: {
-    governmentServices: 'Government Services',
+    governmentServices: 'Knowledge Areas', // Changed from 'Government Services'
     chatHistory: 'Chat History',
-    searchPlaceholder: 'Search services...',
+    searchPlaceholder: 'Search knowledge areas...', // Changed from 'Search services...'
     createFolder: 'Create Folder',
     editFolder: 'Edit Folder',
     folderName: 'Folder Name',

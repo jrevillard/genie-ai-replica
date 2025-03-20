@@ -1,117 +1,128 @@
-<!-- SettingsComponent.vue -->
 <template>
-  <div class="settings-modal">
-    <div class="overlay" @click="closeDialog"></div>
-    <div class="modal-content">
-      <h2>{{ $t('settings.title') }}</h2>
+  <div class="settings-overlay">
+    <div class="settings-dialog">
+      <h2 class="dialog-header">Settings</h2>
       
-      <div class="settings-sections">
-        <!-- Language Settings -->
-        <div class="settings-section">
-          <h3>{{ $t('settings.language.title') }}</h3>
-          <div class="setting-item">
-            <label for="language-select">{{ $t('settings.language.selectLabel') }}</label>
-            <select id="language-select" v-model="selectedLanguage" @change="changeLanguage">
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="sw">Kiswahili</option>
-            </select>
-          </div>
+      <!-- Language Section -->
+      <div class="settings-section">
+        <h3 class="section-title">Language</h3>
+        <div class="setting-item">
+          <label class="section-label">Display Language</label>
+          <select 
+            class="dropdown"
+            v-model="settings.language"
+          >
+            <option value="en">English</option>
+            <option value="fr">French</option>
+            <option value="sw">Swahili</option>
+          </select>
         </div>
-
-        <!-- Appearance Settings -->
-        <div class="settings-section">
-          <h3>{{ $t('settings.appearance.title') }}</h3>
-          <div class="setting-item">
-            <label>{{ $t('settings.appearance.theme') }}</label>
-            <div class="theme-options">
-              <button 
-                class="theme-btn" 
-                :class="{ active: selectedTheme === 'light' }" 
-                @click="setTheme('light')"
-              >
-                {{ $t('settings.appearance.lightTheme') }}
-              </button>
-              <button 
-                class="theme-btn" 
-                :class="{ active: selectedTheme === 'dark' }" 
-                @click="setTheme('dark')"
-              >
-                {{ $t('settings.appearance.darkTheme') }}
-              </button>
-              <button 
-                class="theme-btn" 
-                :class="{ active: selectedTheme === 'system' }" 
-                @click="setTheme('system')"
-              >
-                {{ $t('settings.appearance.systemTheme') }}
-              </button>
-            </div>
-          </div>
-          <div class="setting-item">
-            <label>{{ $t('settings.appearance.fontSize') }}</label>
-            <div class="font-size-slider">
-              <input 
-                type="range" 
-                min="80" 
-                max="120" 
-                step="10" 
-                v-model="fontSizePercent" 
-                @change="changeFontSize"
-              />
-              <span>{{ fontSizePercent }}%</span>
-            </div>
-          </div>
-        </div>
+      </div>
+      
+      <!-- Appearance Section -->
+      <div class="settings-section">
+        <h3 class="section-title">Appearance</h3>
         
-        <!-- Notifications Settings -->
-        <div class="settings-section">
-          <h3>{{ $t('settings.notifications.title') }}</h3>
-          <div class="setting-item">
-            <div class="toggle-wrapper">
-              <label for="email-notifications">{{ $t('settings.notifications.emailUpdates') }}</label>
-              <label class="toggle">
-                <input 
-                  type="checkbox" 
-                  id="email-notifications" 
-                  v-model="notifications.email"
-                />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          <div class="setting-item">
-            <div class="toggle-wrapper">
-              <label for="sound-notifications">{{ $t('settings.notifications.soundEnabled') }}</label>
-              <label class="toggle">
-                <input 
-                  type="checkbox" 
-                  id="sound-notifications" 
-                  v-model="notifications.sound"
-                />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Account Settings Section -->
-        <div class="settings-section">
-          <h3>{{ $t('settings.account.title') }}</h3>
-          <div class="setting-item">
-            <button class="secondary-btn" @click="resetUserData">
-              {{ $t('settings.account.resetUserData') }}
+        <div class="setting-item">
+          <label class="section-label">Theme</label>
+          <div class="theme-buttons">
+            <button 
+              class="theme-toggle"
+              :class="{ active: settings.theme === 'light' }"
+              @click="applyTheme('light')"
+            >
+              Light
             </button>
-            <p class="setting-description">
-              {{ $t('settings.account.resetDescription') }}
-            </p>
+            <button 
+              class="theme-toggle"
+              :class="{ active: settings.theme === 'dark' }"
+              @click="applyTheme('dark')"
+            >
+              Dark
+            </button>
+            <button 
+              class="theme-toggle"
+              :class="{ active: settings.theme === 'system' }"
+              @click="applyTheme('system')"
+            >
+              System
+            </button>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <label class="section-label">Font Size</label>
+          <div class="slider-container">
+            <input 
+              type="range" 
+              min="30" 
+              max="100" 
+              v-model.number="settings.fontSize" 
+              class="slider"
+            />
+            <span class="slider-value">{{ settings.fontSize }}%</span>
           </div>
         </div>
       </div>
       
-      <div class="actions">
-        <button class="cancel-btn" @click="closeDialog">{{ $t('settings.close') }}</button>
-        <button class="save-btn" @click="saveSettings">{{ $t('settings.save') }}</button>
+      <!-- Notifications Section -->
+      <div class="settings-section">
+        <h3 class="section-title">Notifications</h3>
+        
+        <div class="setting-item">
+          <label class="section-label">Email updates</label>
+          <div 
+            class="switch"
+            @click="settings.emailUpdates = !settings.emailUpdates"
+          >
+            <div class="switch-track" :class="{ active: settings.emailUpdates }">
+              <div class="switch-thumb"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <label class="section-label">Sound notifications</label>
+          <div 
+            class="switch"
+            @click="settings.soundNotifications = !settings.soundNotifications"
+          >
+            <div class="switch-track" :class="{ active: settings.soundNotifications }">
+              <div class="switch-thumb"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Account Section -->
+      <div class="settings-section">
+        <h3 class="section-title">Account</h3>
+        
+        <div class="setting-item">
+          <button 
+            class="btn-secondary"
+            @click="confirmResetUserData"
+          >
+            Reset User Data
+          </button>
+          <p class="reset-description">This will clear all your profile data and chat history.</p>
+        </div>
+      </div>
+      
+      <!-- Footer Buttons -->
+      <div class="dialog-footer">
+        <button 
+          class="btn-close"
+          @click="close"
+        >
+          Close
+        </button>
+        <button 
+          class="btn-save"
+          @click="save"
+        >
+          Save Settings
+        </button>
       </div>
     </div>
   </div>
@@ -122,84 +133,136 @@ export default {
   name: 'SettingsComponent',
   data() {
     return {
-      selectedLanguage: this.$i18n.locale,
-      selectedTheme: 'light',
-      fontSizePercent: 100,
-      notifications: {
-        email: false,
-        sound: true
+      // Initialize with current app settings
+      settings: {
+        language: this.$i18n ? this.$i18n.locale : 'en',
+        theme: document.documentElement.getAttribute('data-theme') || 'light',
+        fontSize: this.getSavedFontSize(),
+        emailUpdates: this.getSavedPreference('emailUpdates', false),
+        soundNotifications: this.getSavedPreference('soundNotifications', true)
       }
     }
   },
-  mounted() {
-    // Load saved settings if available
-    this.loadSettings();
-  },
   methods: {
-    closeDialog() {
-      this.$emit('close');
-    },
-    changeLanguage() {
-      this.$i18n.locale = this.selectedLanguage;
-      // For persistence across sessions (Optional: if you have this in main.js)
-      try {
-        localStorage.setItem('userLocale', this.selectedLanguage);
-      } catch (e) {
-        console.warn('Could not save language preference', e);
-      }
-    },
-    setTheme(theme) {
-      this.selectedTheme = theme;
+    // NEW METHOD - Apply theme immediately upon button click
+    applyTheme(theme) {
+      console.log('Theme button clicked:', theme);
+      
+      // Update local state
+      this.settings.theme = theme;
+      
+      // Apply theme immediately to see the change
       document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
       
-      if (theme === 'system') {
-        // Check system preference
-        const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-      }
-    },
-    changeFontSize() {
-      document.documentElement.style.fontSize = `${this.fontSizePercent}%`;
-    },
-    resetUserData() {
-      if (confirm(this.$t('settings.account.confirmReset'))) {
-        // Here you would reset user data in your actual implementation
-        console.log('User data reset requested');
-        alert(this.$t('settings.account.resetComplete'));
-      }
-    },
-    saveSettings() {
-      // Save settings to localStorage for persistence
+      // Also save to localStorage immediately for instant persistence
       try {
-        const settings = {
-          theme: this.selectedTheme,
-          fontSizePercent: this.fontSizePercent,
-          notifications: this.notifications
-        };
-        localStorage.setItem('appSettings', JSON.stringify(settings));
-        alert(this.$t('settings.saveSuccess'));
+        localStorage.setItem('theme', theme);
       } catch (e) {
-        console.warn('Could not save settings', e);
-        alert(this.$t('settings.saveError'));
+        console.warn('Error saving theme:', e);
       }
       
-      this.closeDialog();
+      // Inform parent component about theme change
+      this.$emit('themeChanged', theme);
     },
-    loadSettings() {
+    
+    // Get saved font size or default to 50%
+    getSavedFontSize() {
       try {
-        const savedSettings = localStorage.getItem('appSettings');
-        if (savedSettings) {
-          const settings = JSON.parse(savedSettings);
-          this.selectedTheme = settings.theme || 'light';
-          this.fontSizePercent = settings.fontSizePercent || 100;
-          this.notifications = settings.notifications || { email: false, sound: true };
-          
-          // Apply settings
-          this.setTheme(this.selectedTheme);
-          this.changeFontSize();
+        const fontSize = localStorage.getItem('fontSize')
+        return fontSize ? parseInt(fontSize) : 50
+      } catch (e) {
+        console.warn('Error accessing localStorage:', e)
+        return 50
+      }
+    },
+    
+    // Get saved preference with fallback
+    getSavedPreference(key, defaultValue) {
+      try {
+        const value = localStorage.getItem(key)
+        return value !== null ? JSON.parse(value) : defaultValue
+      } catch (e) {
+        console.warn(`Error accessing localStorage for ${key}:`, e)
+        return defaultValue
+      }
+    },
+    
+    // Close without saving
+    close() {
+      this.$emit('close')
+    },
+    
+    // Save settings and close
+    save() {
+      // Save language preference
+      if (this.$i18n) {
+        this.$i18n.locale = this.settings.language
+        try {
+          localStorage.setItem('userLocale', this.settings.language)
+        } catch (e) {
+          console.warn('Error saving language preference:', e)
         }
+      }
+      
+      // Ensure theme is applied and saved
+      document.documentElement.setAttribute('data-theme', this.settings.theme);
+      document.body.setAttribute('data-theme', this.settings.theme);
+      try {
+        localStorage.setItem('theme', this.settings.theme);
       } catch (e) {
-        console.warn('Could not load settings', e);
+        console.warn('Error saving theme preference:', e);
+      }
+      
+      // Save font size
+      try {
+        localStorage.setItem('fontSize', this.settings.fontSize.toString())
+        // Apply font size to root element
+        document.documentElement.style.fontSize = `${this.settings.fontSize / 50}rem`
+      } catch (e) {
+        console.warn('Error saving font size:', e)
+      }
+      
+      // Save notification preferences
+      try {
+        localStorage.setItem('emailUpdates', JSON.stringify(this.settings.emailUpdates))
+        localStorage.setItem('soundNotifications', JSON.stringify(this.settings.soundNotifications))
+      } catch (e) {
+        console.warn('Error saving notification preferences:', e)
+      }
+      
+      // Emit theme change event to parent for global handling
+      this.$emit('themeChanged', this.settings.theme);
+      
+      // Close dialog
+      this.$emit('close')
+    },
+    
+    // Show confirmation dialog before resetting user data
+    confirmResetUserData() {
+      if (confirm('Are you sure you want to reset all user data? This cannot be undone.')) {
+        this.resetUserData()
+      }
+    },
+    
+    // Reset all user data
+    resetUserData() {
+      try {
+        // Clear all localStorage items except theme and language
+        const themeValue = localStorage.getItem('theme')
+        const langValue = localStorage.getItem('userLocale')
+        
+        localStorage.clear()
+        
+        // Restore theme and language
+        if (themeValue) localStorage.setItem('theme', themeValue)
+        if (langValue) localStorage.setItem('userLocale', langValue)
+        
+        // Inform user
+        alert('User data has been reset.')
+      } catch (e) {
+        console.error('Error clearing user data:', e)
+        alert('Failed to reset user data.')
       }
     }
   }
@@ -207,169 +270,221 @@ export default {
 </script>
 
 <style scoped>
-.settings-modal {
+/* Settings dialog styling */
+.settings-overlay {
   position: fixed;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 9999;
-}
-.overlay {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.5);
-}
-.modal-content {
-  position: relative;
-  background: #fff;
-  width: 600px;
-  max-width: 90%;
-  margin: 40px auto;
-  padding: 20px;
-  border-radius: 8px;
-  overflow-y: auto;
-  max-height: 90vh;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-h2, h3 {
-  color: #333;
-  margin-top: 0;
-}
-h3 {
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #eee;
-}
-.settings-sections {
-  margin-bottom: 20px;
-}
-.settings-section {
-  margin-bottom: 24px;
-}
-.setting-item {
-  margin-bottom: 16px;
-}
-label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-}
-select, input[type="text"] {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background: #fff;
-}
-.theme-options {
-  display: flex;
-  gap: 8px;
-}
-.theme-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  background: #f5f5f5;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.theme-btn.active {
-  background: #4E97D1;
-  color: white;
-  border-color: #3A7DA0;
-}
-.font-size-slider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.font-size-slider input {
-  flex: 1;
-}
-.toggle-wrapper {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.toggle {
-  position: relative;
-  display: inline-block;
-  width: 50px;
-  height: 24px;
-}
-.toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
-  transition: .4s;
-  border-radius: 24px;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
 }
-.toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 16px;
+
+.settings-dialog {
+  width: 500px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 8px;
+  background-color: var(--bg-dialog, #ffffff);
+  color: var(--text-primary, #333333);
+  box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
+}
+
+.dialog-header {
+  padding: 1.5rem;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color, #dcdfe4);
+  color: var(--text-primary, #333333);
+}
+
+.settings-section {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color, #dcdfe4);
+}
+
+.section-title {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--text-primary, #333333);
+}
+
+.setting-item {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.section-label {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-secondary, #4d4d4d);
+}
+
+/* Theme buttons styling */
+.theme-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.theme-toggle {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.2s;
+  background-color: var(--bg-button-secondary, #e9ecef);
+  color: var(--text-button-secondary, #4d4d4d);
+  border: 1px solid var(--border-color, #dcdfe4);
+}
+
+.theme-toggle.active {
+  background-color: var(--bg-button-primary, #4E97D1);
+  color: var(--text-button-primary, #ffffff);
+  border-color: var(--bg-button-primary, #4E97D1);
+}
+
+/* Dropdown styling */
+.dropdown {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background-color: var(--bg-input, #ffffff);
+  color: var(--text-primary, #333333);
+  border: 1px solid var(--border-input, #dcdfe4);
+}
+
+/* Slider styling */
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--slider-track, #e9ecef);
+  outline: none;
+  border-radius: 2px;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
   width: 16px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
-  transition: .4s;
+  height: 16px;
   border-radius: 50%;
+  background: var(--slider-thumb, #4E97D1);
+  cursor: pointer;
 }
-input:checked + .toggle-slider {
-  background-color: #4E97D1;
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--slider-thumb, #4E97D1);
+  cursor: pointer;
+  border: none;
 }
-input:checked + .toggle-slider:before {
+
+.slider-value {
+  min-width: 3rem;
+  text-align: right;
+  color: var(--text-primary, #333333);
+}
+
+/* Switch toggle */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.switch-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--switch-track-off, #d0d0d0);
+  border-radius: 12px;
+  transition: .4s;
+}
+
+.switch-thumb {
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--switch-thumb, #ffffff);
+  border-radius: 50%;
+  transition: .4s;
+}
+
+.switch-track.active .switch-thumb {
   transform: translateX(26px);
 }
-.setting-description {
-  margin-top: 6px;
-  font-size: 0.85rem;
-  color: #666;
+
+.switch-track.active {
+  background-color: var(--switch-track-on, #4E97D1);
 }
-.secondary-btn {
-  padding: 8px 12px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
+
+/* Buttons */
+.btn-close, 
+.btn-save,
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
   border-radius: 4px;
   cursor: pointer;
+  font-weight: 500;
+  border: none;
+  transition: all 0.2s;
 }
-.secondary-btn:hover {
-  background: #e5e5e5;
+
+.btn-secondary {
+  background-color: var(--bg-button-secondary, #e9ecef);
+  color: var(--text-button-secondary, #4d4d4d);
+  border: 1px solid var(--border-color, #dcdfe4);
 }
-.actions {
+
+.btn-save {
+  background-color: var(--bg-button-primary, #4E97D1);
+  color: var(--text-button-primary, #ffffff);
+}
+
+.btn-close {
+  background-color: var(--bg-button-secondary, #e9ecef);
+  color: var(--text-button-secondary, #4d4d4d);
+}
+
+.reset-description {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-tertiary, #767676);
+}
+
+/* Footer buttons */
+.dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
-}
-.cancel-btn, .save-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.cancel-btn {
-  background: #ccc;
-  color: #333;
-}
-.cancel-btn:hover {
-  background: #bbb;
-}
-.save-btn {
-  background: #4E97D1;
-  color: #fff;
-}
-.save-btn:hover {
-  background: #3a7da0;
+  gap: 1rem;
+  padding: 1.5rem;
 }
 </style>

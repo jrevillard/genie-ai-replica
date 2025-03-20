@@ -1,0 +1,143 @@
+/* theme-variables.css - FIXED to ensure Light theme is default */
+
+/* Default (light) theme variables - applied to the root level */
+:root {
+    /* Base colors */
+    --bg-primary: #f5f7fa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f2f5;
+    --bg-dialog: #ffffff;
+    --bg-input: #ffffff;
+    --bg-navbar: linear-gradient(135deg, #4E97D1, #2C5F8A);
+    --bg-sidebar: #f0f2f5;
+    --bg-card: #ffffff;
+    --bg-button-primary: #4E97D1;
+    --bg-button-secondary: #e9ecef;
+    
+    --text-primary: #333333;
+    --text-secondary: #4d4d4d;
+    --text-tertiary: #767676;
+    --text-navbar: #ffffff;
+    --text-muted: #6c757d;
+    --text-button-primary: #ffffff;
+    --text-button-secondary: #4d4d4d;
+    
+    --border-color: #dcdfe4;
+    --border-light: #e5e7eb;
+    --border-input: #dcdfe4;
+    
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    
+    --accent-color: #4E97D1;
+    --accent-hover: #3a7da0;
+  
+    /* Status colors */
+    --status-operational: #10b981;
+    --status-degraded: #f59e0b;
+    --status-outage: #ef4444;
+    
+    /* Form elements */
+    --slider-track: #e9ecef;
+    --slider-thumb: #4E97D1;
+    --switch-track-off: #d0d0d0;
+    --switch-track-on: #4E97D1;
+    --switch-thumb: #ffffff;
+  }
+  
+  /* Dark theme variables - applied ONLY when [data-theme="dark"] is present */
+  html[data-theme="dark"],
+  body[data-theme="dark"],
+  [data-theme="dark"] {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252525;
+    --bg-tertiary: #2a2a2a;
+    --bg-dialog: #2a2a2a;
+    --bg-input: #333333;
+    --bg-navbar: linear-gradient(135deg, #2C5F8A, #1e3c58);
+    --bg-sidebar: #252525;
+    --bg-card: #2a2a2a;
+    --bg-button-primary: #4E97D1;
+    --bg-button-secondary: #3a3a3a;
+    
+    --text-primary: #f0f0f0;
+    --text-secondary: #b3b3b3;
+    --text-tertiary: #8c8c8c;
+    --text-navbar: #ffffff;
+    --text-muted: #9ca3af;
+    --text-button-primary: #ffffff;
+    --text-button-secondary: #e0e0e0;
+    
+    --border-color: #3a3a3a;
+    --border-light: #333333;
+    --border-input: #3a3a3a;
+    
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+    
+    --accent-color: #4E97D1; 
+    --accent-hover: #3a7da0;
+  
+    /* Status colors remain the same for consistency */
+    --status-operational: #10b981;
+    --status-degraded: #f59e0b;
+    --status-outage: #ef4444;
+    
+    /* Form elements */
+    --slider-track: #3a3a3a;
+    --slider-thumb: #4E97D1;
+    --switch-track-off: #4d4d4d;
+    --switch-track-on: #4E97D1;
+    --switch-thumb: #ffffff;
+  }
+  
+  /* System theme support */
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="system"],
+    body[data-theme="system"],
+    [data-theme="system"] {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252525;
+      --bg-tertiary: #2a2a2a;
+      --bg-dialog: #2a2a2a;
+      --bg-input: #333333;
+      --bg-navbar: linear-gradient(135deg, #2C5F8A, #1e3c58);
+      --bg-sidebar: #252525;
+      --bg-card: #2a2a2a;
+      --bg-button-primary: #4E97D1;
+      --bg-button-secondary: #3a3a3a;
+      
+      --text-primary: #f0f0f0;
+      --text-secondary: #b3b3b3;
+      --text-tertiary: #8c8c8c;
+      --text-navbar: #ffffff;
+      --text-muted: #9ca3af;
+      --text-button-primary: #ffffff;
+      --text-button-secondary: #e0e0e0;
+      
+      --border-color: #3a3a3a;
+      --border-light: #333333;
+      --border-input: #3a3a3a;
+      
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+      
+      --accent-color: #4E97D1;
+      --accent-hover: #3a7da0;
+  
+      /* Status colors */
+      --status-operational: #10b981;
+      --status-degraded: #f59e0b;
+      --status-outage: #ef4444;
+      
+      /* Form elements */
+      --slider-track: #3a3a3a;
+      --slider-thumb: #4E97D1;
+      --switch-track-off: #4d4d4d;
+      --switch-track-on: #4E97D1;
+      --switch-thumb: #ffffff;
+    }
+  }

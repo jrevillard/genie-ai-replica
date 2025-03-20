@@ -1,4 +1,4 @@
-<!-- App.vue -->
+<!-- App.vue - FIXED to ensure proper theme handling -->
 <template>
   <div id="app" :class="{ 'sidebar-collapsed': !isSidebarOpen }" :data-theme="theme">
     <!-- Always show public routes without authentication requirement -->
@@ -78,12 +78,23 @@ export default {
     // Load saved theme preference
     this.initTheme()
 
+    // Initialize font size from settings
+    this.initFontSize()
+
     // Adjust sidebar for mobile devices
     this.checkScreenSize()
     window.addEventListener('resize', this.checkScreenSize)
+
+    // Add listener for system theme changes if using system theme
+    this.setupSystemThemeListener()
   },
-  beforeDestroy() {
+  beforeUnmount() {
     window.removeEventListener('resize', this.checkScreenSize)
+    
+    // Remove system theme listener if it exists
+    if (this.systemThemeListener) {
+      window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener)
+    }
   },
   methods: {
     // Initialize theme from localStorage or system preference
@@ -91,34 +102,76 @@ export default {
       try {
         // First try to get from localStorage
         const savedTheme = localStorage.getItem('theme')
-        if (savedTheme) {
+        if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
           this.theme = savedTheme
         } else {
-          // If no saved preference, check system preference
-          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            this.theme = 'dark'
-          } else {
-            this.theme = 'light' // Default to light theme
-          }
+          // Default to light theme if no valid saved preference
+          this.theme = 'light'
         }
 
-        // Apply theme to document
+        // Apply theme to both document elements
         document.documentElement.setAttribute('data-theme', this.theme)
+        document.body.setAttribute('data-theme', this.theme)
+        
+        console.log('App component initialized theme to:', this.theme)
       } catch (e) {
         console.warn('Unable to get theme preference:', e)
         this.theme = 'light' // Fallback to light theme
         document.documentElement.setAttribute('data-theme', 'light')
+        document.body.setAttribute('data-theme', 'light')
+      }
+    },
+
+    // Initialize font size from settings
+    initFontSize() {
+      try {
+        const fontSize = localStorage.getItem('fontSize')
+        if (fontSize) {
+          // Apply font size to root element (base is 16px at 50%)
+          document.documentElement.style.fontSize = `${parseInt(fontSize) / 50}rem`
+        }
+      } catch (e) {
+        console.warn('Unable to get font size preference:', e)
+      }
+    },
+
+    // Setup listener for system theme changes
+    setupSystemThemeListener() {
+      // Only attach listener if the theme is 'system'
+      if (this.theme === 'system' && window.matchMedia) {
+        this.systemThemeListener = (e) => {
+          // Update UI immediately when system preference changes
+          document.documentElement.setAttribute('data-theme', 'system')
+          document.body.setAttribute('data-theme', 'system')
+          console.log('System theme changed')
+        }
+        
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', this.systemThemeListener)
       }
     },
 
     // Handle theme changes from settings
     handleThemeChange(newTheme) {
+      console.log('Theme changed to:', newTheme)
       this.theme = newTheme
+      
+      // Apply theme to both document elements for consistent cascading
       document.documentElement.setAttribute('data-theme', newTheme)
+      document.body.setAttribute('data-theme', newTheme)
+      
       try {
         localStorage.setItem('theme', newTheme)
       } catch (e) {
         console.warn('Unable to save theme preference:', e)
+      }
+      
+      // Update system theme listener status
+      if (newTheme === 'system') {
+        this.setupSystemThemeListener()
+      } else if (this.systemThemeListener) {
+        // Remove listener if not using system theme
+        window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener)
+        this.systemThemeListener = null
       }
     },
 
@@ -128,6 +181,7 @@ export default {
 
       // Ensure theme is applied after login
       document.documentElement.setAttribute('data-theme', this.theme)
+      document.body.setAttribute('data-theme', this.theme)
     },
 
     handleLogout() {
@@ -175,8 +229,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   line-height: 1.6;
-  color: #333;
-  background-color: #f5f7fa;
+  color: var(--text-primary, #333);
+  background-color: var(--bg-primary, #f5f7fa);
 }
 
 /* App layout */
@@ -198,6 +252,7 @@ body {
   overflow-y: auto;
   padding: 20px;
   transition: margin-left 0.3s ease;
+  background-color: var(--bg-primary, #f5f7fa);
 }
 
 /* Responsive adjustments */
@@ -222,39 +277,5 @@ body {
 .fade-enter,
 .fade-leave-to {
   opacity: 0;
-}
-
-/* Dark theme support */
-[data-theme="dark"] {
-  --bg-color: #1e1e1e;
-  --text-color: #f0f0f0;
-  --border-color: #444;
-  --primary-color: #5fa9e0;
-  --card-bg: #2a2a2a;
-}
-
-[data-theme="light"] {
-  --bg-color: #f5f7fa;
-  --text-color: #333;
-  --border-color: #ddd;
-  --primary-color: #4E97D1;
-  --card-bg: #fff;
-}
-
-/* Apply theme variables */
-body {
-  background-color: var(--bg-color, #f5f7fa);
-  color: var(--text-color, #333);
-}
-
-/* Direct HTML element theme override for immediate effect */
-html[data-theme="dark"] {
-  background-color: #1e1e1e;
-  color: #f0f0f0;
-}
-
-html[data-theme="light"] {
-  background-color: #f5f7fa;
-  color: #333;
 }
 </style>

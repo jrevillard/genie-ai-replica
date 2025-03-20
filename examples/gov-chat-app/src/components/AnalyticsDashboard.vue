@@ -4,8 +4,8 @@
       <h2>{{ $t('analytics.title') }}</h2>
       
       <!-- Period selector -->
-      <div class="period-selector">
-        <label>{{ $t('analytics.period') }}:</label>
+      <div class="period-selector" style="color: #000; font-weight: 600;">
+        <label style="color: #000; font-weight: 600;">{{ $t('analytics.period') }}:</label>
         <select v-model="selectedPeriod" @change="loadAnalytics">
           <option value="daily">{{ $t('analytics.periods.daily') }}</option>
           <option value="weekly">{{ $t('analytics.periods.weekly') }}</option>
@@ -45,8 +45,8 @@
       <!-- Key metrics summary -->
       <div class="metrics-summary">
         <div class="metric-card">
-          <h3>{{ $t('analytics.metrics.totalQueries') }}</h3>
-          <div class="metric-value">{{ formatValue(analytics.totalQueries) }}</div>
+          <h3 style="color: #000; font-weight: 600;">{{ $t('analytics.metrics.totalQueries') }}</h3>
+          <div class="metric-value" style="color: #000; font-weight: 700;">{{ formatValue(analytics.totalQueries) }}</div>
           <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
             {{ formatTrend(comparison.totalQueries) }}
           </div>
@@ -122,6 +122,7 @@
 </template>
 
 <script>
+<script>
 import analyticsService from '../services/analyticsService';
 import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
 import TopQueriesChart from './charts/TopQueriesChart.vue';
@@ -174,6 +175,80 @@ export default {
   created() {
     console.log('Analytics dashboard created with locale:', this.$i18n.locale);
     this.loadAnalytics();
+  },
+  mounted() {
+    // Add text fixing function
+    const fixDashboardText = () => {
+      // Target Time Period label
+      const periodLabels = document.querySelectorAll('.period-selector label, .period-selector > *:first-child');
+      periodLabels.forEach(el => {
+        el.style.setProperty('color', '#000', 'important');
+        el.style.setProperty('font-weight', '600', 'important');
+        el.style.setProperty('text-shadow', '0 0 0 #000', 'important');
+      });
+      
+      // Target metric values
+      const metricValues = document.querySelectorAll('.metric-value, .metric-card .metric-value');
+      metricValues.forEach(el => {
+        el.style.setProperty('color', '#000', 'important');
+        el.style.setProperty('font-weight', '700', 'important');
+        el.style.setProperty('text-shadow', '0 0 0 #000', 'important');
+      });
+      
+      // Target metric headings
+      const metricHeadings = document.querySelectorAll('.metric-card h3, .chart-container h3');
+      metricHeadings.forEach(el => {
+        el.style.setProperty('color', '#000', 'important');
+        el.style.setProperty('font-weight', '600', 'important');
+      });
+      
+      // Special case for the dashboard header
+      const dashboardHeader = document.querySelector('.dashboard-header h2');
+      if (dashboardHeader) {
+        dashboardHeader.style.setProperty('color', '#000', 'important');
+        dashboardHeader.style.setProperty('font-weight', '600', 'important');
+      }
+      
+      // Target trend text
+      const trendText = document.querySelectorAll('.trend');
+      trendText.forEach(el => {
+        if (el.classList.contains('neutral')) {
+          el.style.setProperty('color', '#000', 'important');
+        }
+        el.style.setProperty('font-weight', '500', 'important');
+      });
+      
+      // Target SVG text elements in charts
+      const svgTexts = document.querySelectorAll('svg text');
+      svgTexts.forEach(el => {
+        el.setAttribute('fill', '#000');
+        el.style.setProperty('font-weight', '600', 'important');
+      });
+      
+      // Target no-data messages
+      const noDataMessages = document.querySelectorAll('.no-data');
+      noDataMessages.forEach(el => {
+        el.style.setProperty('color', '#000', 'important');
+        el.style.setProperty('font-weight', '500', 'important');
+      });
+    };
+    
+    // Run immediately
+    fixDashboardText();
+    
+    // Also run whenever analytics data changes
+    this.$watch('analytics', fixDashboardText, { deep: true, immediate: true });
+    
+    // Run after a slight delay to ensure all components are rendered
+    setTimeout(fixDashboardText, 500);
+    
+    // Run periodically to catch any dynamically created elements
+    const intervalId = setInterval(fixDashboardText, 1000);
+    
+    // Clean up interval when component is destroyed
+    this.$once('hook:beforeDestroy', () => {
+      clearInterval(intervalId);
+    });
   },
   watch: {
     // Watch for language changes - force complete refresh
@@ -656,6 +731,7 @@ export default {
 <style scoped>
 .analytics-dashboard {
   padding: 20px;
+  color: #000; /* Base text color for the entire component */
 }
 
 .dashboard-header {
@@ -665,10 +741,22 @@ export default {
   margin-bottom: 20px;
 }
 
+.dashboard-header h2 {
+  color: #000;
+  font-weight: 600;
+}
+
 .period-selector {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: #000; /* Ensure Time Period label is black */
+  font-weight: 500;
+}
+
+.period-selector label {
+  color: #000; /* Explicitly set label color */
+  font-weight: 500;
 }
 
 .period-selector select,
@@ -676,6 +764,8 @@ export default {
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  color: #000; /* Ensure dropdown text is black */
+  font-weight: 500;
 }
 
 .loading-container,
@@ -706,6 +796,7 @@ export default {
 .error-message {
   color: #d32f2f;
   margin-bottom: 20px;
+  font-weight: 500;
 }
 
 .retry-button {
@@ -715,6 +806,7 @@ export default {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-weight: 500;
 }
 
 .retry-button:hover {
@@ -748,17 +840,20 @@ export default {
   margin-top: 0;
   margin-bottom: 10px;
   font-size: 14px;
-  color: #666;
+  color: #000;
+  font-weight: 600;
 }
 
 .metric-value {
   font-size: 24px;
   font-weight: bold;
   margin-bottom: 5px;
+  color: #000 !important; /* Important to force black color */
 }
 
 .trend {
   font-size: 12px;
+  font-weight: 500;
 }
 
 .trend.positive {
@@ -770,7 +865,7 @@ export default {
 }
 
 .trend.neutral {
-  color: #757575;
+  color: #000; /* Changed from #757575 to black */
 }
 
 .chart-container {
@@ -785,7 +880,8 @@ export default {
   margin-top: 0;
   margin-bottom: 15px;
   font-size: 16px;
-  color: #333;
+  color: #000;
+  font-weight: 600;
 }
 
 .half-width {
@@ -801,8 +897,9 @@ export default {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #757575;
+  color: #000;
   font-style: italic;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
@@ -823,5 +920,74 @@ export default {
   .half-width {
     width: 100%;
   }
+}
+
+/* Direct targeting of Time Period text */
+.period-selector {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* Target all labels in the period selector */
+.period-selector label {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* Target the metric values specifically */
+.metric-value {
+  color: #000 !important;
+  font-weight: 700 !important; /* Make it extra bold */
+}
+
+/* Target the metric card headings */
+.metric-card h3 {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* If you're using a global app-level style, you might add this */
+:global(.dashboard-text) {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* Add more specific overrides as needed */
+.dashboard-header h2,
+.chart-container h3,
+.period-selector,
+.period-selector label,
+.metric-value,
+.metric-card h3 {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+</style>
+
+<style>
+/* Global dashboard text fix - applied only to dashboard elements */
+.analytics-dashboard h2,
+.analytics-dashboard h3,
+.analytics-dashboard .dashboard-header h2,
+.analytics-dashboard .period-selector,
+.analytics-dashboard .period-selector label,
+.period-selector label {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+.metric-value,
+.analytics-dashboard .metric-value,
+.metrics-summary .metric-value,
+.metric-card .metric-value {
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+
+.chart-container h3,
+.analytics-dashboard .chart-container h3 {
+  color: #000 !important;
+  font-weight: 600 !important;
 }
 </style>

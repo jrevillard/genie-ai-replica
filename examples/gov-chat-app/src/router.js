@@ -26,13 +26,43 @@ const routes = [
     meta: { requiresAuth: false }
   },
 
-  // Email verification route
+  // Email verification result handler
+  {
+    path: '/verify-email-success',
+    name: 'VerifyEmailResult',
+    component: () => import('@/components/EmailVerificationScreen.vue'),
+    props: route => ({ 
+      verificationStatus: route.query.status === 'success' ? 'success' : 'error',
+      errorType: route.query.reason || null,
+      token: route.query.token || null,
+    }),
+    meta: { requiresAuth: false }
+  },
+
+  // Keep the original token route for backward compatibility
   {
     path: '/verify-email/:token',
     name: 'VerifyEmail',
     component: () => import('@/components/EmailVerificationScreen.vue'),
-    props: true,
-    meta: { requiresAuth: false }
+    props: route => ({ 
+      token: route.params.token,
+      verificationStatus: route.query.verified === 'true' ? 'success' : 
+                         route.query.verificationError ? 'error' : null,
+      errorType: route.query.verificationError || null
+    }),
+    meta: { requiresAuth: false },
+    // Add this to prevent reprocessing when query params are changed
+    beforeEnter: (to, from, next) => {
+      // If we're coming from the same path with different query params
+      // (this happens during the redirect from the server),
+      // don't trigger a new navigation as it would cause a loop
+      if (from.path === to.path && 
+         (to.query.verified !== undefined || to.query.verificationError !== undefined)) {
+        // Just update the component props without a full navigation
+        return true;
+      }
+      next();
+    }
   },
 
   {

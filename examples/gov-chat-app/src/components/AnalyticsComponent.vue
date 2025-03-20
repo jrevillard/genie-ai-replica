@@ -327,7 +327,8 @@ export default {
 .analytics-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: #000;
+  font-weight: 600;
 }
 
 .close-btn {
@@ -355,7 +356,8 @@ export default {
   margin-top: 0;
   margin-bottom: 16px;
   font-size: 1.2rem;
-  color: #333;
+  color: #000;
+  font-weight: 600;
 }
 
 .top-queries {
@@ -371,13 +373,14 @@ th {
   text-align: left;
   padding: 12px;
   background: #f5f7fa;
-  color: #333;
+  color: #000;
   font-weight: 600;
 }
 
 td {
   padding: 12px;
   border-top: 1px solid #eee;
+  color: #000;
 }
 
 .category-chart-container {
@@ -402,7 +405,7 @@ td {
   justify-content: center;
   background: rgba(255, 255, 255, 0.8);
   font-size: 1rem;
-  color: #666;
+  color: #000;
 }
 
 @media (max-width: 768px) {

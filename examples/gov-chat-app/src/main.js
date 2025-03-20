@@ -14,6 +14,7 @@ import router from './router'
 import i18n from './i18n'
 import store from './store' // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe' // Import our custom directive
+import './text-fix.css'
 
 // Determine the initial locale - prioritize:
 // 1. Previously saved user preference

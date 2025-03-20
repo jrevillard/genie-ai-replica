@@ -12,6 +12,8 @@ class AuthService {
   constructor() {
     this.tokenKey = 'user';
     this.authEndpoint = 'auth';
+    // Add a map to track in-flight requests
+    this.pendingRequests = new Map();
   }
 
   /**
@@ -260,11 +262,30 @@ class AuthService {
    * @returns {Promise} Promise with verification result
    */
   async verifyEmail(token) {
+    // If there's already a pending request for this token, return that promise
+    if (this.pendingRequests.has(`verify_${token}`)) {
+      console.log('Returning existing verification request');
+      return this.pendingRequests.get(`verify_${token}`);
+    }
+    
     try {
-      // Use httpService instead of api
-      const response = await httpService.post(`${this.authEndpoint}/verify-email`, { token });
+      // Create the verification request
+      const requestPromise = httpService.get(`${this.authEndpoint}/verify-email/${token}`);
+      
+      // Store it in pending requests
+      this.pendingRequests.set(`verify_${token}`, requestPromise);
+      
+      // Wait for the response
+      const response = await requestPromise;
+      
+      // Remove from pending requests once complete
+      this.pendingRequests.delete(`verify_${token}`);
+      
       return response.data;
     } catch (error) {
+      // Remove from pending requests if there was an error
+      this.pendingRequests.delete(`verify_${token}`);
+      
       console.error('Email verification error:', error);
       throw error;
     }

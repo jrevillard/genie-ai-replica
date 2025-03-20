@@ -63,13 +63,23 @@ export default {
     theme: {
       type: String,
       default: 'light'
+    },
+    // New props to receive verification status directly from router
+    verificationStatus: {
+      type: String,
+      default: null
+    },
+    errorType: {
+      type: String,
+      default: null
     }
   },
   data() {
     return {
       isLoading: true,
       isVerified: false,
-      errorMessage: ''
+      errorMessage: '',
+      verificationAttempted: false
     }
   },
   created() {
@@ -83,8 +93,13 @@ export default {
     this.setMobileHeight();
     window.addEventListener('resize', this.setMobileHeight);
     
-    // Verify the email token
-    this.verifyEmail();
+    // Check if we already have verification status from URL query params
+    if (this.verificationStatus) {
+      this.handleVerificationStatus();
+    } else {
+      // Only make the API call if we don't have status from the URL
+      this.verifyEmail();
+    }
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setMobileHeight);
@@ -106,12 +121,37 @@ export default {
       }
     },
     
+    // Process verification status from URL params
+    handleVerificationStatus() {
+      this.isLoading = false;
+      
+      if (this.verificationStatus === 'success') {
+        this.isVerified = true;
+      } else if (this.verificationStatus === 'error') {
+        this.isVerified = false;
+        
+        // Set appropriate error message based on error type
+        if (this.errorType === 'used') {
+          this.errorMessage = this.$t('verification.alreadyUsed');
+        } else if (this.errorType === 'expired') {
+          this.errorMessage = this.$t('verification.expired');
+        } else {
+          this.errorMessage = this.$t('verification.invalidLink');
+        }
+      }
+    },
+    
+    // Only call this if we don't have status from the URL
     async verifyEmail() {
-      if (!this.token) {
+      if (!this.token || this.verificationAttempted) {
         this.isLoading = false;
-        this.errorMessage = this.$t('verification.missingToken');
+        if (!this.token) {
+          this.errorMessage = this.$t('verification.missingToken');
+        }
         return;
       }
+      
+      this.verificationAttempted = true;
       
       try {
         // Call the auth service to verify the email

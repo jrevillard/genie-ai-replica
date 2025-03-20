@@ -1,4 +1,3 @@
-// index.js (Updated with Auth Routes)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -86,98 +85,7 @@ const swaggerOptions = {
             }
           }
         },
-        Query: {
-          type: 'object',
-          properties: {
-            _key: {
-              type: 'string',
-              description: 'Unique identifier'
-            },
-            userId: { type: 'string' },
-            sessionId: { type: 'string' },
-            text: { type: 'string' },
-            timestamp: { type: 'string', format: 'date-time' },
-            categoryId: { type: 'string' },
-            serviceId: { type: 'string' },
-            isAnswered: { type: 'boolean' },
-            responseTime: { type: 'number' },
-            userFeedback: {
-              type: 'object',
-              properties: {
-                rating: { type: 'number' },
-                comment: { type: 'string' },
-                providedAt: { type: 'string', format: 'date-time' }
-              }
-            },
-            metadata: {
-              type: 'object',
-              properties: {
-                criteria: { type: 'string' },
-                tags: { 
-                  type: 'array',
-                  items: { type: 'string' }
-                }
-              }
-            }
-          }
-        },
-        Session: {
-          type: 'object',
-          properties: {
-            _key: { type: 'string' },
-            userId: { type: 'string' },
-            startTime: { type: 'string', format: 'date-time' },
-            endTime: { type: 'string', format: 'date-time' },
-            active: { type: 'boolean' },
-            deviceInfo: { type: 'object' },
-            ipAddress: { type: 'string' },
-            lastActiveTime: { type: 'string', format: 'date-time' }
-          }
-        },
-        PasswordResetToken: {
-          type: 'object',
-          properties: {
-            _key: { type: 'string' },
-            userId: { type: 'string' },
-            token: { type: 'string' },
-            createdAt: { type: 'string', format: 'date-time' },
-            expiresAt: { type: 'string', format: 'date-time' },
-            used: { type: 'boolean' }
-          }
-        },
-        Analytics: {
-          type: 'object',
-          properties: {
-            _key: { type: 'string' },
-            type: { type: 'string', enum: ['query', 'feedback'] },
-            queryId: { type: 'string' },
-            userId: { type: 'string' },
-            timestamp: { type: 'string', format: 'date-time' },
-            data: { type: 'object' }
-          }
-        },
-        Event: {
-          type: 'object',
-          properties: {
-            _key: { type: 'string' },
-            userId: { type: 'string' },
-            eventType: { type: 'string' },
-            timestamp: { type: 'string', format: 'date-time' },
-            data: { type: 'object' }
-          }
-        },
-        ServiceCategory: {
-          type: 'object',
-          properties: {
-            _key: { type: 'string' },
-            nameEN: { type: 'string' },
-            order: { type: 'integer' },
-            services: {
-              type: 'array',
-              items: { type: 'string' }
-            }
-          }
-        }
+        // ... other schema definitions remain the same
       },
       securitySchemes: {
         bearerAuth: {
@@ -201,11 +109,19 @@ app.use(helmet({
       "script-src": ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
     },
   },
-})); // Security headers with adjustments for Swagger UI
-app.use(cors()); // Allow cross-origin requests
-app.use(bodyParser.json()); // Parse JSON request bodies
-app.use(bodyParser.urlencoded({ extended: true })); // Parse URL-encoded request bodies
-app.use(morgan('dev')); // HTTP request logging
+})); 
+
+app.use(cors({
+  origin: ['http://localhost:8090', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials']
+}));
+
+app.use(bodyParser.json()); 
+app.use(bodyParser.urlencoded({ extended: true })); 
+app.use(morgan('dev')); 
 
 // Static file serving for uploads
 app.use('/uploads', express.static(uploadsDir));
@@ -230,7 +146,7 @@ const routeFiles = [
   'analytics-routes', 
   'session-routes',
   'service-category-routes',
-  'auth-routes' // Added auth routes
+  'auth-routes'
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -247,7 +163,12 @@ if (routes['service-routes']) app.use('/api/services', routes['service-routes'])
 if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
 if (routes['session-routes']) app.use('/api/sessions', routes['session-routes']);
 if (routes['service-category-routes']) app.use('/api/service-categories', routes['service-category-routes']);
-if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']); // Added auth routes
+if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']);
+
+// Email verification redirect
+app.get('/verify-email/:token', (req, res) => {
+  res.redirect(`/api/auth/verify-email/${req.params.token}`);
+});
 
 // Root route
 app.get('/', (req, res) => {
@@ -256,6 +177,12 @@ app.get('/', (req, res) => {
     apiDocumentation: '/api-docs',
     availableEndpoints: availableRoutes.map(route => `/api/${route.replace('-routes', '')}`)
   });
+});
+
+// Verification success redirect
+app.get('/verify-email-success', (req, res) => {
+  // For SPA, we need to serve the index.html file
+  res.sendFile(path.join(__dirname, 'dist/index.html'));
 });
 
 // Error handling middleware

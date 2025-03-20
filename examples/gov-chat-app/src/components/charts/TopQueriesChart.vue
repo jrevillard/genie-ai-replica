@@ -368,11 +368,12 @@ export default {
 };
 </script>
 
+/* For TopQueriesChart.vue */
 <style scoped>
 .top-queries-chart {
   position: relative;
   width: 100%;
-  min-height: 180px; /* Reduced height */
+  min-height: 180px;
 }
 
 .loading-overlay {
@@ -393,7 +394,7 @@ export default {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
   border-top: 3px solid #4E97D1;
-  width: 24px; /* Smaller spinner */
+  width: 24px;
   height: 24px;
   animation: spin 1s linear infinite;
   margin-bottom: 8px;
@@ -410,8 +411,8 @@ export default {
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: #757575;
-  font-size: 12px; /* Smaller font */
+  color: #000;
+  font-size: 12px;
 }
 
 .error-message {
@@ -419,43 +420,44 @@ export default {
 }
 
 .table-container {
-  max-height: 140px; /* Reduced height */
+  max-height: 140px;
   overflow-y: auto;
-  margin-bottom: 8px; /* Less margin */
+  margin-bottom: 8px;
 }
 
 .top-queries-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px; /* Smaller font size */
+  font-size: 11px;
 }
 
 .top-queries-table th {
   background-color: #f5f7fa;
-  padding: 5px 6px; /* Reduced padding */
+  padding: 5px 6px;
   text-align: left;
   font-weight: 600;
-  color: #333;
+  color: #000;
   position: sticky;
   top: 0;
   z-index: 1;
-  font-size: 10px; /* Smaller header font */
+  font-size: 10px;
 }
 
 .top-queries-table td {
-  padding: 4px 6px; /* Reduced padding */
+  padding: 4px 6px;
   border-top: 1px solid #eee;
+  color: #000;
 }
 
 .top-queries-table .rank {
   text-align: center;
-  width: 30px; /* Narrower */
+  width: 30px;
 }
 
 .top-queries-table .count,
 .top-queries-table .avg-time {
   text-align: right;
-  width: 70px; /* Narrower */
+  width: 70px;
 }
 
 .top-queries-table .query-text {
@@ -463,11 +465,12 @@ export default {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 300px;
+  color: #000;
 }
 
 .stacked-bar-chart {
   width: 100%;
-  height: 100px; /* Fixed height for the chart */
+  height: 100px;
   margin-top: 5px;
 }
 
@@ -481,5 +484,109 @@ export default {
   pointer-events: none;
   opacity: 0;
   z-index: 1000;
+}
+</style>
+
+/* For UsageTrendChart.vue */
+<style scoped>
+.usage-trend-chart {
+  position: relative;
+  width: 100%;
+  height: 300px;
+}
+
+.chart-container {
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+  padding: 10px;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+  border-radius: 8px;
+}
+
+.spinner {
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 3px solid #4E97D1;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-container, .no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #000;
+  font-style: italic;
+  border-radius: 8px;
+}
+
+.error-message {
+  color: #d32f2f;
+}
+
+:deep(.x-axis line),
+:deep(.y-axis-left line),
+:deep(.y-axis-right line) {
+  stroke: #000;
+}
+
+:deep(.x-axis path),
+:deep(.y-axis-left path),
+:deep(.y-axis-right path) {
+  stroke: #000;
+}
+
+:deep(.x-axis text),
+:deep(.y-axis-left text),
+:deep(.y-axis-right text) {
+  fill: #000;
+}
+
+:deep(.grid line) {
+  stroke: #e0e0e0;
+  stroke-opacity: 0.5;
+}
+
+:deep(.grid path) {
+  stroke-width: 0;
+}
+
+/* Global styles for tooltip */
+:global(.d3-tooltip) {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1000;
+  max-width: 250px;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.4);
 }
 </style>

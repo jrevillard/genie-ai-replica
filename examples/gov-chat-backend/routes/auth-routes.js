@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth-middleware');
+const path = require('path');
 
 /**
  * @swagger
@@ -141,6 +142,29 @@ router.get('/me', authMiddleware.authenticate, authController.getCurrentUser);
  *         description: Redirects to login page with verification status
  */
 router.get('/verify-email/:token', authController.verifyEmail);
+
+/**
+ * @swagger
+ * /auth/verify-email-success:
+ *   get:
+ *     summary: Email verification result page
+ *     description: Displays the result of email verification
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [success, error]
+ *         description: Verification result status
+ *     responses:
+ *       200:
+ *         description: Serves the SPA to handle verification result
+ */
+router.get('/verify-email-success', (req, res) => {
+    // Serve the frontend SPA to handle this route
+    res.sendFile(path.resolve(__dirname, '../../dist/index.html'));
+  });
 
 /**
  * @swagger

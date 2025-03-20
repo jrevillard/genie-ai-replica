@@ -81,7 +81,7 @@ export default {
       handler() {
         // Clear existing tooltips to prevent duplicates
         d3.selectAll('.d3-tooltip').remove();
-        
+
         // Re-render chart with new translations
         this.$nextTick(() => {
           if (this.chartData && this.chartData.length > 0) {
@@ -97,14 +97,14 @@ export default {
   },
   mounted() {
     this.initChartDimensions();
-    
+
     if (this.externalData && this.data.length > 0) {
       this.chartData = this.data;
       this.renderChart();
     } else if (!this.externalData) {
       this.fetchData();
     }
-    
+
     window.addEventListener('resize', this.handleResize);
   },
   beforeUnmount() {
@@ -114,31 +114,31 @@ export default {
   methods: {
     async fetchData() {
       if (this.externalData) return;
-      
+
       this.loading = true;
       this.error = null;
-      
+
       try {
         const params = analyticsService.calculateTimeSeriesParams(
-          this.period, 
+          this.period,
           this.selectedDate
         );
-        
+
         const url = `/api/analytics/timeseries/queries`;
-        
+
         console.log(`Fetching time series data from ${url} with params:`, params);
-        
+
         const response = await fetch(`${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`);
-        
+
         if (!response.ok) {
           throw new Error(`API request failed with status ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (Array.isArray(data) && data.length > 0) {
           console.log('Time series data loaded successfully:', data);
-          
+
           this.chartData = data.map(item => ({
             timestamp: item.timestamp || '',
             dateLabel: this.formatDate(item.timestamp),
@@ -149,7 +149,7 @@ export default {
           console.warn('Empty or invalid time series data received:', data);
           this.chartData = this.generateSampleData();
         }
-        
+
         this.renderChart();
       } catch (error) {
         console.error('Error loading time series data:', error);
@@ -160,10 +160,10 @@ export default {
         this.loading = false;
       }
     },
-    
+
     formatDate(dateString) {
       if (!dateString) return '';
-      
+
       try {
         const date = new Date(dateString);
         return date.toLocaleDateString(this.$i18n.locale);
@@ -171,15 +171,15 @@ export default {
         return dateString;
       }
     },
-    
+
     generateSampleData() {
       const result = [];
       const today = new Date();
-      
+
       for (let i = 30; i > 0; i--) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
-        
+
         result.push({
           timestamp: date.toISOString(),
           dateLabel: date.toLocaleDateString(this.$i18n.locale),
@@ -187,34 +187,34 @@ export default {
           userCount: Math.floor(Math.random() * 200)
         });
       }
-      
+
       console.log('Generated sample data for chart:', result);
       return result;
     },
-    
+
     initChartDimensions() {
       if (!this.$refs.chartContainer) return;
-      
+
       const container = this.$refs.chartContainer;
       this.width = container.clientWidth;
       this.height = 300;
     },
-    
+
     handleResize() {
       this.initChartDimensions();
       this.renderChart();
     },
-    
+
     renderChart() {
       if (!this.chartData || this.chartData.length === 0 || !this.$refs.chartContainer) return;
-      
+
       // Clear previous chart
       d3.select(this.$refs.chartContainer).selectAll('*').remove();
-      
+
       const margin = { top: 40, right: 60, bottom: 50, left: 60 };
       const width = this.width - margin.left - margin.right;
       const height = this.height - margin.top - margin.bottom;
-      
+
       // Create SVG element
       const svg = d3.select(this.$refs.chartContainer)
         .append('svg')
@@ -222,10 +222,10 @@ export default {
         .attr('height', this.height)
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
-      
+
       // Create defs for gradients and filters
       const defs = svg.append('defs');
-      
+
       // Add drop shadow filter
       defs.append('filter')
         .attr('id', 'drop-shadow')
@@ -235,7 +235,7 @@ export default {
         .attr('dy', 3)
         .attr('stdDeviation', 3)
         .attr('flood-color', 'rgba(0,0,0,0.3)');
-      
+
       // Add bar gradient
       const barGradient = defs.append('linearGradient')
         .attr('id', 'bar-gradient')
@@ -243,15 +243,15 @@ export default {
         .attr('y1', '0%')
         .attr('x2', '0%')
         .attr('y2', '100%');
-      
+
       barGradient.append('stop')
         .attr('offset', '0%')
         .attr('stop-color', '#62d9a6'); // Lighter mint green
-      
+
       barGradient.append('stop')
         .attr('offset', '100%')
         .attr('stop-color', '#2da676'); // Darker mint green
-      
+
       // Add blue area gradient
       const areaGradient = defs.append('linearGradient')
         .attr('id', 'area-gradient')
@@ -259,17 +259,17 @@ export default {
         .attr('y1', '0%')
         .attr('x2', '0%')
         .attr('y2', '100%');
-      
+
       areaGradient.append('stop')
         .attr('offset', '0%')
         .attr('stop-color', '#4682B4')
         .attr('stop-opacity', 0.7);
-      
+
       areaGradient.append('stop')
         .attr('offset', '100%')
         .attr('stop-color', '#4682B4')
         .attr('stop-opacity', 0.1);
-      
+
       // Add line gradient
       const lineGradient = defs.append('linearGradient')
         .attr('id', 'line-gradient')
@@ -277,15 +277,15 @@ export default {
         .attr('y1', '0%')
         .attr('x2', '100%')
         .attr('y2', '0%');
-      
+
       lineGradient.append('stop')
         .attr('offset', '0%')
         .attr('stop-color', '#5b9bd5'); // Start color
-      
+
       lineGradient.append('stop')
         .attr('offset', '100%')
         .attr('stop-color', '#3a6da0'); // End color
-      
+
       // Parse dates and prepare data
       const data = this.chartData.map(d => {
         return {
@@ -295,22 +295,22 @@ export default {
           userCount: d.userCount
         };
       }).sort((a, b) => a.timestamp - b.timestamp);
-      
+
       // Create scales
       const x = d3.scaleTime()
         .range([0, width])
         .domain(d3.extent(data, d => d.timestamp));
-      
+
       const yLeft = d3.scaleLinear()
         .range([height, 0])
         .domain([0, d3.max(data, d => d.value) * 1.1])
         .nice();
-      
+
       const yRight = d3.scaleLinear()
         .range([height, 0])
         .domain([0, d3.max(data, d => d.userCount) * 1.2])
         .nice();
-      
+
       // Add chart background with gradient
       svg.append('rect')
         .attr('width', width)
@@ -318,7 +318,7 @@ export default {
         .attr('fill', '#f9f9f9')
         .attr('rx', 5)
         .attr('ry', 5);
-      
+
       // Draw background grid
       svg.append('g')
         .attr('class', 'grid')
@@ -331,7 +331,7 @@ export default {
         .selectAll('line')
         .attr('stroke', '#e0e0e0')
         .attr('stroke-dasharray', '3,3');
-      
+
       svg.append('g')
         .attr('class', 'grid')
         .call(
@@ -342,18 +342,18 @@ export default {
         .selectAll('line')
         .attr('stroke', '#e0e0e0')
         .attr('stroke-dasharray', '3,3');
-      
+
       // Calculate 60% wider bar width
       const barWidth = Math.min(16, width / data.length * 0.7); // Increased from 10 to 16 (60% wider)
-      
+
       // Add bars for query counts with 3D effect
       const bars = svg.selectAll('.bar-group')
         .data(data)
         .enter()
         .append('g')
         .attr('class', 'bar-group')
-        .attr('transform', d => `translate(${x(d.timestamp) - barWidth/2}, 0)`);
-      
+        .attr('transform', d => `translate(${x(d.timestamp) - barWidth / 2}, 0)`);
+
       // Main bar with gradient
       bars.append('rect')
         .attr('class', 'bar')
@@ -365,7 +365,7 @@ export default {
         .attr('ry', 1)
         .style('filter', 'url(#drop-shadow)')
         .style('opacity', 0.85);
-      
+
       // Top highlight for 3D effect
       bars.append('rect')
         .attr('width', barWidth)
@@ -374,14 +374,14 @@ export default {
         .attr('fill', '#ffffff')
         .attr('opacity', 0.5)
         .attr('rx', 1);
-      
+
       // Create the area fill below line (blue hue over the bars)
       const area = d3.area()
         .x(d => x(d.timestamp))
         .y0(height)
         .y1(d => yRight(d.userCount))
         .curve(d3.curveCardinal.tension(0.5));
-      
+
       // Add the blue area fill with reduced opacity
       svg.append('path')
         .datum(data)
@@ -389,13 +389,13 @@ export default {
         .attr('fill', 'url(#area-gradient)')
         .attr('d', area)
         .attr('opacity', 0.4); // Reduced opacity for the area fill
-      
+
       // Add line for user counts with THINNER styling
       const line = d3.line()
         .x(d => x(d.timestamp))
         .y(d => yRight(d.userCount))
         .curve(d3.curveCardinal.tension(0.5));
-      
+
       // Add line shadow with reduced size
       svg.append('path')
         .datum(data)
@@ -406,7 +406,7 @@ export default {
         .attr('stroke-opacity', 0.2)
         .attr('d', line)
         .attr('transform', 'translate(1,1)'); // Reduced shadow offset
-      
+
       // Add the actual line with reduced thickness
       svg.append('path')
         .datum(data)
@@ -415,7 +415,7 @@ export default {
         .attr('stroke', 'url(#line-gradient)')
         .attr('stroke-width', 1.5) // Reduced from 3
         .attr('d', line);
-      
+
       // Add circles for data points with smaller size
       svg.selectAll('.dot-shadow')
         .data(data)
@@ -426,7 +426,7 @@ export default {
         .attr('cy', d => yRight(d.userCount) + 1)
         .attr('r', 3) // Reduced from 4.5
         .attr('fill', 'rgba(0,0,0,0.2)');
-      
+
       svg.selectAll('.dot')
         .data(data)
         .enter()
@@ -438,7 +438,7 @@ export default {
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#ffffff')
         .attr('stroke-width', 1); // Reduced from 1.5
-      
+
       // Draw axes with styled appearance
       const xAxis = d3.axisBottom(x)
         .ticks(d3.timeDay.every(Math.ceil(data.length / 12)))
@@ -447,7 +447,7 @@ export default {
           const day = d.getDate();
           return `${month} ${day}`;
         });
-      
+
       svg.append('g')
         .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
@@ -456,25 +456,28 @@ export default {
         .style('text-anchor', 'end')
         .style('font-weight', 'bold')
         .style('font-size', '11px')
+        .style('fill', '#000') // Changed to black
         .attr('dx', '-.8em')
         .attr('dy', '.15em')
         .attr('transform', 'rotate(-45)');
-      
+
       svg.append('g')
         .attr('class', 'y-axis-left')
         .call(d3.axisLeft(yLeft).ticks(5))
         .selectAll('text')
         .style('font-weight', 'bold')
-        .style('font-size', '11px');
-      
+        .style('font-size', '11px')
+        .style('fill', '#000'); // Changed to black
+
       svg.append('g')
         .attr('class', 'y-axis-right')
         .attr('transform', `translate(${width},0)`)
         .call(d3.axisRight(yRight).ticks(5))
         .selectAll('text')
         .style('font-weight', 'bold')
-        .style('font-size', '11px');
-      
+        .style('font-size', '11px')
+        .style('fill', '#000'); // Changed to black
+
       // Enhanced chart title with shadow
       svg.append('text')
         .attr('x', width / 2)
@@ -482,14 +485,14 @@ export default {
         .attr('text-anchor', 'middle')
         .attr('font-size', '14px')
         .attr('font-weight', 'bold')
-        .attr('fill', '#333')
+        .attr('fill', '#000') // Changed from #333 to black
         .text(this.$t('charts.usageTrend'));
-      
+
       // Add enhanced legend with 3D effects
       const legendBox = svg.append('g')
         .attr('class', 'legend-box')
-        .attr('transform', `translate(${width/2 - 170}, -15)`);
-      
+        .attr('transform', `translate(${width / 2 - 170}, -15)`);
+
       // Legend background
       legendBox.append('rect')
         .attr('x', -5)
@@ -501,10 +504,10 @@ export default {
         .attr('fill', '#fff')
         .attr('stroke', '#eee')
         .style('filter', 'url(#drop-shadow)');
-      
+
       const legend = legendBox.append('g')
         .attr('class', 'legend');
-      
+
       // Total Queries legend
       legend.append('rect')
         .attr('x', 10)
@@ -514,15 +517,16 @@ export default {
         .attr('fill', 'url(#bar-gradient)')
         .attr('rx', 1)
         .attr('ry', 1);
-      
+
       legend.append('text')
         .attr('x', 30)
         .attr('y', 0)
         .attr('dy', '.15em')
         .style('font-size', '12px')
         .style('font-weight', 'bold')
+        .style('fill', '#000') // Changed to black
         .text(this.$t('charts.tooltip.totalQueries'));
-      
+
       // Unique Users legend with thinner line
       legend.append('line')
         .attr('x1', 170)
@@ -531,7 +535,7 @@ export default {
         .attr('y2', 0)
         .attr('stroke', '#5b9bd5')
         .attr('stroke-width', 1.5); // Reduced from 2.5
-      
+
       legend.append('circle')
         .attr('cx', 185)
         .attr('cy', 0)
@@ -539,15 +543,16 @@ export default {
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#fff')
         .attr('stroke-width', 1); // Reduced from 1.5
-      
+
       legend.append('text')
         .attr('x', 210)
         .attr('y', 0)
         .attr('dy', '.15em')
         .style('font-size', '12px')
         .style('font-weight', 'bold')
+        .style('fill', '#000') // Changed to black
         .text(this.$t('charts.tooltip.uniqueUsers'));
-      
+
       // Create enhanced tooltip div
       if (d3.select('body').select('.d3-tooltip').empty()) {
         d3.select('body')
@@ -564,7 +569,7 @@ export default {
           .style('opacity', 0)
           .style('z-index', 1000);
       }
-      
+
       // Add interactive overlay with vertical guide line
       const verticalLine = svg.append('line')
         .attr('class', 'vertical-line')
@@ -574,7 +579,7 @@ export default {
         .attr('stroke-width', 1)
         .attr('stroke-dasharray', '3,3')
         .style('opacity', 0);
-      
+
       // Add hover dots that appear on the guide line
       const hoverDotLeft = svg.append('circle')
         .attr('class', 'hover-dot')
@@ -583,7 +588,7 @@ export default {
         .attr('stroke', '#fff')
         .attr('stroke-width', 1.5)
         .style('opacity', 0);
-      
+
       const hoverDotRight = svg.append('circle')
         .attr('class', 'hover-dot')
         .attr('r', 3) // Reduced from 5
@@ -591,7 +596,7 @@ export default {
         .attr('stroke', '#fff')
         .attr('stroke-width', 1) // Reduced from 1.5
         .style('opacity', 0);
-      
+
       svg.append('rect')
         .attr('width', width)
         .attr('height', height)
@@ -611,52 +616,52 @@ export default {
         })
         .on('mousemove', (event) => {
           const mouseX = d3.pointer(event)[0];
-          
+
           // Find the closest data point
           const bisect = d3.bisector(d => d.timestamp).left;
           const x0 = x.invert(mouseX);
           const i = bisect(data, x0, 1);
-          
+
           if (i === 0 || i >= data.length) {
             return;
           }
-          
+
           const d0 = data[i - 1];
           const d1 = data[i];
           const d = x0 - d0.timestamp > d1.timestamp - x0 ? d1 : d0;
-          
+
           // Update vertical line position
           verticalLine
             .attr('x1', x(d.timestamp))
             .attr('x2', x(d.timestamp));
-          
+
           // Update hover dots positions
           hoverDotLeft
             .attr('cx', x(d.timestamp))
             .attr('cy', yLeft(d.value));
-          
+
           hoverDotRight
             .attr('cx', x(d.timestamp))
             .attr('cy', yRight(d.userCount));
-          
+
           // Format the tooltip content
           const totalQueriesLabel = this.$t('charts.tooltip.totalQueries');
           const uniqueUsersLabel = this.$t('charts.tooltip.uniqueUsers');
-          
+
           const tooltipContent = `
-            <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
-              ${d.dateLabel}
-            </div>
-            <div style="margin: 5px 0;">
-              <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, #62d9a6, #2da676); border-radius: 2px; vertical-align: middle;"></span>
-              ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
-            </div>
-            <div style="margin: 5px 0;">
-              <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: #5b9bd5; border-radius: 50%; vertical-align: middle;"></span>
-              ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
-            </div>
-          `;
-          
+        <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
+          ${d.dateLabel}
+        </div>
+        <div style="margin: 5px 0;">
+          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, #62d9a6, #2da676); border-radius: 2px; vertical-align: middle;"></span>
+          ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
+        </div>
+        <div style="margin: 5px 0;">
+          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: #5b9bd5; border-radius: 50%; vertical-align: middle;"></span>
+          ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
+        </div>
+      `;
+
           // Position and show the tooltip
           d3.select('.d3-tooltip')
             .html(tooltipContent)
@@ -710,35 +715,64 @@ export default {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
-.error-container, .no-data {
+.error-container,
+.no-data {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
   text-align: center;
-  color: #757575;
+  color: #000;
+  /* Changed from #757575 to black */
   font-style: italic;
+  font-weight: 500;
+  /* Added font weight */
   border-radius: 8px;
 }
 
 .error-message {
   color: #d32f2f;
+  font-weight: 500;
+  /* Added font weight */
 }
 
+/* Deep selectors for D3 elements */
 :deep(.x-axis line),
 :deep(.y-axis-left line),
 :deep(.y-axis-right line) {
-  stroke: #ccc;
+  stroke: #000;
+  /* Changed from #ccc to black */
 }
 
 :deep(.x-axis path),
 :deep(.y-axis-left path),
 :deep(.y-axis-right path) {
-  stroke: #ccc;
+  stroke: #000;
+  /* Changed from #ccc to black */
+}
+
+:deep(.x-axis text),
+:deep(.y-axis-left text),
+:deep(.y-axis-right text) {
+  fill: #000 !important;
+  /* Important to override any inline styles */
+  font-weight: 600 !important;
+  /* Force bold */
+}
+
+:deep(text) {
+  fill: #000 !important;
+  /* Ensure all text elements use black */
+  font-weight: 600 !important;
 }
 
 :deep(.grid line) {
@@ -761,6 +795,7 @@ export default {
   opacity: 0;
   z-index: 1000;
   max-width: 250px;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
+  font-weight: bold;
 }
 </style>

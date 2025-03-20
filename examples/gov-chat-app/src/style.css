@@ -262,3 +262,179 @@ main > div:first-child {
   z-index: 99999 !important;
   position: relative !important;
 }
+
+/* ------------------------------------------------------------------- */
+/* ANALYTICS DASHBOARD OVERRIDES - Force text coloring to be dark and visible */
+
+/* Title and Time Period label overrides */
+.analytics-dashboard h2,
+.analytics-dashboard .dashboard-header h2,
+.period-selector,
+.period-selector label,
+.dashboard-header label {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* Metric cards text */
+.metric-card h3,
+.metric-card .metric-value,
+.metrics-summary h3,
+.metrics-summary .metric-value {
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+
+/* Value numbers in metric cards */
+.metric-value {
+  color: #000 !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 0 #000; /* Help with font rendering */
+}
+
+/* Chart container titles */
+.chart-container h3,
+.half-width h3,
+.full-width h3 {
+  color: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* No data messages */
+.no-data {
+  color: #000 !important;
+  font-weight: 500 !important;
+}
+
+/* D3 chart axis and labels - these need to be overridden at the SVG level */
+.x-axis text,
+.y-axis-left text,
+.y-axis-right text,
+svg text {
+  fill: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* Specific targeting for trend indicators */
+.trend {
+  font-weight: 500 !important;
+}
+.trend.neutral {
+  color: #000 !important;
+}
+
+/* Table headers and data for TopQueriesChart */
+.top-queries-table th,
+.top-queries-table td,
+.top-queries-table .query-text {
+  color: #000 !important;
+  font-weight: 500 !important;
+}
+
+/* Category chart legends */
+.chart-legend text,
+.legend text {
+  fill: #000 !important;
+  font-weight: 600 !important;
+}
+
+/* Error and loading states */
+.error-message,
+.loading-container p {
+  color: #000 !important;
+  font-weight: 500 !important;
+}
+
+/* ------------------------------------------------------------------- */
+/* AGGRESSIVE ANALYTICS DASHBOARD TEXT FIX - Add to style.css */
+
+/* Target everything in the analytics dashboard with !important */
+.analytics-dashboard,
+.analytics-dashboard *,
+[class*="analytics"],
+[class*="dashboard"],
+[class*="metrics"],
+[class*="chart"],
+[class*="period"],
+[class*="queries"] {
+  color: #000 !important;
+  font-weight: normal !important;
+}
+
+/* Target specific elements with extra force */
+.analytics-dashboard h2,
+.analytics-dashboard h3,
+.analytics-dashboard .period-selector,
+.analytics-dashboard .period-selector label,
+.analytics-dashboard label,
+.analytics-dashboard .metric-value,
+.period-selector,
+label[for*="period"],
+div:has(> label:contains("Time Period")),
+div:has(> span:contains("Time Period")) {
+  color: #000 !important;
+  font-weight: 600 !important;
+  text-shadow: 0 0 0 #000 !important;
+  -webkit-text-stroke: 0.2px #000 !important; /* Add slight stroke to text */
+}
+
+/* Target the metric values specifically with extremely high specificity */
+.metric-value,
+.analytics-dashboard .metric-value,
+.metrics-summary .metric-value,
+.metric-card .metric-value,
+div[class*="metric"] > div,
+.metric-card > div:nth-child(2),
+[class*="value"],
+[class*="metric"] [class*="value"],
+div:has(> [class*="trend"]) {
+  color: #000 !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 0 #000 !important;
+  -webkit-text-stroke: 0.3px #000 !important;
+  font-size: 24px !important;
+}
+
+/* Target "Time Period" directly by attempting to match text content */
+div:has(> span:contains("Time")),
+span:contains("Time Period"),
+label:contains("Time Period"),
+div.period-selector > *:first-child,
+[class*="period"] > *:first-child {
+  color: #000 !important;
+  font-weight: 600 !important;
+  text-shadow: 0 0 0 #000 !important;
+  -webkit-text-stroke: 0.2px #000 !important;
+}
+
+/* Force SVG text to be black with !important */
+svg text,
+g text,
+.x-axis text,
+.y-axis text,
+.axis text,
+[class*="axis"] text,
+text.tick,
+text.label,
+text.value {
+  fill: #000 !important;
+  color: #000 !important;
+  font-weight: 600 !important;
+  stroke: none !important;
+}
+
+/* Emergency fix for all headings and text in any Vue component */
+[data-v-*] h1,
+[data-v-*] h2,
+[data-v-*] h3,
+[data-v-*] h4,
+[data-v-*] h5,
+[data-v-*] h6,
+[data-v-*] label,
+[data-v-*] div.metric-value,
+[data-v-*] div.period-selector,
+[data-v-*] span {
+  color: #000 !important;
+  font-weight: 600 !important;
+  text-shadow: 0 0 0 #000 !important;
+}

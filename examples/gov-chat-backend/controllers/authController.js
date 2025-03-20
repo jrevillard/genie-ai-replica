@@ -13,17 +13,17 @@ class AuthController {
   async register(req, res) {
     try {
       const userData = req.body;
-      
+
       // Validate required fields
       if (!userData.loginName || !userData.email || !userData.encPassword) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Missing required fields: loginName, email, and encPassword are required' 
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: loginName, email, and encPassword are required'
         });
       }
-      
+
       const result = await authService.register(userData);
-      
+
       // Return success without accessToken for email verification flow
       const { accessToken, ...userWithoutToken } = result;
       res.status(201).json({
@@ -33,12 +33,12 @@ class AuthController {
       });
     } catch (error) {
       console.error('Registration error:', error);
-      
+
       // Handle specific errors
       if (error.message.includes('already exists')) {
         return res.status(409).json({ success: false, message: error.message });
       }
-      
+
       res.status(500).json({ success: false, message: 'Registration failed' });
     }
   }
@@ -51,31 +51,31 @@ class AuthController {
   async login(req, res) {
     try {
       const { loginName, encPassword } = req.body;
-      
+
       // Validate required fields
       if (!loginName || !encPassword) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Missing required fields: loginName and encPassword are required' 
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: loginName and encPassword are required'
         });
       }
-      
+
       const result = await authService.login(loginName, encPassword);
       res.json(result);
     } catch (error) {
       console.error('Login error:', error);
-      
+
       // Handle specific errors
       if (error.message === 'User not found' || error.message === 'Invalid password') {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       } else if (error.message === 'Email not verified') {
-        return res.status(403).json({ 
-          success: false, 
+        return res.status(403).json({
+          success: false,
           message: 'Email not verified. Please check your email for verification instructions.',
           requiresVerification: true
         });
       }
-      
+
       res.status(500).json({ success: false, message: 'Login failed' });
     }
   }
@@ -88,11 +88,11 @@ class AuthController {
   async logout(req, res) {
     try {
       const userId = req.user.userId;
-      
+
       if (!userId) {
         return res.status(400).json({ success: false, message: 'User ID is required' });
       }
-      
+
       const result = await authService.logout(userId);
       res.json(result);
     } catch (error) {
@@ -111,16 +111,24 @@ class AuthController {
       const { token } = req.params;
       
       if (!token) {
-        return res.redirect('/login?verificationError=noToken');
+        return res.status(400).send(`
+          <html>
+            <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?error=noToken'" /></head>
+            <body>Redirecting...</body>
+          </html>
+        `);
       }
       
       const result = await authService.verifyEmail(token);
       
       if (result.success) {
-        // Redirect to login with success message
-        return res.redirect('/login?verified=true');
+        return res.status(200).send(`
+          <html>
+            <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?verified=true'" /></head>
+            <body>Email verified successfully! Redirecting...</body>
+          </html>
+        `);
       } else {
-        // Redirect with appropriate error
         let errorType = 'invalid';
         
         if (result.expired) {
@@ -129,11 +137,21 @@ class AuthController {
           errorType = 'used';
         }
         
-        return res.redirect(`/login?verificationError=${errorType}`);
+        return res.status(400).send(`
+          <html>
+            <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?verified=false&error=${errorType}'" /></head>
+            <body>Verification failed. Redirecting...</body>
+          </html>
+        `);
       }
     } catch (error) {
       console.error('Email verification error:', error);
-      res.redirect('/login?verificationError=unknown');
+      return res.status(500).send(`
+        <html>
+          <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?verified=false&error=unknown'" /></head>
+          <body>An error occurred. Redirecting...</body>
+        </html>
+      `);
     }
   }
 
@@ -145,20 +163,20 @@ class AuthController {
   async resendVerificationEmail(req, res) {
     try {
       const { email } = req.body;
-      
+
       if (!email) {
         return res.status(400).json({ success: false, message: 'Email is required' });
       }
-      
+
       const result = await authService.resendVerificationEmail(email);
       res.json(result);
     } catch (error) {
       console.error('Resend verification email error:', error);
-      
+
       // For security, don't reveal specific errors
-      res.status(500).json({ 
-        success: true, 
-        message: 'If your email exists in our system, a verification email has been sent' 
+      res.status(500).json({
+        success: true,
+        message: 'If your email exists in our system, a verification email has been sent'
       });
     }
   }
@@ -171,20 +189,20 @@ class AuthController {
   async initiatePasswordReset(req, res) {
     try {
       const { email } = req.body;
-      
+
       if (!email) {
         return res.status(400).json({ success: false, message: 'Email is required' });
       }
-      
+
       const result = await authService.initiatePasswordReset(email);
       res.json(result);
     } catch (error) {
       console.error('Password reset initiation error:', error);
-      
+
       // For security, don't reveal specific errors
-      res.status(500).json({ 
-        success: false, 
-        message: 'If your email exists in our system, a password reset link has been sent to your email' 
+      res.status(500).json({
+        success: false,
+        message: 'If your email exists in our system, a password reset link has been sent to your email'
       });
     }
   }
@@ -197,13 +215,13 @@ class AuthController {
   async validateResetToken(req, res) {
     try {
       const { token } = req.body;
-      
+
       if (!token) {
         return res.status(400).json({ success: false, message: 'Token is required' });
       }
-      
+
       const result = await authService.validateResetToken(token);
-      
+
       if (!result.valid) {
         // Different status codes for different validation errors
         if (result.expired) {
@@ -214,7 +232,7 @@ class AuthController {
         }
         return res.status(400).json({ success: false, ...result }); // Bad Request (400) for invalid tokens
       }
-      
+
       res.json({ success: true, ...result });
     } catch (error) {
       console.error('Token validation error:', error);
@@ -230,13 +248,13 @@ class AuthController {
   async resetPassword(req, res) {
     try {
       const { token, newPassword } = req.body;
-      
+
       if (!token || !newPassword) {
         return res.status(400).json({ success: false, message: 'Token and newPassword are required' });
       }
-      
+
       const result = await authService.resetPassword(token, newPassword);
-      
+
       if (!result.success) {
         // Different status codes for different errors
         if (result.expired) {
@@ -247,7 +265,7 @@ class AuthController {
         }
         return res.status(400).json({ success: false, ...result }); // Bad Request (400) for invalid tokens
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error('Password reset error:', error);
@@ -264,28 +282,28 @@ class AuthController {
     try {
       const userId = req.user.userId;
       const { currentPassword, newPassword } = req.body;
-      
+
       if (!userId || !currentPassword || !newPassword) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID, currentPassword, and newPassword are required' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID, currentPassword, and newPassword are required'
         });
       }
-      
+
       const result = await authService.changePassword(userId, currentPassword, newPassword);
       res.json(result);
     } catch (error) {
       console.error('Password change error:', error);
-      
+
       // Handle specific errors
       if (error.message === 'Current password is incorrect') {
         return res.status(401).json({ success: false, message: error.message });
       }
-      
+
       res.status(500).json({ success: false, message: 'Password change failed' });
     }
   }
-  
+
   /**
    * Get current user info
    * @param {Object} req - Express request object
@@ -294,27 +312,27 @@ class AuthController {
   async getCurrentUser(req, res) {
     try {
       const userId = req.user.userId;
-      
+
       if (!userId) {
         return res.status(400).json({ success: false, message: 'User ID is required' });
       }
-      
+
       const user = await authService.getUserById(userId);
-      
+
       if (!user) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
-      
+
       // Remove sensitive information
       const { encPassword, ...userWithoutPassword } = user;
-      
+
       res.json({ success: true, user: userWithoutPassword });
     } catch (error) {
       console.error('Get current user error:', error);
       res.status(500).json({ success: false, message: 'Failed to retrieve user information' });
     }
   }
-  
+
   /**
    * Clean up expired tokens (admin endpoint)
    * @param {Object} req - Express request object

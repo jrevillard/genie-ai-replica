@@ -122,7 +122,6 @@
 </template>
 
 <script>
-<script>
 import analyticsService from '../services/analyticsService';
 import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
 import TopQueriesChart from './charts/TopQueriesChart.vue';

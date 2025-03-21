@@ -456,7 +456,7 @@ export default {
 </script>
 
 <style scoped>
-/* All existing styles */
+/* Base styles - applied to all themes */
 .nav-container {
   position: relative;
 }
@@ -505,7 +505,7 @@ export default {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* Logo styling and animations - Enhanced */
+/* Logo styling and animations */
 .logo-container {
   display: flex;
   align-items: center;
@@ -529,66 +529,31 @@ export default {
   transform: scale(1.08);
 }
 
-/* Logo animations - More noticeable */
+/* Logo animations */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideDown {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 @keyframes pulse {
-  0% {
-    opacity: 0.8;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-
-  100% {
-    opacity: 0.8;
-    transform: scale(1);
-  }
+  0% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 0.8; transform: scale(1); }
 }
 
 @keyframes rotateIn {
-  from {
-    transform: rotate(-15deg);
-    opacity: 0;
-  }
-
-  to {
-    transform: rotate(0deg);
-    opacity: 1;
-  }
+  from { transform: rotate(-15deg); opacity: 0; }
+  to { transform: rotate(0deg); opacity: 1; }
 }
 
 @keyframes shimmer {
-  0% {
-    stroke-dashoffset: 200;
-  }
-
-  100% {
-    stroke-dashoffset: 0;
-  }
+  0% { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
 }
 
 .logo-base {
@@ -671,18 +636,15 @@ export default {
 }
 
 .status-operational {
-  background-color: #10b981;
-  /* Green */
+  background-color: #10b981; /* Green */
 }
 
 .status-degraded {
-  background-color: #f59e0b;
-  /* Yellow/Orange */
+  background-color: #f59e0b; /* Yellow/Orange */
 }
 
 .status-outage {
-  background-color: #ef4444;
-  /* Red */
+  background-color: #ef4444; /* Red */
 }
 
 /* Status Dropdown */
@@ -702,15 +664,8 @@ export default {
 }
 
 @keyframes dropdownFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .status-dropdown-header {
@@ -804,16 +759,14 @@ export default {
 
 .deadline-days {
   font-weight: 600;
-  color: #2563eb;
-  /* Blue */
+  color: #2563eb; /* Blue */
   background: #eef2ff;
   padding: 4px 10px;
   border-radius: 12px;
 }
 
 .deadline-days.urgent {
-  color: #ef4444;
-  /* Red */
+  color: #ef4444; /* Red */
   background: #fee2e2;
 }
 
@@ -839,7 +792,7 @@ export default {
   background-color: #e0e7ff;
 }
 
-/* Improved button styling */
+/* Button styling */
 .icon-btn {
   background: rgba(255, 255, 255, 0.1);
   border: none;
@@ -877,14 +830,13 @@ export default {
   transform: scale(1.1);
 }
 
-/* ADDED: Logout button styling */
+/* Logout button styling */
 .logout-btn {
   background: rgba(255, 255, 255, 0.1);
 }
 
 .logout-btn:hover {
-  background-color: rgba(239, 68, 68, 0.25);
-  /* Subtle red on hover */
+  background-color: rgba(239, 68, 68, 0.25); /* Subtle red on hover */
 }
 
 /* Tooltip styling */
@@ -932,7 +884,7 @@ export default {
   visibility: visible;
 }
 
-/* Improved hamburger menu styling with centered elements */
+/* Hamburger menu styling */
 .hamburger-btn {
   position: relative;
   width: 40px;
@@ -983,19 +935,16 @@ export default {
 .hamburger-btn.is-active .hamburger-inner {
   background-color: transparent;
   transform: translateX(0);
-  /* Ensure centered */
 }
 
 .hamburger-btn.is-active .hamburger-inner::before {
   transform: translateY(5px) rotate(45deg);
   top: 0;
-  /* Ensure centered */
 }
 
 .hamburger-btn.is-active .hamburger-inner::after {
   transform: translateY(-5px) rotate(-45deg);
   bottom: 0;
-  /* Ensure centered */
 }
 
 /* Language dropdown styling */
@@ -1129,7 +1078,6 @@ export default {
 }
 
 @media (max-width: 768px) {
-
   /* Hide desktop controls and show mobile controls */
   .desktop-only {
     display: none;
@@ -1231,5 +1179,149 @@ export default {
     width: 50px;
     margin-left: 6px;
   }
+}
+
+/* Theme Styles - Dark and System Mode */
+/* Dark mode - applied to both explicit dark theme and system dark mode */
+.nav-bar[data-theme="dark"],
+html[data-theme="dark"] .nav-bar,
+.nav-bar[data-theme="system"].dark-mode,
+html[data-theme="system"].dark-mode .nav-bar {
+  background: linear-gradient(135deg, #1e3a58, #0f1c2b);
+}
+
+/* Buttons and Controls - Dark Mode */
+[data-theme="dark"] .icon-btn,
+[data-theme="dark"] .hamburger-btn,
+[data-theme="dark"] .status-indicator-btn,
+[data-theme="dark"] .language-select-container,
+html[data-theme="dark"] .icon-btn,
+html[data-theme="dark"] .hamburger-btn,
+html[data-theme="dark"] .status-indicator-btn,
+html[data-theme="dark"] .language-select-container,
+[data-theme="system"].dark-mode .icon-btn,
+[data-theme="system"].dark-mode .hamburger-btn,
+[data-theme="system"].dark-mode .status-indicator-btn,
+[data-theme="system"].dark-mode .language-select-container,
+html[data-theme="system"].dark-mode .icon-btn,
+html[data-theme="system"].dark-mode .hamburger-btn,
+html[data-theme="system"].dark-mode .status-indicator-btn,
+html[data-theme="system"].dark-mode .language-select-container {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Button Hover States - Dark Mode */
+[data-theme="dark"] .icon-btn:hover,
+[data-theme="dark"] .hamburger-btn:hover,
+[data-theme="dark"] .status-indicator-btn:hover,
+[data-theme="dark"] .language-select-container:hover,
+html[data-theme="dark"] .icon-btn:hover,
+html[data-theme="dark"] .hamburger-btn:hover,
+html[data-theme="dark"] .status-indicator-btn:hover,
+html[data-theme="dark"] .language-select-container:hover,
+[data-theme="system"].dark-mode .icon-btn:hover,
+[data-theme="system"].dark-mode .hamburger-btn:hover,
+[data-theme="system"].dark-mode .status-indicator-btn:hover,
+[data-theme="system"].dark-mode .language-select-container:hover,
+html[data-theme="system"].dark-mode .icon-btn:hover,
+html[data-theme="system"].dark-mode .hamburger-btn:hover,
+html[data-theme="system"].dark-mode .status-indicator-btn:hover,
+html[data-theme="system"].dark-mode .language-select-container:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Status Dropdown - Dark Mode */
+[data-theme="dark"] .status-dropdown,
+html[data-theme="dark"] .status-dropdown,
+[data-theme="system"].dark-mode .status-dropdown,
+html[data-theme="system"].dark-mode .status-dropdown {
+  background: #1f2937;
+  border: 1px solid #374151;
+}
+
+[data-theme="dark"] .status-dropdown-header,
+html[data-theme="dark"] .status-dropdown-header,
+[data-theme="system"].dark-mode .status-dropdown-header,
+html[data-theme="system"].dark-mode .status-dropdown-header {
+  background: #111827;
+  border-bottom: 1px solid #374151;
+}
+
+[data-theme="dark"] .status-dropdown-header h4,
+[data-theme="dark"] .next-deadline h4,
+html[data-theme="dark"] .status-dropdown-header h4,
+html[data-theme="dark"] .next-deadline h4,
+[data-theme="system"].dark-mode .status-dropdown-header h4,
+[data-theme="system"].dark-mode .next-deadline h4,
+html[data-theme="system"].dark-mode .status-dropdown-header h4,
+html[data-theme="system"].dark-mode .next-deadline h4 {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .status-dropdown .status-label,
+[data-theme="dark"] .deadline-title,
+html[data-theme="dark"] .status-dropdown .status-label,
+html[data-theme="dark"] .deadline-title,
+[data-theme="system"].dark-mode .status-dropdown .status-label,
+[data-theme="system"].dark-mode .deadline-title,
+html[data-theme="system"].dark-mode .status-dropdown .status-label,
+html[data-theme="system"].dark-mode .deadline-title {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .status-summary,
+html[data-theme="dark"] .status-summary,
+[data-theme="system"].dark-mode .status-summary,
+html[data-theme="system"].dark-mode .status-summary {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .status-count-item:hover,
+[data-theme="dark"] .deadline-info:hover,
+html[data-theme="dark"] .status-count-item:hover,
+html[data-theme="dark"] .deadline-info:hover,
+[data-theme="system"].dark-mode .status-count-item:hover,
+[data-theme="system"].dark-mode .deadline-info:hover,
+html[data-theme="system"].dark-mode .status-count-item:hover,
+html[data-theme="system"].dark-mode .deadline-info:hover {
+  background-color: #111827;
+}
+
+[data-theme="dark"] .status-value,
+html[data-theme="dark"] .status-value,
+[data-theme="system"].dark-mode .status-value,
+html[data-theme="system"].dark-mode .status-value {
+  background: #374151;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .status-footer,
+html[data-theme="dark"] .status-footer,
+[data-theme="system"].dark-mode .status-footer,
+html[data-theme="system"].dark-mode .status-footer {
+  background: #111827;
+  border-top: 1px solid #374151;
+}
+
+[data-theme="dark"] .status-footer a,
+html[data-theme="dark"] .status-footer a,
+[data-theme="system"].dark-mode .status-footer a,
+html[data-theme="system"].dark-mode .status-footer a {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .status-footer a:hover,
+html[data-theme="dark"] .status-footer a:hover,
+[data-theme="system"].dark-mode .status-footer a:hover,
+html[data-theme="system"].dark-mode .status-footer a:hover {
+  background-color: #1e3a58;
+}
+
+/* Fix dropdown arrow in dark mode */
+[data-theme="dark"] .status-dropdown::before,
+html[data-theme="dark"] .status-dropdown::before,
+[data-theme="system"].dark-mode .status-dropdown::before,
+html[data-theme="system"].dark-mode .status-dropdown::before {
+  background: #111827;
 }
 </style>

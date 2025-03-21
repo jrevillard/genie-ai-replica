@@ -579,8 +579,8 @@ export default {
 }
 
 .selected .node-label {
-  background-color: #e6f0ff;
-  border-left: 2px solid #1867c0;
+  background-color: rgba(78, 151, 209, 0.3); /* Use theme accent color with opacity */
+  border-left: 2px solid var(--accent-color);
 }
 
 /* Ensure all browser-specific list styling is removed */

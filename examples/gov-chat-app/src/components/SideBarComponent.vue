@@ -1,34 +1,24 @@
 <!-- SideBarComponent.vue with improved theme compatibility -->
 <template>
-  <aside 
-    class="side-bar" 
-    :class="{ 'side-bar-open': isOpen }"
-    :data-theme="$route.meta.theme || 'light'"
-  >
+  <aside class="side-bar" :class="{ 'side-bar-open': isOpen }" :data-theme="$route.meta.theme || 'light'">
     <!-- Overlay that only appears on mobile when sidebar is open -->
     <div class="mobile-sidebar-overlay" v-if="isOpen" @click="closeOverlay"></div>
-    
+
     <div class="sidebar-inner">
       <!-- Tabbed navigation -->
       <div class="sidebar-tabs">
-        <button 
-          class="tab-button" 
-          :class="{ 'tab-button-active': activeTab === 'services' }"
-          @click="activeTab = 'services'"
-        >
+        <button class="tab-button" :class="{ 'tab-button-active': activeTab === 'services' }"
+          @click="activeTab = 'services'">
           <i class="fas fa-list"></i>
           {{ $t('sidebar.governmentServices', 'Government Services') }}
         </button>
-        <button 
-          class="tab-button" 
-          :class="{ 'tab-button-active': activeTab === 'history' }"
-          @click="activeTab = 'history'"
-        >
+        <button class="tab-button" :class="{ 'tab-button-active': activeTab === 'history' }"
+          @click="activeTab = 'history'">
           <i class="fas fa-history"></i>
           {{ $t('sidebar.chatHistory', 'Chat History') }}
         </button>
       </div>
-      
+
       <!-- Main flex container for content -->
       <div class="sidebar-content-wrapper">
         <!-- Scrollable content area -->
@@ -38,13 +28,13 @@
             <!-- Service Tree Panel -->
             <service-tree-panel-component />
           </div>
-          
+
           <!-- Chat History Tab -->
           <div v-else-if="activeTab === 'history'" class="chat-history">
             <chat-folders @open-chat="openChat" />
           </div>
         </div>
-        
+
         <!-- Weather Panel in its own container, not part of the scroll area -->
         <div class="weather-container">
           <weather-panel class="weather-panel-fixed" />
@@ -88,6 +78,7 @@ export default {
 </script>
 
 <style scoped>
+/* Base styles - applied to all themes */
 .side-bar {
   width: 300px;
   background: var(--bg-sidebar);
@@ -118,13 +109,6 @@ export default {
   letter-spacing: 0.5px;
 }
 
-[data-theme="dark"] .sidebar-section-title,
-html[data-theme="dark"] .sidebar-section-title,
-[data-theme="dark"] .sidebar-header h3,
-html[data-theme="dark"] .sidebar-header h3 {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
 .sidebar-section h3,
 .sidebar-header h3 {
   margin: 0;
@@ -134,13 +118,6 @@ html[data-theme="dark"] .sidebar-header h3 {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 10px 16px;
-}
-
-[data-theme="dark"] .sidebar-section h3,
-[data-theme="dark"] .sidebar-header h3,
-html[data-theme="dark"] .sidebar-section h3,
-html[data-theme="dark"] .sidebar-header h3 {
-  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 /* Mobile overlay */
@@ -190,12 +167,12 @@ html[data-theme="dark"] .sidebar-header h3 {
 }
 
 .tab-button-active {
-  background-color: var(--accent-color);
-  color: var(--text-button-primary);
+  background-color: #4E97D1; /* Match navbar primary blue */
+  color: white;
 }
 
 .tab-button-active i {
-  color: var(--text-button-primary);
+  color: white;
 }
 
 /* New wrapper to control the layout of content + weather */
@@ -289,45 +266,134 @@ html[data-theme="dark"] .sidebar-header h3 {
   }
 }
 
-/* Dark mode scrollbar - more aggressive styling */
-[data-theme="dark"] *::-webkit-scrollbar {
-  width: 8px;
-  background-color: #2a2a2a; /* Ensure it matches dark sidebar background */
+/* Theme Styles - Dark and System Mode */
+/* Dark mode tab styling to match navbar */
+[data-theme="dark"] .tab-button-active,
+html[data-theme="dark"] .tab-button-active,
+[data-theme="system"].dark-mode .tab-button-active,
+html[data-theme="system"].dark-mode .tab-button-active {
+  background-color: #1e3a58; /* Match navbar dark blue */
+  color: white;
 }
 
-[data-theme="dark"] *::-webkit-scrollbar-track {
+[data-theme="dark"] .tab-button:hover:not(.tab-button-active),
+html[data-theme="dark"] .tab-button:hover:not(.tab-button-active),
+[data-theme="system"].dark-mode .tab-button:hover:not(.tab-button-active),
+html[data-theme="system"].dark-mode .tab-button:hover:not(.tab-button-active) {
+  background-color: rgba(78, 151, 209, 0.15); /* Darker blue hover for dark mode */
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .tab-button,
+html[data-theme="dark"] .tab-button,
+[data-theme="system"].dark-mode .tab-button,
+html[data-theme="system"].dark-mode .tab-button {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .tab-button i,
+html[data-theme="dark"] .tab-button i,
+[data-theme="system"].dark-mode .tab-button i,
+html[data-theme="system"].dark-mode .tab-button i {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .tab-button-active i,
+html[data-theme="dark"] .tab-button-active i,
+[data-theme="system"].dark-mode .tab-button-active i,
+html[data-theme="system"].dark-mode .tab-button-active i {
+  color: white;
+}
+
+/* Ensure tab bottom border is visible in both modes */
+[data-theme="dark"] .sidebar-tabs,
+html[data-theme="dark"] .sidebar-tabs,
+[data-theme="system"].dark-mode .sidebar-tabs,
+html[data-theme="system"].dark-mode .sidebar-tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Section title styling in dark mode */
+[data-theme="dark"] .sidebar-section-title,
+[data-theme="dark"] .sidebar-header h3,
+html[data-theme="dark"] .sidebar-section-title,
+html[data-theme="dark"] .sidebar-header h3,
+[data-theme="system"].dark-mode .sidebar-section-title,
+[data-theme="system"].dark-mode .sidebar-header h3,
+html[data-theme="system"].dark-mode .sidebar-section-title,
+html[data-theme="system"].dark-mode .sidebar-header h3 {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Dark mode scrollbar styling */
+[data-theme="dark"] *::-webkit-scrollbar,
+html[data-theme="dark"] *::-webkit-scrollbar,
+[data-theme="system"].dark-mode *::-webkit-scrollbar,
+html[data-theme="system"].dark-mode *::-webkit-scrollbar {
+  width: 8px;
   background-color: #2a2a2a;
 }
 
-[data-theme="dark"] *::-webkit-scrollbar-thumb {
+[data-theme="dark"] *::-webkit-scrollbar-track,
+html[data-theme="dark"] *::-webkit-scrollbar-track,
+[data-theme="system"].dark-mode *::-webkit-scrollbar-track,
+html[data-theme="system"].dark-mode *::-webkit-scrollbar-track {
+  background-color: #2a2a2a;
+}
+
+[data-theme="dark"] *::-webkit-scrollbar-thumb,
+html[data-theme="dark"] *::-webkit-scrollbar-thumb,
+[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb,
+html[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb {
   background-color: rgba(100, 100, 100, 0.3);
   border-radius: 4px;
 }
 
-[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+[data-theme="dark"] *::-webkit-scrollbar-thumb:hover,
+html[data-theme="dark"] *::-webkit-scrollbar-thumb:hover,
+[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb:hover,
+html[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb:hover {
   background-color: rgba(150, 150, 150, 0.4);
+}
+
+/* Firefox scrollbar consistency */
+[data-theme="dark"] *,
+html[data-theme="dark"] *,
+[data-theme="system"].dark-mode *,
+html[data-theme="system"].dark-mode * {
+  scrollbar-color: rgba(100, 100, 100, 0.3) #2a2a2a;
+  scrollbar-width: thin;
 }
 
 /* Dark mode search input and add button */
 [data-theme="dark"] .search-box,
-[data-theme="dark"] .search-container input {
-  background-color: #333 !important;
-  color: var(--text-primary) !important;
-  border-color: #444 !important;
+[data-theme="dark"] .search-container input,
+html[data-theme="dark"] .search-box,
+html[data-theme="dark"] .search-container input,
+[data-theme="system"].dark-mode .search-box,
+[data-theme="system"].dark-mode .search-container input,
+html[data-theme="system"].dark-mode .search-box,
+html[data-theme="system"].dark-mode .search-container input {
+  background-color: #333;
+  color: var(--text-primary);
+  border-color: #444;
 }
 
 [data-theme="dark"] .search-container .add-btn,
 [data-theme="dark"] .search-container .plus-btn,
-[data-theme="dark"] .search-container button.add-btn {
-  background-color: #444 !important;
-  color: var(--text-primary) !important;
+[data-theme="dark"] .search-container button.add-btn,
+html[data-theme="dark"] .search-container .add-btn,
+html[data-theme="dark"] .search-container .plus-btn,
+html[data-theme="dark"] .search-container button.add-btn,
+[data-theme="system"].dark-mode .search-container .add-btn,
+[data-theme="system"].dark-mode .search-container .plus-btn,
+[data-theme="system"].dark-mode .search-container button.add-btn,
+html[data-theme="system"].dark-mode .search-container .add-btn,
+html[data-theme="system"].dark-mode .search-container .plus-btn,
+html[data-theme="system"].dark-mode .search-container button.add-btn {
+  background-color: #444;
+  color: var(--text-primary);
   border: none;
   border-radius: 4px;
-}
-
-/* Ensure Firefox scrollbar is consistent */
-[data-theme="dark"] * {
-  scrollbar-color: rgba(100, 100, 100, 0.3) #2a2a2a;
-  scrollbar-width: thin;
 }
 </style>

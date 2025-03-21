@@ -3,6 +3,8 @@ const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const emailService = require('./email-service');
+const crypto = require('crypto');
 
 // Initialize ArangoDB connection
 const initDB = () => {
@@ -23,7 +25,7 @@ class UserProfileService {
     this.db = initDB();
     this.users = this.db.collection('users');
     this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-    
+
     // Ensure uploads directory exists
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
@@ -47,38 +49,38 @@ class UserProfileService {
           profileData = {};
         }
       }
-      
+
       console.log('Creating user profile with data:', JSON.stringify(profileData).substring(0, 100) + '...');
-      
+
       // Create a minimal document first - let ArangoDB generate the key
       const basicDoc = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-      
+
       // Add essential user data if available
       if (profileData.personalIdentification) {
         basicDoc.personalIdentification = profileData.personalIdentification;
       }
-      
+
       console.log('Creating basic user document...');
       const user = await this.users.save(basicDoc);
       const userId = user._key;
       console.log(`User created with auto-generated key: ${userId}`);
-      
+
       // Process and store file uploads if any
       const processedData = await this.processProfileData(profileData, files, userId);
-      
+
       // Remove any _key property to avoid conflicts
       delete processedData._key;
-      
+
       // Update with full processed data
       if (Object.keys(processedData).length > 0) {
         console.log(`Updating user ${userId} with full profile data...`);
         const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
         return updatedUser.new;
       }
-      
+
       return user;
     } catch (error) {
       console.error('Error creating user profile:', error);
@@ -104,7 +106,7 @@ class UserProfileService {
           profileData = {};
         }
       }
-      
+
       // Check if user exists
       const userExists = await this.userExists(userId);
       if (!userExists) {
@@ -113,7 +115,7 @@ class UserProfileService {
 
       // Process the updated profile data and files
       const processedData = await this.processProfileData(profileData, files, userId);
-      
+
       // Update the timestamp
       processedData.updatedAt = new Date().toISOString();
 
@@ -122,7 +124,7 @@ class UserProfileService {
 
       // Update the user document
       const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
-      
+
       return updatedUser.new;
     } catch (error) {
       console.error(`Error updating user profile ${userId}:`, error);
@@ -154,13 +156,13 @@ class UserProfileService {
     try {
       // Get user to check for file paths to delete
       const user = await this.getUserProfile(userId);
-      
+
       // Delete user files
       await this.deleteUserFiles(user);
-      
+
       // Delete user document
       const result = await this.users.remove(userId);
-      
+
       return result;
     } catch (error) {
       console.error(`Error deleting user profile ${userId}:`, error);
@@ -186,6 +188,49 @@ class UserProfileService {
   }
 
   /**
+ * Initiate email change process
+ * @param {String} userId - User ID
+ * @param {String} newEmail - New email address
+ * @returns {Promise<Object>} Operation result
+ */
+  async initiateEmailChange(userId, newEmail) {
+    try {
+      // Check if user exists
+      const user = await this.getUserProfile(userId);
+      if (!user) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+
+      // Generate verification token
+      const token = crypto.randomBytes(32).toString('hex');
+
+      // Store token and new email in user document
+      const updateData = {
+        pendingEmailChange: {
+          email: newEmail,
+          token: token
+        },
+        updatedAt: new Date().toISOString()
+      };
+
+      // Update user document with pending email change
+      await this.users.update(userId, updateData);
+
+      // Send verification email to the new email address
+      const userName = user.personalIdentification?.fullName || user.loginName || 'User';
+      await emailService.sendVerificationEmail(newEmail, token, userName);
+
+      return {
+        success: true,
+        message: 'Verification email sent to new address'
+      };
+    } catch (error) {
+      console.error(`Error initiating email change for user ${userId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Process user profile data and file uploads
    * @param {Object} profileData - User profile data
    * @param {Object} files - Files uploaded by the user
@@ -202,17 +247,17 @@ class UserProfileService {
         profileData = {};
       }
     }
-    
+
     // Create a new object to avoid mutations
     const processedData = {};
-    
+
     // Copy all properties except _key
     for (const key in profileData) {
       if (key !== '_key') {
         processedData[key] = profileData[key];
       }
     }
-    
+
     // Process each section that might contain file uploads
     const sections = [
       'personalIdentification',
@@ -237,11 +282,11 @@ class UserProfileService {
     for (const section of sections) {
       // Skip if section doesn't exist in processed data
       if (!processedData[section]) continue;
-      
+
       // Process each field in the section
       if (files && (Array.isArray(files) || typeof files === 'object')) {
         const fileArray = Array.isArray(files) ? files : Object.values(files);
-        
+
         for (const file of fileArray) {
           // Check if this file belongs to this section
           const fileNameParts = (file.fieldname || file.name || '').split('-');
@@ -278,12 +323,12 @@ class UserProfileService {
       if (!fs.existsSync(userDir)) {
         fs.mkdirSync(userDir, { recursive: true });
       }
-  
+
       // Generate a unique filename
       const fileExt = path.extname(file.originalname || file.name || 'unknown');
       const fileName = `${fieldName}-${Date.now()}${fileExt}`;
       const filePath = path.join(userDir, fileName);
-  
+
       // Save the file - handle different file object formats
       if (file.buffer) {
         // If file has buffer property (multer memory storage)
@@ -295,7 +340,7 @@ class UserProfileService {
       } else {
         throw new Error('Unsupported file object format');
       }
-  
+
       // Return file URL (relative to upload dir)
       return `/uploads/${userId}/${fileName}`;
     } catch (error) {
@@ -312,7 +357,7 @@ class UserProfileService {
   async deleteUserFiles(user) {
     const userId = user._key;
     const userDir = path.join(this.uploadDir, userId);
-    
+
     // Check if user directory exists
     if (fs.existsSync(userDir)) {
       // Delete all files in the directory

@@ -291,6 +291,12 @@ export default {
     noChats: 'No recent chats',
     relatedDocs: 'Related Documents',
     noDocuments: 'No related documents',
+    faq: 'Frequently Asked Questions',
+    title: 'Info & Resources',
+    chatHistory: 'Recent Chats',
+    noChats: 'No recent chats',
+    relatedDocs: 'Related Documents',
+    noDocuments: 'No related documents',
     faq: 'Frequently Asked Questions'
   },
   leftPanel: {

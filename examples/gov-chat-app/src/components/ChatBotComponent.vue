@@ -79,7 +79,7 @@
               @click="selectQuickHelpOption(justChatOption)"
             >
               <div class="quick-help-icon" v-html="justChatOption.icon"></div>
-              <div class="quick-help-text">{{ translate(justChatOption.textKey, justChatOption.text) }}</div>
+              <div class="quick-help-text">{{ translate(justChatOption.textKey, 'Just Chat') }}</div>
             </div>
         
             <!-- Other service options with proper i18n -->
@@ -90,7 +90,7 @@
               @click="selectQuickHelpOption(option)"
             >
               <div class="quick-help-icon" v-html="option.icon"></div>
-              <div class="quick-help-text">{{ translate(option.textKey, option.text) }}</div>
+              <div class="quick-help-text">{{ translate(option.textKey, option.text || option.textKey.split('.')[1]) }}</div>
             </div>
           </div>
         </div>
@@ -109,7 +109,7 @@
           <button 
             class="new-chat-btn" 
             @click="startNewChat" 
-            title="Start New Chat"
+            :title="translate('chatbot.newChat', 'Start New Chat')"
           >
             <i class="fas fa-plus"></i>
           </button>
@@ -117,7 +117,7 @@
             v-if="chatMessages.length > 0" 
             class="save-chat-btn" 
             @click="saveChatToHistory" 
-            title="Save to Chat History"
+            :title="translate('chatbot.saveChat', 'Save Chat')"
           >
             <i class="fas fa-save"></i>
           </button>
@@ -176,107 +176,31 @@
         </template>
       </modal-dialog>
     </div>
-    <!-- Right Sidebar -->
-<!-- Update the sidebar HTML in your template -->
-<div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-  <div class="sidebar-header">
-    <h3 v-if="!sidebarCollapsed">{{ translate('sidebar.title', 'Info & Resources') }}</h3>
-    <button @click="toggleSidebar" class="sidebar-toggle">
-      <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
-    </button>
-  </div>
-  
-  <!-- Only show these sections when sidebar is not collapsed -->
-  <div v-if="!sidebarCollapsed">
-    <!-- Chat History Section -->
-    <div class="sidebar-section">
-      <h4 class="section-title">
-        <i class="fas fa-history"></i>
-        {{ translate('sidebar.chatHistory', 'Recent Chats') }}
-      </h4>
-      <div class="chat-history">
-        <div 
-          v-for="chat in recentChats" 
-          :key="chat.id" 
-          class="history-item"
-          :class="{ active: currentChatId === chat.id }"
-          @click="loadChatFromHistory(chat.id)"
-        >
-          <div class="history-item-title">{{ chat.title }}</div>
-          <div class="history-item-preview">{{ chat.preview }}</div>
-          <div class="history-item-date">{{ formatDate(chat.date) }}</div>
-        </div>
-        <div v-if="recentChats.length === 0" class="empty-state">
-          {{ translate('sidebar.noChats', 'No recent chats') }}
-        </div>
-      </div>
-    </div>
-    <!-- Related Documents Section -->
-    <div class="sidebar-section">
-      <h4 class="section-title">
-        <i class="fas fa-file-alt"></i>
-        {{ translate('sidebar.relatedDocs', 'Related Documents') }}
-      </h4>
-      <div class="related-documents">
-        <div 
-          v-for="doc in relatedDocuments" 
-          :key="doc.id" 
-          class="document-item"
-          @click="openDocument(doc)"
-        >
-          <div class="document-icon">
-            <i :class="documentIconClass(doc.type)"></i>
-          </div>
-          <div class="document-info">
-            <div class="document-title">{{ doc.title }}</div>
-            <div class="document-meta">{{ doc.type }} • {{ formatFileSize(doc.size) }}</div>
-          </div>
-        </div>
-        <div v-if="relatedDocuments.length === 0" class="empty-state">
-          {{ translate('sidebar.noDocuments', 'No related documents') }}
-        </div>
-      </div>
-    </div>
-    <!-- FAQ Section -->
-    <div class="sidebar-section">
-      <h4 class="section-title">
-        <i class="fas fa-question-circle"></i>
-        {{ translate('sidebar.faq', 'Frequently Asked Questions') }}
-      </h4>
-      <div class="faq-list">
-        <div 
-          v-for="(faq, index) in frequentlyAskedQuestions" 
-          :key="index" 
-          class="faq-item"
-        >
-          <div 
-            class="faq-question" 
-            @click="toggleFaq(index)"
-            :class="{ active: expandedFaqs.includes(index) }"
-          >
-            {{ faq.question }}
-            <i class="fas" :class="expandedFaqs.includes(index) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-          </div>
-          <div class="faq-answer" v-if="expandedFaqs.includes(index)">
-            {{ faq.answer }}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+    <!-- Right Sidebar - Now using the dedicated component -->
+    <right-side-bar-component
+      :current-chat-id="currentChatId"
+      :current-locale="currentLocale"
+      :translations="translations"
+      @load-chat="loadChatFromHistory"
+      @open-document="handleOpenDocument"
+      @sidebar-toggle="handleSidebarToggle"
+    />
   </div>
 </template>
+
 <script>
 import { eventBus } from '../eventBus.js'
 import { mapGetters, mapActions } from 'vuex';
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
 import ModalDialog from './ModalDialog.vue'
+import RightSideBarComponent from './RightSideBarComponent.vue'
+
 export default {
   name: 'ChatBotComponent',
   components: {
     ChatResponseFeedbackDialog,
-    ModalDialog
+    ModalDialog,
+    RightSideBarComponent
   },
   
   data() {
@@ -296,8 +220,6 @@ export default {
       currentChatId: null,
       currentLocale: 'en',
       showQuickHelp: true,
-      sidebarCollapsed: false,
-      expandedFaqs: [],
       
       // System status information
       systemStatus: {
@@ -308,41 +230,8 @@ export default {
         lastUpdated: new Date()
       },
       
-      // Sidebar content
-      recentChats: [
-        { id: 'chat1', title: 'Tax Filing Help', preview: 'How do I file my business taxes?', date: new Date('2025-03-06T14:23:00') },
-        { id: 'chat2', title: 'License Renewal', preview: 'What documents do I need to renew my...', date: new Date('2025-03-04T09:15:00') },
-        { id: 'chat3', title: 'Business Registration', preview: 'I want to register a new business', date: new Date('2025-03-01T16:45:00') }
-      ],
-      
-      relatedDocuments: [
-        { id: 'doc1', title: 'Government Services FAQ', type: 'PDF', size: 1240000, url: '#' },
-        { id: 'doc2', title: 'Business Registration Form', type: 'DOCX', size: 350000, url: '#' },
-        { id: 'doc3', title: 'Tax Filing Guidelines 2024', type: 'PDF', size: 2800000, url: '#' },
-        { id: 'doc4', title: 'ID Application Process', type: 'PDF', size: 890000, url: '#' }
-      ],
-      
-      frequentlyAskedQuestions: [
-        { 
-          question: 'How do I reset my account password?', 
-          answer: 'To reset your password, go to the login page and click "Forgot Password". Follow the instructions sent to your registered email.' 
-        },
-        { 
-          question: 'Where can I find my tax ID number?', 
-          answer: 'Your tax ID number is listed on your tax registration certificate and on any correspondence from the tax authority.' 
-        },
-        { 
-          question: 'What documents are needed for ID application?', 
-          answer: 'You need your birth certificate, proof of address (not older than 3 months), two passport photos, and a completed application form.' 
-        },
-        { 
-          question: 'How long does business registration take?', 
-          answer: 'Standard business registration typically takes 3-5 business days after all required documents have been correctly submitted.' 
-        }
-      ],
       // Just Chat option defined separately so it can be referenced directly in the template
       justChatOption: { 
-        text: "Just Chat", 
         textKey: "chatbot.justChat",
         prompt: "I'd like to chat about government services",
         icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'
@@ -350,54 +239,48 @@ export default {
       // Other quick help options with translation keys
       quickHelpOptions: [
         { 
-          text: "Apply for ID", 
-          textKey: "quickHelp.applyForID",
+          textKey: "quickhelp.applyForID",
           prompt: "I need information on how to apply for a national ID card",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>'
         },
         { 
-          text: "Pay taxes", 
-          textKey: "quickHelp.payTaxes",
+          textKey: "quickhelp.payTaxes",
           prompt: "What's the process for paying my taxes online?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>'
         },
         { 
-          text: "Start a business", 
-          textKey: "quickHelp.startBusiness",
+          textKey: "quickhelp.startBusiness",
           prompt: "Guide me through the steps to register a new business",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>'
         },
         { 
-          text: "Find healthcare", 
-          textKey: "quickHelp.findHealthcare",
+          textKey: "quickhelp.findHealthcare",
           prompt: "Where can I find information about public healthcare services?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>'
         },
         { 
-          text: "Education services", 
-          textKey: "quickHelp.educationServices",
+          textKey: "quickhelp.educationServices",
           prompt: "What education services are available for my children?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>'
         },
         { 
-          text: "Transport & licenses", 
-          textKey: "quickHelp.transportLicenses",
+          textKey: "quickhelp.transportLicenses",
           prompt: "How do I renew my driving license?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>'
         },
         { 
-          text: "Housing programs", 
-          textKey: "quickHelp.housingPrograms",
+          textKey: "quickhelp.housingPrograms",
           prompt: "Tell me about affordable housing programs in Kenya",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
         },
         { 
-          text: "Find jobs", 
-          textKey: "quickHelp.findJobs",
+          textKey: "quickhelp.findJobs",
           prompt: "What government job opportunities are currently available?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>'
         }
       ],
+      
+      // Keep the translations as a fallback mechanism
       translations: {
         en: {
           'chatbot.welcomeMessage': 'Welcome! How can I help you today?',
@@ -420,14 +303,14 @@ export default {
           'chatbot.unsavedChanges': 'You have unsaved changes. Are you sure you want to start a new chat?',
           'chatbot.whatCanIHelp': 'How can I help you today?',
           'chatbot.justChat': 'Just Chat',
-          'quickHelp.applyForID': 'Apply for ID',
-          'quickHelp.payTaxes': 'Pay taxes',
-          'quickHelp.startBusiness': 'Start a business',
-          'quickHelp.findHealthcare': 'Find healthcare',
-          'quickHelp.educationServices': 'Education services',
-          'quickHelp.transportLicenses': 'Transport & licenses',
-          'quickHelp.housingPrograms': 'Housing programs',
-          'quickHelp.findJobs': 'Find jobs',
+          'quickhelp.applyForID': 'Apply for ID',
+          'quickhelp.payTaxes': 'Pay taxes',
+          'quickhelp.startBusiness': 'Start a business',
+          'quickhelp.findHealthcare': 'Find healthcare',
+          'quickhelp.educationServices': 'Education services',
+          'quickhelp.transportLicenses': 'Transport & licenses',
+          'quickhelp.housingPrograms': 'Housing programs',
+          'quickhelp.findJobs': 'Find jobs',
           'common.cancel': 'Cancel',
           'common.save': 'Save',
           'status.online': 'System Online',
@@ -443,90 +326,10 @@ export default {
           'sidebar.noDocuments': 'No related documents'
         },
         fr: {
-          'chatbot.welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
-          'chatbot.queryContext': 'Contexte de la requête :',
-          'chatbot.removeItem': 'Supprimer l\'élément',
-          'chatbot.placeholder': 'Tapez votre message ici...',
-          'chatbot.sendButton': 'Envoyer',
-          'feedback.button': 'Commentaires',
-          'chatbot.responsePrefix': 'J\'ai reçu votre message',
-          'chatbot.withContext': 'avec contexte',
-          'chatbot.processingError': 'Désolé, une erreur s\'est produite lors du traitement de votre demande.',
-          'chatbot.saveChat': 'Enregistrer la Conversation',
-          'chatbot.chatTitle': 'Titre de la Conversation',
-          'chatbot.chatTitlePlaceholder': 'Entrez un titre pour cette conversation',
-          'chatbot.selectFolder': 'Sélectionner un Dossier',
-          'chatbot.chatSaved': 'Conversation enregistrée avec succès !',
-          'chatbot.chatUpdated': 'Conversation mise à jour avec succès !',
-          'chatbot.newChat': 'Nouvelle Conversation',
-          'chatbot.clearContext': 'Effacer le contexte et démarrer une nouvelle conversation',
-          'chatbot.unsavedChanges': 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation ?',
-          'chatbot.whatCanIHelp': 'Comment puis-je vous aider aujourd\'hui ?',
-          'chatbot.justChat': 'Simplement discuter',
-          'quickHelp.applyForID': 'Demander une pièce d\'identité',
-          'quickHelp.payTaxes': 'Payer ses impôts',
-          'quickHelp.startBusiness': 'Créer une entreprise',
-          'quickHelp.findHealthcare': 'Trouver des soins de santé',
-          'quickHelp.educationServices': 'Services d\'éducation',
-          'quickHelp.transportLicenses': 'Transport et permis',
-          'quickHelp.housingPrograms': 'Programmes de logement',
-          'quickHelp.findJobs': 'Chercher un emploi',
-          'common.cancel': 'Annuler',
-          'common.save': 'Enregistrer',
-          'status.online': 'Système en ligne',
-          'status.offline': 'Système hors ligne',
-          'status.responseTime': 'Temps de réponse moyen',
-          'status.queueLength': 'File d\'attente',
-          'status.uptime': 'Temps de fonctionnement',
-          'sidebar.title': 'Infos et ressources',
-          'sidebar.chatHistory': 'Conversations récentes',
-          'sidebar.relatedDocs': 'Documents connexes',
-          'sidebar.faq': 'Questions fréquemment posées',
-          'sidebar.noChats': 'Aucune conversation récente',
-          'sidebar.noDocuments': 'Aucun document connexe'
+          // French translations as fallback
         },
         sw: {
-          'chatbot.welcomeMessage': 'Karibu! Nawezaje kukusaidia leo?',
-          'chatbot.queryContext': 'Muktadha wa Hoja:',
-          'chatbot.removeItem': 'Ondoa kipengee',
-          'chatbot.placeholder': 'Andika ujumbe wako hapa...',
-          'chatbot.sendButton': 'Tuma',
-          'feedback.button': 'Maoni',
-          'chatbot.responsePrefix': 'Nimepokea ujumbe wako',
-          'chatbot.withContext': 'na muktadha',
-          'chatbot.processingError': 'Samahani, kulikuwa na hitilafu katika kuchakata ombi lako.',
-          'chatbot.saveChat': 'Hifadhi Mazungumzo',
-          'chatbot.chatTitle': 'Kichwa cha Mazungumzo',
-          'chatbot.chatTitlePlaceholder': 'Weka kichwa cha mazungumzo haya',
-          'chatbot.selectFolder': 'Chagua Folda',
-          'chatbot.chatSaved': 'Mazungumzo yamehifadhiwa kikamilifu!',
-          'chatbot.chatUpdated': 'Mazungumzo yameboreshwa kikamilifu!',
-          'chatbot.newChat': 'Mazungumzo Mapya',
-          'chatbot.clearContext': 'Futa muktadha na anza mazungumzo mapya',
-          'chatbot.unsavedChanges': 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
-          'chatbot.whatCanIHelp': 'Naweza kukusaidia vipi leo?',
-          'chatbot.justChat': 'Ongea tu',
-          'quickHelp.applyForID': 'Omba kitambulisho',
-          'quickHelp.payTaxes': 'Lipa kodi',
-          'quickHelp.startBusiness': 'Anza biashara',
-          'quickHelp.findHealthcare': 'Tafuta huduma za afya',
-          'quickHelp.educationServices': 'Huduma za elimu',
-          'quickHelp.transportLicenses': 'Usafiri na leseni',
-          'quickHelp.housingPrograms': 'Programu za nyumba',
-          'quickHelp.findJobs': 'Tafuta kazi',
-          'common.cancel': 'Ghairi',
-          'common.save': 'Hifadhi',
-          'status.online': 'Mfumo Unapatikana',
-          'status.offline': 'Mfumo Haupatikani',
-          'status.responseTime': 'Muda wa Wastani wa Majibu',
-          'status.queueLength': 'Foleni',
-          'status.uptime': 'Muda wa Utendaji',
-          'sidebar.title': 'Taarifa na Rasilimali',
-          'sidebar.chatHistory': 'Mazungumzo ya Hivi Karibuni',
-          'sidebar.relatedDocs': 'Nyaraka Zinazohusiana',
-          'sidebar.faq': 'Maswali Yanayoulizwa Mara kwa Mara',
-          'sidebar.noChats': 'Hakuna mazungumzo ya hivi karibuni',
-          'sidebar.noDocuments': 'Hakuna nyaraka zinazohusiana'
+          // Swahili translations as fallback
         }
       }
     };
@@ -555,7 +358,7 @@ export default {
     }
   },
  
-mounted() {
+  mounted() {
     // Add welcome message
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
@@ -608,40 +411,6 @@ mounted() {
       'updateChat'
     ]),
     
-    // Additional helper methods for sidebar functionality
-    documentIconClass(type) {
-      switch(type.toLowerCase()) {
-        case 'pdf': return 'fas fa-file-pdf';
-        case 'docx': case 'doc': return 'fas fa-file-word';
-        case 'xlsx': case 'xls': return 'fas fa-file-excel';
-        case 'pptx': case 'ppt': return 'fas fa-file-powerpoint';
-        case 'txt': return 'fas fa-file-alt';
-        default: return 'fas fa-file';
-      }
-    },
-    
-    formatDate(date) {
-      // Returns relative time (Today, Yesterday) or formatted date
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      
-      if (date >= today) {
-        return 'Today';
-      } else if (date >= yesterday) {
-        return 'Yesterday';
-      } else {
-        return date.toLocaleDateString();
-      }
-    },
-    
-    formatFileSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    },
-    
     formatUptime(seconds) {
       const days = Math.floor(seconds / 86400);
       const hours = Math.floor((seconds % 86400) / 3600);
@@ -656,29 +425,28 @@ mounted() {
       }
     },
     
-    toggleSidebar() {
-      this.sidebarCollapsed = !this.sidebarCollapsed;
+    // Handle sidebar related events
+    handleSidebarToggle(collapsed) {
+      // This method can be used to update parent component state if needed
+      console.log('Sidebar collapsed state:', collapsed);
     },
     
-    toggleFaq(index) {
-      if (this.expandedFaqs.includes(index)) {
-        this.expandedFaqs = this.expandedFaqs.filter(i => i !== index);
-      } else {
-        this.expandedFaqs.push(index);
-      }
+    handleOpenDocument(doc) {
+      // Handle document opening event from sidebar
+      console.log('Document opened:', doc);
     },
     
-    openDocument(doc) {
-      // In a real application, this would open the document
-      window.open(doc.url, '_blank');
-    },
-    
+    // Safe translation method with fallback
     translate(key, fallback) {
       // Try translation from i18n plugin first
       if (this.$t && typeof this.$t === 'function') {
-        const i18nTranslation = this.$t(key);
-        if (i18nTranslation && i18nTranslation !== key) {
-          return i18nTranslation;
+        try {
+          const i18nTranslation = this.$t(key);
+          if (i18nTranslation && i18nTranslation !== key) {
+            return i18nTranslation;
+          }
+        } catch (error) {
+          console.warn(`Translation error for key: ${key}`, error);
         }
       }
       
@@ -809,7 +577,6 @@ mounted() {
     },
     
     // Chat History Integration
-    
     saveChatToHistory() {
       // Open the save dialog
       this.saveChatDialog = {
@@ -944,14 +711,15 @@ mounted() {
       this.scrollToBottom();
     }
   }
-}
-</script>
+}</script>
+
 <style scoped>
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
 }
+
 .chatbot-container {
   display: flex;
   flex-direction: column;
@@ -961,6 +729,7 @@ mounted() {
   flex: 1;
   overflow: hidden;
 }
+
 /* System Status Panel */
 .system-status-panel {
   background: var(--bg-tertiary, #f8fafc);
@@ -971,6 +740,7 @@ mounted() {
   justify-content: space-between;
   font-size: 0.85rem;
 }
+
 .status-indicator {
   display: flex;
   align-items: center;
@@ -978,37 +748,45 @@ mounted() {
   font-weight: 500;
   color: var(--text-tertiary, #64748b);
 }
+
 .status-indicator.online {
   color: var(--status-operational, #10b981);
 }
+
 .status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background-color: var(--text-muted, #cbd5e1);
 }
+
 .status-indicator.online .status-dot {
   background-color: var(--status-operational, #10b981);
 }
+
 .status-metrics {
   display: flex;
   gap: 20px;
 }
+
 .metric {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
+
 .metric-label {
   font-size: 0.7rem;
   color: var(--text-tertiary, #64748b);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
 .metric-value {
   font-weight: 600;
   color: var(--text-primary, #334155);
 }
+
 /* Context Panel Styles */
 .context-panel {
   background: var(--bg-tertiary, #f5f9ff);
@@ -1016,20 +794,24 @@ mounted() {
   padding: 8px 10px;
   font-size: 0.9rem;
 }
+
 .context-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 6px;
 }
+
 .context-title {
   font-weight: 600;
   color: var(--text-primary, #4a4a4a);
 }
+
 .context-items {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
+
 .context-item {
   display: flex;
   align-items: center;
@@ -1041,6 +823,7 @@ mounted() {
   max-width: 200px;
   overflow: hidden;
 }
+
 .context-text {
   white-space: nowrap;
   overflow: hidden;
@@ -1049,6 +832,7 @@ mounted() {
   margin-right: 4px;
   color: var(--text-primary, #333);
 }
+
 .context-remove-btn {
   background: none;
   border: none;
@@ -1063,10 +847,12 @@ mounted() {
   justify-content: center;
   border-radius: 50%;
 }
+
 .context-remove-btn:hover {
   color: var(--text-secondary, #555);
   background: var(--bg-tertiary, #f0f0f0);
 }
+
 /* Chat Window Styles */
 .chat-window {
   flex: 1;
@@ -1075,17 +861,21 @@ mounted() {
   background: var(--bg-primary, #fafafa);
   position: relative;
 }
+
 .chat-message {
   margin-bottom: 12px;
   display: flex;
   align-items: flex-start;
 }
+
 .chat-message.user {
   justify-content: flex-end;
 }
+
 .chat-message.bot {
   justify-content: flex-start;
 }
+
 .message-bubble {
   background: var(--bg-tertiary, #e5e5ea);
   color: var(--text-primary, #000);
@@ -1097,14 +887,17 @@ mounted() {
   word-wrap: break-word;
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.1));
 }
+
 .chat-message.user .message-bubble {
   background: var(--accent-color, #4e97d1);
   color: var(--text-button-primary, #fff);
 }
+
 .feedback-trigger {
   margin-left: 8px;
   align-self: center;
 }
+
 .feedback-trigger button {
   background: var(--bg-button-secondary, #f0f0f0);
   border: none;
@@ -1114,9 +907,11 @@ mounted() {
   font-size: 0.8rem;
   color: var(--text-button-secondary, #555);
 }
+
 .feedback-trigger button:hover {
   background: var(--bg-tertiary, #e0e0e0);
 }
+
 /* Quick Help Overlay */
 .quick-help-overlay {
   position: absolute;
@@ -1133,10 +928,12 @@ mounted() {
   padding: 20px;
   overflow-y: auto;
 }
+
 .quick-help-content {
   max-width: 600px;
   width: 100%;
 }
+
 .quick-help-heading {
   text-align: center;
   font-size: 1.6rem;
@@ -1144,11 +941,13 @@ mounted() {
   margin-bottom: 24px;
   color: var(--text-primary, #333);
 }
+
 .quick-help-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 12px;
 }
+
 .quick-help-item {
   display: flex;
   align-items: center;
@@ -1160,20 +959,24 @@ mounted() {
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
 }
+
 .quick-help-item:hover {
   background: var(--bg-tertiary, #f9fafb);
   border-color: var(--border-color, #d1d5db);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md, 0 2px 4px rgba(0, 0, 0, 0.1));
 }
+
 .quick-help-item.just-chat {
   background: var(--bg-tertiary, #f0f7ff);
   border-color: var(--accent-color, #bcdcff);
 }
+
 .quick-help-item.just-chat:hover {
   background: var(--bg-tertiary, #e1f0ff);
   border-color: var(--accent-color, #a3ceff);
 }
+
 .quick-help-icon {
   margin-right: 12px;
   display: flex;
@@ -1181,11 +984,13 @@ mounted() {
   justify-content: center;
   width: 40px;
 }
+
 .quick-help-text {
   font-size: 0.95rem;
   color: var(--text-primary, #333);
   font-weight: 500;
 }
+
 /* Chat Input Styles */
 .chat-input {
   display: flex;
@@ -1194,6 +999,7 @@ mounted() {
   border-top: 1px solid var(--border-color, #ddd);
   padding: 8px;
 }
+
 .prompt-textarea {
   resize: vertical;
   border: 1px solid var(--border-input, #ddd);
@@ -1205,12 +1011,14 @@ mounted() {
   background-color: var(--bg-input, #fff);
   color: var(--text-primary, #333);
 }
+
 .input-actions {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   align-items: center;
 }
+
 .new-chat-btn {
   background: var(--bg-button-secondary, #f0f0f0);
   color: var(--text-button-secondary, #555);
@@ -1220,10 +1028,12 @@ mounted() {
   cursor: pointer;
   margin-right: auto; /* This pushes it to the left */
 }
+
 .new-chat-btn:hover {
   background: var(--bg-tertiary, #e0e0e0);
   color: var(--accent-color, #4e97d1);
 }
+
 .save-chat-btn {
   background: var(--bg-button-secondary, #f0f0f0);
   color: var(--text-button-secondary, #555);
@@ -1232,9 +1042,11 @@ mounted() {
   border-radius: 4px;
   cursor: pointer;
 }
+
 .save-chat-btn:hover {
   background: var(--bg-tertiary, #e0e0e0);
 }
+
 .send-btn {
   background: var(--accent-color, #4e97d1);
   color: var(--text-button-primary, #fff);
@@ -1244,205 +1056,23 @@ mounted() {
   cursor: pointer;
   font-weight: 500;
 }
+
 .send-btn:hover {
   background: var(--accent-hover, #3a7da0);
 }
-/* Sidebar Styles */
-.sidebar {
-  width: 320px;
-  background: var(--bg-sidebar, #f8fafc);
-  border-left: 1px solid var(--border-color, #e2e8f0);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease;
-}
-.sidebar.collapsed {
-  width: 50px;
-}
-.sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.sidebar-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--text-primary, #334155);
-}
-.sidebar-toggle {
-  background: none;
-  border: none;
-  color: var(--text-tertiary, #64748b);
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-.sidebar-toggle:hover {
-  background: var(--bg-tertiary, #e2e8f0);
-  color: var(--text-secondary, #334155);
-}
-.sidebar-section {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
-}
-.section-title {
-  margin: 0 0 16px 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text-primary, #475569);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.section-title i {
-  font-size: 0.9rem;
-  color: var(--text-tertiary, #64748b);
-}
-/* Chat History styles */
-.chat-history {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.history-item {
-  background: var(--bg-card, #fff);
-  border-radius: 6px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border-light, #e5e7eb);
-}
-.history-item:hover, .history-item.active {
-  background: var(--bg-tertiary, #f0f7ff);
-  border-color: var(--accent-color, #bcdcff);
-}
-.history-item-title {
-  font-weight: 500;
-  font-size: 0.9rem;
-  margin-bottom: 4px;
-  color: var(--text-primary, #334155);
-}
-.history-item-preview {
-  font-size: 0.8rem;
-  color: var(--text-tertiary, #64748b);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 4px;
-}
-.history-item-date {
-  font-size: 0.75rem;
-  color: var(--text-muted, #94a3b8);
-  text-align: right;
-}
-/* Document styles */
-.related-documents {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.document-item {
-  display: flex;
-  align-items: center;
-  background: var(--bg-card, #fff);
-  border-radius: 6px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border-light, #e5e7eb);
-  gap: 12px;
-}
-.document-item:hover {
-  background: var(--bg-tertiary, #f0f7ff);
-  border-color: var(--accent-color, #bcdcff);
-}
-.document-icon {
-  font-size: 1.2rem;
-  color: var(--text-tertiary, #64748b);
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.document-info {
-  flex: 1;
-  overflow: hidden;
-}
-.document-title {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-primary, #334155);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 2px;
-}
-.document-meta {
-  font-size: 0.75rem;
-  color: var(--text-muted, #94a3b8);
-}
-/* FAQ styles */
-.faq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.faq-item {
-  border: 1px solid var(--border-light, #e5e7eb);
-  border-radius: 6px;
-  overflow: hidden;
-}
-.faq-question {
-  padding: 12px;
-  background: var(--bg-card, #fff);
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-primary, #334155);
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.faq-question:hover, .faq-question.active {
-  background: var(--bg-tertiary, #f0f7ff);
-}
-.faq-question i {
-  font-size: 0.8rem;
-  color: var(--text-tertiary, #64748b);
-}
-.faq-answer {
-  padding: 12px;
-  font-size: 0.85rem;
-  color: var(--text-secondary, #475569);
-  background: var(--bg-tertiary, #f8fafc);
-  border-top: 1px solid var(--border-light, #e2e8f0);
-  line-height: 1.5;
-}
-.empty-state {
-  text-align: center;
-  padding: 16px;
-  color: var(--text-muted, #94a3b8);
-  font-size: 0.9rem;
-  font-style: italic;
-}
+
 /* Form Styles for Save Dialog */
 .form-group {
   margin-bottom: 16px;
 }
+
 .form-group label {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
   color: var(--text-primary, #333);
 }
+
 .form-group input, 
 .form-group select {
   width: 100%;
@@ -1453,6 +1083,7 @@ mounted() {
   background-color: var(--bg-input, #fff);
   color: var(--text-primary, #333);
 }
+
 .cancel-btn, 
 .primary-btn {
   padding: 8px 16px;
@@ -1461,26 +1092,32 @@ mounted() {
   cursor: pointer;
   transition: background-color 0.2s;
 }
+
 .cancel-btn {
   background: var(--bg-button-secondary, #f5f5f5);
   border: 1px solid var(--border-color, #ddd);
   color: var(--text-button-secondary, #666);
 }
+
 .cancel-btn:hover {
   background-color: var(--bg-tertiary, #f5f5f5);
 }
+
 .primary-btn {
   background-color: var(--accent-color, #4e97d1);
   border: none;
   color: var(--text-button-primary, white);
 }
+
 .primary-btn:hover {
   background-color: var(--accent-hover, #3a7cb5);
 }
+
 .primary-btn:disabled {
   background-color: var(--bg-button-secondary, #a9cae8);
   cursor: not-allowed;
 }
+
 /* Responsive Adjustments */
 @media (min-width: 768px) {
   .chat-input {
@@ -1498,26 +1135,14 @@ mounted() {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
 @media (min-width: 1024px) {
   .quick-help-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
 @media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 100;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-  }
-  
-  .sidebar.visible {
-    transform: translateX(0);
-  }
-  
   .system-status-panel {
     flex-direction: column;
     align-items: flex-start;
@@ -1529,6 +1154,7 @@ mounted() {
     justify-content: space-between;
   }
 }
+
 @media (max-width: 480px) {
   .quick-help-grid {
     grid-template-columns: 1fr;
@@ -1536,77 +1162,6 @@ mounted() {
   
   .quick-help-heading {
     font-size: 1.4rem;
-  }
-}
-
-/* Updated Sidebar Styles */
-.sidebar {
-  width: 320px;
-  background: var(--bg-sidebar, #f8fafc);
-  border-left: 1px solid var(--border-color, #e2e8f0);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease;
-}
-
-.sidebar.collapsed {
-  width: 50px;
-  overflow: visible; /* Allow the toggle button to be visible */
-}
-
-.sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: relative;
-}
-
-.sidebar.collapsed .sidebar-header {
-  padding: 16px 0;
-  justify-content: center;
-  border-bottom: none;
-}
-
-.sidebar-toggle {
-  background: none;
-  border: none;
-  color: var(--text-tertiary, #64748b);
-  cursor: pointer;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-
-.sidebar-toggle:hover {
-  background: var(--bg-tertiary, #e2e8f0);
-  color: var(--text-secondary, #334155);
-}
-
-/* Mobile specific adjustments */
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 100;
-    transform: translateX(100%);
-  }
-  
-  .sidebar.visible {
-    transform: translateX(0);
-  }
-  
-  .sidebar.collapsed {
-    transform: translateX(calc(100% - 50px));
   }
 }
 

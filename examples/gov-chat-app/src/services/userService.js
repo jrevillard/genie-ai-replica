@@ -261,11 +261,46 @@ class UserService {
    */
   async getCurrentUserInfo() {
     try {
-      const response = await httpService.get('users/me');
-      return response.data;
+      // First try to get from localStorage for faster loading
+      const cachedUser = this.getCurrentUser();
+      if (cachedUser) {
+        // If we have cached data, make a background refresh but don't wait for it
+        this.refreshUserData();
+        return cachedUser;
+      }
+
+      // If no cached data, fetch from the server
+      const response = await httpService.get(`${this.authEndpoint}/me`);
+      return response.data.user || response.data; // Handle possible response formats
     } catch (error) {
       console.error('Error fetching current user info:', error);
       throw error;
+    }
+  }
+
+  /**
+ * Refresh the data for the logged in user
+ * @returns {Promise} Promise with refreshed user data
+ */
+  async refreshUserData() {
+    try {
+      const response = await httpService.get(`${this.authEndpoint}/me`);
+      const userData = response.data.user || response.data;
+
+      // Update local storage with fresh data
+      if (userData) {
+        const currentData = this.getCurrentUser();
+        this.setUserData({
+          ...currentData,
+          ...userData
+        });
+      }
+
+      return userData;
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+      // Don't throw, this is a background refresh
+      return null;
     }
   }
 
@@ -320,8 +355,10 @@ class UserService {
    * @param {string} password - Current password for verification
    * @returns {Promise} Operation result
    */
+  // In userService.js
   async updateEmail(newEmail, password) {
     try {
+      console.log(`Updating email to: ${newEmail}`);
       const response = await httpService.put('users/email', {
         email: newEmail,
         password: this.hashPassword(password)

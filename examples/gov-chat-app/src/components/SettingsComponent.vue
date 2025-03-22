@@ -597,15 +597,13 @@ export default {
       }
     },
 
-    // Prepare email change with confirmation
-    prepareEmailChange() {
+    //Prepare the email change 
+    async prepareEmailChange() {
       // Reset errors
       this.emailError = null;
 
-      // Regular expression for validating email
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
       // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(this.userData.email)) {
         this.emailError = 'Please enter a valid email address';
         return;
@@ -617,21 +615,22 @@ export default {
         return;
       }
 
-      // Store the new email for confirmation
-      this.newEmail = this.userData.email;
+      try {
+        console.log(`Checking availability for ${this.userData.email}`);
+        const isAvailable = await userService.checkEmailAvailability(this.userData.email);
 
-      // Show confirmation modal
-      this.showEmailConfirmModal = true;
-    },
+        if (!isAvailable) {
+          this.emailError = 'This email address is already in use by another account';
+          return;
+        }
 
-    // Cancel email change
-    cancelEmailChange() {
-      // Reset back to original email
-      this.userData.email = this.newEmail;
-      this.showEmailConfirmModal = false;
-      this.isEditingEmail = false;
-      this.emailChangePassword = '';
-      this.emailChangeError = null;
+        // Email is available, continue with change
+        this.newEmail = this.userData.email;
+        this.showEmailConfirmModal = true;
+      } catch (error) {
+        console.error('Error checking email availability:', error);
+        this.emailError = 'Unable to verify email availability';
+      }
     },
 
     // Confirm and process email change
@@ -646,22 +645,17 @@ export default {
       this.emailChangeError = null;
 
       try {
-        console.log('[SETTINGS] Updating email with userId:', this.currentUserId);
+        console.log('[SETTINGS] Confirming email change to:', this.userData.email);
+        console.log('[SETTINGS] Using userId for authentication:', this.currentUserId);
 
-        // Ensure we're using the numeric userId without any 'users/' prefix
-        let userId = this.currentUserId;
-        if (typeof userId === 'string' && userId.includes('/')) {
-          userId = userId.split('/').pop();
-        }
-
-        console.log('[SETTINGS] Sanitized userId for API call:', userId);
-
-        // Make sure we're sending the actual new email value, the password, and the userId for authentication
+        // Call the user service to update the email
         const response = await userService.updateEmail(
-          this.userData.email,  // This is the new email
-          this.emailChangePassword,
-          userId  // Pass the sanitized userId for authentication
+          this.userData.email,  // New email
+          this.emailChangePassword,  // Password for verification
+          this.currentUserId  // User ID for authentication
         );
+
+        console.log('[SETTINGS] Email update response:', response);
 
         // Show success message
         alert('Please check your new email address for a verification link. You will now be logged out.');

@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const emailService = require('../services/email-service');
 // Get access to the auth middleware
 const authMiddleware = require('../middleware/auth-middleware'); // Adjust the path as needed
+// Import aql from ArangoDB
+const { aql } = require('arangojs');
 
 
 // Configure multer for in-memory file storage
@@ -155,11 +157,13 @@ router.put('/email', authMiddleware.authenticate, async (req, res) => {
         email: email,
         token: token
       },
+      emailVerified: false, // Set emailVerified to false until the new email is verified
       updatedAt: new Date().toISOString()
     };
     
     console.log(`[EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: ${JSON.stringify({
       pendingEmailChange: { email, token: token.substring(0, 10) + '...' },
+      emailVerified: false, // Log this change
       updatedAt: updateData.updatedAt
     })}`);
     
@@ -199,6 +203,28 @@ router.put('/email', authMiddleware.authenticate, async (req, res) => {
     console.error('[EMAIL ROUTE DEBUG] Error stack:', error.stack);
     console.log('=======================================================');
     res.status(500).json({ error: error.message || 'Failed to initiate email change' });
+  }
+});
+
+// Check if email is available
+router.get('/check-email', async (req, res) => {
+  try {
+    const email = req.query.email;
+    
+    console.log(`Email check request received for: ${email}`);
+    
+    if (!email) {
+      console.log('Email check missing email parameter');
+      return res.status(400).json({ available: false, message: 'Email parameter is required' });
+    }
+    
+    // Use the service method for checking email availability
+    const isAvailable = await userService.isEmailAvailable(email);
+    
+    res.json({ available: isAvailable });
+  } catch (error) {
+    console.error('Error checking email availability:', error);
+    res.status(500).json({ available: false, message: 'Error checking email availability' });
   }
 });
 

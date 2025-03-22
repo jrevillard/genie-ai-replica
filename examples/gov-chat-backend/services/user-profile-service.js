@@ -455,6 +455,34 @@ class UserProfileService {
       throw error;
     }
   }
+
+  /**
+ * Check if an email is available (not used by another user)
+ * @param {String} email - Email to check
+ * @returns {Promise<Boolean>} True if email is available, false if already in use
+ */
+  async isEmailAvailable(email) {
+    try {
+      console.log(`Checking if email ${email} is available`);
+
+      const query = aql`
+      FOR u IN users
+        FILTER u.email == ${email}
+        RETURN u
+    `;
+
+      const cursor = await this.db.query(query);
+      const existingUser = await cursor.next();
+
+      const isAvailable = !existingUser;
+      console.log(`Email ${email} is ${isAvailable ? 'available' : 'already in use'}`);
+
+      return isAvailable;
+    } catch (error) {
+      console.error('Error checking email availability:', error);
+      return false; // Default to unavailable on error for safety
+    }
+  }
 }
 
 module.exports = UserProfileService;

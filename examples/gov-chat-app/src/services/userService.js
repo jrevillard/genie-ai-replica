@@ -588,6 +588,26 @@ class UserService {
   }
 
   /**
+ * Check if email is available
+ * @param {string} email - Email to check
+ * @returns {Promise<boolean>} True if email is available
+ */
+async checkEmailAvailability(email) {
+  try {
+    // Direct approach - manually construct the URL with the email parameter
+    const encodedEmail = encodeURIComponent(email);
+    const url = `${this.userEndpoint}/check-email?email=${encodedEmail}`;
+    console.log(`Checking email availability at: ${url}`);
+    
+    const response = await httpService.get(url);
+    return response.data.available;
+  } catch (error) {
+    console.error('Error checking email availability:', error);
+    return false;
+  }
+}
+
+  /**
    * Check if passwords match
    * @param {string} password First password
    * @param {string} confirmPassword Second password for confirmation

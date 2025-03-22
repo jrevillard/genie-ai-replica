@@ -6,105 +6,102 @@
         <div class="app-logo">
           <div class="vue-logo"></div>
         </div>
-        <h1 class="app-name">{{ $t('passwordResetConfirm.appTitle') }}</h1>
+        <h1 class="app-name">{{ $t('app.name', 'Huduma AI') }}</h1>
       </div>
 
-      <h2 class="password-reset-confirm-heading">{{ $t('passwordResetConfirm.resetPassword') }}</h2>
+      <h2 class="password-reset-confirm-heading">{{ $t('passwordReset.resetPassword', 'Reset Password') }}</h2>
 
       <!-- Success message after password reset -->
       <div v-if="resetSuccess" class="success-message">
-        <p>{{ $t('passwordResetConfirm.resetSuccess') }}</p>
-        <p>{{ $t('passwordResetConfirm.redirecting') }}</p>
+        <p>{{ $t('passwordResetConfirm.resetSuccess', 'Password reset successful!') }}</p>
+        <div class="checkmark-circle">
+          <div class="checkmark"></div>
+        </div>
+        <p>{{ $t('passwordResetConfirm.redirecting', 'Redirecting to login...') }}</p>
       </div>
 
       <!-- Token Validation Section -->
       <div v-else-if="!isTokenValidated" class="token-validation-form">
         <!-- Show if token needs to be entered manually -->
         <div v-if="!isValidatingToken" class="form-group">
-          <label for="resetToken" class="form-label">{{ $t('passwordResetConfirm.tokenLabel') }}</label>
-          <input 
-            v-model="manualToken" 
-            type="text" 
-            id="resetToken"
-            :placeholder="$t('passwordResetConfirm.tokenPlaceholder')" 
-            class="form-control"
-            required
-          />
+          <label for="resetToken" class="form-label">{{ $t('passwordResetConfirm.tokenLabel', 'Reset Token') }}</label>
+          <input v-model="manualToken" type="text" id="resetToken"
+            :placeholder="$t('passwordResetConfirm.tokenPlaceholder', 'Enter your reset token')" class="form-control" required
+            @focus="tokenError = ''" />
           <p v-if="tokenError" class="error-message">{{ tokenError }}</p>
         </div>
-        
+
         <!-- Loading state while validating token -->
         <div v-else class="loading-state">
           <div class="loading-spinner"></div>
-          <p>{{ $t('passwordResetConfirm.validatingToken') }}</p>
+          <p>{{ $t('passwordResetConfirm.validatingToken', 'Validating your token...') }}</p>
         </div>
-        
-        <button 
-          v-if="!isValidatingToken"
-          @click="validateToken" 
-          class="validate-token-button"
-          :disabled="!manualToken || isValidatingToken"
-        >
-          {{ $t('passwordResetConfirm.validateButton') }}
+
+        <button v-if="!isValidatingToken" @click="validateToken" class="validate-token-button"
+          :disabled="!manualToken || isValidatingToken">
+          {{ $t('passwordResetConfirm.validateButton', 'Validate Token') }}
         </button>
       </div>
 
       <!-- Password Reset Form -->
-      <form 
-        v-else-if="!resetSuccess"
-        @submit.prevent="handlePasswordReset" 
-        class="password-reset-confirm-form"
-      >
+      <form v-else-if="!resetSuccess" @submit.prevent="handlePasswordReset" class="password-reset-confirm-form">
         <div class="form-group">
           <label for="newPassword" class="form-label">
-            {{ $t('passwordResetConfirm.newPasswordLabel') }}
+            {{ $t('passwordResetConfirm.newPasswordLabel', 'New Password') }}
           </label>
-          <input 
-            v-model="newPassword" 
-            type="password" 
-            id="newPassword"
-            :placeholder="$t('passwordResetConfirm.newPasswordPlaceholder')" 
-            class="form-control" 
-            required 
-          />
+          <input v-model="newPassword" type="password" id="newPassword"
+            :placeholder="$t('passwordResetConfirm.newPasswordPlaceholder', 'Enter your new password')" class="form-control" required
+            @focus="newPasswordError = ''" />
           <p v-if="newPasswordError" class="error-message">{{ newPasswordError }}</p>
+
+          <!-- Password strength indicator -->
+          <div v-if="newPassword && passwordStrength" class="password-strength-indicator">
+            <div class="strength-label">
+              {{ $t('passwordResetConfirm.passwordStrength', 'Password Strength') }}:
+              <span :class="'strength-' + passwordStrength.score">
+                {{ getStrengthLabel(passwordStrength.score) }}
+              </span>
+            </div>
+            <div class="strength-bar-container">
+              <div class="strength-bar" :class="'strength-' + passwordStrength.score"
+                :style="{ width: (passwordStrength.score * 25) + '%' }"></div>
+            </div>
+            <ul v-if="passwordStrength.feedback.suggestions.length > 0" class="strength-suggestions">
+              <li v-for="(suggestion, index) in passwordStrength.feedback.suggestions" :key="index">
+                {{ $t('passwordResetConfirm.passwordSuggestions.' + suggestion, suggestion) }}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div class="form-group">
           <label for="confirmNewPassword" class="form-label">
-            {{ $t('passwordResetConfirm.confirmNewPasswordLabel') }}
+            {{ $t('passwordResetConfirm.confirmNewPasswordLabel', 'Confirm New Password') }}
           </label>
-          <input 
-            v-model="confirmNewPassword" 
-            type="password" 
-            id="confirmNewPassword"
-            :placeholder="$t('passwordResetConfirm.confirmNewPasswordPlaceholder')" 
-            class="form-control" 
-            required 
-          />
+          <input v-model="confirmNewPassword" type="password" id="confirmNewPassword"
+            :placeholder="$t('passwordResetConfirm.confirmNewPasswordPlaceholder', 'Confirm your new password')" class="form-control" required
+            @focus="confirmNewPasswordError = ''" />
           <p v-if="confirmNewPasswordError" class="error-message">{{ confirmNewPasswordError }}</p>
         </div>
 
-        <button 
-          type="submit" 
-          class="reset-confirm-button" 
-          :disabled="isSubmitting"
-        >
-          {{ isSubmitting ? $t('passwordResetConfirm.processing') : $t('passwordResetConfirm.resetButton') }}
+        <button type="submit" class="reset-confirm-button"
+          :disabled="isSubmitting || (passwordStrength && passwordStrength.score < 3)">
+          <span v-if="isSubmitting" class="button-spinner"></span>
+          {{ isSubmitting ? $t('passwordResetConfirm.processing', 'Processing...') : $t('passwordResetConfirm.resetButton', 'Reset Password') }}
         </button>
       </form>
 
       <div class="login-link">
         <p>
-          {{ $t('passwordResetConfirm.rememberedPassword') }} 
+          {{ $t('passwordResetConfirm.rememberedPassword', 'Remembered your password?') }}
           <router-link to="/login" class="login-link-text">
-            {{ $t('passwordResetConfirm.backToLogin') }}
+            {{ $t('passwordResetConfirm.backToLogin', 'Back to Login') }}
           </router-link>
         </p>
       </div>
 
       <div class="password-reset-confirm-footer">
-        <p class="terms-policy">{{ $t('passwordResetConfirm.supportMessage') }}</p>
+        <p class="support-message">{{ $t('passwordResetConfirm.supportMessage', 'If you need assistance, please contact support.') }}</p>
         <div class="language-selector">
           <select v-model="selectedLocale" @change="changeLocale">
             <option value="en">English</option>
@@ -132,11 +129,6 @@ export default {
     token: {
       type: String,
       default: ''
-    },
-    // Allow selection of service to use
-    usePasswordService: {
-      type: Boolean,
-      default: false
     }
   },
   data() {
@@ -147,20 +139,31 @@ export default {
         expired: 'expired_reset_token',
         invalid: 'invalid_reset_token'
       },
-      
+
       // Component state
       manualToken: this.token || '',
       isTokenValidated: false,
       isValidatingToken: false,
       tokenError: '',
-      
+
       newPassword: '',
       confirmNewPassword: '',
       newPasswordError: '',
       confirmNewPasswordError: '',
+      passwordStrength: null,
       isSubmitting: false,
       resetSuccess: false,
-      selectedLocale: this.$i18n.locale
+      selectedLocale: this.$i18n ? this.$i18n.locale : 'en'
+    }
+  },
+  watch: {
+    // Update password strength when password changes
+    newPassword(newValue) {
+      if (!newValue) {
+        this.passwordStrength = null;
+        return;
+      }
+      this.calculatePasswordStrength(newValue);
     }
   },
   created() {
@@ -173,6 +176,66 @@ export default {
     }
   },
   methods: {
+    calculatePasswordStrength(password) {
+      let score = 0;
+
+      // Length check
+      if (password.length >= 8) score += 1;
+
+      // Contains uppercase
+      if (/[A-Z]/.test(password)) score += 1;
+
+      // Contains lowercase
+      if (/[a-z]/.test(password)) score += 1;
+
+      // Contains numbers
+      if (/[0-9]/.test(password)) score += 1;
+
+      // Contains special characters
+      if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+      // Adjust score to be between 0-4
+      score = Math.min(score, 4);
+
+      // Generate suggestions
+      const suggestions = this.getStaticSuggestions(password, score);
+
+      this.passwordStrength = {
+        score,
+        feedback: {
+          suggestions
+        }
+      };
+    },
+
+    getStaticSuggestions(password, score) {
+      const suggestions = [];
+
+      if (score < 4) {
+        if (password.length < 8) {
+          suggestions.push('atLeast8Chars');
+        }
+
+        if (!/[A-Z]/.test(password)) {
+          suggestions.push('addUppercase');
+        }
+
+        if (!/[a-z]/.test(password)) {
+          suggestions.push('addLowercase');
+        }
+
+        if (!/[0-9]/.test(password)) {
+          suggestions.push('addNumbers');
+        }
+
+        if (!/[^A-Za-z0-9]/.test(password)) {
+          suggestions.push('addSpecialChars');
+        }
+      }
+
+      return suggestions;
+    },
+
     async validateToken() {
       // Reset previous errors
       this.tokenError = '';
@@ -182,7 +245,7 @@ export default {
       const token = this.manualToken || this.token;
 
       if (!token) {
-        this.tokenError = this.$t('passwordResetConfirm.noTokenProvided');
+        this.tokenError = this.$t('passwordResetConfirm.noTokenProvided', 'Please enter a reset token');
         this.isValidatingToken = false;
         return;
       }
@@ -195,25 +258,18 @@ export default {
           this.isTokenValidated = true;
           this.isValidatingToken = false;
           return;
-        } 
-        
+        }
+
         if (process.env.NODE_ENV === 'development' && token === this.TEST_TOKENS.expired) {
           // Simulate network delay
           await new Promise(resolve => setTimeout(resolve, 800));
-          this.tokenError = this.$t('passwordResetConfirm.expiredToken');
+          this.tokenError = this.$t('passwordResetConfirm.expiredToken', 'This reset token has expired');
           this.isValidatingToken = false;
           return;
         }
 
-        // Call actual service for token validation
-        const service = this.usePasswordService ? passwordService : authService;
-        let response;
-        
-        if (this.usePasswordService) {
-          response = await passwordService.validateToken(token);
-        } else {
-          response = await authService.validateResetToken(token);
-        }
+        // Use passwordService for token validation - it's specifically designed for this
+        const response = await passwordService.validateToken(token);
 
         // Check response
         if (response && response.valid) {
@@ -221,16 +277,16 @@ export default {
         } else {
           // Handle specific error cases if the API provides them
           if (response.expired) {
-            this.tokenError = this.$t('passwordResetConfirm.expiredToken');
+            this.tokenError = this.$t('passwordResetConfirm.expiredToken', 'This reset token has expired');
           } else if (response.used) {
-            this.tokenError = this.$t('passwordResetConfirm.usedToken');
+            this.tokenError = this.$t('passwordResetConfirm.usedToken', 'This reset token has already been used');
           } else {
-            this.tokenError = this.$t('passwordResetConfirm.invalidToken');
+            this.tokenError = this.$t('passwordResetConfirm.invalidToken', 'Invalid reset token');
           }
         }
       } catch (error) {
         console.error('Token validation error:', error);
-        this.tokenError = this.$t('passwordResetConfirm.validationError');
+        this.tokenError = this.$t('passwordResetConfirm.validationError', 'Could not validate token, please try again');
       } finally {
         this.isValidatingToken = false;
       }
@@ -242,15 +298,13 @@ export default {
       this.confirmNewPasswordError = '';
 
       // Password complexity validation
-      const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
-      if (!passwordRegex.test(this.newPassword)) {
-        this.newPasswordError = this.$t('passwordResetConfirm.passwordRequirements');
+      if (this.passwordStrength && this.passwordStrength.score < 3) {
+        this.newPasswordError = this.$t('passwordResetConfirm.passwordTooWeak', 'Password is too weak. Please choose a stronger password.');
         return false;
       }
 
       if (this.newPassword !== this.confirmNewPassword) {
-        this.confirmNewPasswordError = this.$t('passwordResetConfirm.passwordsDoNotMatch');
+        this.confirmNewPasswordError = this.$t('passwordResetConfirm.passwordsDoNotMatch', 'Passwords do not match');
         return false;
       }
 
@@ -268,36 +322,29 @@ export default {
 
       try {
         const token = this.manualToken || this.token;
-        const service = this.usePasswordService ? passwordService : authService;
-        
+
         // For testing environment
         if (process.env.NODE_ENV === 'development' && token === this.TEST_TOKENS.valid) {
           // Simulate API call
           await new Promise(resolve => setTimeout(resolve, 1500));
-          
+
           // Show success message and redirect after delay
           this.resetSuccess = true;
-          
+
           setTimeout(() => {
             this.$router.push('/login');
           }, 3000);
-          
+
           return;
         }
-        
-        // Call the actual service
-        let response;
-        
-        if (this.usePasswordService) {
-          response = await passwordService.resetPassword(token, this.newPassword);
-        } else {
-          response = await authService.resetPassword(token, this.newPassword);
-        }
+
+        // Use passwordService for the password reset operation
+        const response = await passwordService.resetPassword(token, this.newPassword);
 
         // Handle success
         if (response && response.success) {
           this.resetSuccess = true;
-          
+
           // Redirect to login after a delay
           setTimeout(() => {
             this.$router.push('/login');
@@ -308,33 +355,55 @@ export default {
         }
       } catch (error) {
         console.error('Password reset failed:', error);
-        
+
         // Handle specific error cases
         if (error.response && error.response.status === 410) {
-          this.tokenError = this.$t('passwordResetConfirm.expiredToken');
+          this.tokenError = this.$t('passwordResetConfirm.expiredToken', 'This reset token has expired');
           this.isTokenValidated = false;
         } else if (error.response && error.response.status === 409) {
-          this.tokenError = this.$t('passwordResetConfirm.usedToken');
+          this.tokenError = this.$t('passwordResetConfirm.usedToken', 'This reset token has already been used');
           this.isTokenValidated = false;
         } else {
           // Generic error
-          alert(this.$t('passwordResetConfirm.resetFailed'));
+          alert(this.$t('passwordResetConfirm.resetFailed', 'Password reset failed. Please try again.'));
         }
       } finally {
         this.isSubmitting = false;
       }
     },
 
+    getStrengthLabel(score) {
+      // Use static keys with fallbacks
+      const labels = [
+        this.$t('passwordResetConfirm.strengthLabels.veryWeak', 'Very Weak'), 
+        this.$t('passwordResetConfirm.strengthLabels.weak', 'Weak'),
+        this.$t('passwordResetConfirm.strengthLabels.fair', 'Fair'),
+        this.$t('passwordResetConfirm.strengthLabels.good', 'Good'),
+        this.$t('passwordResetConfirm.strengthLabels.strong', 'Strong')
+      ];
+      return labels[Math.min(score, 4)];
+    },
+
     changeLocale() {
-      // Update locale using your global method
-      this.$setLocale(this.selectedLocale);
+      // Handle both direct i18n and custom method
+      if (this.$i18n) {
+        this.$i18n.locale = this.selectedLocale;
+        try {
+          localStorage.setItem('userLocale', this.selectedLocale);
+        } catch (e) {
+          console.warn('Error saving language preference:', e);
+        }
+      } else if (typeof this.$setLocale === 'function') {
+        // Fallback to custom method if provided
+        this.$setLocale(this.selectedLocale);
+      }
     }
   }
 }
 </script>
 
 <style scoped>
-/* Styles from LoginScreen.vue */
+/* Keeping the original styles */
 .password-reset-confirm-container {
   display: flex;
   justify-content: center;
@@ -499,8 +568,22 @@ export default {
   margin-bottom: 12px;
 }
 
+.button-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s infinite linear;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .login-link {
@@ -551,6 +634,104 @@ export default {
 .language-selector select:focus {
   outline: none;
   border-color: #4E97D1;
+}
+
+/* Password strength indicator */
+.password-strength-indicator {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.strength-label {
+  margin-bottom: 4px;
+}
+
+.strength-0 { color: #ff4d4d; }
+.strength-1 { color: #ffa64d; }
+.strength-2 { color: #ffcc00; }
+.strength-3 { color: #80cc33; }
+.strength-4 { color: #47d147; }
+
+.strength-bar-container {
+  height: 4px;
+  background-color: #444;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.strength-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.strength-bar.strength-0 { background-color: #ff4d4d; }
+.strength-bar.strength-1 { background-color: #ffa64d; }
+.strength-bar.strength-2 { background-color: #ffcc00; }
+.strength-bar.strength-3 { background-color: #80cc33; }
+.strength-bar.strength-4 { background-color: #47d147; }
+
+.strength-suggestions {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 8px 0 0;
+  color: #aaa;
+}
+
+.strength-suggestions li {
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.strength-suggestions li::before {
+  content: "• ";
+  color: #4E97D1;
+}
+
+/* Additional checkmark styles */
+.checkmark-circle {
+  width: 56px;
+  height: 56px;
+  position: relative;
+  display: block;
+  vertical-align: top;
+  margin: 20px auto;
+  background-color: rgba(16, 185, 129, 0.1);
+  border-radius: 50%;
+}
+
+.checkmark {
+  height: 28px;
+  width: 14px;
+  display: block;
+  stroke-width: 2;
+  stroke: #4ade80;
+  stroke-miterlimit: 10;
+  margin: 14px auto;
+  box-shadow: inset 0px 0px 0px #4ade80;
+  animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+  position: relative;
+  top: 0;
+  right: 0;
+  transform: rotate(45deg);
+  border-bottom: 3px solid #4ade80;
+  border-right: 3px solid #4ade80;
+}
+
+@keyframes fill {
+  100% {
+    box-shadow: inset 0px 0px 0px 30px #4ade80;
+  }
+}
+
+@keyframes scale {
+  0%, 100% {
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.2);
+  }
 }
 
 /* Responsive adjustments */

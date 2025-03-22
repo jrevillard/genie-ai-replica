@@ -34,7 +34,24 @@ export default {
     resetFailed: 'Unable to reset password. Please try again.',
     noTokenProvided: 'Please provide a reset token',
     expiredToken: 'This reset token has expired. Please request a new one.',
-    invalidToken: 'Invalid or unrecognized reset token'
+    invalidToken: 'Invalid or unrecognized reset token',
+    validatingToken: 'Validating token...',
+    redirecting: 'Redirecting to login page...',
+    passwordStrength: 'Password Strength',
+    strengthLabels: {
+      veryWeak: 'Very Weak',
+      weak: 'Weak',
+      fair: 'Fair',
+      good: 'Good',
+      strong: 'Strong'
+    },
+    passwordSuggestions: {
+      atLeast8Chars: 'Use at least 8 characters',
+      addUppercase: 'Add uppercase letters',
+      addLowercase: 'Add lowercase letters',
+      addNumbers: 'Add numbers',
+      addSpecialChars: 'Add special characters'
+    }
   },
   passwordReset: {
     appTitle: 'Huduma AI',
@@ -48,7 +65,8 @@ export default {
     supportMessage: 'Need help? Contact our support team',
     invalidEmail: 'Please enter a valid email address',
     resetRequestSuccess: 'Password reset link has been sent to your email',
-    resetRequestFailed: 'Unable to send password reset link. Please try again.'
+    resetRequestFailed: 'Unable to send password reset link. Please try again.',
+    checkEmail: 'Please check your email for further instructions.'
   },
 
   register: {
@@ -88,8 +106,7 @@ export default {
     usernameInvalidChars: 'Username can only contain letters, numbers, underscores, dots and hyphens',
     networkError: 'Network error. Please check your connection and try again.',
     registrationFailed: 'Registration failed. Please try again.',
-    usernameExists: 'Username already exists',
-    emailExists: 'Email already exists'
+    networkError: 'Network error. Please check your connection and try again.'
   },
 
   // Login section
@@ -129,7 +146,7 @@ export default {
     noData: 'No Data',
     notAvailable: 'N/A',
     topQueries: 'Top Queries',
-    categoryDistribution: 'Knowledge Area Usage',  
+    categoryDistribution: 'Knowledge Area Usage',
     usageTrend: 'Usage Trend'
   },
   analytics: {
@@ -440,7 +457,43 @@ export default {
       resetDescription: 'This will clear all your profile data and chat history.',
       confirmReset: 'Are you sure you want to reset all your data? This cannot be undone.',
       resetComplete: 'Your data has been reset.'
-    }
+    },
+    title: 'Settings',
+    close: 'Close',
+    saveSettings: 'Save Settings',
+    display: 'Display',
+    displayLanguage: 'Display Language',
+    languages: {
+      english: 'English',
+      french: 'French',
+      swahili: 'Swahili'
+    },
+    theme: 'Theme',
+    themes: {
+      light: 'Light',
+      dark: 'Dark',
+      system: 'System'
+    },
+    fontSize: 'Font Size',
+    notifications: 'Notifications',
+    emailUpdates: 'Email updates',
+    soundNotifications: 'Sound notifications',
+    accountManagement: 'Account Management',
+    emailAddress: 'Email Address',
+    emailAddressPlaceholder: 'Your email address',
+    password: 'Password',
+    changePassword: 'Change Password',
+    resetUserData: 'Reset User Data',
+    resetUserDataDesc: 'This will clear all your profile data and chat history.',
+    deleteAccount: 'Delete Account',
+    deleteAccountDesc: 'This will permanently delete your account and all associated data.',
+    save: 'Save',
+    edit: 'Edit',
+    // Additional entries for modals and confirmations
+    standardAccount: 'Standard Account',
+    confirmEmailChange: 'Confirm Email Change',
+    pleaseEnterPassword: 'Please enter your password',
+    cancel: 'Cancel'
   },
   userProfile: {
     title: 'User Profile',

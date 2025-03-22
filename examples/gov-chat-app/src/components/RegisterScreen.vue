@@ -9,7 +9,7 @@
                 <h1 class="app-name">{{ $t('register.appTitle') }}</h1>
             </div>
 
-            <h2 class="register-heading">{{ $t('register.createAccount') }}</h2>
+            <h2 class="register-heading" style="color: #fff !important;">{{ $t('register.createAccount') }}</h2>
 
             <form @submit.prevent="handleRegister" class="register-form">
                 <div class="form-group">
@@ -264,36 +264,48 @@ export default {
             } catch (error) {
                 console.error('Registration error:', error);
 
-                // Handle specific error cases
+                // Improved error handling
                 if (error.response) {
                     const { status, data } = error.response;
 
+                    // Handle 409 (Conflict) or 400 (Bad Request) errors
                     if (status === 409 || status === 400) {
-                        // Check response data for specific error information
+                        // Get the error message from the response
                         const errorMessage = data.message || '';
-                        
-                        // Check if the error is about username
-                        if (errorMessage.toLowerCase().includes('username') || 
+                        console.log('Server error message:', errorMessage);
+
+                        // Check for username conflict
+                        if (errorMessage.toLowerCase().includes('username already exists') ||
+                            errorMessage.toLowerCase().includes('username') && errorMessage.toLowerCase().includes('exists') ||
                             (data.field && data.field.toLowerCase() === 'username') ||
                             errorMessage.toLowerCase().includes('loginname')) {
-                            this.usernameError = this.$t('register.usernameExists') || 'Username already exists';
-                        } 
-                        // Check if the error is about email
-                        else if (errorMessage.toLowerCase().includes('email') || 
-                                (data.field && data.field.toLowerCase() === 'email')) {
-                            this.emailError = this.$t('register.emailExists') || 'Email already exists';
-                        } 
-                        // Generic conflict error
+                            this.usernameError = this.$t('register.usernameExists');
+                        }
+                        // Check for email conflict
+                        else if (errorMessage.toLowerCase().includes('email already exists') ||
+                            errorMessage.toLowerCase().includes('email') && errorMessage.toLowerCase().includes('exists') ||
+                            (data.field && data.field.toLowerCase() === 'email')) {
+                            this.emailError = this.$t('register.emailExists');
+                        }
+                        // If we can't determine the specific field, check if it's related to username
+                        else if (errorMessage.includes('username') || errorMessage.includes('fordendk')) {
+                            this.usernameError = this.$t('register.usernameExists');
+                        }
+                        // Default error handling
                         else {
-                            alert(this.$t('register.registrationFailed') || 'Registration failed. Please try again.');
+                            // Display error in the form instead of using alert
+                            this.usernameError = this.$t('register.registrationFailed');
                         }
                     } else {
-                        // Generic error handling for other status codes
-                        alert(this.$t('register.registrationFailed') || 'Registration failed. Please try again.');
+                        // For other status codes, display error in the form
+                        this.usernameError = this.$t('register.registrationFailed');
                     }
+                } else if (error.message && error.message.includes('Network Error')) {
+                    // Network error
+                    this.usernameError = this.$t('register.networkError');
                 } else {
-                    // Network error or unexpected error
-                    alert(this.$t('register.networkError') || 'Network error. Please check your connection and try again.');
+                    // Unexpected error
+                    this.usernameError = this.$t('register.registrationFailed');
                 }
             } finally {
                 this.isSubmitting = false;
@@ -574,4 +586,20 @@ export default {
         /* Limit height on very tall phones */
     }
 }
+
+/* Update this CSS rule */
+.register-heading {
+    text-align: center;
+    font-size: 18px;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-weight: 500;
+    color: #fff !important; /* Changed from #ddd to #fff and added !important */
+}
+
+/* Add this more specific selector to ensure it overrides other styles */
+.register-card .register-heading {
+    color: #fff !important;
+}
+
 </style>

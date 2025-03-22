@@ -33,7 +33,24 @@ export default {
     resetFailed: 'Impossible de réinitialiser le mot de passe. Veuillez réessayer.',
     noTokenProvided: 'Veuillez fournir un jeton de réinitialisation',
     expiredToken: 'Ce jeton de réinitialisation a expiré. Veuillez en demander un nouveau.',
-    invalidToken: 'Jeton invalide ou non reconnu'
+    invalidToken: 'Jeton invalide ou non reconnu',
+    validatingToken: 'Validation du jeton...',
+    redirecting: 'Redirection vers la page de connexion...',
+    passwordStrength: 'Force du mot de passe',
+    strengthLabels: {
+      veryWeak: 'Très faible',
+      weak: 'Faible',
+      fair: 'Moyen',
+      good: 'Bon',
+      strong: 'Fort'
+    },
+    passwordSuggestions: {
+      atLeast8Chars: 'Utilisez au moins 8 caractères',
+      addUppercase: 'Ajoutez des lettres majuscules',
+      addLowercase: 'Ajoutez des lettres minuscules',
+      addNumbers: 'Ajoutez des chiffres',
+      addSpecialChars: 'Ajoutez des caractères spéciaux'
+    }
   },
   passwordReset: {
     appTitle: 'Huduma AI',
@@ -47,7 +64,8 @@ export default {
     supportMessage: 'Besoin d\'aide? Contactez notre équipe de support',
     invalidEmail: 'Veuillez entrer une adresse email valide',
     resetRequestSuccess: 'Un lien de réinitialisation de mot de passe a été envoyé à votre email',
-    resetRequestFailed: 'Impossible d\'envoyer le lien de réinitialisation. Veuillez réessayer.'
+    resetRequestFailed: 'Impossible d\'envoyer le lien de réinitialisation. Veuillez réessayer.',
+    checkEmail: 'Veuillez vérifier votre email pour les instructions à suivre.'
   },
 
   register: {
@@ -443,7 +461,43 @@ export default {
       resetDescription: 'Cela effacera toutes vos données de profil et votre historique de chat.',
       confirmReset: 'Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action ne peut pas être annulée.',
       resetComplete: 'Vos données ont été réinitialisées.'
-    }
+    },
+    title: 'Paramètres',
+    close: 'Fermer',
+    saveSettings: 'Enregistrer',
+    display: 'Affichage',
+    displayLanguage: 'Langue d\'affichage',
+    languages: {
+      english: 'Anglais',
+      french: 'Français',
+      swahili: 'Swahili'
+    },
+    theme: 'Thème',
+    themes: {
+      light: 'Clair',
+      dark: 'Sombre',
+      system: 'Système'
+    },
+    fontSize: 'Taille de police',
+    notifications: 'Notifications',
+    emailUpdates: 'Mises à jour par e-mail',
+    soundNotifications: 'Notifications sonores',
+    accountManagement: 'Gestion du compte',
+    emailAddress: 'Adresse e-mail',
+    emailAddressPlaceholder: 'Votre adresse e-mail',
+    password: 'Mot de passe',
+    changePassword: 'Changer le mot de passe',
+    resetUserData: 'Réinitialiser les données',
+    resetUserDataDesc: 'Cela effacera toutes vos données de profil et votre historique de chat.',
+    deleteAccount: 'Supprimer le compte',
+    deleteAccountDesc: 'Cela supprimera définitivement votre compte et toutes les données associées.',
+    save: 'Enregistrer',
+    edit: 'Modifier',
+    // Additional entries for modals and confirmations
+    standardAccount: 'Compte Standard',
+    confirmEmailChange: 'Confirmer le changement d\'e-mail',
+    pleaseEnterPassword: 'Veuillez entrer votre mot de passe',
+    cancel: 'Annuler'
   },
   userProfile: {
     title: 'Profil Utilisateur',

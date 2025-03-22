@@ -3,13 +3,13 @@
     <div class="settings-dialog">
       <!-- Header with Buttons -->
       <div class="dialog-header">
-        <h2 class="header-title">Settings</h2>
+        <h2 class="header-title">{{ $t('settings.title', 'Settings') }}</h2>
         <div class="header-actions">
           <button class="btn-close" @click="close">
-            Close
+            {{ $t('settings.close', 'Close') }}
           </button>
           <button class="btn-save" @click="save">
-            Save Settings
+            {{ $t('settings.saveSettings', 'Save Settings') }}
           </button>
         </div>
       </div>
@@ -17,13 +17,13 @@
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <p>Loading user information...</p>
+        <p>{{ $t('settings.loadingUserInfo', 'Loading user information...') }}</p>
       </div>
 
       <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
-        <button @click="fetchUserData" class="btn-retry">Retry</button>
+        <button @click="fetchUserData" class="btn-retry">{{ $t('settings.retry', 'Retry') }}</button>
       </div>
 
       <div v-else>
@@ -36,9 +36,10 @@
             <img v-else :src="userAvatar" alt="User avatar" class="avatar-image" />
           </div>
           <div class="account-details">
-            <div class="user-name">{{ userData.name || 'User Name' }}</div>
+            <div class="user-name">{{ userData.name || $t('settings.userName', 'User') }}</div>
             <div class="user-email">{{ userData.email || 'email@example.com' }}</div>
-            <div class="account-type">{{ userData.accountType || 'Free Account' }}</div>
+            <div class="account-type">{{ userData.accountType || $t('settings.standardAccount', 'Standard Account') }}
+            </div>
           </div>
         </div>
 
@@ -46,39 +47,39 @@
         <div class="settings-grid">
           <!-- Display Box (Language + Theme) -->
           <div class="settings-box">
-            <h3 class="section-title">Display</h3>
+            <h3 class="section-title">{{ $t('settings.display', 'Display') }}</h3>
 
             <!-- Language Selector -->
             <div class="setting-item">
-              <label class="section-label">Display Language</label>
-              <select class="dropdown" v-model="settings.language">
-                <option value="en">English</option>
-                <option value="fr">French</option>
-                <option value="sw">Swahili</option>
+              <label class="section-label">{{ $t('settings.displayLanguage', 'Display Language') }}</label>
+              <select class="dropdown" v-model="settings.language" @change="applyLanguage">
+                <option value="en">{{ $t('settings.languages.english', 'English') }}</option>
+                <option value="fr">{{ $t('settings.languages.french', 'Français') }}</option>
+                <option value="sw">{{ $t('settings.languages.swahili', 'Kiswahili') }}</option>
               </select>
             </div>
 
             <!-- Theme Controls -->
             <div class="setting-item">
-              <label class="section-label">Theme</label>
+              <label class="section-label">{{ $t('settings.theme', 'Theme') }}</label>
               <div class="theme-buttons">
                 <button class="theme-toggle" :class="{ active: settings.theme === 'light' }"
                   @click="applyTheme('light')">
-                  Light
+                  {{ $t('settings.themes.light', 'Light') }}
                 </button>
                 <button class="theme-toggle" :class="{ active: settings.theme === 'dark' }" @click="applyTheme('dark')">
-                  Dark
+                  {{ $t('settings.themes.dark', 'Dark') }}
                 </button>
                 <button class="theme-toggle" :class="{ active: settings.theme === 'system' }"
                   @click="applyTheme('system')">
-                  System
+                  {{ $t('settings.themes.system', 'System') }}
                 </button>
               </div>
             </div>
 
             <!-- Font Size -->
             <div class="setting-item">
-              <label class="section-label">Font Size</label>
+              <label class="section-label">{{ $t('settings.fontSize', 'Font Size') }}</label>
               <div class="slider-container">
                 <input type="range" min="30" max="100" v-model.number="settings.fontSize" class="slider" />
                 <span class="slider-value">{{ settings.fontSize }}%</span>
@@ -88,11 +89,11 @@
 
           <!-- Notifications Box -->
           <div class="settings-box">
-            <h3 class="section-title">Notifications</h3>
+            <h3 class="section-title">{{ $t('settings.notifications', 'Notifications') }}</h3>
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">Email updates</label>
+                <label class="section-label">{{ $t('settings.emailUpdates', 'Email Updates') }}</label>
                 <div class="switch" @click="settings.emailUpdates = !settings.emailUpdates">
                   <div class="switch-track" :class="{ active: settings.emailUpdates }">
                     <div class="switch-thumb"></div>
@@ -103,7 +104,7 @@
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">Sound notifications</label>
+                <label class="section-label">{{ $t('settings.soundNotifications', 'Sound Notifications') }}</label>
                 <div class="switch" @click="settings.soundNotifications = !settings.soundNotifications">
                   <div class="switch-track" :class="{ active: settings.soundNotifications }">
                     <div class="switch-thumb"></div>
@@ -116,27 +117,27 @@
 
         <!-- Account Management Section -->
         <div class="account-management-section">
-          <h3 class="section-title">Account Management</h3>
+          <h3 class="section-title">{{ $t('settings.accountManagement', 'Account Management') }}</h3>
 
           <div class="account-management-grid">
             <!-- Row 1: Email & Password -->
             <div class="management-row">
               <div class="management-col">
-                <label class="section-label">Email Address</label>
+                <label class="section-label">{{ $t('settings.emailAddress', 'Email Address') }}</label>
                 <div class="input-with-button">
                   <input type="email" class="text-input" v-model="userData.email" :disabled="!isEditingEmail"
-                    placeholder="Your email address" />
+                    :placeholder="$t('settings.emailAddressPlaceholder', 'Your email address')" />
                   <button class="btn-secondary" @click="toggleEmailEdit" :disabled="isEmailUpdating">
-                    {{ isEditingEmail ? 'Save' : 'Edit' }}
+                    {{ isEditingEmail ? $t('settings.save', 'Save') : $t('settings.edit', 'Edit') }}
                   </button>
                 </div>
                 <p v-if="emailError" class="error-text">{{ emailError }}</p>
               </div>
 
               <div class="management-col">
-                <label class="section-label">Password</label>
+                <label class="section-label">{{ $t('settings.password', 'Password') }}</label>
                 <button class="btn-secondary full-width" @click="initiatePasswordChange">
-                  Change Password
+                  {{ $t('settings.changePassword', 'Change Password') }}
                 </button>
               </div>
             </div>
@@ -145,17 +146,20 @@
             <div class="management-row">
               <div class="management-col">
                 <button class="btn-secondary full-width" @click="confirmResetUserData">
-                  Reset User Data
+                  {{ $t('settings.resetUserData', 'Reset User Data') }}
                 </button>
-                <p class="description-text">This will clear all your profile data and chat history.</p>
+                <p class="description-text">
+                  {{ $t('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.') }}
+                </p>
               </div>
 
               <div class="management-col">
                 <button class="btn-danger full-width" @click="confirmDeleteAccount">
-                  Delete Account
+                  {{ $t('settings.deleteAccount', 'Delete Account') }}
                 </button>
-                <p class="description-text danger-text">This will permanently delete your account and all associated
-                  data.</p>
+                <p class="description-text danger-text">
+                  {{ $t('settings.deleteAccountDesc', 'This will permanently delete your account and all associated  data.') }}
+                </p>
               </div>
             </div>
           </div>
@@ -165,122 +169,46 @@
       <!-- Email Change Confirmation Modal -->
       <div class="modal" v-if="showEmailConfirmModal">
         <div class="modal-content">
-          <h3 class="modal-title">Confirm Email Change</h3>
+          <h3 class="modal-title">{{ $t('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
 
           <div class="modal-body">
-            <p>Changing your email address to <strong>{{ newEmail }}</strong> will:</p>
+            <p>{{ $t('settings.changingEmailTo', 'Changing your email to') }} <strong>{{ newEmail }}</strong> {{
+              $t('settings.will', 'will') }}:</p>
             <ul>
-              <li>Log you out of the system</li>
-              <li>Send a verification link to your new email</li>
-              <li>Require you to verify your new email before regaining access</li>
+              <li>{{ $t('settings.logOutSystem', 'Log you out of the system') }}</li>
+              <li>{{ $t('settings.sendVerificationLink', 'Send a verification link to your new email') }}</li>
+              <li>{{ $t('settings.requireVerification', 'Require verification before you can log in again') }}</li>
             </ul>
 
             <div class="form-group">
-              <label for="confirmPassword">Enter your password to confirm:</label>
+              <label for="confirmPassword">{{ $t('settings.enterPasswordConfirm', 'Enter your password to confirm')
+              }}:</label>
               <input v-model="emailChangePassword" type="password" id="confirmPassword"
-                placeholder="Your current password" class="text-input" required />
+                :placeholder="$t('settings.currentPasswordPlaceholder', 'Your current password')" class="text-input"
+                required />
               <p v-if="emailChangeError" class="error-text">{{ emailChangeError }}</p>
             </div>
           </div>
 
           <div class="modal-footer">
             <button class="btn-close" @click="cancelEmailChange">
-              Cancel
+              {{ $t('settings.cancel', 'Cancel') }}
             </button>
             <button class="btn-save" @click="confirmEmailChange" :disabled="!emailChangePassword || isEmailUpdating">
-              {{ isEmailUpdating ? 'Processing...' : 'Confirm Change' }}
+              {{ isEmailUpdating ? $t('settings.processing', 'Processing...') : $t('settings.confirmChange', 'Confirm Change') }}
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Password Reset Initiate Dialog -->
-      <div class="modal" v-if="showPasswordResetInitiate">
-        <div class="modal-content password-reset-modal">
-          <div class="logo">
-            <div class="app-logo">
-              <div class="vue-logo"></div>
-            </div>
-            <h1 class="app-name">App Name</h1>
-          </div>
-
-          <h2 class="password-reset-heading">Reset Password</h2>
-
-          <div class="password-reset-form">
-            <div class="form-group">
-              <label for="currentPassword" class="form-label">Current Password</label>
-              <input v-model="passwordReset.currentPassword" type="password" id="currentPassword"
-                placeholder="Enter your current password" class="form-control" required />
-              <p v-if="passwordReset.errors.current" class="error-message">{{ passwordReset.errors.current }}</p>
-            </div>
-
-            <button @click="handlePasswordResetInitiate" class="reset-button"
-              :disabled="!passwordReset.currentPassword || passwordReset.isSubmitting">
-              {{ passwordReset.isSubmitting ? 'Processing...' : 'Continue' }}
-            </button>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn-close" @click="cancelPasswordReset">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Password Reset Confirm Dialog -->
-      <div class="modal" v-if="showPasswordResetConfirm">
-        <div class="modal-content password-reset-modal">
-          <div class="logo">
-            <div class="app-logo">
-              <div class="vue-logo"></div>
-            </div>
-            <h1 class="app-name">App Name</h1>
-          </div>
-
-          <h2 class="password-reset-heading">Set New Password</h2>
-
-          <div class="password-reset-form">
-            <div class="form-group">
-              <label for="newPassword" class="form-label">New Password</label>
-              <input v-model="passwordReset.newPassword" type="password" id="newPassword"
-                placeholder="Enter new password" class="form-control" required />
-              <p v-if="passwordReset.errors.new" class="error-message">{{ passwordReset.errors.new }}</p>
-
-              <!-- Password strength indicator -->
-              <div v-if="passwordReset.newPassword && passwordStrength" class="password-strength-indicator">
-                <div class="strength-label">
-                  Password Strength:
-                  <span :class="'strength-' + passwordStrength.score">
-                    {{ getStrengthLabel(passwordStrength.score) }}
-                  </span>
-                </div>
-                <div class="strength-bar-container">
-                  <div class="strength-bar" :class="'strength-' + passwordStrength.score"
-                    :style="{ width: (passwordStrength.score * 25) + '%' }"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="confirmPassword" class="form-label">Confirm New Password</label>
-              <input v-model="passwordReset.confirmPassword" type="password" id="confirmPassword"
-                placeholder="Confirm new password" class="form-control" required />
-              <p v-if="passwordReset.errors.confirm" class="error-message">{{ passwordReset.errors.confirm }}</p>
-            </div>
-
-            <button @click="handlePasswordResetConfirm" class="reset-button"
-              :disabled="!isPasswordValid() || passwordReset.isSubmitting">
-              {{ passwordReset.isSubmitting ? 'Processing...' : 'Reset Password' }}
-            </button>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn-close" @click="cancelPasswordReset">
-              Cancel
-            </button>
-          </div>
-        </div>
+      <!-- Password Reset Modal - FIXED -->
+      <div class="modal" v-if="showPasswordReset">
+        <PasswordResetInitiateScreen 
+          :prefilledEmail="userData.email"
+          :isEmbedded="true"
+          @reset-initiated="handlePasswordResetInitiated"
+          @cancel="cancelPasswordReset"
+        />
       </div>
     </div>
   </div>
@@ -289,9 +217,14 @@
 <script>
 // Import the user service
 import userService from '@/services/userService';
+// Import the PasswordResetInitiateScreen component
+import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue';
 
 export default {
   name: 'SettingsComponent',
+  components: {
+    PasswordResetInitiateScreen
+  },
   data() {
     return {
       // Data loading state
@@ -331,66 +264,80 @@ export default {
       emailChangePassword: '',
       emailChangeError: null,
 
-      // Password Reset Flow
-      showPasswordResetInitiate: false,
-      showPasswordResetConfirm: false,
-      passwordReset: {
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-        token: '',
-        isSubmitting: false,
-        errors: {
-          current: '',
-          new: '',
-          confirm: ''
-        }
-      }
+      // Password Reset Flow - FIXED
+      showPasswordReset: false
     }
   },
-  computed: {
-    // Calculate password strength
-    passwordStrength() {
-      if (!this.passwordReset.newPassword) {
-        return null;
-      }
 
-      const password = this.passwordReset.newPassword;
-      let score = 0;
-
-      // Length check
-      if (password.length >= 8) score += 1;
-
-      // Contains uppercase
-      if (/[A-Z]/.test(password)) score += 1;
-
-      // Contains lowercase
-      if (/[a-z]/.test(password)) score += 1;
-
-      // Contains numbers
-      if (/[0-9]/.test(password)) score += 1;
-
-      // Contains special characters
-      if (/[^A-Za-z0-9]/.test(password)) score += 1;
-
-      // Adjust score to be between 0-4
-      score = Math.min(score, 4);
-
-      return {
-        score,
-        feedback: {
-          suggestions: this.getPasswordSuggestions(password, score)
-        }
-      };
-    }
-  },
   created() {
     // Fetch user data when component is created
     this.fetchUserData();
   },
+
   methods: {
+    // Get saved font size or default to 50%
+    getSavedFontSize() {
+      try {
+        const fontSize = localStorage.getItem('fontSize')
+        return fontSize ? parseInt(fontSize) : 50
+      } catch (e) {
+        console.warn('Error accessing localStorage:', e)
+        return 50
+      }
+    },
+
+    // Get saved preference with fallback
+    getSavedPreference(key, defaultValue) {
+      try {
+        const value = localStorage.getItem(key)
+        return value !== null ? JSON.parse(value) : defaultValue
+      } catch (e) {
+        console.warn(`Error accessing localStorage for ${key}:`, e)
+        return defaultValue
+      }
+    },
+
+    // Apply language immediately and update component
+    applyLanguage() {
+      if (this.$i18n) {
+        // Change active locale
+        this.$i18n.locale = this.settings.language;
+
+        // Save to localStorage
+        try {
+          localStorage.setItem('userLocale', this.settings.language);
+        } catch (e) {
+          console.warn('Error saving language preference:', e);
+        }
+
+        // Emit language change event
+        this.$emit('languageChanged', this.settings.language);
+      }
+    },
+
+    // Apply theme immediately upon button click
+    applyTheme(theme) {
+      console.log('Theme button clicked:', theme);
+
+      // Update local state
+      this.settings.theme = theme;
+
+      // Apply theme immediately to see the change
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
+
+      // Also save to localStorage immediately for instant persistence
+      try {
+        localStorage.setItem('theme', theme);
+      } catch (e) {
+        console.warn('Error saving theme:', e);
+      }
+
+      // Inform parent component about theme change
+      this.$emit('themeChanged', theme);
+    },
+
     // Fetch user data from the backend
-    // In the settings component
     async fetchUserData() {
       this.isLoading = true;
       this.errorMessage = null;
@@ -422,9 +369,9 @@ export default {
 
         // Update component with user data
         this.userData = {
-          name: userData.fullName || userData.loginName || userData.username || 'User',
+          name: userData.fullName || userData.loginName || userData.username || this.$t('settings.user'),
           email: userData.email || '',
-          accountType: userData.accountType || userData.role || 'Standard Account',
+          accountType: userData.accountType || userData.role || this.$t('settings.standardAccount'),
           userId: this.currentUserId, // Use the cleaned ID
           createdAt: userData.createdAt || ''
         };
@@ -435,7 +382,7 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        this.errorMessage = 'Unable to load user information. Please try again.';
+        this.errorMessage = this.$t('settings.unableToLoadUser');
 
         // Use any data we might already have
         const fallbackUser = userService.getCurrentUser();
@@ -450,60 +397,15 @@ export default {
           this.currentUserId = userId;
 
           this.userData = {
-            name: fallbackUser.fullName || fallbackUser.loginName || 'User',
+            name: fallbackUser.fullName || fallbackUser.loginName || this.$t('settings.user'),
             email: fallbackUser.email || '',
-            accountType: fallbackUser.accountType || 'Account',
+            accountType: fallbackUser.accountType || this.$t('settings.account'),
             userId: this.currentUserId,
             createdAt: fallbackUser.createdAt || ''
           };
         }
       } finally {
         this.isLoading = false;
-      }
-    },
-
-
-    // Apply theme immediately upon button click
-    applyTheme(theme) {
-      console.log('Theme button clicked:', theme);
-
-      // Update local state
-      this.settings.theme = theme;
-
-      // Apply theme immediately to see the change
-      document.documentElement.setAttribute('data-theme', theme);
-      document.body.setAttribute('data-theme', theme);
-
-      // Also save to localStorage immediately for instant persistence
-      try {
-        localStorage.setItem('theme', theme);
-      } catch (e) {
-        console.warn('Error saving theme:', e);
-      }
-
-      // Inform parent component about theme change
-      this.$emit('themeChanged', theme);
-    },
-
-    // Get saved font size or default to 50%
-    getSavedFontSize() {
-      try {
-        const fontSize = localStorage.getItem('fontSize')
-        return fontSize ? parseInt(fontSize) : 50
-      } catch (e) {
-        console.warn('Error accessing localStorage:', e)
-        return 50
-      }
-    },
-
-    // Get saved preference with fallback
-    getSavedPreference(key, defaultValue) {
-      try {
-        const value = localStorage.getItem(key)
-        return value !== null ? JSON.parse(value) : defaultValue
-      } catch (e) {
-        console.warn(`Error accessing localStorage for ${key}:`, e)
-        return defaultValue
       }
     },
 
@@ -559,7 +461,7 @@ export default {
 
     // Show confirmation dialog before resetting user data
     confirmResetUserData() {
-      if (confirm('Are you sure you want to reset all user data? This cannot be undone.')) {
+      if (confirm(this.$t('settings.confirmResetUserData'))) {
         this.resetUserData()
       }
     },
@@ -578,10 +480,10 @@ export default {
         if (langValue) localStorage.setItem('userLocale', langValue)
 
         // Inform user
-        alert('User data has been reset.')
+        alert(this.$t('settings.userDataReset'))
       } catch (e) {
         console.error('Error clearing user data:', e)
-        alert('Failed to reset user data.')
+        alert(this.$t('settings.failedToResetUserData'))
       }
     },
 
@@ -597,6 +499,37 @@ export default {
       }
     },
 
+    // Confirm delete account
+    confirmDeleteAccount() {
+      if (confirm(this.$t('settings.confirmDeleteAccount'))) {
+        alert(this.$t('settings.accountDeletionNotImplemented'));
+      }
+    },
+
+    // Password Reset Methods - FIXED
+    // Initiate password change flow
+    initiatePasswordChange() {
+      // Show the password reset component
+      this.showPasswordReset = true;
+    },
+
+    // Handle successful password reset initiation
+    handlePasswordResetInitiated(email) {
+      console.log('Password reset initiated for:', email);
+      
+      // Close the modal after showing success message
+      setTimeout(() => {
+        this.showPasswordReset = false;
+        alert(this.$t('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
+      }, 1500);
+    },
+
+    // Cancel password reset flow
+    cancelPasswordReset() {
+      this.showPasswordReset = false;
+    },
+
+    // Email-related methods
     //Prepare the email change 
     async prepareEmailChange() {
       // Reset errors
@@ -605,7 +538,7 @@ export default {
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(this.userData.email)) {
-        this.emailError = 'Please enter a valid email address';
+        this.emailError = this.$t('settings.enterValidEmail');
         return;
       }
 
@@ -620,7 +553,7 @@ export default {
         const isAvailable = await userService.checkEmailAvailability(this.userData.email);
 
         if (!isAvailable) {
-          this.emailError = 'This email address is already in use by another account';
+          this.emailError = this.$t('settings.emailAlreadyInUse');
           return;
         }
 
@@ -629,14 +562,14 @@ export default {
         this.showEmailConfirmModal = true;
       } catch (error) {
         console.error('Error checking email availability:', error);
-        this.emailError = 'Unable to verify email availability';
+        this.emailError = this.$t('settings.unableToVerifyEmail');
       }
     },
 
     // Confirm and process email change
     async confirmEmailChange() {
       if (!this.emailChangePassword) {
-        this.emailChangeError = 'Please enter your password';
+        this.emailChangeError = this.$t('settings.pleaseEnterPassword');
         return;
       }
 
@@ -658,7 +591,7 @@ export default {
         console.log('[SETTINGS] Email update response:', response);
 
         // Show success message
-        alert('Please check your new email address for a verification link. You will now be logged out.');
+        alert(this.$t('settings.checkNewEmailVerification'));
 
         // Close modals
         this.showEmailConfirmModal = false;
@@ -676,173 +609,17 @@ export default {
         }, 1500); // Short delay to allow user to read the message
       } catch (error) {
         console.error('Error updating email:', error);
-        this.emailChangeError = 'Failed to update email. Please check your password and try again.';
+        this.emailChangeError = this.$t('settings.failedToUpdateEmail');
       } finally {
         this.isEmailUpdating = false;
       }
     },
 
-    // Password Reset Methods
-
-    // Initiate password change flow
-    initiatePasswordChange() {
-      // Reset form state
-      this.passwordReset = {
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-        token: '',
-        isSubmitting: false,
-        errors: {
-          current: '',
-          new: '',
-          confirm: ''
-        }
-      };
-
-      // Show password reset initiate dialog
-      this.showPasswordResetInitiate = true;
-    },
-
-    // Cancel password reset flow
-    cancelPasswordReset() {
-      this.showPasswordResetInitiate = false;
-      this.showPasswordResetConfirm = false;
-
-      // Reset form
-      this.passwordReset = {
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-        token: '',
-        isSubmitting: false,
-        errors: {
-          current: '',
-          new: '',
-          confirm: ''
-        }
-      };
-    },
-
-    // Handle first step of password reset
-    async handlePasswordResetInitiate() {
-      if (!this.passwordReset.currentPassword) {
-        this.passwordReset.errors.current = 'Please enter your current password';
-        return;
-      }
-
-      this.passwordReset.isSubmitting = true;
-      this.passwordReset.errors.current = '';
-
-      try {
-        // In a real implementation, verify the current password with the backend
-        // For this example, we'll simulate a successful verification
-
-        // Proceed to the confirm step
-        this.showPasswordResetInitiate = false;
-        this.showPasswordResetConfirm = true;
-      } catch (error) {
-        console.error('Password verification failed:', error);
-        this.passwordReset.errors.current = 'Incorrect password. Please try again.';
-      } finally {
-        this.passwordReset.isSubmitting = false;
-      }
-    },
-
-    // Validate password
-    isPasswordValid() {
-      const { newPassword, confirmPassword } = this.passwordReset;
-
-      // Reset errors
-      this.passwordReset.errors.new = '';
-      this.passwordReset.errors.confirm = '';
-
-      // Make sure passwords are entered
-      if (!newPassword || !confirmPassword) {
-        return false;
-      }
-
-      // Check password strength (at least 3 out of 5 criteria)
-      if (this.passwordStrength && this.passwordStrength.score < 3) {
-        this.passwordReset.errors.new = 'Password is too weak. Please choose a stronger password.';
-        return false;
-      }
-
-      // Check if passwords match
-      if (newPassword !== confirmPassword) {
-        this.passwordReset.errors.confirm = 'Passwords do not match';
-        return false;
-      }
-
-      return true;
-    },
-
-    // Handle password reset confirmation
-    async handlePasswordResetConfirm() {
-      if (!this.isPasswordValid()) {
-        return;
-      }
-
-      this.passwordReset.isSubmitting = true;
-
-      try {
-        // In a real implementation, call userService to change the password
-        await userService.changePassword(
-          this.passwordReset.currentPassword,
-          this.passwordReset.newPassword
-        );
-
-        // Show success message
-        alert('Your password has been successfully reset');
-
-        // Close the password reset dialog
-        this.showPasswordResetConfirm = false;
-      } catch (error) {
-        console.error('Password reset failed:', error);
-        alert('Failed to reset password. Please try again.');
-      } finally {
-        this.passwordReset.isSubmitting = false;
-      }
-    },
-
-    // Password strength helper methods
-    getStrengthLabel(score) {
-      const labels = [
-        'Very Weak',
-        'Weak',
-        'Fair',
-        'Good',
-        'Strong'
-      ];
-      return labels[Math.min(score, 4)];
-    },
-
-    getPasswordSuggestions(password, score) {
-      const suggestions = [];
-
-      if (score < 4) {
-        if (password.length < 8) {
-          suggestions.push('Use at least 8 characters');
-        }
-
-        if (!/[A-Z]/.test(password)) {
-          suggestions.push('Add uppercase letters');
-        }
-
-        if (!/[a-z]/.test(password)) {
-          suggestions.push('Add lowercase letters');
-        }
-
-        if (!/[0-9]/.test(password)) {
-          suggestions.push('Add numbers');
-        }
-
-        if (!/[^A-Za-z0-9]/.test(password)) {
-          suggestions.push('Add special characters');
-        }
-      }
-
-      return suggestions;
+    // Cancel email change
+    cancelEmailChange() {
+      this.showEmailConfirmModal = false;
+      this.emailChangePassword = '';
+      this.emailChangeError = null;
     }
   }
 }
@@ -875,6 +652,7 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 /* Header with buttons */
@@ -1050,6 +828,8 @@ export default {
   background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
   padding: 1rem;
   border-radius: 6px;
+  display: grid;
+  gap: 1rem;
 }
 
 .management-row {
@@ -1290,6 +1070,8 @@ export default {
 .modal-content {
   width: 450px;
   max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
   background-color: var(--bg-dialog, #ffffff);
   border-radius: 8px;
   box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
@@ -1505,8 +1287,9 @@ export default {
 @media (max-width: 768px) {
   .settings-dialog {
     width: 95vw;
-    height: auto;
+    height: 90vh;
     max-height: 90vh;
+    overflow-y: auto;
   }
 
   .settings-grid {
@@ -1516,5 +1299,128 @@ export default {
   .management-row {
     grid-template-columns: 1fr;
   }
+
+  .account-management-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dialog-header {
+    position: sticky;
+    top: 0;
+    background-color: var(--bg-dialog, #ffffff);
+    z-index: 10;
+  }
+
+  .input-with-button {
+    flex-wrap: wrap;
+  }
+
+  .input-with-button .text-input {
+    width: calc(100% - 70px);
+  }
+
+  .input-with-button .btn-secondary {
+    width: 60px;
+  }
 }
+
+/* Add these styles to the <style scoped> section of SettingsComponent.vue */
+
+/* Password strength indicator */
+.password-strength-indicator {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.strength-label {
+  margin-bottom: 0.25rem;
+  color: #ddd;
+}
+
+.strength-0 {
+  color: #ff4d4d;
+}
+
+.strength-1 {
+  color: #ffa64d;
+}
+
+.strength-2 {
+  color: #ffcc00;
+}
+
+.strength-3 {
+  color: #80cc33;
+}
+
+.strength-4 {
+  color: #47d147;
+}
+
+.strength-bar-container {
+  height: 4px;
+  background-color: #444;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.strength-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.strength-bar.strength-0 {
+  background-color: #ff4d4d;
+}
+
+.strength-bar.strength-1 {
+  background-color: #ffa64d;
+}
+
+.strength-bar.strength-2 {
+  background-color: #ffcc00;
+}
+
+.strength-bar.strength-3 {
+  background-color: #80cc33;
+}
+
+.strength-bar.strength-4 {
+  background-color: #47d147;
+}
+
+.strength-suggestions {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 0.5rem 0 0;
+  color: #aaa;
+}
+
+.strength-suggestions li {
+  margin-bottom: 0.25rem;
+  line-height: 1.2;
+  font-size: 0.75rem;
+}
+
+.strength-suggestions li::before {
+  content: "• ";
+  color: #4E97D1;
+}
+
+.password-reset-modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2001;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
 </style>

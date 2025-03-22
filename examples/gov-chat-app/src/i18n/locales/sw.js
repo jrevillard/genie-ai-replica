@@ -33,7 +33,24 @@ export default {
     resetFailed: 'Imeshindwa kubadilisha nenosiri. Tafadhali jaribu tena.',
     noTokenProvided: 'Tafadhali utoe tokeni ya kubadilisha',
     expiredToken: 'Tokeni hii ya kubadilisha imekwisha. Tafadhali omba mpya.',
-    invalidToken: 'Tokeni batili au isiyojulikana'
+    invalidToken: 'Tokeni batili au isiyojulikana',
+    validatingToken: 'Inathibitisha tokeni...',
+    redirecting: 'Inaelekeza kwenye ukurasa wa kuingia...',
+    passwordStrength: 'Nguvu ya Nenosiri',
+    strengthLabels: {
+      veryWeak: 'Dhaifu Sana',
+      weak: 'Dhaifu',
+      fair: 'Wastani',
+      good: 'Nzuri',
+      strong: 'Imara'
+    },
+    passwordSuggestions: {
+      atLeast8Chars: 'Tumia angalau herufi 8',
+      addUppercase: 'Ongeza herufi kubwa',
+      addLowercase: 'Ongeza herufi ndogo',
+      addNumbers: 'Ongeza nambari',
+      addSpecialChars: 'Ongeza herufi maalum'
+    }
   },
   passwordReset: {
     appTitle: 'Huduma AI',
@@ -47,7 +64,8 @@ export default {
     supportMessage: 'Unahitaji msaada? Wasiliana na timu yetu ya usaidizi',
     invalidEmail: 'Tafadhali ingiza anwani halali ya barua pepe',
     resetRequestSuccess: 'Kiunga cha kubadilisha nenosiri kimeletwa kwenye barua pepe yako',
-    resetRequestFailed: 'Imeshindwa kutuma kiunga cha kubadilisha. Tafadhali jaribu tena.'
+    resetRequestFailed: 'Imeshindwa kutuma kiunga cha kubadilisha. Tafadhali jaribu tena.',
+    checkEmail: 'Tafadhali angalia barua pepe yako kwa maagizo zaidi.'
   },
   register: {
     appTitle: "Huduma AI",
@@ -442,7 +460,43 @@ export default {
       resetDescription: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
       confirmReset: 'Je, una uhakika unataka kufuta data zako zote? Hili halitaweza kutendeka tena.',
       resetComplete: 'Data zako zimerudishwa.'
-    }
+    },
+    title: 'Mipangilio',
+    close: 'Funga',
+    saveSettings: 'Hifadhi Mipangilio',
+    display: 'Onyesho',
+    displayLanguage: 'Lugha ya Onyesho',
+    languages: {
+      english: 'Kiingereza',
+      french: 'Kifaransa',
+      swahili: 'Kiswahili'
+    },
+    theme: 'Mandhari',
+    themes: {
+      light: 'Mwangaza',
+      dark: 'Giza',
+      system: 'Mfumo'
+    },
+    fontSize: 'Ukubwa wa Fonti',
+    notifications: 'Arifa',
+    emailUpdates: 'Arifa za barua pepe',
+    soundNotifications: 'Arifa za sauti',
+    accountManagement: 'Usimamizi wa Akaunti',
+    emailAddress: 'Anwani ya Barua Pepe',
+    emailAddressPlaceholder: 'Anwani yako ya barua pepe',
+    password: 'Nenosiri',
+    changePassword: 'Badilisha Nenosiri',
+    resetUserData: 'Weka Upya Data ya Mtumiaji',
+    resetUserDataDesc: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
+    deleteAccount: 'Futa Akaunti',
+    deleteAccountDesc: 'Hii itafuta kabisa akaunti yako na data zote zinazohusiana.',
+    save: 'Hifadhi',
+    edit: 'Hariri',
+    // Additional entries for modals and confirmations
+    standardAccount: 'Akaunti ya Kawaida',
+    confirmEmailChange: 'Thibitisha Mabadiliko ya Barua Pepe',
+    pleaseEnterPassword: 'Tafadhali ingiza nenosiri lako',
+    cancel: 'Ghairi'
   },
   userProfile: {
     title: 'Wasifu wa Mtumiaji',

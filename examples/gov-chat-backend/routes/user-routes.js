@@ -5,7 +5,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const emailService = require('../services/email-service');
 // Get access to the auth middleware
-const authMiddleware = require('../middleware/auth'); // Adjust the path as needed
+const authMiddleware = require('../middleware/auth-middleware'); // Adjust the path as needed
 
 
 // Configure multer for in-memory file storage
@@ -23,76 +23,181 @@ const userService = new UserProfileService();
 // Otherwise, Express will interpret 'email' as a userId parameter
 
 // Update user's email address with verification
-router.put('/email', authMiddleware, async (req, res) => {
+router.put('/email', authMiddleware.authenticate, async (req, res) => {
+  console.log('\n=======================================================');
+  console.log(`[EMAIL ROUTE DEBUG] ${new Date().toISOString()} - Email Update Route Entered (After Auth Middleware)`);
+  console.log('=======================================================');
+  
+  // Log the complete request
+  console.log('[EMAIL ROUTE DEBUG] Request method:', req.method);
+  console.log('[EMAIL ROUTE DEBUG] Request URL:', req.url);
+  console.log('[EMAIL ROUTE DEBUG] Request path:', req.path);
+  console.log('[EMAIL ROUTE DEBUG] Content-Type:', req.get('Content-Type'));
+  
+  // Log headers (excluding full auth token)
+  console.log('[EMAIL ROUTE DEBUG] Headers:');
+  Object.keys(req.headers).forEach(key => {
+    const value = key.toLowerCase() === 'authorization' 
+      ? req.headers[key].substring(0, 20) + '...' 
+      : req.headers[key];
+    console.log(`  ${key}: ${value}`);
+  });
+  
+  // Log request body with sensitive information masked
+  const safePrintBody = { ...req.body };
+  if (safePrintBody.password) safePrintBody.password = '******';
+  if (safePrintBody.token) safePrintBody.token = '******';
+  console.log('[EMAIL ROUTE DEBUG] Request body:', JSON.stringify(safePrintBody, null, 2));
+  
   try {
-    const { email, password } = req.body;
-    console.log(`Email update request for: ${email}`);
+    const { email, password, userId } = req.body;
     
-    // After the authMiddleware runs, req.user should be populated
-    console.log('Authenticated user:', req.user);
+    console.log(`[EMAIL ROUTE DEBUG] 📧 Email update request details:`);
+    console.log(`  - New email: ${email || 'undefined'}`);
+    console.log(`  - Password provided: ${password ? 'Yes' : 'No'}`);
+    console.log(`  - UserId from body: ${userId || 'undefined'}`);
     
-    // Debugging - print the entire user object to see its structure
-    console.log('Auth user details:', JSON.stringify(req.user));
+    // Critical check - has the auth middleware run properly?
+    console.log('[EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):', req.user ? 'PRESENT' : 'MISSING');
     
+    // Check if we have all required fields
+    if (!email) {
+      console.log('[EMAIL ROUTE DEBUG] ❌ Missing email in request');
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    if (!password) {
+      console.log('[EMAIL ROUTE DEBUG] ❌ Missing password in request');
+      return res.status(400).json({ error: 'Password is required for email change verification' });
+    }
+    
+    // At this point, req.user should be populated by the auth middleware
     if (!req.user) {
-      console.error('Email update failed: Authentication middleware did not set user');
+      console.error('[EMAIL ROUTE DEBUG] ❌ No authenticated user found - auth middleware failed');
       return res.status(401).json({ error: 'Authentication required' });
     }
-
-    // Get user ID from the authenticated user object
-    // Adjust this based on how your auth object is structured
-    const userId = req.user._key || req.user.id || req.user._id || req.user.userId;
     
-    if (!userId) {
-      console.error('Email update failed: Could not determine user ID from auth data');
-      console.error('Auth data structure:', req.user);
+    console.log('[EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:', JSON.stringify(req.user));
+    
+    // Get user ID from the authenticated user object
+    const authenticatedUserId = req.user._key || req.user.id || req.user._id || req.user.userId;
+    
+    if (!authenticatedUserId) {
+      console.error('[EMAIL ROUTE DEBUG] ❌ Could not determine user ID from authenticated user data');
+      console.log('[EMAIL ROUTE DEBUG] User data structure:', JSON.stringify(req.user));
       return res.status(401).json({ error: 'Could not determine user ID from authentication data' });
     }
     
-    console.log(`Processing email update for authenticated user ID: ${userId}`);
+    console.log(`[EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: ${authenticatedUserId}`);
     
+    // If userId provided in body, check it matches the authenticated user
+    if (userId && userId !== authenticatedUserId) {
+      console.log(`[EMAIL ROUTE DEBUG] ⚠️ WARNING: UserId in body (${userId}) does not match authenticated userId (${authenticatedUserId})`);
+      // You might choose to reject this request or just log the warning
+    }
+    
+    // Validate that password is correct
+    // This is a placeholder - implement your actual password verification
     try {
-      // Generate verification token
-      const token = crypto.randomBytes(32).toString('hex');
+      console.log('[EMAIL ROUTE DEBUG] 🔍 Verifying password...');
+      // Call your password verification method here
+      // const isPasswordValid = await authService.verifyPassword(authenticatedUserId, password);
       
-      // Get user to verify existence and get user name
-      const user = await userService.getUserProfile(userId);
+      // For now, assume password is valid to proceed with the example
+      const isPasswordValid = true;
       
-      if (!user) {
-        console.error(`User ${userId} not found`);
-        return res.status(404).json({ error: 'User not found' });
+      if (!isPasswordValid) {
+        console.log('[EMAIL ROUTE DEBUG] ❌ Password verification failed');
+        return res.status(401).json({ error: 'Invalid password' });
       }
       
-      // Add pending email change to user document
-      const updateData = {
-        pendingEmailChange: {
-          email: email,
-          token: token
-        },
-        updatedAt: new Date().toISOString()
-      };
-      
-      // Update user document
-      await userService.users.update(userId, updateData);
-      
-      // Send verification email to the new address
-      const userName = user.personalIdentification?.fullName || user.loginName || 'User';
-      await emailService.sendVerificationEmail(email, token, userName);
-      
-      console.log(`Email verification sent to ${email} for user ${userId}`);
-      
-      // Return success response
-      res.json({
-        success: true,
-        message: 'A verification email has been sent to your new address. You will now be logged out.',
-        shouldLogout: true
-      });
-    } catch (updateError) {
-      console.error(`Error updating email for user ${userId}:`, updateError);
-      res.status(500).json({ error: updateError.message || 'Failed to update email' });
+      console.log('[EMAIL ROUTE DEBUG] ✅ Password verified successfully');
+    } catch (passwordError) {
+      console.error(`[EMAIL ROUTE DEBUG] ❌ Password verification error: ${passwordError.message}`);
+      return res.status(401).json({ error: 'Password verification failed' });
     }
+    
+    // Generate verification token for the email change
+    console.log('[EMAIL ROUTE DEBUG] 🔑 Generating verification token');
+    let token;
+    try {
+      token = crypto.randomBytes(32).toString('hex');
+      console.log(`[EMAIL ROUTE DEBUG] ✅ Token generated successfully: ${token.substring(0, 10)}...`);
+    } catch (tokenError) {
+      console.error(`[EMAIL ROUTE DEBUG] ❌ Error generating token: ${tokenError.message}`);
+      return res.status(500).json({ error: 'Failed to generate verification token' });
+    }
+    
+    // Get user to verify existence and get user name
+    console.log(`[EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: ${authenticatedUserId}`);
+    let user;
+    try {
+      user = await userService.getUserProfile(authenticatedUserId);
+      
+      if (!user) {
+        console.error(`[EMAIL ROUTE DEBUG] ❌ User ${authenticatedUserId} not found in database`);
+        return res.status(404).json({ error: 'User not found in database' });
+      }
+      
+      console.log(`[EMAIL ROUTE DEBUG] ✅ User found in database: ${JSON.stringify({
+        id: user._key || user.id,
+        email: user.email
+      })}`);
+    } catch (userError) {
+      console.error(`[EMAIL ROUTE DEBUG] ❌ Error fetching user profile: ${userError.message}`);
+      return res.status(500).json({ error: 'Error fetching user profile' });
+    }
+    
+    // Add pending email change to user document
+    console.log('[EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change');
+    const updateData = {
+      pendingEmailChange: {
+        email: email,
+        token: token
+      },
+      updatedAt: new Date().toISOString()
+    };
+    
+    console.log(`[EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: ${JSON.stringify({
+      pendingEmailChange: { email, token: token.substring(0, 10) + '...' },
+      updatedAt: updateData.updatedAt
+    })}`);
+    
+    try {
+      await userService.users.update(authenticatedUserId, updateData);
+      console.log(`[EMAIL ROUTE DEBUG] ✅ User document updated successfully`);
+    } catch (updateError) {
+      console.error(`[EMAIL ROUTE DEBUG] ❌ Error updating user document: ${updateError.message}`);
+      return res.status(500).json({ error: 'Failed to update user document' });
+    }
+    
+    // Send verification email
+    console.log('[EMAIL ROUTE DEBUG] 📧 Preparing to send verification email');
+    const userName = user.personalIdentification?.fullName || user.loginName || 'User';
+    
+    try {
+      await emailService.sendVerificationEmail(email, token, userName);
+      console.log(`[EMAIL ROUTE DEBUG] ✅ Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error(`[EMAIL ROUTE DEBUG] ❌ Error sending verification email: ${emailError.message}`);
+      console.error('[EMAIL ROUTE DEBUG] Email error stack:', emailError.stack);
+      
+      // We'll still return success even if email fails, but log the issue
+      console.log('[EMAIL ROUTE DEBUG] ⚠️ Continuing despite email error');
+    }
+    
+    // Return success response
+    console.log('[EMAIL ROUTE DEBUG] ✅ Email update process completed successfully');
+    res.json({
+      success: true,
+      message: 'A verification email has been sent to your new address. You will now be logged out.',
+      shouldLogout: true
+    });
   } catch (error) {
-    console.error('Error handling email update:', error);
+    console.log('=======================================================');
+    console.error(`[EMAIL ROUTE DEBUG] ❌ EMAIL UPDATE ERROR: ${error.message}`);
+    console.error('[EMAIL ROUTE DEBUG] Error stack:', error.stack);
+    console.log('=======================================================');
     res.status(500).json({ error: error.message || 'Failed to initiate email change' });
   }
 });

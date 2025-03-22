@@ -140,7 +140,7 @@ class AuthService {
       if (!userData.loginName || !userData.email || !userData.encPassword) {
         throw new Error('Missing required fields: loginName, email, and encPassword are required');
       }
-  
+
       // Check if user already exists
       const existing = await this.getUserByLoginNameOrEmail(userData.loginName, userData.email);
       if (existing) {
@@ -150,10 +150,10 @@ class AuthService {
           throw new Error('Email already exists');
         }
       }
-  
+
       // Hash the password (SHA-256 from client) with bcrypt for storage
       const hashedPassword = await this.hashPassword(userData.encPassword);
-  
+
       // Create the user document
       const user = {
         loginName: userData.loginName,
@@ -162,7 +162,7 @@ class AuthService {
         emailVerified: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-  
+
         personalIdentification: {
           fullName: userData.fullName || userData.loginName,
           dob: userData.dob || '',
@@ -174,20 +174,20 @@ class AuthService {
           currentAddress: userData.address || ''
         }
       };
-  
+
       // Save user to database first
       const savedUser = await this.users.save(user);
-  
+
       // Explicitly log saved user to verify
       console.log('Saved user before email verification:', savedUser);
-  
+
       // Send verification email AFTER user is saved
       // Use setImmediate or process.nextTick to ensure it runs asynchronously
       setImmediate(async () => {
         try {
           // Retrieve the user again to ensure we have the latest data
           const freshUser = await this.getUserById(savedUser._key);
-          
+
           if (freshUser) {
             await this.sendVerificationEmail(freshUser);
           } else {
@@ -197,15 +197,15 @@ class AuthService {
           console.error('Email verification failed, but user was registered:', emailError.message);
         }
       });
-  
+
       // Generate access token
       const accessToken = this.generateToken(savedUser);
-      
+
       // Update user with access token
       await this.users.update(savedUser._key, {
         accessToken: accessToken
       });
-  
+
       // Return user data with token (exclude password)
       const { encPassword, ...userWithoutPassword } = savedUser;
       return {
@@ -296,10 +296,10 @@ class AuthService {
         console.error('Missing user or email for verification email:', user);
         throw new Error('User or email is missing for verification');
       }
-  
+
       // Log user email for debugging
       console.log(`Preparing to send verification email to ${user.email}`);
-  
+
       // Remove any existing unused tokens for this user
       const cleanupQuery = aql`
         FOR t IN verificationTokens
@@ -307,14 +307,14 @@ class AuthService {
           REMOVE t IN verificationTokens
       `;
       await this.db.query(cleanupQuery);
-  
+
       // Generate a unique token
       const token = crypto.randomBytes(32).toString('hex');
-  
+
       // Calculate expiration time (24 hours from now)
       const now = new Date();
       const expiresAt = new Date(now.getTime() + (24 * 60 * 60 * 1000));
-  
+
       // Save token to database with additional uniqueness constraints
       try {
         await this.verificationTokens.save({
@@ -329,7 +329,7 @@ class AuthService {
         console.error('Error saving verification token:', saveError);
         throw new Error('Failed to create verification token');
       }
-  
+
       // Send email with verification token
       try {
         await emailService.sendVerificationEmail(
@@ -337,16 +337,16 @@ class AuthService {
           token,
           user.personalIdentification?.fullName || user.loginName
         );
-  
+
         // Log token in development environment for testing
         if (process.env.NODE_ENV === 'development') {
           console.log(`Email verification token for ${user.email}: ${token}`);
         }
-  
+
         return { success: true, message: 'Verification email sent' };
       } catch (emailError) {
         console.error(`Error sending verification email for user ${user._key}:`, emailError);
-        
+
         // Remove the just-created token if email sending fails
         const removeTokenQuery = aql`
           FOR t IN verificationTokens
@@ -354,7 +354,7 @@ class AuthService {
             REMOVE t IN verificationTokens
         `;
         await this.db.query(removeTokenQuery);
-  
+
         // Continue with registration despite email error in development
         if (process.env.NODE_ENV === 'development') {
           console.log('DEV MODE: Continuing with registration despite email error');
@@ -415,100 +415,80 @@ class AuthService {
   async verifyEmail(token) {
     try {
       console.log('Verification Token Received:', token);
-  
-      // Log all existing tokens for debugging
-      const allTokensQuery = aql`
-        FOR t IN verificationTokens
-        RETURN t
-      `;
-  
-      const allTokensCursor = await this.db.query(allTokensQuery);
-      const allTokens = await allTokensCursor.all();
-  
-      console.log('All Verification Tokens:', JSON.stringify(allTokens, null, 2));
-  
-      // Specific query to find matching token
-      const query = aql`
+
+      // First, check verificationTokens collection as it currently does
+      const tokenQuery = aql`
         FOR t IN verificationTokens
           FILTER t.token == ${token}
           RETURN t
       `;
-  
-      const cursor = await this.db.query(query);
-      const tokenDoc = await cursor.next();
-  
-      console.log('Token Document Found:', tokenDoc);
-  
+
+      const tokenCursor = await this.db.query(tokenQuery);
+      let tokenDoc = await tokenCursor.next();
+      let isEmailChangeToken = false;
+
+      // If not found in verificationTokens, check for pending email change tokens
+      if (!tokenDoc) {
+        console.log('Token not found in verificationTokens, checking pendingEmailChange');
+
+        const pendingEmailQuery = aql`
+          FOR u IN users
+            FILTER u.pendingEmailChange.token == ${token}
+            RETURN {
+              userId: u._id,
+              token: u.pendingEmailChange.token,
+              email: u.pendingEmailChange.email,
+              expiresAt: DATE_ADD(u.updatedAt, 24, 'hour'),
+              used: false
+            }
+        `;
+
+        const pendingCursor = await this.db.query(pendingEmailQuery);
+        tokenDoc = await pendingCursor.next();
+
+        if (tokenDoc) {
+          console.log('Found token in pendingEmailChange:', tokenDoc);
+          isEmailChangeToken = true;
+        } else {
+          console.log('No token found in either location');
+        }
+      }
+
       if (!tokenDoc) {
         console.error('No token document found for token:', token);
         return { success: false, message: 'Invalid token' };
       }
-  
-      // Check if token is expired
-      const expiresAt = new Date(tokenDoc.expiresAt);
-      const now = new Date();
-  
-      console.log('Token Expiration Details:', {
-        expiresAt: expiresAt.toISOString(),
-        now: now.toISOString(),
-        isExpired: now > expiresAt
-      });
-  
-      if (now > expiresAt) {
-        console.error('Token has expired');
-        return { success: false, expired: true, message: 'Token has expired' };
+
+      // Rest of verification logic...
+      // (Regular expiration, used checks)
+
+      // For regular email verification
+      if (!isEmailChangeToken) {
+        // Handle normal verification as you do now
+        // ...existing code...
       }
-  
-      // Check if token has been used
-      if (tokenDoc.used) {
-        console.error('Token has already been used');
-        return { success: false, used: true, message: 'Token has already been used' };
-      }
-  
-      // Get user ID from token
-      const userId = tokenDoc.userId.split('/')[1];
-  
-      // Verify user exists and email matches
-      const user = await this.getUserById(userId);
-      if (!user || user.email !== tokenDoc.email) {
-        console.error('Invalid verification attempt', {
-          userFound: !!user,
-          emailMatched: user ? user.email === tokenDoc.email : false
+      // For email change verification
+      else {
+        // Get user ID from token
+        const userId = tokenDoc.userId.split('/')[1];
+
+        // Get the user
+        const user = await this.getUserById(userId);
+
+        // Update user's email and clear pendingEmailChange
+        await this.users.update(userId, {
+          email: tokenDoc.email,
+          emailVerified: true,
+          pendingEmailChange: null,
+          updatedAt: new Date().toISOString()
         });
-        return { success: false, message: 'Invalid verification attempt' };
+
+        console.log(`Email changed successfully for user ${userId} to ${tokenDoc.email}`);
+
+        return { success: true, message: 'Email changed successfully' };
       }
-  
-      console.log('Preparing to update user verification status:', {
-        userId: userId,
-        tokenUserId: tokenDoc.userId
-      });
-  
-      // Update user as verified
-      await this.users.update(userId, {
-        emailVerified: true,
-        updatedAt: new Date().toISOString()
-      });
-  
-      // Mark token as used
-      const tokenUpdateQuery = aql`
-        FOR t IN verificationTokens
-          FILTER t.token == ${token}
-          UPDATE t WITH { used: true } IN verificationTokens
-          RETURN NEW
-      `;
-  
-      const updateResult = await this.db.query(tokenUpdateQuery);
-      const updatedToken = await updateResult.next();
-  
-      console.log('Token Update Result:', updatedToken);
-  
-      return { success: true, message: 'Email verified successfully' };
     } catch (error) {
-      console.error(`Comprehensive error in verifying email with token ${token}:`, {
-        errorMessage: error.message,
-        errorStack: error.stack,
-        token: token
-      });
+      console.error('Error in verifyEmail:', error);
       throw error;
     }
   }

@@ -353,15 +353,16 @@ class UserService {
    * Update user's email address
    * @param {string} newEmail - New email address
    * @param {string} password - Current password for verification
+   * @param {string} userId - User ID for authentication
    * @returns {Promise} Operation result
    */
-  // In userService.js
-  async updateEmail(newEmail, password) {
+  async updateEmail(newEmail, password, userId) {
     try {
-      console.log(`Updating email to: ${newEmail}`);
+      console.log(`Updating email to: ${newEmail} for user: ${userId}`);
       const response = await httpService.put('users/email', {
         email: newEmail,
-        password: this.hashPassword(password)
+        password: this.hashPassword(password),
+        userId: userId  // Include userId in the request payload
       });
       return response.data;
     } catch (error) {

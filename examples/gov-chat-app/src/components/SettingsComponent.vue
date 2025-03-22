@@ -298,6 +298,9 @@ export default {
       isLoading: true,
       errorMessage: null,
 
+      // Store userId for authentication during email changes
+      currentUserId: '',
+
       // Initialize with current app settings
       settings: {
         language: this.$i18n ? this.$i18n.locale : 'en',
@@ -406,12 +409,23 @@ export default {
           });
         }
 
+        // Extract the numeric ID part if it includes 'users/' prefix
+        let userId = userData.id || userData.userId || userData._id || '';
+
+        // Remove 'users/' prefix if present
+        if (typeof userId === 'string' && userId.includes('/')) {
+          userId = userId.split('/').pop();
+        }
+
+        this.currentUserId = userId;
+        console.log('[SETTINGS] Stored user ID for authentication:', this.currentUserId);
+
         // Update component with user data
         this.userData = {
           name: userData.fullName || userData.loginName || userData.username || 'User',
           email: userData.email || '',
           accountType: userData.accountType || userData.role || 'Standard Account',
-          userId: userData.id || userData.userId || userData._id,
+          userId: this.currentUserId, // Use the cleaned ID
           createdAt: userData.createdAt || ''
         };
 
@@ -426,11 +440,20 @@ export default {
         // Use any data we might already have
         const fallbackUser = userService.getCurrentUser();
         if (fallbackUser) {
+          let userId = fallbackUser.id || fallbackUser.userId || fallbackUser._id || '';
+
+          // Remove 'users/' prefix if present
+          if (typeof userId === 'string' && userId.includes('/')) {
+            userId = userId.split('/').pop();
+          }
+
+          this.currentUserId = userId;
+
           this.userData = {
             name: fallbackUser.fullName || fallbackUser.loginName || 'User',
             email: fallbackUser.email || '',
             accountType: fallbackUser.accountType || 'Account',
-            userId: fallbackUser.id || '',
+            userId: this.currentUserId,
             createdAt: fallbackUser.createdAt || ''
           };
         }
@@ -438,6 +461,7 @@ export default {
         this.isLoading = false;
       }
     },
+
 
     // Apply theme immediately upon button click
     applyTheme(theme) {
@@ -622,10 +646,21 @@ export default {
       this.emailChangeError = null;
 
       try {
-        // Make sure we're sending the actual new email value and the password
+        console.log('[SETTINGS] Updating email with userId:', this.currentUserId);
+
+        // Ensure we're using the numeric userId without any 'users/' prefix
+        let userId = this.currentUserId;
+        if (typeof userId === 'string' && userId.includes('/')) {
+          userId = userId.split('/').pop();
+        }
+
+        console.log('[SETTINGS] Sanitized userId for API call:', userId);
+
+        // Make sure we're sending the actual new email value, the password, and the userId for authentication
         const response = await userService.updateEmail(
-          this.userData.email,  // This should be the new email
-          this.emailChangePassword
+          this.userData.email,  // This is the new email
+          this.emailChangePassword,
+          userId  // Pass the sanitized userId for authentication
         );
 
         // Show success message
@@ -650,33 +685,6 @@ export default {
         this.emailChangeError = 'Failed to update email. Please check your password and try again.';
       } finally {
         this.isEmailUpdating = false;
-      }
-    },
-
-    // Delete account
-    async deleteAccount() {
-      try {
-        // Show secondary confirmation with password
-        const password = prompt('Please enter your password to confirm account deletion:');
-
-        if (!password) {
-          // User cancelled the prompt
-          return;
-        }
-
-        // In a real implementation, call userService to deactivate the account
-        await userService.deactivateAccount('User requested account deletion', password);
-
-        // Show success message and redirect to logout
-        alert('Your account has been deleted. You will be logged out.');
-
-        // For demo purposes, just close the settings dialog
-        this.$emit('close');
-        // In a real implementation, redirect to logout
-        // window.location.href = '/logout';
-      } catch (error) {
-        console.error('Error deleting account:', error);
-        alert('Failed to delete account. Please verify your password and try again.');
       }
     },
 

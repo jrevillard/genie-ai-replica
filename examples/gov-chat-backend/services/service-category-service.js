@@ -3,22 +3,13 @@ require('dotenv').config();
 const { Database, aql } = require('arangojs');
 
 // Initialize ArangoDB connection
-const initDB = () => {
-  const db = new Database({
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'node-services',
-    auth: {
-      username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
-    }
-  });
+const dbService = require('../utils/db-connect-service');
 
-  return db;
-};
+const initDB = dbService.getConnection();
 
 class ServiceCategoryService {
   constructor() {
-    this.db = initDB();
+    this.db = initDB;
     this.serviceCategories = this.db.collection('serviceCategories');
     this.services = this.db.collection('services');
     this.categoryServices = this.db.collection('categoryServices');

@@ -5,24 +5,14 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
-
 // Initialize ArangoDB connection
-const initDB = () => {
-  const db = new Database({
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'node-services',
-    auth: {
-      username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
-    }
-  });
+const dbService = require('../utils/db-connect-service');
 
-  return db;
-};
+const initDB = dbService.getConnection();
 
 class UserProfileService {
   constructor() {
-    this.db = initDB();
+    this.db = initDB;
     this.users = this.db.collection('users');
     this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 

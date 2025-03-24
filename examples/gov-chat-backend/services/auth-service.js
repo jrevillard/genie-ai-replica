@@ -7,24 +7,16 @@ const crypto = require('crypto');
 const emailService = require('./email-service');
 
 // Initialize ArangoDB connection
-const initDB = () => {
-  const db = new Database({
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'node-services',
-    auth: {
-      username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
-    }
-  });
-  return db;
-};
+const dbService = require('../utils/db-connect-service');
+
+const initDB = dbService.getConnection();
 
 /**
  * Service to handle user authentication and password management
  */
 class AuthService {
   constructor() {
-    this.db = initDB();
+    this.db = initDB;
     this.users = this.db.collection('users');
     this.passwordResetTokens = this.db.collection('passwordResetTokens');
     this.verificationTokens = this.db.collection('verificationTokens');

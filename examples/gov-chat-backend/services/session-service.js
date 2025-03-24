@@ -4,22 +4,13 @@ const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 
 // Initialize ArangoDB connection
-const initDB = () => {
-  const db = new Database({
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
-    databaseName: process.env.ARANGO_DB || 'node-services',
-    auth: {
-      username: process.env.ARANGO_USERNAME || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
-    }
-  });
+const dbService = require('../utils/db-connect-service');
 
-  return db;
-};
+const initDB = dbService.getConnection();
 
 class SessionService {
   constructor() {
-    this.db = initDB();
+    this.db = initDB;
     this.sessions = this.db.collection('sessions');
     this.userSessions = this.db.collection('userSessions');
     this.sessionExpirationTime = process.env.SESSION_EXPIRATION_TIME || 30 * 60 * 1000; // 30 minutes in milliseconds

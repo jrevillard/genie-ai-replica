@@ -1,6 +1,9 @@
 <template>
   <div class="chart-wrapper">
-    <div ref="chart" class="chart-container"></div>
+    <div ref="chart" class="chart-container">
+      <apexchart v-if="!loading && !error && chartOptions" type="donut" height="100%" :options="chartOptions"
+        :series="chartSeries"></apexchart>
+    </div>
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
       <span>{{ $t('analytics.status.loading') }}</span>
@@ -12,7 +15,6 @@
 </template>
 
 <script>
-import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
 import { serviceTreeService } from '../../services';
 
@@ -50,9 +52,13 @@ export default {
       categories: {},
       loading: false,
       error: null,
-      chart: null,
-      width: 0,
-      height: 0
+      chartOptions: null,
+      chartSeries: [],
+      isMobile: false,
+      themeObserver: null,
+      systemThemeMediaQuery: null,
+      systemThemeChangeHandler: null,
+      processedData: []
     };
   },
   watch: {
@@ -61,7 +67,7 @@ export default {
       handler(newData) {
         if (this.externalData && newData && newData.length > 0) {
           this.chartData = newData;
-          this.renderChart();
+          this.updateChart();
         }
       },
       deep: true
@@ -84,89 +90,97 @@ export default {
     // Watch for renderKey (locale) changes to force complete re-render
     renderKey: {
       handler() {
-        // First clean up old tooltips
-        d3.selectAll('.d3-tooltip').remove();
-        
-        // Then reload category names with new locale
+        // Reload category names with new locale
         this.loadCategoryNames().then(() => {
           if (this.chartData && this.chartData.length > 0) {
-            // Force complete recreation of chart
-            d3.select(this.$refs.chart).selectAll('*').remove();
-            this.renderChart();
+            // Update chart with new locale
+            this.updateChart();
           }
         });
       }
     }
   },
   mounted() {
+    // Check if mobile on mount
+    this.checkMobile();
+
+    // Add theme change listener
+    this.setupThemeChangeListener();
+
     // Load category names first
     this.loadCategoryNames().then(() => {
-      // Set up chart dimensions
-      this.initChartDimensions();
-      
       // Use data from props or fetch from API
       if (this.externalData && this.data.length > 0) {
         this.chartData = this.data;
-        this.renderChart();
+        this.updateChart();
       } else if (!this.externalData) {
         this.fetchData();
       }
     });
-    
+
     // Add resize listener
     window.addEventListener('resize', this.handleResize);
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
-    // Clean up any D3 tooltips
-    d3.selectAll('.d3-tooltip').remove();
+
+    // Clean up theme change listeners
+    this.cleanupThemeChangeListener();
   },
   methods: {
+    /**
+     * Check if the device is mobile based on screen width
+     */
+    checkMobile() {
+      this.isMobile = window.innerWidth < 768;
+      console.log(`[DEBUG] Device detected as ${this.isMobile ? 'mobile' : 'desktop'}`);
+    },
+
     /**
      * Fetch category distribution data from API
      */
     async fetchData() {
       if (this.externalData) return;
-      
+
       this.loading = true;
       this.error = null;
-      
+
       try {
         // Calculate date range based on period
         const { startDate, endDate } = analyticsService.calculateDateRange(
-          this.period, 
+          this.period,
           this.selectedDate
         );
-        
+
         // Get current locale from i18n and ensure it's passed to the service
         const locale = this.$i18n.locale;
         console.log(`[DEBUG] fetchData: Current locale is "${locale}"`);
-        
+
         // Make sure analyticsService has the locale information
         if (!analyticsService.$i18n) {
           console.log(`[DEBUG] Setting i18n instance on analyticsService`);
           analyticsService.$i18n = this.$i18n;
         }
-        
+
         // Fetch dashboard analytics with explicit locale
         const dashboardData = await analyticsService.getDashboardAnalytics(
-          this.period, 
+          this.period,
           this.selectedDate
         );
-        
+
         if (dashboardData && dashboardData.queryDistribution) {
           // Debug: Log category names from API
-          console.log(`[DEBUG] Category data received from API:`, 
+          console.log(`[DEBUG] Category data received from API:`,
             dashboardData.queryDistribution.map(item => ({
               id: item.categoryId,
               name: item.name,
               count: item.count
             }))
           );
-          
+
           this.chartData = dashboardData.queryDistribution;
-          this.renderChart();
-          
+          this.updateChart();
+
           // Debug: Check language of received category names
           this.logCategoryLanguageInfo();
         } else {
@@ -178,32 +192,32 @@ export default {
         console.log('Falling back to sample category data...');
         // Fall back to hard-coded data
         this.chartData = this.getFallbackData();
-        this.renderChart();
+        this.updateChart();
       } finally {
         this.loading = false;
       }
     },
-    
+
     /**
      * Load category names from the service
      */
     async loadCategoryNames() {
       try {
         const categories = await serviceTreeService.getAllCategories();
-        
+
         // Create a lookup object for category names by ID
         categories.forEach(category => {
           // Extract the numeric ID from serviceCategories/123 (full path)
           // or just use the raw _key (which is typically just the number) 
-          const id = category._key || 
-                     (category._id && category._id.split('/')[1]) || 
-                     category.catKey || 
-                     category.categoryId;
-          
+          const id = category._key ||
+            (category._id && category._id.split('/')[1]) ||
+            category.catKey ||
+            category.categoryId;
+
           if (id) {
             // Use the appropriate translation based on current locale
             const currentLocale = this.$i18n.locale;
-            
+
             // Use nameXX based on locale or fall back to nameEN
             let name = null;
             if (currentLocale === 'fr' && category.nameFR) {
@@ -216,37 +230,37 @@ export default {
               name = category.nameEN || category.name || null;
               console.log(`[DEBUG] Using default/English name for category ${id}: ${name}`);
             }
-            
+
             // Store the name with various ID formats for flexible lookup
             if (name) {
               // Store with numeric ID (most important - this is the _key in ArangoDB)
               this.categories[id] = name;
-              
+
               // Store with full path from _id (serviceCategories/X)
               if (category._id) {
                 this.categories[category._id] = name;
               } else if (id.match(/^\d+$/)) {
                 this.categories[`serviceCategories/${id}`] = name;
               }
-              
+
               // Store with s/X short format
               if (id.match(/^\d+$/)) {
                 this.categories[`s/${id}`] = name;
               }
-              
+
               // Store with serviceCategorie format
               if (id.match(/^\d+$/)) {
                 this.categories[`serviceCategorie${id}`] = name;
               }
-              
+
               // Store with cat format
               if (id.match(/^\d+$/)) {
-                this.categories[`cat${id}`] = name; 
+                this.categories[`cat${id}`] = name;
               }
             }
           }
         });
-        
+
         console.log(`[DEBUG] Loaded ${Object.keys(this.categories).length} category names for locale: ${this.$i18n.locale}`);
       } catch (error) {
         console.error('Error loading category names:', error);
@@ -254,7 +268,7 @@ export default {
         this.populateFallbackCategories();
       }
     },
-    
+
     /**
      * Populate with fallback category names when service fails
      */
@@ -275,11 +289,11 @@ export default {
         '12': { nameEN: 'Culture & Recreation', nameFR: 'Culture et Loisirs', nameSW: 'Utamaduni na Burudani' },
         '13': { nameEN: 'Legal Services', nameFR: 'Services Juridiques', nameSW: 'Huduma za Kisheria' }
       };
-      
+
       // Determine the current locale
       const currentLocale = this.$i18n.locale;
       console.log(`[DEBUG] Using fallback categories for locale: ${currentLocale}`);
-      
+
       // Add entries for each format with the appropriate language
       Object.entries(fallbackCategories).forEach(([id, names]) => {
         // Choose the right language name
@@ -289,7 +303,7 @@ export default {
         } else if (currentLocale === 'sw' && names.nameSW) {
           name = names.nameSW;
         }
-        
+
         // Add entries with all possible ID formats for maximum compatibility
         this.categories[id] = name;
         this.categories[`serviceCategories/${id}`] = name;
@@ -298,22 +312,22 @@ export default {
         this.categories[`cat${id}`] = name;
       });
     },
-    
+
     /**
      * Format category ID for display when no name is found
      */
     formatCategoryId(categoryId) {
       if (!categoryId) return this.$t('charts.notAvailable');
-      
+
       // Extract the numeric ID from different formats
       let numericId = null;
-      
+
       // Try serviceCategories/X format (from database _id)
       const serviceCategoriesMatch = categoryId.match(/serviceCategories\/(\d+)/i);
       if (serviceCategoriesMatch) {
         numericId = serviceCategoriesMatch[1];
       }
-      
+
       // Try s/X format 
       if (!numericId) {
         const sMatch = categoryId.match(/s\/(\d+)/i);
@@ -321,7 +335,7 @@ export default {
           numericId = sMatch[1];
         }
       }
-      
+
       // Try serviceCategorie format
       if (!numericId) {
         const serviceCatMatch = categoryId.match(/serviceCategorie(\d+)/i);
@@ -329,7 +343,7 @@ export default {
           numericId = serviceCatMatch[1];
         }
       }
-      
+
       // Try cat format
       if (!numericId) {
         const catMatch = categoryId.match(/cat(\d+)/i);
@@ -337,17 +351,17 @@ export default {
           numericId = catMatch[1];
         }
       }
-      
+
       // Try to parse the ID itself if it's a number
       if (!numericId && /^\d+$/.test(categoryId)) {
         numericId = categoryId;
       }
-      
+
       // If we found a numeric ID, check our fallback data
       if (numericId && this.categories[numericId]) {
         return this.categories[numericId];
       }
-      
+
       // Default fallback - just format the ID nicely
       // Extract the relevant part of the ID for display
       let idDisplay = categoryId;
@@ -356,10 +370,10 @@ export default {
       } else {
         idDisplay = categoryId.replace(/^(serviceCategorie|cat)/i, '');
       }
-      
+
       return `${this.$t('analytics.chartLabels.category')} ${idDisplay}`;
     },
-    
+
     /**
      * Remove number prefix from category name
      */
@@ -367,28 +381,15 @@ export default {
       if (!text) return '';
       return text.replace(/^\d+\.\s*/, '');
     },
-    
-    /**
-     * Initialize chart dimensions
-     */
-    initChartDimensions() {
-      if (!this.$refs.chart) return;
-      
-      const container = this.$refs.chart;
-      
-      // Get container dimensions
-      this.width = container.clientWidth;
-      this.height = Math.min(400, this.width * 0.7); // Maintain aspect ratio
-    },
-    
+
     /**
      * Handle window resize
      */
     handleResize() {
-      this.initChartDimensions();
-      this.renderChart();
+      this.checkMobile();
+      this.updateChart();
     },
-    
+
     /**
      * Get fallback data in case API fails
      * @returns {Array} Sample category distribution data
@@ -396,7 +397,7 @@ export default {
     getFallbackData() {
       // Get current locale
       const currentLocale = this.$i18n.locale;
-      
+
       // Define multi-language names
       const categoryNames = {
         'cat1': {
@@ -440,13 +441,13 @@ export default {
           sw: 'Nyumba na Maendeleo ya Miji'
         }
       };
-      
+
       // Select language based on locale
-      const lang = currentLocale === 'fr' ? 'fr' : 
-                  (currentLocale === 'sw' ? 'sw' : 'en');
-      
+      const lang = currentLocale === 'fr' ? 'fr' :
+        (currentLocale === 'sw' ? 'sw' : 'en');
+
       console.log(`[DEBUG] Using fallback data with language: ${lang}`);
-      
+
       // Create fallback data with appropriate language
       return [
         { categoryId: 'cat1', name: categoryNames.cat1[lang], count: 2347, value: 23 },
@@ -459,15 +460,73 @@ export default {
         { categoryId: 'cat8', name: categoryNames.cat8[lang], count: 650, value: 6 }
       ];
     },
-    
+
+    /**
+     * Set up theme change listener to update chart when theme changes
+     */
+    setupThemeChangeListener() {
+      // Watch for theme changes through classList mutations
+      this.themeObserver = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+          if (mutation.attributeName === 'class' || mutation.attributeName === 'data-theme') {
+            console.log('[DEBUG] Theme change detected, updating chart...');
+            this.updateChart();
+            break;
+          }
+        }
+      });
+
+      // Observe document root for theme changes
+      this.themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme']
+      });
+
+      // Also listen for system preference changes
+      this.systemThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      this.systemThemeChangeHandler = e => {
+        console.log('[DEBUG] System theme preference changed, updating chart...');
+        this.updateChart();
+      };
+
+      // Add listener with compatibility for older browsers
+      if (this.systemThemeMediaQuery.addEventListener) {
+        this.systemThemeMediaQuery.addEventListener('change', this.systemThemeChangeHandler);
+      } else {
+        // Fallback for older browsers
+        this.systemThemeMediaQuery.addListener(this.systemThemeChangeHandler);
+      }
+    },
+
+    /**
+     * Clean up theme change listeners
+     */
+    cleanupThemeChangeListener() {
+      if (this.themeObserver) {
+        this.themeObserver.disconnect();
+      }
+
+      if (this.systemThemeMediaQuery) {
+        if (this.systemThemeMediaQuery.removeEventListener) {
+          this.systemThemeMediaQuery.removeEventListener('change', this.systemThemeChangeHandler);
+        } else {
+          // Fallback for older browsers
+          this.systemThemeMediaQuery.removeListener(this.systemThemeChangeHandler);
+        }
+      }
+    },
+
     /**
      * Truncate text to fit in available space
      */
     truncateText(text, maxLength) {
       if (!text) return '';
-      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+
+      // On mobile, truncate more aggressively
+      const limit = this.isMobile ? Math.min(maxLength, 18) : maxLength;
+      return text.length > limit ? text.slice(0, limit) + '...' : text;
     },
-    
+
     /**
      * Get localized category name based on ID
      */
@@ -476,35 +535,35 @@ export default {
       if (this.categories[categoryId]) {
         return this.categories[categoryId];
       }
-      
+
       // Handle "serviceCategories/X" format (format from the database _id field)
       const serviceCategoriesMatch = categoryId.match(/serviceCategories\/(\d+)/i);
       if (serviceCategoriesMatch && this.categories[serviceCategoriesMatch[1]]) {
         return this.categories[serviceCategoriesMatch[1]];
       }
-      
+
       // Handle "s/X" format (shorthand format used in some places)
       const sMatch = categoryId.match(/s\/(\d+)/i);
       if (sMatch && this.categories[sMatch[1]]) {
         return this.categories[sMatch[1]];
       }
-      
+
       // Then try extracting numeric part if it's a serviceCategorie format
       const serviceMatch = categoryId.match(/serviceCategorie(\d+)/i);
       if (serviceMatch && this.categories[serviceMatch[1]]) {
         return this.categories[serviceMatch[1]];
       }
-      
+
       // Then try extracting numeric part if it's a cat format
       const catMatch = categoryId.match(/cat(\d+)/i);
       if (catMatch && this.categories[catMatch[1]]) {
         return this.categories[catMatch[1]];
       }
-      
+
       // Fallback to formatting the ID
       return this.formatCategoryId(categoryId);
     },
-    
+
     /**
      * Analyze if category names are in the correct language
      * Helps debug if the API is returning names in the wrong language
@@ -514,28 +573,28 @@ export default {
         console.log('[DEBUG] No chart data available to check language');
         return;
       }
-      
+
       const locale = this.$i18n.locale;
       console.log(`[DEBUG] Analyzing category names for locale: "${locale}"`);
-      
+
       // Simple word patterns to detect language
       const patterns = {
         en: ['and', 'of', 'services', 'identity', 'civil', 'education', 'business'],
         sw: ['na', 'ya', 'huduma', 'utambulisho', 'elimu', 'biashara'],
         fr: ['et', 'de', 'services', 'identité', 'civil', 'éducation']
       };
-      
+
       let matchCount = 0;
       let totalWithNames = 0;
-      
+
       this.chartData.forEach(cat => {
         if (!cat.name) {
           console.log(`[DEBUG] Missing name for category: ${cat.categoryId}`);
           return;
         }
-        
+
         totalWithNames++;
-        
+
         // Check each language
         const results = {};
         Object.entries(patterns).forEach(([lang, words]) => {
@@ -543,252 +602,275 @@ export default {
           const matches = words.filter(word => nameLower.includes(word.toLowerCase()));
           results[lang] = matches.length;
         });
-        
+
         // Determine likely language
         let likelyLang = 'unknown';
         let highestCount = 0;
-        
+
         Object.entries(results).forEach(([lang, count]) => {
           if (count > highestCount) {
             highestCount = count;
             likelyLang = lang;
           }
         });
-        
+
         const isMatch = likelyLang === locale;
         if (isMatch) {
           matchCount++;
         }
-        
+
         console.log(`[DEBUG] Category "${cat.categoryId}" name: "${cat.name}" - likely language: ${likelyLang} (match with current locale: ${isMatch ? 'YES' : 'NO'})`);
       });
-      
+
       // Summary statistics
       if (totalWithNames > 0) {
         const matchPercent = Math.round((matchCount / totalWithNames) * 100);
         console.log(`[DEBUG] Language match summary: ${matchCount}/${totalWithNames} (${matchPercent}%) names match current locale "${locale}"`);
       }
     },
-    
+
     /**
-     * Render the pie chart
+     * Get current theme information
      */
-    renderChart() {
-      if (!this.chartData || this.chartData.length === 0 || !this.$refs.chart) return;
-      
-      console.log(`[DEBUG] Rendering chart with locale: ${this.$i18n.locale}`);
-      
-      // Clear previous chart
-      d3.select(this.$refs.chart).selectAll('*').remove();
-      
-      // CRITICAL FIX: Process the data and ensure we prioritize names from the API directly
-      const chartData = this.chartData.map(item => {
-        // Ensure the value property exists and is a valid number
+    getThemeInfo() {
+      // Check if dark mode is enabled via CSS classes, data attributes, or system preferences
+      const isDarkMode = document.documentElement.classList.contains('dark-theme')
+        || document.documentElement.classList.contains('dark-mode')
+        || document.documentElement.getAttribute('data-theme') === 'dark'
+        || window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      console.log(`[DEBUG] Theme detection: isDarkMode = ${isDarkMode}`);
+
+      // Simple theme configuration - white text on dark, black text on light
+      return {
+        isDarkMode,
+        textColor: isDarkMode ? '#FFFFFF' : '#333333',
+        backgroundColor: 'transparent',
+        tooltipBackground: isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+        tooltipTextColor: isDarkMode ? '#FFFFFF' : '#333333',
+        theme: isDarkMode ? 'dark' : 'light'
+      };
+    },
+
+    /**
+     * Get ApexCharts tooltip formatter
+     */
+    tooltipFormatter(value, opts, theme) {
+      const item = this.processedData[opts.dataPointIndex];
+      if (!item) return '';
+
+      // Use theme colors for tooltip text
+      const textColor = theme.tooltipTextColor;
+      const bgColor = theme.tooltipBackground;
+
+      return `
+        <div class="apexcharts-tooltip-box" style="background: ${bgColor}; border-radius: 5px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+          <div class="apexcharts-tooltip-title" style="color: ${textColor}; font-weight: bold; margin-bottom: 5px;">${item.categoryName}</div>
+          <div class="apexcharts-tooltip-series-group" style="color: ${textColor}; padding: 0;">
+            <div style="color: ${textColor}; padding: 2px 0;">${this.$t('analytics.table.count')}: ${item.count ? item.count.toLocaleString() : 'N/A'}</div>
+            <div style="color: ${textColor}; padding: 2px 0;">${this.$t('analytics.percentage', 'Percentage')}: ${Math.round(item.percentage)}%</div>
+          </div>
+        </div>
+      `;
+    },
+
+    /**
+     * Process chart data to ensure all necessary properties
+     */
+    processChartData() {
+      if (!this.chartData || this.chartData.length === 0) return [];
+
+      // Calculate total for percentages
+      const total = this.chartData.reduce((sum, item) => {
         const value = Number(item.value) || Number(item.count) || 1;
-        
-        // CRITICAL FIX: Prioritize the name directly from the API response
-        // instead of trying to translate or look up from categories
-        let displayName = '';
-        
-        if (item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')) {
-          // Use the name directly from the API which should already be in the correct language
-          displayName = item.name;
-          console.log(`[DEBUG] Using API-provided name: "${displayName}" for ${item.categoryId}`);
-        } 
-        // Only fall back to category lookup if API didn't provide a usable name
-        else {
-          displayName = this.getCategoryDisplayName(item.categoryId);
-          console.log(`[DEBUG] Using looked-up name: "${displayName}" for ${item.categoryId}`);
+        return sum + value;
+      }, 0);
+
+      // Process and prepare data with proper names
+      return this.chartData
+        .map(item => {
+          // Ensure the value property exists and is a valid number
+          const value = Number(item.value) || Number(item.count) || 1;
+          const percentage = (value / total) * 100;
+
+          // CRITICAL: Prioritize the name directly from the API response
+          let displayName = '';
+
+          if (item.name && item.name !== item.categoryId && !item.name.startsWith('Category ')) {
+            // Use the name directly from the API which should already be in the correct language
+            displayName = item.name;
+            console.log(`[DEBUG] Using API-provided name: "${displayName}" for ${item.categoryId}`);
+          }
+          // Only fall back to category lookup if API didn't provide a usable name
+          else {
+            displayName = this.getCategoryDisplayName(item.categoryId);
+            console.log(`[DEBUG] Using looked-up name: "${displayName}" for ${item.categoryId}`);
+          }
+
+          return {
+            categoryId: item.categoryId,
+            categoryName: displayName,
+            count: Number(item.count) || 0,
+            value: value,
+            percentage: percentage
+          };
+        })
+        // Sort by value descending for better visualization
+        .sort((a, b) => b.value - a.value);
+    },
+
+    /**
+     * Update the chart with current data
+     */
+    updateChart() {
+
+      // Process the data for the chart
+      this.processedData = this.processChartData();
+
+      if (!this.processedData || this.processedData.length === 0) {
+        this.error = this.$t('analytics.status.noData');
+        return;
+      }
+
+      // Get theme information
+      const theme = this.getThemeInfo();
+      console.log(`[DEBUG] Theme detected: ${theme.isDarkMode ? 'dark' : 'light'}`);
+      console.log('[DEBUG] Theme info:', theme);
+      console.log('[DEBUG] Is dark mode detected:', theme.isDarkMode);
+      console.log('[DEBUG] Text color being used:', theme.textColor);
+
+      // Prepare series data for ApexCharts
+      this.chartSeries = this.processedData.map(item => item.value);
+
+      // Set up chart labels with proper category names
+      const labels = this.processedData.map(item => {
+        // Truncate long names
+        const nameMaxLength = this.isMobile ? 18 : 25;
+        return this.truncateText(item.categoryName, nameMaxLength);
+      });
+
+      // Get colors for chart
+      const colors = [
+        '#5470c6', '#91cc75', '#fac858', '#ee6666',
+        '#73c0de', '#3ba272', '#fc8452', '#9a60b4'
+      ];
+
+      // Set up chart options
+      this.chartOptions = {
+        chart: {
+          type: 'donut',
+          fontFamily: 'inherit',
+          toolbar: {
+            show: false
+          },
+          animations: {
+            enabled: true,
+            speed: 500
+          },
+          background: theme.backgroundColor,
+          foreColor: theme.textColor // Set text color based on theme
+        },
+        stroke: {
+          width: 0 // Remove stroke around slices
+        },
+        colors: colors,
+        labels: labels,
+        dataLabels: {
+          enabled: true,
+          formatter: (val) => {
+            return Math.round(val) + '%';
+          },
+          style: {
+            fontSize: '12px',
+            fontWeight: 'bold',
+            colors: [theme.textColor] // Set text color based on theme
+          },
+          dropShadow: {
+            enabled: false
+          }
+        },
+        legend: {
+          position: this.isMobile ? 'bottom' : 'right',
+          offsetY: this.isMobile ? 10 : 0,
+          formatter: (seriesName, opts) => {
+            const item = this.processedData[opts.seriesIndex];
+            if (!item) return seriesName;
+
+            // Show percentage in the legend
+            return `${seriesName} (${Math.round(item.percentage)}%)`;
+          },
+          labels: {
+            colors: theme.textColor // Set text color based on theme
+          }
+        },
+        tooltip: {
+          enabled: true,
+          custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+            return this.tooltipFormatter(series[seriesIndex], { dataPointIndex }, theme);
+          }
+        },
+        plotOptions: {
+          pie: {
+            donut: {
+              size: '60%',
+              background: 'transparent',
+              labels: {
+                show: true,
+                name: {
+                  show: true,
+                  formatter: function (val) {
+                    return "Knowledge Areas"; // First line
+                  },
+                  // Only use the theme.textColor if the background is light
+                  // Otherwise always use white for the dark center
+                  color: theme.isDarkMode ? '#FFFFFF' : '#333333'
+                },
+                value: {
+                  show: true
+                },
+                total: {
+                  show: true,
+                  formatter: function () {
+                    return "by Usage"; // Second line
+                  },
+                  color: theme.isDarkMode ? '#FFFFFF' : '#333333'
+                }
+              }
+            },
+            dataLabels: {
+              style: {
+                colors: [theme.textColor]
+              },
+              background: {
+                enabled: false
+              }
+            }
+          }
+        },
+        responsive: [{
+          breakpoint: 768,
+          options: {
+            chart: {
+              height: 380
+            },
+            legend: {
+              position: 'bottom',
+              offsetY: 0,
+              height: 100
+            }
+          }
+        }],
+        theme: {
+          mode: theme.isDarkMode ? 'dark' : 'light'
+        },
+        states: {
+          hover: {
+            filter: {
+              type: 'none' // Remove grayscale filter on hover
+            }
+          }
         }
-        
-        return {
-          categoryId: item.categoryId,
-          categoryName: displayName,
-          count: Number(item.count) || 0,
-          value: value
-        };
-      });
-      
-      // Calculate total for accurate percentages
-      const total = chartData.reduce((sum, d) => sum + d.value, 0);
-      
-      // Set up chart dimensions
-      const width = this.width;
-      const height = this.height;
-      const chartWidth = width * 0.5; // Use 50% of width for chart
-      const radius = Math.min(chartWidth, height) / 2; // Chart radius
-      
-      // Create SVG
-      const svg = d3.select(this.$refs.chart)
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height);
-      
-      // Create chart group - positioned for balance  
-      const chartGroup = svg.append('g')
-        .attr('class', 'chart-group')
-        .attr('transform', `translate(${chartWidth / 2},${height / 2})`);
-      
-      // Set up color scale
-      const colorScale = d3.scaleOrdinal()
-        .domain(chartData.map(d => d.categoryId))
-        .range([
-          '#5470c6', '#91cc75', '#fac858', '#ee6666',
-          '#73c0de', '#3ba272', '#fc8452', '#9a60b4'
-        ]);
-      
-      // Create pie layout
-      const pie = d3.pie()
-        .value(d => d.value)
-        .sort(null);
-      
-      // Create arc generators
-      const arc = d3.arc()
-        .innerRadius(radius * 0.6) // Make it a donut chart
-        .outerRadius(radius);
-      
-      // Create pie slices
-      const slices = chartGroup.selectAll('.slice')
-        .data(pie(chartData))
-        .enter()
-        .append('path')
-        .attr('class', 'slice')
-        .attr('d', arc)
-        .attr('fill', d => colorScale(d.data.categoryId))
-        .attr('stroke', 'white')
-        .style('stroke-width', '2px')
-        .style('opacity', 0.8)
-        .on('mouseover', function() {
-          d3.select(this)
-            .style('opacity', 1)
-            .attr('transform', 'scale(1.05)');
-        })
-        .on('mouseout', function() {
-          d3.select(this)
-            .style('opacity', 0.8)
-            .attr('transform', 'scale(1)');
-        });
-          
-      // Add percentage labels inside the donut slices
-      chartGroup.selectAll('.percent-label')
-        .data(pie(chartData))
-        .enter()
-        .append('text')
-        .attr('class', 'percent-label')
-        .attr('transform', d => {
-          // Position text in the middle of each arc
-          const centroid = arc.centroid(d);
-          return `translate(${centroid})`;
-        })
-        .attr('text-anchor', 'middle')
-        .attr('dominant-baseline', 'middle')
-        .style('font-size', '11px')
-        .style('font-weight', 'bold')
-        .style('fill', 'white')
-        .style('pointer-events', 'none')
-        .text(d => {
-          const percent = Math.round((d.data.value / total) * 100);
-          return percent >= 4 ? `${percent}%` : ''; // Only show percentage for segments large enough
-        });
-      
-      // Add center text
-      const centerText = chartGroup.append('g')
-        .attr('class', 'center-text')
-        .attr('text-anchor', 'middle');
-      
-      centerText.append('text')
-        .attr('y', -10)
-        .style('font-size', '12px')
-        .style('font-weight', 'bold')
-        .text(this.$t('analytics.chartLabels.serviceCategories'));
-      
-      centerText.append('text')
-        .attr('y', 10)
-        .style('font-size', '12px')
-        .text(this.$t('analytics.chartLabels.byUsage'));
-      
-      // Create a legend container - positioned to the right with proper spacing
-      const legend = svg.append('g')
-        .attr('class', 'legend')
-        .attr('transform', `translate(${chartWidth + 40},${(height - (chartData.length * 24)) / 2})`); // Centered vertically
-      
-      // Add legend title
-      legend.append('text')
-        .attr('x', 0)
-        .attr('y', -20)
-        .style('font-size', '14px')
-        .style('font-weight', 'bold')
-        .text(this.$t('analytics.chartLabels.categories'));
-      
-      // Add legend items
-      const legendItems = legend.selectAll('.legend-item')
-        .data(chartData)
-        .enter()
-        .append('g')
-        .attr('class', 'legend-item')
-        .attr('transform', (d, i) => `translate(0, ${i * 24})`); // More spacing between items
-      
-      // Add color squares
-      legendItems.append('rect')
-        .attr('width', 14)
-        .attr('height', 14)
-        .attr('fill', d => colorScale(d.categoryId));
-      
-      // CRITICAL FIX: Add category names using the direct API-provided names
-      legendItems.append('text')
-        .attr('x', 20)
-        .attr('y', 12)
-        .style('font-size', '12px')
-        .text(d => {
-          // Calculate percentage for display
-          const percent = Math.round((d.value / total) * 100);
-          
-          // Log the category name being used in the legend
-          console.log(`[DEBUG] Legend showing for ${d.categoryId}: "${d.categoryName}"`);
-          
-          // Truncate long names and add percentage
-          const nameMaxLength = 25;
-          const truncatedName = this.truncateText(d.categoryName, nameMaxLength);
-          return `${truncatedName} (${percent}%)`;
-        });
-      
-      // Add tooltips
-      const tooltip = d3.select('body')
-        .append('div')
-        .attr('class', 'd3-tooltip')
-        .style('position', 'absolute')
-        .style('background', 'rgba(0, 0, 0, 0.7)')
-        .style('color', 'white')
-        .style('padding', '8px')
-        .style('border-radius', '4px')
-        .style('pointer-events', 'none')
-        .style('opacity', 0)
-        .style('z-index', 1000);
-      
-      // CRITICAL FIX: Update tooltip to use direct API-provided names
-      slices.on('mouseover', (event, d) => {
-        tooltip.transition()
-          .duration(200)
-          .style('opacity', 0.9);
-        
-        const percent = Math.round((d.data.value / total) * 100);
-        
-        // Log the tooltip content for debugging
-        console.log(`[DEBUG] Tooltip showing for ${d.data.categoryId}: "${d.data.categoryName}"`);
-        
-        tooltip.html(`
-          <div><strong>${d.data.categoryName}</strong></div>
-          <div>${this.$t('analytics.table.count')}: ${d.data.count ? d.data.count.toLocaleString() : 'N/A'}</div>
-          <div>${this.$t('analytics.percentage', 'Percentage')}: ${percent}%</div>
-        `)
-          .style('left', (event.pageX + 10) + 'px')
-          .style('top', (event.pageY - 28) + 'px');
-      })
-      .on('mouseout', () => {
-        tooltip.transition()
-          .duration(500)
-          .style('opacity', 0);
-      });
+      };
     }
   }
 };
@@ -799,12 +881,16 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 300px;
+  min-height: 400px;
+  background-color: transparent;
 }
 
 .chart-container {
   width: 100%;
   height: 100%;
+  min-height: 400px;
+  background-color: transparent;
+  border-radius: 4px;
 }
 
 .loading-overlay {
@@ -817,14 +903,14 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.8));
   z-index: 1;
 }
 
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid #4E97D1;
+  border-top: 3px solid var(--accent-color, #4E97D1);
   width: 30px;
   height: 30px;
   animation: spin 1s linear infinite;
@@ -832,8 +918,13 @@ export default {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .error-message {
@@ -842,18 +933,37 @@ export default {
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: #d32f2f;
+  color: var(--status-outage, #d32f2f);
 }
 
-/* Global styles for D3 tooltip */
-:global(.d3-tooltip) {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 8px;
-  border-radius: 4px;
-  pointer-events: none;
-  opacity: 0;
-  z-index: 1000;
+/* Mobile-specific styles */
+@media (max-width: 767px) {
+  .chart-wrapper {
+    min-height: 450px;
+  }
+}
+
+/* Fix for legend text in light mode */
+:deep(.apexcharts-legend-text) {
+  color: inherit !important;
+}
+
+/* Force white text in dark mode for donut center */
+:deep(.dark-theme) .apexcharts-datalabel-label,
+:deep([data-theme="dark"]) .apexcharts-datalabel-label,
+:deep(.dark-mode) .apexcharts-datalabel-label,
+:deep(.dark-theme) .apexcharts-datalabel-value,
+:deep([data-theme="dark"]) .apexcharts-datalabel-value,
+:deep(.dark-mode) .apexcharts-datalabel-value {
+  fill: white !important;
+}
+
+/* System dark mode preference */
+@media (prefers-color-scheme: dark) {
+
+  :deep(.apexcharts-datalabel-label),
+  :deep(.apexcharts-datalabel-value) {
+    fill: white !important;
+  }
 }
 </style>

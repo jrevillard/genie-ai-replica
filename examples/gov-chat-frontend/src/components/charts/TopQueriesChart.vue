@@ -35,6 +35,9 @@
       
       <!-- Stacked bar chart visualization -->
       <div ref="stackedBarChart" class="stacked-bar-chart"></div>
+      
+      <!-- Bottom bar chart visualization -->
+      <div ref="bottomBarChart" class="bottom-bar-chart"></div>
     </div>
   </div>
 </template>
@@ -42,6 +45,13 @@
 <script>
 import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
+import { 
+  getThemeColors, 
+  applyThemeToAxes, 
+  createThemedGrid, 
+  cleanupTooltips, 
+  ensureTooltipExists 
+} from '../../utils/chartThemeUtils';
 
 export default {
   name: 'TopQueriesChart',
@@ -64,6 +74,11 @@ export default {
     selectedDate: {
       type: String,
       default: () => new Date().toISOString().split('T')[0]
+    },
+    // Added to force re-render when language or theme changes
+    renderKey: {
+      type: String,
+      default: null
     }
   },
   data() {
@@ -81,6 +96,7 @@ export default {
           this.chartData = newData;
           this.$nextTick(() => {
             this.renderStackedBarChart();
+            this.renderBottomBarChart();
           });
         }
       },
@@ -101,16 +117,37 @@ export default {
         }
       }
     },
-    // Watch for locale changes
+    // Watch for renderKey (theme/locale) changes to force complete re-render
+    renderKey: {
+      handler() {
+        this.$nextTick(() => {
+          // Clean up existing tooltips
+          cleanupTooltips();
+          
+          // Completely re-render charts
+          if (this.$refs.stackedBarChart) {
+            this.renderStackedBarChart();
+          }
+          
+          if (this.$refs.bottomBarChart) {
+            this.renderBottomBarChart();
+          }
+        });
+      }
+    },
+    // Watch for locale changes directly
     '$i18n.locale': {
       handler() {
         // Force chart re-render when locale changes
         this.$nextTick(() => {
+          cleanupTooltips();
+          
           if (this.$refs.stackedBarChart) {
-            // Clear existing tooltip to prevent duplicates
-            d3.selectAll('.d3-tooltip').remove();
-            
             this.renderStackedBarChart();
+          }
+          
+          if (this.$refs.bottomBarChart) {
+            this.renderBottomBarChart();
           }
         });
       },
@@ -123,6 +160,7 @@ export default {
       this.chartData = this.data;
       this.$nextTick(() => {
         this.renderStackedBarChart();
+        this.renderBottomBarChart();
       });
     } else if (!this.externalData) {
       this.fetchData();
@@ -133,8 +171,17 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
+    cleanupTooltips();
   },
   methods: {
+    /**
+     * Gets theme variables and detects current theme mode
+     * @returns {Object} Theme colors and mode information
+     */
+    getThemeColors() {
+      return getThemeColors();
+    },
+    
     /**
      * Fetch top queries data if not provided externally
      */
@@ -163,6 +210,7 @@ export default {
         
         this.$nextTick(() => {
           this.renderStackedBarChart();
+          this.renderBottomBarChart();
         });
       } catch (error) {
         console.error('Error fetching top queries data:', error);
@@ -191,6 +239,15 @@ export default {
      */
     handleResize() {
       this.renderStackedBarChart();
+      this.renderBottomBarChart();
+    },
+    
+    /**
+     * Truncate text to fit in available space
+     */
+    truncateText(text, maxLength) {
+      if (!text) return '';
+      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
     },
     
     /**
@@ -201,6 +258,9 @@ export default {
       
       // Clear any existing chart
       d3.select(this.$refs.stackedBarChart).selectAll('*').remove();
+      
+      // Get theme colors with dark mode detection
+      const theme = this.getThemeColors();
       
       // Get container dimensions
       const container = this.$refs.stackedBarChart;
@@ -246,35 +306,23 @@ export default {
         .nice()
         .range([chartHeight, 0]);
       
-      // Add gridlines
-      svg.append('g')
-        .attr('class', 'grid')
-        .attr('transform', `translate(0,${chartHeight})`)
-        .call(
-          d3.axisBottom(x)
-            .tickSize(-chartHeight)
-            .tickFormat('')
-        )
-        .selectAll('line')
-        .attr('stroke', '#e0e0e0')
-        .attr('stroke-opacity', 0.5);
+      // Add themed grid
+      createThemedGrid(svg, x, y, chartWidth, chartHeight, theme, false, true);
       
       // Add X axis
-      svg.append('g')
+      const xAxis = svg.append('g')
         .attr('transform', `translate(0,${chartHeight})`)
-        .call(d3.axisBottom(x).tickSizeOuter(0))
-        .selectAll('text')
-        .style('font-size', '9px');
+        .call(d3.axisBottom(x).tickSizeOuter(0));
+      
+      // Apply theme to axis
+      applyThemeToAxes(xAxis, theme);
       
       // Add Y axis
-      svg.append('g')
-        .call(d3.axisLeft(y).ticks(3).tickFormat(d => d3.format('.0s')(d)))
-        .selectAll('text')
-        .style('font-size', '9px');
+      const yAxis = svg.append('g')
+        .call(d3.axisLeft(y).ticks(3).tickFormat(d => d3.format('.0s')(d)));
       
-      // Create color scales
-      const countColor = '#4E97D1';
-      const timeColor = '#4CAF50';
+      // Apply theme to axis
+      applyThemeToAxes(yAxis, theme);
       
       // Draw count bars
       const bars = svg.append('g')
@@ -287,7 +335,7 @@ export default {
         .attr('y', d => y(d.normalizedCount))
         .attr('width', x.bandwidth())
         .attr('height', d => chartHeight - y(d.normalizedCount))
-        .attr('fill', countColor)
+        .attr('fill', theme.accentColor)
         .attr('rx', 2)
         .attr('ry', 2);
       
@@ -302,6 +350,7 @@ export default {
         .attr('y', chartHeight + 20)
         .attr('text-anchor', 'middle')
         .style('font-size', '8px')
+        .style('fill', theme.textColor) // Use theme text color
         .text((d, i) => `#${i + 1}`);
       
       // Add count labels inside the bars (for larger bars only)
@@ -315,7 +364,7 @@ export default {
         .attr('y', d => y(d.normalizedCount) + 12)
         .attr('text-anchor', 'middle')
         .style('font-size', '8px')
-        .style('fill', 'white')
+        .style('fill', 'white') // Keep white for contrast against colored bars
         .style('font-weight', 'bold')
         .text(d => {
           // Only show label if bar is tall enough
@@ -324,18 +373,7 @@ export default {
         });
       
       // Add tooltips
-      const tooltip = d3.select('body')
-        .append('div')
-        .attr('class', 'd3-tooltip')
-        .style('position', 'absolute')
-        .style('background', 'rgba(0, 0, 0, 0.7)')
-        .style('color', 'white')
-        .style('padding', '5px 8px')
-        .style('border-radius', '4px')
-        .style('font-size', '11px')
-        .style('pointer-events', 'none')
-        .style('opacity', 0)
-        .style('z-index', 1000);
+      const tooltip = ensureTooltipExists();
       
       bars.on('mouseover', (event, d) => {
         tooltip.transition()
@@ -358,22 +396,98 @@ export default {
     },
     
     /**
-     * Truncate text to fit in available space
+     * Render bottom bar chart
      */
-    truncateText(text, maxLength) {
-      if (!text) return '';
-      return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+    renderBottomBarChart() {
+      // Get container element
+      const container = this.$refs.bottomBarChart;
+      if (!container || !this.chartData || this.chartData.length === 0) return;
+      
+      // Clear any existing content
+      d3.select(container).selectAll('*').remove();
+      
+      // Get theme colors with dark mode detection
+      const theme = this.getThemeColors();
+      
+      // Set dimensions
+      const margin = { top: 10, right: 10, bottom: 20, left: 40 };
+      const width = container.clientWidth;
+      const height = 80;
+      const chartWidth = width - margin.left - margin.right;
+      const chartHeight = height - margin.top - margin.bottom;
+      
+      // Prepare data (top 5 queries)
+      const data = this.chartData.slice(0, 5).map((d, i) => ({
+        query: `Query ${i + 1}`,
+        count: d.count
+      }));
+      
+      // Create SVG
+      const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+      
+      // Create scales
+      const x = d3.scaleBand()
+        .domain(data.map(d => d.query))
+        .range([0, chartWidth])
+        .padding(0.4);
+      
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.count) * 1.1])
+        .range([chartHeight, 0]);
+      
+      // Add X axis with theme-colored text
+      const xAxis = svg.append('g')
+        .attr('transform', `translate(0,${chartHeight})`)
+        .call(d3.axisBottom(x));
+      
+      // Apply theme to axes
+      applyThemeToAxes(xAxis, theme);
+      
+      // Add background grid
+      createThemedGrid(svg, x, y, chartWidth, chartHeight, theme);
+      
+      // Add the bars with accent color
+      svg.selectAll('.bar')
+        .data(data)
+        .enter()
+        .append('rect')
+        .attr('class', 'bar')
+        .attr('x', d => x(d.query))
+        .attr('y', d => y(d.count))
+        .attr('width', x.bandwidth())
+        .attr('height', d => chartHeight - y(d.count))
+        .attr('fill', theme.accentColor)
+        .attr('rx', 1)
+        .attr('ry', 1);
+      
+      // Add value labels on top of bars
+      svg.selectAll('.value-label')
+        .data(data)
+        .enter()
+        .append('text')
+        .attr('class', 'value-label')
+        .attr('x', d => x(d.query) + x.bandwidth() / 2)
+        .attr('y', d => y(d.count) - 5)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '8px')
+        .style('fill', theme.textColor)
+        .text(d => d3.format(',')(d.count));
     }
   }
 };
 </script>
 
-/* For TopQueriesChart.vue */
 <style scoped>
 .top-queries-chart {
   position: relative;
   width: 100%;
   min-height: 180px;
+  background-color: var(--bg-card, #fff);
 }
 
 .loading-overlay {
@@ -386,14 +500,15 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.8));
+  opacity: 0.8;
   z-index: 1;
 }
 
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid #4E97D1;
+  border-top: 3px solid var(--accent-color, #4E97D1);
   width: 24px;
   height: 24px;
   animation: spin 1s linear infinite;
@@ -411,12 +526,12 @@ export default {
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: #000;
+  color: var(--text-primary, #333);
   font-size: 12px;
 }
 
 .error-message {
-  color: #d32f2f;
+  color: var(--status-outage, #d32f2f);
 }
 
 .table-container {
@@ -432,11 +547,11 @@ export default {
 }
 
 .top-queries-table th {
-  background-color: #f5f7fa;
+  background-color: var(--bg-tertiary, #f5f7fa);
   padding: 5px 6px;
   text-align: left;
   font-weight: 600;
-  color: #000;
+  color: var(--text-primary, #333);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -445,8 +560,8 @@ export default {
 
 .top-queries-table td {
   padding: 4px 6px;
-  border-top: 1px solid #eee;
-  color: #000;
+  border-top: 1px solid var(--border-light, #eee);
+  color: var(--text-primary, #333);
 }
 
 .top-queries-table .rank {
@@ -465,13 +580,21 @@ export default {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 300px;
-  color: #000;
+  color: var(--text-primary, #333);
 }
 
 .stacked-bar-chart {
   width: 100%;
   height: 100px;
   margin-top: 5px;
+  background-color: transparent;
+}
+
+.bottom-bar-chart {
+  width: 100%;
+  height: 80px;
+  margin-top: 10px;
+  background-color: transparent;
 }
 
 /* Global styles for D3 tooltip */
@@ -484,109 +607,5 @@ export default {
   pointer-events: none;
   opacity: 0;
   z-index: 1000;
-}
-</style>
-
-/* For UsageTrendChart.vue */
-<style scoped>
-.usage-trend-chart {
-  position: relative;
-  width: 100%;
-  height: 300px;
-}
-
-.chart-container {
-  width: 100%;
-  height: 100%;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
-  padding: 10px;
-}
-
-.loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
-  z-index: 1;
-  border-radius: 8px;
-}
-
-.spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top: 3px solid #4E97D1;
-  width: 30px;
-  height: 30px;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.error-container, .no-data {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: #000;
-  font-style: italic;
-  border-radius: 8px;
-}
-
-.error-message {
-  color: #d32f2f;
-}
-
-:deep(.x-axis line),
-:deep(.y-axis-left line),
-:deep(.y-axis-right line) {
-  stroke: #000;
-}
-
-:deep(.x-axis path),
-:deep(.y-axis-left path),
-:deep(.y-axis-right path) {
-  stroke: #000;
-}
-
-:deep(.x-axis text),
-:deep(.y-axis-left text),
-:deep(.y-axis-right text) {
-  fill: #000;
-}
-
-:deep(.grid line) {
-  stroke: #e0e0e0;
-  stroke-opacity: 0.5;
-}
-
-:deep(.grid path) {
-  stroke-width: 0;
-}
-
-/* Global styles for tooltip */
-:global(.d3-tooltip) {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.75);
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
-  pointer-events: none;
-  opacity: 0;
-  z-index: 1000;
-  max-width: 250px;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.4);
 }
 </style>

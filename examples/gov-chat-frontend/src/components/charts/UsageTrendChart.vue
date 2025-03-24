@@ -17,6 +17,7 @@
 <script>
 import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
+import { getThemeColors, applyThemeToAxes, cleanupTooltips } from '../../utils/chartThemeUtils';
 
 export default {
   name: 'UsageTrendChart',
@@ -80,7 +81,7 @@ export default {
     renderKey: {
       handler() {
         // Clear existing tooltips to prevent duplicates
-        d3.selectAll('.d3-tooltip').remove();
+        cleanupTooltips();
 
         // Re-render chart with new translations
         this.$nextTick(() => {
@@ -109,7 +110,7 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
-    d3.selectAll('.d3-tooltip').remove();
+    cleanupTooltips();
   },
   methods: {
     async fetchData() {
@@ -211,6 +212,14 @@ export default {
       // Clear previous chart
       d3.select(this.$refs.chartContainer).selectAll('*').remove();
 
+      // Get theme colors using the utility function
+      const theme = getThemeColors();
+      const { textColor, backgroundColor, borderColor, gridColor, isDarkMode } = theme;
+
+      // Use a LIGHT GRAY background for dark mode that contrasts with black text
+      // This color will be used for all background elements
+      const chartBackgroundColor = isDarkMode ? '#bbbcbe' : '#ffffff';
+
       const margin = { top: 40, right: 60, bottom: 50, left: 60 };
       const width = this.width - margin.left - margin.right;
       const height = this.height - margin.top - margin.bottom;
@@ -219,12 +228,24 @@ export default {
       const svg = d3.select(this.$refs.chartContainer)
         .append('svg')
         .attr('width', this.width)
-        .attr('height', this.height)
-        .append('g')
+        .attr('height', this.height);
+
+      // Add background rectangle that extends beyond the axes to make labels readable
+      // Only add in dark mode with LIGHT GRAY color
+      if (isDarkMode) {
+        svg.append('rect')
+          .attr('width', this.width)
+          .attr('height', this.height)
+          .attr('fill', chartBackgroundColor)
+          .attr('rx', 8)
+          .attr('ry', 8);
+      }
+
+      const mainGroup = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
       // Create defs for gradients and filters
-      const defs = svg.append('defs');
+      const defs = mainGroup.append('defs');
 
       // Add drop shadow filter
       defs.append('filter')
@@ -244,13 +265,25 @@ export default {
         .attr('x2', '0%')
         .attr('y2', '100%');
 
-      barGradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#62d9a6'); // Lighter mint green
+      if (isDarkMode) {
+        // Darker gradient for dark mode
+        barGradient.append('stop')
+          .attr('offset', '0%')
+          .attr('stop-color', '#4a8bbf');
 
-      barGradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#2da676'); // Darker mint green
+        barGradient.append('stop')
+          .attr('offset', '100%')
+          .attr('stop-color', '#2d6fa7');
+      } else {
+        // Lighter gradient for light mode
+        barGradient.append('stop')
+          .attr('offset', '0%')
+          .attr('stop-color', '#62d9a6');
+
+        barGradient.append('stop')
+          .attr('offset', '100%')
+          .attr('stop-color', '#2da676');
+      }
 
       // Add blue area gradient
       const areaGradient = defs.append('linearGradient')
@@ -311,16 +344,16 @@ export default {
         .domain([0, d3.max(data, d => d.userCount) * 1.2])
         .nice();
 
-      // Add chart background with gradient
-      svg.append('rect')
+      // Add chart background with the same light gray color
+      mainGroup.append('rect')
         .attr('width', width)
         .attr('height', height)
-        .attr('fill', '#f9f9f9')
+        .attr('fill', chartBackgroundColor)
         .attr('rx', 5)
         .attr('ry', 5);
 
       // Draw background grid
-      svg.append('g')
+      mainGroup.append('g')
         .attr('class', 'grid')
         .attr('transform', `translate(0,${height})`)
         .call(
@@ -329,10 +362,10 @@ export default {
             .tickFormat('')
         )
         .selectAll('line')
-        .attr('stroke', '#e0e0e0')
-        .attr('stroke-dasharray', '3,3');
+        .attr('stroke', gridColor)
+        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none');
 
-      svg.append('g')
+      mainGroup.append('g')
         .attr('class', 'grid')
         .call(
           d3.axisLeft(yLeft)
@@ -340,14 +373,18 @@ export default {
             .tickFormat('')
         )
         .selectAll('line')
-        .attr('stroke', '#e0e0e0')
-        .attr('stroke-dasharray', '3,3');
+        .attr('stroke', gridColor)
+        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none');
+
+      // Remove grid domain lines
+      mainGroup.selectAll('.grid .domain')
+        .attr('stroke', 'none');
 
       // Calculate 60% wider bar width
-      const barWidth = Math.min(16, width / data.length * 0.7); // Increased from 10 to 16 (60% wider)
+      const barWidth = Math.min(16, width / data.length * 0.7);
 
       // Add bars for query counts with 3D effect
-      const bars = svg.selectAll('.bar-group')
+      const bars = mainGroup.selectAll('.bar-group')
         .data(data)
         .enter()
         .append('g')
@@ -383,12 +420,12 @@ export default {
         .curve(d3.curveCardinal.tension(0.5));
 
       // Add the blue area fill with reduced opacity
-      svg.append('path')
+      mainGroup.append('path')
         .datum(data)
         .attr('class', 'area')
         .attr('fill', 'url(#area-gradient)')
         .attr('d', area)
-        .attr('opacity', 0.4); // Reduced opacity for the area fill
+        .attr('opacity', 0.4);
 
       // Add line for user counts with THINNER styling
       const line = d3.line()
@@ -397,47 +434,47 @@ export default {
         .curve(d3.curveCardinal.tension(0.5));
 
       // Add line shadow with reduced size
-      svg.append('path')
+      mainGroup.append('path')
         .datum(data)
         .attr('class', 'line-shadow')
         .attr('fill', 'none')
-        .attr('stroke', '#333')
-        .attr('stroke-width', 1.5) // Reduced from 3
+        .attr('stroke', isDarkMode ? '#555' : '#333')
+        .attr('stroke-width', 1.5)
         .attr('stroke-opacity', 0.2)
         .attr('d', line)
-        .attr('transform', 'translate(1,1)'); // Reduced shadow offset
+        .attr('transform', 'translate(1,1)');
 
       // Add the actual line with reduced thickness
-      svg.append('path')
+      mainGroup.append('path')
         .datum(data)
         .attr('class', 'line')
         .attr('fill', 'none')
         .attr('stroke', 'url(#line-gradient)')
-        .attr('stroke-width', 1.5) // Reduced from 3
+        .attr('stroke-width', 1.5)
         .attr('d', line);
 
       // Add circles for data points with smaller size
-      svg.selectAll('.dot-shadow')
+      mainGroup.selectAll('.dot-shadow')
         .data(data)
         .enter()
         .append('circle')
         .attr('class', 'dot-shadow')
         .attr('cx', d => x(d.timestamp) + 1)
         .attr('cy', d => yRight(d.userCount) + 1)
-        .attr('r', 3) // Reduced from 4.5
+        .attr('r', 3)
         .attr('fill', 'rgba(0,0,0,0.2)');
 
-      svg.selectAll('.dot')
+      mainGroup.selectAll('.dot')
         .data(data)
         .enter()
         .append('circle')
         .attr('class', 'dot')
         .attr('cx', d => x(d.timestamp))
         .attr('cy', d => yRight(d.userCount))
-        .attr('r', 2.5) // Reduced from 4
+        .attr('r', 2.5)
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#ffffff')
-        .attr('stroke-width', 1); // Reduced from 1.5
+        .attr('stroke-width', 1);
 
       // Draw axes with styled appearance
       const xAxis = d3.axisBottom(x)
@@ -448,52 +485,80 @@ export default {
           return `${month} ${day}`;
         });
 
-      svg.append('g')
+      // X-axis with BLACK text that will be visible on light gray background
+      const xAxisGroup = mainGroup.append('g')
         .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
-        .call(xAxis)
-        .selectAll('text')
+        .call(xAxis);
+
+      // Use black text in dark mode for all axes (since we have light gray background)
+      const axisTextColor = isDarkMode ? '#333333' : textColor;
+      const axisLineColor = isDarkMode ? '#333333' : textColor;
+
+      xAxisGroup.selectAll('text')
         .style('text-anchor', 'end')
         .style('font-weight', 'bold')
         .style('font-size', '11px')
-        .style('fill', '#000') // Changed to black
+        .style('fill', axisTextColor)
         .attr('dx', '-.8em')
         .attr('dy', '.15em')
         .attr('transform', 'rotate(-45)');
 
-      svg.append('g')
+      xAxisGroup.selectAll('path')
+        .attr('stroke', axisLineColor);
+
+      xAxisGroup.selectAll('line')
+        .attr('stroke', axisLineColor);
+
+      // Y-axis left with proper text color
+      const yAxisLeftGroup = mainGroup.append('g')
         .attr('class', 'y-axis-left')
-        .call(d3.axisLeft(yLeft).ticks(5))
-        .selectAll('text')
+        .call(d3.axisLeft(yLeft).ticks(5));
+
+      yAxisLeftGroup.selectAll('text')
         .style('font-weight', 'bold')
         .style('font-size', '11px')
-        .style('fill', '#000'); // Changed to black
+        .style('fill', axisTextColor);
 
-      svg.append('g')
+      yAxisLeftGroup.selectAll('path')
+        .attr('stroke', axisLineColor);
+
+      yAxisLeftGroup.selectAll('line')
+        .attr('stroke', axisLineColor);
+
+      // Y-axis right with proper text color
+      const yAxisRightGroup = mainGroup.append('g')
         .attr('class', 'y-axis-right')
         .attr('transform', `translate(${width},0)`)
-        .call(d3.axisRight(yRight).ticks(5))
-        .selectAll('text')
+        .call(d3.axisRight(yRight).ticks(5));
+
+      yAxisRightGroup.selectAll('text')
         .style('font-weight', 'bold')
         .style('font-size', '11px')
-        .style('fill', '#000'); // Changed to black
+        .style('fill', axisTextColor);
 
-      // Enhanced chart title with shadow
-      svg.append('text')
+      yAxisRightGroup.selectAll('path')
+        .attr('stroke', axisLineColor);
+
+      yAxisRightGroup.selectAll('line')
+        .attr('stroke', axisLineColor);
+
+      // Enhanced chart title with dark text
+      mainGroup.append('text')
         .attr('x', width / 2)
         .attr('y', -20)
         .attr('text-anchor', 'middle')
         .attr('font-size', '14px')
         .attr('font-weight', 'bold')
-        .attr('fill', '#000') // Changed from #333 to black
+        .attr('fill', axisTextColor)
         .text(this.$t('charts.usageTrend'));
 
       // Add enhanced legend with 3D effects
-      const legendBox = svg.append('g')
+      const legendBox = mainGroup.append('g')
         .attr('class', 'legend-box')
         .attr('transform', `translate(${width / 2 - 170}, -15)`);
 
-      // Legend background
+      // Legend background - also use same light gray
       legendBox.append('rect')
         .attr('x', -5)
         .attr('y', -15)
@@ -501,8 +566,7 @@ export default {
         .attr('height', 30)
         .attr('rx', 5)
         .attr('ry', 5)
-        .attr('fill', '#fff')
-        .attr('stroke', '#eee')
+        .attr('fill', chartBackgroundColor)
         .style('filter', 'url(#drop-shadow)');
 
       const legend = legendBox.append('g')
@@ -518,13 +582,14 @@ export default {
         .attr('rx', 1)
         .attr('ry', 1);
 
-      legend.append('text')
+      // Legend text with black color for contrast on light gray
+      const totalQueriesText = legend.append('text')
         .attr('x', 30)
         .attr('y', 0)
         .attr('dy', '.15em')
         .style('font-size', '12px')
         .style('font-weight', 'bold')
-        .style('fill', '#000') // Changed to black
+        .attr('fill', axisTextColor)
         .text(this.$t('charts.tooltip.totalQueries'));
 
       // Unique Users legend with thinner line
@@ -534,23 +599,24 @@ export default {
         .attr('x2', 200)
         .attr('y2', 0)
         .attr('stroke', '#5b9bd5')
-        .attr('stroke-width', 1.5); // Reduced from 2.5
+        .attr('stroke-width', 1.5);
 
       legend.append('circle')
         .attr('cx', 185)
         .attr('cy', 0)
-        .attr('r', 2.5) // Reduced from 4
+        .attr('r', 2.5)
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#fff')
-        .attr('stroke-width', 1); // Reduced from 1.5
+        .attr('stroke-width', 1);
 
-      legend.append('text')
+      // Legend text with black color for contrast on light gray
+      const uniqueUsersText = legend.append('text')
         .attr('x', 210)
         .attr('y', 0)
         .attr('dy', '.15em')
         .style('font-size', '12px')
         .style('font-weight', 'bold')
-        .style('fill', '#000') // Changed to black
+        .attr('fill', axisTextColor)
         .text(this.$t('charts.tooltip.uniqueUsers'));
 
       // Create enhanced tooltip div
@@ -571,17 +637,17 @@ export default {
       }
 
       // Add interactive overlay with vertical guide line
-      const verticalLine = svg.append('line')
+      const verticalLine = mainGroup.append('line')
         .attr('class', 'vertical-line')
         .attr('y1', 0)
         .attr('y2', height)
-        .attr('stroke', '#aaa')
+        .attr('stroke', borderColor)
         .attr('stroke-width', 1)
         .attr('stroke-dasharray', '3,3')
         .style('opacity', 0);
 
       // Add hover dots that appear on the guide line
-      const hoverDotLeft = svg.append('circle')
+      const hoverDotLeft = mainGroup.append('circle')
         .attr('class', 'hover-dot')
         .attr('r', 5)
         .attr('fill', 'url(#bar-gradient)')
@@ -589,15 +655,15 @@ export default {
         .attr('stroke-width', 1.5)
         .style('opacity', 0);
 
-      const hoverDotRight = svg.append('circle')
+      const hoverDotRight = mainGroup.append('circle')
         .attr('class', 'hover-dot')
-        .attr('r', 3) // Reduced from 5
+        .attr('r', 3)
         .attr('fill', '#5b9bd5')
         .attr('stroke', '#fff')
-        .attr('stroke-width', 1) // Reduced from 1.5
+        .attr('stroke-width', 1)
         .style('opacity', 0);
 
-      svg.append('rect')
+      mainGroup.append('rect')
         .attr('width', width)
         .attr('height', height)
         .style('fill', 'none')
@@ -648,12 +714,13 @@ export default {
           const totalQueriesLabel = this.$t('charts.tooltip.totalQueries');
           const uniqueUsersLabel = this.$t('charts.tooltip.uniqueUsers');
 
+          // Updated tooltip with proper contrasting colors regardless of theme
           const tooltipContent = `
         <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
           ${d.dateLabel}
         </div>
         <div style="margin: 5px 0;">
-          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, #62d9a6, #2da676); border-radius: 2px; vertical-align: middle;"></span>
+          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, ${isDarkMode ? '#4a8bbf, #2d6fa7' : '#62d9a6, #2da676'}); border-radius: 2px; vertical-align: middle;"></span>
           ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
         </div>
         <div style="margin: 5px 0;">
@@ -683,9 +750,9 @@ export default {
 .chart-container {
   width: 100%;
   height: 100%;
-  background-color: #fff;
+  background-color: var(--bg-card, #fff);
   border-radius: 8px;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm, 0 2px 15px rgba(0, 0, 0, 0.1));
   padding: 10px;
 }
 
@@ -699,15 +766,17 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--bg-card, rgba(255, 255, 255, 0.8));
+  opacity: 0.9;
   z-index: 1;
   border-radius: 8px;
+  color: var(--text-primary, #333);
 }
 
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid #4E97D1;
+  border-top: 3px solid var(--accent-color, #4E97D1);
   width: 30px;
   height: 30px;
   animation: spin 1s linear infinite;
@@ -731,57 +800,15 @@ export default {
   justify-content: center;
   height: 100%;
   text-align: center;
-  color: #000;
-  /* Changed from #757575 to black */
+  color: var(--text-primary, #333);
   font-style: italic;
   font-weight: 500;
-  /* Added font weight */
   border-radius: 8px;
 }
 
 .error-message {
-  color: #d32f2f;
+  color: var(--status-outage, #d32f2f);
   font-weight: 500;
-  /* Added font weight */
-}
-
-/* Deep selectors for D3 elements */
-:deep(.x-axis line),
-:deep(.y-axis-left line),
-:deep(.y-axis-right line) {
-  stroke: #000;
-  /* Changed from #ccc to black */
-}
-
-:deep(.x-axis path),
-:deep(.y-axis-left path),
-:deep(.y-axis-right path) {
-  stroke: #000;
-  /* Changed from #ccc to black */
-}
-
-:deep(.x-axis text),
-:deep(.y-axis-left text),
-:deep(.y-axis-right text) {
-  fill: #000 !important;
-  /* Important to override any inline styles */
-  font-weight: 600 !important;
-  /* Force bold */
-}
-
-:deep(text) {
-  fill: #000 !important;
-  /* Ensure all text elements use black */
-  font-weight: 600 !important;
-}
-
-:deep(.grid line) {
-  stroke: #e0e0e0;
-  stroke-opacity: 0.5;
-}
-
-:deep(.grid path) {
-  stroke-width: 0;
 }
 
 /* Global styles for tooltip */
@@ -797,5 +824,9 @@ export default {
   max-width: 250px;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
   font-weight: bold;
+}
+
+[data-theme="dark"] svg text {
+  fill: white !important;
 }
 </style>

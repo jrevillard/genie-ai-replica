@@ -501,18 +501,18 @@ export default {
       "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
     privacyPolicyLink: 'Privacy Policy',
     tabs: {
-      tab1: '1. Personal Identification Data',
-      tab2: '2. Civil Registration & Documentation',
-      tab3: '3. Address & Residency Information',
-      tab4: '4. Identity & Travel Documents',
-      tab5: '5. Health & Medical Records',
-      tab6: '6. Employment & Economic Data',
-      tab7: '7. Education & Academic Records',
-      tab8: '8. Financial & Tax Data',
-      tab9: '9. Social Security & Welfare',
-      tab10: '10. Criminal & Legal Records',
-      tab11: '11. Transportation & Mobility',
-      tab12: '12. Civic & Political Participation'
+      tab1: 'Personal Identification Data',
+      tab2: 'Civil Registration & Documentation',
+      tab3: 'Address & Residency Information',
+      tab4: 'Identity & Travel Documents',
+      tab5: 'Health & Medical Records',
+      tab6: 'Employment & Economic Data',
+      tab7: 'Education & Academic Records',
+      tab8: 'Financial & Tax Data',
+      tab9: 'Social Security & Welfare',
+      tab10: 'Criminal & Legal Records',
+      tab11: 'Transportation & Mobility',
+      tab12: 'Civic & Political Participation'
     },
     fields: {
       // Tab 1

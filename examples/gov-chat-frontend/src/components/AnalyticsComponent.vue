@@ -4,6 +4,7 @@
     <div class="analytics-content">
       <div class="analytics-header">
         <h2>{{ $t('analytics.title') }}</h2>
+
         <button class="close-btn" @click="close" aria-label="Close">×</button>
       </div>
       

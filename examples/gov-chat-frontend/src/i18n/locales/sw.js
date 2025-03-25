@@ -504,18 +504,18 @@ export default {
       'Kwa kutoa taarifa zaidi, utapata majibu sahihi na muhimu. Tafadhali soma',
     privacyPolicyLink: 'Sera ya Faragha',
     tabs: {
-      tab1: '1. Taarifa za Utambulisho',
-      tab2: '2. Usajili wa Kiraia & Nyaraka',
-      tab3: '3. Anwani & Makazi',
-      tab4: '4. Nyaraka za Kitambulisho & Safari',
-      tab5: '5. Afya & Rekodi za Matibabu',
-      tab6: '6. Ajira & Uchumi',
-      tab7: '7. Elimu & Masomo',
-      tab8: '8. Fedha & Ushuru',
-      tab9: '9. Hifadhi ya Jamii & Ustawi',
-      tab10: '10. Kumbukumbu za Jinai & Sheria',
-      tab11: '11. Usafiri & Uhamaji',
-      tab12: '12. Ushiriki wa Kiraia & Kisiasa'
+      tab1: 'Taarifa za Utambulisho',
+      tab2: 'Usajili wa Kiraia & Nyaraka',
+      tab3: 'Anwani & Makazi',
+      tab4: 'Nyaraka za Kitambulisho & Safari',
+      tab5: 'Afya & Rekodi za Matibabu',
+      tab6: 'Ajira & Uchumi',
+      tab7: 'Elimu & Masomo',
+      tab8: 'Fedha & Ushuru',
+      tab9: 'Hifadhi ya Jamii & Ustawi',
+      tab10: 'Kumbukumbu za Jinai & Sheria',
+      tab11: 'Usafiri & Uhamaji',
+      tab12: 'Ushiriki wa Kiraia & Kisiasa'
     },
     fields: {
       // Tab 1

@@ -505,18 +505,18 @@ export default {
       "En fournissant plus d'informations, vous obtiendrez des réponses plus précises. Veuillez consulter notre",
     privacyPolicyLink: 'Politique de Confidentialité',
     tabs: {
-      tab1: '1. Données d\'identification personnelle',
-      tab2: '2. Enregistrement civil & Documentation',
-      tab3: '3. Adresse & Résidence',
-      tab4: '4. Documents d\'identité & Voyage',
-      tab5: '5. Dossiers de santé & médicaux',
-      tab6: '6. Emploi & Économie',
-      tab7: '7. Éducation & Académique',
-      tab8: '8. Données Financières & Impôts',
-      tab9: '9. Sécurité sociale & Aide',
-      tab10: '10. Casier judiciaire & Légal',
-      tab11: '11. Transport & Mobilité',
-      tab12: '12. Participation Civique & Politique'
+      tab1: 'Données d\'identification personnelle',
+      tab2: 'Enregistrement civil & Documentation',
+      tab3: 'Adresse & Résidence',
+      tab4: 'Documents d\'identité & Voyage',
+      tab5: 'Dossiers de santé & médicaux',
+      tab6: 'Emploi & Économie',
+      tab7: 'Éducation & Académique',
+      tab8: 'Données Financières & Impôts',
+      tab9: 'Sécurité sociale & Aide',
+      tab10: 'Casier judiciaire & Légal',
+      tab11: 'Transport & Mobilité',
+      tab12: 'Participation Civique & Politique'
     },
     fields: {
       // Tab 1

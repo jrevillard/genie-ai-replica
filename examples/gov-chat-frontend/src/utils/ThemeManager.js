@@ -13,6 +13,10 @@ class ThemeManager {
         this.currentTheme = 'light';
         this.isDarkMode = false;
 
+        // Bind methods to ensure correct context
+        this.getDialogTheme = this.getDialogTheme.bind(this);
+        this.applyDialogTheme = this.applyDialogTheme.bind(this);
+
         // Initialize by checking if dark mode is active
         this.detectInitialTheme();
 
@@ -156,15 +160,75 @@ class ThemeManager {
             ]
         };
     }
+
+    /**
+     * Get dialog-specific theme styles
+     * @returns {Object} Dialog styling configuration
+     */
+    getDialogTheme() {
+        const isDarkMode = this.isDarkMode;
+
+        return {
+            modal: {
+                titleColor: isDarkMode ? '#ffffff' : '#333333',
+                textColor: isDarkMode ? 'rgba(255, 255, 255, 0.8)' : '#666666',    
+                background: isDarkMode ? '#2a2a2a' : '#ffffff',
+                textColor: isDarkMode ? '#f0f0f0' : '#333333',
+                borderColor: isDarkMode ? '#3a3a3a' : '#dcdfe4',
+                boxShadow: isDarkMode
+                    ? '0 4px 12px rgba(0, 0, 0, 0.4)'
+                    : '0 4px 12px rgba(0, 0, 0, 0.15)'
+            },
+            overlay: {
+                background: isDarkMode
+                    ? 'rgba(0, 0, 0, 0.7)'
+                    : 'rgba(0, 0, 0, 0.5)'
+            },
+            buttons: {
+                primary: {
+                    background: '#4E97D1',
+                    textColor: '#ffffff',
+                    hoverBackground: '#3a7da0'
+                },
+                secondary: {
+                    background: isDarkMode ? '#3a3a3a' : '#cccccc',
+                    textColor: isDarkMode ? '#e0e0e0' : '#333333',
+                    hoverBackground: isDarkMode ? '#4a4a4a' : '#bbbbbb'
+                }
+            },
+            input: {
+                background: isDarkMode ? '#333333' : '#ffffff',
+                textColor: isDarkMode ? '#f0f0f0' : '#333333',
+                borderColor: isDarkMode ? '#3a3a3a' : '#ddd',
+                placeholderColor: isDarkMode ? '#8c8c8c' : '#767676'
+            },
+            tabs: {
+                background: isDarkMode ? '#252525' : '#f0f2f5',
+                activeBackground: isDarkMode ? '#2a2a2a' : '#ffffff',
+                textColor: isDarkMode ? '#f0f0f0' : '#333333',
+                activeTextColor: isDarkMode ? '#ffffff' : '#000000',
+                borderColor: isDarkMode ? '#3a3a3a' : '#cccccc'
+            }
+        };
+    }
+
+    /**
+     * Convenience method to apply dialog theme to an element
+     * @param {HTMLElement} element - Element to apply theme to
+     * @param {string} [themeType='modal'] - Type of theme to apply
+     */
+    applyDialogTheme(element, themeType = 'modal') {
+        if (!element) return;
+
+        const theme = this.getDialogTheme();
+        const themeStyles = theme[themeType] || theme.modal;
+
+        Object.entries(themeStyles).forEach(([key, value]) => {
+            if (typeof value === 'object') return; // Skip nested objects
+            element.style.setProperty(`--dialog-${key}`, value);
+        });
+    }
 }
-
-// Export singleton instance
-export const themeManager = new ThemeManager();
-
-// Export convenience methods
-export const getThemeInfo = () => themeManager.getThemeInfo();
-export const setTheme = (theme) => themeManager.setTheme(theme);
-export const toggleTheme = () => themeManager.toggleTheme();
 
 // Legacy exported functions for backward compatibility
 export function applyThemeToAxes(svg, theme) {
@@ -204,3 +268,31 @@ export function createThemedTooltip(containerId = 'chart-tooltip') {
 
     return tooltip;
 }
+
+/**
+ * Convenience method to apply dialog theme to an element
+ * @param {HTMLElement} element - Element to apply theme to
+ * @param {string} [themeType='modal'] - Type of theme to apply
+ */
+//export function applyDialogTheme(element, themeType = 'modal') {
+//    if (!element) return;
+
+//    const theme = this.getDialogTheme();
+//    const themeStyles = theme[themeType] || theme.modal;
+
+//    Object.entries(themeStyles).forEach(([key, value]) => {
+//        if (typeof value === 'object') return; // Skip nested objects
+//        element.style.setProperty(`--dialog-${key}`, value);
+//    });
+//}
+
+// Ensure singleton export
+export const themeManager = new ThemeManager();
+// Export methods to ensure they can be imported correctly
+export const getDialogTheme = themeManager.getDialogTheme;
+export const applyDialogTheme = themeManager.applyDialogTheme;
+// Export convenience methods
+export const getThemeInfo = () => themeManager.getThemeInfo();
+export const setTheme = (theme) => themeManager.setTheme(theme);
+export const toggleTheme = () => themeManager.toggleTheme();
+export default themeManager;

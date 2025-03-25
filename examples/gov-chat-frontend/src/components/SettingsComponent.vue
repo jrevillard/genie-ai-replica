@@ -320,18 +320,44 @@ export default {
       // Update local state
       this.settings.theme = theme;
 
-      // Use the ThemeManager to apply the theme
-      setTheme(theme);
+      // First save to localStorage
+      localStorage.setItem('theme', theme);
 
-      // Also save to localStorage for backwards compatibility
-      try {
-        localStorage.setItem('theme', theme);
-      } catch (e) {
-        console.warn('Error saving theme:', e);
+      // Direct DOM approach - don't rely on themeManager which might be causing issues
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
+
+      // Update dark mode classes
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+        document.body.classList.add('dark-mode');
+      } else {
+        document.documentElement.classList.remove('dark-mode');
+        document.body.classList.remove('dark-mode');
       }
 
-      // Inform parent component about theme change
-      this.$emit('themeChanged', theme);
+      // Then, if ThemeManager is available, keep it in sync
+      // But do this separately to avoid exceptions
+      try {
+        if (typeof themeManager !== 'undefined' && themeManager) {
+          // Update themeManager state directly
+          themeManager.isDarkMode = theme === 'dark';
+          themeManager.currentTheme = theme;
+          themeManager.userPreference = theme;
+        }
+      } catch (e) {
+        console.warn('Error updating ThemeManager:', e);
+      }
+
+      // Manually trigger theme change event after a short delay
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('themeChange', {
+          detail: { theme, isDarkMode: theme === 'dark' }
+        }));
+
+        // Also notify parent component
+        this.$emit('themeChanged', theme);
+      }, 50);
     },
 
     // Fetch user data from the backend

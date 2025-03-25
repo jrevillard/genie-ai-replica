@@ -446,3 +446,53 @@ text.value {
 [data-theme="dark"] .registration-success-card .heading {
   color: rgba(255, 255, 255, 0.9) !important;
 }
+
+/* Dark mode exceptions for analytics title */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] .analytics-dashboard h1,
+[data-theme="dark"] .analytics-dashboard h2,
+[data-theme="dark"] [class*="analytics"] h1,
+[data-theme="dark"] [class*="analytics"] h2,
+[data-theme="dark"] .page-title,
+[data-theme="dark"] .section-title,
+[data-theme="dark"] .analytics-title {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+/* Target the exact "Data Analytics & Insights" heading */
+[data-theme="dark"] h1:first-child,
+[data-theme="dark"] h2:first-child {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+}
+
+/* Super targeted styles for the analytics title in dark mode */
+[data-theme="dark"] body h1,
+[data-theme="dark"] body h2,
+[data-theme="dark"] body div h1,
+[data-theme="dark"] body div h2,
+[data-theme="dark"] #app h1,
+[data-theme="dark"] #app h2,
+[data-theme="dark"] .analytics-dashboard > h1,
+[data-theme="dark"] .analytics-dashboard > h2,
+[data-theme="dark"] .analytics-dashboard > div > h1,
+[data-theme="dark"] .analytics-dashboard > div > h2,
+[data-theme="dark"] .analytics-modal > h1,
+[data-theme="dark"] .analytics-modal > h2 {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+/* Target Time Period text too */
+[data-theme="dark"] .period-selector,
+[data-theme="dark"] .period-selector label,
+[data-theme="dark"] .period-selector > *:first-child {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+}

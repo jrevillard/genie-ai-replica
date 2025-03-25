@@ -3,15 +3,15 @@
   <div class="analytics-modal" @click.self="close">
     <div class="analytics-content" :key="'analytics-content-' + currentLocale">
       <div class="analytics-header">
-        <h2>{{ translate('analytics.title') }}</h2>
+        <h2 style="color: var(--text-primary) !important;">{{ $t('analytics.title') }}</h2>
         <button class="close-btn" @click="close" aria-label="Close">×</button>
       </div>
 
       <div class="analytics-body">
         <!-- Period selector (for dynamic mode) -->
         <div v-if="useDynamicData" class="period-selector">
-          <label>{{ translate('analytics.period') }}</label>
-          <select v-model="selectedPeriod" @change="loadAnalytics">
+          <label style="color: var(--text-primary) !important;">{{ translate('analytics.period') }}</label>
+          <select v-model="selectedPeriod" @change="loadAnalytics" style="background-color: var(--bg-dialog) !important;"> 
             <option value="daily">{{ translate('analytics.periods.daily') }}</option>
             <option value="weekly">{{ translate('analytics.periods.weekly') }}</option>
             <option value="monthly">{{ translate('analytics.periods.monthly') }}</option>
@@ -20,7 +20,7 @@
 
           <!-- Date picker (hidden for all-time) -->
           <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
-            <input type="date" v-model="selectedDate" @change="loadAnalytics" :max="todayStr" />
+            <input type="date" v-model="selectedDate" @change="loadAnalytics" :max="todayStr" style="background-color: var(--bg-dialog) !important;" />
           </div>
         </div>
 

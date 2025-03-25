@@ -17,6 +17,7 @@
 <script>
 import analyticsService from '../../services/analyticsService';
 import { serviceTreeService } from '../../services';
+import { getThemeInfo as getThemeFromManager } from '../../utils/ThemeManager';
 
 export default {
   name: 'CategoryDistributionChart',
@@ -633,45 +634,30 @@ export default {
      * Get current theme information
      */
     getThemeInfo() {
-      // Check if dark mode is enabled via CSS classes, data attributes, or system preferences
-      const isDarkMode = document.documentElement.classList.contains('dark-theme')
-        || document.documentElement.classList.contains('dark-mode')
-        || document.documentElement.getAttribute('data-theme') === 'dark'
-        || window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-      console.log(`[DEBUG] Theme detection: isDarkMode = ${isDarkMode}`);
-
-      // Simple theme configuration - white text on dark, black text on light
-      return {
-        isDarkMode,
-        textColor: isDarkMode ? '#FFFFFF' : '#333333',
-        backgroundColor: 'transparent',
-        tooltipBackground: isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-        tooltipTextColor: isDarkMode ? '#FFFFFF' : '#333333',
-        theme: isDarkMode ? 'dark' : 'light'
-      };
+      // Use the singleton theme manager
+      return getThemeFromManager();
     },
 
     /**
-     * Get ApexCharts tooltip formatter
+     * Get ApexCharts tooltip formatter with transparent black background
      */
     tooltipFormatter(value, opts, theme) {
       const item = this.processedData[opts.dataPointIndex];
       if (!item) return '';
 
-      // Use theme colors for tooltip text
-      const textColor = theme.tooltipTextColor;
-      const bgColor = theme.tooltipBackground;
+      // Use transparent black background and white text for all themes
+      const bgColor = 'rgba(0, 0, 0, 0.75)';  // Transparent black
+      const textColor = '#FFFFFF';  // White text
 
       return `
-        <div class="apexcharts-tooltip-box" style="background: ${bgColor}; border-radius: 5px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-          <div class="apexcharts-tooltip-title" style="color: ${textColor}; font-weight: bold; margin-bottom: 5px;">${item.categoryName}</div>
-          <div class="apexcharts-tooltip-series-group" style="color: ${textColor}; padding: 0;">
-            <div style="color: ${textColor}; padding: 2px 0;">${this.$t('analytics.table.count')}: ${item.count ? item.count.toLocaleString() : 'N/A'}</div>
-            <div style="color: ${textColor}; padding: 2px 0;">${this.$t('analytics.percentage', 'Percentage')}: ${Math.round(item.percentage)}%</div>
-          </div>
-        </div>
-      `;
+    <div class="apexcharts-tooltip-box" style="background: ${bgColor}; border-radius: 5px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+      <div class="apexcharts-tooltip-title" style="color: ${textColor}; font-weight: bold; margin-bottom: 5px;">${item.categoryName}</div>
+      <div class="apexcharts-tooltip-series-group" style="color: ${textColor}; padding: 0;">
+        <div style="color: ${textColor}; padding: 2px 0;">${this.$t('analytics.table.count')}: ${item.count ? item.count.toLocaleString() : 'N/A'}</div>
+        <div style="color: ${textColor}; padding: 2px 0;">${this.$t('analytics.percentage', 'Percentage')}: ${Math.round(item.percentage)}%</div>
+      </div>
+    </div>
+  `;
     },
 
     /**
@@ -719,159 +705,321 @@ export default {
         .sort((a, b) => b.value - a.value);
     },
 
-    /**
-     * Update the chart with current data
-     */
-    updateChart() {
+/**
+ * Update the chart and implement manual tooltips
+ */
+ updateChart() {
+  // Process the data for the chart
+  this.processedData = this.processChartData();
 
-      // Process the data for the chart
-      this.processedData = this.processChartData();
+  if (!this.processedData || this.processedData.length === 0) {
+    this.error = this.$t('analytics.status.noData');
+    return;
+  }
 
-      if (!this.processedData || this.processedData.length === 0) {
-        this.error = this.$t('analytics.status.noData');
-        return;
+  // Get theme information
+  const theme = this.getThemeInfo();
+  console.log(`[DEBUG] Theme detected: ${theme.isDarkMode ? 'dark' : 'light'}`);
+
+  // Create explicit center label style based on theme
+  const centerLabelStyle = {
+    color: theme.isDarkMode ? '#FFFFFF' : '#333333',
+    fontSize: '14px',
+    fontWeight: 'bold'
+  };
+
+  // Prepare series data for ApexCharts
+  this.chartSeries = this.processedData.map(item => item.value);
+
+  // Set up chart labels with proper category names
+  const labels = this.processedData.map(item => {
+    // Truncate long names
+    const nameMaxLength = this.isMobile ? 18 : 25;
+    return this.truncateText(item.categoryName, nameMaxLength);
+  });
+
+  // Get colors for chart
+  const colors = [
+    '#5470c6', '#91cc75', '#fac858', '#ee6666',
+    '#73c0de', '#3ba272', '#fc8452', '#9a60b4'
+  ];
+
+  // Set up chart options - DISABLE BUILT-IN TOOLTIPS COMPLETELY
+  this.chartOptions = {
+    chart: {
+      type: 'donut',
+      fontFamily: 'inherit',
+      toolbar: {
+        show: false
+      },
+      animations: {
+        enabled: true,
+        speed: 300
+      },
+      background: theme.backgroundColor,
+      foreColor: theme.textColor
+    },
+    stroke: {
+      width: 0 // Remove stroke around slices
+    },
+    colors: colors,
+    labels: labels,
+    dataLabels: {
+      enabled: true,
+      formatter: (val) => {
+        return Math.round(val) + '%';
+      },
+      style: {
+        fontSize: '12px',
+        fontWeight: 'bold',
+        colors: [theme.textColor]
+      },
+      dropShadow: {
+        enabled: false
       }
-
-      // Get theme information
-      const theme = this.getThemeInfo();
-      console.log(`[DEBUG] Theme detected: ${theme.isDarkMode ? 'dark' : 'light'}`);
-      console.log('[DEBUG] Theme info:', theme);
-      console.log('[DEBUG] Is dark mode detected:', theme.isDarkMode);
-      console.log('[DEBUG] Text color being used:', theme.textColor);
-
-      // Prepare series data for ApexCharts
-      this.chartSeries = this.processedData.map(item => item.value);
-
-      // Set up chart labels with proper category names
-      const labels = this.processedData.map(item => {
-        // Truncate long names
-        const nameMaxLength = this.isMobile ? 18 : 25;
-        return this.truncateText(item.categoryName, nameMaxLength);
-      });
-
-      // Get colors for chart
-      const colors = [
-        '#5470c6', '#91cc75', '#fac858', '#ee6666',
-        '#73c0de', '#3ba272', '#fc8452', '#9a60b4'
-      ];
-
-      // Set up chart options
-      this.chartOptions = {
-        chart: {
-          type: 'donut',
-          fontFamily: 'inherit',
-          toolbar: {
-            show: false
-          },
-          animations: {
-            enabled: true,
-            speed: 500
-          },
-          background: theme.backgroundColor,
-          foreColor: theme.textColor // Set text color based on theme
+    },
+    legend: {
+      position: this.isMobile ? 'bottom' : 'right',
+      offsetY: this.isMobile ? 10 : 0,
+      formatter: (seriesName, opts) => {
+        const item = this.processedData[opts.seriesIndex];
+        if (!item) return seriesName;
+        return `${seriesName} (${Math.round(item.percentage)}%)`;
+      },
+      labels: {
+        colors: theme.textColor
+      }
+    },
+    tooltip: {
+      enabled: false // DISABLE BUILT-IN TOOLTIPS
+    },
+    plotOptions: {
+      pie: {
+        expandOnClick: false, // Don't expand on click
+        donut: {
+          size: '60%',
+          background: 'transparent',
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              formatter: function (val) {
+                return "Knowledge Areas"; // First line
+              },
+              style: centerLabelStyle
+            },
+            value: {
+              show: true,
+              formatter: function (val) {
+                return val; // Show the value
+              },
+              style: centerLabelStyle
+            },
+            total: {
+              show: true,
+              label: "by Usage", // Second line
+              formatter: function () {
+                return ""; // Use empty formatter to show just the label
+              },
+              style: centerLabelStyle
+            }
+          }
         },
-        stroke: {
-          width: 0 // Remove stroke around slices
-        },
-        colors: colors,
-        labels: labels,
         dataLabels: {
-          enabled: true,
-          formatter: (val) => {
-            return Math.round(val) + '%';
-          },
           style: {
-            fontSize: '12px',
-            fontWeight: 'bold',
-            colors: [theme.textColor] // Set text color based on theme
+            colors: [theme.textColor]
           },
-          dropShadow: {
+          background: {
             enabled: false
           }
+        }
+      }
+    },
+    states: {
+      hover: {
+        filter: {
+          type: 'none' // No filter on hover
+        }
+      },
+      active: {
+        allowMultipleDataPointsSelection: false,
+        filter: {
+          type: 'none' // No filter on active state
+        }
+      }
+    },
+    responsive: [{
+      breakpoint: 768,
+      options: {
+        chart: {
+          height: 380
         },
         legend: {
-          position: this.isMobile ? 'bottom' : 'right',
-          offsetY: this.isMobile ? 10 : 0,
-          formatter: (seriesName, opts) => {
-            const item = this.processedData[opts.seriesIndex];
-            if (!item) return seriesName;
-
-            // Show percentage in the legend
-            return `${seriesName} (${Math.round(item.percentage)}%)`;
-          },
-          labels: {
-            colors: theme.textColor // Set text color based on theme
-          }
-        },
-        tooltip: {
-          enabled: true,
-          custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            return this.tooltipFormatter(series[seriesIndex], { dataPointIndex }, theme);
-          }
-        },
-        plotOptions: {
-          pie: {
-            donut: {
-              size: '60%',
-              background: 'transparent',
-              labels: {
-                show: true,
-                name: {
-                  show: true,
-                  formatter: function (val) {
-                    return "Knowledge Areas"; // First line
-                  },
-                  // Only use the theme.textColor if the background is light
-                  // Otherwise always use white for the dark center
-                  color: theme.isDarkMode ? '#FFFFFF' : '#333333'
-                },
-                value: {
-                  show: true
-                },
-                total: {
-                  show: true,
-                  formatter: function () {
-                    return "by Usage"; // Second line
-                  },
-                  color: theme.isDarkMode ? '#FFFFFF' : '#333333'
-                }
-              }
-            },
-            dataLabels: {
-              style: {
-                colors: [theme.textColor]
-              },
-              background: {
-                enabled: false
-              }
-            }
-          }
-        },
-        responsive: [{
-          breakpoint: 768,
-          options: {
-            chart: {
-              height: 380
-            },
-            legend: {
-              position: 'bottom',
-              offsetY: 0,
-              height: 100
-            }
-          }
-        }],
-        theme: {
-          mode: theme.isDarkMode ? 'dark' : 'light'
-        },
-        states: {
-          hover: {
-            filter: {
-              type: 'none' // Remove grayscale filter on hover
-            }
-          }
+          position: 'bottom',
+          offsetY: 0,
+          height: 100
         }
-      };
+      }
+    }],
+    theme: {
+      mode: theme.isDarkMode ? 'dark' : 'light',
+      palette: 'palette1'
     }
+  };
+
+  // Create or get a custom tooltip element
+  this.ensureCustomTooltipExists();
+
+  // Apply fixes after chart renders
+  this.$nextTick(() => {
+    setTimeout(() => {
+      console.log('[DEBUG] Applying direct DOM fixes and custom tooltips');
+      
+      // Fix center text color
+      const isDark = theme.isDarkMode;
+      const centerColor = isDark ? '#FFFFFF' : '#333333';
+      const centerLabels = document.querySelectorAll('.apexcharts-datalabels-group text');
+      centerLabels.forEach(label => {
+        label.setAttribute('fill', centerColor);
+      });
+      
+      // Add custom tooltip handlers to chart slices
+      this.addTooltipHandlers();
+    }, 500); // Longer delay to ensure chart is fully rendered
+  });
+},
+
+/**
+ * Create a custom tooltip element if it doesn't exist
+ */
+ensureCustomTooltipExists() {
+  // Remove any existing tooltip
+  const existingTooltip = document.getElementById('chart-custom-tooltip');
+  if (existingTooltip) {
+    existingTooltip.remove();
+  }
+  
+  // Create a new tooltip element
+  const tooltip = document.createElement('div');
+  tooltip.id = 'chart-custom-tooltip';
+  tooltip.style.cssText = `
+    position: absolute;
+    background: rgba(0, 0, 0, 0.65);
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 10000;
+    display: none;
+    min-width: 160px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  `;
+  document.body.appendChild(tooltip);
+},
+
+/**
+ * Add tooltip event handlers to chart slices
+ */
+addTooltipHandlers() {
+  // Get the tooltip element
+  const tooltip = document.getElementById('chart-custom-tooltip');
+  if (!tooltip) return;
+  
+  // Get all slice elements
+  const chartContainer = this.$refs.chart;
+  if (!chartContainer) return;
+  
+  // All possible selectors for chart slices
+  const sliceSelectors = [
+    '.apexcharts-pie-area',
+    '.apexcharts-slice-0',
+    '.apexcharts-slice',
+    '.apexcharts-pie .apexcharts-series path',
+    '.apexcharts-donut-slice-0',
+    '.apexcharts-series path'
+  ];
+  
+  // Try different selectors until we find slices
+  let slices = [];
+  for (const selector of sliceSelectors) {
+    slices = chartContainer.querySelectorAll(selector);
+    if (slices.length > 0) {
+      console.log(`[DEBUG] Found ${slices.length} slices using selector: ${selector}`);
+      break;
+    }
+  }
+  
+  // If we still can't find slices, try the document
+  if (slices.length === 0) {
+    for (const selector of sliceSelectors) {
+      slices = document.querySelectorAll(selector);
+      if (slices.length > 0) {
+        console.log(`[DEBUG] Found ${slices.length} slices in document using selector: ${selector}`);
+        break;
+      }
+    }
+  }
+  
+  // Apply hover handlers to each slice
+  if (slices.length > 0) {
+    slices.forEach((slice, index) => {
+      // Make sure index is in range
+      if (index >= this.processedData.length) return;
+      
+      // Set cursor style
+      slice.style.cursor = 'pointer';
+      
+      // Mouse enter handler - show tooltip
+      slice.addEventListener('mouseenter', (e) => {
+        const item = this.processedData[index];
+        if (!item) return;
+        
+        // Update tooltip content
+        tooltip.innerHTML = `
+          <div style="font-weight: bold; margin-bottom: 6px;">${item.categoryName}</div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>Total Queries:</span>
+            <span style="font-weight: 500;">${item.count.toLocaleString()}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Percentage:</span>
+            <span style="font-weight: 500;">${Math.round(item.percentage)}%</span>
+          </div>
+        `;
+        
+        // Show tooltip
+        tooltip.style.display = 'block';
+        
+        // Apply active styles to slice (optional)
+        slice.setAttribute('data-active', 'true');
+      });
+      
+      // Mouse move handler - position tooltip
+      slice.addEventListener('mousemove', (e) => {
+        // Position tooltip near cursor but not directly under it
+        const offset = 15;
+        tooltip.style.left = (e.pageX + offset) + 'px';
+        tooltip.style.top = (e.pageY + offset) + 'px';
+      });
+      
+      // Mouse leave handler - hide tooltip
+      slice.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
+        slice.removeAttribute('data-active');
+      });
+    });
+    
+    console.log('[DEBUG] Successfully added tooltip handlers to slices');
+  } else {
+    console.log('[DEBUG] No slices found to attach tooltips');
+    
+    // Last resort: try again after a longer delay
+    setTimeout(() => {
+      this.addTooltipHandlers();
+    }, 1000);
+  }
+}
   }
 };
 </script>
@@ -948,7 +1096,7 @@ export default {
   color: inherit !important;
 }
 
-/* Force white text in dark mode for donut center */
+/* Force white text ONLY in dark mode for donut center */
 :deep(.dark-theme) .apexcharts-datalabel-label,
 :deep([data-theme="dark"]) .apexcharts-datalabel-label,
 :deep(.dark-mode) .apexcharts-datalabel-label,
@@ -958,12 +1106,27 @@ export default {
   fill: white !important;
 }
 
-/* System dark mode preference */
+/* Force dark text ONLY in light mode for donut center */
+:deep([data-theme="light"]) .apexcharts-datalabel-label,
+:deep([data-theme="light"]) .apexcharts-datalabel-value {
+  fill: #333333 !important;
+}
+
+/* System dark mode preference - ONLY apply in dark mode */
 @media (prefers-color-scheme: dark) {
 
-  :deep(.apexcharts-datalabel-label),
-  :deep(.apexcharts-datalabel-value) {
+  :deep(:not(.light-theme):not([data-theme="light"])) .apexcharts-datalabel-label,
+  :deep(:not(.light-theme):not([data-theme="light"])) .apexcharts-datalabel-value {
     fill: white !important;
+  }
+}
+
+/* System light mode preference - ONLY apply in light mode */
+@media (prefers-color-scheme: light) {
+
+  :deep(:not(.dark-theme):not([data-theme="dark"])) .apexcharts-datalabel-label,
+  :deep(:not(.dark-theme):not([data-theme="dark"])) .apexcharts-datalabel-value {
+    fill: #333333 !important;
   }
 }
 </style>

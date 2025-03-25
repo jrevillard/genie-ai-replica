@@ -158,7 +158,7 @@
                   {{ $t('settings.deleteAccount', 'Delete Account') }}
                 </button>
                 <p class="description-text danger-text">
-                  {{ $t('settings.deleteAccountDesc', 'This will permanently delete your account and all associated  data.') }}
+                  {{ $t('settings.deleteAccountDesc', 'This will permanently delete your account and all associated data.') }}
                 </p>
               </div>
             </div>
@@ -182,7 +182,7 @@
 
             <div class="form-group">
               <label for="confirmPassword">{{ $t('settings.enterPasswordConfirm', 'Enter your password to confirm')
-              }}:</label>
+                }}:</label>
               <input v-model="emailChangePassword" type="password" id="confirmPassword"
                 :placeholder="$t('settings.currentPasswordPlaceholder', 'Your current password')" class="text-input"
                 required />
@@ -203,12 +203,8 @@
 
       <!-- Password Reset Modal - FIXED -->
       <div class="modal" v-if="showPasswordReset">
-        <PasswordResetInitiateScreen 
-          :prefilledEmail="userData.email"
-          :isEmbedded="true"
-          @reset-initiated="handlePasswordResetInitiated"
-          @cancel="cancelPasswordReset"
-        />
+        <PasswordResetInitiateScreen :prefilledEmail="userData.email" :isEmbedded="true"
+          @reset-initiated="handlePasswordResetInitiated" @cancel="cancelPasswordReset" />
       </div>
     </div>
   </div>
@@ -219,6 +215,9 @@
 import userService from '@/services/userService';
 // Import the PasswordResetInitiateScreen component
 import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue';
+
+// Import the theme manager
+import { themeManager, setTheme } from '@/utils/ThemeManager';
 
 export default {
   name: 'SettingsComponent',
@@ -315,18 +314,16 @@ export default {
       }
     },
 
-    // Apply theme immediately upon button click
     applyTheme(theme) {
       console.log('Theme button clicked:', theme);
 
       // Update local state
       this.settings.theme = theme;
 
-      // Apply theme immediately to see the change
-      document.documentElement.setAttribute('data-theme', theme);
-      document.body.setAttribute('data-theme', theme);
+      // Use the ThemeManager to apply the theme
+      setTheme(theme);
 
-      // Also save to localStorage immediately for instant persistence
+      // Also save to localStorage for backwards compatibility
       try {
         localStorage.setItem('theme', theme);
       } catch (e) {
@@ -516,7 +513,7 @@ export default {
     // Handle successful password reset initiation
     handlePasswordResetInitiated(email) {
       console.log('Password reset initiated for:', email);
-      
+
       // Close the modal after showing success message
       setTimeout(() => {
         this.showPasswordReset = false;
@@ -1422,5 +1419,4 @@ export default {
   align-items: center;
   background-color: rgba(0, 0, 0, 0.5);
 }
-
 </style>

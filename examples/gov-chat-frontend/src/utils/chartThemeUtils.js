@@ -73,66 +73,76 @@ export function getThemeColors() {
   };
 }
 
-export function /**
-* Get current theme information with reliable dark mode detection
-*/
-getThemeInfo() {
- // Multiple reliable methods to detect dark mode
- const htmlElement = document.documentElement;
- const bodyElement = document.body;
- 
- // Method 1: Check explicit dark mode classes
- const hasDarkClass = 
-   htmlElement.classList.contains('dark-theme') || 
-   htmlElement.classList.contains('dark-mode') || 
-   bodyElement.classList.contains('dark-theme') || 
-   bodyElement.classList.contains('dark-mode');
- 
- // Method 2: Check data-theme attribute
- const hasDataTheme = 
-   htmlElement.getAttribute('data-theme') === 'dark' || 
-   bodyElement.getAttribute('data-theme') === 'dark';
- 
- // Method 3: Check computed background color
- const computedStyle = getComputedStyle(htmlElement);
- const bgColor = computedStyle.backgroundColor;
- 
- // Parse RGB values (handles both rgb(x,y,z) and rgba(x,y,z,a) formats)
- let isDarkBg = false;
- const rgbMatch = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
- if (rgbMatch) {
-   const r = parseInt(rgbMatch[1], 10);
-   const g = parseInt(rgbMatch[2], 10);
-   const b = parseInt(rgbMatch[3], 10);
-   
-   // Calculate luminance - dark backgrounds have low luminance
-   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-   isDarkBg = luminance < 0.5;
- }
- 
- // Method 4: Check prefers-color-scheme media query
- const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
- 
- // Combine all detection methods, prioritizing explicit classes
- const isDarkMode = hasDarkClass || hasDataTheme || isDarkBg || prefersDarkMode;
- 
- console.log('[DEBUG] Theme detection results:', {
-   hasDarkClass,
-   hasDataTheme,
-   isDarkBg,
-   prefersDarkMode,
-   finalResult: isDarkMode
- });
- 
- // Use appropriate colors based on detected theme
- return {
-   isDarkMode,
-   textColor: isDarkMode ? '#FFFFFF' : '#333333',
-   backgroundColor: 'transparent',
-   tooltipBackground: isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)', 
-   tooltipTextColor: isDarkMode ? '#FFFFFF' : '#333333',
-   theme: isDarkMode ? 'dark' : 'light'
- };
+/**
+ * getThemeInfo - Improved theme detection that fixes the incorrect dark mode detection
+ * 
+ * This function properly detects the current theme mode using multiple reliable methods
+ * and weighs them correctly to prevent false positives.
+ */
+export function getThemeInfo() {
+  // Multiple methods to detect dark mode with proper priority
+  const htmlElement = document.documentElement;
+  const bodyElement = document.body;
+  
+  // Method 1: Check explicit dark mode classes (highest priority)
+  const hasDarkClass = 
+    htmlElement.classList.contains('dark-theme') || 
+    htmlElement.classList.contains('dark-mode') || 
+    bodyElement.classList.contains('dark-theme') || 
+    bodyElement.classList.contains('dark-mode');
+  
+  // Method 2: Check data-theme attribute (second priority)
+  const hasDataTheme = 
+    htmlElement.getAttribute('data-theme') === 'dark' || 
+    bodyElement.getAttribute('data-theme') === 'dark';
+  
+  // Method 3: Check computed background color (if needed)
+  let isDarkBg = false;
+  
+  if (!hasDarkClass && !hasDataTheme) {
+    const computedStyle = getComputedStyle(htmlElement);
+    const bgColor = computedStyle.backgroundColor;
+    
+    // Parse RGB values (handles both rgb(x,y,z) and rgba(x,y,z,a) formats)
+    const rgbMatch = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (rgbMatch) {
+      const r = parseInt(rgbMatch[1], 10);
+      const g = parseInt(rgbMatch[2], 10);
+      const b = parseInt(rgbMatch[3], 10);
+      
+      // Calculate luminance - dark backgrounds have low luminance
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      isDarkBg = luminance < 0.5;
+    }
+  }
+  
+  // Method 4: Check prefers-color-scheme media query (lowest priority)
+  // Only use this if no other method gives a definitive answer
+  let prefersDarkMode = false;
+  if (!hasDarkClass && !hasDataTheme && !isDarkBg) {
+    prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  
+  // Combine detection methods with proper priority
+  const isDarkMode = hasDarkClass || hasDataTheme || isDarkBg || prefersDarkMode;
+  
+  console.log('[DEBUG] Theme detection results:', {
+    hasDarkClass,
+    hasDataTheme,
+    isDarkBg,
+    prefersDarkMode,
+    finalResult: isDarkMode
+  });
+  
+  // Return theme configuration based on detection
+  return {
+    isDarkMode,
+    textColor: isDarkMode ? '#FFFFFF' : '#333333',
+    backgroundColor: 'transparent',
+    tooltipBackground: isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)', 
+    tooltipTextColor: isDarkMode ? '#FFFFFF' : '#333333',
+    theme: isDarkMode ? 'dark' : 'light'
+  };
 }
 
 /**

@@ -1055,4 +1055,45 @@ export default {
   -webkit-text-fill-color: white !important;
   text-shadow: 0 0 1px rgba(255,255,255,0.5) !important;
 }
+
+/* Dark mode background changes only */
+[data-theme="dark"] .analytics-content,
+.dark-theme .analytics-content,
+.dark-mode .analytics-content {
+  background-color: #414141 !important; /* Slightly lighter gray background for dark mode */
+}
+
+[data-theme="dark"] .analytics-body,
+.dark-theme .analytics-body,
+.dark-mode .analytics-body {
+  background-color: #414141 !important; /* Match content background for dark mode */
+}
+
+/* Chart background only - conditional for dark mode */
+[data-theme="dark"] .chart-container,
+.dark-theme .chart-container,
+.dark-mode .chart-container {
+  background-color: #d9d9d9 !important; /* Light gray for chart area in dark mode */
+}
+
+/* Metric cards background - conditional for dark mode */
+[data-theme="dark"] .metric-card,
+.dark-theme .metric-card,
+.dark-mode .metric-card {
+  background-color: #414141 !important; /* Match main background for dark mode */
+}
+
+/* Analytics sections - conditional for dark mode */
+[data-theme="dark"] .analytics-section,
+.dark-theme .analytics-section,
+.dark-mode .analytics-section {
+  background-color: #414141 !important; /* Match main background for dark mode */
+}
+
+/* Top queries and knowledge area containers - conditional for dark mode */
+[data-theme="dark"] .half-width,
+.dark-theme .half-width,
+.dark-mode .half-width {
+  background-color: #414141 !important; /* Match main background for dark mode */
+}
 </style>

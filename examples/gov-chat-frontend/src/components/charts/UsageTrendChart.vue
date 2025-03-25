@@ -232,14 +232,14 @@ export default {
 
       // Add background rectangle that extends beyond the axes to make labels readable
       // Only add in dark mode with LIGHT GRAY color
-      if (isDarkMode) {
-        svg.append('rect')
-          .attr('width', this.width)
-          .attr('height', this.height)
-          .attr('fill', chartBackgroundColor)
-          .attr('rx', 8)
-          .attr('ry', 8);
-      }
+      //if (isDarkMode) {
+      //  svg.append('rect')
+      //    .attr('width', this.width)
+      //    .attr('height', this.height)
+      //    .attr('fill', chartBackgroundColor)
+      //    .attr('rx', 8)
+      //    .attr('ry', 8);
+      //}
 
       const mainGroup = svg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
@@ -265,25 +265,14 @@ export default {
         .attr('x2', '0%')
         .attr('y2', '100%');
 
-      if (isDarkMode) {
-        // Darker gradient for dark mode
-        barGradient.append('stop')
-          .attr('offset', '0%')
-          .attr('stop-color', '#4a8bbf');
+      // Always use light green for bars
+      barGradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', '#62d9a6');
 
-        barGradient.append('stop')
-          .attr('offset', '100%')
-          .attr('stop-color', '#2d6fa7');
-      } else {
-        // Lighter gradient for light mode
-        barGradient.append('stop')
-          .attr('offset', '0%')
-          .attr('stop-color', '#62d9a6');
-
-        barGradient.append('stop')
-          .attr('offset', '100%')
-          .attr('stop-color', '#2da676');
-      }
+      barGradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', '#2da676');
 
       // Add blue area gradient
       const areaGradient = defs.append('linearGradient')
@@ -345,12 +334,12 @@ export default {
         .nice();
 
       // Add chart background with the same light gray color
-      mainGroup.append('rect')
-        .attr('width', width)
-        .attr('height', height)
-        .attr('fill', chartBackgroundColor)
-        .attr('rx', 5)
-        .attr('ry', 5);
+      //mainGroup.append('rect')
+      //  .attr('width', width)
+      //  .attr('height', height)
+      //  .attr('fill', chartBackgroundColor)
+      //  .attr('rx', 5)
+      //  .attr('ry', 5);
 
       // Draw background grid
       mainGroup.append('g')
@@ -392,12 +381,13 @@ export default {
         .attr('transform', d => `translate(${x(d.timestamp) - barWidth / 2}, 0)`);
 
       // Main bar with gradient
+      // Main bar with explicit green color
       bars.append('rect')
         .attr('class', 'bar')
         .attr('width', barWidth)
         .attr('y', d => yLeft(d.value))
         .attr('height', d => height - yLeft(d.value))
-        .attr('fill', 'url(#bar-gradient)')
+        .attr('fill', '#62d9a6') // Direct light green color
         .attr('rx', 1)
         .attr('ry', 1)
         .style('filter', 'url(#drop-shadow)')
@@ -546,7 +536,7 @@ export default {
       // Enhanced chart title with dark text
       mainGroup.append('text')
         .attr('x', width / 2)
-        .attr('y', -20)
+        .attr('y', -30)  // Change from -20 to -30 or even -35
         .attr('text-anchor', 'middle')
         .attr('font-size', '14px')
         .attr('font-weight', 'bold')
@@ -559,15 +549,15 @@ export default {
         .attr('transform', `translate(${width / 2 - 170}, -15)`);
 
       // Legend background - also use same light gray
-      legendBox.append('rect')
-        .attr('x', -5)
-        .attr('y', -15)
-        .attr('width', 340)
-        .attr('height', 30)
-        .attr('rx', 5)
-        .attr('ry', 5)
-        .attr('fill', chartBackgroundColor)
-        .style('filter', 'url(#drop-shadow)');
+      //legendBox.append('rect')
+      //  .attr('x', -5)
+      //  .attr('y', -15)
+      //  .attr('width', 340)
+      //  .attr('height', 30)
+      //  .attr('rx', 5)
+      //  .attr('ry', 5)
+      //  .attr('fill', chartBackgroundColor)
+      //  .style('filter', 'url(#drop-shadow)');
 
       const legend = legendBox.append('g')
         .attr('class', 'legend');
@@ -826,7 +816,52 @@ export default {
   font-weight: bold;
 }
 
+/* Fix styles for dark mode only */
 [data-theme="dark"] svg text {
   fill: white !important;
+}
+
+/* Conditional dark mode styling for chart container */
+[data-theme="dark"] .chart-container {
+  background-color: #414141 !important;
+  /* Match the main background color */
+  border-radius: 0 !important;
+  /* Remove border radius */
+  box-shadow: none !important;
+  /* Remove box shadow */
+}
+
+/* SVG background fixes - only in dark mode */
+[data-theme="dark"] :deep(svg rect:first-child) {
+  fill: #414141 !important;
+  /* Change the SVG background to match main background */
+}
+
+/* This specifically targets the background rect added in dark mode */
+[data-theme="dark"] :deep(svg rect[fill="#bbbcbe"]) {
+  fill: #414141 !important;
+  /* Change to match the background */
+}
+
+/* Fix chart bar colors to be light green in both modes */
+:deep(.bar) {
+  fill: url(#bar-gradient) !important;
+}
+
+/* Force the gradient definitions - works in both modes */
+:deep(#bar-gradient stop:first-child) {
+  stop-color: #62d9a6 !important;
+  /* Light green top */
+}
+
+:deep(#bar-gradient stop:last-child) {
+  stop-color: #2da676 !important;
+  /* Darker green bottom */
+}
+
+/* In case direct targeting is needed for the bars */
+:deep(rect.bar) {
+  fill: #62d9a6 !important;
+  /* Fallback if gradient doesn't work */
 }
 </style>

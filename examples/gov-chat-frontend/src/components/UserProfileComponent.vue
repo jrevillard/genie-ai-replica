@@ -27,43 +27,12 @@
 
       <!-- Tab content -->
       <div class="tab-content">
-        <!-- Profile Type or General Information Tab -->
+        <!-- Personal Identification Data -->
         <div v-if="activeTab === 0">
           <div class="field-group">
-            <label>{{ $t('userProfile.fields.profileType') }}</label>
-            <select v-model="formData.generalInfo.profileType">
-              <option value="personal">{{ $t('userProfile.profileTypes.personal') }}</option>
-              <option value="business">{{ $t('userProfile.profileTypes.business') }}</option>
-              <option value="organization">{{ $t('userProfile.profileTypes.organization') }}</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.primaryPurpose') }}</label>
-            <textarea v-model="formData.generalInfo.primaryPurpose"></textarea>
-          </div>
-        </div>
-
-        <!-- Contact Information Tab -->
-        <div v-else-if="activeTab === 1">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.email') }}</label>
-            <input v-model="formData.contactInfo.email" type="email" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.phoneNumber') }}</label>
-            <input v-model="formData.contactInfo.phoneNumber" type="tel" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.alternateContact') }}</label>
-            <input v-model="formData.contactInfo.alternateContact" type="tel" />
-          </div>
-        </div>
-
-        <!-- Personal Identification Data -->
-        <div v-else-if="activeTab === 2">
-          <div class="field-group">
             <label>{{ $t('userProfile.fields.fullName') }}</label>
-            <input v-model="formData.personalIdentification.fullName" type="text" />
+            <input v-model="formData.personalIdentification.fullName" type="text" 
+                   :placeholder="$t('userProfile.placeholders.fullName')" />
           </div>
           <div class="field-group">
             <label>{{ $t('userProfile.fields.dob') }}</label>
@@ -82,12 +51,28 @@
           <div class="field-group">
             <label>{{ $t('userProfile.fields.nationality') }}</label>
             <input v-model="formData.personalIdentification.nationality" type="text" 
-                  :placeholder="$t('userProfile.placeholders.nationality')" />
+                   :placeholder="$t('userProfile.placeholders.nationality')" />
+          </div>
+        </div>
+
+        <!-- Civil Registration & Documentation -->
+        <div v-else-if="activeTab === 1">
+          <div class="field-group">
+            <label>{{ $t('userProfile.fields.birthCert') }}</label>
+            <input v-model="formData.civilRegistration.birthCert" type="text" />
+          </div>
+          <div class="field-group">
+            <label>{{ $t('userProfile.fields.citizenship') }}</label>
+            <input v-model="formData.civilRegistration.citizenship" type="text" />
+          </div>
+          <div class="field-group">
+            <label>{{ $t('userProfile.fields.immigration') }}</label>
+            <input v-model="formData.civilRegistration.immigration" type="text" />
           </div>
         </div>
 
         <!-- Address & Residency Information -->
-        <div v-else-if="activeTab === 3">
+        <div v-else-if="activeTab === 2">
           <div class="field-group">
             <label>{{ $t('userProfile.fields.currentAddress') }}</label>
             <textarea v-model="formData.addressResidency.currentAddress"></textarea>
@@ -111,8 +96,8 @@
           </div>
         </div>
 
-        <!-- Identity Documents -->
-        <div v-else-if="activeTab === 4">
+        <!-- Identity & Travel Documents -->
+        <div v-else-if="activeTab === 3">
           <div class="field-group">
             <label>{{ $t('userProfile.fields.idCard') }}</label>
             <input v-model="formData.identityDocuments.idCard" type="text" />
@@ -127,59 +112,8 @@
           </div>
         </div>
 
-        <!-- Employment Information -->
-        <div v-else-if="activeTab === 5">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.employmentStatus') }}</label>
-            <select v-model="formData.employmentInfo.employmentStatus">
-              <option value="employed">{{ $t('userProfile.employmentStatuses.employed') }}</option>
-              <option value="self-employed">{{ $t('userProfile.employmentStatuses.selfEmployed') }}</option>
-              <option value="unemployed">{{ $t('userProfile.employmentStatuses.unemployed') }}</option>
-              <option value="student">{{ $t('userProfile.employmentStatuses.student') }}</option>
-              <option value="retired">{{ $t('userProfile.employmentStatuses.retired') }}</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.occupation') }}</label>
-            <input v-model="formData.employmentInfo.occupation" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.employer') }}</label>
-            <input v-model="formData.employmentInfo.employer" type="text" />
-          </div>
-        </div>
-
-        <!-- Financial Information -->
-        <div v-else-if="activeTab === 6">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.incomeRange') }}</label>
-            <select v-model="formData.financialInfo.incomeRange">
-              <option value="0-25000">{{ $t('userProfile.incomeRanges.0-25000') }}</option>
-              <option value="25001-50000">{{ $t('userProfile.incomeRanges.25001-50000') }}</option>
-              <option value="50001-100000">{{ $t('userProfile.incomeRanges.50001-100000') }}</option>
-              <option value="100001+">{{ $t('userProfile.incomeRanges.100001+') }}</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.taxIdentification') }}</label>
-            <input v-model="formData.financialInfo.taxIdentification" type="text" />
-          </div>
-        </div>
-
-        <!-- Additional Identifiers -->
-        <div v-else-if="activeTab === 7">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.socialSecurityNumber') }}</label>
-            <input v-model="formData.additionalIdentifiers.socialSecurityNumber" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.taxId') }}</label>
-            <input v-model="formData.additionalIdentifiers.taxId" type="text" />
-          </div>
-        </div>
-
-        <!-- Health Information -->
-        <div v-else-if="activeTab === 8">
+        <!-- Health & Medical Records -->
+        <div v-else-if="activeTab === 4">
           <div class="field-group">
             <label>{{ $t('userProfile.fields.bloodType') }}</label>
             <select v-model="formData.healthInfo.bloodType">
@@ -202,52 +136,31 @@
           </div>
         </div>
 
-        <!-- Emergency Contacts -->
-        <div v-else-if="activeTab === 9">
+        <!-- Employment & Economic Data -->
+        <div v-else-if="activeTab === 5">
           <div class="field-group">
-            <label>{{ $t('userProfile.fields.emergencyContactName') }}</label>
-            <input v-model="formData.emergencyContacts.primaryContact.name" type="text" />
+            <label>{{ $t('userProfile.fields.eHistory') }}</label>
+            <input v-model="formData.employmentInfo.employmentHistory" type="text" />
           </div>
           <div class="field-group">
-            <label>{{ $t('userProfile.fields.emergencyContactRelationship') }}</label>
-            <input v-model="formData.emergencyContacts.primaryContact.relationship" type="text" />
+            <label>{{ $t('userProfile.fields.currentEmployer') }}</label>
+            <input v-model="formData.employmentInfo.currentEmployer" type="text" />
           </div>
           <div class="field-group">
-            <label>{{ $t('userProfile.fields.emergencyContactPhone') }}</label>
-            <input v-model="formData.emergencyContacts.primaryContact.phone" type="tel" />
-          </div>
-        </div>
-
-        <!-- Preferences -->
-        <div v-else-if="activeTab === 10">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.communicationPreference') }}</label>
-            <select v-model="formData.preferences.communicationPreference">
-              <option value="email">{{ $t('userProfile.communicationPreferences.email') }}</option>
-              <option value="phone">{{ $t('userProfile.communicationPreferences.phone') }}</option>
-              <option value="sms">{{ $t('userProfile.communicationPreferences.sms') }}</option>
-              <option value="mail">{{ $t('userProfile.communicationPreferences.mail') }}</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.languagePreference') }}</label>
-            <select v-model="formData.preferences.languagePreference">
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="sw">Kiswahili</option>
-            </select>
+            <label>{{ $t('userProfile.fields.tin') }}</label>
+            <input v-model="formData.employmentInfo.taxId" type="text" />
           </div>
         </div>
 
-        <!-- Additional Information -->
-        <div v-else-if="activeTab === 11">
+        <!-- Financial & Tax Data -->
+        <div v-else-if="activeTab === 6">
           <div class="field-group">
-            <label>{{ $t('userProfile.fields.additionalNotes') }}</label>
-            <textarea v-model="formData.additionalInfo.notes" rows="4"></textarea>
+            <label>{{ $t('userProfile.fields.incomeTax') }}</label>
+            <input v-model="formData.financialInfo.incomeTax" type="text" />
           </div>
           <div class="field-group">
-            <label>{{ $t('userProfile.fields.specialRequirements') }}</label>
-            <textarea v-model="formData.additionalInfo.specialRequirements" rows="4"></textarea>
+            <label>{{ $t('userProfile.fields.bankAccounts') }}</label>
+            <input v-model="formData.financialInfo.bankAccounts" type="text" />
           </div>
         </div>
       </div>
@@ -273,34 +186,25 @@ export default {
       isThemeReady: false,
       activeTab: 0,
       tabs: [
-        { key: 'generalInfo' },
-        { key: 'contactInfo' },
         { key: 'personalIdentification' },
+        { key: 'civilRegistration' },
         { key: 'addressResidency' },
         { key: 'identityDocuments' },
-        { key: 'employmentInfo' },
-        { key: 'financialInfo' },
-        { key: 'additionalIdentifiers' },
         { key: 'healthInfo' },
-        { key: 'emergencyContacts' },
-        { key: 'preferences' },
-        { key: 'additionalInfo' }
+        { key: 'employmentInfo' },
+        { key: 'financialInfo' }
       ],
       formData: {
-        generalInfo: {
-          profileType: '',
-          primaryPurpose: ''
-        },
-        contactInfo: {
-          email: '',
-          phoneNumber: '',
-          alternateContact: ''
-        },
         personalIdentification: {
           fullName: '',
           dob: '',
           gender: '',
           nationality: ''
+        },
+        civilRegistration: {
+          birthCert: '',
+          citizenship: '',
+          immigration: ''
         },
         addressResidency: {
           currentAddress: '',
@@ -313,37 +217,18 @@ export default {
           passport: '',
           driversLicense: ''
         },
-        employmentInfo: {
-          employmentStatus: '',
-          occupation: '',
-          employer: ''
-        },
-        financialInfo: {
-          incomeRange: '',
-          taxIdentification: ''
-        },
-        additionalIdentifiers: {
-          socialSecurityNumber: '',
-          taxId: ''
-        },
         healthInfo: {
           bloodType: '',
           organDonor: ''
         },
-        emergencyContacts: {
-          primaryContact: {
-            name: '',
-            relationship: '',
-            phone: ''
-          }
+        employmentInfo: {
+          employmentHistory: '',
+          currentEmployer: '',
+          taxId: ''
         },
-        preferences: {
-          communicationPreference: '',
-          languagePreference: ''
-        },
-        additionalInfo: {
-          notes: '',
-          specialRequirements: ''
+        financialInfo: {
+          incomeTax: '',
+          bankAccounts: ''
         }
       }
     };
@@ -421,20 +306,12 @@ export default {
       this.formData[section][fieldKey] = file;
     },
     validateForm() {
-      // Basic form validation
+      // Basic form validation (simplified from original)
       const validations = {
-        generalInfo: [
-          { field: 'profileType', required: true }
-        ],
-        contactInfo: [
-          { field: 'email', required: true, type: 'email' },
-          { field: 'phoneNumber', required: true }
-        ],
         personalIdentification: [
           { field: 'fullName', required: true },
           { field: 'dob', required: true }
         ]
-        // Add more validations as needed
       };
       
       const errors = {};
@@ -444,11 +321,7 @@ export default {
           const value = this.formData[section][validation.field];
           
           if (validation.required && !value) {
-            errors[`${section}.${validation.field}`] = this.$t('userProfile.validations.required');
-          }
-          
-          if (validation.type === 'email' && value && !/\S+@\S+\.\S+/.test(value)) {
-            errors[`${section}.${validation.field}`] = this.$t('userProfile.validations.invalidEmail');
+            errors[`${section}.${validation.field}`] = this.$t('userProfile.validation.nameRequired');
           }
         });
       });

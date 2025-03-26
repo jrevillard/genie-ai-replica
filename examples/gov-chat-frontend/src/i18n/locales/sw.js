@@ -517,6 +517,16 @@ export default {
       tab11: 'Usafiri & Uhamaji',
       tab12: 'Ushiriki wa Kiraia & Kisiasa'
     },
+    residencyStatuses: {
+      citizen: 'Raia',
+      permanentResident: 'Makazi wa Kudumu',
+      temporaryResident: 'Makazi ya Muda',
+      other: 'Nyingine'
+    },
+    yesNo: {
+      yes: 'Ndiyo',
+      no: 'Hapana'
+    },
     fields: {
       // Tab 1
       fullName: 'Jina Kamili',
@@ -606,7 +616,13 @@ export default {
       electionHistory: 'Historia ya Ushiriki wa Uchaguzi',
       partyMembership: 'Uanachama wa Chama cha Kisiasa',
       militaryStatus: 'Huduma ya Jeshi au Hali ya Utii',
-      publicServiceRoles: 'Majukumu ya Huduma za Umma'
+      publicServiceRoles: 'Majukumu ya Huduma za Umma',
+
+      //New fields
+      postalCode: 'Nambari ya Posta',
+      country: 'Nchi',
+      residencyStatus: 'Hali ya Makazi',
+      bloodType: 'Aina ya Damu'
     },
     actions: {
       cancel: 'Ghairi',

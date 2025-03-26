@@ -514,6 +514,16 @@ export default {
       tab11: 'Transportation & Mobility',
       tab12: 'Civic & Political Participation'
     },
+    residencyStatuses: {
+      citizen: 'Citizen',
+      permanentResident: 'Permanent Resident',
+      temporaryResident: 'Temporary Resident',
+      other: 'Other'
+    },
+    yesNo: {
+      yes: 'Yes',
+      no: 'No'
+    },
     fields: {
       // Tab 1
       fullName: 'Full name (including aliases)',
@@ -592,7 +602,12 @@ export default {
       electionHistory: 'Election participation history',
       partyMembership: 'Political party membership',
       militaryStatus: 'Military service or conscription status',
-      publicServiceRoles: 'Public service roles'
+      publicServiceRoles: 'Public service roles',
+      //Additional
+      postalCode: 'Postal Code',
+      country: 'Country',
+      residencyStatus: 'Residency Status',
+      bloodType: 'Blood Type'
     },
     actions: {
       cancel: 'Cancel',

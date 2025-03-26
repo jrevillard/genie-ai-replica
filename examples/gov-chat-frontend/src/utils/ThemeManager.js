@@ -8,52 +8,106 @@ class ThemeManager {
         if (ThemeManager.instance) {
             return ThemeManager.instance;
         }
-
+    
         // Initialize with default theme (light)
         this.currentTheme = 'light';
         this.isDarkMode = false;
-
+        this.userPreference = 'light';
+    
         // Bind methods to ensure correct context
         this.getDialogTheme = this.getDialogTheme.bind(this);
         this.applyDialogTheme = this.applyDialogTheme.bind(this);
-
-        // Initialize by checking if dark mode is active
+        this.detectInitialTheme = this.detectInitialTheme.bind(this);
+        this.forceApplyTheme = this.forceApplyTheme.bind(this);
+    
+        // Detect and apply theme immediately
         this.detectInitialTheme();
-
+    
         // Set up system theme change listener
         this.setupSystemThemeListener();
-
+    
         // Make this instance the singleton
         ThemeManager.instance = this;
+        
+        // Reapply theme after a small delay to ensure it propagates
+        setTimeout(() => this.forceApplyTheme(), 50);
     }
 
-    /**
-     * Detect the initial theme from DOM or system preference
-     */
     detectInitialTheme() {
         const htmlElement = document.documentElement;
-
-        // Check for explicit dark mode indicators
+        const bodyElement = document.body;
+        
+        // Check for explicit dark mode indicators - more robust checks
         const hasDarkClass =
             htmlElement.classList.contains('dark-theme') ||
-            htmlElement.classList.contains('dark-mode');
-
+            htmlElement.classList.contains('dark-mode') ||
+            bodyElement.classList.contains('dark-theme') ||
+            bodyElement.classList.contains('dark-mode');
+    
         const hasDarkDataTheme =
-            htmlElement.getAttribute('data-theme') === 'dark';
-
+            htmlElement.getAttribute('data-theme') === 'dark' ||
+            bodyElement.getAttribute('data-theme') === 'dark';
+            
         // Check system preference
         const prefersDarkMode =
             window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        // Set initial theme
-        if (hasDarkClass || hasDarkDataTheme || prefersDarkMode) {
+            
+        // Check for light mode indicators
+        const hasLightClass =
+            htmlElement.classList.contains('light-theme') ||
+            htmlElement.classList.contains('light-mode') ||
+            bodyElement.classList.contains('light-theme') ||
+            bodyElement.classList.contains('light-mode');
+            
+        const hasLightDataTheme =
+            htmlElement.getAttribute('data-theme') === 'light' ||
+            bodyElement.getAttribute('data-theme') === 'light';
+            
+        // Set initial theme with explicit priority:
+        // 1. Explicit light/dark classes or data attributes
+        // 2. System preference
+        // 3. Default to light mode
+        if (hasDarkClass || hasDarkDataTheme) {
+            this.setTheme('dark');
+        } else if (hasLightClass || hasLightDataTheme) {
+            this.setTheme('light');
+        } else if (prefersDarkMode) {
             this.setTheme('dark');
         } else {
+            // Always default to light mode if no clear indication
             this.setTheme('light');
         }
-
+        
+        // Force apply theme to ensure it's properly set in the DOM
+        this.forceApplyTheme();
+        
         console.log(`[ThemeManager] Initial theme detected: ${this.currentTheme}`);
     }
+
+    // Add this new method to ThemeManager class
+forceApplyTheme() {
+    // Force apply the theme to the DOM
+    document.documentElement.setAttribute('data-theme', this.currentTheme);
+    document.body.setAttribute('data-theme', this.currentTheme);
+    
+    // Add/remove dark mode classes for compatibility
+    if (this.isDarkMode) {
+        document.documentElement.classList.add('dark-mode');
+        document.body.classList.add('dark-mode');
+    } else {
+        document.documentElement.classList.remove('dark-mode');
+        document.body.classList.remove('dark-mode');
+    }
+    
+    // Dispatch theme change event
+    window.dispatchEvent(new CustomEvent('themeChange', {
+        detail: {
+            theme: this.currentTheme,
+            isDarkMode: this.isDarkMode,
+            userPreference: this.userPreference
+        }
+    }));
+}
 
     /**
      * Set up listener for system theme changes

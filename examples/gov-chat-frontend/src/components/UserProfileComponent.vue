@@ -1,14 +1,14 @@
-<!-- UserProfileComponent.vue -->
 <template>
   <div 
     class="user-profile-modal" 
     :style="dialogThemeStyles"
+    :data-themed="isThemeReady"
     ref="modalContainer"
   >
     <div class="overlay" @click="cancel"></div>
     <div class="modal-content">
-      <h2>{{ $t('userProfile.title') }}</h2>
-      <p class="privacy-info">
+      <h2 :data-themed="isThemeReady">{{ $t('userProfile.title') }}</h2>
+      <p class="privacy-info" :data-themed="isThemeReady">
         {{ $t('userProfile.privacyInfo') }}
         <a href="#" class="privacy-link">{{ $t('userProfile.privacyPolicyLink') }}</a>
       </p>
@@ -21,7 +21,7 @@
           :class="{ active: activeTab === index }"
           @click="activeTab = index"
         >
-          {{ $t(`userProfile.tabs.${tab.key}`) }}
+          {{ $t(`userProfile.tabs.tab${index+1}`) }}
         </button>
       </div>
 
@@ -72,16 +72,17 @@
           <div class="field-group">
             <label>{{ $t('userProfile.fields.gender') }}</label>
             <select v-model="formData.personalIdentification.gender">
-              <option value="">{{ $t('userProfile.fields.selectGender') }}</option>
-              <option value="male">{{ $t('userProfile.genders.male') }}</option>
-              <option value="female">{{ $t('userProfile.genders.female') }}</option>
-              <option value="other">{{ $t('userProfile.genders.other') }}</option>
-              <option value="prefer-not-to-say">{{ $t('userProfile.genders.preferNotToSay') }}</option>
+              <option value="">{{ $t('userProfile.select') }}</option>
+              <option value="male">{{ $t('userProfile.gender.male') }}</option>
+              <option value="female">{{ $t('userProfile.gender.female') }}</option>
+              <option value="other">{{ $t('userProfile.gender.other') }}</option>
+              <option value="prefer-not-to-say">{{ $t('userProfile.gender.preferNot') }}</option>
             </select>
           </div>
           <div class="field-group">
             <label>{{ $t('userProfile.fields.nationality') }}</label>
-            <input v-model="formData.personalIdentification.nationality" type="text" />
+            <input v-model="formData.personalIdentification.nationality" type="text" 
+                  :placeholder="$t('userProfile.placeholders.nationality')" />
           </div>
         </div>
 
@@ -232,10 +233,8 @@
             <label>{{ $t('userProfile.fields.languagePreference') }}</label>
             <select v-model="formData.preferences.languagePreference">
               <option value="en">English</option>
-              <option value="es">Español</option>
               <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <!-- Add more languages as needed -->
+              <option value="sw">Kiswahili</option>
             </select>
           </div>
         </div>
@@ -271,6 +270,7 @@ export default {
   name: 'UserProfileComponent',
   data() {
     return {
+      isThemeReady: false,
       activeTab: 0,
       tabs: [
         { key: 'generalInfo' },
@@ -385,6 +385,13 @@ export default {
     }
   },
   methods: {
+    updateTheme() {
+      // Force-update the theme variables
+      this.isThemeReady = false;
+      this.$nextTick(() => {
+        this.isThemeReady = true;
+      });
+    },
     cancel() {
       this.$emit('cancel');
     },
@@ -455,6 +462,12 @@ export default {
   mounted() {
     // Add theme change listener
     window.addEventListener('themeChange', this.updateTheme);
+    
+    // Set initial theme after a small delay to ensure DOM is ready
+    this.$nextTick(() => {
+      // Update theme variables
+      this.isThemeReady = true;
+    });
   },
   beforeDestroy() {
     // Remove theme change listener
@@ -464,7 +477,8 @@ export default {
 </script>
 
 <style scoped>
-/* Styles remain the same as in the previous version */
+/* Base Modal Styling */
+/* Base Modal Styling */
 .user-profile-modal {
   position: fixed;
   top: 0;
@@ -472,16 +486,23 @@ export default {
   width: 100%;
   height: 100%;
   z-index: 9999;
+  /* Set default colors for light mode regardless of theme detection */
+  background-color: #ffffff;
+  color: #333333;
+}
+
+/* Apply theme variables only as overrides */
+.user-profile-modal[data-themed="true"] {
   background-color: var(--dialog-background, #ffffff);
   color: var(--dialog-text-color, #333333);
 }
 
+/* Other existing styles remain unchanged */
 .overlay {
   position: absolute;
   width: 100%;
   height: 100%;
   background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
-  cursor: pointer;
 }
 
 .modal-content {
@@ -498,6 +519,26 @@ export default {
   border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
+/* Title and Info Styling - add explicit color */
+h2 {
+  color: #333333;
+  margin-bottom: 10px;
+}
+
+h2[data-themed="true"] {
+  color: var(--dialog-title-color, #333333);
+}
+
+.privacy-info {
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  color: #666666;
+}
+
+.privacy-info[data-themed="true"] {
+  color: var(--dialog-text-color, #666666);
+}
+
 /* Tabs Styling */
 .tabs {
   display: flex;
@@ -506,14 +547,14 @@ export default {
   border-bottom: 1px solid var(--dialog-tabs-border-color, #cccccc);
   max-height: 120px;
   overflow-y: auto;
-  background-color: var(--dialog-tabs-background, #f0f2f5);
+  background-color: var(--dialog-tabs-background, #ffffff);
 }
 
 .tabs button {
   margin-right: 4px;
   padding: 8px 12px;
-  background-color: var(--dialog-tabs-background, #f0f2f5);
-  color: var(--dialog-tabs-text-color, #333333);
+  background-color: var(--dialog-tabs-background, #ffffff);
+  color: var(--dialog-tabs-text-color, #000000);
   border: 1px solid var(--dialog-tabs-border-color, #cccccc);
   border-bottom: none;
   cursor: pointer;
@@ -522,7 +563,7 @@ export default {
 }
 
 .tabs button:hover {
-  background-color: var(--dialog-tabs-hover-background, #e0e0e0);
+  background-color: var(--dialog-tabs-hover-background, #f0f0f0);
 }
 
 .tabs button.active {
@@ -551,26 +592,15 @@ export default {
 .field-group label {
   margin-bottom: 4px;
   color: var(--dialog-text-color, #333333);
-  font-weight: 600;
 }
 
 .field-group input,
-.field-group textarea,
-.field-group select {
-  padding: 8px;
+.field-group textarea {
+  padding: 6px;
   border: 1px solid var(--dialog-input-border-color, #ddd);
   border-radius: 4px;
   background-color: var(--dialog-input-background, #ffffff);
   color: var(--dialog-input-text-color, #333333);
-  transition: border-color 0.2s ease;
-}
-
-.field-group input:focus,
-.field-group textarea:focus,
-.field-group select:focus {
-  outline: none;
-  border-color: #4E97D1;
-  box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.2);
 }
 
 .field-group input::placeholder,
@@ -589,13 +619,11 @@ export default {
 
 .cancel-btn,
 .save-btn {
-  padding: 10px 18px;
+  padding: 8px 16px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  font-weight: 600;
-  text-transform: uppercase;
+  transition: background-color 0.2s;
 }
 
 .cancel-btn {
@@ -614,8 +642,6 @@ export default {
 
 .save-btn:hover {
   background-color: var(--dialog-primary-button-hover-bg, #3a7da0);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* Dark Mode Specific Overrides */
@@ -634,5 +660,4 @@ export default {
 .dark-mode .privacy-info {
   color: rgba(255, 255, 255, 0.8) !important;
 }
-
 </style>

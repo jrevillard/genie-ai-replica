@@ -235,7 +235,7 @@ export default {
 
       // Initialize with current app settings
       settings: {
-        language: this.$i18n ? this.$i18n.locale : 'en',
+        language: this.getCurrentLanguage(),
         theme: document.documentElement.getAttribute('data-theme') || 'light',
         fontSize: this.getSavedFontSize(),
         emailUpdates: this.getSavedPreference('emailUpdates', false),
@@ -268,12 +268,48 @@ export default {
     }
   },
 
+  // Add this to your created() lifecycle hook (to replace the watcher in your original code)
   created() {
     // Fetch user data when component is created
     this.fetchUserData();
+
+    // Add a watcher for language changes that forces rendering updates
+    this.$watch('settings.language', (newVal) => {
+      // Apply language change without page reload
+      if (this.$i18n) {
+        this.$i18n.locale = newVal;
+        this.$forceUpdate();
+
+        // Force update the entire component tree if possible
+        if (this.$root) {
+          this.$root.$forceUpdate();
+        }
+      }
+    });
   },
 
   methods: {
+    // Get current language from i18n or localStorage
+    getCurrentLanguage() {
+      // First try to get from i18n instance
+      if (this.$i18n && this.$i18n.locale) {
+        return this.$i18n.locale;
+      }
+      
+      // Fallback to localStorage
+      try {
+        const savedLocale = localStorage.getItem('userLocale');
+        if (savedLocale) {
+          return savedLocale;
+        }
+      } catch (e) {
+        console.warn('Error accessing localStorage for language:', e);
+      }
+      
+      // Default to English if nothing else works
+      return 'en';
+    },
+    
     // Get saved font size or default to 50%
     getSavedFontSize() {
       try {
@@ -295,11 +331,11 @@ export default {
         return defaultValue
       }
     },
-
-    // Apply language immediately and update component
+    // In SettingsComponent.vue, modify your applyLanguage method:
+    // Method 1: Don't reload in applyLanguage, just update the local component
     applyLanguage() {
       if (this.$i18n) {
-        // Change active locale
+        // Set the i18n locale for this component only
         this.$i18n.locale = this.settings.language;
 
         // Save to localStorage
@@ -309,8 +345,31 @@ export default {
           console.warn('Error saving language preference:', e);
         }
 
-        // Emit language change event
-        this.$emit('languageChanged', this.settings.language);
+        // Just update this component
+        this.$forceUpdate();
+      }
+    },
+
+    mounted() {
+      // Add theme change listener
+      window.addEventListener('themeChange', this.updateTheme);
+
+      // CRUCIAL FIX: Force updating i18n when component mounts
+      // This ensures translations are applied on initial render
+      if (this.$i18n) {
+        const savedLanguage = localStorage.getItem('userLocale') || 'en';
+
+        // Force the i18n locale to match the saved locale
+        this.$i18n.locale = savedLanguage;
+
+        // Update the component state to match
+        this.settings.language = savedLanguage;
+
+        // Explicitly trigger Vue's reactivity system
+        this.$nextTick(() => {
+          // Force a re-render of this component specifically
+          this.$forceUpdate();
+        });
       }
     },
 
@@ -323,41 +382,43 @@ export default {
       // First save to localStorage
       localStorage.setItem('theme', theme);
 
-      // Direct DOM approach - don't rely on themeManager which might be causing issues
+      // Apply theme to document elements
       document.documentElement.setAttribute('data-theme', theme);
       document.body.setAttribute('data-theme', theme);
 
       // Update dark mode classes
       if (theme === 'dark') {
         document.documentElement.classList.add('dark-mode');
+        document.documentElement.classList.remove('light-mode');
+        document.body.classList.remove('light-mode');
         document.body.classList.add('dark-mode');
       } else {
         document.documentElement.classList.remove('dark-mode');
+        document.documentElement.classList.add('light-mode');
         document.body.classList.remove('dark-mode');
+        document.body.classList.add('light-mode');
       }
 
-      // Then, if ThemeManager is available, keep it in sync
-      // But do this separately to avoid exceptions
+      // Ensure ThemeManager is updated if available
       try {
         if (typeof themeManager !== 'undefined' && themeManager) {
-          // Update themeManager state directly
-          themeManager.isDarkMode = theme === 'dark';
           themeManager.currentTheme = theme;
+          themeManager.isDarkMode = theme === 'dark';
           themeManager.userPreference = theme;
         }
       } catch (e) {
         console.warn('Error updating ThemeManager:', e);
       }
 
-      // Manually trigger theme change event after a short delay
+      // Dispatch a theme change event with a slight delay to ensure DOM updates first
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('themeChange', {
           detail: { theme, isDarkMode: theme === 'dark' }
         }));
-
-        // Also notify parent component
-        this.$emit('themeChanged', theme);
       }, 50);
+
+      // Notify parent component
+      this.$emit('themeChanged', theme);
     },
 
     // Fetch user data from the backend
@@ -437,17 +498,24 @@ export default {
       this.$emit('close')
     },
 
-    // Save settings and close
+    // Then update your save method to dispatch the global event:
+    // Method 2: When saving, do the global reload after closing
     save() {
+      // First set a flag to indicate we're changing language
+      const isChangingLanguage = this.$i18n &&
+        this.$i18n.locale !== this.settings.language;
+
       // Save language preference
       if (this.$i18n) {
-        this.$i18n.locale = this.settings.language
+        this.$i18n.locale = this.settings.language;
         try {
-          localStorage.setItem('userLocale', this.settings.language)
+          localStorage.setItem('userLocale', this.settings.language);
         } catch (e) {
-          console.warn('Error saving language preference:', e)
+          console.warn('Error saving language preference:', e);
         }
       }
+
+      // Save all other settings as before...
 
       // Ensure theme is applied and saved
       document.documentElement.setAttribute('data-theme', this.settings.theme);
@@ -461,7 +529,6 @@ export default {
       // Save font size
       try {
         localStorage.setItem('fontSize', this.settings.fontSize.toString())
-        // Apply font size to root element
         document.documentElement.style.fontSize = `${this.settings.fontSize / 50}rem`
       } catch (e) {
         console.warn('Error saving font size:', e)
@@ -475,11 +542,18 @@ export default {
         console.warn('Error saving notification preferences:', e)
       }
 
-      // Emit theme change event to parent for global handling
+      // Emit events
       this.$emit('themeChanged', this.settings.theme);
 
       // Close dialog
-      this.$emit('close')
+      this.$emit('close');
+
+      // If language was changed, reload AFTER dialog closed
+      if (isChangingLanguage) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 100); // Short delay to ensure dialog closes first
+      }
     },
 
     // Show confirmation dialog before resetting user data

@@ -8,177 +8,198 @@
     <div class="overlay" @click="cancel"></div>
     <div class="modal-content">
       <h2 :data-themed="isThemeReady">{{ $t('userProfile.title') }}</h2>
-      <p class="privacy-info" :data-themed="isThemeReady">
-        {{ $t('userProfile.privacyInfo') }}
-        <a href="#" class="privacy-link">{{ $t('userProfile.privacyPolicyLink') }}</a>
-      </p>
-
-      <!-- Tabs -->
-      <div class="tabs">
-        <button
-          v-for="(tab, index) in tabs"
-          :key="index"
-          :class="{ active: activeTab === index }"
-          @click="activeTab = index"
-        >
-          {{ $t(`userProfile.tabs.tab${index+1}`) }}
+      
+      <!-- Loading Indicator -->
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>{{ $t('userProfile.loading', 'Loading user profile...') }}</p>
+      </div>
+      
+      <!-- Error Message -->
+      <div v-else-if="errorMessage" class="error-container">
+        <p class="error-message">{{ errorMessage }}</p>
+        <button @click="retryLoading" class="retry-btn">
+          {{ $t('userProfile.retry', 'Retry') }}
         </button>
       </div>
+      
+      <!-- Main content - shown when not loading and no errors -->
+      <div v-else>
+        <p class="privacy-info" :data-themed="isThemeReady">
+          {{ $t('userProfile.privacyInfo') }}
+          <a href="#" class="privacy-link">{{ $t('userProfile.privacyPolicyLink') }}</a>
+        </p>
 
-      <!-- Tab content -->
-      <div class="tab-content">
-        <!-- Personal Identification Data -->
-        <div v-if="activeTab === 0">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.fullName') }}</label>
-            <input v-model="formData.personalIdentification.fullName" type="text" 
-                   :placeholder="$t('userProfile.placeholders.fullName')" />
+        <!-- Tabs -->
+        <div class="tabs">
+          <button
+            v-for="(tab, index) in tabs"
+            :key="index"
+            :class="{ active: activeTab === index }"
+            @click="activeTab = index"
+          >
+            {{ $t(`userProfile.tabs.tab${index+1}`) }}
+          </button>
+        </div>
+
+        <!-- Tab content -->
+        <div class="tab-content">
+          <!-- Personal Identification Data -->
+          <div v-if="activeTab === 0">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.fullName') }}</label>
+              <input v-model="formData.personalIdentification.fullName" type="text" 
+                     :placeholder="$t('userProfile.placeholders.fullName')" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.dob') }}</label>
+              <input v-model="formData.personalIdentification.dob" type="date" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.gender') }}</label>
+              <select v-model="formData.personalIdentification.gender">
+                <option value="">{{ $t('userProfile.select') }}</option>
+                <option value="male">{{ $t('userProfile.gender.male') }}</option>
+                <option value="female">{{ $t('userProfile.gender.female') }}</option>
+                <option value="other">{{ $t('userProfile.gender.other') }}</option>
+                <option value="prefer-not-to-say">{{ $t('userProfile.gender.preferNot') }}</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.nationality') }}</label>
+              <input v-model="formData.personalIdentification.nationality" type="text" 
+                     :placeholder="$t('userProfile.placeholders.nationality')" />
+            </div>
           </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.dob') }}</label>
-            <input v-model="formData.personalIdentification.dob" type="date" />
+
+          <!-- Civil Registration & Documentation -->
+          <div v-else-if="activeTab === 1">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.birthCert') }}</label>
+              <input v-model="formData.civilRegistration.birthCert" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.citizenship') }}</label>
+              <input v-model="formData.civilRegistration.citizenship" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.immigration') }}</label>
+              <input v-model="formData.civilRegistration.immigration" type="text" />
+            </div>
           </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.gender') }}</label>
-            <select v-model="formData.personalIdentification.gender">
-              <option value="">{{ $t('userProfile.select') }}</option>
-              <option value="male">{{ $t('userProfile.gender.male') }}</option>
-              <option value="female">{{ $t('userProfile.gender.female') }}</option>
-              <option value="other">{{ $t('userProfile.gender.other') }}</option>
-              <option value="prefer-not-to-say">{{ $t('userProfile.gender.preferNot') }}</option>
-            </select>
+
+          <!-- Address & Residency Information -->
+          <div v-else-if="activeTab === 2">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.currentAddress') }}</label>
+              <textarea v-model="formData.addressResidency.currentAddress"></textarea>
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.postalCode') }}</label>
+              <input v-model="formData.addressResidency.postalCode" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.country') }}</label>
+              <input v-model="formData.addressResidency.country" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.residencyStatus') }}</label>
+              <select v-model="formData.addressResidency.residencyStatus">
+                <option value="citizen">{{ $t('userProfile.residencyStatuses.citizen') }}</option>
+                <option value="permanent-resident">{{ $t('userProfile.residencyStatuses.permanentResident') }}</option>
+                <option value="temporary-resident">{{ $t('userProfile.residencyStatuses.temporaryResident') }}</option>
+                <option value="other">{{ $t('userProfile.residencyStatuses.other') }}</option>
+              </select>
+            </div>
           </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.nationality') }}</label>
-            <input v-model="formData.personalIdentification.nationality" type="text" 
-                   :placeholder="$t('userProfile.placeholders.nationality')" />
+
+          <!-- Identity & Travel Documents -->
+          <div v-else-if="activeTab === 3">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.idCard') }}</label>
+              <input v-model="formData.identityDocuments.idCard" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.passport') }}</label>
+              <input v-model="formData.identityDocuments.passport" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.driversLicense') }}</label>
+              <input v-model="formData.identityDocuments.driversLicense" type="text" />
+            </div>
+          </div>
+
+          <!-- Health & Medical Records -->
+          <div v-else-if="activeTab === 4">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.bloodType') }}</label>
+              <select v-model="formData.healthInfo.bloodType">
+                <option value="a-positive">A+</option>
+                <option value="a-negative">A-</option>
+                <option value="b-positive">B+</option>
+                <option value="b-negative">B-</option>
+                <option value="ab-positive">AB+</option>
+                <option value="ab-negative">AB-</option>
+                <option value="o-positive">O+</option>
+                <option value="o-negative">O-</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.organDonor') }}</label>
+              <select v-model="formData.healthInfo.organDonor">
+                <option value="yes">{{ $t('userProfile.yesNo.yes') }}</option>
+                <option value="no">{{ $t('userProfile.yesNo.no') }}</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Employment & Economic Data -->
+          <div v-else-if="activeTab === 5">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.eHistory') }}</label>
+              <input v-model="formData.employmentInfo.employmentHistory" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.currentEmployer') }}</label>
+              <input v-model="formData.employmentInfo.currentEmployer" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.tin') }}</label>
+              <input v-model="formData.employmentInfo.taxId" type="text" />
+            </div>
+          </div>
+
+          <!-- Financial & Tax Data -->
+          <div v-else-if="activeTab === 6">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.incomeTax') }}</label>
+              <input v-model="formData.financialInfo.incomeTax" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.bankAccounts') }}</label>
+              <input v-model="formData.financialInfo.bankAccounts" type="text" />
+            </div>
           </div>
         </div>
 
-        <!-- Civil Registration & Documentation -->
-        <div v-else-if="activeTab === 1">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.birthCert') }}</label>
-            <input v-model="formData.civilRegistration.birthCert" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.citizenship') }}</label>
-            <input v-model="formData.civilRegistration.citizenship" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.immigration') }}</label>
-            <input v-model="formData.civilRegistration.immigration" type="text" />
-          </div>
+        <!-- Action buttons -->
+        <div class="actions">
+          <button class="cancel-btn" @click="cancel" :disabled="isSubmitting">
+            {{ $t('userProfile.actions.cancel') }}
+          </button>
+          <button class="save-btn" @click="saveProfile" :disabled="isSubmitting">
+            {{ isSubmitting ? $t('userProfile.actions.saving', 'Saving...') : $t('userProfile.actions.save') }}
+          </button>
         </div>
-
-        <!-- Address & Residency Information -->
-        <div v-else-if="activeTab === 2">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.currentAddress') }}</label>
-            <textarea v-model="formData.addressResidency.currentAddress"></textarea>
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.postalCode') }}</label>
-            <input v-model="formData.addressResidency.postalCode" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.country') }}</label>
-            <input v-model="formData.addressResidency.country" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.residencyStatus') }}</label>
-            <select v-model="formData.addressResidency.residencyStatus">
-              <option value="citizen">{{ $t('userProfile.residencyStatuses.citizen') }}</option>
-              <option value="permanent-resident">{{ $t('userProfile.residencyStatuses.permanentResident') }}</option>
-              <option value="temporary-resident">{{ $t('userProfile.residencyStatuses.temporaryResident') }}</option>
-              <option value="other">{{ $t('userProfile.residencyStatuses.other') }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Identity & Travel Documents -->
-        <div v-else-if="activeTab === 3">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.idCard') }}</label>
-            <input v-model="formData.identityDocuments.idCard" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.passport') }}</label>
-            <input v-model="formData.identityDocuments.passport" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.driversLicense') }}</label>
-            <input v-model="formData.identityDocuments.driversLicense" type="text" />
-          </div>
-        </div>
-
-        <!-- Health & Medical Records -->
-        <div v-else-if="activeTab === 4">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.bloodType') }}</label>
-            <select v-model="formData.healthInfo.bloodType">
-              <option value="a-positive">A+</option>
-              <option value="a-negative">A-</option>
-              <option value="b-positive">B+</option>
-              <option value="b-negative">B-</option>
-              <option value="ab-positive">AB+</option>
-              <option value="ab-negative">AB-</option>
-              <option value="o-positive">O+</option>
-              <option value="o-negative">O-</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.organDonor') }}</label>
-            <select v-model="formData.healthInfo.organDonor">
-              <option value="yes">{{ $t('userProfile.yesNo.yes') }}</option>
-              <option value="no">{{ $t('userProfile.yesNo.no') }}</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Employment & Economic Data -->
-        <div v-else-if="activeTab === 5">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.eHistory') }}</label>
-            <input v-model="formData.employmentInfo.employmentHistory" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.currentEmployer') }}</label>
-            <input v-model="formData.employmentInfo.currentEmployer" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.tin') }}</label>
-            <input v-model="formData.employmentInfo.taxId" type="text" />
-          </div>
-        </div>
-
-        <!-- Financial & Tax Data -->
-        <div v-else-if="activeTab === 6">
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.incomeTax') }}</label>
-            <input v-model="formData.financialInfo.incomeTax" type="text" />
-          </div>
-          <div class="field-group">
-            <label>{{ $t('userProfile.fields.bankAccounts') }}</label>
-            <input v-model="formData.financialInfo.bankAccounts" type="text" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Action buttons -->
-      <div class="actions">
-        <button class="cancel-btn" @click="cancel">
-          {{ $t('userProfile.actions.cancel') }}
-        </button>
-        <button class="save-btn" @click="saveProfile">
-          {{ $t('userProfile.actions.save') }}
-        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import userProfileService from '@/services/userProfileService';
+import userService from '@/services/userService';
+
 export default {
   name: 'UserProfileComponent',
   data() {
@@ -230,7 +251,12 @@ export default {
           incomeTax: '',
           bankAccounts: ''
         }
-      }
+      },
+      // New properties for API integration
+      isLoading: false,
+      errorMessage: null,
+      currentUserId: '',
+      isSubmitting: false
     };
   },
   computed: {
@@ -280,10 +306,42 @@ export default {
     cancel() {
       this.$emit('cancel');
     },
-    saveProfile() {
-      // Emit a deep copy to avoid direct mutation
-      const copy = JSON.parse(JSON.stringify(this.formData));
-      this.$emit('save', copy);
+    async saveProfile() {
+      // Show confirmation dialog
+      if (!confirm(this.$t('userProfile.confirmSave', 'Are you sure you want to save these changes?'))) {
+        return; // User cancelled
+      }
+      
+      this.isSubmitting = true;
+      
+      try {
+        // Validate the form if needed
+        const validation = this.validateForm();
+        if (!validation.isValid) {
+          // Show first error message
+          const firstError = Object.values(validation.errors)[0];
+          alert(firstError);
+          this.isSubmitting = false;
+          return;
+        }
+        
+        // Create a deep copy to avoid mutation
+        const profileData = JSON.parse(JSON.stringify(this.formData));
+        
+        // Call the API to update the profile
+        await userProfileService.updateProfile(this.currentUserId, profileData);
+        
+        // Show success message
+        alert(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
+        
+        // Emit success event and close
+        this.$emit('save', profileData);
+      } catch (error) {
+        console.error('Error saving profile:', error);
+        alert(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
+      } finally {
+        this.isSubmitting = false;
+      }
     },
     onFileChange(e, section, fieldKey) {
       const file = e.target.files[0];
@@ -330,6 +388,76 @@ export default {
         isValid: Object.keys(errors).length === 0,
         errors
       };
+    },
+    // Get current user ID
+    getCurrentUserId() {
+      try {
+        // First try to get from cached user data (fast)
+        const userData = userService.getCurrentUser();
+        
+        if (!userData) {
+          console.error('No user data available');
+          return '';
+        }
+        
+        // Extract the numeric ID part if it includes 'users/' prefix
+        let userId = userData.id || userData.userId || userData._id || '';
+        
+        // Remove 'users/' prefix if present
+        if (typeof userId === 'string' && userId.includes('/')) {
+          userId = userId.split('/').pop();
+        }
+        
+        return userId;
+      } catch (error) {
+        console.error('Error getting current user ID:', error);
+        return '';
+      }
+    },
+    
+    // Load user profile data from the API
+    async loadUserProfileData() {
+      this.isLoading = true;
+      this.errorMessage = null;
+      
+      try {
+        // Get the current user ID
+        this.currentUserId = this.getCurrentUserId();
+        
+        if (!this.currentUserId) {
+          throw new Error('Unable to determine current user ID');
+        }
+        
+        // Fetch user profile data from the API
+        const profileData = await userProfileService.getProfile(this.currentUserId);
+        
+        // Populate the form with received data
+        if (profileData) {
+          // Loop through each section in our form data
+          Object.keys(this.formData).forEach(section => {
+            // Check if this section exists in the API response
+            if (profileData[section]) {
+              // Loop through each field in this section
+              Object.keys(this.formData[section]).forEach(field => {
+                // If this field exists in the API response, update our form
+                if (profileData[section][field] !== undefined) {
+                  this.formData[section][field] = profileData[section][field];
+                }
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+        this.errorMessage = this.$t('userProfile.errors.loadingFailed', 'Failed to load profile data');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    
+    // Handle retry when loading fails
+    retryLoading() {
+      this.loadUserProfileData();
     }
   },
   mounted() {
@@ -341,6 +469,9 @@ export default {
       // Update theme variables
       this.isThemeReady = true;
     });
+    
+    // Load user profile data when component mounts
+    this.loadUserProfileData();
   },
   beforeDestroy() {
     // Remove theme change listener
@@ -533,4 +664,64 @@ h2[data-themed="true"] {
 .dark-mode .privacy-info {
   color: rgba(255, 255, 255, 0.8) !important;
 }
+
+/* Add these styles to the existing <style> section */
+
+/* Loading spinner */
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-height: 200px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--dialog-primary-button-bg, #4E97D1);
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error container */
+.error-container {
+  padding: 2rem;
+  text-align: center;
+}
+
+.error-message {
+  color: #dc3545;
+  margin-bottom: 1rem;
+}
+
+.retry-btn {
+  padding: 0.5rem 1.5rem;
+  background-color: var(--dialog-secondary-button-bg, #cccccc);
+  color: var(--dialog-secondary-button-text, #333333);
+  border: 1px solid var(--dialog-tabs-border-color, #cccccc);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background-color: var(--dialog-secondary-button-hover-bg, #bbbbbb);
+}
+
+/* Disabled button styles */
+.save-btn:disabled,
+.cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 </style>

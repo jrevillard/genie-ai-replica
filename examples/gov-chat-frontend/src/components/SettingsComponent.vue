@@ -1519,4 +1519,27 @@ export default {
   align-items: center;
   background-color: rgba(0, 0, 0, 0.5);
 }
+
+.header-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333333;
+}
+
+/* Dark mode - target the title directly without CSS variables */
+.dark-mode .dialog-header .header-title,
+[data-theme="dark"] .dialog-header .header-title {
+  color: #ffffff;
+}
+
+/* Dark mode styles - using multiple selectors to ensure higher specificity */
+[data-theme="dark"] .header-title,
+.dark-mode .header-title,
+body.dark-mode .dialog-header .header-title,
+html[data-theme="dark"] .settings-dialog .dialog-header .header-title {
+  color: #ffffff !important;
+}
+
+
 </style>

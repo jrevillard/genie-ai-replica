@@ -169,8 +169,100 @@
             </div>
           </div>
 
-          <!-- Financial & Tax Data -->
+          <!-- Education & Academic Records -->
           <div v-else-if="activeTab === 6">
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.education', 'Education') }}</label>
+              <div class="select-wrapper">
+                <input 
+                  v-if="showEducationSearch" 
+                  type="text" 
+                  v-model="educationSearchTerm" 
+                  class="search-input"
+                  :placeholder="$t('userProfile.placeholders.searchDisciplines', 'Search disciplines...')"
+                  @input="filterEducationOptions"
+                  @blur="handleEducationBlur"
+                  @keydown.enter="selectFirstEducationOption"
+                  @keydown.down="navigateEducationOptions(1)"
+                  @keydown.up="navigateEducationOptions(-1)"
+                  ref="educationSearchInput"
+                />
+                <div 
+                  v-else 
+                  class="selected-option" 
+                  @click="toggleEducationSearch"
+                >
+                  {{ formData.educationRecords.education || $t('userProfile.placeholders.selectDiscipline', 'Select a discipline') }}
+                </div>
+                <div v-if="showEducationSearch" class="options-dropdown">
+                  <div 
+                    v-for="(option, index) in filteredEducationOptions" 
+                    :key="index"
+                    class="option" 
+                    :class="{ 'active': index === selectedEducationIndex }"
+                    @click="selectEducationOption(option)"
+                    @mouseenter="selectedEducationIndex = index"
+                  >
+                    {{ option }}
+                  </div>
+                  <div v-if="filteredEducationOptions.length === 0" class="no-results">
+                    {{ $t('userProfile.noMatchingDisciplines', 'No matching disciplines found') }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.degrees', 'Degrees') }}</label>
+              <div class="select-wrapper">
+                <input 
+                  v-if="showDegreeSearch" 
+                  type="text" 
+                  v-model="degreeSearchTerm" 
+                  class="search-input"
+                  :placeholder="$t('userProfile.placeholders.searchDegrees', 'Search degrees...')"
+                  @input="filterDegreeOptions"
+                  @blur="handleDegreeBlur"
+                  @keydown.enter="selectFirstDegreeOption"
+                  @keydown.down="navigateDegreeOptions(1)"
+                  @keydown.up="navigateDegreeOptions(-1)"
+                  ref="degreeSearchInput"
+                />
+                <div 
+                  v-else 
+                  class="selected-option" 
+                  @click="toggleDegreeSearch"
+                >
+                  {{ formData.educationRecords.degrees || $t('userProfile.placeholders.selectDegree', 'Select a degree') }}
+                </div>
+                <div v-if="showDegreeSearch" class="options-dropdown">
+                  <div 
+                    v-for="(option, index) in filteredDegreeOptions" 
+                    :key="index"
+                    class="option" 
+                    :class="{ 'active': index === selectedDegreeIndex }"
+                    @click="selectDegreeOption(option)"
+                    @mouseenter="selectedDegreeIndex = index"
+                  >
+                    {{ option }}
+                  </div>
+                  <div v-if="filteredDegreeOptions.length === 0" class="no-results">
+                    {{ $t('userProfile.noMatchingDegrees', 'No matching degrees found') }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.certifications', 'Certifications') }}</label>
+              <input v-model="formData.educationRecords.certifications" type="text" />
+            </div>
+            <div class="field-group">
+              <label>{{ $t('userProfile.fields.academicRecords', 'Academic Records') }}</label>
+              <textarea v-model="formData.educationRecords.academicRecords"></textarea>
+            </div>
+          </div>
+
+          <!-- Financial & Tax Data -->
+          <div v-else-if="activeTab === 7">
             <div class="field-group">
               <label>{{ $t('userProfile.fields.incomeTax') }}</label>
               <input v-model="formData.financialInfo.incomeTax" type="text" />
@@ -213,7 +305,8 @@ export default {
         { key: 'identityDocuments' },
         { key: 'healthInfo' },
         { key: 'employmentInfo' },
-        { key: 'financialInfo' }
+        { key: 'educationRecords' },   // Education tab
+        { key: 'financialInfo' }       // Financial tab
       ],
       formData: {
         personalIdentification: {
@@ -247,29 +340,50 @@ export default {
           currentEmployer: '',
           taxId: ''
         },
+        educationRecords: {       // Education Records section
+          education: '',
+          degrees: '',
+          certifications: '',
+          academicRecords: ''
+        },
         financialInfo: {
           incomeTax: '',
           bankAccounts: ''
         }
       },
-      // New properties for API integration
+      // API integration properties
       isLoading: false,
       errorMessage: null,
       currentUserId: '',
-      isSubmitting: false
+      isSubmitting: false,
+
+      // Education dropdown properties
+      showEducationSearch: false,
+      educationSearchTerm: '',
+      educationOptions: [],
+      filteredEducationOptions: [],
+      selectedEducationIndex: -1,
+
+      // Education and degrees dropdown properties
+      degreeOptions: [],
+      showDegreeSearch: false,
+      degreeSearchTerm: '',
+      filteredDegreeOptions: [],
+      selectedDegreeIndex: -1,
     };
+
   },
   computed: {
     isDarkMode() {
       // Simplified check based directly on DOM
       return document.documentElement.getAttribute('data-theme') === 'dark' ||
-             document.body.getAttribute('data-theme') === 'dark';
+        document.body.getAttribute('data-theme') === 'dark';
     },
-    
+
     dialogThemeStyles() {
       // Create a minimal required set of styles based on current theme
       const isDark = this.isDarkMode;
-      
+
       return {
         '--dialog-background': isDark ? '#2a2a2a' : '#ffffff',
         '--dialog-title-color': isDark ? '#ffffff' : '#333333',
@@ -311,9 +425,9 @@ export default {
       if (!confirm(this.$t('userProfile.confirmSave', 'Are you sure you want to save these changes?'))) {
         return; // User cancelled
       }
-      
+
       this.isSubmitting = true;
-      
+
       try {
         // Validate the form if needed
         const validation = this.validateForm();
@@ -324,16 +438,16 @@ export default {
           this.isSubmitting = false;
           return;
         }
-        
+
         // Create a deep copy to avoid mutation
         const profileData = JSON.parse(JSON.stringify(this.formData));
-        
+
         // Call the API to update the profile
         await userProfileService.updateProfile(this.currentUserId, profileData);
-        
+
         // Show success message
         alert(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
-        
+
         // Emit success event and close
         this.$emit('save', profileData);
       } catch (error) {
@@ -346,21 +460,21 @@ export default {
     onFileChange(e, section, fieldKey) {
       const file = e.target.files[0];
       if (!file) return;
-      
+
       // Validate file type and size
       const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
       const maxSize = 5 * 1024 * 1024; // 5MB
-      
+
       if (!allowedTypes.includes(file.type)) {
         this.$emit('error', this.$t('userProfile.errors.invalidFileType'));
         return;
       }
-      
+
       if (file.size > maxSize) {
         this.$emit('error', this.$t('userProfile.errors.fileTooLarge'));
         return;
       }
-      
+
       this.formData[section][fieldKey] = file;
     },
     validateForm() {
@@ -371,19 +485,19 @@ export default {
           { field: 'dob', required: true }
         ]
       };
-      
+
       const errors = {};
-      
+
       Object.keys(validations).forEach(section => {
         validations[section].forEach(validation => {
           const value = this.formData[section][validation.field];
-          
+
           if (validation.required && !value) {
             errors[`${section}.${validation.field}`] = this.$t('userProfile.validation.nameRequired');
           }
         });
       });
-      
+
       return {
         isValid: Object.keys(errors).length === 0,
         errors
@@ -394,43 +508,43 @@ export default {
       try {
         // First try to get from cached user data (fast)
         const userData = userService.getCurrentUser();
-        
+
         if (!userData) {
           console.error('No user data available');
           return '';
         }
-        
+
         // Extract the numeric ID part if it includes 'users/' prefix
         let userId = userData.id || userData.userId || userData._id || '';
-        
+
         // Remove 'users/' prefix if present
         if (typeof userId === 'string' && userId.includes('/')) {
           userId = userId.split('/').pop();
         }
-        
+
         return userId;
       } catch (error) {
         console.error('Error getting current user ID:', error);
         return '';
       }
     },
-    
+
     // Load user profile data from the API
     async loadUserProfileData() {
       this.isLoading = true;
       this.errorMessage = null;
-      
+
       try {
         // Get the current user ID
         this.currentUserId = this.getCurrentUserId();
-        
+
         if (!this.currentUserId) {
           throw new Error('Unable to determine current user ID');
         }
-        
+
         // Fetch user profile data from the API
         const profileData = await userProfileService.getProfile(this.currentUserId);
-        
+
         // Populate the form with received data
         if (profileData) {
           // Loop through each section in our form data
@@ -454,22 +568,318 @@ export default {
         this.isLoading = false;
       }
     },
-    
+
     // Handle retry when loading fails
     retryLoading() {
       this.loadUserProfileData();
+    },
+
+    // 2. Add this method to load degree options (similar to education options):
+    loadDegreeOptions() {
+      // Default degree options if translations are not available
+      const defaultOptions = [
+        'Associate Degree',
+        'Bachelor of Arts (BA)',
+        'Bachelor of Science (BS)',
+        'Bachelor of Engineering (BEng)',
+        'Bachelor of Business Administration (BBA)',
+        'Bachelor of Fine Arts (BFA)',
+        'Bachelor of Education (BEd)',
+        'Bachelor of Medicine (MBBS)',
+        'Bachelor of Laws (LLB)',
+        'Master of Arts (MA)',
+        'Master of Science (MS)',
+        'Master of Business Administration (MBA)',
+        'Master of Engineering (MEng)',
+        'Master of Fine Arts (MFA)',
+        'Master of Education (MEd)',
+        'Master of Laws (LLM)',
+        'Master of Public Health (MPH)',
+        'Doctor of Philosophy (PhD)',
+        'Doctor of Medicine (MD)',
+        'Doctor of Education (EdD)',
+        'Doctor of Business Administration (DBA)',
+        'Doctor of Jurisprudence (JD)',
+        'Professional Diploma',
+        'Technical Diploma',
+        'Vocational Certificate',
+        'Graduate Certificate',
+        'Post-Graduate Diploma',
+        'Post-Doctoral'
+      ];
+
+      // Get translations or fallback to default options
+      this.degreeOptions = this.$te('userProfile.degreeOptions')
+        ? this.$t('userProfile.degreeOptions')
+        : defaultOptions;
+
+      // Sort options alphabetically according to current locale
+      if (Array.isArray(this.degreeOptions) && this.degreeOptions.length > 0) {
+        const locale = this.$i18n ? this.$i18n.locale : 'en';
+        this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
+      }
+    },
+
+    // 3. Add these methods to handle degree dropdown:
+    toggleDegreeSearch() {
+      this.showDegreeSearch = true;
+      this.degreeSearchTerm = this.formData.educationRecords.degrees || '';
+      this.filterDegreeOptions();
+      this.$nextTick(() => {
+        if (this.$refs.degreeSearchInput) {
+          this.$refs.degreeSearchInput.focus();
+        }
+      });
+    },
+
+    filterDegreeOptions() {
+      if (!this.degreeSearchTerm) {
+        this.filteredDegreeOptions = [...this.degreeOptions];
+      } else {
+        const searchTerm = this.degreeSearchTerm.toLowerCase();
+        this.filteredDegreeOptions = this.degreeOptions.filter(option =>
+          option.toLowerCase().includes(searchTerm)
+        );
+      }
+      this.selectedDegreeIndex = -1;
+    },
+
+    selectDegreeOption(option) {
+      this.formData.educationRecords.degrees = option;
+      this.showDegreeSearch = false;
+    },
+
+    handleDegreeBlur(event) {
+      // Check if related target is inside the dropdown
+      if (!event.relatedTarget ||
+        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
+        setTimeout(() => {
+          this.showDegreeSearch = false;
+        }, 150);
+      }
+    },
+
+    selectFirstDegreeOption() {
+      if (this.filteredDegreeOptions.length > 0) {
+        this.selectDegreeOption(this.filteredDegreeOptions[0]);
+      }
+    },
+
+    navigateDegreeOptions(direction) {
+      const optionsLength = this.filteredDegreeOptions.length;
+      if (optionsLength > 0) {
+        // Calculate new index with wrapping
+        this.selectedDegreeIndex =
+          (this.selectedDegreeIndex + direction + optionsLength) % optionsLength;
+
+        // If an option is selected with keyboard, use Enter to select it
+        if (this.selectedDegreeIndex >= 0 && this.selectedDegreeIndex < optionsLength) {
+          // Keep focus on the input
+          this.$refs.degreeSearchInput.focus();
+        }
+      }
+    },
+
+    // Load education options from i18n
+    loadEducationOptions() {
+      // Default education options if translations are not available
+      const defaultOptions = [
+        'Accounting',
+        'Aerospace Engineering',
+        'Agricultural Science',
+        'Anthropology',
+        'Architecture',
+        'Art History',
+        'Artificial Intelligence',
+        'Astronomy',
+        'Astrophysics',
+        'Biochemistry',
+        'Biomedical Engineering',
+        'Biotechnology',
+        'Business Administration',
+        'Chemical Engineering',
+        'Chemistry',
+        'Civil Engineering',
+        'Communications',
+        'Computer Engineering',
+        'Computer Science',
+        'Construction Management',
+        'Criminal Justice',
+        'Cybersecurity',
+        'Data Science',
+        'Dentistry',
+        'Economics',
+        'Education',
+        'Electrical Engineering',
+        'Elementary Education',
+        'English Literature',
+        'Environmental Engineering',
+        'Environmental Science',
+        'Fashion Design',
+        'Film Studies',
+        'Finance',
+        'Fine Arts',
+        'Food Science',
+        'Forensic Science',
+        'Game Design',
+        'Geography',
+        'Geology',
+        'Graphic Design',
+        'Health Administration',
+        'History',
+        'Hospitality Management',
+        'Human Resources',
+        'Industrial Design',
+        'Industrial Engineering',
+        'Information Systems',
+        'Information Technology',
+        'Interior Design',
+        'International Business',
+        'International Relations',
+        'Journalism',
+        'Law',
+        'Library Science',
+        'Linguistics',
+        'Management',
+        'Marketing',
+        'Materials Science',
+        'Mathematics',
+        'Mechanical Engineering',
+        'Media Studies',
+        'Medicine',
+        'Meteorology',
+        'Microbiology',
+        'Music',
+        'Nanotechnology',
+        'Nursing',
+        'Nutrition',
+        'Occupational Therapy',
+        'Oceanography',
+        'Petroleum Engineering',
+        'Pharmacy',
+        'Philosophy',
+        'Photography',
+        'Physical Education',
+        'Physical Therapy',
+        'Physics',
+        'Political Science',
+        'Psychology',
+        'Public Administration',
+        'Public Health',
+        'Public Relations',
+        'Robotics',
+        'Secondary Education',
+        'Social Work',
+        'Sociology',
+        'Software Engineering',
+        'Special Education',
+        'Sports Management',
+        'Statistics',
+        'Systems Engineering',
+        'Theatre Arts',
+        'Tourism',
+        'Urban Planning',
+        'Veterinary Medicine',
+        'Web Development',
+        'Wildlife Biology',
+        'Zoology'
+      ];
+
+      // Get translations or fallback to default options
+      this.educationOptions = this.$te('userProfile.educationOptions')
+        ? this.$t('userProfile.educationOptions')
+        : defaultOptions;
+
+      // Sort options alphabetically according to current locale
+      if (Array.isArray(this.educationOptions) && this.educationOptions.length > 0) {
+        const locale = this.$i18n ? this.$i18n.locale : 'en';
+        this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
+      }
+    },
+
+    // Education dropdown methods
+    toggleEducationSearch() {
+      this.showEducationSearch = true;
+      this.educationSearchTerm = this.formData.educationRecords.education || '';
+      this.filterEducationOptions();
+      this.$nextTick(() => {
+        if (this.$refs.educationSearchInput) {
+          this.$refs.educationSearchInput.focus();
+        }
+      });
+    },
+
+    filterEducationOptions() {
+      if (!this.educationSearchTerm) {
+        this.filteredEducationOptions = [...this.educationOptions];
+      } else {
+        const searchTerm = this.educationSearchTerm.toLowerCase();
+        this.filteredEducationOptions = this.educationOptions.filter(option =>
+          option.toLowerCase().includes(searchTerm)
+        );
+      }
+      this.selectedEducationIndex = -1;
+    },
+
+    selectEducationOption(option) {
+      this.formData.educationRecords.education = option;
+      this.showEducationSearch = false;
+    },
+
+    handleEducationBlur(event) {
+      // Check if related target is inside the dropdown
+      if (!event.relatedTarget ||
+        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
+        setTimeout(() => {
+          this.showEducationSearch = false;
+        }, 150);
+      }
+    },
+
+    selectFirstEducationOption() {
+      if (this.filteredEducationOptions.length > 0) {
+        this.selectEducationOption(this.filteredEducationOptions[0]);
+      }
+    },
+
+    navigateEducationOptions(direction) {
+      const optionsLength = this.filteredEducationOptions.length;
+      if (optionsLength > 0) {
+        // Calculate new index with wrapping
+        this.selectedEducationIndex =
+          (this.selectedEducationIndex + direction + optionsLength) % optionsLength;
+
+        // If an option is selected with keyboard, use Enter to select it
+        if (this.selectedEducationIndex >= 0 && this.selectedEducationIndex < optionsLength) {
+          // Keep focus on the input
+          this.$refs.educationSearchInput.focus();
+        }
+      }
     }
   },
+  // 4. Modify the mounted hook to load degree options
   mounted() {
     // Add theme change listener
     window.addEventListener('themeChange', this.updateTheme);
-    
+
     // Set initial theme after a small delay to ensure DOM is ready
     this.$nextTick(() => {
       // Update theme variables
       this.isThemeReady = true;
     });
-    
+
+    // Load education and degree options
+    this.loadEducationOptions();
+    this.loadDegreeOptions();
+
+    // Add watcher for locale changes to update options if i18n is available
+    if (this.$i18n) {
+      this.$watch('$i18n.locale', () => {
+        this.loadEducationOptions();
+        this.loadDegreeOptions();
+      });
+    }
+
     // Load user profile data when component mounts
     this.loadUserProfileData();
   },
@@ -724,4 +1134,92 @@ h2[data-themed="true"] {
   cursor: not-allowed;
 }
 
+/* Searchable dropdown styles */
+.select-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--dialog-input-border-color, #ddd);
+  border-radius: 4px;
+  background-color: var(--dialog-input-background, #ffffff);
+  color: var(--dialog-input-text-color, #333333);
+}
+
+.selected-option {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--dialog-input-border-color, #ddd);
+  border-radius: 4px;
+  background-color: var(--dialog-input-background, #ffffff);
+  color: var(--dialog-input-text-color, #333333);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.selected-option:after {
+  content: '▼';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8em;
+  color: var(--dialog-input-text-color, #888);
+}
+
+.options-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: var(--dialog-input-background, #ffffff);
+  border: 1px solid var(--dialog-input-border-color, #ddd);
+  border-radius: 0 0 4px 4px;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.option {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.option:hover,
+.option.active {
+  background-color: var(--dialog-primary-button-bg, #4E97D1);
+  color: var(--dialog-primary-button-text, #ffffff);
+}
+
+.no-results {
+  padding: 10px;
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .options-dropdown,
+.dark-mode .options-dropdown {
+  background-color: var(--dialog-input-background, #333333);
+  border-color: var(--dialog-input-border-color, #3a3a3a);
+}
+
+[data-theme="dark"] .option:hover,
+.dark-mode .option:hover,
+[data-theme="dark"] .option.active,
+.dark-mode .option.active {
+  background-color: var(--dialog-primary-button-bg, #4E97D1);
+}
+
+[data-theme="dark"] .no-results,
+.dark-mode .no-results {
+  color: #777;
+}
 </style>

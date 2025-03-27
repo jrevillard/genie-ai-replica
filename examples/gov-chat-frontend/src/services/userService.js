@@ -162,6 +162,28 @@ class UserService {
     localStorage.removeItem(this.tokenKey);
   }
 
+  // Add this to userService.js - make sure it's inside the class definition
+  /**
+   * Reset user profile data while preserving essential account information
+   * @returns {Promise} Promise with reset operation result
+   */
+  async resetUserData() {
+    try {
+      console.log('Calling reset user data endpoint');
+      const response = await httpService.post(`${this.userEndpoint}/reset-data`);
+
+      // If successful, refresh the user data in local storage
+      if (response.data && response.data.success) {
+        await this.refreshUserData();
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error('Error resetting user data:', error);
+      throw error;
+    }
+  }
+
   /**
    * Hash a password using SHA-256
    * Note: This is done for demonstration. In production, HTTPS should be used

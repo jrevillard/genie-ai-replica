@@ -323,5 +323,70 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Reset user profile data while preserving essential account information
+router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
+  try {
+    console.log('[RESET DATA] Request received to reset user data');
+    
+    // Debug the entire user object to see what properties are available
+    console.log('[RESET DATA] Complete req.user object:', JSON.stringify(req.user, null, 2));
+    
+    // Try all possible ways to get the user ID
+    const possibleIdFields = ['_key', 'id', '_id', 'userId'];
+    console.log('[RESET DATA] Checking all possible ID fields:');
+    possibleIdFields.forEach(field => {
+      console.log(`  - ${field}: ${req.user ? req.user[field] : 'undefined'}`);
+    });
+    
+    // If the user object has a different structure, check its properties
+    if (req.user && typeof req.user === 'object') {
+      console.log('[RESET DATA] All properties of req.user:', Object.keys(req.user));
+    }
+    
+    // Try getting the ID directly from the token verification result
+    console.log('[RESET DATA] Token userId:', req.user ? req.user.userId : 'undefined');
+    
+    // Get user ID from authenticated user object - try all possible variants
+    const userId = req.user && (
+      req.user._key || 
+      req.user.id || 
+      req.user._id || 
+      req.user.userId || 
+      (req.user.user && req.user.user._key) || 
+      (req.user.user && req.user.user.id) ||
+      (req.user.user && req.user.user._id)
+    );
+    
+    if (!userId) {
+      console.error('[RESET DATA] Could not determine user ID from authentication data');
+      console.error('[RESET DATA] User object type:', typeof req.user);
+      console.error('[RESET DATA] Is user object present:', !!req.user);
+      
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required' 
+      });
+    }
+    
+    console.log(`[RESET DATA] Processing reset request for user ID: ${userId}`);
+    
+    // Call the user profile service to reset the user data
+    const result = await userService.resetUserData(userId);
+    
+    // Return success response
+    res.json({
+      success: true,
+      message: 'User profile data has been reset successfully',
+      ...result
+    });
+  } catch (error) {
+    console.error('[RESET DATA] Error resetting user data:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to reset user data' 
+    });
+  }
+});
+
 // Export the router
 module.exports = router;

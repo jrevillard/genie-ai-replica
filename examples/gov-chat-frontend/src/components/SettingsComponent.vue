@@ -558,14 +558,25 @@ export default {
 
     // Show confirmation dialog before resetting user data
     confirmResetUserData() {
-      if (confirm(this.$t('settings.confirmResetUserData'))) {
-        this.resetUserData()
+      if (confirm(this.$t('settings.confirmResetUserData', 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'))) {
+        this.resetUserData();
       }
     },
 
     // Reset all user data
-    resetUserData() {
+    async resetUserData() {
       try {
+        // Show loading state
+        this.isLoading = true;
+
+        // Call the backend API through userService
+        const response = await userService.resetUserData();
+
+        // Inform user of success
+        alert(this.$t('settings.userDataReset', 'Your profile data has been successfully reset.'));
+
+        // Refresh the user data displayed in the component
+        await this.fetchUserData();
         // Clear all localStorage items except theme and language
         const themeValue = localStorage.getItem('theme')
         const langValue = localStorage.getItem('userLocale')
@@ -576,11 +587,12 @@ export default {
         if (themeValue) localStorage.setItem('theme', themeValue)
         if (langValue) localStorage.setItem('userLocale', langValue)
 
-        // Inform user
-        alert(this.$t('settings.userDataReset'))
       } catch (e) {
-        console.error('Error clearing user data:', e)
-        alert(this.$t('settings.failedToResetUserData'))
+        console.error('Error resetting user data:', e);
+        alert(this.$t('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
+      } finally {
+        // Hide loading state
+        this.isLoading = false;
       }
     },
 

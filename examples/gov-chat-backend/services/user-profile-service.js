@@ -473,6 +473,72 @@ class UserProfileService {
       return false; // Default to unavailable on error for safety
     }
   }
+
+  /**
+   * Reset user data while preserving essential account information
+   * @param {String} userId - User ID
+   * @returns {Promise<Object>} Result of the reset operation
+   */
+  async resetUserData(userId) {
+    try {
+      console.log(`[USER PROFILE SERVICE] Resetting data for user: ${userId}`);
+
+      // Get current user document
+      const currentUserDoc = await this.getUserProfile(userId);
+
+      if (!currentUserDoc) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+
+      // Create a completely new document with ONLY the fields we want to preserve
+      const preservedData = {
+        // Preserve essential account information
+        loginName: currentUserDoc.loginName,
+        email: currentUserDoc.email,
+        encPassword: currentUserDoc.encPassword,
+        emailVerified: currentUserDoc.emailVerified || false,
+        createdAt: currentUserDoc.createdAt,
+        updatedAt: new Date().toISOString(),
+        accessToken: currentUserDoc.accessToken
+      };
+
+      // Log which fields we're preserving
+      console.log(`[USER PROFILE SERVICE] Preserving fields: ${Object.keys(preservedData).join(', ')}`);
+
+      // Check if there are any uploaded files to clean up
+      await this.deleteUserFiles(currentUserDoc);
+
+      // Now COMPLETELY REPLACE the document with only our preserved fields
+      // This will remove all other fields like personalIdentification, addressResidency, etc.
+      try {
+        // Use replace operation which completely replaces the document
+        await this.users.replace(userId, preservedData);
+        console.log(`[USER PROFILE SERVICE] User document replaced successfully`);
+      } catch (replaceError) {
+        console.warn(`[USER PROFILE SERVICE] Replace operation failed, falling back to update: ${replaceError.message}`);
+
+        // Fallback to update with options that make it act like replace
+        await this.users.update(userId, preservedData, {
+          keepNull: true,
+          mergeObjects: false,  // Don't merge with existing document
+          overwrite: true       // Completely overwrite the document
+        });
+        console.log(`[USER PROFILE SERVICE] User document updated with overwrite`);
+      }
+
+      console.log(`[USER PROFILE SERVICE] User data reset completed for user: ${userId}`);
+
+      return {
+        userId,
+        fieldsPreserved: Object.keys(preservedData).length,
+        success: true
+      };
+    } catch (error) {
+      console.error(`[USER PROFILE SERVICE] Error resetting user data for ${userId}:`, error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = UserProfileService;

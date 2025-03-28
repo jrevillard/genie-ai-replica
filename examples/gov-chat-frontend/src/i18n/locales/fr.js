@@ -435,13 +435,24 @@ export default {
   settings: {
     title: 'Paramètres',
     save: 'Enregistrer',
+    edit: 'Modifier',
     close: 'Fermer',
     saveSuccess: 'Paramètres enregistrés avec succès',
     saveError: 'Erreur lors de l\'enregistrement des paramètres',
+    saveSettings: 'Enregistrer',
+    cancel: 'Annuler',
+    
     language: {
       title: 'Langue',
       selectLabel: 'Langue d\'affichage'
     },
+    displayLanguage: 'Langue d\'affichage',
+    languages: {
+      english: 'Anglais',
+      french: 'Français',
+      swahili: 'Swahili'
+    },
+    
     appearance: {
       title: 'Apparence',
       theme: 'Thème',
@@ -450,28 +461,7 @@ export default {
       systemTheme: 'Système',
       fontSize: 'Taille de police'
     },
-    notifications: {
-      title: 'Notifications',
-      emailUpdates: 'Mises à jour par email',
-      soundEnabled: 'Notifications sonores'
-    },
-    account: {
-      title: 'Compte',
-      resetUserData: 'Réinitialiser les données',
-      resetDescription: 'Cela effacera toutes vos données de profil et votre historique de chat.',
-      confirmReset: 'Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action ne peut pas être annulée.',
-      resetComplete: 'Vos données ont été réinitialisées.'
-    },
-    title: 'Paramètres',
-    close: 'Fermer',
-    saveSettings: 'Enregistrer',
     display: 'Affichage',
-    displayLanguage: 'Langue d\'affichage',
-    languages: {
-      english: 'Anglais',
-      french: 'Français',
-      swahili: 'Swahili'
-    },
     theme: 'Thème',
     themes: {
       light: 'Clair',
@@ -479,9 +469,23 @@ export default {
       system: 'Système'
     },
     fontSize: 'Taille de police',
+    
+    notifications: {
+      title: 'Notifications',
+      emailUpdates: 'Mises à jour par email',
+      soundEnabled: 'Notifications sonores'
+    },
     notifications: 'Notifications',
     emailUpdates: 'Mises à jour par e-mail',
     soundNotifications: 'Notifications sonores',
+    
+    account: {
+      title: 'Compte',
+      resetUserData: 'Réinitialiser les données',
+      resetDescription: 'Cela effacera toutes vos données de profil et votre historique de chat.',
+      confirmReset: 'Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action ne peut pas être annulée.',
+      resetComplete: 'Vos données ont été réinitialisées.'
+    },
     accountManagement: 'Gestion du compte',
     emailAddress: 'Adresse e-mail',
     emailAddressPlaceholder: 'Votre adresse e-mail',
@@ -491,13 +495,23 @@ export default {
     resetUserDataDesc: 'Cela effacera toutes vos données de profil et votre historique de chat.',
     deleteAccount: 'Supprimer le compte',
     deleteAccountDesc: 'Cela supprimera définitivement votre compte et toutes les données associées.',
-    save: 'Enregistrer',
-    edit: 'Modifier',
+    
     // Additional entries for modals and confirmations
     standardAccount: 'Compte Standard',
     confirmEmailChange: 'Confirmer le changement d\'e-mail',
     pleaseEnterPassword: 'Veuillez entrer votre mot de passe',
-    cancel: 'Annuler'
+    confirmDeleteAccount: 'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action ne peut pas être annulée.',
+    confirmAccountDeletion: 'Confirmer la Suppression du Compte',
+    accountDeletionWarning: 'Avertissement : Cette action est permanente et ne peut pas être annulée. Toutes vos données seront définitivement supprimées.',
+    deletionReason: 'Raison de la suppression (facultatif) :',
+    deletionReasonPlaceholder: 'Qu\'est-ce qui vous a fait décider de supprimer votre compte ?',
+    enterPasswordConfirm: 'Entrez votre mot de passe pour confirmer :',
+    currentPasswordPlaceholder: 'Votre mot de passe actuel',
+    deleting: 'Suppression en cours...',
+    permanentlyDeleteAccount: 'Supprimer le Compte',
+    accountDeletedSuccess: 'Votre compte a été supprimé avec succès.',
+    incorrectPassword: 'Mot de passe incorrect',
+    accountDeletionFailed: 'Échec de la suppression du compte. Veuillez réessayer plus tard.',
   },
   userProfile: {
     title: 'Profil Utilisateur',

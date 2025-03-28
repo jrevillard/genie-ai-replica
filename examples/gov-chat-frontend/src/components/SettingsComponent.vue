@@ -1,15 +1,15 @@
 <template>
   <div class="settings-overlay">
-    <div class="settings-dialog">
+    <div class="settings-dialog" :key="'settings-dialog-' + currentLocale">
       <!-- Header with Buttons -->
       <div class="dialog-header">
-        <h2 class="header-title">{{ $t('settings.title', 'Settings') }}</h2>
+        <h2 class="header-title">{{ translate('settings.title', 'Settings') }}</h2>
         <div class="header-actions">
           <button class="btn-close" @click="close">
-            {{ $t('settings.close', 'Close') }}
+            {{ translate('settings.close', 'Close') }}
           </button>
           <button class="btn-save" @click="save">
-            {{ $t('settings.saveSettings', 'Save Settings') }}
+            {{ translate('settings.saveSettings', 'Save Settings') }}
           </button>
         </div>
       </div>
@@ -17,13 +17,13 @@
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <p>{{ $t('settings.loadingUserInfo', 'Loading user information...') }}</p>
+        <p>{{ translate('settings.loadingUserInfo', 'Loading user information...') }}</p>
       </div>
 
       <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
-        <button @click="fetchUserData" class="btn-retry">{{ $t('settings.retry', 'Retry') }}</button>
+        <button @click="fetchUserData" class="btn-retry">{{ translate('settings.retry', 'Retry') }}</button>
       </div>
 
       <div v-else>
@@ -36,9 +36,9 @@
             <img v-else :src="userAvatar" alt="User avatar" class="avatar-image" />
           </div>
           <div class="account-details">
-            <div class="user-name">{{ userData.name || $t('settings.userName', 'User') }}</div>
+            <div class="user-name">{{ userData.name || translate('settings.userName', 'User') }}</div>
             <div class="user-email">{{ userData.email || 'email@example.com' }}</div>
-            <div class="account-type">{{ userData.accountType || $t('settings.standardAccount', 'Standard Account') }}
+            <div class="account-type">{{ userData.accountType || translate('settings.standardAccount', 'Standard Account') }}
             </div>
           </div>
         </div>
@@ -47,39 +47,39 @@
         <div class="settings-grid">
           <!-- Display Box (Language + Theme) -->
           <div class="settings-box">
-            <h3 class="section-title">{{ $t('settings.display', 'Display') }}</h3>
+            <h3 class="section-title">{{ translate('settings.display', 'Display') }}</h3>
 
             <!-- Language Selector -->
             <div class="setting-item">
-              <label class="section-label">{{ $t('settings.displayLanguage', 'Display Language') }}</label>
+              <label class="section-label">{{ translate('settings.displayLanguage', 'Display Language') }}</label>
               <select class="dropdown" v-model="settings.language" @change="applyLanguage">
-                <option value="en">{{ $t('settings.languages.english', 'English') }}</option>
-                <option value="fr">{{ $t('settings.languages.french', 'Français') }}</option>
-                <option value="sw">{{ $t('settings.languages.swahili', 'Kiswahili') }}</option>
+                <option value="en">{{ translate('settings.languages.english', 'English') }}</option>
+                <option value="fr">{{ translate('settings.languages.french', 'Français') }}</option>
+                <option value="sw">{{ translate('settings.languages.swahili', 'Kiswahili') }}</option>
               </select>
             </div>
 
             <!-- Theme Controls -->
             <div class="setting-item">
-              <label class="section-label">{{ $t('settings.theme', 'Theme') }}</label>
+              <label class="section-label">{{ translate('settings.theme', 'Theme') }}</label>
               <div class="theme-buttons">
                 <button class="theme-toggle" :class="{ active: settings.theme === 'light' }"
                   @click="applyTheme('light')">
-                  {{ $t('settings.themes.light', 'Light') }}
+                  {{ translate('settings.themes.light', 'Light') }}
                 </button>
                 <button class="theme-toggle" :class="{ active: settings.theme === 'dark' }" @click="applyTheme('dark')">
-                  {{ $t('settings.themes.dark', 'Dark') }}
+                  {{ translate('settings.themes.dark', 'Dark') }}
                 </button>
                 <button class="theme-toggle" :class="{ active: settings.theme === 'system' }"
                   @click="applyTheme('system')">
-                  {{ $t('settings.themes.system', 'System') }}
+                  {{ translate('settings.themes.system', 'System') }}
                 </button>
               </div>
             </div>
 
             <!-- Font Size -->
             <div class="setting-item">
-              <label class="section-label">{{ $t('settings.fontSize', 'Font Size') }}</label>
+              <label class="section-label">{{ translate('settings.fontSize', 'Font Size') }}</label>
               <div class="slider-container">
                 <input type="range" min="30" max="100" v-model.number="settings.fontSize" class="slider" />
                 <span class="slider-value">{{ settings.fontSize }}%</span>
@@ -89,11 +89,11 @@
 
           <!-- Notifications Box -->
           <div class="settings-box">
-            <h3 class="section-title">{{ $t('settings.notifications', 'Notifications') }}</h3>
+            <h3 class="section-title">{{ translate('settings.notifications', 'Notifications') }}</h3>
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{ $t('settings.emailUpdates', 'Email Updates') }}</label>
+                <label class="section-label">{{ translate('settings.emailUpdates', 'Email Updates') }}</label>
                 <div class="switch" @click="settings.emailUpdates = !settings.emailUpdates">
                   <div class="switch-track" :class="{ active: settings.emailUpdates }">
                     <div class="switch-thumb"></div>
@@ -104,7 +104,7 @@
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{ $t('settings.soundNotifications', 'Sound Notifications') }}</label>
+                <label class="section-label">{{ translate('settings.soundNotifications', 'Sound Notifications') }}</label>
                 <div class="switch" @click="settings.soundNotifications = !settings.soundNotifications">
                   <div class="switch-track" :class="{ active: settings.soundNotifications }">
                     <div class="switch-thumb"></div>
@@ -117,27 +117,27 @@
 
         <!-- Account Management Section -->
         <div class="account-management-section">
-          <h3 class="section-title">{{ $t('settings.accountManagement', 'Account Management') }}</h3>
+          <h3 class="section-title">{{ translate('settings.accountManagement', 'Account Management') }}</h3>
 
           <div class="account-management-grid">
             <!-- Row 1: Email & Password -->
             <div class="management-row">
               <div class="management-col">
-                <label class="section-label">{{ $t('settings.emailAddress', 'Email Address') }}</label>
+                <label class="section-label">{{ translate('settings.emailAddress', 'Email Address') }}</label>
                 <div class="input-with-button">
                   <input type="email" class="text-input" v-model="userData.email" :disabled="!isEditingEmail"
-                    :placeholder="$t('settings.emailAddressPlaceholder', 'Your email address')" />
+                    :placeholder="translate('settings.emailAddressPlaceholder', 'Your email address')" />
                   <button class="btn-secondary" @click="toggleEmailEdit" :disabled="isEmailUpdating">
-                    {{ isEditingEmail ? $t('settings.save', 'Save') : $t('settings.edit', 'Edit') }}
+                    {{ isEditingEmail ? translate('settings.save', 'Save') : translate('settings.edit', 'Edit') }}
                   </button>
                 </div>
                 <p v-if="emailError" class="error-text">{{ emailError }}</p>
               </div>
 
               <div class="management-col">
-                <label class="section-label">{{ $t('settings.password', 'Password') }}</label>
+                <label class="section-label">{{ translate('settings.password', 'Password') }}</label>
                 <button class="btn-secondary full-width" @click="initiatePasswordChange">
-                  {{ $t('settings.changePassword', 'Change Password') }}
+                  {{ translate('settings.changePassword', 'Change Password') }}
                 </button>
               </div>
             </div>
@@ -146,19 +146,19 @@
             <div class="management-row">
               <div class="management-col">
                 <button class="btn-secondary full-width" @click="confirmResetUserData">
-                  {{ $t('settings.resetUserData', 'Reset User Data') }}
+                  {{ translate('settings.resetUserData', 'Reset User Data') }}
                 </button>
                 <p class="description-text">
-                  {{ $t('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.') }}
+                  {{ translate('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.') }}
                 </p>
               </div>
 
               <div class="management-col">
                 <button class="btn-danger full-width" @click="confirmDeleteAccount">
-                  {{ $t('settings.deleteAccount', 'Delete Account') }}
+                  {{ translate('settings.deleteAccount', 'Delete Account') }}
                 </button>
                 <p class="description-text danger-text">
-                  {{ $t('settings.deleteAccountDesc', 'This will permanently delete your account and all associated data.') }}
+                  {{ translate('settings.deleteAccountDesc', 'This will permanently delete your account and all associated data.') }}
                 </p>
               </div>
             </div>
@@ -169,22 +169,22 @@
       <!-- Email Change Confirmation Modal -->
       <div class="modal" v-if="showEmailConfirmModal">
         <div class="modal-content">
-          <h3 class="modal-title">{{ $t('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
+          <h3 class="modal-title">{{ translate('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
 
           <div class="modal-body">
-            <p>{{ $t('settings.changingEmailTo', 'Changing your email to') }} <strong>{{ newEmail }}</strong> {{
-              $t('settings.will', 'will') }}:</p>
+            <p>{{ translate('settings.changingEmailTo', 'Changing your email to') }} <strong>{{ newEmail }}</strong> {{
+              translate('settings.will', 'will') }}:</p>
             <ul>
-              <li>{{ $t('settings.logOutSystem', 'Log you out of the system') }}</li>
-              <li>{{ $t('settings.sendVerificationLink', 'Send a verification link to your new email') }}</li>
-              <li>{{ $t('settings.requireVerification', 'Require verification before you can log in again') }}</li>
+              <li>{{ translate('settings.logOutSystem', 'Log you out of the system') }}</li>
+              <li>{{ translate('settings.sendVerificationLink', 'Send a verification link to your new email') }}</li>
+              <li>{{ translate('settings.requireVerification', 'Require verification before you can log in again') }}</li>
             </ul>
 
             <div class="form-group">
-              <label for="confirmPassword">{{ $t('settings.enterPasswordConfirm', 'Enter your password to confirm')
+              <label for="confirmPassword">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm')
                 }}:</label>
               <input v-model="emailChangePassword" type="password" id="confirmPassword"
-                :placeholder="$t('settings.currentPasswordPlaceholder', 'Your current password')" class="text-input"
+                :placeholder="translate('settings.currentPasswordPlaceholder', 'Your current password')" class="text-input"
                 required />
               <p v-if="emailChangeError" class="error-text">{{ emailChangeError }}</p>
             </div>
@@ -192,10 +192,10 @@
 
           <div class="modal-footer">
             <button class="btn-close" @click="cancelEmailChange">
-              {{ $t('settings.cancel', 'Cancel') }}
+              {{ translate('settings.cancel', 'Cancel') }}
             </button>
             <button class="btn-save" @click="confirmEmailChange" :disabled="!emailChangePassword || isEmailUpdating">
-              {{ isEmailUpdating ? $t('settings.processing', 'Processing...') : $t('settings.confirmChange', 'Confirm Change') }}
+              {{ isEmailUpdating ? translate('settings.processing', 'Processing...') : translate('settings.confirmChange', 'Confirm Change') }}
             </button>
           </div>
         </div>
@@ -208,6 +208,41 @@
       </div>
     </div>
   </div>
+
+  <!-- Delete Account Confirmation Modal -->
+<div class="modal" v-if="showDeleteAccountModal">
+  <div class="modal-content">
+    <h3 class="modal-title">{{ translate('settings.confirmAccountDeletion', 'Confirm Account Deletion') }}</h3>
+    <div class="modal-body">
+      <p class="warning-text">{{ translate('settings.accountDeletionWarning', 'Warning: This action is permanent and cannot be undone.') }}</p>
+      
+      <div class="form-group">
+        <label for="deleteReason">{{ translate('settings.deletionReason', 'Reason for deletion (optional):') }}</label>
+        <textarea v-model="deleteAccountReason" id="deleteReason" rows="3" class="text-input"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmDeletePassword">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm:') }}</label>
+        <input v-model="deleteAccountPassword" type="password" id="confirmDeletePassword"
+          class="text-input" required />
+        <p v-if="deleteAccountError" class="error-text">{{ deleteAccountError }}</p>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-close" @click="cancelAccountDeletion">
+        {{ translate('settings.cancel', 'Cancel') }}
+      </button>
+      <button class="btn-danger" @click="processAccountDeletion" :disabled="!deleteAccountPassword || isDeletingAccount">
+        {{ isDeletingAccount ? translate('settings.deleting', 'Deleting...') : translate('settings.permanentlyDeleteAccount', 'Delete Account') }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Add a key to force re-rendering on locale changes -->
+<div class="settings-dialog" :key="'settings-dialog-' + currentLocale"></div>
+
 </template>
 
 <script>
@@ -226,6 +261,8 @@ export default {
   },
   data() {
     return {
+      // Add this
+      currentLocale: this.$i18n ? this.$i18n.locale : 'en',
       // Data loading state
       isLoading: true,
       errorMessage: null,
@@ -264,29 +301,56 @@ export default {
       emailChangeError: null,
 
       // Password Reset Flow - FIXED
-      showPasswordReset: false
+      showPasswordReset: false,
+
+      // Account Deletion
+      showDeleteAccountModal: false,
+      deleteAccountPassword: '',
+      deleteAccountReason: '',
+      deleteAccountError: null,
+      isDeletingAccount: false
     }
   },
 
   // Add this to your created() lifecycle hook (to replace the watcher in your original code)
   created() {
-    // Fetch user data when component is created
-    this.fetchUserData();
+  // Initialize currentLocale
+  this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
+  
+  // Fetch user data when component is created
+  this.fetchUserData();
 
-    // Add a watcher for language changes that forces rendering updates
-    this.$watch('settings.language', (newVal) => {
-      // Apply language change without page reload
-      if (this.$i18n) {
-        this.$i18n.locale = newVal;
-        this.$forceUpdate();
+  // Add a watcher for language changes that forces rendering updates
+  this.$watch('settings.language', (newVal) => {
+    // Apply language change without page reload
+    if (this.$i18n) {
+      this.$i18n.locale = newVal;
+      this.currentLocale = newVal; // Update currentLocale when language changes
+      this.$forceUpdate();
 
-        // Force update the entire component tree if possible
-        if (this.$root) {
-          this.$root.$forceUpdate();
-        }
+      // Force update the entire component tree if possible
+      if (this.$root) {
+        this.$root.$forceUpdate();
       }
+    }
+  });
+  
+  // Also watch for locale changes from outside this component
+  if (this.$i18n) {
+    this.$watch('$i18n.locale', (newLocale) => {
+      console.log('Locale changed in Settings:', newLocale);
+      this.currentLocale = newLocale;
+      
+      // Update settings language to match if different
+      if (this.settings && this.settings.language !== newLocale) {
+        this.settings.language = newLocale;
+      }
+      
+      // Force component to re-render
+      this.$forceUpdate();
     });
-  },
+  }
+},
 
   methods: {
     // Get current language from i18n or localStorage
@@ -350,6 +414,21 @@ export default {
       }
     },
 
+    translate(key, fallback = '') {
+      if (!this.$i18n) return fallback;
+      try {
+        // Force the correct locale
+        const translation = this.$i18n.t(key, { locale: this.currentLocale });
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      } catch (e) {
+        console.error('Translation error:', e);
+        return fallback || key;
+      }
+    },
+
     mounted() {
       // Add theme change listener
       window.addEventListener('themeChange', this.updateTheme);
@@ -371,6 +450,13 @@ export default {
           this.$forceUpdate();
         });
       }
+
+      // Add this in your mounted hook or a method you can call
+      console.log('Current locale:', this.$i18n.locale);
+      console.log('Available locales:', this.$i18n.availableLocales);
+      console.log('Sample translation for deleteAccount:',
+        this.$i18n.t('settings.deleteAccount'),
+        this.$i18n.te('settings.deleteAccount') ? 'exists' : 'missing');
     },
 
     applyTheme(theme) {
@@ -453,9 +539,9 @@ export default {
 
         // Update component with user data
         this.userData = {
-          name: userData.fullName || userData.loginName || userData.username || this.$t('settings.user'),
+          name: userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
           email: userData.email || '',
-          accountType: userData.accountType || userData.role || this.$t('settings.standardAccount'),
+          accountType: userData.accountType || userData.role || this.translate('settings.standardAccount'),
           userId: this.currentUserId, // Use the cleaned ID
           createdAt: userData.createdAt || ''
         };
@@ -466,7 +552,7 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        this.errorMessage = this.$t('settings.unableToLoadUser');
+        this.errorMessage = this.translate('settings.unableToLoadUser');
 
         // Use any data we might already have
         const fallbackUser = userService.getCurrentUser();
@@ -481,9 +567,9 @@ export default {
           this.currentUserId = userId;
 
           this.userData = {
-            name: fallbackUser.fullName || fallbackUser.loginName || this.$t('settings.user'),
+            name: fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
             email: fallbackUser.email || '',
-            accountType: fallbackUser.accountType || this.$t('settings.account'),
+            accountType: fallbackUser.accountType || this.translate('settings.account'),
             userId: this.currentUserId,
             createdAt: fallbackUser.createdAt || ''
           };
@@ -558,7 +644,7 @@ export default {
 
     // Show confirmation dialog before resetting user data
     confirmResetUserData() {
-      if (confirm(this.$t('settings.confirmResetUserData', 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'))) {
+      if (confirm(this.translate('settings.confirmResetUserData', 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'))) {
         this.resetUserData();
       }
     },
@@ -573,7 +659,7 @@ export default {
         const response = await userService.resetUserData();
 
         // Inform user of success
-        alert(this.$t('settings.userDataReset', 'Your profile data has been successfully reset.'));
+        alert(this.translate('settings.userDataReset', 'Your profile data has been successfully reset.'));
 
         // Refresh the user data displayed in the component
         await this.fetchUserData();
@@ -589,7 +675,7 @@ export default {
 
       } catch (e) {
         console.error('Error resetting user data:', e);
-        alert(this.$t('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
+        alert(this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
       } finally {
         // Hide loading state
         this.isLoading = false;
@@ -608,12 +694,59 @@ export default {
       }
     },
 
-    // Confirm delete account
-    confirmDeleteAccount() {
-      if (confirm(this.$t('settings.confirmDeleteAccount'))) {
-        alert(this.$t('settings.accountDeletionNotImplemented'));
+  // Confirm delete account
+  confirmDeleteAccount() {
+    if (confirm(this.translate('settings.confirmDeleteAccount', 'Are you sure you want to delete your account? This action cannot be undone.'))) {
+      // Show the delete account modal
+      this.showDeleteAccountModal = true;
+    }
+  },
+  
+  // Process account deletion
+  async processAccountDeletion() {
+    if (!this.deleteAccountPassword) {
+      this.deleteAccountError = this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion');
+      return;
+    }
+    
+    try {
+      this.isDeletingAccount = true;
+      this.deleteAccountError = null;
+      
+      // Call the service to delete the account
+      await userService.deleteAccount(
+        this.deleteAccountPassword,
+        this.deleteAccountReason
+      );
+      
+      // Show success message
+      alert(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
+      
+      // Close modal and redirect to login
+      this.showDeleteAccountModal = false;
+      
+      // Redirect to login page
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      
+      if (error.response && error.response.status === 403) {
+        this.deleteAccountError = this.translate('settings.incorrectPassword', 'Incorrect password');
+      } else {
+        this.deleteAccountError = this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.');
       }
-    },
+    } finally {
+      this.isDeletingAccount = false;
+    }
+  },
+  
+  // Cancel account deletion
+  cancelAccountDeletion() {
+    this.showDeleteAccountModal = false;
+    this.deleteAccountPassword = '';
+    this.deleteAccountReason = '';
+    this.deleteAccountError = null;
+  },
 
     // Password Reset Methods - FIXED
     // Initiate password change flow
@@ -629,7 +762,7 @@ export default {
       // Close the modal after showing success message
       setTimeout(() => {
         this.showPasswordReset = false;
-        alert(this.$t('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
+        alert(this.translate('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
       }, 1500);
     },
 
@@ -647,7 +780,7 @@ export default {
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(this.userData.email)) {
-        this.emailError = this.$t('settings.enterValidEmail');
+        this.emailError = this.translate('settings.enterValidEmail');
         return;
       }
 
@@ -662,7 +795,7 @@ export default {
         const isAvailable = await userService.checkEmailAvailability(this.userData.email);
 
         if (!isAvailable) {
-          this.emailError = this.$t('settings.emailAlreadyInUse');
+          this.emailError = this.translate('settings.emailAlreadyInUse');
           return;
         }
 
@@ -671,14 +804,14 @@ export default {
         this.showEmailConfirmModal = true;
       } catch (error) {
         console.error('Error checking email availability:', error);
-        this.emailError = this.$t('settings.unableToVerifyEmail');
+        this.emailError = this.translate('settings.unableToVerifyEmail');
       }
     },
 
     // Confirm and process email change
     async confirmEmailChange() {
       if (!this.emailChangePassword) {
-        this.emailChangeError = this.$t('settings.pleaseEnterPassword');
+        this.emailChangeError = this.translate('settings.pleaseEnterPassword');
         return;
       }
 
@@ -700,7 +833,7 @@ export default {
         console.log('[SETTINGS] Email update response:', response);
 
         // Show success message
-        alert(this.$t('settings.checkNewEmailVerification'));
+        alert(this.translate('settings.checkNewEmailVerification'));
 
         // Close modals
         this.showEmailConfirmModal = false;
@@ -718,7 +851,7 @@ export default {
         }, 1500); // Short delay to allow user to read the message
       } catch (error) {
         console.error('Error updating email:', error);
-        this.emailChangeError = this.$t('settings.failedToUpdateEmail');
+        this.emailChangeError = this.translate('settings.failedToUpdateEmail');
       } finally {
         this.isEmailUpdating = false;
       }
@@ -1553,5 +1686,14 @@ html[data-theme="dark"] .settings-dialog .dialog-header .header-title {
   color: #ffffff !important;
 }
 
+.warning-text {
+  color: var(--text-warning, #f5a623);
+  font-weight: 500;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background-color: rgba(245, 166, 35, 0.1);
+  border-left: 3px solid var(--text-warning, #f5a623);
+  border-radius: 4px;
+}
 
 </style>

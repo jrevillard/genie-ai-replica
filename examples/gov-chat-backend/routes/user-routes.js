@@ -388,5 +388,45 @@ router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
   }
 });
 
+// Permanently delete user account
+router.post('/delete', authMiddleware.authenticate, async (req, res) => {
+  try {
+    // Get the user ID from auth middleware
+    const userId = req.user && (
+      req.user._key || req.user.id || req.user._id || req.user.userId || 
+      (req.user.user && req.user.user._key) || (req.user.user && req.user.user.id) ||
+      (req.user.user && req.user.user._id)
+    );
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    
+    // Validate the password
+    const { password, reason } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'Password is required' });
+    }
+    
+    // Verify password
+    const authService = require('../services/auth-service');
+    const user = await userService.getUserProfile(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    const isPasswordValid = await authService.verifyPassword(password, user.encPassword);
+    if (!isPasswordValid) {
+      return res.status(403).json({ success: false, message: 'Incorrect password' });
+    }
+    
+    // Delete the account
+    const result = await userService.deleteUserAccountPermanently(userId);
+    res.json({ success: true, message: 'Account deleted', ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to delete account' });
+  }
+});
+
 // Export the router
 module.exports = router;

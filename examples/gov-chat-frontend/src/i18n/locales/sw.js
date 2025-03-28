@@ -433,14 +433,26 @@ export default {
   },
   settings: {
     title: 'Mipangilio',
-    save: 'Hifadhi Mipangilio',
-    close: 'Funga',
+    save: 'Hifadhi',
     saveSuccess: 'Mipangilio imehifadhiwa kwa mafanikio',
     saveError: 'Hitilafu katika kuhifadhi mipangilio',
+    close: 'Funga',
+    saveSettings: 'Hifadhi Mipangilio',
+    cancel: 'Ghairi',
+    edit: 'Hariri',
+    
     language: {
       title: 'Lugha',
       selectLabel: 'Lugha ya Onyesho'
     },
+    display: 'Onyesho',
+    displayLanguage: 'Lugha ya Onyesho',
+    languages: {
+      english: 'Kiingereza',
+      french: 'Kifaransa',
+      swahili: 'Kiswahili'
+    },
+    
     appearance: {
       title: 'Muonekano',
       theme: 'Mandhari',
@@ -449,28 +461,6 @@ export default {
       systemTheme: 'Mfumo',
       fontSize: 'Ukubwa wa Fonti'
     },
-    notifications: {
-      title: 'Arifa',
-      emailUpdates: 'Arifa za barua pepe',
-      soundEnabled: 'Arifa za sauti'
-    },
-    account: {
-      title: 'Akaunti',
-      resetUserData: 'Rudisha Data za Mtumiaji',
-      resetDescription: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
-      confirmReset: 'Je, una uhakika unataka kufuta data zako zote? Hili halitaweza kutendeka tena.',
-      resetComplete: 'Data zako zimerudishwa.'
-    },
-    title: 'Mipangilio',
-    close: 'Funga',
-    saveSettings: 'Hifadhi Mipangilio',
-    display: 'Onyesho',
-    displayLanguage: 'Lugha ya Onyesho',
-    languages: {
-      english: 'Kiingereza',
-      french: 'Kifaransa',
-      swahili: 'Kiswahili'
-    },
     theme: 'Mandhari',
     themes: {
       light: 'Mwangaza',
@@ -478,9 +468,23 @@ export default {
       system: 'Mfumo'
     },
     fontSize: 'Ukubwa wa Fonti',
+    
+    notifications: {
+      title: 'Arifa',
+      emailUpdates: 'Arifa za barua pepe',
+      soundEnabled: 'Arifa za sauti'
+    },
     notifications: 'Arifa',
     emailUpdates: 'Arifa za barua pepe',
     soundNotifications: 'Arifa za sauti',
+    
+    account: {
+      title: 'Akaunti',
+      resetUserData: 'Rudisha Data za Mtumiaji',
+      resetDescription: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
+      confirmReset: 'Je, una uhakika unataka kufuta data zako zote? Hili halitaweza kutendeka tena.',
+      resetComplete: 'Data zako zimerudishwa.'
+    },
     accountManagement: 'Usimamizi wa Akaunti',
     emailAddress: 'Anwani ya Barua Pepe',
     emailAddressPlaceholder: 'Anwani yako ya barua pepe',
@@ -490,13 +494,23 @@ export default {
     resetUserDataDesc: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
     deleteAccount: 'Futa Akaunti',
     deleteAccountDesc: 'Hii itafuta kabisa akaunti yako na data zote zinazohusiana.',
-    save: 'Hifadhi',
-    edit: 'Hariri',
+    
     // Additional entries for modals and confirmations
     standardAccount: 'Akaunti ya Kawaida',
     confirmEmailChange: 'Thibitisha Mabadiliko ya Barua Pepe',
     pleaseEnterPassword: 'Tafadhali ingiza nenosiri lako',
-    cancel: 'Ghairi'
+    confirmDeleteAccount: 'Je, una uhakika unataka kufuta akaunti yako? Kitendo hiki hakiwezi kutenduliwa.',
+    confirmAccountDeletion: 'Thibitisha Kufuta Akaunti',
+    accountDeletionWarning: 'Onyo: Kitendo hiki ni cha kudumu na hakiwezi kutenduliwa. Data zako zote zitafutwa kabisa.',
+    deletionReason: 'Sababu ya kufuta (hiari):',
+    deletionReasonPlaceholder: 'Nini kilikufanya uamue kufuta akaunti yako?',
+    enterPasswordConfirm: 'Ingiza nenosiri lako kuthibitisha:',
+    currentPasswordPlaceholder: 'Nenosiri lako la sasa',
+    deleting: 'Inafuta...',
+    permanentlyDeleteAccount: 'Futa Akaunti',
+    accountDeletedSuccess: 'Akaunti yako imefutwa kikamilifu.',
+    incorrectPassword: 'Nenosiri lisilo sahihi',
+    accountDeletionFailed: 'Imeshindwa kufuta akaunti. Tafadhali jaribu tena baadaye.',
   },
   userProfile: {
     title: 'Wasifu wa Mtumiaji',

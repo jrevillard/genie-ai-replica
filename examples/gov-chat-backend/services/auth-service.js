@@ -407,22 +407,22 @@ class AuthService {
   async verifyEmail(token) {
     try {
       console.log('Verification Token Received:', token);
-
-      // First, check verificationTokens collection as it currently does
+  
+      // First, check verificationTokens collection
       const tokenQuery = aql`
         FOR t IN verificationTokens
           FILTER t.token == ${token}
           RETURN t
       `;
-
+  
       const tokenCursor = await this.db.query(tokenQuery);
       let tokenDoc = await tokenCursor.next();
       let isEmailChangeToken = false;
-
-      // If not found in verificationTokens, check for pending email change tokens
+  
+      // Check for email change token if not found in verificationTokens
       if (!tokenDoc) {
         console.log('Token not found in verificationTokens, checking pendingEmailChange');
-
+        
         const pendingEmailQuery = aql`
           FOR u IN users
             FILTER u.pendingEmailChange.token == ${token}
@@ -434,10 +434,10 @@ class AuthService {
               used: false
             }
         `;
-
+  
         const pendingCursor = await this.db.query(pendingEmailQuery);
         tokenDoc = await pendingCursor.next();
-
+  
         if (tokenDoc) {
           console.log('Found token in pendingEmailChange:', tokenDoc);
           isEmailChangeToken = true;
@@ -445,28 +445,30 @@ class AuthService {
           console.log('No token found in either location');
         }
       }
-
+  
       if (!tokenDoc) {
         console.error('No token document found for token:', token);
         return { success: false, message: 'Invalid token' };
       }
-
-      // Rest of verification logic...
-      // (Regular expiration, used checks)
-
-      // For regular email verification
-      if (!isEmailChangeToken) {
-        // Handle normal verification as you do now
-        // ...existing code...
+  
+      // Check if token is expired
+      const expiresAt = new Date(tokenDoc.expiresAt);
+      const now = new Date();
+  
+      if (now > expiresAt) {
+        return { success: false, expired: true, message: 'Token has expired' };
       }
+  
+      // Check if token has been used
+      if (tokenDoc.used) {
+        return { success: false, used: true, message: 'Token has already been used' };
+      }
+  
       // For email change verification
-      else {
+      if (isEmailChangeToken) {
         // Get user ID from token
         const userId = tokenDoc.userId.split('/')[1];
-
-        // Get the user
-        const user = await this.getUserById(userId);
-
+  
         // Update user's email and clear pendingEmailChange
         await this.users.update(userId, {
           email: tokenDoc.email,
@@ -474,10 +476,29 @@ class AuthService {
           pendingEmailChange: null,
           updatedAt: new Date().toISOString()
         });
-
+  
         console.log(`Email changed successfully for user ${userId} to ${tokenDoc.email}`);
-
         return { success: true, message: 'Email changed successfully' };
+      } 
+      // For regular email verification
+      else {
+        // Get user ID from token
+        const userId = tokenDoc.userId.split('/')[1];
+  
+        // Update user's verification status
+        await this.users.update(userId, {
+          emailVerified: true,
+          updatedAt: new Date().toISOString()
+        });
+  
+        // Mark token as used
+        await this.verificationTokens.update(tokenDoc._key, {
+          used: true
+        });
+  
+        console.log(`Email verified successfully for user ${userId}`);
+        // ADD THIS RETURN STATEMENT
+        return { success: true, message: 'Email verified successfully' };
       }
     } catch (error) {
       console.error('Error in verifyEmail:', error);

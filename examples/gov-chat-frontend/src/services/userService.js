@@ -638,6 +638,50 @@ async checkEmailAvailability(email) {
   doPasswordsMatch(password, confirmPassword) {
     return password === confirmPassword;
   }
+
+  /**
+   * Deactivate user account
+   * @param {string} reason - Reason for deactivation
+   * @param {string} password - Password confirmation
+   * @returns {Promise} Deactivation result
+   */
+  async deactivateAccount(reason, password) {
+    try {
+      const response = await httpService.post('users/deactivate', {
+        reason,
+        password: this.hashPassword(password)
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error deactivating account:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Permanently delete user account
+   * @param {string} password - Password confirmation for security
+   * @param {string} reason - Optional reason for deletion
+   * @returns {Promise} Deletion result
+   */
+  async deleteAccount(password, reason = '') {
+    try {
+      const response = await httpService.post('users/delete', {
+        password: this.hashPassword(password),
+        reason
+      });
+      
+      // If successful, clear user data from local storage
+      if (response.data && response.data.success) {
+        this.clearUserData();
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      throw error;
+    }
+  }
 }
 
 export default new UserService();

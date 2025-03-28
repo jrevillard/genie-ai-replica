@@ -539,6 +539,55 @@ class UserProfileService {
     }
   }
 
+  /**
+ * Permanently delete a user account
+ * @param {String} userId - User ID
+ * @returns {Promise<Object>} Result of the deletion operation
+ */
+  async deleteUserAccountPermanently(userId) {
+    try {
+      // Get user document
+      const user = await this.getUserProfile(userId);
+      if (!user) {
+        throw new Error(`User not found`);
+      }
+
+      // Delete user files
+      await this.deleteUserFiles(user);
+
+      // Delete related tokens
+      try {
+        const verificationTokens = this.db.collection('verificationTokens');
+        const passwordResetTokens = this.db.collection('passwordResetTokens');
+
+        // Delete tokens
+        const verifyQuery = aql`
+        FOR t IN verificationTokens
+          FILTER t.userId == ${'users/' + userId}
+          REMOVE t IN verificationTokens
+      `;
+        const resetQuery = aql`
+        FOR t IN passwordResetTokens
+          FILTER t.userId == ${'users/' + userId}
+          REMOVE t IN passwordResetTokens
+      `;
+
+        await this.db.query(verifyQuery);
+        await this.db.query(resetQuery);
+      } catch (error) {
+        console.warn(`Error cleaning related data: ${error.message}`);
+      }
+
+      // Delete user document
+      await this.users.remove(userId);
+
+      return { userId, success: true, deletedAt: new Date().toISOString() };
+    } catch (error) {
+      console.error(`Error deleting account for ${userId}:`, error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = UserProfileService;

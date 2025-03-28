@@ -430,37 +430,11 @@ export default {
   },
   settings: {
     title: 'Settings',
-    save: 'Save Settings',
-    close: 'Close',
-    saveSuccess: 'Settings saved successfully',
-    saveError: 'Error saving settings',
-    language: {
-      title: 'Language',
-      selectLabel: 'Display Language'
-    },
-    appearance: {
-      title: 'Appearance',
-      theme: 'Theme',
-      lightTheme: 'Light',
-      darkTheme: 'Dark',
-      systemTheme: 'System',
-      fontSize: 'Font Size'
-    },
-    notifications: {
-      title: 'Notifications',
-      emailUpdates: 'Email updates',
-      soundEnabled: 'Sound notifications'
-    },
-    account: {
-      title: 'Account',
-      resetUserData: 'Reset User Data',
-      resetDescription: 'This will clear all your profile data and chat history.',
-      confirmReset: 'Are you sure you want to reset all your data? This cannot be undone.',
-      resetComplete: 'Your data has been reset.'
-    },
-    title: 'Settings',
+    save: 'Save',
     close: 'Close',
     saveSettings: 'Save Settings',
+    saveSuccess: 'Settings saved successfully',
+    saveError: 'Error saving settings',
     display: 'Display',
     displayLanguage: 'Display Language',
     languages: {
@@ -487,13 +461,72 @@ export default {
     resetUserDataDesc: 'This will clear all your profile data and chat history.',
     deleteAccount: 'Delete Account',
     deleteAccountDesc: 'This will permanently delete your account and all associated data.',
-    save: 'Save',
     edit: 'Edit',
-    // Additional entries for modals and confirmations
     standardAccount: 'Standard Account',
     confirmEmailChange: 'Confirm Email Change',
     pleaseEnterPassword: 'Please enter your password',
-    cancel: 'Cancel'
+    cancel: 'Cancel',
+    // Account section
+    account: {
+      title: 'Account',
+      resetUserData: 'Reset User Data',
+      resetDescription: 'This will clear all your profile data and chat history.',
+      confirmReset: 'Are you sure you want to reset all your data? This cannot be undone.',
+      resetComplete: 'Your data has been reset.'
+    },
+    // Language section
+    language: {
+      title: 'Language',
+      selectLabel: 'Display Language'
+    },
+    // Appearance section
+    appearance: {
+      title: 'Appearance',
+      theme: 'Theme',
+      lightTheme: 'Light',
+      darkTheme: 'Dark',
+      systemTheme: 'System',
+      fontSize: 'Font Size'
+    },
+    // Notifications section
+    notifications: {
+      title: 'Notifications',
+      emailUpdates: 'Email updates',
+      soundEnabled: 'Sound notifications'
+    },
+    // Added delete account translations
+    confirmDeleteAccount: 'Are you sure you want to delete your account? This action cannot be undone.',
+    confirmAccountDeletion: 'Confirm Account Deletion',
+    accountDeletionWarning: 'Warning: This action is permanent and cannot be undone. All your data will be permanently deleted.',
+    deletionReason: 'Reason for deletion (optional):',
+    deletionReasonPlaceholder: 'What made you decide to delete your account?',
+    enterPasswordConfirm: 'Enter your password to confirm:',
+    currentPasswordPlaceholder: 'Your current password',
+    deleting: 'Deleting...',
+    permanentlyDeleteAccount: 'Delete Account',
+    accountDeletedSuccess: 'Your account has been deleted successfully.',
+    incorrectPassword: 'Incorrect password',
+    accountDeletionFailed: 'Failed to delete account. Please try again later.',
+    confirmChange: 'Confirm Change',
+    processing: 'Processing...',
+    userDataReset: 'Your profile data has been successfully reset.',
+    failedToResetUserData: 'Failed to reset your profile data. Please try again later.',
+    changingEmailTo: 'Changing your email to',
+    will: 'will',
+    logOutSystem: 'Log you out of the system',
+    sendVerificationLink: 'Send a verification link to your new email',
+    requireVerification: 'Require verification before you can log in again',
+    checkNewEmailVerification: 'Please check your new email for verification instructions.',
+    unableToVerifyEmail: 'Unable to verify email. Please try again.',
+    emailAlreadyInUse: 'Email already in use',
+    enterValidEmail: 'Please enter a valid email address',
+    failedToUpdateEmail: 'Failed to update email. Please try again.',
+    passwordResetInitiated: 'A password reset link has been sent to your email address.',
+    unableToLoadUser: 'Unable to load user information. Please try again.',
+    retry: 'Retry',
+    user: 'User',
+    account: 'Account',
+    loadingUserInfo: 'Loading user information...'
   },
   userProfile: {
     title: 'User Profile',

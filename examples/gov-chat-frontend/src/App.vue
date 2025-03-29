@@ -309,16 +309,21 @@ body {
 /* Notification styles */
 .notification {
   position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 12px 20px;
-  border-radius: 6px;
+  top: 0;
+  left: 0; /* Start from left edge */
+  right: 0; /* Stretch to right edge */
+  width: 100%; /* Full width */
+  padding: 16px 20px;
   color: white;
   font-weight: 500;
+  line-height: 1.8; /* Increased line height */
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   animation: notification-fadeIn 0.3s ease;
   cursor: pointer;
+  text-align: center; /* Center the text */
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
 }
 
 .notification.success {
@@ -338,7 +343,7 @@ body {
 }
 
 @keyframes notification-fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 0; transform: translateY(-100%); }
   to { opacity: 1; transform: translateY(0); }
 }
 

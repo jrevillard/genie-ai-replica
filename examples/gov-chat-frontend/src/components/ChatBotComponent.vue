@@ -2,6 +2,10 @@
   <div class="app-container">
     <!-- Main chatbot container -->
     <div class="chatbot-container">
+      <!-- New Chat Confirmation Dialog -->
+      <ConfirmDialog :visible="showNewChatConfirm" :title="newChatDialog.title" :message="newChatDialog.message"
+        :confirm-text="newChatDialog.confirmText" :cancel-text="newChatDialog.cancelText" :theme="getCurrentTheme()"
+        :parent-styles="{ maxWidth: '450px' }" @confirm="startNewChatConfirmed" @cancel="cancelNewChat" />
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-indicator" :class="{ online: systemStatus.online }">
@@ -141,13 +145,15 @@ import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
 import ModalDialog from './ModalDialog.vue';
 import RightSideBarComponent from './RightSideBarComponent.vue';
 import chatbotService from '../services/chatbotService';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 
 export default {
   name: 'ChatBotComponent',
   components: {
     ChatResponseFeedbackDialog,
     ModalDialog,
-    RightSideBarComponent
+    RightSideBarComponent,
+    ConfirmDialog 
   },
 
   data() {
@@ -278,7 +284,14 @@ export default {
         sw: {
           // Swahili translations as fallback
         }
-      }
+      },
+      showNewChatConfirm: false,
+      newChatDialog: {
+        title: '',
+        message: '',
+        confirmText: '',
+        cancelText: ''
+      },
     };
   },
 
@@ -339,6 +352,7 @@ export default {
       this.systemStatus.requestQueue = Math.max(0, Math.floor(Math.random() * 3));
       this.systemStatus.lastUpdated = new Date();
     }, 30000); // Update every 30 seconds
+    this.updateDialogTexts();
   },
 
   beforeUnmount() {
@@ -352,11 +366,27 @@ export default {
     }
   },
 
+  watch: {
+    currentLocale: function () {
+      // Update dialog texts when locale changes
+      this.updateDialogTexts();
+    }
+  },
+
   methods: {
     ...mapActions('chatHistory', [
       'createChat',
       'updateChat'
     ]),
+
+    // Get the current theme
+    getCurrentTheme() {
+      // Check for theme in DOM
+      const documentTheme = document.documentElement.getAttribute('data-theme');
+      const bodyTheme = document.body.getAttribute('data-theme');
+
+      return documentTheme || bodyTheme || 'light';
+    },
 
     formatUptime(seconds) {
       const days = Math.floor(seconds / 86400);
@@ -737,6 +767,56 @@ export default {
       // Scroll to bottom after resetting
       this.scrollToBottom();
       notificationService.info(this.translate('chatbot.newChatStarted', 'Started a new conversation.'), 1500);
+    },
+    // Update new chat dialog texts
+    updateDialogTexts() {
+      this.newChatDialog = {
+        title: this.translate('chatbot.newChatTitle', 'Start New Chat'),
+        message: this.translate('chatbot.unsavedChanges', 'You have unsaved changes. Are you sure you want to start a new chat?'),
+        confirmText: this.translate('chatbot.startNew', 'Start New'),
+        cancelText: this.translate('common.cancel', 'Cancel')
+      };
+    },
+    // Modified startNewChat to use custom dialog
+    startNewChat() {
+      // Check if confirmation is needed
+      if (this.chatMessages.length > 1 && !this.currentChatId) {
+        // Show confirmation dialog instead of browser confirm
+        this.showNewChatConfirm = true;
+        return;
+      }
+
+      // If no confirmation needed, proceed with new chat
+      this.startNewChatConfirmed();
+    },
+
+    // This is executed when user confirms new chat
+    startNewChatConfirmed() {
+      // Hide the confirmation dialog
+      this.showNewChatConfirm = false;
+
+      // Clear current chat
+      this.chatMessages = [
+        {
+          sender: 'bot',
+          content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
+        }
+      ];
+      this.currentChatId = null;
+      this.selectedContextItems = [];
+      this.newMessage = '';
+
+      // Show quick help when starting a new chat
+      this.showQuickHelp = true;
+
+      // Scroll to bottom after resetting
+      this.scrollToBottom();
+      notificationService.info(this.translate('chatbot.newChatStarted', 'Started a new conversation.'), 1500);
+    },
+
+    // This is called when user cancels new chat
+    cancelNewChat() {
+      this.showNewChatConfirm = false;
     }
   }
 }</script>

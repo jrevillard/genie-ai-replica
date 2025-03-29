@@ -496,3 +496,39 @@ text.value {
   color: white !important;
   -webkit-text-fill-color: white !important;
 }
+
+/* In your global style.css */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  color: white;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: notification-fadeIn 0.3s ease;
+  cursor: pointer;
+}
+
+.notification.success {
+  background-color: #10b981;
+}
+
+.notification.error {
+  background-color: #ef4444;
+}
+
+.notification.info {
+  background-color: #3b82f6; 
+}
+
+.notification.warning {
+  background-color: #f59e0b;
+}
+
+@keyframes notification-fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

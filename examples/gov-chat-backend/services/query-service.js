@@ -51,7 +51,19 @@ class QueryService {
       const query = await this.queries.save(basicQueryDoc);
       const queryId = query._key;
       console.log(`Query created with auto-generated key: ${queryId}`);
+      console.log('DEBUG - Full query document after save:', JSON.stringify(query));
       
+      // Verify the document was actually saved by immediately retrieving it
+      try {
+        const savedQuery = await this.queries.document(queryId);
+        console.log('DEBUG - Query successfully verified in database with key:', queryId);
+        console.log('DEBUG - Retrieved document:', JSON.stringify(savedQuery));
+      } catch (err) {
+        console.error('DEBUG - CRITICAL ERROR: Query was not found in database immediately after save!', err);
+        console.error('DEBUG - DB connection details:', this.db.name, this.db.url);
+        console.error('DEBUG - Collection info:', await this.queries.properties());
+      }
+
       // Now add additional data if needed
       const updateData = {};
       

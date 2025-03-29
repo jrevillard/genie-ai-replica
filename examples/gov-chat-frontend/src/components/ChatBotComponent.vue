@@ -6,7 +6,8 @@
       <div class="system-status-panel">
         <div class="status-indicator" :class="{ online: systemStatus.online }">
           <div class="status-dot"></div>
-          <span>{{ systemStatus.online ? translate('status.online', 'System Online') : translate('status.offline', 'System Offline') }}</span>
+          <span>{{ systemStatus.online ? translate('status.online', 'System Online') : translate('status.offline',
+            'System Offline') }}</span>
         </div>
         <div class="status-metrics">
           <div class="metric">
@@ -29,17 +30,10 @@
           <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
         </div>
         <div class="context-items">
-          <div 
-            v-for="(item, index) in selectedContextItems" 
-            :key="index" 
-            class="context-item"
-          >
+          <div v-for="(item, index) in selectedContextItems" :key="index" class="context-item">
             <span class="context-text">{{ item.service }}</span>
-            <button 
-              class="context-remove-btn" 
-              @click="removeContextItem(index)"
-              :aria-label="translate('chatbot.removeItem', 'Remove item')"
-            >
+            <button class="context-remove-btn" @click="removeContextItem(index)"
+              :aria-label="translate('chatbot.removeItem', 'Remove item')">
               ✕
             </button>
           </div>
@@ -47,12 +41,7 @@
       </div>
       <!-- The scrollable chat window -->
       <div class="chat-window" ref="chatWindow">
-        <div
-          v-for="(msg, index) in chatMessages"
-          :key="index"
-          class="chat-message"
-          :class="msg.sender"
-        >
+        <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="msg.sender">
           <div class="message-bubble">
             <span>{{ msg.content }}</span>
           </div>
@@ -65,60 +54,38 @@
         <div ref="messagesEnd"></div>
       </div>
       <!-- Updated Quick Help Overlay with proper internationalization -->
-      <div 
-        class="quick-help-overlay" 
-        v-if="showQuickHelp && chatMessages.length <= 1"
-      >
+      <div class="quick-help-overlay" v-if="showQuickHelp && chatMessages.length <= 1">
         <div class="quick-help-content">
           <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp', 'How can I help you today?') }}</h2>
-      
+
           <div class="quick-help-grid">
             <!-- Just Chat option with different styling -->
-            <div
-              class="quick-help-item just-chat"
-              @click="selectQuickHelpOption(justChatOption)"
-            >
+            <div class="quick-help-item just-chat" @click="selectQuickHelpOption(justChatOption)">
               <div class="quick-help-icon" v-html="justChatOption.icon"></div>
               <div class="quick-help-text">{{ translate(justChatOption.textKey, 'Just Chat') }}</div>
             </div>
-        
+
             <!-- Other service options with proper i18n -->
-            <div
-              v-for="(option, index) in quickHelpOptions"
-              :key="index"
-              class="quick-help-item"
-              @click="selectQuickHelpOption(option)"
-            >
+            <div v-for="(option, index) in quickHelpOptions" :key="index" class="quick-help-item"
+              @click="selectQuickHelpOption(option)">
               <div class="quick-help-icon" v-html="option.icon"></div>
-              <div class="quick-help-text">{{ translate(option.textKey, option.text || option.textKey.split('.')[1]) }}</div>
+              <div class="quick-help-text">{{ translate(option.textKey, option.text || option.textKey.split('.')[1]) }}
+              </div>
             </div>
           </div>
         </div>
       </div>
       <!-- Input Area -->
       <div class="chat-input">
-        <textarea
-          v-model="newMessage"
-          class="prompt-textarea"
-          rows="4"
+        <textarea v-model="newMessage" class="prompt-textarea" rows="4"
           :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
-          @keyup.enter.exact.prevent="sendMessage"
-          @focus="handleTextareaFocus"
-        ></textarea>
+          @keyup.enter.exact.prevent="sendMessage" @focus="handleTextareaFocus"></textarea>
         <div class="input-actions">
-          <button 
-            class="new-chat-btn" 
-            @click="startNewChat" 
-            :title="translate('chatbot.newChat', 'Start New Chat')"
-          >
+          <button class="new-chat-btn" @click="startNewChat" :title="translate('chatbot.newChat', 'Start New Chat')">
             <i class="fas fa-plus"></i>
           </button>
-          <button 
-            v-if="chatMessages.length > 0" 
-            class="save-chat-btn" 
-            @click="saveChatToHistory" 
-            :title="translate('chatbot.saveChat', 'Save Chat')"
-          >
+          <button v-if="chatMessages.length > 0" class="save-chat-btn" @click="saveChatToHistory"
+            :title="translate('chatbot.saveChat', 'Save Chat')">
             <i class="fas fa-save"></i>
           </button>
           <button class="send-btn" @click="sendMessage">
@@ -127,13 +94,8 @@
         </div>
       </div>
       <!-- Feedback Dialog -->
-      <chat-response-feedback-dialog
-        v-if="feedbackDialog.visible"
-        :visible="feedbackDialog.visible"
-        :message="feedbackDialog.message"
-        @close="closeFeedbackDialog"
-        @submit="handleFeedbackSubmit"
-      />
+      <chat-response-feedback-dialog v-if="feedbackDialog.visible" :visible="feedbackDialog.visible"
+        :message="feedbackDialog.message" @close="closeFeedbackDialog" @submit="handleFeedbackSubmit" />
       <!-- Save Chat Dialog -->
       <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
         <template v-slot:header>
@@ -142,21 +104,13 @@
         <template v-slot:body>
           <div class="form-group">
             <label for="chatTitle">{{ translate('chatbot.chatTitle', 'Chat Title') }}</label>
-            <input 
-              type="text" 
-              id="chatTitle" 
-              v-model="saveChatDialog.title" 
-              :placeholder="translate('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')"
-            >
+            <input type="text" id="chatTitle" v-model="saveChatDialog.title"
+              :placeholder="translate('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')">
           </div>
           <div class="form-group">
             <label for="chatFolder">{{ translate('chatbot.selectFolder', 'Select Folder') }}</label>
             <select id="chatFolder" v-model="saveChatDialog.folderId">
-              <option 
-                v-for="folder in folders" 
-                :key="folder.id" 
-                :value="folder.id"
-              >
+              <option v-for="folder in folders" :key="folder.id" :value="folder.id">
                 {{ folder.name }}
               </option>
             </select>
@@ -166,34 +120,27 @@
           <button @click="saveChatDialog.visible = false" class="cancel-btn">
             {{ translate('common.cancel', 'Cancel') }}
           </button>
-          <button 
-            @click="handleSaveChat" 
-            class="primary-btn" 
-            :disabled="!saveChatDialog.title.trim()"
-          >
+          <button @click="handleSaveChat" class="primary-btn" :disabled="!saveChatDialog.title.trim()">
             {{ translate('common.save', 'Save') }}
           </button>
         </template>
       </modal-dialog>
     </div>
     <!-- Right Sidebar - Now using the dedicated component -->
-    <right-side-bar-component
-      :current-chat-id="currentChatId"
-      :current-locale="currentLocale"
-      :translations="translations"
-      @load-chat="loadChatFromHistory"
-      @open-document="handleOpenDocument"
-      @sidebar-toggle="handleSidebarToggle"
-    />
+    <right-side-bar-component :current-chat-id="currentChatId" :current-locale="currentLocale"
+      :translations="translations" @load-chat="loadChatFromHistory" @open-document="handleOpenDocument"
+      @sidebar-toggle="handleSidebarToggle" />
   </div>
 </template>
 
 <script>
-import { eventBus } from '../eventBus.js'
+import { eventBus } from '../eventBus.js';
+import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
-import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue'
-import ModalDialog from './ModalDialog.vue'
-import RightSideBarComponent from './RightSideBarComponent.vue'
+import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
+import ModalDialog from './ModalDialog.vue';
+import RightSideBarComponent from './RightSideBarComponent.vue';
+import chatbotService from '../services/chatbotService';
 
 export default {
   name: 'ChatBotComponent',
@@ -202,7 +149,7 @@ export default {
     ModalDialog,
     RightSideBarComponent
   },
-  
+
   data() {
     return {
       chatMessages: [],
@@ -220,7 +167,7 @@ export default {
       currentChatId: null,
       currentLocale: 'en',
       showQuickHelp: true,
-      
+
       // System status information
       systemStatus: {
         online: true,
@@ -229,57 +176,57 @@ export default {
         uptime: 3659, // in seconds
         lastUpdated: new Date()
       },
-      
+
       // Just Chat option defined separately so it can be referenced directly in the template
-      justChatOption: { 
+      justChatOption: {
         textKey: "chatbot.justChat",
         prompt: "I'd like to chat about government services",
         icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'
       },
       // Other quick help options with translation keys
       quickHelpOptions: [
-        { 
+        {
           textKey: "quickhelp.applyForID",
           prompt: "I need information on how to apply for a national ID card",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.payTaxes",
           prompt: "What's the process for paying my taxes online?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.startBusiness",
           prompt: "Guide me through the steps to register a new business",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.findHealthcare",
           prompt: "Where can I find information about public healthcare services?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.educationServices",
           prompt: "What education services are available for my children?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.transportLicenses",
           prompt: "How do I renew my driving license?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.housingPrograms",
           prompt: "Tell me about affordable housing programs in Kenya",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
         },
-        { 
+        {
           textKey: "quickhelp.findJobs",
           prompt: "What government job opportunities are currently available?",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>'
         }
       ],
-      
+
       // Keep the translations as a fallback mechanism
       translations: {
         en: {
@@ -334,30 +281,30 @@ export default {
       }
     };
   },
-  
+
   computed: {
     ...mapGetters('chatHistory', [
       'getAllFolders',
       'getChatById'
     ]),
-    
+
     folders() {
       return this.getAllFolders;
     },
-    
+
     // Get the first message from the user as a preview
     chatPreview() {
       const userMessage = this.chatMessages.find(msg => msg.sender === 'user');
       if (userMessage) {
         // Truncate to reasonable length (50 chars)
-        return userMessage.content.length > 50 
-          ? userMessage.content.substring(0, 47) + '...' 
+        return userMessage.content.length > 50
+          ? userMessage.content.substring(0, 47) + '...'
           : userMessage.content;
       }
       return 'New conversation';
     }
   },
- 
+
   mounted() {
     // Add welcome message
     if (this.chatMessages.length === 0) {
@@ -366,7 +313,7 @@ export default {
         content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
       });
     }
-    
+
     // Set up event listeners
     if (this.$root.$i18n) {
       this.currentLocale = this.$root.$i18n.locale;
@@ -374,16 +321,16 @@ export default {
         this.currentLocale = newLocale;
       });
     }
-    
+
     // Listen for tree node selection events
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
-    
+
     // Listen for open-chat events from the folder system
     eventBus.$on('open-chat', this.loadChatFromHistory);
-    
+
     // Scroll to bottom of chat
     this.scrollToBottom();
-    
+
     // Start system status update interval
     this.statusUpdateInterval = setInterval(() => {
       // Simulate status updates (in a real app, this would come from an API)
@@ -393,29 +340,29 @@ export default {
       this.systemStatus.lastUpdated = new Date();
     }, 30000); // Update every 30 seconds
   },
-  
+
   beforeUnmount() {
     // Clean up event listeners
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
     eventBus.$off('open-chat', this.loadChatFromHistory);
-    
+
     // Clear intervals
     if (this.statusUpdateInterval) {
       clearInterval(this.statusUpdateInterval);
     }
   },
-  
+
   methods: {
     ...mapActions('chatHistory', [
       'createChat',
       'updateChat'
     ]),
-    
+
     formatUptime(seconds) {
       const days = Math.floor(seconds / 86400);
       const hours = Math.floor((seconds % 86400) / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
-      
+
       if (days > 0) {
         return `${days}d ${hours}h`;
       } else if (hours > 0) {
@@ -424,18 +371,18 @@ export default {
         return `${minutes}m`;
       }
     },
-    
+
     // Handle sidebar related events
     handleSidebarToggle(collapsed) {
       // This method can be used to update parent component state if needed
       console.log('Sidebar collapsed state:', collapsed);
     },
-    
+
     handleOpenDocument(doc) {
       // Handle document opening event from sidebar
       console.log('Document opened:', doc);
     },
-    
+
     // Safe translation method with fallback
     translate(key, fallback) {
       // Try translation from i18n plugin first
@@ -449,24 +396,24 @@ export default {
           console.warn(`Translation error for key: ${key}`, error);
         }
       }
-      
+
       // Then try from local translations
       const localTranslation = this.translations[this.currentLocale]?.[key];
       if (localTranslation) {
         return localTranslation;
       }
-      
+
       // Finally, use English translation or fallback
       return this.translations['en']?.[key] || fallback;
     },
-    
+
     selectQuickHelpOption(option) {
       // Set the prompt text in the input field
       this.newMessage = option.prompt;
-      
+
       // Hide the quick help overlay
       this.showQuickHelp = false;
-      
+
       // Focus on the textarea
       this.$nextTick(() => {
         const textarea = document.querySelector('.prompt-textarea');
@@ -475,78 +422,131 @@ export default {
         }
       });
     },
-    
+
     handleTextareaFocus() {
       // Hide quick help when user focuses on the textarea
       this.showQuickHelp = false;
     },
-    
+
     handleTreeNodeSelected(item) {
       if (!item || typeof item !== 'object') return;
-      
+
       // Check if item is selected or deselected
       if (item.selected) {
         // Add to context if not already present
-        const exists = this.selectedContextItems.some(existing => 
-            existing.category === item.category && 
-            existing.service === item.service);
-            
+        const exists = this.selectedContextItems.some(existing =>
+          existing.category === item.category &&
+          existing.service === item.service);
+
         if (!exists) {
           this.selectedContextItems.push(item);
+          notificationService.info(this.translate('chatbot.contextAdded', 'Context added to your query.'), 1500);
         }
       } else {
         // Remove from context if deselected
-        this.selectedContextItems = this.selectedContextItems.filter(existing => 
+        this.selectedContextItems = this.selectedContextItems.filter(existing =>
           !(existing.category === item.category && existing.service === item.service)
         );
       }
     },
-    
+
     removeContextItem(index) {
       if (index < 0 || index >= this.selectedContextItems.length) return;
-      
+
       const removed = this.selectedContextItems[index];
       this.selectedContextItems.splice(index, 1);
-      
+
       // Emit event to notify tree component to update its selection
       eventBus.$emit('contextItemRemoved', removed);
+      notificationService.info(this.translate('chatbot.contextRemoved', 'Context removed from your query.'), 1500);
     },
-    
-    sendMessage() {
+
+    // In the methods section:
+    async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
-      
-      // Add user message
-      this.chatMessages.push({ sender: 'user', content });
+
+      // Add user message to chat immediately for responsive UI
+      this.chatMessages.push({
+        sender: 'user',
+        content,
+        timestamp: new Date().toISOString()
+      });
       this.newMessage = '';
-      
-      // Create context string
+
+      // Get context string
       const contextInfo = this.selectedContextItems.length > 0
         ? this.selectedContextItems.map(item => item.service).join(', ')
         : null;
-      
-      // Hide quick help when a message is sent
+
+      // Hide quick help
       this.showQuickHelp = false;
-      
-      // Simulate response (in real app, this would be an API call)
-      setTimeout(() => {
-        this.chatMessages.push({ 
-          sender: 'bot', 
-          content: `${this.translate('chatbot.responsePrefix', 'I received your message')}: "${content}"${
-            contextInfo ? ` ${this.translate('chatbot.withContext', 'with context')}: ${contextInfo}` : ''
-          }`
+
+      // Prepare loading state (optional)
+      const tempId = Date.now().toString();
+      let botMessageIndex = null;
+
+      try {
+        // Call the existing service method
+        const queryData = {
+          userId: this.$store.getters.currentUser?._key || 'anonymous',
+          sessionId: this.currentSessionId || 'new-session',
+          text: content,
+          categoryId: contextInfo ? this.selectedContextItems[0].category : null,
+          serviceId: contextInfo ? this.selectedContextItems[0].service : null,
+          isAnswered: false // Will be updated when response is received
+        };
+
+        // Submit query through service
+        const result = await chatbotService.submitQuery(queryData);
+
+        // Add bot response with queryId from database
+        this.chatMessages.push({
+          sender: 'bot',
+          content: result.response || `${this.translate('chatbot.responsePrefix', 'I received your message')}: "${content}"${contextInfo ? ` ${this.translate('chatbot.withContext', 'with context')}: ${contextInfo}` : ''
+            }`,
+          queryId: result._key, // Store the database ID for feedback
+          timestamp: new Date().toISOString()
         });
-        
-        // Scroll to bottom after adding message
-        this.scrollToBottom();
-        
-        // If this is an existing chat, update it
-        if (this.currentChatId) {
-          this.updateChatInHistory();
+
+        // After submitting the query
+        console.log('Query result:', result);
+
+        // Update session ID if needed
+        if (result.sessionId) {
+          this.currentSessionId = result.sessionId;
+          notificationService.info(this.translate('chatbot.sessionUpdated', 'Session updated.'), 1500);
         }
-      }, 500);
+
+        // Before marking as answered
+        console.log('About to mark query as answered:', result._key);
+
+        // Mark query as answered
+        await chatbotService.markQueryAsAnswered(result._key, result.responseTime);
+
+        // After the mark as answered call
+        console.log('Query marked as answered successfully');
+
+      } catch (error) {
+        console.error('Error sending query:', error);
+        this.chatMessages.push({
+          sender: 'bot',
+          content: this.translate('chatbot.processingError', 'Sorry, there was an error processing your request.'),
+          timestamp: new Date().toISOString(),
+        }
+        );
+        notificationService.error(this.translate('chatbot.processingError', 'Sorry, there was an error processing your request.'))
+      }
+
+      // Scroll to bottom after adding message
+      this.scrollToBottom();
+
+      // If this is an existing chat, update it
+      if (this.currentChatId) {
+        this.updateChatInHistory();
+      }
     },
-    
+
     openFeedbackDialog(index) {
       // Set the selected message and make dialog visible
       this.feedbackDialog = {
@@ -554,19 +554,43 @@ export default {
         message: this.chatMessages[index]
       };
     },
-    
+
     closeFeedbackDialog() {
       this.feedbackDialog.visible = false;
     },
-    
-    handleFeedbackSubmit(feedback) {
-      // In a real app, this would send the feedback to your API
-      console.log('Feedback submitted:', feedback);
-      
+
+    // Update the feedback handler
+    async handleFeedbackSubmit(feedback) {
+      const queryId = feedback.message.queryId;
+
+      if (!queryId) {
+        console.error('Cannot submit feedback: No queryId found');
+        return;
+      }
+
+      try {
+        // Use the existing service method
+        await chatbotService.submitFeedback(queryId, {
+          rating: feedback.rating,
+          comment: feedback.text,
+          providedAt: new Date().toISOString()
+        });
+
+        console.log('Feedback submitted successfully');
+
+        // Show success notification
+        notificationService.success('Thank you for your feedback!');
+      } catch (error) {
+        console.error('Error submitting feedback:', error);
+
+        // Show error notification
+        notificationService.error('Unable to submit feedback. Please try again.');
+      }
+
       // Close the dialog
       this.closeFeedbackDialog();
     },
-    
+
     scrollToBottom() {
       this.$nextTick(() => {
         const container = this.$refs.chatWindow;
@@ -575,22 +599,22 @@ export default {
         }
       });
     },
-    
+
     // Chat History Integration
     saveChatToHistory() {
       // Open the save dialog
       this.saveChatDialog = {
         visible: true,
-        title: this.currentChatId ? 
-          (this.getChatById(this.currentChatId)?.title || '') : 
+        title: this.currentChatId ?
+          (this.getChatById(this.currentChatId)?.title || '') :
           this.generateChatTitle(),
         folderId: 'default'
       };
     },
-    
+
     handleSaveChat() {
       if (!this.saveChatDialog.title.trim()) return;
-      
+
       if (this.currentChatId) {
         // Update existing chat
         this.updateChat({
@@ -598,9 +622,10 @@ export default {
           title: this.saveChatDialog.title.trim(),
           preview: this.chatPreview
         });
-        
+
         // Show success message or notification
-        alert(this.translate('chatbot.chatUpdated', 'Chat updated successfully!'));
+        // alert(this.translate('chatbot.chatUpdated', 'Chat updated successfully!'));
+        notificationService.success(this.translate('chatbot.chatUpdated', 'Chat updated successfully!'));
       } else {
         // Create new chat
         const chatId = this.createChat({
@@ -610,18 +635,19 @@ export default {
           // Store full chat data in localStorage or somewhere else
           fullChatData: JSON.stringify(this.chatMessages)
         });
-        
+
         // Update current chat ID
         this.currentChatId = chatId;
-        
+
         // Show success message or notification
-        alert(this.translate('chatbot.chatSaved', 'Chat saved successfully!'));
+        //alert(this.translate('chatbot.chatSaved', 'Chat saved successfully!'));
+        notificationService.success(this.translate('chatbot.chatSaved', 'Chat saved successfully!'));
       }
-      
+
       // Close dialog
       this.saveChatDialog.visible = false;
     },
-    
+
     updateChatInHistory() {
       // Only update if we have a current chat ID
       if (this.currentChatId) {
@@ -633,12 +659,12 @@ export default {
         });
       }
     },
-    
+
     loadChatFromHistory(chatId) {
       // Get chat from store
       const chat = this.getChatById(chatId);
       if (!chat) return;
-      
+
       try {
         // Retrieve full chat data from storage
         // This is a simplified example - in a real app, you'd store this in your backend
@@ -655,36 +681,37 @@ export default {
             }
           ];
         }
-        
+
         // Set current chat ID
         this.currentChatId = chatId;
-        
+
         // Hide quick help when loading a chat
         this.showQuickHelp = false;
-        
+
         // Scroll to bottom after loading
         this.scrollToBottom();
       } catch (error) {
         console.error('Error loading chat:', error);
         // Show error message
+        notificationService.error(this.translate('chatbot.loadError', 'Unable to load chat history.'));
       }
     },
-    
+
     generateChatTitle() {
       // Generate a title based on the first user message or current date
       const userMessage = this.chatMessages.find(msg => msg.sender === 'user');
       if (userMessage) {
         // Use first 20 chars of user message
-        return userMessage.content.length > 20 
-          ? userMessage.content.substring(0, 17) + '...' 
+        return userMessage.content.length > 20
+          ? userMessage.content.substring(0, 17) + '...'
           : userMessage.content;
       }
-      
+
       // Default to date-based title
       const now = new Date();
       return `Chat - ${now.toLocaleDateString()}`;
     },
-    
+
     startNewChat() {
       // Confirm with user if there are unsaved changes
       if (this.chatMessages.length > 1 && !this.currentChatId) {
@@ -692,7 +719,7 @@ export default {
           return;
         }
       }
-      
+
       // Clear current chat
       this.chatMessages = [
         {
@@ -703,12 +730,13 @@ export default {
       this.currentChatId = null;
       this.selectedContextItems = [];
       this.newMessage = '';
-      
+
       // Show quick help when starting a new chat
       this.showQuickHelp = true;
-      
+
       // Scroll to bottom after resetting
       this.scrollToBottom();
+      notificationService.info(this.translate('chatbot.newChatStarted', 'Started a new conversation.'), 1500);
     }
   }
 }</script>
@@ -885,7 +913,7 @@ export default {
   line-height: 1.4;
   white-space: pre-wrap;
   word-wrap: break-word;
-  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.1));
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .chat-message.user .message-bubble {
@@ -1026,7 +1054,8 @@ export default {
   padding: 8px 12px;
   border-radius: 4px;
   cursor: pointer;
-  margin-right: auto; /* This pushes it to the left */
+  margin-right: auto;
+  /* This pushes it to the left */
 }
 
 .new-chat-btn:hover {
@@ -1073,7 +1102,7 @@ export default {
   color: var(--text-primary, #333);
 }
 
-.form-group input, 
+.form-group input,
 .form-group select {
   width: 100%;
   padding: 8px 12px;
@@ -1084,7 +1113,7 @@ export default {
   color: var(--text-primary, #333);
 }
 
-.cancel-btn, 
+.cancel-btn,
 .primary-btn {
   padding: 8px 16px;
   border-radius: 4px;
@@ -1124,13 +1153,13 @@ export default {
     flex-direction: row;
     align-items: flex-end;
   }
-  
+
   .prompt-textarea {
     margin-bottom: 0;
     margin-right: 8px;
     flex: 1;
   }
-  
+
   .quick-help-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1148,7 +1177,7 @@ export default {
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .status-metrics {
     width: 100%;
     justify-content: space-between;
@@ -1159,7 +1188,7 @@ export default {
   .quick-help-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .quick-help-heading {
     font-size: 1.4rem;
   }

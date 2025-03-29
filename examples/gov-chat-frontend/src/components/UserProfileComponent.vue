@@ -291,6 +291,7 @@
 <script>
 import userProfileService from '@/services/userProfileService';
 import userService from '@/services/userService';
+import notificationService from '@/services/notificationService';
 
 export default {
   name: 'UserProfileComponent',
@@ -434,7 +435,7 @@ export default {
         if (!validation.isValid) {
           // Show first error message
           const firstError = Object.values(validation.errors)[0];
-          alert(firstError);
+          notificationService.error(firstError);
           this.isSubmitting = false;
           return;
         }
@@ -446,13 +447,15 @@ export default {
         await userProfileService.updateProfile(this.currentUserId, profileData);
 
         // Show success message
-        alert(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
+        //alert(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
+        notificationService.success(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
 
         // Emit success event and close
         this.$emit('save', profileData);
       } catch (error) {
         console.error('Error saving profile:', error);
-        alert(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
+        //alert(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
+        notificationService.error(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
       } finally {
         this.isSubmitting = false;
       }
@@ -466,12 +469,14 @@ export default {
       const maxSize = 5 * 1024 * 1024; // 5MB
 
       if (!allowedTypes.includes(file.type)) {
-        this.$emit('error', this.$t('userProfile.errors.invalidFileType'));
+        //this.$emit('error', this.$t('userProfile.errors.invalidFileType'));
+        notificationService.error(this.$t('userProfile.errors.invalidFileType'));
         return;
       }
 
       if (file.size > maxSize) {
-        this.$emit('error', this.$t('userProfile.errors.fileTooLarge'));
+        //this.$emit('error', this.$t('userProfile.errors.fileTooLarge'));
+        notificationService.error(this.$t('userProfile.errors.fileTooLarge'));
         return;
       }
 
@@ -497,6 +502,10 @@ export default {
           }
         });
       });
+
+      if (this.isTabComplete(this.activeTab)) {
+        notificationService.info(this.$t('userProfile.tabComplete', 'Tab completed!'), 1500);
+      }
 
       return {
         isValid: Object.keys(errors).length === 0,

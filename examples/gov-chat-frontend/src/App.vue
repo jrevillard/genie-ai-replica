@@ -31,6 +31,16 @@
 
     <!-- Show login screen if not authenticated and route requires auth -->
     <login-screen v-else @login-success="handleLoginSuccess" :theme="theme" />
+    
+    <!-- Global notification component -->
+    <div 
+      v-if="notification.visible" 
+      class="notification" 
+      :class="notification.type"
+      @click="hideNotification"
+    >
+      {{ notification.message }}
+    </div>
   </div>
 </template>
 
@@ -42,6 +52,7 @@ import UserProfileComponent from './components/UserProfileComponent.vue'
 import SettingsComponent from './components/SettingsComponent.vue'
 import LoginScreen from './components/LoginScreen.vue'
 import { mapGetters } from 'vuex'
+import { eventBus } from './eventBus.js'
 
 export default {
   name: 'App',
@@ -59,7 +70,13 @@ export default {
       showAnalytics: false,
       showUserProfile: false,
       showSettings: false,
-      theme: 'light' // Default to light theme
+      theme: 'light', // Default to light theme
+      notification: {
+        visible: false,
+        message: '',
+        type: 'success',
+        timer: null
+      }
     }
   },
   computed: {
@@ -87,6 +104,9 @@ export default {
 
     // Add listener for system theme changes if using system theme
     this.setupSystemThemeListener()
+
+    // Set up notification event listener
+    eventBus.$on('notification:show', this.showNotification)
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkScreenSize)
@@ -95,8 +115,40 @@ export default {
     if (this.systemThemeListener) {
       window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', this.systemThemeListener)
     }
+
+    // Clean up notification event listener
+    eventBus.$off('notification:show', this.showNotification)
   },
   methods: {
+    // Notification methods
+    showNotification(payload) {
+      // Clear any existing timer
+      if (this.notification.timer) {
+        clearTimeout(this.notification.timer)
+      }
+      
+      // Show the notification
+      this.notification = {
+        visible: true,
+        message: payload.message,
+        type: payload.type || 'success',
+        timer: null
+      }
+      
+      // Set timer to auto-hide
+      this.notification.timer = setTimeout(() => {
+        this.hideNotification()
+      }, payload.duration || 3000)
+    },
+    
+    hideNotification() {
+      this.notification.visible = false
+      if (this.notification.timer) {
+        clearTimeout(this.notification.timer)
+        this.notification.timer = null
+      }
+    },
+
     // Initialize theme from localStorage or system preference
     initTheme() {
       try {
@@ -253,6 +305,42 @@ body {
   padding: 20px;
   transition: margin-left 0.3s ease;
   background-color: var(--bg-primary, #f5f7fa);
+}
+
+/* Notification styles */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  color: white;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: notification-fadeIn 0.3s ease;
+  cursor: pointer;
+}
+
+.notification.success {
+  background-color: #10b981;
+}
+
+.notification.error {
+  background-color: #ef4444;
+}
+
+.notification.info {
+  background-color: #3b82f6; 
+}
+
+.notification.warning {
+  background-color: #f59e0b;
+}
+
+@keyframes notification-fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Responsive adjustments */

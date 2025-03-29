@@ -246,11 +246,13 @@
 </template>
 
 <script>
+
 // Import the user service
 import userService from '@/services/userService';
 // Import the PasswordResetInitiateScreen component
 import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue';
-
+// Import the notifications service
+import notificationService from '@/services/notificationService';
 // Import the theme manager
 import { themeManager, setTheme } from '@/utils/ThemeManager';
 
@@ -468,40 +470,41 @@ export default {
       // First save to localStorage
       localStorage.setItem('theme', theme);
 
-      // Apply theme to document elements
-      document.documentElement.setAttribute('data-theme', theme);
-      document.body.setAttribute('data-theme', theme);
-
-      // Update dark mode classes
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark-mode');
-        document.documentElement.classList.remove('light-mode');
-        document.body.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-      } else {
-        document.documentElement.classList.remove('dark-mode');
-        document.documentElement.classList.add('light-mode');
-        document.body.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-      }
-
-      // Ensure ThemeManager is updated if available
+      // Let the ThemeManager handle the theme application
+      // It already supports 'system' option with OS preference detection
       try {
         if (typeof themeManager !== 'undefined' && themeManager) {
-          themeManager.currentTheme = theme;
-          themeManager.isDarkMode = theme === 'dark';
-          themeManager.userPreference = theme;
+          // Use the ThemeManager's setTheme method which handles 'system' theme
+          themeManager.setTheme(theme);
+
+          // Since ThemeManager.setTheme already handles everything, we don't need
+          // to manually set attributes or classes here
+        } else {
+          // Fallback if ThemeManager is not available
+          // Simple direct application without system detection
+          const effectiveTheme = theme === 'system'
+            ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : theme;
+
+          document.documentElement.setAttribute('data-theme', effectiveTheme);
+          document.body.setAttribute('data-theme', effectiveTheme);
+
+          // Update dark mode classes
+          if (effectiveTheme === 'dark') {
+            document.documentElement.classList.add('dark-mode');
+            document.documentElement.classList.remove('light-mode');
+            document.body.classList.remove('light-mode');
+            document.body.classList.add('dark-mode');
+          } else {
+            document.documentElement.classList.remove('dark-mode');
+            document.documentElement.classList.add('light-mode');
+            document.body.classList.remove('dark-mode');
+            document.body.classList.add('light-mode');
+          }
         }
       } catch (e) {
-        console.warn('Error updating ThemeManager:', e);
+        console.warn('Error applying theme:', e);
       }
-
-      // Dispatch a theme change event with a slight delay to ensure DOM updates first
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('themeChange', {
-          detail: { theme, isDarkMode: theme === 'dark' }
-        }));
-      }, 50);
 
       // Notify parent component
       this.$emit('themeChanged', theme);
@@ -552,7 +555,8 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
-        this.errorMessage = this.translate('settings.unableToLoadUser');
+        // this.errorMessage = this.translate('settings.unableToLoadUser');
+        notificationService.error(this.translate('settings.unableToLoadUser'));
 
         // Use any data we might already have
         const fallbackUser = userService.getCurrentUser();
@@ -587,6 +591,8 @@ export default {
     // Then update your save method to dispatch the global event:
     // Method 2: When saving, do the global reload after closing
     save() {
+
+      notificationService.info(this.translate('settings.savingSettings', 'Saving your settings...'), 1000);
       // First set a flag to indicate we're changing language
       const isChangingLanguage = this.$i18n &&
         this.$i18n.locale !== this.settings.language;
@@ -631,6 +637,8 @@ export default {
       // Emit events
       this.$emit('themeChanged', this.settings.theme);
 
+      notificationService.success(this.translate('settings.settingsSaved', 'Settings saved successfully!'));
+
       // Close dialog
       this.$emit('close');
 
@@ -659,7 +667,8 @@ export default {
         const response = await userService.resetUserData();
 
         // Inform user of success
-        alert(this.translate('settings.userDataReset', 'Your profile data has been successfully reset.'));
+        //alert(this.translate('settings.userDataReset', 'Your profile data has been successfully reset.'));
+        notificationService.success(this.translate('settings.userDataReset', 'Your profile data has been successfully reset.'));
 
         // Refresh the user data displayed in the component
         await this.fetchUserData();
@@ -675,7 +684,9 @@ export default {
 
       } catch (e) {
         console.error('Error resetting user data:', e);
-        alert(this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
+        //alert(this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
+        notificationService.error(this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
+
       } finally {
         // Hide loading state
         this.isLoading = false;
@@ -705,7 +716,8 @@ export default {
   // Process account deletion
   async processAccountDeletion() {
     if (!this.deleteAccountPassword) {
-      this.deleteAccountError = this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion');
+      // this.deleteAccountError = this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion');
+      notificationService.error(this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion'));
       return;
     }
     
@@ -720,7 +732,8 @@ export default {
       );
       
       // Show success message
-      alert(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
+      // alert(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
+      notificationService.success(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
       
       // Close modal and redirect to login
       this.showDeleteAccountModal = false;
@@ -731,9 +744,11 @@ export default {
       console.error('Error deleting account:', error);
       
       if (error.response && error.response.status === 403) {
-        this.deleteAccountError = this.translate('settings.incorrectPassword', 'Incorrect password');
+        // this.deleteAccountError = this.translate('settings.incorrectPassword', 'Incorrect password');
+        notificationService.error(this.translate('settings.incorrectPassword', 'Incorrect password'));
       } else {
-        this.deleteAccountError = this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.');
+        // this.deleteAccountError = this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.');
+        notificationService.error(this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.'));
       }
     } finally {
       this.isDeletingAccount = false;
@@ -762,7 +777,8 @@ export default {
       // Close the modal after showing success message
       setTimeout(() => {
         this.showPasswordReset = false;
-        alert(this.translate('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
+        //alert(this.translate('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
+        notificationService.success(this.translate('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
       }, 1500);
     },
 
@@ -780,7 +796,8 @@ export default {
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(this.userData.email)) {
-        this.emailError = this.translate('settings.enterValidEmail');
+        // this.emailError = this.translate('settings.enterValidEmail');
+        notificationService.error(this.translate('settings.enterValidEmail'));
         return;
       }
 
@@ -795,7 +812,8 @@ export default {
         const isAvailable = await userService.checkEmailAvailability(this.userData.email);
 
         if (!isAvailable) {
-          this.emailError = this.translate('settings.emailAlreadyInUse');
+          // this.emailError = this.translate('settings.emailAlreadyInUse');
+          notificationService.error(this.translate('settings.emailAlreadyInUse'));
           return;
         }
 
@@ -804,14 +822,16 @@ export default {
         this.showEmailConfirmModal = true;
       } catch (error) {
         console.error('Error checking email availability:', error);
-        this.emailError = this.translate('settings.unableToVerifyEmail');
+        // this.emailError = this.translate('settings.unableToVerifyEmail');
+        notificationService.error(this.translate('settings.unableToVerifyEmail'));
       }
     },
 
     // Confirm and process email change
     async confirmEmailChange() {
       if (!this.emailChangePassword) {
-        this.emailChangeError = this.translate('settings.pleaseEnterPassword');
+        // this.emailChangeError = this.translate('settings.pleaseEnterPassword');
+        notificationService.error(this.translate('settings.pleaseEnterPassword'));
         return;
       }
 
@@ -833,7 +853,8 @@ export default {
         console.log('[SETTINGS] Email update response:', response);
 
         // Show success message
-        alert(this.translate('settings.checkNewEmailVerification'));
+        // alert(this.translate('settings.checkNewEmailVerification'));
+        notificationService.info(this.translate('settings.checkNewEmailVerification'));
 
         // Close modals
         this.showEmailConfirmModal = false;
@@ -851,7 +872,8 @@ export default {
         }, 1500); // Short delay to allow user to read the message
       } catch (error) {
         console.error('Error updating email:', error);
-        this.emailChangeError = this.translate('settings.failedToUpdateEmail');
+        // this.emailChangeError = this.translate('settings.failedToUpdateEmail');
+        notificationService.error(this.translate('settings.failedToUpdateEmail'));
       } finally {
         this.isEmailUpdating = false;
       }

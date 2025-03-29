@@ -841,7 +841,12 @@ export default {
     clearContext: 'Futa muktadha na anza mazungumzo mapya',
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
     whatCanIHelp: "Naweza kukusaidia vipi leo?",
-    justChat: "Ongea tu"
+    justChat: "Ongea tu",
+    contextAdded: 'Muktadha umeongezwa kwenye swali lako',
+    contextRemoved: 'Muktadha umeondolewa kutoka kwenye swali lako',
+    sessionUpdated: 'Kikao kimesasishwa',
+    newChatStarted: 'Mazungumzo mapya yameanzishwa',
+    loadError: 'Imeshindwa kupakia historia ya mazungumzo'
   },
   quickhelp: {
     applyForID: "Omba kitambulisho",
@@ -870,7 +875,8 @@ export default {
     close: 'Ghairi',
     thankYouMessage: 'Asante kwa maoni yako!',
     submitting: 'Inawasilisha...',
-    error: 'Hitilafu imetokea. Tafadhali jaribu tena.'
+    success: 'Asante kwa maoni yako!',
+    error: 'Imeshindwa kuwasilisha maoni. Tafadhali jaribu tena.'
   },
   responseRating: {
     title: 'Tusaidie Kuboresha',

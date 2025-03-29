@@ -846,7 +846,12 @@ export default {
     clearContext: 'Clear context and start a new conversation',
     unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?',
     whatCanIHelp: "How can I help you today?",
-    justChat: "Just Chat"
+    justChat: "Just Chat",
+    contextAdded: 'Context added to your query',
+    contextRemoved: 'Context removed from your query',
+    sessionUpdated: 'Session updated',
+    newChatStarted: 'Started a new conversation',
+    loadError: 'Unable to load chat history',
   },
   quickhelp: {
     applyForID: "Apply for ID",
@@ -875,7 +880,8 @@ export default {
     close: 'Cancel',
     thankYouMessage: 'Thank you for your feedback!',
     submitting: 'Submitting...',
-    error: 'Something went wrong. Please try again.'
+    error: 'Something went wrong. Please try again.',
+    success: 'Thank you for your feedback!',
   },
   responseRating: {
     title: 'Help Us Improve',

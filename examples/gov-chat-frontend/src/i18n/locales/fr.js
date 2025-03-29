@@ -441,7 +441,7 @@ export default {
     saveError: 'Erreur lors de l\'enregistrement des paramètres',
     saveSettings: 'Enregistrer',
     cancel: 'Annuler',
-    
+
     language: {
       title: 'Langue',
       selectLabel: 'Langue d\'affichage'
@@ -452,7 +452,7 @@ export default {
       french: 'Français',
       swahili: 'Swahili'
     },
-    
+
     appearance: {
       title: 'Apparence',
       theme: 'Thème',
@@ -469,7 +469,7 @@ export default {
       system: 'Système'
     },
     fontSize: 'Taille de police',
-    
+
     notifications: {
       title: 'Notifications',
       emailUpdates: 'Mises à jour par email',
@@ -478,7 +478,7 @@ export default {
     notifications: 'Notifications',
     emailUpdates: 'Mises à jour par e-mail',
     soundNotifications: 'Notifications sonores',
-    
+
     account: {
       title: 'Compte',
       resetUserData: 'Réinitialiser les données',
@@ -495,7 +495,7 @@ export default {
     resetUserDataDesc: 'Cela effacera toutes vos données de profil et votre historique de chat.',
     deleteAccount: 'Supprimer le compte',
     deleteAccountDesc: 'Cela supprimera définitivement votre compte et toutes les données associées.',
-    
+
     // Additional entries for modals and confirmations
     standardAccount: 'Compte Standard',
     confirmEmailChange: 'Confirmer le changement d\'e-mail',
@@ -841,7 +841,12 @@ export default {
     clearContext: 'Effacer le contexte et démarrer une nouvelle conversation',
     unsavedChanges: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation?',
     whatCanIHelp: "Comment puis-je vous aider aujourd'hui ?",
-    justChat: "Simplement discuter"
+    justChat: "Simplement discuter",
+    contextAdded: 'Contexte ajouté à votre requête',
+    contextRemoved: 'Contexte supprimé de votre requête',
+    sessionUpdated: 'Session mise à jour',
+    newChatStarted: 'Nouvelle conversation démarrée',
+    loadError: 'Impossible de charger l\'historique de conversation'
   },
   quickhelp: {
     applyForID: "Demander une pièce d'identité",
@@ -870,7 +875,8 @@ export default {
     close: 'Annuler',
     thankYouMessage: 'Merci pour votre retour d\'information!',
     submitting: 'Envoi en cours...',
-    error: 'Une erreur s\'est produite. Veuillez réessayer.'
+    success: 'Merci pour votre avis !',
+    error: 'Impossible de soumettre votre avis. Veuillez réessayer.'
   },
   responseRating: {
     title: 'Aidez-nous à Améliorer',

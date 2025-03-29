@@ -822,7 +822,9 @@ export default {
       "Utengenezaji wa Tovuti",
       "Biolojia ya Wanyama Pori",
       "Zoolojia"
-    ]
+    ],
+    confirmSaveTitle: "Hifadhi Wasifu",
+    confirmSave: "Una uhakika unataka kuhifadhi mabadiliko haya?"
   },
   chatbot: {
     placeholder: 'Andika swali lako hapa...',

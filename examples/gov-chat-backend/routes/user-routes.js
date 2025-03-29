@@ -269,6 +269,7 @@ router.post('/', upload.any(), async (req, res) => {
 });
 
 // Update user profile
+// Update user profile
 router.put('/:userId', upload.any(), async (req, res) => {
   try {
     console.log("Update request body:", req.body);
@@ -282,17 +283,33 @@ router.put('/:userId', upload.any(), async (req, res) => {
         profileData = JSON.parse(req.body.data);
       } catch (error) {
         console.error('Error parsing profile data:', error);
-        return res.status(400).json({ message: 'Invalid profile data format' });
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid profile data format' 
+        });
       }
+    } else {
+      // If req.body.data doesn't exist, assume the entire body is the profile data
+      profileData = req.body;
     }
     
     console.log("Parsed profile data for update:", JSON.stringify(profileData));
     
     const user = await userService.updateUserProfile(req.params.userId, profileData, req.files || []);
-    res.json(user);
+    
+    // Return a clean JSON response with success flag and message
+    // This avoids triggering alert dialogs on the frontend
+    res.json({
+      success: true,
+      message: 'Profile saved successfully',
+      user: user
+    });
   } catch (error) {
     console.error(`Error updating user profile ${req.params.userId}:`, error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to update profile' 
+    });
   }
 });
 

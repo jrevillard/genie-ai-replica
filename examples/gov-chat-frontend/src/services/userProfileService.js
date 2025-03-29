@@ -43,28 +43,59 @@ class UserProfileService {
     }
   }
 
-  /**
-   * Update an existing user profile
-   * @param {String} userId - User ID
-   * @param {Object} profileData - Updated profile data
-   * @returns {Promise} Updated user profile
-   */
+ /**
+ * Update an existing user profile
+ * @param {String} userId - User ID
+ * @param {Object} profileData - Updated profile data
+ * @returns {Promise} Updated user profile
+ */
   async updateProfile(userId, profileData) {
     try {
-      // Handle file uploads and form data
-      const formData = this.prepareFormData(profileData);
-      
-      const response = await httpService.put(`users/${userId}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
+      console.log(`Updating user profile for ID: ${userId}`);
+      console.log('Profile data:', profileData);
+
+      // Check if there are any File objects in the profile data
+      const hasFiles = this.checkForFiles(profileData);
+
+      let response;
+      if (hasFiles) {
+        // Handle file uploads and form data
+        const formData = this.prepareFormData(profileData);
+
+        response = await httpService.put(`users/${userId}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      } else {
+        // No files, send as JSON
+        response = await httpService.put(`users/${userId}`, profileData);
+      }
+
       return response.data;
     } catch (error) {
       console.error('Error updating user profile:', error);
       throw error;
     }
+  }
+
+  /**
+ * Check if the profile data contains any File objects
+ * @param {Object} profileData - Profile data to check
+ * @returns {Boolean} True if files are present
+ */
+  checkForFiles(profileData) {
+    // Check for File objects in any section
+    for (const section in profileData) {
+      if (typeof profileData[section] === 'object' && profileData[section] !== null) {
+        for (const field in profileData[section]) {
+          if (profileData[section][field] instanceof File) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   /**

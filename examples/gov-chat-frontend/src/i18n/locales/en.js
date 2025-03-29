@@ -827,7 +827,9 @@ export default {
       "Web Development",
       "Wildlife Biology",
       "Zoology"
-    ]
+    ],
+    confirmSaveTitle: "Save Profile",
+    confirmSave: "Are you sure you want to save these changes?"
   },
   chatbot: {
     placeholder: 'Type your query here...',

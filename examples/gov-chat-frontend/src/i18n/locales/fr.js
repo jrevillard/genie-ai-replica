@@ -822,7 +822,9 @@ export default {
       "Développement web",
       "Biologie de la faune",
       "Zoologie"
-    ]
+    ],
+    confirmSaveTitle: "Enregistrer le profil",
+    confirmSave: "Êtes-vous sûr de vouloir enregistrer ces modifications ?"
   },
   chatbot: {
     placeholder: 'Tapez votre requête ici...',

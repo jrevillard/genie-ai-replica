@@ -263,7 +263,6 @@ export default {
       // Process profile data after save
       console.log('Profile saved:', profileData)
       this.showUserProfile = false
-      alert(this.$t('userProfile.saveSuccess') || 'Profile saved successfully')
     }
   }
 }

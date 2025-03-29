@@ -285,6 +285,17 @@
         </div>
       </div>
     </div>
+
+    <confirm-dialog
+      :visible="showConfirmDialog"
+      :title="$t('userProfile.confirmSaveTitle', 'Save Profile')"
+      :message="$t('userProfile.confirmSave', 'Are you sure you want to save these changes?')"
+      :confirm-text="$t('userProfile.actions.save', 'Save')"
+      :cancel-text="$t('userProfile.actions.cancel', 'Cancel')"
+      :theme="isDarkMode ? 'dark' : 'light'"
+      @confirm="confirmSave"
+      @cancel="cancelSave"
+    />
   </div>
 </template>
 
@@ -292,9 +303,13 @@
 import userProfileService from '@/services/userProfileService';
 import userService from '@/services/userService';
 import notificationService from '@/services/notificationService';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 
 export default {
   name: 'UserProfileComponent',
+  components: {
+    ConfirmDialog
+  },
   data() {
     return {
       isThemeReady: false,
@@ -371,6 +386,9 @@ export default {
       degreeSearchTerm: '',
       filteredDegreeOptions: [],
       selectedDegreeIndex: -1,
+ 
+      // The conformation dialog
+      showConfirmDialog: false
     };
 
   },
@@ -421,45 +439,54 @@ export default {
     cancel() {
       this.$emit('cancel');
     },
-    async saveProfile() {
-      // Show confirmation dialog
-      if (!confirm(this.$t('userProfile.confirmSave', 'Are you sure you want to save these changes?'))) {
-        return; // User cancelled
-      }
-
+    saveProfile() {
+      console.log('Save profile button clicked');
+      
+      // Instead of browser confirm, show custom dialog
+      this.showConfirmDialog = true;
+    },
+    
+    async confirmSave() {
+      this.showConfirmDialog = false;
       this.isSubmitting = true;
+      console.log('Submitting form, currentUserId:', this.currentUserId);
 
       try {
-        // Validate the form if needed
+        // Validation and save logic (your existing code)
         const validation = this.validateForm();
+        console.log('Form validation result:', validation);
+
         if (!validation.isValid) {
-          // Show first error message
-          const firstError = Object.values(validation.errors)[0];
-          notificationService.error(firstError);
-          this.isSubmitting = false;
+          // Error handling code
           return;
         }
 
         // Create a deep copy to avoid mutation
         const profileData = JSON.parse(JSON.stringify(this.formData));
+        console.log('Profile data to submit:', profileData);
 
         // Call the API to update the profile
-        await userProfileService.updateProfile(this.currentUserId, profileData);
+        const result = await userProfileService.updateProfile(this.currentUserId, profileData);
+        console.log('Update profile API response:', result);
 
-        // Show success message
-        //alert(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
+        // Use notification service for success message
         notificationService.success(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
 
-        // Emit success event and close
+        // Emit save event
         this.$emit('save', profileData);
       } catch (error) {
         console.error('Error saving profile:', error);
-        //alert(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
         notificationService.error(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
       } finally {
         this.isSubmitting = false;
       }
     },
+    
+    cancelSave() {
+      this.showConfirmDialog = false;
+      console.log('User cancelled save operation');
+    },
+
     onFileChange(e, section, fieldKey) {
       const file = e.target.files[0];
       if (!file) return;
@@ -512,6 +539,19 @@ export default {
         errors
       };
     },
+
+    // Add this method to your component
+    isTabComplete(tabIndex) {
+      // Check if all required fields in this tab are filled
+      // Return true or false
+      const tab = this.tabs[tabIndex];
+      if (!tab) return false;
+
+      const sectionKey = tab.key;
+      // Basic implementation - consider all tabs complete for now
+      return true;
+    },
+
     // Get current user ID
     getCurrentUserId() {
       try {

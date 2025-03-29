@@ -1,20 +1,15 @@
 <template>
-  <div 
-    class="user-profile-modal" 
-    :style="dialogThemeStyles"
-    :data-themed="isThemeReady"
-    ref="modalContainer"
-  >
+  <div class="user-profile-modal" :style="dialogThemeStyles" :data-themed="isThemeReady" ref="modalContainer">
     <div class="overlay" @click="cancel"></div>
     <div class="modal-content">
       <h2 :data-themed="isThemeReady">{{ $t('userProfile.title') }}</h2>
-      
+
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
         <p>{{ $t('userProfile.loading', 'Loading user profile...') }}</p>
       </div>
-      
+
       <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
@@ -22,7 +17,7 @@
           {{ $t('userProfile.retry', 'Retry') }}
         </button>
       </div>
-      
+
       <!-- Main content - shown when not loading and no errors -->
       <div v-else>
         <p class="privacy-info" :data-themed="isThemeReady">
@@ -32,12 +27,8 @@
 
         <!-- Tabs -->
         <div class="tabs">
-          <button
-            v-for="(tab, index) in tabs"
-            :key="index"
-            :class="{ active: activeTab === index }"
-            @click="activeTab = index"
-          >
+          <button v-for="(tab, index) in tabs" :key="index" :class="{ active: activeTab === index }"
+            @click="activeTab = index">
             {{ $t(`userProfile.tabs.tab${index+1}`) }}
           </button>
         </div>
@@ -48,8 +39,8 @@
           <div v-if="activeTab === 0">
             <div class="field-group">
               <label>{{ $t('userProfile.fields.fullName') }}</label>
-              <input v-model="formData.personalIdentification.fullName" type="text" 
-                     :placeholder="$t('userProfile.placeholders.fullName')" />
+              <input v-model="formData.personalIdentification.fullName" type="text"
+                :placeholder="$t('userProfile.placeholders.fullName')" />
             </div>
             <div class="field-group">
               <label>{{ $t('userProfile.fields.dob') }}</label>
@@ -67,8 +58,8 @@
             </div>
             <div class="field-group">
               <label>{{ $t('userProfile.fields.nationality') }}</label>
-              <input v-model="formData.personalIdentification.nationality" type="text" 
-                     :placeholder="$t('userProfile.placeholders.nationality')" />
+              <input v-model="formData.personalIdentification.nationality" type="text"
+                :placeholder="$t('userProfile.placeholders.nationality')" />
             </div>
           </div>
 
@@ -174,35 +165,18 @@
             <div class="field-group">
               <label>{{ $t('userProfile.fields.education', 'Education') }}</label>
               <div class="select-wrapper">
-                <input 
-                  v-if="showEducationSearch" 
-                  type="text" 
-                  v-model="educationSearchTerm" 
-                  class="search-input"
+                <input v-if="showEducationSearch" type="text" v-model="educationSearchTerm" class="search-input"
                   :placeholder="$t('userProfile.placeholders.searchDisciplines', 'Search disciplines...')"
-                  @input="filterEducationOptions"
-                  @blur="handleEducationBlur"
-                  @keydown.enter="selectFirstEducationOption"
-                  @keydown.down="navigateEducationOptions(1)"
-                  @keydown.up="navigateEducationOptions(-1)"
-                  ref="educationSearchInput"
-                />
-                <div 
-                  v-else 
-                  class="selected-option" 
-                  @click="toggleEducationSearch"
-                >
+                  @input="filterEducationOptions" @blur="handleEducationBlur"
+                  @keydown.enter="selectFirstEducationOption" @keydown.down="navigateEducationOptions(1)"
+                  @keydown.up="navigateEducationOptions(-1)" ref="educationSearchInput" />
+                <div v-else class="selected-option" @click="toggleEducationSearch">
                   {{ formData.educationRecords.education || $t('userProfile.placeholders.selectDiscipline', 'Select a discipline') }}
                 </div>
                 <div v-if="showEducationSearch" class="options-dropdown">
-                  <div 
-                    v-for="(option, index) in filteredEducationOptions" 
-                    :key="index"
-                    class="option" 
-                    :class="{ 'active': index === selectedEducationIndex }"
-                    @click="selectEducationOption(option)"
-                    @mouseenter="selectedEducationIndex = index"
-                  >
+                  <div v-for="(option, index) in filteredEducationOptions" :key="index" class="option"
+                    :class="{ 'active': index === selectedEducationIndex }" @click="selectEducationOption(option)"
+                    @mouseenter="selectedEducationIndex = index">
                     {{ option }}
                   </div>
                   <div v-if="filteredEducationOptions.length === 0" class="no-results">
@@ -214,35 +188,18 @@
             <div class="field-group">
               <label>{{ $t('userProfile.fields.degrees', 'Degrees') }}</label>
               <div class="select-wrapper">
-                <input 
-                  v-if="showDegreeSearch" 
-                  type="text" 
-                  v-model="degreeSearchTerm" 
-                  class="search-input"
+                <input v-if="showDegreeSearch" type="text" v-model="degreeSearchTerm" class="search-input"
                   :placeholder="$t('userProfile.placeholders.searchDegrees', 'Search degrees...')"
-                  @input="filterDegreeOptions"
-                  @blur="handleDegreeBlur"
-                  @keydown.enter="selectFirstDegreeOption"
-                  @keydown.down="navigateDegreeOptions(1)"
-                  @keydown.up="navigateDegreeOptions(-1)"
-                  ref="degreeSearchInput"
-                />
-                <div 
-                  v-else 
-                  class="selected-option" 
-                  @click="toggleDegreeSearch"
-                >
+                  @input="filterDegreeOptions" @blur="handleDegreeBlur" @keydown.enter="selectFirstDegreeOption"
+                  @keydown.down="navigateDegreeOptions(1)" @keydown.up="navigateDegreeOptions(-1)"
+                  ref="degreeSearchInput" />
+                <div v-else class="selected-option" @click="toggleDegreeSearch">
                   {{ formData.educationRecords.degrees || $t('userProfile.placeholders.selectDegree', 'Select a degree') }}
                 </div>
                 <div v-if="showDegreeSearch" class="options-dropdown">
-                  <div 
-                    v-for="(option, index) in filteredDegreeOptions" 
-                    :key="index"
-                    class="option" 
-                    :class="{ 'active': index === selectedDegreeIndex }"
-                    @click="selectDegreeOption(option)"
-                    @mouseenter="selectedDegreeIndex = index"
-                  >
+                  <div v-for="(option, index) in filteredDegreeOptions" :key="index" class="option"
+                    :class="{ 'active': index === selectedDegreeIndex }" @click="selectDegreeOption(option)"
+                    @mouseenter="selectedDegreeIndex = index">
                     {{ option }}
                   </div>
                   <div v-if="filteredDegreeOptions.length === 0" class="no-results">
@@ -285,17 +242,17 @@
         </div>
       </div>
     </div>
-
-    <confirm-dialog
-      :visible="showConfirmDialog"
-      :title="$t('userProfile.confirmSaveTitle', 'Save Profile')"
-      :message="$t('userProfile.confirmSave', 'Are you sure you want to save these changes?')"
-      :confirm-text="$t('userProfile.actions.save', 'Save')"
-      :cancel-text="$t('userProfile.actions.cancel', 'Cancel')"
-      :theme="isDarkMode ? 'dark' : 'light'"
-      @confirm="confirmSave"
-      @cancel="cancelSave"
-    />
+      <confirm-dialog
+        :visible="showConfirmDialog"
+        :title="$t('userProfile.confirmSaveTitle', 'Save Profile')"
+        :message="$t('userProfile.confirmSave', 'Are you sure you want to save these changes?')"
+        :confirm-text="$t('userProfile.actions.save', 'Save')"
+        :cancel-text="$t('userProfile.actions.cancel', 'Cancel')"
+        :theme="isDarkMode ? 'dark' : 'light'"
+        :parent-styles="dialogThemeStyles"
+        @confirm="confirmSave"
+        @cancel="cancelSave"
+      />
   </div>
 </template>
 

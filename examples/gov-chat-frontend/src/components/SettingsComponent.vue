@@ -104,7 +104,8 @@
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{ translate('settings.soundNotifications', 'Sound Notifications') }}</label>
+                <label class="section-label">{{ translate('settings.soundNotifications', 'Sound Notifications')
+                  }}</label>
                 <div class="switch" @click="settings.soundNotifications = !settings.soundNotifications">
                   <div class="switch-track" :class="{ active: settings.soundNotifications }">
                     <div class="switch-thumb"></div>
@@ -149,7 +150,8 @@
                   {{ translate('settings.resetUserData', 'Reset User Data') }}
                 </button>
                 <p class="description-text">
-                  {{ translate('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.') }}
+                  {{ translate('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.')
+                  }}
                 </p>
               </div>
 
@@ -168,24 +170,25 @@
 
       <!-- Email Change Confirmation Modal -->
       <div class="modal" v-if="showEmailConfirmModal">
-        <div class="modal-content">
-          <h3 class="modal-title">{{ translate('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
+        <div class="modal-content" :data-theme="settings.theme">
+          <h3 class="modal-title" :data-themed="true">{{ translate('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
 
           <div class="modal-body">
-            <p>{{ translate('settings.changingEmailTo', 'Changing your email to') }} <strong>{{ newEmail }}</strong> {{
+            <p :data-themed="true">{{ translate('settings.changingEmailTo', 'Changing your email to') }} <strong>{{ newEmail }}</strong> {{
               translate('settings.will', 'will') }}:</p>
             <ul>
               <li>{{ translate('settings.logOutSystem', 'Log you out of the system') }}</li>
               <li>{{ translate('settings.sendVerificationLink', 'Send a verification link to your new email') }}</li>
-              <li>{{ translate('settings.requireVerification', 'Require verification before you can log in again') }}</li>
+              <li>{{ translate('settings.requireVerification', 'Require verification before you can log in again') }}
+              </li>
             </ul>
 
             <div class="form-group">
-              <label for="confirmPassword">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm')
+              <label for="confirmPassword" :data-themed="true">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm')
                 }}:</label>
               <input v-model="emailChangePassword" type="password" id="confirmPassword"
-                :placeholder="translate('settings.currentPasswordPlaceholder', 'Your current password')" class="text-input"
-                required />
+                :placeholder="translate('settings.currentPasswordPlaceholder', 'Your current password')"
+                class="text-input" required />
               <p v-if="emailChangeError" class="error-text">{{ emailChangeError }}</p>
             </div>
           </div>
@@ -195,7 +198,8 @@
               {{ translate('settings.cancel', 'Cancel') }}
             </button>
             <button class="btn-save" @click="confirmEmailChange" :disabled="!emailChangePassword || isEmailUpdating">
-              {{ isEmailUpdating ? translate('settings.processing', 'Processing...') : translate('settings.confirmChange', 'Confirm Change') }}
+              {{ isEmailUpdating ? translate('settings.processing', 'Processing...') :
+              translate('settings.confirmChange', 'Confirm Change') }}
             </button>
           </div>
         </div>
@@ -210,43 +214,56 @@
   </div>
 
   <!-- Delete Account Confirmation Modal -->
-<div class="modal" v-if="showDeleteAccountModal">
-  <div class="modal-content">
-    <h3 class="modal-title">{{ translate('settings.confirmAccountDeletion', 'Confirm Account Deletion') }}</h3>
-    <div class="modal-body">
-      <p class="warning-text">{{ translate('settings.accountDeletionWarning', 'Warning: This action is permanent and cannot be undone.') }}</p>
-      
-      <div class="form-group">
-        <label for="deleteReason">{{ translate('settings.deletionReason', 'Reason for deletion (optional):') }}</label>
-        <textarea v-model="deleteAccountReason" id="deleteReason" rows="3" class="text-input"></textarea>
+  <div class="modal" v-if="showDeleteAccountModal">
+    <div class="modal-content">
+      <h3 class="modal-title">{{ translate('settings.confirmAccountDeletion', 'Confirm Account Deletion') }}</h3>
+      <div class="modal-body">
+        <p class="warning-text">{{ translate('settings.accountDeletionWarning', 'Warning: This action is permanent and cannot be undone.') }}</p>
+
+        <div class="form-group">
+          <label for="deleteReason">{{ translate('settings.deletionReason', 'Reason for deletion (optional):')
+            }}</label>
+          <textarea v-model="deleteAccountReason" id="deleteReason" rows="3" class="text-input"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="confirmDeletePassword">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm:') }}</label>
+          <input v-model="deleteAccountPassword" type="password" id="confirmDeletePassword" class="text-input"
+            required />
+          <p v-if="deleteAccountError" class="error-text">{{ deleteAccountError }}</p>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label for="confirmDeletePassword">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm:') }}</label>
-        <input v-model="deleteAccountPassword" type="password" id="confirmDeletePassword"
-          class="text-input" required />
-        <p v-if="deleteAccountError" class="error-text">{{ deleteAccountError }}</p>
+      <div class="modal-footer">
+        <button class="btn-close" @click="cancelAccountDeletion">
+          {{ translate('settings.cancel', 'Cancel') }}
+        </button>
+        <button class="btn-danger" @click="processAccountDeletion"
+          :disabled="!deleteAccountPassword || isDeletingAccount">
+          {{ isDeletingAccount ? translate('settings.deleting', 'Deleting...') :
+          translate('settings.permanentlyDeleteAccount', 'Delete Account') }}
+        </button>
       </div>
-    </div>
-
-    <div class="modal-footer">
-      <button class="btn-close" @click="cancelAccountDeletion">
-        {{ translate('settings.cancel', 'Cancel') }}
-      </button>
-      <button class="btn-danger" @click="processAccountDeletion" :disabled="!deleteAccountPassword || isDeletingAccount">
-        {{ isDeletingAccount ? translate('settings.deleting', 'Deleting...') : translate('settings.permanentlyDeleteAccount', 'Delete Account') }}
-      </button>
     </div>
   </div>
-</div>
 
-<!-- Add a key to force re-rendering on locale changes -->
-<div class="settings-dialog" :key="'settings-dialog-' + currentLocale"></div>
+  <!-- Reset User Data Confirmation Dialog -->
+  <ConfirmDialog :visible="showResetDataConfirm" :title="resetDataDialog.title" :message="resetDataDialog.message"
+    :confirm-text="resetDataDialog.confirmText" :cancel-text="resetDataDialog.cancelText" :theme="getCurrentTheme()"
+    :parent-styles="{ maxWidth: '450px' }" @confirm="handleResetDataConfirm" @cancel="handleResetDataCancel" />
+
+  <!-- Delete Account Confirmation Dialog -->
+  <ConfirmDialog :visible="showDeleteAccountConfirm" :title="deleteAccountDialog.title"
+    :message="deleteAccountDialog.message" :confirm-text="deleteAccountDialog.confirmText"
+    :cancel-text="deleteAccountDialog.cancelText" :theme="getCurrentTheme()" :parent-styles="{ maxWidth: '450px' }"
+    @confirm="handleDeleteAccountConfirm" @cancel="handleDeleteAccountCancel" />
+
+  <!-- Add a key to force re-rendering on locale changes -->
+  <div class="settings-dialog" :key="'settings-dialog-' + currentLocale"></div>
 
 </template>
 
 <script>
-
 // Import the user service
 import userService from '@/services/userService';
 // Import the PasswordResetInitiateScreen component
@@ -255,11 +272,14 @@ import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScree
 import notificationService from '@/services/notificationService';
 // Import the theme manager
 import { themeManager, setTheme } from '@/utils/ThemeManager';
+// Import the ConfirmDialog component
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 
 export default {
   name: 'SettingsComponent',
   components: {
-    PasswordResetInitiateScreen
+    PasswordResetInitiateScreen,
+    ConfirmDialog
   },
   data() {
     return {
@@ -310,51 +330,89 @@ export default {
       deleteAccountPassword: '',
       deleteAccountReason: '',
       deleteAccountError: null,
-      isDeletingAccount: false
+      isDeletingAccount: false,
+
+      // Custom confirmation dialogs
+      showResetDataConfirm: false,
+      showDeleteAccountConfirm: false,
+      
+      // Dialog configuration objects
+      resetDataDialog: {
+        title: '',
+        message: '',
+        confirmText: '',
+        cancelText: ''
+      },
+      deleteAccountDialog: {
+        title: '',
+        message: '',
+        confirmText: '',
+        cancelText: ''
+      }
     }
   },
 
   // Add this to your created() lifecycle hook (to replace the watcher in your original code)
   created() {
-  // Initialize currentLocale
-  this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
-  
-  // Fetch user data when component is created
-  this.fetchUserData();
+    // Initialize currentLocale
+    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
+    
+    // Fetch user data when component is created
+    this.fetchUserData();
 
-  // Add a watcher for language changes that forces rendering updates
-  this.$watch('settings.language', (newVal) => {
-    // Apply language change without page reload
-    if (this.$i18n) {
-      this.$i18n.locale = newVal;
-      this.currentLocale = newVal; // Update currentLocale when language changes
-      this.$forceUpdate();
+    // Initialize dialog texts
+    this.updateDialogTexts();
 
-      // Force update the entire component tree if possible
-      if (this.$root) {
-        this.$root.$forceUpdate();
+    // Add a watcher for language changes that forces rendering updates
+    this.$watch('settings.language', (newVal) => {
+      // Apply language change without page reload
+      if (this.$i18n) {
+        this.$i18n.locale = newVal;
+        this.currentLocale = newVal; // Update currentLocale when language changes
+        this.$forceUpdate();
+
+        // Force update the entire component tree if possible
+        if (this.$root) {
+          this.$root.$forceUpdate();
+        }
       }
-    }
-  });
-  
-  // Also watch for locale changes from outside this component
-  if (this.$i18n) {
-    this.$watch('$i18n.locale', (newLocale) => {
-      console.log('Locale changed in Settings:', newLocale);
-      this.currentLocale = newLocale;
-      
-      // Update settings language to match if different
-      if (this.settings && this.settings.language !== newLocale) {
-        this.settings.language = newLocale;
-      }
-      
-      // Force component to re-render
-      this.$forceUpdate();
     });
-  }
-},
+    
+    // Also watch for locale changes from outside this component
+    if (this.$i18n) {
+      this.$watch('$i18n.locale', (newLocale) => {
+        console.log('Locale changed in Settings:', newLocale);
+        this.currentLocale = newLocale;
+        
+        // Update settings language to match if different
+        if (this.settings && this.settings.language !== newLocale) {
+          this.settings.language = newLocale;
+        }
+        
+        // Force component to re-render
+        this.$forceUpdate();
+      });
+    }
+  },
 
   methods: {
+    // Update dialog text content based on current locale
+    updateDialogTexts() {
+      this.resetDataDialog = {
+        title: this.translate('settings.resetUserDataTitle', 'Reset User Data'),
+        message: this.translate('settings.confirmResetUserData', 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'),
+        confirmText: this.translate('settings.reset', 'Reset'),
+        cancelText: this.translate('settings.cancel', 'Cancel')
+      };
+      
+      this.deleteAccountDialog = {
+        title: this.translate('settings.deleteAccountTitle', 'Delete Account'),
+        message: this.translate('settings.confirmDeleteAccount', 'Are you sure you want to delete your account? This action cannot be undone.'),
+        confirmText: this.translate('settings.delete', 'Delete'),
+        cancelText: this.translate('settings.cancel', 'Cancel')
+      };
+    },
+
     // Get current language from i18n or localStorage
     getCurrentLanguage() {
       // First try to get from i18n instance
@@ -652,9 +710,19 @@ export default {
 
     // Show confirmation dialog before resetting user data
     confirmResetUserData() {
-      if (confirm(this.translate('settings.confirmResetUserData', 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'))) {
-        this.resetUserData();
-      }
+      // Show the custom ConfirmDialog instead of browser confirm
+      this.showResetDataConfirm = true;
+    },
+    
+    // Handle reset data confirmation
+    handleResetDataConfirm() {
+      this.showResetDataConfirm = false;
+      this.resetUserData();
+    },
+    
+    // Handle reset data cancellation
+    handleResetDataCancel() {
+      this.showResetDataConfirm = false;
     },
 
     // Reset all user data
@@ -705,63 +773,82 @@ export default {
       }
     },
 
-  // Confirm delete account
-  confirmDeleteAccount() {
-    if (confirm(this.translate('settings.confirmDeleteAccount', 'Are you sure you want to delete your account? This action cannot be undone.'))) {
-      // Show the delete account modal
-      this.showDeleteAccountModal = true;
-    }
-  },
-  
-  // Process account deletion
-  async processAccountDeletion() {
-    if (!this.deleteAccountPassword) {
-      // this.deleteAccountError = this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion');
-      notificationService.error(this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion'));
-      return;
-    }
-    
-    try {
-      this.isDeletingAccount = true;
-      this.deleteAccountError = null;
-      
-      // Call the service to delete the account
-      await userService.deleteAccount(
-        this.deleteAccountPassword,
-        this.deleteAccountReason
-      );
-      
-      // Show success message
-      // alert(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
-      notificationService.success(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
-      
-      // Close modal and redirect to login
-      this.showDeleteAccountModal = false;
-      
-      // Redirect to login page
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Error deleting account:', error);
-      
-      if (error.response && error.response.status === 403) {
-        // this.deleteAccountError = this.translate('settings.incorrectPassword', 'Incorrect password');
-        notificationService.error(this.translate('settings.incorrectPassword', 'Incorrect password'));
-      } else {
-        // this.deleteAccountError = this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.');
-        notificationService.error(this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.'));
+    // Get the effective current theme (resolving 'system' preference)
+    getCurrentTheme() {
+      // If theme is set to 'system', determine from OS preference
+      if (this.settings.theme === 'system') {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
-    } finally {
-      this.isDeletingAccount = false;
-    }
-  },
-  
-  // Cancel account deletion
-  cancelAccountDeletion() {
-    this.showDeleteAccountModal = false;
-    this.deleteAccountPassword = '';
-    this.deleteAccountReason = '';
-    this.deleteAccountError = null;
-  },
+      // Otherwise return the explicitly set theme
+      return this.settings.theme;
+    },
+
+    // Confirm delete account
+    confirmDeleteAccount() {
+      // Show the custom ConfirmDialog instead of browser confirm
+      this.showDeleteAccountConfirm = true;
+    },
+
+    // Handle delete account confirmation
+    handleDeleteAccountConfirm() {
+      this.showDeleteAccountConfirm = false;
+      this.showDeleteAccountModal = true; // Show the existing delete account modal
+    },
+
+    // Handle delete account cancellation
+    handleDeleteAccountCancel() {
+      this.showDeleteAccountConfirm = false;
+    },
+
+    // Process account deletion
+    async processAccountDeletion() {
+      if (!this.deleteAccountPassword) {
+        // this.deleteAccountError = this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion');
+        notificationService.error(this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion'));
+        return;
+      }
+
+      try {
+        this.isDeletingAccount = true;
+        this.deleteAccountError = null;
+
+        // Call the service to delete the account
+        await userService.deleteAccount(
+          this.deleteAccountPassword,
+          this.deleteAccountReason
+        );
+
+        // Show success message
+        // alert(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
+        notificationService.success(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
+
+        // Close modal and redirect to login
+        this.showDeleteAccountModal = false;
+
+        // Redirect to login page
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Error deleting account:', error);
+
+        if (error.response && error.response.status === 403) {
+          // this.deleteAccountError = this.translate('settings.incorrectPassword', 'Incorrect password');
+          notificationService.error(this.translate('settings.incorrectPassword', 'Incorrect password'));
+        } else {
+          // this.deleteAccountError = this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.');
+          notificationService.error(this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.'));
+        }
+      } finally {
+        this.isDeletingAccount = false;
+      }
+    },
+
+    // Cancel account deletion
+    cancelAccountDeletion() {
+      this.showDeleteAccountModal = false;
+      this.deleteAccountPassword = '';
+      this.deleteAccountReason = '';
+      this.deleteAccountError = null;
+    },
 
     // Password Reset Methods - FIXED
     // Initiate password change flow
@@ -884,6 +971,17 @@ export default {
       this.showEmailConfirmModal = false;
       this.emailChangePassword = '';
       this.emailChangeError = null;
+    }
+  },
+
+  watch: {
+    // Add watchers for language/locale changes to update dialog texts
+    'settings.language': function () {
+      this.updateDialogTexts();
+    },
+
+    currentLocale: function () {
+      this.updateDialogTexts();
     }
   }
 }
@@ -1716,6 +1814,50 @@ html[data-theme="dark"] .settings-dialog .dialog-header .header-title {
   background-color: rgba(245, 166, 35, 0.1);
   border-left: 3px solid var(--text-warning, #f5a623);
   border-radius: 4px;
+}
+
+/* Add themed styles for modal components */
+.modal-content[data-theme="dark"] {
+  background-color: var(--bg-dialog-dark, #2a2a2a);
+  color: var(--text-primary-dark, #ffffff);
+}
+
+.modal-content[data-theme="dark"] .modal-title,
+.modal-content[data-theme="dark"] label[data-themed="true"] {
+  color: var(--text-primary-dark, #ffffff) !important;
+}
+
+.modal-content[data-theme="dark"] .modal-footer {
+  border-top-color: var(--border-color-dark, #444444);
+}
+
+.modal-content[data-theme="dark"] .modal-title {
+  border-bottom-color: var(--border-color-dark, #444444);
+}
+
+.modal-content[data-theme="dark"] .text-input {
+  background-color: var(--bg-input-dark, #333333);
+  color: var(--text-primary-dark, #ffffff);
+  border-color: var(--border-input-dark, #555555);
+}
+
+.modal-title[data-themed="true"] {
+  color: var(--dialog-title-color, #333333) !important;
+}
+
+/* Make sure buttons have proper styling in dark mode */
+.modal-content[data-theme="dark"] .btn-close {
+  background-color: var(--bg-button-secondary-dark, #444444);
+  color: var(--text-button-secondary-dark, #cccccc);
+}
+
+.modal-content[data-theme="dark"] .btn-save {
+  background-color: var(--bg-button-primary, #4E97D1);
+  color: var(--text-button-primary, #ffffff);
+}
+
+.modal-content[data-theme="dark"] p[data-themed="true"] {
+  color: var(--text-primary-dark, #ffffff) !important;
 }
 
 </style>

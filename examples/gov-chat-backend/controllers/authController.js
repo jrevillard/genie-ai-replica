@@ -1,5 +1,24 @@
-// auth-controller.js
 const authService = require('../services/auth-service');
+const { createLogger, format, transports } = require('winston'); // Import Winston
+
+// Set up Winston logger (consistent with other files)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 /**
  * Controller for authentication-related endpoints
@@ -12,10 +31,12 @@ class AuthController {
    */
   async register(req, res) {
     try {
+      logger.info('Processing user registration');
       const userData = req.body;
 
       // Validate required fields
       if (!userData.loginName || !userData.email || !userData.encPassword) {
+        logger.warn('Missing required fields: loginName, email, and encPassword are required');
         return res.status(400).json({
           success: false,
           message: 'Missing required fields: loginName, email, and encPassword are required'
@@ -26,16 +47,18 @@ class AuthController {
 
       // Return success without accessToken for email verification flow
       const { accessToken, ...userWithoutToken } = result;
+      logger.info(`User registration successful for email: ${userData.email}`);
       res.status(201).json({
         success: true,
         message: 'Registration successful. Please check your email to verify your account.',
         user: userWithoutToken
       });
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('Registration error:', error);
 
       // Handle specific errors
       if (error.message.includes('already exists')) {
+        logger.warn(`Registration failed: ${error.message}`);
         return res.status(409).json({ success: false, message: error.message });
       }
 
@@ -50,10 +73,12 @@ class AuthController {
    */
   async login(req, res) {
     try {
+      logger.info('Processing user login');
       const { loginName, encPassword } = req.body;
 
       // Validate required fields
       if (!loginName || !encPassword) {
+        logger.warn('Missing required fields: loginName and encPassword are required');
         return res.status(400).json({
           success: false,
           message: 'Missing required fields: loginName and encPassword are required'
@@ -61,14 +86,17 @@ class AuthController {
       }
 
       const result = await authService.login(loginName, encPassword);
+      logger.info(`User login successful for loginName: ${loginName}`);
       res.json(result);
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
 
       // Handle specific errors
       if (error.message === 'User not found' || error.message === 'Invalid password') {
+        logger.warn('Login failed: Invalid credentials');
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       } else if (error.message === 'Email not verified') {
+        logger.warn('Login failed: Email not verified');
         return res.status(403).json({
           success: false,
           message: 'Email not verified. Please check your email for verification instructions.',
@@ -87,16 +115,19 @@ class AuthController {
    */
   async logout(req, res) {
     try {
+      logger.info('Processing user logout');
       const userId = req.user.userId;
 
       if (!userId) {
+        logger.warn('User ID is required for logout');
         return res.status(400).json({ success: false, message: 'User ID is required' });
       }
 
       const result = await authService.logout(userId);
+      logger.info(`User logout successful for userId: ${userId}`);
       res.json(result);
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
       res.status(500).json({ success: false, message: 'Logout failed' });
     }
   }
@@ -108,9 +139,11 @@ class AuthController {
    */
   async verifyEmail(req, res) {
     try {
+      logger.info('Processing email verification');
       const { token } = req.params;
       
       if (!token) {
+        logger.warn('Token is required for email verification');
         return res.status(400).send(`
           <html>
             <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?error=noToken'" /></head>
@@ -122,6 +155,7 @@ class AuthController {
       const result = await authService.verifyEmail(token);
       
       if (result.success) {
+        logger.info('Email verified successfully');
         return res.status(200).send(`
           <html>
             <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?verified=true'" /></head>
@@ -133,8 +167,12 @@ class AuthController {
         
         if (result.expired) {
           errorType = 'expired';
+          logger.warn('Email verification failed: Token expired');
         } else if (result.used) {
           errorType = 'used';
+          logger.warn('Email verification failed: Token already used');
+        } else {
+          logger.warn('Email verification failed: Invalid token');
         }
         
         return res.status(400).send(`
@@ -145,7 +183,7 @@ class AuthController {
         `);
       }
     } catch (error) {
-      console.error('Email verification error:', error);
+      logger.error('Email verification error:', error);
       return res.status(500).send(`
         <html>
           <head><meta http-equiv="refresh" content="0; URL='http://localhost:8090/login?verified=false&error=unknown'" /></head>
@@ -162,16 +200,19 @@ class AuthController {
    */
   async resendVerificationEmail(req, res) {
     try {
+      logger.info('Processing resend verification email');
       const { email } = req.body;
 
       if (!email) {
+        logger.warn('Email is required for resending verification email');
         return res.status(400).json({ success: false, message: 'Email is required' });
       }
 
       const result = await authService.resendVerificationEmail(email);
+      logger.info(`Verification email resent successfully for email: ${email}`);
       res.json(result);
     } catch (error) {
-      console.error('Resend verification email error:', error);
+      logger.error('Resend verification email error:', error);
 
       // For security, don't reveal specific errors
       res.status(500).json({
@@ -188,16 +229,19 @@ class AuthController {
    */
   async initiatePasswordReset(req, res) {
     try {
+      logger.info('Initiating password reset');
       const { email } = req.body;
 
       if (!email) {
+        logger.warn('Email is required for password reset initiation');
         return res.status(400).json({ success: false, message: 'Email is required' });
       }
 
       const result = await authService.initiatePasswordReset(email);
+      logger.info(`Password reset initiated successfully for email: ${email}`);
       res.json(result);
     } catch (error) {
-      console.error('Password reset initiation error:', error);
+      logger.error('Password reset initiation error:', error);
 
       // For security, don't reveal specific errors
       res.status(500).json({
@@ -214,9 +258,11 @@ class AuthController {
    */
   async validateResetToken(req, res) {
     try {
+      logger.info('Validating password reset token');
       const { token } = req.body;
 
       if (!token) {
+        logger.warn('Token is required for validation');
         return res.status(400).json({ success: false, message: 'Token is required' });
       }
 
@@ -225,17 +271,21 @@ class AuthController {
       if (!result.valid) {
         // Different status codes for different validation errors
         if (result.expired) {
+          logger.warn('Token validation failed: Token expired');
           return res.status(410).json({ success: false, ...result }); // Gone (410) for expired tokens
         }
         if (result.used) {
+          logger.warn('Token validation failed: Token already used');
           return res.status(409).json({ success: false, ...result }); // Conflict (409) for used tokens
         }
+        logger.warn('Token validation failed: Invalid token');
         return res.status(400).json({ success: false, ...result }); // Bad Request (400) for invalid tokens
       }
 
+      logger.info('Password reset token validated successfully');
       res.json({ success: true, ...result });
     } catch (error) {
-      console.error('Token validation error:', error);
+      logger.error('Token validation error:', error);
       res.status(500).json({ success: false, message: 'Token validation failed' });
     }
   }
@@ -247,9 +297,11 @@ class AuthController {
    */
   async resetPassword(req, res) {
     try {
+      logger.info('Processing password reset with token');
       const { token, newPassword } = req.body;
 
       if (!token || !newPassword) {
+        logger.warn('Token and newPassword are required for password reset');
         return res.status(400).json({ success: false, message: 'Token and newPassword are required' });
       }
 
@@ -258,17 +310,21 @@ class AuthController {
       if (!result.success) {
         // Different status codes for different errors
         if (result.expired) {
+          logger.warn('Password reset failed: Token expired');
           return res.status(410).json({ success: false, ...result }); // Gone (410) for expired tokens
         }
         if (result.used) {
+          logger.warn('Password reset failed: Token already used');
           return res.status(409).json({ success: false, ...result }); // Conflict (409) for used tokens
         }
+        logger.warn('Password reset failed: Invalid token');
         return res.status(400).json({ success: false, ...result }); // Bad Request (400) for invalid tokens
       }
 
+      logger.info('Password reset successful');
       res.json(result);
     } catch (error) {
-      console.error('Password reset error:', error);
+      logger.error('Password reset error:', error);
       res.status(500).json({ success: false, message: 'Password reset failed' });
     }
   }
@@ -280,10 +336,12 @@ class AuthController {
    */
   async changePassword(req, res) {
     try {
+      logger.info('Processing password change for authenticated user');
       const userId = req.user.userId;
       const { currentPassword, newPassword } = req.body;
 
       if (!userId || !currentPassword || !newPassword) {
+        logger.warn('User ID, currentPassword, and newPassword are required for password change');
         return res.status(400).json({
           success: false,
           message: 'User ID, currentPassword, and newPassword are required'
@@ -291,12 +349,14 @@ class AuthController {
       }
 
       const result = await authService.changePassword(userId, currentPassword, newPassword);
+      logger.info(`Password changed successfully for userId: ${userId}`);
       res.json(result);
     } catch (error) {
-      console.error('Password change error:', error);
+      logger.error('Password change error:', error);
 
       // Handle specific errors
       if (error.message === 'Current password is incorrect') {
+        logger.warn('Password change failed: Current password is incorrect');
         return res.status(401).json({ success: false, message: error.message });
       }
 
@@ -311,24 +371,28 @@ class AuthController {
    */
   async getCurrentUser(req, res) {
     try {
+      logger.info('Fetching current user info');
       const userId = req.user.userId;
 
       if (!userId) {
+        logger.warn('User ID is required to fetch user info');
         return res.status(400).json({ success: false, message: 'User ID is required' });
       }
 
       const user = await authService.getUserById(userId);
 
       if (!user) {
+        logger.warn(`User not found for userId: ${userId}`);
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
       // Remove sensitive information
       const { encPassword, ...userWithoutPassword } = user;
 
+      logger.info(`Current user info retrieved successfully for userId: ${userId}`);
       res.json({ success: true, user: userWithoutPassword });
     } catch (error) {
-      console.error('Get current user error:', error);
+      logger.error('Get current user error:', error);
       res.status(500).json({ success: false, message: 'Failed to retrieve user information' });
     }
   }
@@ -340,10 +404,12 @@ class AuthController {
    */
   async cleanupExpiredTokens(req, res) {
     try {
+      logger.info('Cleaning up expired tokens');
       const result = await authService.cleanupExpiredTokens();
+      logger.info('Expired tokens cleanup completed successfully');
       res.json(result);
     } catch (error) {
-      console.error('Cleanup expired tokens error:', error);
+      logger.error('Cleanup expired tokens error:', error);
       res.status(500).json({ success: false, message: 'Failed to clean up expired tokens' });
     }
   }

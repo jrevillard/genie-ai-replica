@@ -9,7 +9,7 @@
       <!-- Top navigation bar -->
       <nav-bar-component :is-sidebar-open="isSidebarOpen" @toggleSidebar="toggleSidebar"
         @openAnalytics="showAnalytics = true" @openProfile="showUserProfile = true" @openSettings="showSettings = true"
-        @logout="handleLogout" />
+        @logout="handleLogout" @open-admin="showAdminDashboard = true" />
 
       <div class="main-container">
         <!-- Sidebar (collapsible) -->
@@ -31,17 +31,13 @@
 
     <!-- Show login screen if not authenticated and route requires auth -->
     <login-screen v-else @login-success="handleLoginSuccess" :theme="theme" />
-    
+
     <!-- Global notification component -->
-    <div 
-      v-if="notification.visible" 
-      class="notification" 
-      :class="notification.type"
-      @click="hideNotification"
-    >
+    <div v-if="notification.visible" class="notification" :class="notification.type" @click="hideNotification">
       {{ notification.message }}
     </div>
   </div>
+  <AdminDashboard v-if="showAdminDashboard" @close="showAdminDashboard = false" />
 </template>
 
 <script>
@@ -51,6 +47,7 @@ import UnifiedAnalyticsComponent from './components/UnifiedAnalytics.vue'
 import UserProfileComponent from './components/UserProfileComponent.vue'
 import SettingsComponent from './components/SettingsComponent.vue'
 import LoginScreen from './components/LoginScreen.vue'
+import AdminDashboard from './components/AdminDashboard.vue'
 import { mapGetters } from 'vuex'
 import { eventBus } from './eventBus.js'
 
@@ -62,7 +59,8 @@ export default {
     UnifiedAnalyticsComponent,
     UserProfileComponent,
     SettingsComponent,
-    LoginScreen
+    LoginScreen,
+    AdminDashboard
   },
   data() {
     return {
@@ -70,6 +68,7 @@ export default {
       showAnalytics: false,
       showUserProfile: false,
       showSettings: false,
+      showAdminDashboard: false,
       theme: 'light', // Default to light theme
       notification: {
         visible: false,
@@ -126,7 +125,7 @@ export default {
       if (this.notification.timer) {
         clearTimeout(this.notification.timer)
       }
-      
+
       // Show the notification
       this.notification = {
         visible: true,
@@ -134,13 +133,13 @@ export default {
         type: payload.type || 'success',
         timer: null
       }
-      
+
       // Set timer to auto-hide
       this.notification.timer = setTimeout(() => {
         this.hideNotification()
       }, payload.duration || 3000)
     },
-    
+
     hideNotification() {
       this.notification.visible = false
       if (this.notification.timer) {
@@ -263,6 +262,10 @@ export default {
       // Process profile data after save
       console.log('Profile saved:', profileData)
       this.showUserProfile = false
+    },
+    
+    openAdminDashboard() {
+      this.showAdminDashboard = true;
     }
   }
 }

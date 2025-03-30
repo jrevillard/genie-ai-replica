@@ -1052,3 +1052,1466 @@
 2025-03-30 09:55:03 [INFO]: Generating JWT token for user: 2133
 2025-03-30 09:55:03 [INFO]: User logged in successfully: fordendk
 2025-03-30 09:55:03 [INFO]: [0mPOST /api/auth/login [32m200[0m 63.236 ms - 67302[0m
+2025-03-30 10:05:14 [INFO]: 
+=======================================================
+2025-03-30 10:05:14 [INFO]: Verifying JWT token
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] 2025-03-30T04:35:14.653Z - Authentication Started
+2025-03-30 10:05:14 [INFO]: =======================================================
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:05:14 [INFO]:   host: localhost:3000
+2025-03-30 10:05:14 [INFO]:   connection: keep-alive
+2025-03-30 10:05:14 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:05:14 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:05:14 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:05:14 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:05:14 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:05:14 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:05:14 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:05:14 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:05:14 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:05:14 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:05:14 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:05:14 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:05:14 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:05:14 [INFO]:   if-none-match: W/"106fa-k8DAQcJUZQA66Y6K+q+lJnW3764"
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:05:14 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:05:14 [INFO]: Token verified successfully for user:
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:05:14 [INFO]: Fetching current user info for: fordendk
+2025-03-30 10:05:14 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:05:14 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:05:14 [INFO]: [0mGET /api/auth/me [32m200[0m 7.972 ms - 67326[0m
+2025-03-30 10:05:27 [INFO]: Email check request received for: fordendk@gmail.com
+2025-03-30 10:05:27 [INFO]: Checking if email fordendk@gmail.com is available
+2025-03-30 10:05:27 [INFO]: Email fordendk@gmail.com is available
+2025-03-30 10:05:27 [INFO]: [0mGET /api/users/check-email?email=fordendk%40gmail.com [36m304[0m 3.519 ms - -[0m
+2025-03-30 10:05:30 [INFO]: 
+=======================================================
+2025-03-30 10:05:30 [INFO]: Verifying JWT token
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] 2025-03-30T04:35:30.067Z - Authentication Started
+2025-03-30 10:05:30 [INFO]: =======================================================
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] Request URL: PUT /email
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:05:30 [INFO]:   host: localhost:3000
+2025-03-30 10:05:30 [INFO]:   connection: keep-alive
+2025-03-30 10:05:30 [INFO]:   content-length: 124
+2025-03-30 10:05:30 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:05:30 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:05:30 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:05:30 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:05:30 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:05:30 [INFO]:   content-type: application/json
+2025-03-30 10:05:30 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:05:30 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:05:30 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:05:30 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:05:30 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:05:30 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:05:30 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:05:30 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:05:30 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:05:30 [INFO]: Token verified successfully for user:
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:05:30 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] 📝 Found userId in request body: 2133
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] ✅ userId in body matches token
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] 📧 Email route - fetching additional user data for ID: 2133
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] ✅ Additional user details found:
+2025-03-30 10:05:30 [INFO]: 
+=======================================================
+2025-03-30 10:05:30 [INFO]: Fetching user profile for user 2133
+2025-03-30 10:05:30 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 2025-03-30T04:35:30.075Z - Email Update Route Entered (After Auth Middleware)
+2025-03-30 10:05:30 [INFO]: =======================================================
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] Request method:
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] Request URL:
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] Request path:
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] Content-Type:
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] Headers:
+2025-03-30 10:05:30 [INFO]:   host: localhost:3000
+2025-03-30 10:05:30 [INFO]:   connection: keep-alive
+2025-03-30 10:05:30 [INFO]:   content-length: 124
+2025-03-30 10:05:30 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:05:30 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:05:30 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:05:30 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:05:30 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:05:30 [INFO]:   content-type: application/json
+2025-03-30 10:05:30 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:05:30 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:05:30 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:05:30 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:05:30 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:05:30 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:05:30 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:05:30 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] Request body:
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 📧 Email update request details:
+2025-03-30 10:05:30 [INFO]:   - New email: fordendk@gmail.com
+2025-03-30 10:05:30 [INFO]:   - Password provided: Yes
+2025-03-30 10:05:30 [INFO]:   - UserId from body: 2133
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: 2133
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Verifying password...
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] ✅ Password verified successfully
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 🔑 Generating verification token
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] ✅ Token generated successfully: 1c537e18ce...
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: 2133
+2025-03-30 10:05:30 [INFO]: User profile 2133 retrieved successfully
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] ✅ User found in database: {"id":"2133","email":"fordendk@outlook.com"}
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: {"pendingEmailChange":{"email":"fordendk@gmail.com","token":"1c537e18ce..."},"emailVerified":false,"updatedAt":"2025-03-30T04:35:30.078Z"}
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] ✅ User document updated successfully
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: [EMAIL ROUTE DEBUG] 📧 Preparing to send verification email
+2025-03-30 10:05:30 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL REQUEST] - 2025-03-30T04:35:30.082Z
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: {
+  "to": "fordendk@gmail.com",
+  "token": "1c537e18ce...",
+  "userName": "DAVID KEITH FORDEN..."
+}
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION LINK] - 2025-03-30T04:35:30.082Z
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: http://localhost:8090/verify-email/1c537e18ce751b3a80b6bcea3929e0b7b508b4f4841270d457502d0b3e8a3563
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL CONTENT] - 2025-03-30T04:35:30.082Z
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:30 [INFO]: {
+  "from": "\"Huduma AI\" <fordendk@gmail.com>",
+  "to": "fordendk@gmail.com",
+  "subject": "Verify Your Email - Huduma AI",
+  "textPreview": "\nHello DAVID KEITH FORDEN...,\n\nThank you for registering with Huduma AI. \nPlease verify your email a..."
+}
+2025-03-30 10:05:30 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:31 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:31 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION VERIFIED BEFORE SENDING] - 2025-03-30T04:35:31.360Z
+2025-03-30 10:05:31 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:33 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:33 [INFO]: [EMAIL ROUTE DEBUG] ✅ Verification email sent to fordendk@gmail.com
+2025-03-30 10:05:33 [INFO]: [0mPUT /api/users/email [32m200[0m 3660.908 ms - 132[0m
+2025-03-30 10:05:33 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL SENT] - 2025-03-30T04:35:33.727Z
+2025-03-30 10:05:33 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:33 [INFO]: {
+  "messageId": "<32e9ddd4-7f69-08d1-8525-eecb518e033a@gmail.com>",
+  "response": "250 OK queued as 48fe7580-6500-432b-9fd8-f351fbff111b",
+  "envelope": {
+    "from": "fordendk@gmail.com",
+    "to": [
+      "fordendk@gmail.com"
+    ]
+  }
+}
+2025-03-30 10:05:33 [INFO]: -----------------------------------------------------
+2025-03-30 10:05:33 [INFO]: Verification email sent to fordendk@gmail.com: <32e9ddd4-7f69-08d1-8525-eecb518e033a@gmail.com>
+2025-03-30 10:05:33 [INFO]: [EMAIL ROUTE DEBUG] ✅ Email update process completed successfully
+2025-03-30 10:05:35 [INFO]: 
+=======================================================
+2025-03-30 10:05:35 [INFO]: Verifying JWT token
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] 2025-03-30T04:35:35.738Z - Authentication Started
+2025-03-30 10:05:35 [INFO]: =======================================================
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] Request URL: POST /logout
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:05:35 [INFO]:   host: localhost:3000
+2025-03-30 10:05:35 [INFO]:   connection: keep-alive
+2025-03-30 10:05:35 [INFO]:   content-length: 2
+2025-03-30 10:05:35 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:05:35 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:05:35 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:05:35 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:05:35 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:05:35 [INFO]:   content-type: application/json
+2025-03-30 10:05:35 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:05:35 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:05:35 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:05:35 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:05:35 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:05:35 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:05:35 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:05:35 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:05:35 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:05:35 [INFO]: Token verified successfully for user:
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:05:35 [INFO]: Logout request for user: fordendk
+2025-03-30 10:05:35 [INFO]: Logging out user with ID: 2133
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:05:35 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:05:35 [INFO]: User logged out successfully: 2133
+2025-03-30 10:05:35 [INFO]: [0mPOST /api/auth/logout [32m200[0m 9.790 ms - 52[0m
+2025-03-30 10:05:53 [INFO]: Email verification attempt with token: 1c537e18ce751b3a80b6bcea3929e0b7b508b4f4841270d457502d0b3e8a3563
+2025-03-30 10:05:53 [INFO]: Verification Token Received:
+2025-03-30 10:05:53 [INFO]: Token not found in verificationTokens, checking pendingEmailChange
+2025-03-30 10:05:53 [INFO]: Found token in pendingEmailChange:
+2025-03-30 10:05:53 [INFO]: Email changed successfully for user 2133 to fordendk@gmail.com
+2025-03-30 10:05:53 [INFO]: [0mGET /api/auth/verify-email/1c537e18ce751b3a80b6bcea3929e0b7b508b4f4841270d457502d0b3e8a3563 [32m200[0m 8.143 ms - 229[0m
+2025-03-30 10:06:54 [INFO]: Register request for loginName: dforden, email: fordendk@outlook.com
+2025-03-30 10:06:54 [INFO]: Registering new user with loginName:
+2025-03-30 10:06:54 [INFO]: Fetching user by loginName: dforden or email: fordendk@outlook.com
+2025-03-30 10:06:54 [INFO]: No user found for loginName: dforden or email: fordendk@outlook.com
+2025-03-30 10:06:54 [INFO]: Hashing password with bcrypt
+2025-03-30 10:06:54 [INFO]: Saved user before email verification:
+2025-03-30 10:06:54 [INFO]: Generating JWT token for user: 2134
+2025-03-30 10:06:54 [INFO]: Fetching user by ID: 2134
+2025-03-30 10:06:54 [INFO]: User registered successfully with ID: 2134
+2025-03-30 10:06:54 [INFO]: [0mPOST /api/auth/register [32m201[0m 66.205 ms - 164[0m
+2025-03-30 10:06:54 [INFO]: Preparing to send verification email to fordendk@outlook.com
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL REQUEST] - 2025-03-30T04:36:54.576Z
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: {
+  "to": "fordendk@outlook.com",
+  "token": "4d79f7e946...",
+  "userName": "dforden"
+}
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION LINK] - 2025-03-30T04:36:54.576Z
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: http://localhost:8090/verify-email/4d79f7e9460b2cdf886bc0ac32868a4fd77171236c46c366f8e77240e88e48ca
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL CONTENT] - 2025-03-30T04:36:54.576Z
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:54 [INFO]: {
+  "from": "\"Huduma AI\" <fordendk@gmail.com>",
+  "to": "fordendk@outlook.com",
+  "subject": "Verify Your Email - Huduma AI",
+  "textPreview": "\nHello dforden,\n\nThank you for registering with Huduma AI. \nPlease verify your email address by usin..."
+}
+2025-03-30 10:06:54 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:56 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:56 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION VERIFIED BEFORE SENDING] - 2025-03-30T04:36:56.502Z
+2025-03-30 10:06:56 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:58 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:58 [INFO]: Email verification token for fordendk@outlook.com: 4d79f7e9460b2cdf886bc0ac32868a4fd77171236c46c366f8e77240e88e48ca
+2025-03-30 10:06:58 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL SENT] - 2025-03-30T04:36:58.881Z
+2025-03-30 10:06:58 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:58 [INFO]: {
+  "messageId": "<23678ad6-27a9-0a8b-a59b-4f286998d53d@gmail.com>",
+  "response": "250 OK queued as a7ee6c1f-31b7-479a-9208-aaac68f6e1ef",
+  "envelope": {
+    "from": "fordendk@gmail.com",
+    "to": [
+      "fordendk@outlook.com"
+    ]
+  }
+}
+2025-03-30 10:06:58 [INFO]: -----------------------------------------------------
+2025-03-30 10:06:58 [INFO]: Verification email sent to fordendk@outlook.com: <23678ad6-27a9-0a8b-a59b-4f286998d53d@gmail.com>
+2025-03-30 10:06:58 [INFO]: Verification email sent to fordendk@outlook.com
+2025-03-30 10:07:18 [INFO]: Login attempt for loginName: dforden
+2025-03-30 10:07:18 [INFO]: Attempting login for user: dforden
+2025-03-30 10:07:18 [INFO]: Fetching user by loginName: dforden or email: dforden
+2025-03-30 10:07:18 [INFO]: Verifying password
+2025-03-30 10:07:18 [WARN]: Email not verified for user: dforden
+2025-03-30 10:07:18 [INFO]: [0mPOST /api/auth/login [33m403[0m 56.917 ms - 132[0m
+2025-03-30 10:07:18 [ERROR]: Error during login: Email not verified
+2025-03-30 10:07:36 [INFO]: Email verification attempt with token: 4d79f7e9460b2cdf886bc0ac32868a4fd77171236c46c366f8e77240e88e48ca
+2025-03-30 10:07:36 [INFO]: Verification Token Received:
+2025-03-30 10:07:36 [INFO]: Email verified successfully for user 2134
+2025-03-30 10:07:36 [INFO]: [0mGET /api/auth/verify-email/4d79f7e9460b2cdf886bc0ac32868a4fd77171236c46c366f8e77240e88e48ca [32m200[0m 6.316 ms - 229[0m
+2025-03-30 10:07:42 [INFO]: Login attempt for loginName: dforden
+2025-03-30 10:07:42 [INFO]: Attempting login for user: dforden
+2025-03-30 10:07:42 [INFO]: Fetching user by loginName: dforden or email: dforden
+2025-03-30 10:07:42 [INFO]: Verifying password
+2025-03-30 10:07:42 [INFO]: Generating JWT token for user: 2134
+2025-03-30 10:07:42 [INFO]: User logged in successfully: dforden
+2025-03-30 10:07:42 [INFO]: [0mPOST /api/auth/login [32m200[0m 59.805 ms - 590[0m
+2025-03-30 10:07:49 [INFO]: Getting user profile for ID: 2134
+2025-03-30 10:07:49 [INFO]: Fetching user profile for user 2134
+2025-03-30 10:07:49 [INFO]: User profile 2134 retrieved successfully
+2025-03-30 10:07:49 [INFO]: [0mGET /api/users/2134 [32m200[0m 2.288 ms - 667[0m
+2025-03-30 10:08:43 [INFO]: Update request body:
+2025-03-30 10:08:43 [INFO]: Updating user profile for user 2134
+2025-03-30 10:08:43 [INFO]: Update files:
+2025-03-30 10:08:43 [INFO]: Parsed profile data for update:
+2025-03-30 10:08:43 [INFO]: Checking if user 2134 exists
+2025-03-30 10:08:43 [INFO]: User 2134 exists
+2025-03-30 10:08:43 [INFO]: Processing profile data for user 2134
+2025-03-30 10:08:43 [INFO]: Profile data processed for user 2134
+2025-03-30 10:08:43 [INFO]: User profile 2134 updated successfully
+2025-03-30 10:08:43 [INFO]: [0mPUT /api/users/2134 [32m200[0m 11.512 ms - 67422[0m
+2025-03-30 10:09:46 [INFO]: 
+=======================================================
+2025-03-30 10:09:46 [INFO]: Verifying JWT token
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] 2025-03-30T04:39:46.523Z - Authentication Started
+2025-03-30 10:09:46 [INFO]: =======================================================
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:09:46 [INFO]:   host: localhost:3000
+2025-03-30 10:09:46 [INFO]:   connection: keep-alive
+2025-03-30 10:09:46 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:09:46 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:09:46 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:09:46 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:09:46 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:09:46 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:09:46 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:09:46 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:09:46 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:09:46 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:09:46 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:09:46 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:09:46 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:09:46 [INFO]:   if-none-match: W/"106fe-7a6boB9tYMq/oclP/BSyDUaQuaE"
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:09:46 [INFO]: Fetching user by ID: 2134
+2025-03-30 10:09:46 [INFO]: Token verified successfully for user:
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:09:46 [INFO]: Fetching current user info for: dforden
+2025-03-30 10:09:46 [INFO]: Fetching user by ID: 2134
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2134
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:09:46 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:09:46 [INFO]: [0mGET /api/auth/me [32m200[0m 6.839 ms - 67306[0m
+2025-03-30 10:10:12 [INFO]: 
+=======================================================
+2025-03-30 10:10:12 [INFO]: Verifying JWT token
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] 2025-03-30T04:40:12.748Z - Authentication Started
+2025-03-30 10:10:12 [INFO]: =======================================================
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] Request URL: POST /delete
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:10:12 [INFO]:   host: localhost:3000
+2025-03-30 10:10:12 [INFO]:   connection: keep-alive
+2025-03-30 10:10:12 [INFO]:   content-length: 91
+2025-03-30 10:10:12 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:10:12 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:10:12 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:10:12 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:10:12 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:10:12 [INFO]:   content-type: application/json
+2025-03-30 10:10:12 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:10:12 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:10:12 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:10:12 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:10:12 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:10:12 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:10:12 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:10:12 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:10:12 [INFO]: Fetching user by ID: 2134
+2025-03-30 10:10:12 [INFO]: Token verified successfully for user:
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:10:12 [INFO]: Delete account request body:
+2025-03-30 10:10:12 [INFO]: Fetching user profile for user 2134
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2134
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:10:12 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:10:12 [INFO]: Processing account deletion for user ID: 2134, Reason: Not provided
+2025-03-30 10:10:12 [INFO]: User profile 2134 retrieved successfully
+2025-03-30 10:10:12 [INFO]: Verifying password
+2025-03-30 10:10:12 [INFO]: Permanently deleting user account for user 2134
+2025-03-30 10:10:12 [INFO]: Fetching user profile for user 2134
+2025-03-30 10:10:12 [INFO]: User profile 2134 retrieved successfully
+2025-03-30 10:10:12 [INFO]: Deleting user files for user 2134
+2025-03-30 10:10:12 [INFO]: No user directory found for user 2134
+2025-03-30 10:10:12 [INFO]: User files deleted for user 2134
+2025-03-30 10:10:12 [INFO]: Related tokens deleted for user 2134
+2025-03-30 10:10:12 [INFO]: User account 2134 permanently deleted
+2025-03-30 10:10:12 [INFO]: [0mPOST /api/users/delete [32m200[0m 71.232 ms - 99[0m
+2025-03-30 10:10:21 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 10:10:21 [INFO]: Attempting login for user: fordendk
+2025-03-30 10:10:21 [INFO]: Fetching user by loginName: fordendk or email: fordendk
+2025-03-30 10:10:21 [INFO]: Verifying password
+2025-03-30 10:10:21 [INFO]: Generating JWT token for user: 2133
+2025-03-30 10:10:21 [INFO]: User logged in successfully: fordendk
+2025-03-30 10:10:21 [INFO]: [0mPOST /api/auth/login [32m200[0m 62.787 ms - 67298[0m
+2025-03-30 10:11:14 [INFO]: 
+=======================================================
+2025-03-30 10:11:14 [INFO]: Verifying JWT token
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] 2025-03-30T04:41:14.788Z - Authentication Started
+2025-03-30 10:11:14 [INFO]: =======================================================
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:11:14 [INFO]:   host: localhost:3000
+2025-03-30 10:11:14 [INFO]:   connection: keep-alive
+2025-03-30 10:11:14 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:11:14 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:11:14 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:11:14 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:11:14 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:11:14 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:11:14 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:11:14 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:11:14 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:11:14 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:11:14 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:11:14 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:11:14 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:11:14 [INFO]:   if-none-match: W/"106ea-MZc+x1mYUBXBrwy4MmG8zWZKUX0"
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:11:14 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:11:14 [INFO]: Token verified successfully for user:
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:11:14 [INFO]: Fetching current user info for: fordendk
+2025-03-30 10:11:14 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:11:14 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:11:14 [INFO]: [0mGET /api/auth/me [32m200[0m 8.461 ms - 67322[0m
+2025-03-30 10:11:26 [INFO]: Email check request received for: fordendk@outlook.com
+2025-03-30 10:11:26 [INFO]: Checking if email fordendk@outlook.com is available
+2025-03-30 10:11:26 [INFO]: Email fordendk@outlook.com is available
+2025-03-30 10:11:26 [INFO]: [0mGET /api/users/check-email?email=fordendk%40outlook.com [36m304[0m 2.577 ms - -[0m
+2025-03-30 10:11:36 [INFO]: 
+=======================================================
+2025-03-30 10:11:36 [INFO]: Verifying JWT token
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] 2025-03-30T04:41:36.014Z - Authentication Started
+2025-03-30 10:11:36 [INFO]: =======================================================
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] Request URL: PUT /email
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:11:36 [INFO]:   host: localhost:3000
+2025-03-30 10:11:36 [INFO]:   connection: keep-alive
+2025-03-30 10:11:36 [INFO]:   content-length: 126
+2025-03-30 10:11:36 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:11:36 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:11:36 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:11:36 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:11:36 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:11:36 [INFO]:   content-type: application/json
+2025-03-30 10:11:36 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:11:36 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:11:36 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:11:36 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:11:36 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:11:36 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:11:36 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:11:36 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:11:36 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:11:36 [INFO]: Token verified successfully for user:
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:11:36 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] 📝 Found userId in request body: 2133
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] ✅ userId in body matches token
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] 📧 Email route - fetching additional user data for ID: 2133
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] ✅ Additional user details found:
+2025-03-30 10:11:36 [INFO]: 
+=======================================================
+2025-03-30 10:11:36 [INFO]: Fetching user profile for user 2133
+2025-03-30 10:11:36 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 2025-03-30T04:41:36.021Z - Email Update Route Entered (After Auth Middleware)
+2025-03-30 10:11:36 [INFO]: =======================================================
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] Request method:
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] Request URL:
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] Request path:
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] Content-Type:
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] Headers:
+2025-03-30 10:11:36 [INFO]:   host: localhost:3000
+2025-03-30 10:11:36 [INFO]:   connection: keep-alive
+2025-03-30 10:11:36 [INFO]:   content-length: 126
+2025-03-30 10:11:36 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:11:36 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:11:36 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:11:36 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:11:36 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:11:36 [INFO]:   content-type: application/json
+2025-03-30 10:11:36 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:11:36 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:11:36 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:11:36 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:11:36 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:11:36 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:11:36 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:11:36 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] Request body:
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 📧 Email update request details:
+2025-03-30 10:11:36 [INFO]:   - New email: fordendk@outlook.com
+2025-03-30 10:11:36 [INFO]:   - Password provided: Yes
+2025-03-30 10:11:36 [INFO]:   - UserId from body: 2133
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: 2133
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Verifying password...
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] ✅ Password verified successfully
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 🔑 Generating verification token
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] ✅ Token generated successfully: d5e7cbf821...
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: 2133
+2025-03-30 10:11:36 [INFO]: User profile 2133 retrieved successfully
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] ✅ User found in database: {"id":"2133","email":"fordendk@gmail.com"}
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: {"pendingEmailChange":{"email":"fordendk@outlook.com","token":"d5e7cbf821..."},"emailVerified":false,"updatedAt":"2025-03-30T04:41:36.025Z"}
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] ✅ User document updated successfully
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: [EMAIL ROUTE DEBUG] 📧 Preparing to send verification email
+2025-03-30 10:11:36 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL REQUEST] - 2025-03-30T04:41:36.029Z
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: {
+  "to": "fordendk@outlook.com",
+  "token": "d5e7cbf821...",
+  "userName": "DAVID KEITH FORDEN..."
+}
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION LINK] - 2025-03-30T04:41:36.030Z
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: http://localhost:8090/verify-email/d5e7cbf821482b10c9338a5b340d9a72321faa456d27dc8465cf4cc864f98334
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL CONTENT] - 2025-03-30T04:41:36.030Z
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:36 [INFO]: {
+  "from": "\"Huduma AI\" <fordendk@gmail.com>",
+  "to": "fordendk@outlook.com",
+  "subject": "Verify Your Email - Huduma AI",
+  "textPreview": "\nHello DAVID KEITH FORDEN...,\n\nThank you for registering with Huduma AI. \nPlease verify your email a..."
+}
+2025-03-30 10:11:36 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:37 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:37 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION VERIFIED BEFORE SENDING] - 2025-03-30T04:41:37.365Z
+2025-03-30 10:11:37 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:39 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:39 [INFO]: [EMAIL ROUTE DEBUG] ✅ Verification email sent to fordendk@outlook.com
+2025-03-30 10:11:39 [INFO]: [0mPUT /api/users/email [32m200[0m 3567.443 ms - 132[0m
+2025-03-30 10:11:39 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL SENT] - 2025-03-30T04:41:39.579Z
+2025-03-30 10:11:39 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:39 [INFO]: {
+  "messageId": "<8da35927-eb27-15f7-5764-f6287fbf52d3@gmail.com>",
+  "response": "250 OK queued as 046ded1f-ac42-433a-a4fa-a85bec53413a",
+  "envelope": {
+    "from": "fordendk@gmail.com",
+    "to": [
+      "fordendk@outlook.com"
+    ]
+  }
+}
+2025-03-30 10:11:39 [INFO]: -----------------------------------------------------
+2025-03-30 10:11:39 [INFO]: Verification email sent to fordendk@outlook.com: <8da35927-eb27-15f7-5764-f6287fbf52d3@gmail.com>
+2025-03-30 10:11:39 [INFO]: [EMAIL ROUTE DEBUG] ✅ Email update process completed successfully
+2025-03-30 10:11:41 [INFO]: 
+=======================================================
+2025-03-30 10:11:41 [INFO]: Verifying JWT token
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] 2025-03-30T04:41:41.467Z - Authentication Started
+2025-03-30 10:11:41 [INFO]: =======================================================
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] Request URL: POST /logout
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:11:41 [INFO]:   host: localhost:3000
+2025-03-30 10:11:41 [INFO]:   connection: keep-alive
+2025-03-30 10:11:41 [INFO]:   content-length: 2
+2025-03-30 10:11:41 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:11:41 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:11:41 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:11:41 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:11:41 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:11:41 [INFO]:   content-type: application/json
+2025-03-30 10:11:41 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:11:41 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:11:41 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:11:41 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:11:41 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:11:41 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:11:41 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:11:41 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:11:41 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:11:41 [INFO]: Token verified successfully for user:
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:11:41 [INFO]: Logout request for user: fordendk
+2025-03-30 10:11:41 [INFO]: Logging out user with ID: 2133
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:11:41 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:11:41 [INFO]: User logged out successfully: 2133
+2025-03-30 10:11:41 [INFO]: [0mPOST /api/auth/logout [32m200[0m 7.883 ms - 52[0m
+2025-03-30 10:11:53 [INFO]: Email verification attempt with token: d5e7cbf821482b10c9338a5b340d9a72321faa456d27dc8465cf4cc864f98334
+2025-03-30 10:11:53 [INFO]: Verification Token Received:
+2025-03-30 10:11:53 [INFO]: Token not found in verificationTokens, checking pendingEmailChange
+2025-03-30 10:11:53 [INFO]: Found token in pendingEmailChange:
+2025-03-30 10:11:53 [INFO]: Email changed successfully for user 2133 to fordendk@outlook.com
+2025-03-30 10:11:53 [INFO]: [0mGET /api/auth/verify-email/d5e7cbf821482b10c9338a5b340d9a72321faa456d27dc8465cf4cc864f98334 [32m200[0m 8.625 ms - 229[0m
+2025-03-30 10:12:05 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 10:12:05 [INFO]: Attempting login for user: fordendk
+2025-03-30 10:12:05 [INFO]: Fetching user by loginName: fordendk or email: fordendk
+2025-03-30 10:12:05 [INFO]: Verifying password
+2025-03-30 10:12:05 [INFO]: Generating JWT token for user: 2133
+2025-03-30 10:12:05 [INFO]: User logged in successfully: fordendk
+2025-03-30 10:12:05 [INFO]: [0mPOST /api/auth/login [32m200[0m 61.938 ms - 67302[0m
+2025-03-30 10:12:08 [INFO]: Getting user profile for ID: 2133
+2025-03-30 10:12:08 [INFO]: Fetching user profile for user 2133
+2025-03-30 10:12:08 [INFO]: User profile 2133 retrieved successfully
+2025-03-30 10:12:08 [INFO]: [0mGET /api/users/2133 [32m200[0m 3.124 ms - 67379[0m
+2025-03-30 10:12:15 [INFO]: 
+=======================================================
+2025-03-30 10:12:15 [INFO]: Verifying JWT token
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] 2025-03-30T04:42:15.804Z - Authentication Started
+2025-03-30 10:12:15 [INFO]: =======================================================
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:12:15 [INFO]:   host: localhost:3000
+2025-03-30 10:12:15 [INFO]:   connection: keep-alive
+2025-03-30 10:12:15 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:12:15 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:12:15 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:12:15 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:12:15 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:12:15 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:12:15 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:12:15 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:12:15 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:12:15 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:12:15 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:12:15 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:12:15 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:12:15 [INFO]:   if-none-match: W/"106fa-3GSOFT4hZ4S6USywHpMuVeoXBa0"
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:12:15 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:12:15 [INFO]: Token verified successfully for user:
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:12:15 [INFO]: Fetching current user info for: fordendk
+2025-03-30 10:12:15 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:12:15 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:12:15 [INFO]: [0mGET /api/auth/me [32m200[0m 7.347 ms - 67326[0m
+2025-03-30 10:13:22 [INFO]: Email check request received for: fordendk@gmail.com
+2025-03-30 10:13:22 [INFO]: Checking if email fordendk@gmail.com is available
+2025-03-30 10:13:22 [INFO]: Email fordendk@gmail.com is available
+2025-03-30 10:13:22 [INFO]: [0mGET /api/users/check-email?email=fordendk%40gmail.com [36m304[0m 3.761 ms - -[0m
+2025-03-30 10:13:24 [INFO]: 
+=======================================================
+2025-03-30 10:13:24 [INFO]: Verifying JWT token
+2025-03-30 10:13:24 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] 2025-03-30T04:43:24.695Z - Authentication Started
+2025-03-30 10:13:24 [INFO]: =======================================================
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] Request URL: PUT /email
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:13:24 [INFO]:   host: localhost:3000
+2025-03-30 10:13:24 [INFO]:   connection: keep-alive
+2025-03-30 10:13:24 [INFO]:   content-length: 124
+2025-03-30 10:13:24 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:13:24 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:13:24 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:13:24 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:13:24 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:13:24 [INFO]:   content-type: application/json
+2025-03-30 10:13:24 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:13:24 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:13:24 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:13:24 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:13:24 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:13:24 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:13:24 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:13:24 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:13:24 [INFO]: Token verified successfully for user:
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:13:24 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] 📝 Found userId in request body: 2133
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] ✅ userId in body matches token
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] 📧 Email route - fetching additional user data for ID: 2133
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] ✅ Additional user details found:
+2025-03-30 10:13:24 [INFO]: 
+=======================================================
+2025-03-30 10:13:24 [INFO]: Fetching user profile for user 2133
+2025-03-30 10:13:24 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 2025-03-30T04:43:24.701Z - Email Update Route Entered (After Auth Middleware)
+2025-03-30 10:13:24 [INFO]: =======================================================
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] Request method:
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] Request URL:
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] Request path:
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] Content-Type:
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] Headers:
+2025-03-30 10:13:24 [INFO]:   host: localhost:3000
+2025-03-30 10:13:24 [INFO]:   connection: keep-alive
+2025-03-30 10:13:24 [INFO]:   content-length: 124
+2025-03-30 10:13:24 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:13:24 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:13:24 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:13:24 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:13:24 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:13:24 [INFO]:   content-type: application/json
+2025-03-30 10:13:24 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:13:24 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:13:24 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:13:24 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:13:24 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:13:24 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:13:24 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:13:24 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] Request body:
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 📧 Email update request details:
+2025-03-30 10:13:24 [INFO]:   - New email: fordendk@gmail.com
+2025-03-30 10:13:24 [INFO]:   - Password provided: Yes
+2025-03-30 10:13:24 [INFO]:   - UserId from body: 2133
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: 2133
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Verifying password...
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] ✅ Password verified successfully
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 🔑 Generating verification token
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] ✅ Token generated successfully: 244fd75f43...
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: 2133
+2025-03-30 10:13:24 [INFO]: User profile 2133 retrieved successfully
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] ✅ User found in database: {"id":"2133","email":"fordendk@outlook.com"}
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: {"pendingEmailChange":{"email":"fordendk@gmail.com","token":"244fd75f43..."},"emailVerified":false,"updatedAt":"2025-03-30T04:43:24.704Z"}
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] ✅ User document updated successfully
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: [EMAIL ROUTE DEBUG] 📧 Preparing to send verification email
+2025-03-30 10:13:24 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL REQUEST] - 2025-03-30T04:43:24.709Z
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: {
+  "to": "fordendk@gmail.com",
+  "token": "244fd75f43...",
+  "userName": "DAVID KEITH FORDEN..."
+}
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION LINK] - 2025-03-30T04:43:24.710Z
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: http://localhost:8090/verify-email/244fd75f43211ec438c103f65f67b82e97928e157b3a416808763df3cd063b6d
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL CONTENT] - 2025-03-30T04:43:24.710Z
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:24 [INFO]: {
+  "from": "\"Huduma AI\" <fordendk@gmail.com>",
+  "to": "fordendk@gmail.com",
+  "subject": "Verify Your Email - Huduma AI",
+  "textPreview": "\nHello DAVID KEITH FORDEN...,\n\nThank you for registering with Huduma AI. \nPlease verify your email a..."
+}
+2025-03-30 10:13:24 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:26 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:26 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION VERIFIED BEFORE SENDING] - 2025-03-30T04:43:26.021Z
+2025-03-30 10:13:26 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:28 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:28 [INFO]: [EMAIL ROUTE DEBUG] ✅ Verification email sent to fordendk@gmail.com
+2025-03-30 10:13:28 [INFO]: [0mPUT /api/users/email [32m200[0m 3789.729 ms - 132[0m
+2025-03-30 10:13:28 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL SENT] - 2025-03-30T04:43:28.484Z
+2025-03-30 10:13:28 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:28 [INFO]: {
+  "messageId": "<b7f69813-116d-6d9d-81aa-47fb951cf58c@gmail.com>",
+  "response": "250 OK queued as a784ef01-413b-422f-8826-798b0ece9aff",
+  "envelope": {
+    "from": "fordendk@gmail.com",
+    "to": [
+      "fordendk@gmail.com"
+    ]
+  }
+}
+2025-03-30 10:13:28 [INFO]: -----------------------------------------------------
+2025-03-30 10:13:28 [INFO]: Verification email sent to fordendk@gmail.com: <b7f69813-116d-6d9d-81aa-47fb951cf58c@gmail.com>
+2025-03-30 10:13:28 [INFO]: [EMAIL ROUTE DEBUG] ✅ Email update process completed successfully
+2025-03-30 10:13:30 [INFO]: 
+=======================================================
+2025-03-30 10:13:30 [INFO]: Verifying JWT token
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] 2025-03-30T04:43:30.399Z - Authentication Started
+2025-03-30 10:13:30 [INFO]: =======================================================
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] Request URL: POST /logout
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:13:30 [INFO]:   host: localhost:3000
+2025-03-30 10:13:30 [INFO]:   connection: keep-alive
+2025-03-30 10:13:30 [INFO]:   content-length: 2
+2025-03-30 10:13:30 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:13:30 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:13:30 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:13:30 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:13:30 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:13:30 [INFO]:   content-type: application/json
+2025-03-30 10:13:30 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:13:30 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:13:30 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:13:30 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:13:30 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:13:30 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:13:30 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:13:30 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:13:30 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:13:30 [INFO]: Token verified successfully for user:
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:13:30 [INFO]: Logout request for user: fordendk
+2025-03-30 10:13:30 [INFO]: Logging out user with ID: 2133
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:13:30 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:13:30 [INFO]: User logged out successfully: 2133
+2025-03-30 10:13:30 [INFO]: [0mPOST /api/auth/logout [32m200[0m 8.433 ms - 52[0m
+2025-03-30 10:13:41 [INFO]: Email verification attempt with token: 244fd75f43211ec438c103f65f67b82e97928e157b3a416808763df3cd063b6d
+2025-03-30 10:13:41 [INFO]: Verification Token Received:
+2025-03-30 10:13:41 [INFO]: Token not found in verificationTokens, checking pendingEmailChange
+2025-03-30 10:13:41 [INFO]: Found token in pendingEmailChange:
+2025-03-30 10:13:41 [INFO]: Email changed successfully for user 2133 to fordendk@gmail.com
+2025-03-30 10:13:41 [INFO]: [0mGET /api/auth/verify-email/244fd75f43211ec438c103f65f67b82e97928e157b3a416808763df3cd063b6d [32m200[0m 8.663 ms - 229[0m
+2025-03-30 10:13:48 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 10:13:48 [INFO]: Attempting login for user: fordendk
+2025-03-30 10:13:48 [INFO]: Fetching user by loginName: fordendk or email: fordendk
+2025-03-30 10:13:48 [INFO]: Verifying password
+2025-03-30 10:13:48 [INFO]: Generating JWT token for user: 2133
+2025-03-30 10:13:48 [INFO]: User logged in successfully: fordendk
+2025-03-30 10:13:48 [INFO]: [0mPOST /api/auth/login [32m200[0m 61.183 ms - 67298[0m
+2025-03-30 10:13:51 [INFO]: 
+=======================================================
+2025-03-30 10:13:51 [INFO]: Verifying JWT token
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] 2025-03-30T04:43:51.038Z - Authentication Started
+2025-03-30 10:13:51 [INFO]: =======================================================
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:13:51 [INFO]:   host: localhost:3000
+2025-03-30 10:13:51 [INFO]:   connection: keep-alive
+2025-03-30 10:13:51 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:13:51 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:13:51 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:13:51 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:13:51 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:13:51 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:13:51 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:13:51 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:13:51 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:13:51 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:13:51 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:13:51 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:13:51 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:13:51 [INFO]:   if-none-match: W/"106fe-5A3mdwDJfqyYdxurPNUI4xCcoO4"
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:13:51 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:13:51 [INFO]: Token verified successfully for user:
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:13:51 [INFO]: Fetching current user info for: fordendk
+2025-03-30 10:13:51 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:13:51 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:13:51 [INFO]: [0mGET /api/auth/me [32m200[0m 5.292 ms - 67322[0m
+2025-03-30 10:19:54 [INFO]: Getting dashboard analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with locale en
+2025-03-30 10:19:54 [INFO]: Getting dashboard analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with locale en
+2025-03-30 10:19:54 [INFO]: Test query result:
+2025-03-30 10:19:54 [INFO]: Executing dashboard analytics query...
+2025-03-30 10:20:01 [INFO]: ======= DEBUG: CATEGORY NAMES LOCALIZATION =======
+2025-03-30 10:20:01 [INFO]: DEBUG: Processing locale "en" for category name localization
+2025-03-30 10:20:01 [INFO]: Getting service categories for name localization...
+2025-03-30 10:20:01 [INFO]: Found 13 service categories for localization
+2025-03-30 10:20:01 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 7665.255 ms - 1991[0m
+2025-03-30 10:20:01 [INFO]: DEBUG: First few categories from database:
+2025-03-30 10:20:01 [INFO]: DEBUG: Processing 15 categories from analytics data
+2025-03-30 10:20:01 [INFO]: DEBUG: First category from analytics:
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: cat1, extracted key: cat1
+2025-03-30 10:20:01 [INFO]: DEBUG: No matching category found for ID: cat1
+2025-03-30 10:20:01 [INFO]: DEBUG: Available category keys: 1, 2, 3, 4, 5
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: cat2, extracted key: cat2
+2025-03-30 10:20:01 [INFO]: DEBUG: No matching category found for ID: cat2
+2025-03-30 10:20:01 [INFO]: DEBUG: Available category keys: 1, 2, 3, 4, 5
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/1, extracted key: 1
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/1",
+  "_key": "1",
+  "nameEN": "Identity & Civil Registration",
+  "nameFR": "Identité et état civil",
+  "nameSW": "Utambulisho na Usajili wa Raia"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Identity & Civil Registration" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Identity & Civil Registration"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/10, extracted key: 10
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/10",
+  "_key": "10",
+  "nameEN": "Utilities & Environment",
+  "nameFR": "Services publics et environnement",
+  "nameSW": "Huduma na Mazingira"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Utilities & Environment" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Utilities & Environment"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/11, extracted key: 11
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/11",
+  "_key": "11",
+  "nameEN": "Culture & Recreation",
+  "nameFR": "Culture et loisirs",
+  "nameSW": "Utamaduni na Burudani"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Culture & Recreation" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Culture & Recreation"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/12, extracted key: 12
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/12",
+  "_key": "12",
+  "nameEN": "Immigration & Citizenship",
+  "nameFR": "Immigration et citoyenneté",
+  "nameSW": "Uhamiaji na Uraia"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Immigration & Citizenship" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Immigration & Citizenship"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/13, extracted key: 13
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/13",
+  "_key": "13",
+  "nameEN": "Social Security & Pensions",
+  "nameFR": "Sécurité sociale et retraites",
+  "nameSW": "Hifadhi ya Jamii na Pensheni"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Social Security & Pensions" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Social Security & Pensions"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/2, extracted key: 2
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/2",
+  "_key": "2",
+  "nameEN": "Healthcare & Social Services",
+  "nameFR": "Santé et services sociaux",
+  "nameSW": "Afya na Huduma za Kijamii"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Healthcare & Social Services" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Healthcare & Social Services"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/3, extracted key: 3
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/3",
+  "_key": "3",
+  "nameEN": "Education & Learning",
+  "nameFR": "Éducation et apprentissage",
+  "nameSW": "Elimu na Mafunzo"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Education & Learning" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Education & Learning"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/4, extracted key: 4
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/4",
+  "_key": "4",
+  "nameEN": "Employment & Labor Services",
+  "nameFR": "Emploi et services du travail",
+  "nameSW": "Ajira na Huduma za Kazi"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Employment & Labor Services" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Employment & Labor Services"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/5, extracted key: 5
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/5",
+  "_key": "5",
+  "nameEN": "Taxes & Revenue",
+  "nameFR": "Impôts et revenus",
+  "nameSW": "Kodi na Mapato"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Taxes & Revenue" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Taxes & Revenue"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/6, extracted key: 6
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/6",
+  "_key": "6",
+  "nameEN": "Public Safety & Justice",
+  "nameFR": "Sécurité publique et justice",
+  "nameSW": "Usalama wa Umma na Haki"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Public Safety & Justice" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Public Safety & Justice"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/7, extracted key: 7
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/7",
+  "_key": "7",
+  "nameEN": "Transportation & Mobility",
+  "nameFR": "Transport et mobilité",
+  "nameSW": "Usafiri na Usafiri"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Transportation & Mobility" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Transportation & Mobility"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/8, extracted key: 8
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/8",
+  "_key": "8",
+  "nameEN": "Business & Trade",
+  "nameFR": "Affaires et commerce",
+  "nameSW": "Biashara na Biashara"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Business & Trade" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Business & Trade"
+2025-03-30 10:20:01 [INFO]: DEBUG: Looking up category for ID: serviceCategories/9, extracted key: 9
+2025-03-30 10:20:01 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/9",
+  "_key": "9",
+  "nameEN": "Housing & Urban Development",
+  "nameFR": "Logement et développement urbain",
+  "nameSW": "Nyumba na Maendeleo ya Mjini"
+}
+2025-03-30 10:20:01 [INFO]: DEBUG: Using English name: "Housing & Urban Development" (default)
+2025-03-30 10:20:01 [INFO]: DEBUG: Final name selected for locale en: "Housing & Urban Development"
+2025-03-30 10:20:01 [INFO]: ======= END DEBUG: CATEGORY NAMES LOCALIZATION =======
+2025-03-30 10:20:01 [INFO]: Dashboard analytics processing completed successfully
+2025-03-30 10:20:02 [INFO]: Fetching metric: totalQueries from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 10:20:02 [INFO]: Getting general analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with filters:
+2025-03-30 10:20:02 [INFO]: Collections initialized successfully
+2025-03-30 10:20:02 [INFO]: Executing analytics query with bind vars:
+2025-03-30 10:20:02 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 14.943 ms - -[0m
+2025-03-30 10:20:02 [INFO]: Fetching metric: totalQueries from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 10:20:02 [INFO]: Getting general analytics from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z with filters:
+2025-03-30 10:20:02 [INFO]: Collections initialized successfully
+2025-03-30 10:20:02 [INFO]: Executing analytics query with bind vars:
+2025-03-30 10:20:02 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 12.057 ms - -[0m
+2025-03-30 10:20:02 [INFO]: Fetching metric: uniqueUsers from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 10:20:02 [INFO]: Getting unique users count from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 10:20:02 [INFO]: Sample user IDs:
+2025-03-30 10:20:02 [INFO]: Executing unique users count query...
+2025-03-30 10:20:03 [INFO]: Unique users query result:
+2025-03-30 10:20:03 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 756.630 ms - -[0m
+2025-03-30 10:20:04 [INFO]: Fetching metric: uniqueUsers from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 10:20:04 [INFO]: Getting unique users count from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 10:20:04 [INFO]: Sample user IDs:
+2025-03-30 10:20:04 [INFO]: Executing unique users count query...
+2025-03-30 10:20:04 [INFO]: Unique users query result:
+2025-03-30 10:20:04 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 767.020 ms - -[0m
+2025-03-30 10:20:05 [INFO]: Fetching metric: averageResponseTime from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 10:20:05 [INFO]: Getting general analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with filters:
+2025-03-30 10:20:05 [INFO]: Collections initialized successfully
+2025-03-30 10:20:05 [INFO]: Executing analytics query with bind vars:
+2025-03-30 10:20:05 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 11.189 ms - 59[0m
+2025-03-30 10:20:05 [INFO]: Fetching metric: averageResponseTime from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 10:20:05 [INFO]: Getting general analytics from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z with filters:
+2025-03-30 10:20:05 [INFO]: Collections initialized successfully
+2025-03-30 10:20:05 [INFO]: Executing analytics query with bind vars:
+2025-03-30 10:20:05 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 10.788 ms - -[0m
+2025-03-30 10:20:05 [INFO]: Fetching metric: satisfactionRate from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 10:20:05 [INFO]: Getting general analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with filters:
+2025-03-30 10:20:05 [INFO]: Collections initialized successfully
+2025-03-30 10:20:05 [INFO]: Executing analytics query with bind vars:
+2025-03-30 10:20:05 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 10.668 ms - -[0m
+2025-03-30 10:20:06 [INFO]: Fetching metric: satisfactionRate from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 10:20:06 [INFO]: Getting general analytics from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z with filters:
+2025-03-30 10:20:06 [INFO]: Collections initialized successfully
+2025-03-30 10:20:06 [INFO]: Executing analytics query with bind vars:
+2025-03-30 10:20:06 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 11.545 ms - -[0m
+2025-03-30 10:20:06 [INFO]: Fetching time series data for metricType: queries, interval: daily, from 2025-03-01 to 2025-03-30
+2025-03-30 10:20:06 [INFO]: Getting time series data for metric: queries, interval: daily, from 2025-03-01T00:00:00.000Z to 2025-03-30T00:00:00.000Z
+2025-03-30 10:20:07 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-01&endDate=2025-03-30&locale=en [36m304[0m 833.294 ms - -[0m
+2025-03-30 10:20:07 [INFO]: Fetching all service categories with services, locale: en
+2025-03-30 10:20:07 [INFO]: Fetching all categories with services for locale en
+2025-03-30 10:20:07 [INFO]: Retrieved 13 categories with services
+2025-03-30 10:20:07 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 4.101 ms - -[0m
+2025-03-30 10:20:22 [INFO]: 
+=======================================================
+2025-03-30 10:20:22 [INFO]: Verifying JWT token
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] 2025-03-30T04:50:22.375Z - Authentication Started
+2025-03-30 10:20:22 [INFO]: =======================================================
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 10:20:22 [INFO]:   host: localhost:3000
+2025-03-30 10:20:22 [INFO]:   connection: keep-alive
+2025-03-30 10:20:22 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 10:20:22 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 10:20:22 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 10:20:22 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 10:20:22 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 10:20:22 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 10:20:22 [INFO]:   origin: http://localhost:8090
+2025-03-30 10:20:22 [INFO]:   sec-fetch-site: same-site
+2025-03-30 10:20:22 [INFO]:   sec-fetch-mode: cors
+2025-03-30 10:20:22 [INFO]:   sec-fetch-dest: empty
+2025-03-30 10:20:22 [INFO]:   referer: http://localhost:8090/
+2025-03-30 10:20:22 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 10:20:22 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 10:20:22 [INFO]:   if-none-match: W/"106fa-7q1/z9icC6qRKfoewoLEAY6wYfY"
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 10:20:22 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:20:22 [INFO]: Token verified successfully for user:
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 10:20:22 [INFO]: Fetching current user info for: fordendk
+2025-03-30 10:20:22 [INFO]: Fetching user by ID: 2133
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 10:20:22 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 10:20:22 [INFO]: [0mGET /api/auth/me [36m304[0m 6.163 ms - -[0m
+2025-03-30 10:20:30 [INFO]: Getting user profile for ID: 2133
+2025-03-30 10:20:30 [INFO]: Fetching user profile for user 2133
+2025-03-30 10:20:30 [INFO]: User profile 2133 retrieved successfully
+2025-03-30 10:20:30 [INFO]: [0mGET /api/users/2133 [32m200[0m 2.993 ms - 67375[0m
+2025-03-30 10:21:07 [INFO]: Update request body:
+2025-03-30 10:21:07 [INFO]: Updating user profile for user 2133
+2025-03-30 10:21:07 [INFO]: Update files:
+2025-03-30 10:21:07 [INFO]: Parsed profile data for update:
+2025-03-30 10:21:07 [INFO]: Checking if user 2133 exists
+2025-03-30 10:21:07 [INFO]: User 2133 exists
+2025-03-30 10:21:07 [INFO]: Processing profile data for user 2133
+2025-03-30 10:21:07 [INFO]: Profile data processed for user 2133
+2025-03-30 10:21:07 [INFO]: User profile 2133 updated successfully
+2025-03-30 10:21:07 [INFO]: [0mPUT /api/users/2133 [32m200[0m 11.208 ms - 67459[0m
+2025-03-30 10:21:35 [INFO]: Creating query with body: {"userId":"2133","sessionId":"new-session","text":"I need information on how to apply for a national ID card","categoryId":null,"serviceId":null,"isAnswered":false,"timestamp":"2025-03-30T04:51:34.242Z"}
+2025-03-30 10:21:35 [INFO]: Creating new query with data:
+2025-03-30 10:21:35 [INFO]: Creating basic query document...
+2025-03-30 10:21:35 [INFO]: Query created with auto-generated key: 34405965
+2025-03-30 10:21:35 [INFO]: Updating query 34405965 with additional data...
+2025-03-30 10:21:35 [INFO]: Creating edge between session new-session and query 34405965
+2025-03-30 10:21:35 [INFO]: Recording query analytics...
+2025-03-30 10:21:35 [INFO]: Analytics record created with auto-generated key: 34405981
+2025-03-30 10:21:35 [INFO]: Analytics updated for query 34405965
+2025-03-30 10:21:35 [INFO]: Query 34405965 created successfully
+2025-03-30 10:21:35 [INFO]: [0mPOST /api/queries [32m201[0m 15.842 ms - 232[0m
+2025-03-30 10:21:35 [INFO]: [0mPATCH /api/queries/34405965/responsetime [33m404[0m 0.882 ms - 174[0m
+2025-03-30 10:21:35 [INFO]: Marking query 34405965 as answered with body: {}
+2025-03-30 10:21:35 [INFO]: Marking query 34405965 as answered with response time: 0ms
+2025-03-30 10:21:35 [INFO]: Query 34405965 marked as answered
+2025-03-30 10:21:35 [INFO]: [0mPATCH /api/queries/34405965/answered [32m200[0m 4.715 ms - 248[0m
+2025-03-30 10:47:03 [INFO]: Accessed root endpoint
+2025-03-30 10:47:03 [INFO]: [0mGET / [32m200[0m 0.815 ms - 214[0m
+2025-03-30 10:47:04 [INFO]: [0mGET /favicon.ico [33m404[0m 0.723 ms - 150[0m
+2025-03-30 10:54:11 [INFO]: Creating query with body: {"userId":"2133","sessionId":"new-session","text":"What education services are available for my children? They are all mentally handicapped.","categoryId":"cat2","serviceId":"Mental Health","isAnswered":false,"timestamp":"2025-03-30T05:24:10.004Z"}
+2025-03-30 10:54:11 [INFO]: Creating new query with data:
+2025-03-30 10:54:11 [INFO]: Creating basic query document...
+2025-03-30 10:54:11 [INFO]: Query created with auto-generated key: 34405966
+2025-03-30 10:54:11 [INFO]: Updating query 34405966 with additional data...
+2025-03-30 10:54:11 [INFO]: Creating edge between session new-session and query 34405966
+2025-03-30 10:54:11 [INFO]: Creating edge between query 34405966 and category cat2
+2025-03-30 10:54:11 [INFO]: Recording query analytics...
+2025-03-30 10:54:11 [INFO]: Analytics record created with auto-generated key: 34405982
+2025-03-30 10:54:11 [INFO]: Analytics updated for query 34405966
+2025-03-30 10:54:11 [INFO]: Query 34405966 created successfully
+2025-03-30 10:54:11 [INFO]: [0mPOST /api/queries [32m201[0m 17.194 ms - 312[0m
+2025-03-30 10:54:11 [INFO]: [0mPATCH /api/queries/34405966/responsetime [33m404[0m 0.352 ms - 174[0m
+2025-03-30 10:54:11 [INFO]: Marking query 34405966 as answered with body: {}
+2025-03-30 10:54:11 [INFO]: Marking query 34405966 as answered with response time: 0ms
+2025-03-30 10:54:11 [INFO]: Query 34405966 marked as answered
+2025-03-30 10:54:11 [INFO]: [0mPATCH /api/queries/34405966/answered [32m200[0m 3.840 ms - 328[0m
+2025-03-30 10:54:23 [INFO]: Adding feedback to query 34405966 with body: {"rating":1,"comment":"","providedAt":"2025-03-30T05:24:22.163Z"}
+2025-03-30 10:54:23 [INFO]: Adding feedback to query 34405966
+2025-03-30 10:54:23 [INFO]: Recording feedback analytics...
+2025-03-30 10:54:23 [INFO]: Feedback record created with auto-generated key: 34405983
+2025-03-30 10:54:23 [INFO]: Analytics updated with feedback for query 34405966
+2025-03-30 10:54:23 [INFO]: [0mPOST /api/queries/34405966/feedback [32m200[0m 6.873 ms - 409[0m
+2025-03-30 10:54:23 [INFO]: Feedback added to query 34405966
+2025-03-30 11:12:28 [INFO]: 
+=======================================================
+2025-03-30 11:12:28 [INFO]: Verifying JWT token
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] 2025-03-30T05:42:28.398Z - Authentication Started
+2025-03-30 11:12:28 [INFO]: =======================================================
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 11:12:28 [INFO]:   host: localhost:3000
+2025-03-30 11:12:28 [INFO]:   connection: keep-alive
+2025-03-30 11:12:28 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 11:12:28 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 11:12:28 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 11:12:28 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 11:12:28 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 11:12:28 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 11:12:28 [INFO]:   origin: http://localhost:8090
+2025-03-30 11:12:28 [INFO]:   sec-fetch-site: same-site
+2025-03-30 11:12:28 [INFO]:   sec-fetch-mode: cors
+2025-03-30 11:12:28 [INFO]:   sec-fetch-dest: empty
+2025-03-30 11:12:28 [INFO]:   referer: http://localhost:8090/
+2025-03-30 11:12:28 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 11:12:28 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 11:12:28 [INFO]:   if-none-match: W/"106fa-7q1/z9icC6qRKfoewoLEAY6wYfY"
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 11:12:28 [INFO]: Fetching user by ID: 2133
+2025-03-30 11:12:28 [INFO]: Token verified successfully for user:
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 11:12:28 [INFO]: Fetching current user info for: fordendk
+2025-03-30 11:12:28 [INFO]: Fetching user by ID: 2133
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 11:12:28 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 11:12:28 [INFO]: [0mGET /api/auth/me [32m200[0m 5.994 ms - 67343[0m
+2025-03-30 16:22:57 [INFO]: Server is running on port 3000
+2025-03-30 16:22:57 [INFO]: -----------------------------------------------------
+2025-03-30 16:22:57 [INFO]: UserProfileService initialized
+2025-03-30 16:22:57 [INFO]: Initializing AuthService...
+2025-03-30 16:22:57 [INFO]: QueryService initialized
+2025-03-30 16:22:57 [INFO]: Initializing AnalyticsService...
+2025-03-30 16:22:57 [INFO]: ServiceCategoryService initialized
+2025-03-30 16:22:57 [INFO]: SessionService initialized with expiration time:
+2025-03-30 16:22:57 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 16:22:57 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 16:22:57 [INFO]: EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - 2025-03-30T10:52:57.836Z
+2025-03-30 16:22:57 [INFO]: -----------------------------------------------------
+2025-03-30 16:22:57 [INFO]: {
+  "host": "in-V3.mailjet.com",
+  "port": "587",
+  "secure": false,
+  "auth": {
+    "user": "187ad3288090609e6e282b07f359acd4",
+    "pass": "******"
+  },
+  "fromEmail": "fordendk@gmail.com",
+  "appName": "Huduma AI",
+  "baseUrl": "http://localhost:8090"
+}
+2025-03-30 16:22:57 [INFO]: -----------------------------------------------------
+2025-03-30 16:22:57 [INFO]: -----------------------------------------------------
+2025-03-30 16:22:57 [INFO]: EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - 2025-03-30T10:52:57.842Z
+2025-03-30 16:22:57 [INFO]: -----------------------------------------------------
+2025-03-30 16:22:57 [INFO]: Analytics service set for QueryService
+2025-03-30 16:22:57 [INFO]: Initializing AnalyticsService...
+2025-03-30 16:22:57 [INFO]: Initializing AnalyticsService...
+2025-03-30 16:22:57 [INFO]: ServiceCategoryService initialized
+2025-03-30 16:22:57 [INFO]: Collections initialized successfully
+2025-03-30 16:22:57 [INFO]: Collections initialized successfully
+2025-03-30 16:22:57 [INFO]: Collections initialized successfully
+2025-03-30 16:22:57 [INFO]: Auth service initialized successfully
+2025-03-30 16:23:00 [INFO]: -----------------------------------------------------
+2025-03-30 16:23:00 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - 2025-03-30T10:53:00.001Z
+2025-03-30 16:23:00 [INFO]: -----------------------------------------------------
+2025-03-30 16:23:00 [INFO]: true
+2025-03-30 16:23:00 [INFO]: -----------------------------------------------------
+2025-03-30 16:23:40 [INFO]: Creating query with body: {"userId":"2133","sessionId":"new-session","text":"J'ai besoin d'informations sur la procédure de demande d'une carte d'identité nationale","categoryId":null,"serviceId":null,"isAnswered":false,"timestamp":"2025-03-30T10:53:39.872Z"}
+2025-03-30 16:23:40 [INFO]: Creating new query with data:
+2025-03-30 16:23:40 [INFO]: Creating basic query document...
+2025-03-30 16:23:41 [INFO]: Query created with auto-generated key: 34405967
+2025-03-30 16:23:41 [INFO]: Updating query 34405967 with additional data...
+2025-03-30 16:23:41 [INFO]: Creating edge between session new-session and query 34405967
+2025-03-30 16:23:41 [INFO]: Recording query analytics...
+2025-03-30 16:23:41 [INFO]: Analytics record created with auto-generated key: 34405984
+2025-03-30 16:23:41 [INFO]: Analytics updated for query 34405967
+2025-03-30 16:23:41 [INFO]: Query 34405967 created successfully
+2025-03-30 16:23:41 [INFO]: [0mPOST /api/queries [32m201[0m 19.181 ms - 264[0m
+2025-03-30 16:23:41 [INFO]: [0mPATCH /api/queries/34405967/responsetime [33m404[0m 1.216 ms - 174[0m
+2025-03-30 16:23:41 [INFO]: Marking query 34405967 as answered with body: {}
+2025-03-30 16:23:41 [INFO]: Marking query 34405967 as answered with response time: 0ms
+2025-03-30 16:23:41 [INFO]: Query 34405967 marked as answered
+2025-03-30 16:23:41 [INFO]: [0mPATCH /api/queries/34405967/answered [32m200[0m 4.604 ms - 280[0m
+2025-03-30 16:23:50 [INFO]: Adding feedback to query 34405967 with body: {"rating":5,"comment":"","providedAt":"2025-03-30T10:53:48.992Z"}
+2025-03-30 16:23:50 [INFO]: Adding feedback to query 34405967
+2025-03-30 16:23:50 [INFO]: Recording feedback analytics...
+2025-03-30 16:23:50 [INFO]: Feedback record created with auto-generated key: 34405985
+2025-03-30 16:23:50 [INFO]: Analytics updated with feedback for query 34405967
+2025-03-30 16:23:50 [INFO]: [0mPOST /api/queries/34405967/feedback [32m200[0m 8.026 ms - 361[0m
+2025-03-30 16:23:50 [INFO]: Feedback added to query 34405967
+2025-03-30 16:32:51 [INFO]: Creating query with body: {"userId":"2133","sessionId":"new-session","text":"I'd like to chat about government services","categoryId":"cat2","serviceId":"Mental Health","isAnswered":false,"timestamp":"2025-03-30T11:02:50.090Z"}
+2025-03-30 16:32:51 [INFO]: Creating new query with data:
+2025-03-30 16:32:51 [INFO]: Creating basic query document...
+2025-03-30 16:32:51 [INFO]: Query created with auto-generated key: 34405968
+2025-03-30 16:32:51 [INFO]: Updating query 34405968 with additional data...
+2025-03-30 16:32:51 [INFO]: Creating edge between session new-session and query 34405968
+2025-03-30 16:32:51 [INFO]: Creating edge between query 34405968 and category cat2
+2025-03-30 16:32:51 [INFO]: Recording query analytics...
+2025-03-30 16:32:51 [INFO]: Analytics record created with auto-generated key: 34405986
+2025-03-30 16:32:51 [INFO]: Analytics updated for query 34405968
+2025-03-30 16:32:51 [INFO]: Query 34405968 created successfully
+2025-03-30 16:32:51 [INFO]: [0mPOST /api/queries [32m201[0m 21.583 ms - 265[0m
+2025-03-30 16:32:51 [INFO]: [0mPATCH /api/queries/34405968/responsetime [33m404[0m 0.487 ms - 174[0m
+2025-03-30 16:32:51 [INFO]: Marking query 34405968 as answered with body: {}
+2025-03-30 16:32:51 [INFO]: Marking query 34405968 as answered with response time: 0ms
+2025-03-30 16:32:51 [INFO]: Query 34405968 marked as answered
+2025-03-30 16:32:51 [INFO]: [0mPATCH /api/queries/34405968/answered [32m200[0m 4.110 ms - 281[0m
+2025-03-30 17:49:15 [INFO]: 
+=======================================================
+2025-03-30 17:49:15 [INFO]: Verifying JWT token
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] 2025-03-30T12:19:15.198Z - Authentication Started
+2025-03-30 17:49:15 [INFO]: =======================================================
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 17:49:15 [INFO]:   host: localhost:3000
+2025-03-30 17:49:15 [INFO]:   connection: keep-alive
+2025-03-30 17:49:15 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 17:49:15 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 17:49:15 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 17:49:15 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 17:49:15 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 17:49:15 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 17:49:15 [INFO]:   origin: http://localhost:8090
+2025-03-30 17:49:15 [INFO]:   sec-fetch-site: same-site
+2025-03-30 17:49:15 [INFO]:   sec-fetch-mode: cors
+2025-03-30 17:49:15 [INFO]:   sec-fetch-dest: empty
+2025-03-30 17:49:15 [INFO]:   referer: http://localhost:8090/
+2025-03-30 17:49:15 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 17:49:15 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 17:49:15 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 17:49:15 [INFO]: Fetching user by ID: 2133
+2025-03-30 17:49:15 [INFO]: Token verified successfully for user:
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 17:49:15 [INFO]: Fetching current user info for: fordendk
+2025-03-30 17:49:15 [INFO]: Fetching user by ID: 2133
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 17:49:15 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 17:49:15 [INFO]: [0mGET /api/auth/me [36m304[0m 9.646 ms - -[0m
+2025-03-30 18:00:50 [INFO]: 
+=======================================================
+2025-03-30 18:00:50 [INFO]: Verifying JWT token
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] 2025-03-30T12:30:50.805Z - Authentication Started
+2025-03-30 18:00:50 [INFO]: =======================================================
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 18:00:50 [INFO]:   host: localhost:3000
+2025-03-30 18:00:50 [INFO]:   connection: keep-alive
+2025-03-30 18:00:50 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 18:00:50 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 18:00:50 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 18:00:50 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 18:00:50 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 18:00:50 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 18:00:50 [INFO]:   origin: http://localhost:8090
+2025-03-30 18:00:50 [INFO]:   sec-fetch-site: same-site
+2025-03-30 18:00:50 [INFO]:   sec-fetch-mode: cors
+2025-03-30 18:00:50 [INFO]:   sec-fetch-dest: empty
+2025-03-30 18:00:50 [INFO]:   referer: http://localhost:8090/
+2025-03-30 18:00:50 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 18:00:50 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 18:00:50 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 18:00:50 [INFO]: Fetching user by ID: 2133
+2025-03-30 18:00:50 [INFO]: Token verified successfully for user:
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 18:00:50 [INFO]: Fetching current user info for: fordendk
+2025-03-30 18:00:50 [INFO]: Fetching user by ID: 2133
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 18:00:50 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 18:00:50 [INFO]: [0mGET /api/auth/me [36m304[0m 8.431 ms - -[0m
+2025-03-30 18:01:44 [INFO]: 
+=======================================================
+2025-03-30 18:01:44 [INFO]: Verifying JWT token
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] 2025-03-30T12:31:44.656Z - Authentication Started
+2025-03-30 18:01:44 [INFO]: =======================================================
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 18:01:44 [INFO]:   host: localhost:3000
+2025-03-30 18:01:44 [INFO]:   connection: keep-alive
+2025-03-30 18:01:44 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 18:01:44 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 18:01:44 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 18:01:44 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 18:01:44 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 18:01:44 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 18:01:44 [INFO]:   origin: http://localhost:8090
+2025-03-30 18:01:44 [INFO]:   sec-fetch-site: same-site
+2025-03-30 18:01:44 [INFO]:   sec-fetch-mode: cors
+2025-03-30 18:01:44 [INFO]:   sec-fetch-dest: empty
+2025-03-30 18:01:44 [INFO]:   referer: http://localhost:8090/
+2025-03-30 18:01:44 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 18:01:44 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 18:01:44 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 18:01:44 [INFO]: Fetching user by ID: 2133
+2025-03-30 18:01:44 [INFO]: Token verified successfully for user:
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 18:01:44 [INFO]: Fetching current user info for: fordendk
+2025-03-30 18:01:44 [INFO]: Fetching user by ID: 2133
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 18:01:44 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 18:01:44 [INFO]: [0mGET /api/auth/me [36m304[0m 6.987 ms - -[0m
+2025-03-30 18:32:46 [INFO]: 
+=======================================================
+2025-03-30 18:32:46 [INFO]: Verifying JWT token
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] 2025-03-30T13:02:46.765Z - Authentication Started
+2025-03-30 18:32:46 [INFO]: =======================================================
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 18:32:46 [INFO]:   host: localhost:3000
+2025-03-30 18:32:46 [INFO]:   connection: keep-alive
+2025-03-30 18:32:46 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 18:32:46 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 18:32:46 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 18:32:46 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 18:32:46 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 18:32:46 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 18:32:46 [INFO]:   origin: http://localhost:8090
+2025-03-30 18:32:46 [INFO]:   sec-fetch-site: same-site
+2025-03-30 18:32:46 [INFO]:   sec-fetch-mode: cors
+2025-03-30 18:32:46 [INFO]:   sec-fetch-dest: empty
+2025-03-30 18:32:46 [INFO]:   referer: http://localhost:8090/
+2025-03-30 18:32:46 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 18:32:46 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 18:32:46 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 18:32:46 [INFO]: Fetching user by ID: 2133
+2025-03-30 18:32:46 [INFO]: Token verified successfully for user:
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 18:32:46 [INFO]: Fetching current user info for: fordendk
+2025-03-30 18:32:46 [INFO]: Fetching user by ID: 2133
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 18:32:46 [INFO]: [0mGET /api/auth/me [36m304[0m 9.378 ms - -[0m

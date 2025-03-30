@@ -1,0 +1,1593 @@
+<template>
+    <!-- Add backdrop -->
+    <div class="admin-backdrop" @click="$emit('close')"></div>
+    
+    <div class="admin-dashboard">
+      <!-- Close button -->
+      <button class="close-dashboard-btn" @click="$emit('close')" aria-label="Close dashboard">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      
+      <div class="dashboard">
+        <!-- Sidebar -->
+        <div class="sidebar">
+          <div class="logo">
+            <div class="logo-icon">H</div>
+            <span>{{ translate('admin.huduma', 'Huduma AI') }}</span>
+          </div>
+          
+          <div class="nav-section">
+            <div class="nav-header">{{ translate('admin.dashboard', 'Dashboard') }}</div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a href="#" class="nav-link active" @click.prevent="setActiveTab('overview')">
+                  <i>📊</i>
+                  <span>{{ translate('admin.overview', 'Overview') }}</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="nav-section">
+            <div class="nav-header">{{ translate('admin.system', 'System') }}</div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a href="#" class="nav-link" @click.prevent="setActiveTab('database')">
+                  <i>💾</i>
+                  <span>{{ translate('admin.database', 'Database') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" @click.prevent="setActiveTab('logs')">
+                  <i>📋</i>
+                  <span>{{ translate('admin.logs', 'Logs') }}</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="nav-section">
+            <div class="nav-header">{{ translate('admin.settings', 'Settings') }}</div>
+            <ul class="nav-items">
+              <li class="nav-item">
+                <a href="#" class="nav-link" @click.prevent="setActiveTab('users')">
+                  <i>👥</i>
+                  <span>{{ translate('admin.userManagement', 'User Management') }}</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="#" class="nav-link" @click.prevent="setActiveTab('security')">
+                  <i>🔒</i>
+                  <span>{{ translate('admin.security', 'Security') }}</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main">
+          <div class="header">
+            <h1 class="page-title">{{ translate('admin.systemAdministration', 'System Administration') }}</h1>
+          </div>
+          
+          <!-- Quick Stats -->
+          <div class="quick-stats">
+            <div class="stat-card">
+              <div class="stat-title">{{ translate('admin.systemUptime', 'System Uptime') }}</div>
+              <div class="stat-value">99.98%</div>
+              <div class="stat-trend trend-up">
+                <span>↑ 0.2%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">{{ translate('admin.avgResponseTime', 'Average Response Time') }}</div>
+              <div class="stat-value">245ms</div>
+              <div class="stat-trend trend-down">
+                <span>↓ 12%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">{{ translate('admin.errorRate', 'Error Rate') }}</div>
+              <div class="stat-value">0.05%</div>
+              <div class="stat-trend trend-up">
+                <span>↑ 0.01%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-title">{{ translate('admin.activeUsers', 'Active Users') }}</div>
+              <div class="stat-value">2,453</div>
+              <div class="stat-trend trend-up">
+                <span>↑ 15%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              </div>
+            </div>
+          </div>
+          
+          <!-- System Tabs -->
+          <div class="tabs">
+            <div class="tab-header">
+              <button 
+                v-for="tab in tabs" 
+                :key="tab.id"
+                class="tab-btn" 
+                :class="{ active: activeTab === tab.id }"
+                @click="setActiveTab(tab.id)"
+              >
+                {{ translate(`admin.tabs.${tab.id}`, tab.label) }}
+              </button>
+            </div>
+            
+            <div class="tab-content">
+              <div class="dashboard-grid">
+                <!-- System Health Card - Overview Tab Only -->
+                <div class="dashboard-card" v-if="activeTab === 'overview'">
+                  <div class="card-header">
+                    <div class="card-title">{{ translate('admin.systemHealthStatus', 'System Health Status') }}</div>
+                    <div class="card-actions">
+                      <button class="btn btn-outline" @click="runDiagnostics">
+                        {{ translate('admin.runDiagnostics', 'Run Diagnostics') }}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div class="health-status">
+                    <div v-for="service in healthServices" :key="service.name" 
+                         :class="['health-item', `status-${service.status}`]">
+                      <div :class="['status-badge', `badge-${service.status}`]"></div>
+                      <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Resource Usage - Overview Tab Only -->
+                <div class="dashboard-card" v-if="activeTab === 'overview'">
+                  <div class="card-header">
+                    <div class="card-title">{{ translate('admin.resourceUsage', 'Resource Usage') }}</div>
+                  </div>
+                  
+                  <div class="resource-usage">
+                    <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
+                      <div class="usage-header">
+                        <div class="usage-label">{{ translate(`admin.resources.${resource.id}`, resource.label) }}</div>
+                        <div class="usage-value">{{ resource.value }}%</div>
+                      </div>
+                      <div class="usage-bar">
+                        <div 
+                          :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]" 
+                          :style="{ width: `${resource.value}%` }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Database Management - Database Tab Only -->
+                <div class="dashboard-card" v-if="activeTab === 'database'" style="grid-column: span 2;">
+                  <div class="card-header">
+                    <div class="card-title">{{ translate('admin.databaseManagement', 'Database Management') }}</div>
+                    <div class="card-actions">
+                      <button class="btn btn-primary" @click="reindexDatabase">
+                        {{ translate('admin.reindexDatabase', 'Reindex Database') }}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div class="db-actions">
+                    <div class="db-action-card" @click="reindexDatabase">
+                      <div class="action-icon">🔄</div>
+                      <div class="action-title">{{ translate('admin.dbActions.reindex', 'Reindex') }}</div>
+                      <div class="action-desc">{{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}</div>
+                    </div>
+                    <div class="db-action-card" @click="backupDatabase">
+                      <div class="action-icon">💾</div>
+                      <div class="action-title">{{ translate('admin.dbActions.backup', 'Backup') }}</div>
+                      <div class="action-desc">{{ translate('admin.dbActions.backupDesc', 'Create database backup') }}</div>
+                    </div>
+                    <div class="db-action-card" @click="optimizeDatabase">
+                      <div class="action-icon">📊</div>
+                      <div class="action-title">{{ translate('admin.dbActions.optimize', 'Optimize') }}</div>
+                      <div class="action-desc">{{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance') }}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="db-stats">
+                    <div><strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong> 5 {{ translate('admin.daysAgo', 'days ago') }}</div>
+                    <div><strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong> 42.3 GB</div>
+                    <div><strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong> 128</div>
+                  </div>
+                </div>
+                
+                <!-- Log Management - Logs Tab Only -->
+                <div class="dashboard-card" v-if="activeTab === 'logs'" style="grid-column: span 2;">
+                  <div class="card-header">
+                    <div class="card-title">{{ translate('admin.logManagement', 'Log Management') }}</div>
+                    <div class="card-actions">
+                      <button class="btn btn-primary" @click="rolloverLogs">
+                        {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
+                      </button>
+                      <button class="btn btn-outline" @click="searchLogs">
+                        {{ translate('admin.searchLogs', 'Search Logs') }}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <table class="log-table">
+                    <thead>
+                      <tr>
+                        <th>{{ translate('admin.logTime', 'Time') }}</th>
+                        <th>{{ translate('admin.logLevel', 'Level') }}</th>
+                        <th>{{ translate('admin.logService', 'Service') }}</th>
+                        <th>{{ translate('admin.logMessage', 'Message') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(log, index) in logs" :key="index">
+                        <td>{{ log.time }}</td>
+                        <td><span :class="['log-level', `log-${log.level.toLowerCase()}`]">{{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}</span></td>
+                        <td>{{ log.service }}</td>
+                        <td>{{ translate(`admin.logMessages.${log.messageKey}`, log.message) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  
+                  <div class="table-footer">
+                    <div>{{ translate('admin.showingEntries', 'Showing {start}-{end} of {total} entries').replace('{start}', '1').replace('{end}', '3').replace('{total}', '1,284') }}</div>
+                    <div class="pagination">
+                      <button class="page-btn">«</button>
+                      <button class="page-btn active">1</button>
+                      <button class="page-btn">2</button>
+                      <button class="page-btn">3</button>
+                      <button class="page-btn">»</button>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Security Monitoring - Security Tab Only -->
+                <div class="dashboard-card" v-if="activeTab === 'security'" style="grid-column: span 2;">
+                  <div class="card-header">
+                    <div class="card-title">{{ translate('admin.securityMonitoring', 'Security Monitoring') }}</div>
+                    <div class="card-actions">
+                      <button class="btn btn-outline" @click="runSecurityScan">
+                        {{ translate('admin.securityScan', 'Security Scan') }}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div style="margin-bottom: 1rem;">
+                    <div class="usage-item">
+                      <div class="usage-header">
+                        <div class="usage-label">{{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)') }}</div>
+                        <div class="usage-value">23</div>
+                      </div>
+                      <div class="usage-bar">
+                        <div class="usage-fill usage-low" style="width: 23%"></div>
+                      </div>
+                    </div>
+                    
+                    <div class="usage-item">
+                      <div class="usage-header">
+                        <div class="usage-label">{{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)') }}</div>
+                        <div class="usage-value">5</div>
+                      </div>
+                      <div class="usage-bar">
+                        <div class="usage-fill usage-low" style="width: 5%"></div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style="font-size: 0.875rem;">
+                    <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong> 2 {{ translate('admin.daysAgo', 'days ago') }}</div>
+                    <div><strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong> 0 {{ translate('admin.critical', 'critical') }}, 2 {{ translate('admin.medium', 'medium') }}, 5 {{ translate('admin.low', 'low') }}</div>
+                  </div>
+                </div>
+                
+                <!-- User Management - Users Tab Only -->
+                <div class="dashboard-card" v-if="activeTab === 'users'" style="grid-column: span 2;">
+                  <div class="card-header">
+                    <div class="card-title">{{ translate('admin.userManagement', 'User Management') }}</div>
+                  </div>
+                  
+                  <table class="log-table">
+                    <thead>
+                      <tr>
+                        <th>{{ translate('admin.userName', 'Name') }}</th>
+                        <th>{{ translate('admin.userEmail', 'Email') }}</th>
+                        <th>{{ translate('admin.userRole', 'Role') }}</th>
+                        <th>{{ translate('admin.userStatus', 'Status') }}</th>
+                        <th>{{ translate('admin.userActions', 'Actions') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Admin User</td>
+                        <td>admin@huduma.ai</td>
+                        <td>Administrator</td>
+                        <td><span class="log-level log-info">Active</span></td>
+                        <td>
+                          <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
+                            {{ translate('admin.edit', 'Edit') }}
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Test User</td>
+                        <td>test@huduma.ai</td>
+                        <td>User</td>
+                        <td><span class="log-level log-info">Active</span></td>
+                        <td>
+                          <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
+                            {{ translate('admin.edit', 'Edit') }}
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Loading Indicator -->
+      <div class="loading-overlay" v-if="isLoading">
+        <div class="loading-spinner"></div>
+        <p>{{ translate('admin.loading', 'Loading...') }}</p>
+      </div>
+    </div>
+  </template>
+
+<script>
+
+export default {
+  name: 'AdminDashboard',
+  emits: ['close'],
+  data() {
+    return {
+      // Current locale for translations
+      currentLocale: this.getCurrentLanguage(),
+      
+      // Theme settings
+      currentTheme: document.documentElement.getAttribute('data-theme') || 'light',
+      
+      // Tab navigation
+      activeTab: 'overview',
+        tabs: [
+          { id: 'overview', label: 'System Health' },
+          { id: 'database', label: 'Database' },
+          { id: 'logs', label: 'Logs' },
+          { id: 'security', label: 'Security' },
+          { id: 'users', label: 'Users' }
+        ],
+      
+      // Loading state
+      isLoading: false,
+      
+      // System health services
+      healthServices: [
+        { id: 'apiServices', name: 'API Services', status: 'good' },
+        { id: 'database', name: 'Database', status: 'good' },
+        { id: 'cache', name: 'Cache', status: 'good' },
+        { id: 'storage', name: 'Storage', status: 'warning' },
+        { id: 'messageQueue', name: 'Message Queue', status: 'good' },
+        { id: 'externalApi', name: 'External API', status: 'error' }
+      ],
+      
+      // Resource usage metrics
+      resourceUsage: [
+        { id: 'cpu', label: 'CPU Usage', value: 42 },
+        { id: 'memory', label: 'Memory Usage', value: 78 },
+        { id: 'storage', label: 'Storage Usage', value: 92 },
+        { id: 'network', label: 'Network Bandwidth', value: 35 }
+      ],
+      
+      // Logs data
+      logs: [
+        { 
+          time: '10:42:15', 
+          level: 'ERROR', 
+          service: 'API Gateway', 
+          message: 'Connection timeout to external provider',
+          messageKey: 'connectionTimeout'
+        },
+        { 
+          time: '10:38:22', 
+          level: 'WARNING', 
+          service: 'Storage', 
+          message: 'Disk space below 10% threshold',
+          messageKey: 'lowDiskSpace'
+        },
+        { 
+          time: '10:35:47', 
+          level: 'INFO', 
+          service: 'Auth Service', 
+          message: 'User role updated for admin@huduma.ai',
+          messageKey: 'userRoleUpdated'
+        }
+      ],
+      
+      // Feature flags
+      featureFlags: [
+        { 
+          id: 'enhancedSearch', 
+          name: 'Enhanced Search', 
+          description: 'Enable AI-powered search capabilities', 
+          enabled: true 
+        },
+        { 
+          id: 'newDashboardUi', 
+          name: 'New Dashboard UI', 
+          description: 'Updated user interface for dashboards', 
+          enabled: false 
+        },
+        { 
+          id: 'bulkProcessingApi', 
+          name: 'Bulk Processing API', 
+          description: 'Enable bulk data processing endpoints', 
+          enabled: true 
+        }
+      ],
+      
+      // Alert configurations
+      alertConfigs: [
+        { 
+          id: 'cpuUsage', 
+          title: 'CPU Usage > 90%', 
+          channels: 'Email, SMS to System Admin', 
+          enabled: true 
+        },
+        { 
+          id: 'errorRate', 
+          title: 'Error Rate > 1%', 
+          channels: 'Email to Dev Team, Slack #alerts', 
+          enabled: true 
+        },
+        { 
+          id: 'lowStorage', 
+          title: 'Storage < 10%', 
+          channels: 'Email, SMS, Automated cleanup', 
+          enabled: true 
+        }
+      ],
+      
+      // Maintenance mode toggle
+      maintenanceMode: false,
+      
+      // Alert configuration modal
+      showAlertsConfig: false,
+    };
+  },
+    mounted() {
+
+        // Apply current language settings
+        if (this.$i18n) {
+            this.$i18n.locale = this.currentLocale;
+        }
+
+        // Apply theme from localStorage or default
+        this.applyTheme(this.currentTheme);
+
+        // Listen for theme changes from other components
+        window.addEventListener('themeChange', this.handleThemeChange);
+    },
+
+    beforeDestroy() {
+        // Clean up event listeners when component is destroyed
+        window.removeEventListener('themeChange', this.handleThemeChange)
+    },
+  methods: {
+    
+    // Translation method - similar to the one in SettingsComponent
+    translate(key, fallback = '') {
+      if (!this.$i18n) return fallback;
+      try {
+        // Force the correct locale
+        const translation = this.$i18n.t(key, { locale: this.currentLocale });
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      } catch (e) {
+        console.error('Translation error:', e);
+        return fallback || key;
+      }
+    },
+    
+    // Get current language from i18n or localStorage
+    getCurrentLanguage() {
+      // First try to get from i18n instance
+      if (this.$i18n && this.$i18n.locale) {
+        return this.$i18n.locale;
+      }
+      
+      // Fallback to localStorage
+      try {
+        const savedLocale = localStorage.getItem('userLocale');
+        if (savedLocale) {
+          return savedLocale;
+        }
+      } catch (e) {
+        console.warn('Error accessing localStorage for language:', e);
+      }
+      
+      // Default to English if nothing else works
+      return 'en';
+    },
+    
+    // Change language
+    changeLanguage() {
+      if (this.$i18n) {
+        // Set the i18n locale
+        this.$i18n.locale = this.currentLocale;
+        
+        // Save to localStorage
+        try {
+          localStorage.setItem('userLocale', this.currentLocale);
+        } catch (e) {
+          console.warn('Error saving language preference:', e);
+        }
+        
+        // Force update this component
+        this.$forceUpdate();
+      }
+    },
+    
+    // Toggle between light and dark theme
+    toggleTheme() {
+      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+      this.applyTheme(newTheme);
+    },
+    
+    // Apply theme
+    applyTheme(theme) {
+      // Update local state
+      this.currentTheme = theme;
+      
+      // Save to localStorage
+      localStorage.setItem('theme', theme);
+      
+      // Apply to document
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
+      
+      // Update class names
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark-mode');
+        document.documentElement.classList.remove('light-mode');
+        document.body.classList.remove('light-mode');
+        document.body.classList.add('dark-mode');
+      } else {
+        document.documentElement.classList.remove('dark-mode');
+        document.documentElement.classList.add('light-mode');
+        document.body.classList.remove('dark-mode');
+        document.body.classList.add('light-mode');
+      }
+      
+    },
+    
+    // Handle theme change event from other components
+    handleThemeChange(event) {
+      if (event.detail && event.detail.theme) {
+        this.applyTheme(event.detail.theme);
+      }
+    },
+    
+    // Get current effective theme (useful for components that need the actual theme)
+    getCurrentTheme() {
+      return this.currentTheme;
+    },
+    
+    // Set active tab
+    setActiveTab(tabId) {
+      this.activeTab = tabId;
+    },
+    
+    // Get usage level based on percentage
+    getUsageLevel(value) {
+      if (value < 50) return 'low';
+      if (value < 80) return 'medium';
+      return 'high';
+    },
+    
+    // Database operations
+    reindexDatabase() {
+      this.showOperation('reindexDatabase');
+    },
+    
+    backupDatabase() {
+      this.showOperation('backupDatabase');
+    },
+    
+    optimizeDatabase() {
+      this.showOperation('optimizeDatabase');
+    },
+    
+    // Log operations
+    rolloverLogs() {
+      this.showOperation('rolloverLogs');
+    },
+    
+    searchLogs() {
+      this.showOperation('searchLogs');
+    },
+    
+    // System diagnostics
+    runDiagnostics() {
+      this.showOperation('runDiagnostics');
+    },
+    
+    // Security operations
+    runSecurityScan() {
+      this.showOperation('runSecurityScan');
+    },
+    
+    // Job operations
+    viewAllJobs() {
+      this.showOperation('viewAllJobs');
+    },
+    
+    cancelJob(jobId) {
+      this.showOperation('cancelJob', { jobId });
+    },
+    
+    restartJob(jobId) {
+      this.showOperation('restartJob', { jobId });
+    },
+    
+    // Feature flag operations
+    addNewFlag() {
+      this.showOperation('addNewFlag');
+    },
+    
+    updateFeatureFlag(feature) {
+      this.showOperation('updateFeatureFlag', { 
+        id: feature.id, 
+        enabled: feature.enabled 
+      });
+    },
+    
+    // Alert operations
+    addNewAlert() {
+      this.showOperation('addNewAlert');
+    },
+    
+    updateAlertConfig(alert) {
+      this.showOperation('updateAlertConfig', { 
+        id: alert.id, 
+        enabled: alert.enabled 
+      });
+    },
+    
+    saveAlertConfigs() {
+      this.showOperation('saveAlertConfigs');
+      this.showAlertsConfig = false;
+    },
+    
+    // Deployment operations
+    deployVersion() {
+      this.showOperation('deployVersion');
+    },
+    
+    toggleMaintenanceMode() {
+      this.showOperation('toggleMaintenanceMode', { 
+        enabled: this.maintenanceMode 
+      });
+    },
+    
+    // Performance operations
+    viewDetailedMetrics() {
+      this.showOperation('viewDetailedMetrics');
+    },
+    
+    // Helper to show operation feedback
+    showOperation(operation, data = {}) {
+      // In a real app, this would make API calls
+      // For now, just show loading and a notification
+      this.isLoading = true;
+      
+      setTimeout(() => {
+        this.isLoading = false;
+        console.log(`Operation ${operation} executed with data:`, data);
+        
+        // If using a notification service like in SettingsComponent:
+        // notificationService.success(this.translate(`admin.operations.${operation}.success`));
+        alert(this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`));
+      }, 1500);
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* Base variables */
+:root {
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+  --secondary: #64748b;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --light: #f8fafc;
+  --dark: #1e293b;
+  --border: #e2e8f0;
+  
+  /* Theme variables */
+  --bg-dialog: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #4d4d4d;
+  --text-tertiary: #767676;
+  --text-button-primary: #ffffff;
+  --text-button-secondary: #4d4d4d;
+  --bg-button-primary: #3b82f6;
+  --bg-button-secondary: #e9ecef;
+  --border-color: #dcdfe4;
+  --bg-section: rgba(0, 0, 0, 0.02);
+  --bg-danger: #ef4444;
+  --bg-danger-hover: #dc2626;
+  --bg-input: #ffffff;
+  --border-input: #dcdfe4;
+  --switch-track-off: #d0d0d0;
+  --switch-track-on: #3b82f6;
+  --switch-thumb: #ffffff;
+  --slider-track: #e9ecef;
+  --slider-thumb: #3b82f6;
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme variables */
+[data-theme="dark"], .dark-mode {
+  --bg-dialog: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-button-primary: #ffffff;
+  --text-button-secondary: #cbd5e1;
+  --bg-button-primary: #3b82f6;
+  --bg-button-secondary: #334155;
+  --border-color: #334155;
+  --bg-section: rgba(255, 255, 255, 0.03);
+  --bg-danger: #ef4444;
+  --bg-danger-hover: #dc2626;
+  --bg-input: #0f172a;
+  --border-input: #334155;
+  --switch-track-off: #475569;
+  --switch-track-on: #3b82f6;
+  --switch-thumb: #ffffff;
+  --slider-track: #334155;
+  --slider-thumb: #3b82f6;
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Modal backdrop */
+.admin-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 999;
+}
+
+/* Admin dashboard container */
+.admin-dashboard {
+  position: fixed;
+  top: 60px; /* Position below navbar - adjust based on your navbar height */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 1200px;
+  max-height: calc(100vh - 80px); /* Leave space for navbar and notifications */
+  overflow-y: auto;
+  background-color: var(--bg-dialog);
+  z-index: 1000;
+  border-radius: 8px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Close button */
+.close-dashboard-btn {
+  position: absolute;
+  top: 8px; /* Move it higher into the top bar */
+  right: 16px; /* Position closer to the right edge */
+  background: rgba(0, 0, 0, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-primary);
+  z-index: 1100;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.close-dashboard-btn:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: white;
+  transform: scale(1.1);
+}
+
+/* Main layout grid */
+.dashboard {
+  display: grid;
+  grid-template-columns: 220px 1fr; /* Slightly smaller sidebar */
+  min-height: auto;
+  max-height: calc(100vh - 80px);
+}
+
+/* Sidebar */
+.sidebar {
+  background-color: var(--dark);
+  color: white;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.logo-icon {
+  background-color: var(--primary);
+  color: white;
+  height: 2rem;
+  width: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+}
+
+.nav-section {
+  margin-bottom: 1.5rem;
+}
+
+.nav-header {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 0.5rem;
+}
+
+.nav-items {
+  list-style: none;
+}
+
+.nav-item {
+  margin-bottom: 0.25rem;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+  color: #e2e8f0;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.nav-link:hover, .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.nav-link.active {
+  background-color: var(--primary);
+  color: white;
+}
+
+/* Main Content */
+.main {
+  padding: 1.5rem;
+  background-color: var(--bg-dialog);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.notification {
+  position: relative;
+  cursor: pointer;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: var(--danger);
+  color: white;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+}
+
+.user-avatar {
+  height: 2.5rem;
+  width: 2.5rem;
+  border-radius: 50%;
+  background-color: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Quick Stats */
+.quick-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stat-card {
+  background-color: var(--bg-dialog);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+}
+
+.stat-title {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+}
+
+.stat-trend {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.trend-up {
+  color: var(--success);
+}
+
+.trend-down {
+  color: var(--danger);
+}
+
+/* Tabs */
+.tabs {
+  background-color: var(--bg-dialog);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.tab-header {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.tab-btn {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  background: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.tab-btn.active {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.tab-content {
+  padding: 1.25rem;
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.dashboard-card {
+  background-color: var(--bg-dialog);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: none;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background-color: var(--bg-button-primary);
+  color: var(--text-button-primary);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-dark);
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-section);
+}
+
+/* Health Status */
+.health-status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.health-item {
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.status-good {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.status-warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.status-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.status-badge {
+  height: 0.75rem;
+  width: 0.75rem;
+  border-radius: 50%;
+}
+
+.badge-good {
+  background-color: var(--success);
+}
+
+.badge-warning {
+  background-color: var(--warning);
+}
+
+.badge-error {
+  background-color: var(--danger);
+}
+
+/* Database Section */
+.db-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.db-action-card {
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: var(--bg-dialog);
+  font-size: 0.8rem;
+}
+
+.db-action-card:hover {
+  border-color: var(--primary);
+}
+
+.action-icon {
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+  color: var(--primary);
+}
+
+.action-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+}
+
+.action-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.db-stats {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+/* Log Table */
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.log-table th, .log-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.log-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.log-level {
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.log-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+
+.log-warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.log-info {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--primary);
+}
+
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.pagination {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.page-btn {
+  height: 1.8rem;
+  width: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+  background: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.page-btn.active {
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+/* Resource Usage */
+.resource-usage {
+  padding: 0.5rem 0;
+}
+
+.usage-item {
+  margin-bottom: 0.75rem;
+}
+
+.usage-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.usage-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.usage-value {
+  color: var(--text-primary);
+}
+
+.usage-bar {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background-color: var(--border);
+  overflow: hidden;
+}
+
+.usage-fill {
+  height: 100%;
+  border-radius: 0.25rem;
+}
+
+.usage-low {
+  background-color: var(--success);
+}
+
+.usage-medium {
+  background-color: var(--warning);
+}
+
+.usage-high {
+  background-color: var(--danger);
+}
+
+/* Feature Flags */
+.feature-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.feature-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-dialog);
+  font-size: 0.8rem;
+}
+
+.feature-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.feature-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.feature-description {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 2.5rem;
+  height: 1.25rem;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--switch-track-off);
+  transition: .4s;
+  border-radius: 1.25rem;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 0.85rem;
+  width: 0.85rem;
+  left: 0.2rem;
+  bottom: 0.2rem;
+  background-color: var(--switch-thumb);
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--switch-track-on);
+}
+
+input:checked + .slider:before {
+  transform: translateX(1.25rem);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  color: white;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1200;
+}
+
+.modal-content {
+  width: 450px;
+  max-width: 90vw;
+  background-color: var(--bg-dialog);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-title {
+  padding: 1rem;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 1.25rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.modal-footer {
+  padding: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-close, .btn-save {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  border: none;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-save {
+  background-color: var(--bg-button-primary);
+  color: var(--text-button-primary);
+}
+
+.btn-close {
+  background-color: var(--bg-button-secondary);
+  color: var(--text-button-secondary);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 1024px) {
+  .admin-dashboard {
+    width: 95%;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quick-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-dashboard {
+    width: 95%;
+    top: 50px;
+    max-height: calc(100vh - 60px);
+  }
+  
+  .close-dashboard-btn {
+    top: 60px;
+  }
+  
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+  
+  .sidebar {
+    display: none;
+  }
+  
+  .health-status, .db-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-dashboard {
+    width: 98%;
+    top: 45px;
+  }
+  
+  .close-dashboard-btn {
+    top: 55px;
+    right: 10px;
+  }
+  
+  .quick-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .health-status, .db-actions {
+    grid-template-columns: 1fr;
+  }
+  
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .page-title {
+    font-size: 1.25rem;
+  }
+  
+  .user-menu {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .tab-header {
+    flex-wrap: wrap;
+  }
+  
+  .tab-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .card-actions {
+    align-self: flex-start;
+  }
+}
+</style>

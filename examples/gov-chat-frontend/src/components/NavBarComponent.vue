@@ -136,6 +136,16 @@
             <span class="tooltip">{{ $t('nav.analytics') }}</span>
           </button>
 
+          <button class="icon-btn admin-btn mobile-btn" @click="$emit('openAdmin')" aria-label="Administration">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="3" y1="9" x2="21" y2="9"></line>
+              <line x1="9" y1="21" x2="9" y2="9"></line>
+            </svg>
+            <span class="tooltip">{{ $t('nav.administration') }}</span>
+          </button>
+
           <button class="icon-btn mobile-btn" @click="$emit('openSettings')" aria-label="Settings">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -246,6 +256,16 @@
           <span class="tooltip">{{ $t('nav.analytics') }}</span>
         </button>
 
+        <button class="icon-btn admin-btn" @click="$emit('openAdmin')" aria-label="Administration">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span class="tooltip">{{ $t('nav.administration') }}</span>
+        </button>
+
         <button class="icon-btn" @click="$emit('openSettings')" aria-label="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -284,7 +304,7 @@
 <script>
 export default {
   name: 'NavBarComponent',
-  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout'],
+  emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout', 'openAdmin'],
   props: {
     isSidebarOpen: {
       type: Boolean,

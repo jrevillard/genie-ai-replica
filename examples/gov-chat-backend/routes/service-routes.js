@@ -1,8 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const ServiceCategoryService = require('../services/service-category-service');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 const serviceService = new ServiceCategoryService();
+
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 /**
  * @swagger
@@ -57,9 +77,11 @@ const serviceService = new ServiceCategoryService();
 router.get('/categories', async (req, res) => {
   try {
     const locale = req.query.locale || 'en';
+    logger.info(`Fetching all service categories with services, locale: ${locale}`);
     const categories = await serviceService.getAllCategoriesWithServices(locale);
     res.json(categories);
   } catch (error) {
+    logger.error(`Error fetching all categories with services: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -112,7 +134,7 @@ router.get('/categories', async (req, res) => {
  *                       descriptionEN:
  *                         type: string
  *                       requirements:
- *                         type: string
+ *                           type: string
  *                       process:
  *                         type: string
  *       404:
@@ -123,10 +145,16 @@ router.get('/categories', async (req, res) => {
 router.get('/categories/:categoryId', async (req, res) => {
   try {
     const locale = req.query.locale || 'en';
+    logger.info(`Fetching category ${req.params.categoryId} with services, locale: ${locale}`);
     const category = await serviceService.getCategoryWithServices(req.params.categoryId, locale);
     res.json(category);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, error);
+    if (error.message.includes('not found')) {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: error.message });
+    }
   }
 });
 
@@ -192,9 +220,15 @@ router.get('/categories/:categoryId', async (req, res) => {
 router.get('/search', async (req, res) => {
   try {
     const { query, locale = 'en' } = req.query;
+    if (!query) {
+      logger.warn('Search query missing in /services/search');
+      return res.status(400).json({ message: 'Search query is required' });
+    }
+    logger.info(`Searching services with query: "${query}", locale: ${locale}`);
     const results = await serviceService.searchCategoriesAndServices(query, locale);
     res.json(results);
   } catch (error) {
+    logger.error(`Error searching categories and services: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });

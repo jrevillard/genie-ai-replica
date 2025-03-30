@@ -1,12 +1,31 @@
-// analytics-service.js
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
+
+// Set up Winston logger (consistent with other files)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 class AnalyticsService {
   constructor() {
@@ -19,9 +38,10 @@ class AnalyticsService {
     this.serviceCategoriesCollection = this.db.collection('serviceCategories');
 
     // Initialize collections
+    logger.info('Initializing AnalyticsService...');
     this.initialize()
       .then(() => this.ensureServiceCategories())
-      .catch(err => console.error('Error during initialization:', err));
+      .catch(err => logger.error('Error during initialization:', err));
   }
 
   /**
@@ -37,10 +57,10 @@ class AnalyticsService {
       // Function to create a collection if it doesn't exist
       const ensureCollection = async (name) => {
         if (!collectionNames.includes(name)) {
-          console.log(`Creating ${name} collection...`);
+          logger.info(`Creating ${name} collection...`);
           try {
             await this.db.createCollection(name);
-            console.log(`Created ${name} collection successfully`);
+            logger.info(`Created ${name} collection successfully`);
           } catch (err) {
             // If collection was created in the meantime, ignore the error
             if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
@@ -58,9 +78,9 @@ class AnalyticsService {
       this.analytics = this.db.collection('analytics');
       this.events = this.db.collection('events');
 
-      console.log('Collections initialized successfully');
+      logger.info('Collections initialized successfully');
     } catch (error) {
-      console.error('Error initializing collections:', error);
+      logger.error('Error initializing collections:', error);
       // Don't throw here, log the error but allow service to continue
     }
   }
@@ -77,10 +97,10 @@ class AnalyticsService {
 
       // Create the collection if it doesn't exist
       if (!collectionNames.includes('serviceCategories')) {
-        console.log('Creating serviceCategories collection...');
+        logger.info('Creating serviceCategories collection...');
         try {
           await this.db.createCollection('serviceCategories');
-          console.log('Created serviceCategories collection successfully');
+          logger.info('Created serviceCategories collection successfully');
         } catch (err) {
           if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
             throw err;
@@ -102,7 +122,7 @@ class AnalyticsService {
 
       // If the collection is empty, add sample service categories
       if (existingCategories.length === 0) {
-        console.log('Adding sample service categories...');
+        logger.info('Adding sample service categories...');
 
         // Sample categories with meaningful names
         const sampleCategories = [
@@ -126,17 +146,17 @@ class AnalyticsService {
           try {
             await serviceCategories.save(category);
           } catch (err) {
-            console.error(`Error saving category ${category._key}:`, err);
+            logger.error(`Error saving category ${category._key}:`, err);
             // Continue with the next category on error
           }
         }
 
-        console.log('Sample service categories added successfully');
+        logger.info('Sample service categories added successfully');
       }
 
       return true;
     } catch (error) {
-      console.error('Error ensuring service categories:', error);
+      logger.error('Error ensuring service categories:', error);
       return false;
     }
   }
@@ -164,13 +184,13 @@ class AnalyticsService {
         }
       };
 
-      console.log('Recording query analytics...');
+      logger.info('Recording query analytics...');
       const record = await this.analytics.save(analyticsDoc);
-      console.log(`Analytics record created with auto-generated key: ${record._key}`);
+      logger.info(`Analytics record created with auto-generated key: ${record._key}`);
 
       return record;
     } catch (error) {
-      console.error('Error recording query analytics:', error);
+      logger.error('Error recording query analytics:', error);
       throw error;
     }
   }
@@ -191,13 +211,13 @@ class AnalyticsService {
         data: feedback
       };
 
-      console.log('Recording feedback analytics...');
+      logger.info('Recording feedback analytics...');
       const record = await this.analytics.save(analyticsDoc);
-      console.log(`Feedback record created with auto-generated key: ${record._key}`);
+      logger.info(`Feedback record created with auto-generated key: ${record._key}`);
 
       return record;
     } catch (error) {
-      console.error('Error recording feedback analytics:', error);
+      logger.error('Error recording feedback analytics:', error);
       throw error;
     }
   }
@@ -222,13 +242,13 @@ class AnalyticsService {
         data: eventData
       };
 
-      console.log('Tracking event...');
+      logger.info('Tracking event...');
       const event = await this.events.save(eventDoc);
-      console.log(`Event created with auto-generated key: ${event._key}`);
+      logger.info(`Event created with auto-generated key: ${event._key}`);
 
       return event;
     } catch (error) {
-      console.error('Error tracking event:', error);
+      logger.error('Error tracking event:', error);
       throw error;
     }
   }
@@ -247,7 +267,7 @@ class AnalyticsService {
       const validEndDate = endDate ? new Date(endDate).toISOString() :
         new Date().toISOString();
 
-      console.log(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
+      logger.info(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
 
       // Run a simpler query first to test
       try {
@@ -258,9 +278,9 @@ class AnalyticsService {
             RETURN a.userId
         `);
         const testResult = await testCursor.all();
-        console.log("Sample user IDs:", testResult);
+        logger.info("Sample user IDs:", testResult);
       } catch (testError) {
-        console.error("Test query failed:", testError);
+        logger.error("Test query failed:", testError);
       }
 
       // Modified query to be more resilient
@@ -276,23 +296,22 @@ class AnalyticsService {
         RETURN LENGTH(usersList)
       `;
 
-      console.log("Executing unique users count query...");
+      logger.info("Executing unique users count query...");
       const cursor = await this.db.query(query, {
         startDate: validStartDate,
         endDate: validEndDate
       });
 
       const result = await cursor.next();
-      console.log("Unique users query result:", result);
+      logger.info("Unique users query result:", result);
       return result || 0;
     } catch (error) {
-      console.error('Error getting unique users count:', error);
-      console.log("Returning fixed sample count of 60 instead");
+      logger.error('Error getting unique users count:', error);
+      logger.info("Returning fixed sample count of 60 instead");
       // Return a sample count that matches what we see in the chart
       return 60;
     }
   }
-
 
   /**
    * Get analytics for dashboard
@@ -307,7 +326,7 @@ class AnalyticsService {
       const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
-      console.log(`Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`);
+      logger.info(`Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`);
 
       // Execute a much simpler query first to check if we can reach the database
       try {
@@ -317,9 +336,9 @@ class AnalyticsService {
         }
       `);
         const testResult = await testCursor.next();
-        console.log("Test query result:", testResult);
+        logger.info("Test query result:", testResult);
       } catch (testError) {
-        console.error("Test query failed:", testError);
+        logger.error("Test query failed:", testError);
         return this.generateSampleDashboardData(locale);
       }
 
@@ -463,7 +482,7 @@ class AnalyticsService {
       }
     `;
 
-      console.log("Executing dashboard analytics query...");
+      logger.info("Executing dashboard analytics query...");
 
       // Get analytics data
       const analyticsData = await this.db.query(analyticsQuery, {
@@ -472,17 +491,17 @@ class AnalyticsService {
       }).then(cursor => cursor.next());
 
       if (!analyticsData) {
-        console.log("No analytics data found, returning sample data");
+        logger.info("No analytics data found, returning sample data");
         return this.generateSampleDashboardData(locale);
       }
 
       // ======= DEBUG START =======
-      console.log("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
-      console.log(`DEBUG: Processing locale "${locale}" for category name localization`);
+      logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
+      logger.info(`DEBUG: Processing locale "${locale}" for category name localization`);
       // ======= DEBUG END =======
 
       // Now get all service categories - MODIFIED TO FIX THE ISSUE
-      console.log("Getting service categories for name localization...");
+      logger.info("Getting service categories for name localization...");
       // FIXED QUERY - Modified to return _key and _id directly
       const categoriesQuery = `
       FOR cat IN serviceCategories
@@ -496,24 +515,24 @@ class AnalyticsService {
     `;
 
       const categories = await this.db.query(categoriesQuery).then(cursor => cursor.all());
-      console.log(`Found ${categories.length} service categories for localization`);
+      logger.info(`Found ${categories.length} service categories for localization`);
 
       // Debug: log first few categories
       if (categories.length > 0) {
-        console.log("DEBUG: First few categories from database:", JSON.stringify(categories.slice(0, 3), null, 2));
+        logger.info("DEBUG: First few categories from database:", JSON.stringify(categories.slice(0, 3), null, 2));
       }
 
       // Map the category IDs to the proper localized names
       if (analyticsData.categories && analyticsData.categories.length > 0) {
-        console.log(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
-        console.log("DEBUG: First category from analytics:", JSON.stringify(analyticsData.categories[0], null, 2));
+        logger.info(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
+        logger.info("DEBUG: First category from analytics:", JSON.stringify(analyticsData.categories[0], null, 2));
         
         analyticsData.categories = analyticsData.categories.map(category => {
           // Extract ID from path format
           const idParts = category.categoryId.split('/');
           const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
 
-          console.log(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
+          logger.info(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
 
           // FIXED MATCHING LOGIC - Use _key and _id from our custom query
           const matchingCategory = categories.find(cat =>
@@ -521,40 +540,40 @@ class AnalyticsService {
           );
 
           if (matchingCategory) {
-            console.log(`DEBUG: Found matching category: ${JSON.stringify(matchingCategory, null, 2)}`);
+            logger.info(`DEBUG: Found matching category: ${JSON.stringify(matchingCategory, null, 2)}`);
 
             // Select name based on locale
             let name;
             if (locale === 'fr' && matchingCategory.nameFR) {
               name = matchingCategory.nameFR;
-              console.log(`DEBUG: Using French name: "${name}"`);
+              logger.info(`DEBUG: Using French name: "${name}"`);
             } else if (locale === 'sw' && matchingCategory.nameSW) {
               name = matchingCategory.nameSW;
-              console.log(`DEBUG: Using Swahili name: "${name}"`);
+              logger.info(`DEBUG: Using Swahili name: "${name}"`);
             } else {
               name = matchingCategory.nameEN;
-              console.log(`DEBUG: Using English name: "${name}" (default)`);
+              logger.info(`DEBUG: Using English name: "${name}" (default)`);
             }
 
-            console.log(`DEBUG: Final name selected for locale ${locale}: "${name}"`);
+            logger.info(`DEBUG: Final name selected for locale ${locale}: "${name}"`);
 
             return {
               ...category,
               name: name
             };
           } else {
-            console.log(`DEBUG: No matching category found for ID: ${category.categoryId}`);
-            console.log(`DEBUG: Available category keys: ${categories.map(c => c._key).slice(0, 5).join(', ')}`);
+            logger.info(`DEBUG: No matching category found for ID: ${category.categoryId}`);
+            logger.info(`DEBUG: Available category keys: ${categories.map(c => c._key).slice(0, 5).join(', ')}`);
             return category;
           }
         });
       }
 
-      console.log("======= END DEBUG: CATEGORY NAMES LOCALIZATION =======");
-      console.log("Dashboard analytics processing completed successfully");
+      logger.info("======= END DEBUG: CATEGORY NAMES LOCALIZATION =======");
+      logger.info("Dashboard analytics processing completed successfully");
       return analyticsData;
     } catch (error) {
-      console.error('Error getting dashboard analytics:', error);
+      logger.error('Error getting dashboard analytics:', error);
       // Return sample data on error
       return this.generateSampleDashboardData(locale);
     }
@@ -567,6 +586,8 @@ class AnalyticsService {
    * @returns {Object} Sample dashboard data
    */
   generateSampleDashboardData(locale = 'en') {
+    logger.info(`Generating sample dashboard data for locale: ${locale}`);
+
     // Sample top queries with realistic data
     const sampleTopQueries = [
       { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
@@ -701,6 +722,8 @@ class AnalyticsService {
       const validStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Default to 30 days ago
       const validEndDate = endDate || new Date().toISOString(); // Default to now
 
+      logger.info(`Getting general analytics from ${validStartDate} to ${validEndDate} with filters:`, filters);
+
       // First make sure the collections exist
       await this.initialize();
 
@@ -732,7 +755,7 @@ class AnalyticsService {
         if (filters.serviceId) bindVars.serviceId = filters.serviceId;
       }
 
-      console.log('Executing analytics query with bind vars:', JSON.stringify(bindVars));
+      logger.info('Executing analytics query with bind vars:', JSON.stringify(bindVars));
 
       // Execute the query using string template with bind variables
       const cursor = await this.db.query(query, bindVars);
@@ -780,7 +803,7 @@ class AnalyticsService {
             }
           } catch (err) {
             // Skip invalid timestamps
-            console.error('Invalid timestamp in analytics item:', item.timestamp);
+            logger.error('Invalid timestamp in analytics item:', item.timestamp);
           }
         }
       }
@@ -795,7 +818,7 @@ class AnalyticsService {
 
       return processedData;
     } catch (error) {
-      console.error('Error getting analytics:', error);
+      logger.error('Error getting analytics:', error);
       throw error;
     }
   }
@@ -817,6 +840,8 @@ class AnalyticsService {
       // Convert dates to ISO strings
       const startDateISO = start.toISOString();
       const endDateISO = end.toISOString();
+
+      logger.info(`Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`);
 
       // Comprehensive query to get time series data
       const baseQuery = `
@@ -863,12 +888,13 @@ class AnalyticsService {
 
       // If no results, generate sample data
       if (chartData.length === 0) {
+        logger.info('No time series data found, generating sample data');
         return this.generateSampleTimeSeriesData(metricType, interval, start, end);
       }
 
       return chartData;
     } catch (error) {
-      console.error('Error in getTimeSeriesData:', error);
+      logger.error('Error in getTimeSeriesData:', error);
       return this.generateSampleTimeSeriesData(metricType, interval, start, end);
     }
   }
@@ -899,7 +925,7 @@ class AnalyticsService {
           return date.toLocaleDateString();
       }
     } catch (error) {
-      console.warn('Error formatting date label:', error);
+      logger.warn('Error formatting date label:', error);
       return String(timestamp);
     }
   }
@@ -913,6 +939,8 @@ class AnalyticsService {
    * @returns {Array} Sample time series data
    */
   generateSampleTimeSeriesData(metricType, interval, startDate, endDate) {
+    logger.info(`Generating sample time series data for metric: ${metricType}, interval: ${interval}, from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
     const data = [];
     const current = new Date(startDate);
     const end = new Date(endDate);

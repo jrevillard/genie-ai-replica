@@ -1,42 +1,50 @@
-// email-service.js
 require('dotenv').config();
 const nodemailer = require('nodemailer');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Add debug flag - can be controlled via environment variable
 const DEBUG = process.env.DEBUG_EMAIL !== 'false';
 
-// Helper function for debug logging
-function debugLog(label, data) {
-  if (!DEBUG) return;
+// Set up Winston logger (consistent with other files)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
 
-  console.log('\n-----------------------------------------------------');
-  console.log(`EMAIL SERVICE DEBUG [${label}] - ${new Date().toISOString()}`);
-  console.log('-----------------------------------------------------');
-
-  if (data) {
-    if (typeof data === 'object') {
-      console.log(JSON.stringify(data, null, 2));
-    } else {
-      console.log(data);
-    }
-  }
-  console.log('-----------------------------------------------------\n');
-}
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 class EmailService {
   constructor() {
-    debugLog('INITIALIZING EMAIL SERVICE', {
-      host: process.env.EMAIL_HOST || 'in-V3.mailjet.com',
-      port: process.env.EMAIL_PORT || 587,
-      secure: process.env.EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.EMAIL_USER || 'fordendk@gmail.com',
-        pass: '******' // Hide password in logs
-      },
-      fromEmail: process.env.EMAIL_FROM || 'noreply@huduma.com',
-      appName: process.env.APP_NAME || 'Huduma AI',
-      baseUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
-    });
+    // Log initialization details if DEBUG is enabled
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(JSON.stringify({
+        host: process.env.EMAIL_HOST || 'in-V3.mailjet.com',
+        port: process.env.EMAIL_PORT || 587,
+        secure: process.env.EMAIL_SECURE === 'true',
+        auth: {
+          user: process.env.EMAIL_USER || 'fordendk@gmail.com',
+          pass: '******' // Hide password in logs
+        },
+        fromEmail: process.env.EMAIL_FROM || 'noreply@huduma.com',
+        appName: process.env.APP_NAME || 'Huduma AI',
+        baseUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
+      }, null, 2));
+      logger.info('-----------------------------------------------------');
+    }
 
     // Create a transporter with your email provider settings
     this.transporter = nodemailer.createTransport({
@@ -67,29 +75,53 @@ class EmailService {
    */
   async verifyConnection() {
     try {
-      debugLog('TESTING SMTP CONNECTION');
-      const verification = await this.transporter.verify();
-      debugLog('SMTP CONNECTION SUCCESSFUL', verification);
-    } catch (error) {
-      debugLog('SMTP CONNECTION FAILED', {
-        error: error.message,
-        code: error.code,
-        stack: error.stack
-      });
+      if (DEBUG) {
+        logger.info('-----------------------------------------------------');
+        logger.info(`EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - ${new Date().toISOString()}`);
+        logger.info('-----------------------------------------------------');
+      }
 
-      // Log specific issues based on error code
-      if (error.code === 'EAUTH') {
-        debugLog('AUTHENTICATION ERROR',
-          'SMTP authentication failed. Check username and password in .env file.'
-        );
-      } else if (error.code === 'ESOCKET') {
-        debugLog('CONNECTION ERROR',
-          'Could not connect to SMTP server. Check host, port, and firewall settings.'
-        );
-      } else if (error.code === 'ETIMEDOUT') {
-        debugLog('TIMEOUT ERROR',
-          'Connection to SMTP server timed out. Server might be down or blocked.'
-        );
+      const verification = await this.transporter.verify();
+
+      if (DEBUG) {
+        logger.info('-----------------------------------------------------');
+        logger.info(`EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - ${new Date().toISOString()}`);
+        logger.info('-----------------------------------------------------');
+        logger.info(JSON.stringify(verification, null, 2));
+        logger.info('-----------------------------------------------------');
+      }
+    } catch (error) {
+      if (DEBUG) {
+        logger.error('-----------------------------------------------------');
+        logger.error(`EMAIL SERVICE DEBUG [SMTP CONNECTION FAILED] - ${new Date().toISOString()}`);
+        logger.error('-----------------------------------------------------');
+        logger.error(JSON.stringify({
+          error: error.message,
+          code: error.code,
+          stack: error.stack
+        }, null, 2));
+        logger.error('-----------------------------------------------------');
+
+        // Log specific issues based on error code
+        if (error.code === 'EAUTH') {
+          logger.error('-----------------------------------------------------');
+          logger.error(`EMAIL SERVICE DEBUG [AUTHENTICATION ERROR] - ${new Date().toISOString()}`);
+          logger.error('-----------------------------------------------------');
+          logger.error('SMTP authentication failed. Check username and password in .env file.');
+          logger.error('-----------------------------------------------------');
+        } else if (error.code === 'ESOCKET') {
+          logger.error('-----------------------------------------------------');
+          logger.error(`EMAIL SERVICE DEBUG [CONNECTION ERROR] - ${new Date().toISOString()}`);
+          logger.error('-----------------------------------------------------');
+          logger.error('Could not connect to SMTP server. Check host, port, and firewall settings.');
+          logger.error('-----------------------------------------------------');
+        } else if (error.code === 'ETIMEDOUT') {
+          logger.error('-----------------------------------------------------');
+          logger.error(`EMAIL SERVICE DEBUG [TIMEOUT ERROR] - ${new Date().toISOString()}`);
+          logger.error('-----------------------------------------------------');
+          logger.error('Connection to SMTP server timed out. Server might be down or blocked.');
+          logger.error('-----------------------------------------------------');
+        }
       }
     }
   }
@@ -102,15 +134,27 @@ class EmailService {
    * @returns {Promise<Object>} Send result
    */
   async sendPasswordResetEmail(email, token, userName) {
-    debugLog('PASSWORD RESET EMAIL REQUEST', {
-      to: email,
-      token: token.substring(0, 10) + '...', // Show only beginning of token for security
-      userName
-    });
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [PASSWORD RESET EMAIL REQUEST] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(JSON.stringify({
+        to: email,
+        token: token.substring(0, 10) + '...', // Show only beginning of token for security
+        userName
+      }, null, 2));
+      logger.info('-----------------------------------------------------');
+    }
 
     // Create reset password link
     const resetLink = `${this.baseUrl}/reset-password/${token}`;
-    debugLog('RESET LINK', resetLink);
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [RESET LINK] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(resetLink);
+      logger.info('-----------------------------------------------------');
+    }
 
     // Email content
     const mailOptions = {
@@ -174,32 +218,50 @@ The ${this.appName} Team
       `
     };
 
-    debugLog('PASSWORD RESET EMAIL CONTENT', {
-      from: mailOptions.from,
-      to: mailOptions.to,
-      subject: mailOptions.subject,
-      textPreview: mailOptions.text.substring(0, 100) + '...'
-    });
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [PASSWORD RESET EMAIL CONTENT] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(JSON.stringify({
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        textPreview: mailOptions.text.substring(0, 100) + '...'
+      }, null, 2));
+      logger.info('-----------------------------------------------------');
+    }
 
     // Send email
     try {
       const info = await this.transporter.sendMail(mailOptions);
-      debugLog('PASSWORD RESET EMAIL SENT', {
-        messageId: info.messageId,
-        response: info.response,
-        envelope: info.envelope
-      });
-      console.log(`Password reset email sent to ${email}: ${info.messageId}`);
+      if (DEBUG) {
+        logger.info('-----------------------------------------------------');
+        logger.info(`EMAIL SERVICE DEBUG [PASSWORD RESET EMAIL SENT] - ${new Date().toISOString()}`);
+        logger.info('-----------------------------------------------------');
+        logger.info(JSON.stringify({
+          messageId: info.messageId,
+          response: info.response,
+          envelope: info.envelope
+        }, null, 2));
+        logger.info('-----------------------------------------------------');
+      }
+      logger.info(`Password reset email sent to ${email}: ${info.messageId}`);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      debugLog('PASSWORD RESET EMAIL ERROR', {
-        error: error.message,
-        code: error.code,
-        command: error.command,
-        responseCode: error.responseCode,
-        response: error.response
-      });
-      console.error(`Error sending password reset email to ${email}:`, error);
+      if (DEBUG) {
+        logger.error('-----------------------------------------------------');
+        logger.error(`EMAIL SERVICE DEBUG [PASSWORD RESET EMAIL ERROR] - ${new Date().toISOString()}`);
+        logger.error('-----------------------------------------------------');
+        logger.error(JSON.stringify({
+          error: error.message,
+          code: error.code,
+          command: error.command,
+          responseCode: error.responseCode,
+          response: error.response
+        }, null, 2));
+        logger.error('-----------------------------------------------------');
+      }
+      logger.error(`Error sending password reset email to ${email}:`, error);
       throw error;
     }
   }
@@ -212,25 +274,42 @@ The ${this.appName} Team
    * @returns {Promise<Object>} Send result
    */
   async sendVerificationEmail(email, token, userName) {
-
     if (!email) {
-      debugLog('VERIFICATION EMAIL ERROR - MISSING RECIPIENT', {
-        email: 'undefined or null',
-        token: token ? `${token.substring(0, 10)}...` : 'undefined',
-        userName: userName || 'undefined'
-      });
+      if (DEBUG) {
+        logger.error('-----------------------------------------------------');
+        logger.error(`EMAIL SERVICE DEBUG [VERIFICATION EMAIL ERROR - MISSING RECIPIENT] - ${new Date().toISOString()}`);
+        logger.error('-----------------------------------------------------');
+        logger.error(JSON.stringify({
+          email: 'undefined or null',
+          token: token ? `${token.substring(0, 10)}...` : 'undefined',
+          userName: userName || 'undefined'
+        }, null, 2));
+        logger.error('-----------------------------------------------------');
+      }
       throw new Error('Email recipient is required');
     }
 
-    debugLog('VERIFICATION EMAIL REQUEST', {
-      to: email,
-      token: token ? `${token.substring(0, 10)}...` : 'undefined',
-      userName
-    });
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [VERIFICATION EMAIL REQUEST] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(JSON.stringify({
+        to: email,
+        token: token ? `${token.substring(0, 10)}...` : 'undefined',
+        userName
+      }, null, 2));
+      logger.info('-----------------------------------------------------');
+    }
 
     // Create verification link
     const verificationLink = `${this.baseUrl}/verify-email/${token}`;
-    debugLog('VERIFICATION LINK', verificationLink);
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [VERIFICATION LINK] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(verificationLink);
+      logger.info('-----------------------------------------------------');
+    }
 
     // Email content
     const mailOptions = {
@@ -291,55 +370,87 @@ The ${this.appName} Team
       `
     };
 
-    debugLog('VERIFICATION EMAIL CONTENT', {
-      from: mailOptions.from,
-      to: mailOptions.to,
-      subject: mailOptions.subject,
-      textPreview: mailOptions.text.substring(0, 100) + '...'
-    });
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [VERIFICATION EMAIL CONTENT] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(JSON.stringify({
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        textPreview: mailOptions.text.substring(0, 100) + '...'
+      }, null, 2));
+      logger.info('-----------------------------------------------------');
+    }
 
     // Send email
     try {
       // Test SMTP connection before sending
       try {
         await this.transporter.verify();
-        debugLog('SMTP CONNECTION VERIFIED BEFORE SENDING');
+        if (DEBUG) {
+          logger.info('-----------------------------------------------------');
+          logger.info(`EMAIL SERVICE DEBUG [SMTP CONNECTION VERIFIED BEFORE SENDING] - ${new Date().toISOString()}`);
+          logger.info('-----------------------------------------------------');
+        }
       } catch (verifyError) {
-        debugLog('SMTP CONNECTION TEST FAILED', {
-          error: verifyError.message,
-          code: verifyError.code
-        });
+        if (DEBUG) {
+          logger.error('-----------------------------------------------------');
+          logger.error(`EMAIL SERVICE DEBUG [SMTP CONNECTION TEST FAILED] - ${new Date().toISOString()}`);
+          logger.error('-----------------------------------------------------');
+          logger.error(JSON.stringify({
+            error: verifyError.message,
+            code: verifyError.code
+          }, null, 2));
+          logger.error('-----------------------------------------------------');
+        }
       }
 
       const info = await this.transporter.sendMail(mailOptions);
-      debugLog('VERIFICATION EMAIL SENT', {
-        messageId: info.messageId,
-        response: info.response,
-        envelope: info.envelope
-      });
-      console.log(`Verification email sent to ${email}: ${info.messageId}`);
+      if (DEBUG) {
+        logger.info('-----------------------------------------------------');
+        logger.info(`EMAIL SERVICE DEBUG [VERIFICATION EMAIL SENT] - ${new Date().toISOString()}`);
+        logger.info('-----------------------------------------------------');
+        logger.info(JSON.stringify({
+          messageId: info.messageId,
+          response: info.response,
+          envelope: info.envelope
+        }, null, 2));
+        logger.info('-----------------------------------------------------');
+      }
+      logger.info(`Verification email sent to ${email}: ${info.messageId}`);
       return { success: true, messageId: info.messageId };
     } catch (error) {
-      debugLog('VERIFICATION EMAIL ERROR', {
-        error: error.message,
-        code: error.code,
-        command: error.command,
-        responseCode: error.responseCode,
-        response: error.response,
-        stack: error.stack
-      });
+      if (DEBUG) {
+        logger.error('-----------------------------------------------------');
+        logger.error(`EMAIL SERVICE DEBUG [VERIFICATION EMAIL ERROR] - ${new Date().toISOString()}`);
+        logger.error('-----------------------------------------------------');
+        logger.error(JSON.stringify({
+          error: error.message,
+          code: error.code,
+          command: error.command,
+          responseCode: error.responseCode,
+          response: error.response,
+          stack: error.stack
+        }, null, 2));
+        logger.error('-----------------------------------------------------');
 
-      // Log specific issues based on error code
-      if (error.code === 'EAUTH') {
-        debugLog('GMAIL AUTH ISSUE', `
-          Gmail requires either:
-          1. An app password (if 2FA is enabled) - Create one at https://myaccount.google.com/apppasswords
-          2. 'Less secure app access' enabled (not recommended) - https://myaccount.google.com/lesssecureapps
-          3. Or use OAuth2 authentication
-        `);
+        // Log specific issues based on error code
+        if (error.code === 'EAUTH') {
+          logger.error('-----------------------------------------------------');
+          logger.error(`EMAIL SERVICE DEBUG [GMAIL AUTH ISSUE] - ${new Date().toISOString()}`);
+          logger.error('-----------------------------------------------------');
+          logger.error(`
+            Gmail requires either:
+            1. An app password (if 2FA is enabled) - Create one at https://myaccount.google.com/apppasswords
+            2. 'Less secure app access' enabled (not recommended) - https://myaccount.google.com/lesssecureapps
+            3. Or use OAuth2 authentication
+          `);
+          logger.error('-----------------------------------------------------');
+        }
       }
 
-      console.error(`Error sending verification email to ${email}:`, error);
+      logger.error(`Error sending verification email to ${email}:`, error);
       throw error;
     }
   }

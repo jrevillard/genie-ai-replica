@@ -8,6 +8,26 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+const { createLogger, format, transports } = require('winston'); // Add Winston
+
+// Set up Winston logger
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -19,7 +39,7 @@ if (!fs.existsSync(uploadsDir)) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Swagger definition
+// Swagger definition (unchanged)
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -43,23 +63,10 @@ const swaggerOptions = {
         User: {
           type: 'object',
           properties: {
-            _key: {
-              type: 'string',
-              description: 'Unique identifier'
-            },
-            loginName: {
-              type: 'string',
-              description: 'Username for authentication'
-            },
-            email: {
-              type: 'string',
-              format: 'email',
-              description: 'User email address' 
-            },
-            accessToken: {
-              type: 'string',
-              description: 'JWT access token'
-            },
+            _key: { type: 'string', description: 'Unique identifier' },
+            loginName: { type: 'string', description: 'Username for authentication' },
+            email: { type: 'string', format: 'email', description: 'User email address' },
+            accessToken: { type: 'string', description: 'JWT access token' },
             personalIdentification: {
               type: 'object',
               properties: {
@@ -75,17 +82,10 @@ const swaggerOptions = {
                 currentAddress: { type: 'string' }
               }
             },
-            createdAt: {
-              type: 'string',
-              format: 'date-time'
-            },
-            updatedAt: {
-              type: 'string',
-              format: 'date-time'
-            }
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
           }
         },
-        // ... other schema definitions remain the same
       },
       securitySchemes: {
         bearerAuth: {
@@ -96,7 +96,7 @@ const swaggerOptions = {
       }
     }
   },
-  apis: ['./routes/*.js'] // Path to the API routes files
+  apis: ['./routes/*.js']
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -109,20 +109,24 @@ app.use(helmet({
       "script-src": ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
     },
   },
-})); 
+}));
 
 app.use(cors({
-  origin:true, //Allow all origins
-  //origin: ['http://localhost:8090', 'http://localhost:3000'], // for production modify this to protect the services
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials']
 }));
 
-app.use(bodyParser.json()); 
-app.use(bodyParser.urlencoded({ extended: true })); 
-app.use(morgan('dev')); 
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+// Replace basic Morgan with Morgan piped to Winston
+app.use(morgan('dev', {
+  stream: {
+    write: (message) => logger.info(message.trim())
+  }
+}));
 
 // Static file serving for uploads
 app.use('/uploads', express.static(uploadsDir));
@@ -141,10 +145,10 @@ app.get('/api-docs.json', (req, res) => {
 
 // Check if route files exist
 const routeFiles = [
-  'user-routes', 
-  'query-routes', 
-  'service-routes', 
-  'analytics-routes', 
+  'user-routes',
+  'query-routes',
+  'service-routes',
+  'analytics-routes',
   'session-routes',
   'service-category-routes',
   'auth-routes'
@@ -173,7 +177,8 @@ app.get('/verify-email/:token', (req, res) => {
 
 // Root route
 app.get('/', (req, res) => {
-  res.json({ 
+  logger.info('Accessed root endpoint');
+  res.json({
     message: 'Welcome to the Government Services API',
     apiDocumentation: '/api-docs',
     availableEndpoints: availableRoutes.map(route => `/api/${route.replace('-routes', '')}`)
@@ -182,13 +187,12 @@ app.get('/', (req, res) => {
 
 // Verification success redirect
 app.get('/verify-email-success', (req, res) => {
-  // For SPA, we need to serve the index.html file
   res.sendFile(path.join(__dirname, 'dist/index.html'));
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack); // Replace console.error with logger
   res.status(500).json({
     message: 'An unexpected error occurred',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -197,9 +201,9 @@ app.use((err, req, res, next) => {
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`API Documentation available at: http://localhost:${PORT}/api-docs`);
-  console.log(`Available endpoints: ${availableRoutes.map(route => `/api/${route.replace('-routes', '')}`).join(', ')}`);
+  logger.info(`Server is running on port ${PORT}`);
+  logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+  logger.info(`Available endpoints: ${availableRoutes.map(route => `/api/${route.replace('-routes', '')}`).join(', ')}`);
 });
 
 module.exports = app; // For testing

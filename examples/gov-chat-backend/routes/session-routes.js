@@ -1,8 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const SessionService = require('../services/session-service');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 const sessionService = new SessionService();
+
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 /**
  * @swagger
@@ -49,10 +69,11 @@ const sessionService = new SessionService();
  */
 router.post('/', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Creating session with body: ${JSON.stringify(req.body)}, IP: ${req.ip}`);
     const session = await sessionService.createSession(req.body.userId, req.body.deviceInfo, req.ip);
     res.status(201).json(session);
   } catch (error) {
+    logger.error(`Error creating session: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -85,11 +106,16 @@ router.post('/', async (req, res) => {
  */
 router.get('/:sessionId', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Fetching session with ID: ${req.params.sessionId}`);
     const session = await sessionService.getSession(req.params.sessionId);
     res.json(session);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error(`Error fetching session ${req.params.sessionId}: ${error.message}`, error);
+    if (error.message.includes('not found')) {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: error.message });
+    }
   }
 });
 
@@ -121,11 +147,16 @@ router.get('/:sessionId', async (req, res) => {
  */
 router.patch('/:sessionId/end', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Ending session ${req.params.sessionId}`);
     const session = await sessionService.endSession(req.params.sessionId);
     res.json(session);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error(`Error ending session ${req.params.sessionId}: ${error.message}`, error);
+    if (error.message.includes('not found')) {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: error.message });
+    }
   }
 });
 
@@ -157,11 +188,16 @@ router.patch('/:sessionId/end', async (req, res) => {
  */
 router.patch('/:sessionId/keepalive', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Keeping session ${req.params.sessionId} alive`);
     const session = await sessionService.keepSessionAlive(req.params.sessionId);
     res.json(session);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    logger.error(`Error keeping session ${req.params.sessionId} alive: ${error.message}`, error);
+    if (error.message.includes('not found')) {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: error.message });
+    }
   }
 });
 
@@ -200,10 +236,11 @@ router.patch('/:sessionId/keepalive', async (req, res) => {
 router.get('/user/:userId', async (req, res) => {
   try {
     const activeOnly = req.query.activeOnly === 'true';
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Fetching sessions for user ${req.params.userId}, activeOnly: ${activeOnly}`);
     const sessions = await sessionService.getUserSessions(req.params.userId, activeOnly);
     res.json(sessions);
   } catch (error) {
+    logger.error(`Error fetching sessions for user ${req.params.userId}: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });

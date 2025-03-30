@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const QueryService = require('../services/query-service');
 const AnalyticsService = require('../services/analytics-service');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Initialize services
 const queryService = new QueryService();
@@ -10,10 +11,29 @@ const analyticsService = new AnalyticsService();
 // Inject analytics service into query service
 queryService.setAnalyticsService(analyticsService);
 
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
+
 // Middleware to ensure analytics service is set
 router.use((req, res, next) => {
   if (!queryService.analyticsService) {
-    console.log('Analytics service was not set, setting it now...');
+    logger.warn('Analytics service was not set, setting it now...');
     queryService.setAnalyticsService(analyticsService);
   }
   next();
@@ -71,11 +91,11 @@ router.use((req, res, next) => {
 // Submit a query
 router.post('/', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
     const query = await queryService.createQuery(req.body);
     res.status(201).json(query);
   } catch (error) {
-    console.error('Error creating query:', error);
+    logger.error(`Error creating query: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -109,11 +129,11 @@ router.post('/', async (req, res) => {
 // Get query by ID
 router.get('/:queryId', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Fetching query with ID: ${req.params.queryId}`);
     const query = await queryService.getQuery(req.params.queryId);
     res.json(query);
   } catch (error) {
-    console.error(`Error getting query ${req.params.queryId}:`, error);
+    logger.error(`Error getting query ${req.params.queryId}: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -166,11 +186,11 @@ router.get('/:queryId', async (req, res) => {
 // Add feedback to a query
 router.post('/:queryId/feedback', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
     const query = await queryService.addFeedback(req.params.queryId, req.body);
     res.json(query);
   } catch (error) {
-    console.error(`Error adding feedback to query ${req.params.queryId}:`, error);
+    logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -213,11 +233,11 @@ router.post('/:queryId/feedback', async (req, res) => {
 // Mark a query as answered - support both PATCH and PUT
 router.patch('/:queryId/answered', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Marking query ${req.params.queryId} as answered with body: ${JSON.stringify(req.body)}`);
     const query = await queryService.markAsAnswered(req.params.queryId, req.body.responseTime);
     res.json(query);
   } catch (error) {
-    console.error(`Error marking query ${req.params.queryId} as answered:`, error);
+    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -260,15 +280,14 @@ router.patch('/:queryId/answered', async (req, res) => {
 // Mark a query as answered (PUT method for test compatibility)
 router.put('/:queryId/answered', async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body));
     const responseTime = req.body.responseTime || 0;
     
-    console.log(`Marking query ${req.params.queryId} as answered with response time: ${responseTime}ms`);
+    logger.info(`Marking query ${req.params.queryId} as answered with response time: ${responseTime}ms and body: ${JSON.stringify(req.body)}`);
     
     const query = await queryService.markAsAnswered(req.params.queryId, responseTime);
     res.json(query);
   } catch (error) {
-    console.error(`Error marking query ${req.params.queryId} as answered:`, error);
+    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -367,11 +386,11 @@ router.put('/:queryId/answered', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { limit = 20, offset = 0, ...criteria } = req.query;
-    console.log("Request body:", JSON.stringify(req.body));
+    logger.info(`Searching queries with criteria: ${JSON.stringify(criteria)}, limit: ${limit}, offset: ${offset}`);
     const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
     res.json(results);
   } catch (error) {
-    console.error('Error searching queries:', error);
+    logger.error(`Error searching queries: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });

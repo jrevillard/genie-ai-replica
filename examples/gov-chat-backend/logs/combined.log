@@ -1,0 +1,1054 @@
+2025-03-30 08:37:10 [INFO]: Server is running on port 3000
+2025-03-30 08:37:10 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 08:37:10 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 08:37:21 [INFO]: [0mPOST /api/auth/login [32m200[0m 65.591 ms - 67298[0m
+2025-03-30 08:42:40 [INFO]: Server is running on port 3000
+2025-03-30 08:42:41 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 08:42:41 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 08:42:57 [INFO]: [0mPOST /api/auth/logout [33m401[0m 3.005 ms - 58[0m
+2025-03-30 08:43:00 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 08:43:00 [INFO]: [0mPOST /api/auth/login [32m200[0m 64.783 ms - 67298[0m
+2025-03-30 08:46:04 [INFO]: Server is running on port 3000
+2025-03-30 08:46:04 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 08:46:04 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 08:46:14 [INFO]: Getting dashboard analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with locale en
+2025-03-30 08:46:22 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 8087.825 ms - 1991[0m
+2025-03-30 08:46:23 [INFO]: Fetching metric: totalQueries from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:46:23 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 14.693 ms - 38[0m
+2025-03-30 08:46:23 [INFO]: Fetching metric: totalQueries from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:46:23 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [32m200[0m 12.089 ms - 38[0m
+2025-03-30 08:46:24 [INFO]: Fetching metric: uniqueUsers from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:46:25 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 850.620 ms - 36[0m
+2025-03-30 08:46:25 [INFO]: Fetching metric: uniqueUsers from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:46:26 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [32m200[0m 843.647 ms - 36[0m
+2025-03-30 08:46:26 [INFO]: Fetching metric: averageResponseTime from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:46:26 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 12.187 ms - 59[0m
+2025-03-30 08:46:27 [INFO]: Fetching metric: averageResponseTime from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:46:27 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [32m200[0m 36.576 ms - 59[0m
+2025-03-30 08:46:27 [INFO]: Fetching metric: satisfactionRate from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:46:27 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 12.329 ms - 55[0m
+2025-03-30 08:46:27 [INFO]: Fetching metric: satisfactionRate from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:46:27 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [32m200[0m 10.525 ms - 43[0m
+2025-03-30 08:46:28 [INFO]: Fetching time series data for metricType: queries, interval: daily, from 2025-03-01 to 2025-03-30
+2025-03-30 08:46:29 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-01&endDate=2025-03-30&locale=en [32m200[0m 866.375 ms - 1269[0m
+2025-03-30 08:46:29 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 4.223 ms - -[0m
+2025-03-30 08:49:32 [INFO]: Server is running on port 3000
+2025-03-30 08:49:32 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 08:49:32 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 08:49:57 [INFO]: Creating query with body: {"userId":"2133","sessionId":"new-session","text":"I need information on how to apply for a national ID card","categoryId":null,"serviceId":null,"isAnswered":false,"timestamp":"2025-03-30T03:19:56.934Z"}
+2025-03-30 08:49:57 [INFO]: [0mPOST /api/queries [32m201[0m 16.344 ms - 232[0m
+2025-03-30 08:49:58 [INFO]: [0mPATCH /api/queries/34405963/responsetime [33m404[0m 1.254 ms - 174[0m
+2025-03-30 08:49:58 [INFO]: Marking query 34405963 as answered with body: {}
+2025-03-30 08:49:58 [INFO]: [0mPATCH /api/queries/34405963/answered [32m200[0m 5.608 ms - 248[0m
+2025-03-30 08:52:41 [INFO]: [0mPOST /api/auth/logout [33m401[0m 1.956 ms - 58[0m
+2025-03-30 08:52:41 [INFO]: [0mPOST /api/auth/logout [33m401[0m 0.802 ms - 58[0m
+2025-03-30 08:52:43 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 08:52:44 [INFO]: [0mPOST /api/auth/login [32m200[0m 62.576 ms - 67298[0m
+2025-03-30 08:53:06 [INFO]: Server is running on port 3000
+2025-03-30 08:53:06 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 08:53:06 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 08:53:52 [INFO]: [0mPOST /api/auth/logout [33m401[0m 2.506 ms - 58[0m
+2025-03-30 08:53:52 [INFO]: [0mPOST /api/auth/logout [33m401[0m 0.961 ms - 58[0m
+2025-03-30 08:53:56 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 08:53:56 [INFO]: [0mPOST /api/auth/login [32m200[0m 64.385 ms - 67298[0m
+2025-03-30 08:54:14 [INFO]: Getting dashboard analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with locale en
+2025-03-30 08:54:22 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 7642.202 ms - 1991[0m
+2025-03-30 08:54:22 [INFO]: Fetching metric: totalQueries from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:54:22 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 12.576 ms - -[0m
+2025-03-30 08:54:23 [INFO]: Fetching metric: totalQueries from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:54:23 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 15.447 ms - -[0m
+2025-03-30 08:54:23 [INFO]: Fetching metric: uniqueUsers from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:54:24 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 881.904 ms - -[0m
+2025-03-30 08:54:24 [INFO]: Fetching metric: uniqueUsers from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:54:25 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 877.473 ms - -[0m
+2025-03-30 08:54:25 [INFO]: Fetching metric: averageResponseTime from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:54:25 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 10.654 ms - 59[0m
+2025-03-30 08:54:26 [INFO]: Fetching metric: averageResponseTime from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:54:26 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 11.252 ms - -[0m
+2025-03-30 08:54:26 [INFO]: Fetching metric: satisfactionRate from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 08:54:26 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 35.460 ms - -[0m
+2025-03-30 08:54:27 [INFO]: Fetching metric: satisfactionRate from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 08:54:27 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 11.516 ms - -[0m
+2025-03-30 08:54:27 [INFO]: Fetching time series data for metricType: queries, interval: daily, from 2025-03-01 to 2025-03-30
+2025-03-30 08:54:28 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-01&endDate=2025-03-30&locale=en [36m304[0m 851.689 ms - -[0m
+2025-03-30 08:54:28 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 3.667 ms - -[0m
+2025-03-30 09:03:53 [INFO]: Server is running on port 3000
+2025-03-30 09:03:53 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:03:53 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:04:10 [INFO]: [0mPOST /api/auth/logout [33m401[0m 2.664 ms - 58[0m
+2025-03-30 09:04:10 [INFO]: [0mPOST /api/auth/logout [33m401[0m 1.135 ms - 58[0m
+2025-03-30 09:04:16 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:04:16 [INFO]: [0mPOST /api/auth/login [32m200[0m 63.886 ms - 67298[0m
+2025-03-30 09:04:19 [INFO]: Getting user profile for ID: 2133
+2025-03-30 09:04:19 [INFO]: [0mGET /api/users/2133 [32m200[0m 3.602 ms - 67375[0m
+2025-03-30 09:04:49 [INFO]: Update request body:
+2025-03-30 09:04:49 [INFO]: Update files:
+2025-03-30 09:04:49 [INFO]: Parsed profile data for update:
+2025-03-30 09:04:49 [INFO]: [0mPUT /api/users/2133 [32m200[0m 9.319 ms - 67435[0m
+2025-03-30 09:11:08 [INFO]: Server is running on port 3000
+2025-03-30 09:11:08 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:11:08 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:11:16 [INFO]: Getting user profile for ID: 2133
+2025-03-30 09:11:16 [INFO]: [0mGET /api/users/2133 [32m200[0m 4.977 ms - 67372[0m
+2025-03-30 09:11:27 [INFO]: Update request body:
+2025-03-30 09:11:27 [INFO]: Update files:
+2025-03-30 09:11:27 [INFO]: Parsed profile data for update:
+2025-03-30 09:11:27 [INFO]: [0mPUT /api/users/2133 [32m200[0m 10.503 ms - 67438[0m
+2025-03-30 09:12:09 [INFO]: Accessed root endpoint
+2025-03-30 09:12:09 [INFO]: [0mGET / [32m200[0m 1.070 ms - 214[0m
+2025-03-30 09:12:18 [INFO]: Getting user profile for ID: 2133
+2025-03-30 09:12:18 [INFO]: [0mGET /api/users/2133 [32m200[0m 2.802 ms - 67375[0m
+2025-03-30 09:12:35 [INFO]: Fetching current user info for: fordendk
+2025-03-30 09:12:35 [INFO]: [0mGET /api/auth/me [32m200[0m 7.712 ms - 67322[0m
+2025-03-30 09:12:52 [INFO]: Email check request received for: fordendk@outlook.com
+2025-03-30 09:12:52 [INFO]: [0mGET /api/users/check-email?email=fordendk%40outlook.com [36m304[0m 2.815 ms - -[0m
+2025-03-30 09:13:00 [INFO]: 
+=======================================================
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 2025-03-30T03:43:00.242Z - Email Update Route Entered (After Auth Middleware)
+2025-03-30 09:13:00 [INFO]: =======================================================
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] Request method:
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] Request URL:
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] Request path:
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] Content-Type:
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] Headers:
+2025-03-30 09:13:00 [INFO]:   host: localhost:3000
+2025-03-30 09:13:00 [INFO]:   connection: keep-alive
+2025-03-30 09:13:00 [INFO]:   content-length: 126
+2025-03-30 09:13:00 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:13:00 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 09:13:00 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:13:00 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:13:00 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:13:00 [INFO]:   content-type: application/json
+2025-03-30 09:13:00 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:13:00 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:13:00 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:13:00 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:13:00 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:13:00 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:13:00 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:13:00 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] Request body:
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 📧 Email update request details:
+2025-03-30 09:13:00 [INFO]:   - New email: fordendk@outlook.com
+2025-03-30 09:13:00 [INFO]:   - Password provided: Yes
+2025-03-30 09:13:00 [INFO]:   - UserId from body: 2133
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: 2133
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Verifying password...
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] ✅ Password verified successfully
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 🔑 Generating verification token
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] ✅ Token generated successfully: 9c7fd229fe...
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: 2133
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] ✅ User found in database: {"id":"2133","email":"fordendk@gmail.com"}
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: {"pendingEmailChange":{"email":"fordendk@outlook.com","token":"9c7fd229fe..."},"emailVerified":false,"updatedAt":"2025-03-30T03:43:00.245Z"}
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] ✅ User document updated successfully
+2025-03-30 09:13:00 [INFO]: [EMAIL ROUTE DEBUG] 📧 Preparing to send verification email
+2025-03-30 09:13:04 [INFO]: [EMAIL ROUTE DEBUG] ✅ Verification email sent to fordendk@outlook.com
+2025-03-30 09:13:04 [INFO]: [0mPUT /api/users/email [32m200[0m 4061.087 ms - 132[0m
+2025-03-30 09:13:04 [INFO]: [EMAIL ROUTE DEBUG] ✅ Email update process completed successfully
+2025-03-30 09:13:06 [INFO]: Logout request for user: fordendk
+2025-03-30 09:13:06 [INFO]: [0mPOST /api/auth/logout [32m200[0m 20.867 ms - 52[0m
+2025-03-30 09:13:41 [INFO]: Email verification attempt with token: 9c7fd229fecff555491250f222649a9cf6529d90ce9d145076afcaea7e44fc5f
+2025-03-30 09:13:41 [INFO]: [0mGET /api/auth/verify-email/9c7fd229fecff555491250f222649a9cf6529d90ce9d145076afcaea7e44fc5f [32m200[0m 9.886 ms - 229[0m
+2025-03-30 09:14:36 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:14:36 [INFO]: [0mPOST /api/auth/login [32m200[0m 62.973 ms - 67302[0m
+2025-03-30 09:14:51 [INFO]: Fetching current user info for: fordendk
+2025-03-30 09:14:51 [INFO]: [0mGET /api/auth/me [32m200[0m 5.673 ms - 67326[0m
+2025-03-30 09:15:02 [INFO]: Email check request received for: fordendk@gmail.com
+2025-03-30 09:15:02 [INFO]: [0mGET /api/users/check-email?email=fordendk%40gmail.com [36m304[0m 2.699 ms - -[0m
+2025-03-30 09:15:05 [INFO]: 
+=======================================================
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 2025-03-30T03:45:05.934Z - Email Update Route Entered (After Auth Middleware)
+2025-03-30 09:15:05 [INFO]: =======================================================
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] Request method:
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] Request URL:
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] Request path:
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] Content-Type:
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] Headers:
+2025-03-30 09:15:05 [INFO]:   host: localhost:3000
+2025-03-30 09:15:05 [INFO]:   connection: keep-alive
+2025-03-30 09:15:05 [INFO]:   content-length: 124
+2025-03-30 09:15:05 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:15:05 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 09:15:05 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:15:05 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:15:05 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:15:05 [INFO]:   content-type: application/json
+2025-03-30 09:15:05 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:15:05 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:15:05 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:15:05 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:15:05 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:15:05 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:15:05 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:15:05 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] Request body:
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 📧 Email update request details:
+2025-03-30 09:15:05 [INFO]:   - New email: fordendk@gmail.com
+2025-03-30 09:15:05 [INFO]:   - Password provided: Yes
+2025-03-30 09:15:05 [INFO]:   - UserId from body: 2133
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: 2133
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Verifying password...
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] ✅ Password verified successfully
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 🔑 Generating verification token
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] ✅ Token generated successfully: 64e665f39a...
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: 2133
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] ✅ User found in database: {"id":"2133","email":"fordendk@outlook.com"}
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: {"pendingEmailChange":{"email":"fordendk@gmail.com","token":"64e665f39a..."},"emailVerified":false,"updatedAt":"2025-03-30T03:45:05.937Z"}
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] ✅ User document updated successfully
+2025-03-30 09:15:05 [INFO]: [EMAIL ROUTE DEBUG] 📧 Preparing to send verification email
+2025-03-30 09:15:10 [INFO]: [EMAIL ROUTE DEBUG] ✅ Verification email sent to fordendk@gmail.com
+2025-03-30 09:15:10 [INFO]: [0mPUT /api/users/email [32m200[0m 4493.953 ms - 132[0m
+2025-03-30 09:15:10 [INFO]: [EMAIL ROUTE DEBUG] ✅ Email update process completed successfully
+2025-03-30 09:15:12 [INFO]: Logout request for user: fordendk
+2025-03-30 09:15:12 [INFO]: [0mPOST /api/auth/logout [32m200[0m 8.253 ms - 52[0m
+2025-03-30 09:15:28 [INFO]: Email verification attempt with token: 64e665f39a9e0cd63197b6d7acc38c25ae1b1b81d5cabf67166b1cbaaf4f4cbd
+2025-03-30 09:15:28 [INFO]: [0mGET /api/auth/verify-email/64e665f39a9e0cd63197b6d7acc38c25ae1b1b81d5cabf67166b1cbaaf4f4cbd [32m200[0m 9.122 ms - 229[0m
+2025-03-30 09:15:38 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:15:38 [INFO]: [0mPOST /api/auth/login [32m200[0m 62.866 ms - 67298[0m
+2025-03-30 09:23:28 [INFO]: Server is running on port 3000
+2025-03-30 09:23:28 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:23:28 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:23:28 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:23:28 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:23:28 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:23:28 [INFO]: Collections initialized successfully
+2025-03-30 09:23:28 [INFO]: Collections initialized successfully
+2025-03-30 09:23:28 [INFO]: Collections initialized successfully
+2025-03-30 09:23:36 [INFO]: Getting dashboard analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with locale en
+2025-03-30 09:23:36 [INFO]: Getting dashboard analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with locale en
+2025-03-30 09:23:36 [INFO]: Test query result:
+2025-03-30 09:23:36 [INFO]: Executing dashboard analytics query...
+2025-03-30 09:23:43 [INFO]: ======= DEBUG: CATEGORY NAMES LOCALIZATION =======
+2025-03-30 09:23:43 [INFO]: DEBUG: Processing locale "en" for category name localization
+2025-03-30 09:23:43 [INFO]: Getting service categories for name localization...
+2025-03-30 09:23:43 [INFO]: Found 13 service categories for localization
+2025-03-30 09:23:43 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [32m200[0m 7836.935 ms - 1991[0m
+2025-03-30 09:23:43 [INFO]: DEBUG: First few categories from database:
+2025-03-30 09:23:43 [INFO]: DEBUG: Processing 15 categories from analytics data
+2025-03-30 09:23:43 [INFO]: DEBUG: First category from analytics:
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: cat1, extracted key: cat1
+2025-03-30 09:23:43 [INFO]: DEBUG: No matching category found for ID: cat1
+2025-03-30 09:23:43 [INFO]: DEBUG: Available category keys: 1, 2, 3, 4, 5
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: cat2, extracted key: cat2
+2025-03-30 09:23:43 [INFO]: DEBUG: No matching category found for ID: cat2
+2025-03-30 09:23:43 [INFO]: DEBUG: Available category keys: 1, 2, 3, 4, 5
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/1, extracted key: 1
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/1",
+  "_key": "1",
+  "nameEN": "Identity & Civil Registration",
+  "nameFR": "Identité et état civil",
+  "nameSW": "Utambulisho na Usajili wa Raia"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Identity & Civil Registration" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Identity & Civil Registration"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/10, extracted key: 10
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/10",
+  "_key": "10",
+  "nameEN": "Utilities & Environment",
+  "nameFR": "Services publics et environnement",
+  "nameSW": "Huduma na Mazingira"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Utilities & Environment" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Utilities & Environment"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/11, extracted key: 11
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/11",
+  "_key": "11",
+  "nameEN": "Culture & Recreation",
+  "nameFR": "Culture et loisirs",
+  "nameSW": "Utamaduni na Burudani"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Culture & Recreation" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Culture & Recreation"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/12, extracted key: 12
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/12",
+  "_key": "12",
+  "nameEN": "Immigration & Citizenship",
+  "nameFR": "Immigration et citoyenneté",
+  "nameSW": "Uhamiaji na Uraia"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Immigration & Citizenship" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Immigration & Citizenship"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/13, extracted key: 13
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/13",
+  "_key": "13",
+  "nameEN": "Social Security & Pensions",
+  "nameFR": "Sécurité sociale et retraites",
+  "nameSW": "Hifadhi ya Jamii na Pensheni"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Social Security & Pensions" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Social Security & Pensions"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/2, extracted key: 2
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/2",
+  "_key": "2",
+  "nameEN": "Healthcare & Social Services",
+  "nameFR": "Santé et services sociaux",
+  "nameSW": "Afya na Huduma za Kijamii"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Healthcare & Social Services" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Healthcare & Social Services"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/3, extracted key: 3
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/3",
+  "_key": "3",
+  "nameEN": "Education & Learning",
+  "nameFR": "Éducation et apprentissage",
+  "nameSW": "Elimu na Mafunzo"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Education & Learning" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Education & Learning"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/4, extracted key: 4
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/4",
+  "_key": "4",
+  "nameEN": "Employment & Labor Services",
+  "nameFR": "Emploi et services du travail",
+  "nameSW": "Ajira na Huduma za Kazi"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Employment & Labor Services" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Employment & Labor Services"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/5, extracted key: 5
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/5",
+  "_key": "5",
+  "nameEN": "Taxes & Revenue",
+  "nameFR": "Impôts et revenus",
+  "nameSW": "Kodi na Mapato"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Taxes & Revenue" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Taxes & Revenue"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/6, extracted key: 6
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/6",
+  "_key": "6",
+  "nameEN": "Public Safety & Justice",
+  "nameFR": "Sécurité publique et justice",
+  "nameSW": "Usalama wa Umma na Haki"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Public Safety & Justice" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Public Safety & Justice"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/7, extracted key: 7
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/7",
+  "_key": "7",
+  "nameEN": "Transportation & Mobility",
+  "nameFR": "Transport et mobilité",
+  "nameSW": "Usafiri na Usafiri"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Transportation & Mobility" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Transportation & Mobility"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/8, extracted key: 8
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/8",
+  "_key": "8",
+  "nameEN": "Business & Trade",
+  "nameFR": "Affaires et commerce",
+  "nameSW": "Biashara na Biashara"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Business & Trade" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Business & Trade"
+2025-03-30 09:23:43 [INFO]: DEBUG: Looking up category for ID: serviceCategories/9, extracted key: 9
+2025-03-30 09:23:43 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/9",
+  "_key": "9",
+  "nameEN": "Housing & Urban Development",
+  "nameFR": "Logement et développement urbain",
+  "nameSW": "Nyumba na Maendeleo ya Mjini"
+}
+2025-03-30 09:23:43 [INFO]: DEBUG: Using English name: "Housing & Urban Development" (default)
+2025-03-30 09:23:43 [INFO]: DEBUG: Final name selected for locale en: "Housing & Urban Development"
+2025-03-30 09:23:43 [INFO]: ======= END DEBUG: CATEGORY NAMES LOCALIZATION =======
+2025-03-30 09:23:43 [INFO]: Dashboard analytics processing completed successfully
+2025-03-30 09:23:44 [INFO]: Fetching metric: totalQueries from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 09:23:44 [INFO]: Getting general analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with filters:
+2025-03-30 09:23:44 [INFO]: Collections initialized successfully
+2025-03-30 09:23:44 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:23:44 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 12.409 ms - -[0m
+2025-03-30 09:23:44 [INFO]: Fetching metric: totalQueries from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 09:23:44 [INFO]: Getting general analytics from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z with filters:
+2025-03-30 09:23:44 [INFO]: Collections initialized successfully
+2025-03-30 09:23:44 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:23:44 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 14.854 ms - -[0m
+2025-03-30 09:23:45 [INFO]: Fetching metric: uniqueUsers from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 09:23:45 [INFO]: Getting unique users count from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 09:23:45 [INFO]: Sample user IDs:
+2025-03-30 09:23:45 [INFO]: Executing unique users count query...
+2025-03-30 09:23:45 [INFO]: Unique users query result:
+2025-03-30 09:23:45 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 801.083 ms - -[0m
+2025-03-30 09:23:46 [INFO]: Fetching metric: uniqueUsers from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 09:23:46 [INFO]: Getting unique users count from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 09:23:46 [INFO]: Sample user IDs:
+2025-03-30 09:23:46 [INFO]: Executing unique users count query...
+2025-03-30 09:23:47 [INFO]: Unique users query result:
+2025-03-30 09:23:47 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 832.965 ms - -[0m
+2025-03-30 09:23:47 [INFO]: Fetching metric: averageResponseTime from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 09:23:47 [INFO]: Getting general analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with filters:
+2025-03-30 09:23:47 [INFO]: Collections initialized successfully
+2025-03-30 09:23:47 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:23:47 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 13.386 ms - -[0m
+2025-03-30 09:23:48 [INFO]: Fetching metric: averageResponseTime from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 09:23:48 [INFO]: Getting general analytics from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z with filters:
+2025-03-30 09:23:48 [INFO]: Collections initialized successfully
+2025-03-30 09:23:48 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:23:48 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 36.797 ms - -[0m
+2025-03-30 09:23:48 [INFO]: Fetching metric: satisfactionRate from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z
+2025-03-30 09:23:48 [INFO]: Getting general analytics from 2025-02-28T17:00:00.000Z to 2025-03-30T16:59:59.999Z with filters:
+2025-03-30 09:23:48 [INFO]: Collections initialized successfully
+2025-03-30 09:23:48 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:23:48 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-28T17:00:00.000Z&endDate=2025-03-30T16:59:59.999Z&locale=en [36m304[0m 11.722 ms - -[0m
+2025-03-30 09:23:48 [INFO]: Fetching metric: satisfactionRate from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z
+2025-03-30 09:23:48 [INFO]: Getting general analytics from 2025-01-31T17:00:00.000Z to 2025-03-02T16:59:59.999Z with filters:
+2025-03-30 09:23:48 [INFO]: Collections initialized successfully
+2025-03-30 09:23:48 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:23:48 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-31T17:00:00.000Z&endDate=2025-03-02T16:59:59.999Z&locale=en [36m304[0m 10.627 ms - -[0m
+2025-03-30 09:23:49 [INFO]: Fetching time series data for metricType: queries, interval: daily, from 2025-03-01 to 2025-03-30
+2025-03-30 09:23:49 [INFO]: Getting time series data for metric: queries, interval: daily, from 2025-03-01T00:00:00.000Z to 2025-03-30T00:00:00.000Z
+2025-03-30 09:23:49 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-01&endDate=2025-03-30&locale=en [36m304[0m 811.425 ms - -[0m
+2025-03-30 09:23:50 [INFO]: Fetching all service categories with services, locale: en
+2025-03-30 09:23:50 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 3.469 ms - -[0m
+2025-03-30 09:24:46 [INFO]: Getting dashboard analytics from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z with locale en
+2025-03-30 09:24:46 [INFO]: Getting dashboard analytics from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z with locale en
+2025-03-30 09:24:46 [INFO]: Test query result:
+2025-03-30 09:24:46 [INFO]: Executing dashboard analytics query...
+2025-03-30 09:24:55 [INFO]: ======= DEBUG: CATEGORY NAMES LOCALIZATION =======
+2025-03-30 09:24:55 [INFO]: DEBUG: Processing locale "en" for category name localization
+2025-03-30 09:24:55 [INFO]: Getting service categories for name localization...
+2025-03-30 09:24:55 [INFO]: Found 13 service categories for localization
+2025-03-30 09:24:55 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-01-30T17:00:00.000Z&endDate=2025-03-01T16:59:59.999Z&locale=en [32m200[0m 8214.725 ms - 1951[0m
+2025-03-30 09:24:55 [INFO]: DEBUG: First few categories from database:
+2025-03-30 09:24:55 [INFO]: DEBUG: Processing 13 categories from analytics data
+2025-03-30 09:24:55 [INFO]: DEBUG: First category from analytics:
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/1, extracted key: 1
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/1",
+  "_key": "1",
+  "nameEN": "Identity & Civil Registration",
+  "nameFR": "Identité et état civil",
+  "nameSW": "Utambulisho na Usajili wa Raia"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Identity & Civil Registration" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Identity & Civil Registration"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/10, extracted key: 10
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/10",
+  "_key": "10",
+  "nameEN": "Utilities & Environment",
+  "nameFR": "Services publics et environnement",
+  "nameSW": "Huduma na Mazingira"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Utilities & Environment" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Utilities & Environment"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/11, extracted key: 11
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/11",
+  "_key": "11",
+  "nameEN": "Culture & Recreation",
+  "nameFR": "Culture et loisirs",
+  "nameSW": "Utamaduni na Burudani"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Culture & Recreation" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Culture & Recreation"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/12, extracted key: 12
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/12",
+  "_key": "12",
+  "nameEN": "Immigration & Citizenship",
+  "nameFR": "Immigration et citoyenneté",
+  "nameSW": "Uhamiaji na Uraia"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Immigration & Citizenship" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Immigration & Citizenship"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/13, extracted key: 13
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/13",
+  "_key": "13",
+  "nameEN": "Social Security & Pensions",
+  "nameFR": "Sécurité sociale et retraites",
+  "nameSW": "Hifadhi ya Jamii na Pensheni"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Social Security & Pensions" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Social Security & Pensions"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/2, extracted key: 2
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/2",
+  "_key": "2",
+  "nameEN": "Healthcare & Social Services",
+  "nameFR": "Santé et services sociaux",
+  "nameSW": "Afya na Huduma za Kijamii"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Healthcare & Social Services" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Healthcare & Social Services"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/3, extracted key: 3
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/3",
+  "_key": "3",
+  "nameEN": "Education & Learning",
+  "nameFR": "Éducation et apprentissage",
+  "nameSW": "Elimu na Mafunzo"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Education & Learning" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Education & Learning"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/4, extracted key: 4
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/4",
+  "_key": "4",
+  "nameEN": "Employment & Labor Services",
+  "nameFR": "Emploi et services du travail",
+  "nameSW": "Ajira na Huduma za Kazi"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Employment & Labor Services" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Employment & Labor Services"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/5, extracted key: 5
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/5",
+  "_key": "5",
+  "nameEN": "Taxes & Revenue",
+  "nameFR": "Impôts et revenus",
+  "nameSW": "Kodi na Mapato"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Taxes & Revenue" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Taxes & Revenue"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/6, extracted key: 6
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/6",
+  "_key": "6",
+  "nameEN": "Public Safety & Justice",
+  "nameFR": "Sécurité publique et justice",
+  "nameSW": "Usalama wa Umma na Haki"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Public Safety & Justice" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Public Safety & Justice"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/7, extracted key: 7
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/7",
+  "_key": "7",
+  "nameEN": "Transportation & Mobility",
+  "nameFR": "Transport et mobilité",
+  "nameSW": "Usafiri na Usafiri"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Transportation & Mobility" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Transportation & Mobility"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/8, extracted key: 8
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/8",
+  "_key": "8",
+  "nameEN": "Business & Trade",
+  "nameFR": "Affaires et commerce",
+  "nameSW": "Biashara na Biashara"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Business & Trade" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Business & Trade"
+2025-03-30 09:24:55 [INFO]: DEBUG: Looking up category for ID: serviceCategories/9, extracted key: 9
+2025-03-30 09:24:55 [INFO]: DEBUG: Found matching category: {
+  "_id": "serviceCategories/9",
+  "_key": "9",
+  "nameEN": "Housing & Urban Development",
+  "nameFR": "Logement et développement urbain",
+  "nameSW": "Nyumba na Maendeleo ya Mjini"
+}
+2025-03-30 09:24:55 [INFO]: DEBUG: Using English name: "Housing & Urban Development" (default)
+2025-03-30 09:24:55 [INFO]: DEBUG: Final name selected for locale en: "Housing & Urban Development"
+2025-03-30 09:24:55 [INFO]: ======= END DEBUG: CATEGORY NAMES LOCALIZATION =======
+2025-03-30 09:24:55 [INFO]: Dashboard analytics processing completed successfully
+2025-03-30 09:24:55 [INFO]: Fetching metric: totalQueries from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z
+2025-03-30 09:24:55 [INFO]: Getting general analytics from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z with filters:
+2025-03-30 09:24:55 [INFO]: Collections initialized successfully
+2025-03-30 09:24:55 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:24:55 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-30T17:00:00.000Z&endDate=2025-03-01T16:59:59.999Z&locale=en [36m304[0m 12.618 ms - -[0m
+2025-03-30 09:24:55 [INFO]: Fetching metric: totalQueries from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z
+2025-03-30 09:24:55 [INFO]: Getting general analytics from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z with filters:
+2025-03-30 09:24:55 [INFO]: Collections initialized successfully
+2025-03-30 09:24:55 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:24:55 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-02T17:00:00.000Z&endDate=2025-02-01T16:59:59.999Z&locale=en [32m200[0m 35.205 ms - 38[0m
+2025-03-30 09:24:56 [INFO]: Fetching metric: uniqueUsers from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z
+2025-03-30 09:24:56 [INFO]: Getting unique users count from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z
+2025-03-30 09:24:56 [INFO]: Sample user IDs:
+2025-03-30 09:24:56 [INFO]: Executing unique users count query...
+2025-03-30 09:24:57 [INFO]: Unique users query result:
+2025-03-30 09:24:57 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-30T17:00:00.000Z&endDate=2025-03-01T16:59:59.999Z&locale=en [36m304[0m 811.079 ms - -[0m
+2025-03-30 09:24:57 [INFO]: Fetching metric: uniqueUsers from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z
+2025-03-30 09:24:57 [INFO]: Getting unique users count from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z
+2025-03-30 09:24:57 [INFO]: Sample user IDs:
+2025-03-30 09:24:57 [INFO]: Executing unique users count query...
+2025-03-30 09:24:58 [INFO]: Unique users query result:
+2025-03-30 09:24:58 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-02T17:00:00.000Z&endDate=2025-02-01T16:59:59.999Z&locale=en [32m200[0m 815.066 ms - 36[0m
+2025-03-30 09:24:58 [INFO]: Fetching metric: averageResponseTime from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z
+2025-03-30 09:24:58 [INFO]: Getting general analytics from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z with filters:
+2025-03-30 09:24:58 [INFO]: Collections initialized successfully
+2025-03-30 09:24:58 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:24:58 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-30T17:00:00.000Z&endDate=2025-03-01T16:59:59.999Z&locale=en [36m304[0m 14.490 ms - -[0m
+2025-03-30 09:24:58 [INFO]: Fetching metric: averageResponseTime from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z
+2025-03-30 09:24:58 [INFO]: Getting general analytics from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z with filters:
+2025-03-30 09:24:58 [INFO]: Collections initialized successfully
+2025-03-30 09:24:58 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:24:58 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-02T17:00:00.000Z&endDate=2025-02-01T16:59:59.999Z&locale=en [32m200[0m 11.605 ms - 59[0m
+2025-03-30 09:24:59 [INFO]: Fetching metric: satisfactionRate from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z
+2025-03-30 09:24:59 [INFO]: Getting general analytics from 2025-01-30T17:00:00.000Z to 2025-03-01T16:59:59.999Z with filters:
+2025-03-30 09:24:59 [INFO]: Collections initialized successfully
+2025-03-30 09:24:59 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:24:59 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-30T17:00:00.000Z&endDate=2025-03-01T16:59:59.999Z&locale=en [36m304[0m 36.145 ms - -[0m
+2025-03-30 09:24:59 [INFO]: Fetching metric: satisfactionRate from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z
+2025-03-30 09:24:59 [INFO]: Getting general analytics from 2025-01-02T17:00:00.000Z to 2025-02-01T16:59:59.999Z with filters:
+2025-03-30 09:24:59 [INFO]: Collections initialized successfully
+2025-03-30 09:24:59 [INFO]: Executing analytics query with bind vars:
+2025-03-30 09:24:59 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-02T17:00:00.000Z&endDate=2025-02-01T16:59:59.999Z&locale=en [32m200[0m 11.024 ms - 43[0m
+2025-03-30 09:25:00 [INFO]: Fetching time series data for metricType: queries, interval: daily, from 2025-01-31 to 2025-03-01
+2025-03-30 09:25:00 [INFO]: Getting time series data for metric: queries, interval: daily, from 2025-01-31T00:00:00.000Z to 2025-03-01T00:00:00.000Z
+2025-03-30 09:25:02 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-01-31&endDate=2025-03-01&locale=en [32m200[0m 1923.053 ms - 2042[0m
+2025-03-30 09:25:02 [INFO]: Fetching all service categories with services, locale: en
+2025-03-30 09:25:02 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 3.339 ms - -[0m
+2025-03-30 09:31:31 [INFO]: [0mPOST /api/auth/logout [33m401[0m 1.129 ms - 58[0m
+2025-03-30 09:31:31 [INFO]: [0mPOST /api/auth/logout [33m401[0m 0.685 ms - 58[0m
+2025-03-30 09:31:34 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:31:34 [INFO]: [0mPOST /api/auth/login [32m200[0m 65.428 ms - 67298[0m
+2025-03-30 09:31:57 [INFO]: Server is running on port 3000
+2025-03-30 09:31:57 [INFO]: Initializing AuthService...
+2025-03-30 09:31:57 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:31:57 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:31:57 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:31:57 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:31:57 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:31:57 [INFO]: Collections initialized successfully
+2025-03-30 09:31:57 [INFO]: Collections initialized successfully
+2025-03-30 09:31:57 [INFO]: Collections initialized successfully
+2025-03-30 09:31:57 [INFO]: Auth service initialized successfully
+2025-03-30 09:32:07 [INFO]: [0mPOST /api/auth/logout [33m401[0m 2.602 ms - 58[0m
+2025-03-30 09:32:07 [INFO]: [0mPOST /api/auth/logout [33m401[0m 0.764 ms - 58[0m
+2025-03-30 09:32:10 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:32:10 [INFO]: Attempting login for user: fordendk
+2025-03-30 09:32:10 [INFO]: Fetching user by loginName: fordendk or email: fordendk
+2025-03-30 09:32:10 [INFO]: Verifying password
+2025-03-30 09:32:10 [INFO]: Generating JWT token for user: 2133
+2025-03-30 09:32:10 [INFO]: User logged in successfully: fordendk
+2025-03-30 09:32:10 [INFO]: [0mPOST /api/auth/login [32m200[0m 67.389 ms - 67298[0m
+2025-03-30 09:35:54 [INFO]: Server is running on port 3000
+2025-03-30 09:35:54 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:54 [INFO]: Initializing AuthService...
+2025-03-30 09:35:54 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:35:54 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:35:54 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:35:54 [INFO]: EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - 2025-03-30T04:05:54.415Z
+2025-03-30 09:35:54 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:54 [INFO]: {
+  "host": "in-V3.mailjet.com",
+  "port": "587",
+  "secure": false,
+  "auth": {
+    "user": "187ad3288090609e6e282b07f359acd4",
+    "pass": "******"
+  },
+  "fromEmail": "fordendk@gmail.com",
+  "appName": "Huduma AI",
+  "baseUrl": "http://localhost:8090"
+}
+2025-03-30 09:35:54 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:54 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:54 [INFO]: EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - 2025-03-30T04:05:54.421Z
+2025-03-30 09:35:54 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:54 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:35:54 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:35:54 [INFO]: Collections initialized successfully
+2025-03-30 09:35:54 [INFO]: Collections initialized successfully
+2025-03-30 09:35:54 [INFO]: Collections initialized successfully
+2025-03-30 09:35:54 [INFO]: Auth service initialized successfully
+2025-03-30 09:35:55 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:55 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - 2025-03-30T04:05:55.818Z
+2025-03-30 09:35:55 [INFO]: -----------------------------------------------------
+2025-03-30 09:35:55 [INFO]: true
+2025-03-30 09:35:55 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:02 [INFO]: Server is running on port 3000
+2025-03-30 09:41:02 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:02 [INFO]: Initializing AuthService...
+2025-03-30 09:41:02 [INFO]: QueryService initialized
+2025-03-30 09:41:02 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:41:02 [INFO]: EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - 2025-03-30T04:11:02.908Z
+2025-03-30 09:41:02 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:02 [INFO]: {
+  "host": "in-V3.mailjet.com",
+  "port": "587",
+  "secure": false,
+  "auth": {
+    "user": "187ad3288090609e6e282b07f359acd4",
+    "pass": "******"
+  },
+  "fromEmail": "fordendk@gmail.com",
+  "appName": "Huduma AI",
+  "baseUrl": "http://localhost:8090"
+}
+2025-03-30 09:41:02 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:02 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:02 [INFO]: EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - 2025-03-30T04:11:02.914Z
+2025-03-30 09:41:02 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:02 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:41:02 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:41:02 [INFO]: Analytics service set for QueryService
+2025-03-30 09:41:02 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:41:02 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:41:02 [INFO]: Collections initialized successfully
+2025-03-30 09:41:02 [INFO]: Collections initialized successfully
+2025-03-30 09:41:02 [INFO]: Collections initialized successfully
+2025-03-30 09:41:02 [INFO]: Auth service initialized successfully
+2025-03-30 09:41:04 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:04 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - 2025-03-30T04:11:04.283Z
+2025-03-30 09:41:04 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:04 [INFO]: true
+2025-03-30 09:41:04 [INFO]: -----------------------------------------------------
+2025-03-30 09:41:27 [INFO]: Creating query with body: {"userId":"2133","sessionId":"new-session","text":"I need information on how to apply for a national ID card","categoryId":null,"serviceId":null,"isAnswered":false,"timestamp":"2025-03-30T04:11:26.159Z"}
+2025-03-30 09:41:27 [INFO]: Creating new query with data:
+2025-03-30 09:41:27 [INFO]: Creating basic query document...
+2025-03-30 09:41:27 [INFO]: Query created with auto-generated key: 34405964
+2025-03-30 09:41:27 [INFO]: Updating query 34405964 with additional data...
+2025-03-30 09:41:27 [INFO]: Creating edge between session new-session and query 34405964
+2025-03-30 09:41:27 [INFO]: Recording query analytics...
+2025-03-30 09:41:27 [INFO]: Analytics record created with auto-generated key: 34405980
+2025-03-30 09:41:27 [INFO]: Analytics updated for query 34405964
+2025-03-30 09:41:27 [INFO]: Query 34405964 created successfully
+2025-03-30 09:41:27 [INFO]: [0mPOST /api/queries [32m201[0m 14.533 ms - 232[0m
+2025-03-30 09:41:27 [INFO]: [0mPATCH /api/queries/34405964/responsetime [33m404[0m 0.887 ms - 174[0m
+2025-03-30 09:41:27 [INFO]: Marking query 34405964 as answered with body: {}
+2025-03-30 09:41:27 [INFO]: Marking query 34405964 as answered with response time: 0ms
+2025-03-30 09:41:27 [INFO]: Query 34405964 marked as answered
+2025-03-30 09:41:27 [INFO]: [0mPATCH /api/queries/34405964/answered [32m200[0m 4.604 ms - 248[0m
+2025-03-30 09:53:37 [INFO]: Server is running on port 3000
+2025-03-30 09:53:37 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:37 [INFO]: UserProfileService initialized
+2025-03-30 09:53:37 [INFO]: Initializing AuthService...
+2025-03-30 09:53:37 [INFO]: QueryService initialized
+2025-03-30 09:53:37 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:53:37 [INFO]: ServiceCategoryService initialized
+2025-03-30 09:53:37 [INFO]: SessionService initialized with expiration time:
+2025-03-30 09:53:37 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-30 09:53:37 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth
+2025-03-30 09:53:37 [INFO]: EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - 2025-03-30T04:23:37.797Z
+2025-03-30 09:53:37 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:37 [INFO]: {
+  "host": "in-V3.mailjet.com",
+  "port": "587",
+  "secure": false,
+  "auth": {
+    "user": "187ad3288090609e6e282b07f359acd4",
+    "pass": "******"
+  },
+  "fromEmail": "fordendk@gmail.com",
+  "appName": "Huduma AI",
+  "baseUrl": "http://localhost:8090"
+}
+2025-03-30 09:53:37 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:37 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:37 [INFO]: EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - 2025-03-30T04:23:37.802Z
+2025-03-30 09:53:37 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:37 [INFO]: Analytics service set for QueryService
+2025-03-30 09:53:37 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:53:37 [INFO]: Initializing AnalyticsService...
+2025-03-30 09:53:37 [INFO]: ServiceCategoryService initialized
+2025-03-30 09:53:37 [INFO]: Collections initialized successfully
+2025-03-30 09:53:37 [INFO]: Collections initialized successfully
+2025-03-30 09:53:37 [INFO]: Collections initialized successfully
+2025-03-30 09:53:37 [INFO]: Auth service initialized successfully
+2025-03-30 09:53:39 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:39 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - 2025-03-30T04:23:39.265Z
+2025-03-30 09:53:39 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:39 [INFO]: true
+2025-03-30 09:53:39 [INFO]: -----------------------------------------------------
+2025-03-30 09:53:50 [INFO]: 
+=======================================================
+2025-03-30 09:53:50 [INFO]: [0mPOST /api/auth/logout [33m401[0m 3.709 ms - 58[0m
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] 2025-03-30T04:23:50.337Z - Authentication Started
+2025-03-30 09:53:50 [INFO]: =======================================================
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Request URL: POST /logout
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 09:53:50 [INFO]:   host: localhost:3000
+2025-03-30 09:53:50 [INFO]:   connection: keep-alive
+2025-03-30 09:53:50 [INFO]:   content-length: 2
+2025-03-30 09:53:50 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:53:50 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:53:50 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:53:50 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:53:50 [INFO]:   content-type: application/json
+2025-03-30 09:53:50 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:53:50 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:53:50 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:53:50 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:53:50 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:53:50 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:53:50 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:53:50 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] ❌ No Authorization header found
+2025-03-30 09:53:50 [INFO]: 
+=======================================================
+2025-03-30 09:53:50 [INFO]: [0mPOST /api/auth/logout [33m401[0m 2.732 ms - 58[0m
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] 2025-03-30T04:23:50.428Z - Authentication Started
+2025-03-30 09:53:50 [INFO]: =======================================================
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Request URL: POST /logout
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 09:53:50 [INFO]:   host: localhost:3000
+2025-03-30 09:53:50 [INFO]:   connection: keep-alive
+2025-03-30 09:53:50 [INFO]:   content-length: 2
+2025-03-30 09:53:50 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:53:50 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:53:50 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:53:50 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:53:50 [INFO]:   content-type: application/json
+2025-03-30 09:53:50 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:53:50 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:53:50 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:53:50 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:53:50 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:53:50 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:53:50 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:53:50 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 09:53:50 [INFO]: [AUTH DEBUG] ❌ No Authorization header found
+2025-03-30 09:53:52 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:53:52 [INFO]: Attempting login for user: fordendk
+2025-03-30 09:53:52 [INFO]: Fetching user by loginName: fordendk or email: fordendk
+2025-03-30 09:53:52 [INFO]: Verifying password
+2025-03-30 09:53:52 [INFO]: Generating JWT token for user: 2133
+2025-03-30 09:53:52 [INFO]: User logged in successfully: fordendk
+2025-03-30 09:53:52 [INFO]: [0mPOST /api/auth/login [32m200[0m 66.271 ms - 67298[0m
+2025-03-30 09:53:59 [INFO]: 
+=======================================================
+2025-03-30 09:53:59 [INFO]: Verifying JWT token
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] 2025-03-30T04:23:59.362Z - Authentication Started
+2025-03-30 09:53:59 [INFO]: =======================================================
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 09:53:59 [INFO]:   host: localhost:3000
+2025-03-30 09:53:59 [INFO]:   connection: keep-alive
+2025-03-30 09:53:59 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:53:59 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 09:53:59 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:53:59 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:53:59 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:53:59 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:53:59 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:53:59 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:53:59 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:53:59 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:53:59 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:53:59 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:53:59 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:53:59 [INFO]:   if-none-match: W/"106fe-BNu5UTWTTA1ocxsB44RsPoyfrf4"
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 09:53:59 [INFO]: Fetching user by ID: 2133
+2025-03-30 09:53:59 [INFO]: Token verified successfully for user:
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 09:53:59 [INFO]: Fetching current user info for: fordendk
+2025-03-30 09:53:59 [INFO]: Fetching user by ID: 2133
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 09:53:59 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 09:53:59 [INFO]: [0mGET /api/auth/me [32m200[0m 8.706 ms - 67322[0m
+2025-03-30 09:54:17 [INFO]: Email check request received for: fordendk@outlook.com
+2025-03-30 09:54:17 [INFO]: Checking if email fordendk@outlook.com is available
+2025-03-30 09:54:17 [INFO]: Email fordendk@outlook.com is available
+2025-03-30 09:54:17 [INFO]: [0mGET /api/users/check-email?email=fordendk%40outlook.com [36m304[0m 2.867 ms - -[0m
+2025-03-30 09:54:23 [INFO]: 
+=======================================================
+2025-03-30 09:54:23 [INFO]: Verifying JWT token
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] 2025-03-30T04:24:23.147Z - Authentication Started
+2025-03-30 09:54:23 [INFO]: =======================================================
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] Request URL: PUT /email
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 09:54:23 [INFO]:   host: localhost:3000
+2025-03-30 09:54:23 [INFO]:   connection: keep-alive
+2025-03-30 09:54:23 [INFO]:   content-length: 126
+2025-03-30 09:54:23 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:54:23 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 09:54:23 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:54:23 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:54:23 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:54:23 [INFO]:   content-type: application/json
+2025-03-30 09:54:23 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:54:23 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:54:23 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:54:23 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:54:23 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:54:23 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:54:23 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:54:23 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 09:54:23 [INFO]: Fetching user by ID: 2133
+2025-03-30 09:54:23 [INFO]: Token verified successfully for user:
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 09:54:23 [INFO]: Fetching user by ID: 2133
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] 📝 Found userId in request body: 2133
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] ✅ userId in body matches token
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] 📧 Email route - fetching additional user data for ID: 2133
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] ✅ Additional user details found:
+2025-03-30 09:54:23 [INFO]: 
+=======================================================
+2025-03-30 09:54:23 [INFO]: Fetching user profile for user 2133
+2025-03-30 09:54:23 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 2025-03-30T04:24:23.153Z - Email Update Route Entered (After Auth Middleware)
+2025-03-30 09:54:23 [INFO]: =======================================================
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] Request method:
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] Request URL:
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] Request path:
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] Content-Type:
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] Headers:
+2025-03-30 09:54:23 [INFO]:   host: localhost:3000
+2025-03-30 09:54:23 [INFO]:   connection: keep-alive
+2025-03-30 09:54:23 [INFO]:   content-length: 126
+2025-03-30 09:54:23 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:54:23 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 09:54:23 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:54:23 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:54:23 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:54:23 [INFO]:   content-type: application/json
+2025-03-30 09:54:23 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:54:23 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:54:23 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:54:23 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:54:23 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:54:23 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:54:23 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:54:23 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] Request body:
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 📧 Email update request details:
+2025-03-30 09:54:23 [INFO]:   - New email: fordendk@outlook.com
+2025-03-30 09:54:23 [INFO]:   - Password provided: Yes
+2025-03-30 09:54:23 [INFO]:   - UserId from body: 2133
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: 2133
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Verifying password...
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] ✅ Password verified successfully
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 🔑 Generating verification token
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] ✅ Token generated successfully: 1f5bb411fd...
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: 2133
+2025-03-30 09:54:23 [INFO]: User profile 2133 retrieved successfully
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] ✅ User found in database: {"id":"2133","email":"fordendk@gmail.com"}
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: {"pendingEmailChange":{"email":"fordendk@outlook.com","token":"1f5bb411fd..."},"emailVerified":false,"updatedAt":"2025-03-30T04:24:23.156Z"}
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] ✅ User document updated successfully
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: [EMAIL ROUTE DEBUG] 📧 Preparing to send verification email
+2025-03-30 09:54:23 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL REQUEST] - 2025-03-30T04:24:23.160Z
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: {
+  "to": "fordendk@outlook.com",
+  "token": "1f5bb411fd...",
+  "userName": "DAVID KEITH FORDEN..."
+}
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION LINK] - 2025-03-30T04:24:23.161Z
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: http://localhost:8090/verify-email/1f5bb411fd9773645b2f6db1a90ea3494e64965d87d0b449a7559b04e578afa1
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL CONTENT] - 2025-03-30T04:24:23.161Z
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:23 [INFO]: {
+  "from": "\"Huduma AI\" <fordendk@gmail.com>",
+  "to": "fordendk@outlook.com",
+  "subject": "Verify Your Email - Huduma AI",
+  "textPreview": "\nHello DAVID KEITH FORDEN...,\n\nThank you for registering with Huduma AI. \nPlease verify your email a..."
+}
+2025-03-30 09:54:23 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:24 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:24 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION VERIFIED BEFORE SENDING] - 2025-03-30T04:24:24.448Z
+2025-03-30 09:54:24 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:26 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:26 [INFO]: [EMAIL ROUTE DEBUG] ✅ Verification email sent to fordendk@outlook.com
+2025-03-30 09:54:26 [INFO]: [0mPUT /api/users/email [32m200[0m 3686.363 ms - 132[0m
+2025-03-30 09:54:26 [INFO]: EMAIL SERVICE DEBUG [VERIFICATION EMAIL SENT] - 2025-03-30T04:24:26.833Z
+2025-03-30 09:54:26 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:26 [INFO]: {
+  "messageId": "<e1ea531f-93c4-0d65-96b3-778b5435da07@gmail.com>",
+  "response": "250 OK queued as 47f1509f-c45c-4f25-9eeb-7b9b4f119d81",
+  "envelope": {
+    "from": "fordendk@gmail.com",
+    "to": [
+      "fordendk@outlook.com"
+    ]
+  }
+}
+2025-03-30 09:54:26 [INFO]: -----------------------------------------------------
+2025-03-30 09:54:26 [INFO]: Verification email sent to fordendk@outlook.com: <e1ea531f-93c4-0d65-96b3-778b5435da07@gmail.com>
+2025-03-30 09:54:26 [INFO]: [EMAIL ROUTE DEBUG] ✅ Email update process completed successfully
+2025-03-30 09:54:29 [INFO]: 
+=======================================================
+2025-03-30 09:54:29 [INFO]: Verifying JWT token
+2025-03-30 09:54:29 [INFO]: Fetching user by ID: 2133
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] 2025-03-30T04:24:29.008Z - Authentication Started
+2025-03-30 09:54:29 [INFO]: =======================================================
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] Request URL: POST /logout
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 09:54:29 [INFO]:   host: localhost:3000
+2025-03-30 09:54:29 [INFO]:   connection: keep-alive
+2025-03-30 09:54:29 [INFO]:   content-length: 2
+2025-03-30 09:54:29 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 09:54:29 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 09:54:29 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 09:54:29 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 09:54:29 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 09:54:29 [INFO]:   content-type: application/json
+2025-03-30 09:54:29 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 09:54:29 [INFO]:   origin: http://localhost:8090
+2025-03-30 09:54:29 [INFO]:   sec-fetch-site: same-site
+2025-03-30 09:54:29 [INFO]:   sec-fetch-mode: cors
+2025-03-30 09:54:29 [INFO]:   sec-fetch-dest: empty
+2025-03-30 09:54:29 [INFO]:   referer: http://localhost:8090/
+2025-03-30 09:54:29 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 09:54:29 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 09:54:29 [INFO]: Token verified successfully for user:
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 09:54:29 [INFO]: Logout request for user: fordendk
+2025-03-30 09:54:29 [INFO]: Logging out user with ID: 2133
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 09:54:29 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 09:54:29 [INFO]: User logged out successfully: 2133
+2025-03-30 09:54:29 [INFO]: [0mPOST /api/auth/logout [32m200[0m 9.337 ms - 52[0m
+2025-03-30 09:54:54 [INFO]: Email verification attempt with token: 1f5bb411fd9773645b2f6db1a90ea3494e64965d87d0b449a7559b04e578afa1
+2025-03-30 09:54:54 [INFO]: Verification Token Received:
+2025-03-30 09:54:54 [INFO]: Token not found in verificationTokens, checking pendingEmailChange
+2025-03-30 09:54:54 [INFO]: Found token in pendingEmailChange:
+2025-03-30 09:54:54 [INFO]: Email changed successfully for user 2133 to fordendk@outlook.com
+2025-03-30 09:54:54 [INFO]: [0mGET /api/auth/verify-email/1f5bb411fd9773645b2f6db1a90ea3494e64965d87d0b449a7559b04e578afa1 [32m200[0m 9.383 ms - 229[0m
+2025-03-30 09:55:03 [INFO]: Login attempt for loginName: fordendk
+2025-03-30 09:55:03 [INFO]: Attempting login for user: fordendk
+2025-03-30 09:55:03 [INFO]: Fetching user by loginName: fordendk or email: fordendk
+2025-03-30 09:55:03 [INFO]: Verifying password
+2025-03-30 09:55:03 [INFO]: Generating JWT token for user: 2133
+2025-03-30 09:55:03 [INFO]: User logged in successfully: fordendk
+2025-03-30 09:55:03 [INFO]: [0mPOST /api/auth/login [32m200[0m 63.236 ms - 67302[0m

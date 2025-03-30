@@ -1,12 +1,31 @@
-// session-service.js
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
+
+// Set up Winston logger (consistent with other files)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 class SessionService {
   constructor() {
@@ -14,6 +33,7 @@ class SessionService {
     this.sessions = this.db.collection('sessions');
     this.userSessions = this.db.collection('userSessions');
     this.sessionExpirationTime = process.env.SESSION_EXPIRATION_TIME || 30 * 60 * 1000; // 30 minutes in milliseconds
+    logger.info('SessionService initialized with expiration time:', this.sessionExpirationTime);
   }
 
   /**
@@ -25,6 +45,8 @@ class SessionService {
    */
   async createSession(userId, deviceInfo = {}, ipAddress = '') {
     try {
+      logger.info(`Creating session for user ${userId}`);
+
       // Create basic session document - let ArangoDB generate the key
       const basicSessionDoc = {
         userId,
@@ -32,10 +54,10 @@ class SessionService {
         active: true
       };
       
-      console.log(`Creating session for user ${userId}...`);
+      logger.info(`Creating session for user ${userId}...`);
       const session = await this.sessions.save(basicSessionDoc);
       const sessionId = session._key;
-      console.log(`Session created with auto-generated key: ${sessionId}`);
+      logger.info(`Session created with auto-generated key: ${sessionId}`);
       
       // Add additional information if provided
       const updateData = {};
@@ -50,13 +72,13 @@ class SessionService {
       
       // Update with additional data if needed
       if (Object.keys(updateData).length > 0) {
-        console.log(`Updating session ${sessionId} with additional data...`);
+        logger.info(`Updating session ${sessionId} with additional data...`);
         await this.sessions.update(sessionId, updateData);
       }
 
       // Create edge between user and session
       try {
-        console.log(`Creating edge between user ${userId} and session ${sessionId}`);
+        logger.info(`Creating edge between user ${userId} and session ${sessionId}`);
         await this.userSessions.save({
           _from: `users/${userId}`,
           _to: `sessions/${sessionId}`,
@@ -64,13 +86,15 @@ class SessionService {
         });
       } catch (error) {
         // If creating the edge fails, we'll log but continue
-        console.error(`Error creating user-session edge for user ${userId}:`, error);
+        logger.error(`Error creating user-session edge for user ${userId}:`, error);
       }
 
       // Return the full session document
-      return await this.sessions.document(sessionId);
+      const fullSession = await this.sessions.document(sessionId);
+      logger.info(`Session ${sessionId} created successfully for user ${userId}`);
+      return fullSession;
     } catch (error) {
-      console.error(`Error creating session for user ${userId}:`, error);
+      logger.error(`Error creating session for user ${userId}:`, error);
       throw error;
     }
   }
@@ -82,6 +106,8 @@ class SessionService {
    */
   async getActiveSession(userId) {
     try {
+      logger.info(`Fetching active session for user ${userId}`);
+
       const query = aql`
         FOR session IN sessions
           FILTER session.userId == ${userId}
@@ -96,6 +122,7 @@ class SessionService {
       const session = await cursor.next();
 
       if (!session) {
+        logger.info(`No active session found for user ${userId}`);
         return null;
       }
 
@@ -105,13 +132,15 @@ class SessionService {
       
       if (currentTime - sessionStartTime > this.sessionExpirationTime) {
         // Session has expired, end it
+        logger.info(`Session ${session._key} for user ${userId} has expired`);
         await this.endSession(session._key);
         return null;
       }
 
+      logger.info(`Active session ${session._key} found for user ${userId}`);
       return session;
     } catch (error) {
-      console.error(`Error getting active session for user ${userId}:`, error);
+      logger.error(`Error getting active session for user ${userId}:`, error);
       return null;
     }
   }
@@ -125,16 +154,20 @@ class SessionService {
    */
   async getOrCreateSession(userId, deviceInfo = {}, ipAddress = '') {
     try {
+      logger.info(`Getting or creating session for user ${userId}`);
+
       const activeSession = await this.getActiveSession(userId);
       
       if (activeSession) {
+        logger.info(`Returning existing active session ${activeSession._key} for user ${userId}`);
         return activeSession;
       }
       
       // No active session, create a new one
+      logger.info(`No active session found, creating new session for user ${userId}`);
       return await this.createSession(userId, deviceInfo, ipAddress);
     } catch (error) {
-      console.error(`Error getting or creating session for user ${userId}:`, error);
+      logger.error(`Error getting or creating session for user ${userId}:`, error);
       throw error;
     }
   }
@@ -146,6 +179,8 @@ class SessionService {
    */
   async endSession(sessionId) {
     try {
+      logger.info(`Ending session ${sessionId}`);
+
       const updatedSession = await this.sessions.update(
         sessionId,
         {
@@ -155,9 +190,10 @@ class SessionService {
         { returnNew: true }
       );
 
+      logger.info(`Session ${sessionId} ended successfully`);
       return updatedSession.new;
     } catch (error) {
-      console.error(`Error ending session ${sessionId}:`, error);
+      logger.error(`Error ending session ${sessionId}:`, error);
       throw error;
     }
   }
@@ -169,6 +205,8 @@ class SessionService {
    */
   async keepSessionAlive(sessionId) {
     try {
+      logger.info(`Keeping session ${sessionId} alive`);
+
       // This is a simple update to ensure the session doesn't expire
       // The logic is based on checking the startTime against current time
       const updatedSession = await this.sessions.update(
@@ -179,9 +217,10 @@ class SessionService {
         { returnNew: true }
       );
 
+      logger.info(`Session ${sessionId} kept alive successfully`);
       return updatedSession.new;
     } catch (error) {
-      console.error(`Error keeping session ${sessionId} alive:`, error);
+      logger.error(`Error keeping session ${sessionId} alive:`, error);
       throw error;
     }
   }
@@ -194,6 +233,8 @@ class SessionService {
    */
   async getUserSessions(userId, activeOnly = false) {
     try {
+      logger.info(`Fetching sessions for user ${userId}${activeOnly ? ' (active only)' : ''}`);
+
       let query;
       
       if (activeOnly) {
@@ -214,9 +255,11 @@ class SessionService {
       }
 
       const cursor = await this.db.query(query);
-      return await cursor.all();
+      const sessions = await cursor.all();
+      logger.info(`Found ${sessions.length} sessions for user ${userId}`);
+      return sessions;
     } catch (error) {
-      console.error(`Error getting sessions for user ${userId}:`, error);
+      logger.error(`Error getting sessions for user ${userId}:`, error);
       throw error;
     }
   }
@@ -228,9 +271,13 @@ class SessionService {
    */
   async getSession(sessionId) {
     try {
-      return await this.sessions.document(sessionId);
+      logger.info(`Fetching session ${sessionId}`);
+
+      const session = await this.sessions.document(sessionId);
+      logger.info(`Session ${sessionId} retrieved successfully`);
+      return session;
     } catch (error) {
-      console.error(`Error getting session ${sessionId}:`, error);
+      logger.error(`Error getting session ${sessionId}:`, error);
       throw error;
     }
   }
@@ -241,6 +288,8 @@ class SessionService {
    */
   async cleanupExpiredSessions() {
     try {
+      logger.info('Starting cleanup of expired sessions');
+
       const expirationTime = new Date(Date.now() - this.sessionExpirationTime).toISOString();
       
       // Find active sessions that have expired
@@ -262,12 +311,13 @@ class SessionService {
         endedCount++;
       }
       
+      logger.info(`Cleanup completed: ${expiredSessions.length} expired sessions found, ${endedCount} sessions ended`);
       return {
         expiredSessionsFound: expiredSessions.length,
         sessionsEnded: endedCount
       };
     } catch (error) {
-      console.error('Error cleaning up expired sessions:', error);
+      logger.error('Error cleaning up expired sessions:', error);
       throw error;
     }
   }
@@ -280,6 +330,8 @@ class SessionService {
    */
   async getSessionStats(startDate, endDate) {
     try {
+      logger.info(`Fetching session statistics from ${startDate} to ${endDate}`);
+
       const query = aql`
         LET totalSessions = (
           FOR session IN sessions
@@ -329,9 +381,11 @@ class SessionService {
       `;
       
       const cursor = await this.db.query(query);
-      return await cursor.next();
+      const stats = await cursor.next();
+      logger.info('Session statistics retrieved successfully:', stats);
+      return stats;
     } catch (error) {
-      console.error('Error getting session statistics:', error);
+      logger.error('Error getting session statistics:', error);
       throw error;
     }
   }

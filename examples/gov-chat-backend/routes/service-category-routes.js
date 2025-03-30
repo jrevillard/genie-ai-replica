@@ -1,9 +1,28 @@
-// service-category-routes.js
 const express = require('express');
 const router = express.Router();
 const ServiceCategoryService = require('../services/service-category-service');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 const serviceCategoryService = new ServiceCategoryService();
+
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 /**
  * @swagger
@@ -43,10 +62,11 @@ const serviceCategoryService = new ServiceCategoryService();
 router.get('/', async (req, res) => {
   try {
     const locale = req.query.locale || 'en';
+    logger.info(`Fetching all service categories with locale: ${locale}`);
     const categories = await serviceCategoryService.getAllCategoriesWithServices(locale);
     res.json(categories);
   } catch (error) {
-    console.error('Error getting all categories with services:', error);
+    logger.error(`Error getting all categories with services: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -95,13 +115,14 @@ router.get('/', async (req, res) => {
 router.get('/:categoryKey', async (req, res) => {
   try {
     const locale = req.query.locale || 'en';
+    logger.info(`Fetching category ${req.params.categoryKey} with locale: ${locale}`);
     const category = await serviceCategoryService.getCategoryWithServices(req.params.categoryKey, locale);
     res.json(category);
   } catch (error) {
     if (error.message.includes('not found')) {
       res.status(404).json({ message: error.message });
     } else {
-      console.error(`Error getting category ${req.params.categoryKey}:`, error);
+      logger.error(`Error getting category ${req.params.categoryKey}: ${error.message}`, error);
       res.status(500).json({ message: error.message });
     }
   }
@@ -171,13 +192,15 @@ router.get('/search', async (req, res) => {
     const { q, locale = 'en' } = req.query;
     
     if (!q) {
+      logger.warn('Search query missing in /service-categories/search');
       return res.status(400).json({ message: 'Search query is required' });
     }
     
+    logger.info(`Searching categories and services with query: "${q}" and locale: ${locale}`);
     const results = await serviceCategoryService.searchCategoriesAndServices(q, locale);
     res.json(results);
   } catch (error) {
-    console.error('Error searching categories and services:', error);
+    logger.error(`Error searching categories and services: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -233,13 +256,15 @@ router.post('/', async (req, res) => {
     const { categories, locale = 'en' } = req.body;
     
     if (!categories || !Array.isArray(categories)) {
+      logger.warn('Categories array missing or invalid in /service-categories POST');
       return res.status(400).json({ message: 'Categories array is required' });
     }
     
+    logger.info(`Creating/updating categories with locale: ${locale}, count: ${categories.length}`);
     const result = await serviceCategoryService.upsertCategories(categories, locale);
     res.json(result);
   } catch (error) {
-    console.error('Error creating/updating categories:', error);
+    logger.error(`Error creating/updating categories: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -268,17 +293,19 @@ router.post('/', async (req, res) => {
  */
 router.delete('/:categoryKey', async (req, res) => {
   try {
+    logger.info(`Attempting to delete category: ${req.params.categoryKey}`);
     // Check if category exists first
     const exists = await serviceCategoryService.categoryExists(req.params.categoryKey);
     
     if (!exists) {
+      logger.warn(`Category ${req.params.categoryKey} not found for deletion`);
       return res.status(404).json({ message: `Category ${req.params.categoryKey} not found` });
     }
     
     await serviceCategoryService.deleteCategory(req.params.categoryKey);
     res.json({ message: `Category ${req.params.categoryKey} deleted successfully` });
   } catch (error) {
-    console.error(`Error deleting category ${req.params.categoryKey}:`, error);
+    logger.error(`Error deleting category ${req.params.categoryKey}: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -307,10 +334,11 @@ router.delete('/:categoryKey', async (req, res) => {
  */
 router.post('/init', async (req, res) => {
   try {
+    logger.info('Initializing default categories and services');
     const result = await serviceCategoryService.initializeDefaultCategoriesAndServices();
     res.json(result);
   } catch (error) {
-    console.error('Error initializing default categories:', error);
+    logger.error(`Error initializing default categories: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });

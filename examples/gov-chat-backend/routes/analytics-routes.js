@@ -2,8 +2,28 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsService = require('../services/analytics-service');
 const analyticsController = require('../controllers/analyticsController');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 const analyticsService = new AnalyticsService();
+
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 /**
  * @swagger
@@ -102,12 +122,12 @@ router.get('/dashboard', async (req, res) => {
     const endDate = req.query.endDate || new Date().toISOString();
     const locale = req.query.locale || 'en';
     
-    console.log(`Getting dashboard analytics from ${startDate} to ${endDate} with locale ${locale}`);
+    logger.info(`Getting dashboard analytics from ${startDate} to ${endDate} with locale ${locale}`);
     const analytics = await analyticsService.getDashboardAnalytics(startDate, endDate, locale);
     
     res.json(analytics);
   } catch (error) {
-    console.error('Error getting dashboard analytics:', error);
+    logger.error(`Error getting dashboard analytics: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -158,7 +178,10 @@ router.get('/dashboard', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get('/metric/:metric', analyticsController.getMetric);
+router.get('/metric/:metric', (req, res, next) => {
+  logger.info(`Fetching metric: ${req.params.metric} from ${req.query.startDate} to ${req.query.endDate}`);
+  analyticsController.getMetric(req, res, next);
+});
 
 /**
  * @swagger
@@ -224,13 +247,12 @@ router.get('/', async (req, res) => {
     const filters = req.query.filters ? JSON.parse(req.query.filters) : {};
     const locale = req.query.locale || 'en';
     
-    console.log(`Getting analytics from ${startDate} to ${endDate} with filters:`, filters);
-    console.log(`Using locale: ${locale}`);
+    logger.info(`Getting analytics from ${startDate || 'unspecified'} to ${endDate || 'unspecified'} with filters: ${JSON.stringify(filters)} and locale: ${locale}`);
     const analytics = await analyticsService.getAnalytics(filters, startDate, endDate);
     
     res.json(analytics);
   } catch (error) {
-    console.error('Error getting analytics:', error);
+    logger.error(`Error getting analytics: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -289,7 +311,10 @@ router.get('/', async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get('/timeseries/:metricType', analyticsController.getTimeSeriesData);
+router.get('/timeseries/:metricType', (req, res, next) => {
+  logger.info(`Fetching time series data for metricType: ${req.params.metricType}, interval: ${req.query.interval || 'daily'}, from ${req.query.startDate} to ${req.query.endDate}`);
+  analyticsController.getTimeSeriesData(req, res, next);
+});
 
 /**
  * @swagger
@@ -334,14 +359,15 @@ router.post('/events', async (req, res) => {
     const { userId, eventType, eventData } = req.body;
     
     if (!userId || !eventType) {
+      logger.warn(`Missing required fields in event tracking: userId=${userId}, eventType=${eventType}`);
       return res.status(400).json({ message: 'userId and eventType are required' });
     }
     
-    console.log(`Recording event of type ${eventType} for user ${userId}`);
+    logger.info(`Recording event of type ${eventType} for user ${userId}`);
     const result = await analyticsService.trackEvent(userId, eventType, eventData || {});
     res.status(201).json(result);
   } catch (error) {
-    console.error('Error recording event:', error);
+    logger.error(`Error recording event: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -383,9 +409,8 @@ router.get('/records', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
     
-    console.log(`Getting analytics records with limit ${limit} and offset ${offset}`);
+    logger.info(`Getting analytics records with limit ${limit} and offset ${offset}`);
     
-    // Query analytics collection directly
     const cursor = await analyticsService.db.query(`
       FOR a IN analytics
         SORT a.timestamp DESC
@@ -396,7 +421,7 @@ router.get('/records', async (req, res) => {
     const records = await cursor.all();
     res.json(records);
   } catch (error) {
-    console.error('Error retrieving analytics records:', error);
+    logger.error(`Error retrieving analytics records: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -438,9 +463,8 @@ router.get('/events', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
     
-    console.log(`Getting event records with limit ${limit} and offset ${offset}`);
+    logger.info(`Getting event records with limit ${limit} and offset ${offset}`);
     
-    // Query events collection directly
     const cursor = await analyticsService.db.query(`
       FOR e IN events
         SORT e.timestamp DESC
@@ -451,7 +475,7 @@ router.get('/events', async (req, res) => {
     const events = await cursor.all();
     res.json(events);
   } catch (error) {
-    console.error('Error retrieving events records:', error);
+    logger.error(`Error retrieving events records: ${error.message}`, error);
     res.status(500).json({ message: error.message });
   }
 });

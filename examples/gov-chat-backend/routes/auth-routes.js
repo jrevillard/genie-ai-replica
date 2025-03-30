@@ -1,9 +1,28 @@
-// auth-routes.js
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth-middleware');
 const path = require('path');
+const { createLogger, format, transports } = require('winston'); // Import Winston
+
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 /**
  * @swagger
@@ -46,7 +65,10 @@ const path = require('path');
  *       500:
  *         description: Registration failed
  */
-router.post('/register', authController.register);
+router.post('/register', (req, res, next) => {
+  logger.info(`Register request for loginName: ${req.body.loginName}, email: ${req.body.email}`);
+  authController.register(req, res, next);
+});
 
 /**
  * @swagger
@@ -81,7 +103,10 @@ router.post('/register', authController.register);
  *       500:
  *         description: Login failed
  */
-router.post('/login', authController.login);
+router.post('/login', (req, res, next) => {
+  logger.info(`Login attempt for loginName: ${req.body.loginName}`);
+  authController.login(req, res, next);
+});
 
 /**
  * @swagger
@@ -100,7 +125,10 @@ router.post('/login', authController.login);
  *       500:
  *         description: Logout failed
  */
-router.post('/logout', authMiddleware.authenticate, authController.logout);
+router.post('/logout', authMiddleware.authenticate, (req, res, next) => {
+  logger.info(`Logout request for user: ${req.user?.loginName || 'unknown'}`);
+  authController.logout(req, res, next);
+});
 
 /**
  * @swagger
@@ -121,7 +149,10 @@ router.post('/logout', authMiddleware.authenticate, authController.logout);
  *       500:
  *         description: Failed to retrieve user information
  */
-router.get('/me', authMiddleware.authenticate, authController.getCurrentUser);
+router.get('/me', authMiddleware.authenticate, (req, res, next) => {
+  logger.info(`Fetching current user info for: ${req.user?.loginName || 'unknown'}`);
+  authController.getCurrentUser(req, res, next);
+});
 
 /**
  * @swagger
@@ -141,7 +172,10 @@ router.get('/me', authMiddleware.authenticate, authController.getCurrentUser);
  *       302:
  *         description: Redirects to login page with verification status
  */
-router.get('/verify-email/:token', authController.verifyEmail);
+router.get('/verify-email/:token', (req, res, next) => {
+  logger.info(`Email verification attempt with token: ${req.params.token}`);
+  authController.verifyEmail(req, res, next);
+});
 
 /**
  * @swagger
@@ -162,9 +196,9 @@ router.get('/verify-email/:token', authController.verifyEmail);
  *         description: Serves the SPA to handle verification result
  */
 router.get('/verify-email-success', (req, res) => {
-    // Serve the frontend SPA to handle this route
-    res.sendFile(path.resolve(__dirname, '../../dist/index.html'));
-  });
+  logger.info(`Serving email verification result page with status: ${req.query.status || 'unknown'}`);
+  res.sendFile(path.resolve(__dirname, '../../dist/index.html'));
+});
 
 /**
  * @swagger
@@ -194,7 +228,10 @@ router.get('/verify-email-success', (req, res) => {
  *       500:
  *         description: Failed to send verification email
  */
-router.post('/resend-verification', authController.resendVerificationEmail);
+router.post('/resend-verification', (req, res, next) => {
+  logger.info(`Resend verification email request for: ${req.body.email}`);
+  authController.resendVerificationEmail(req, res, next);
+});
 
 /**
  * @swagger
@@ -224,7 +261,10 @@ router.post('/resend-verification', authController.resendVerificationEmail);
  *       500:
  *         description: Password reset initiation failed
  */
-router.post('/reset-password', authController.initiatePasswordReset);
+router.post('/reset-password', (req, res, next) => {
+  logger.info(`Password reset request initiated for: ${req.body.email}`);
+  authController.initiatePasswordReset(req, res, next);
+});
 
 /**
  * @swagger
@@ -257,7 +297,10 @@ router.post('/reset-password', authController.initiatePasswordReset);
  *       500:
  *         description: Token validation failed
  */
-router.post('/validate-token', authController.validateResetToken);
+router.post('/validate-token', (req, res, next) => {
+  logger.info(`Validating password reset token: ${req.body.token}`);
+  authController.validateResetToken(req, res, next);
+});
 
 /**
  * @swagger
@@ -294,7 +337,10 @@ router.post('/validate-token', authController.validateResetToken);
  *       500:
  *         description: Password reset failed
  */
-router.post('/reset-password/confirm', authController.resetPassword);
+router.post('/reset-password/confirm', (req, res, next) => {
+  logger.info(`Confirming password reset with token: ${req.body.token}`);
+  authController.resetPassword(req, res, next);
+});
 
 /**
  * @swagger
@@ -331,7 +377,10 @@ router.post('/reset-password/confirm', authController.resetPassword);
  *       500:
  *         description: Password change failed
  */
-router.post('/change-password', authMiddleware.authenticate, authController.changePassword);
+router.post('/change-password', authMiddleware.authenticate, (req, res, next) => {
+  logger.info(`Password change request for user: ${req.user?.loginName || 'unknown'}`);
+  authController.changePassword(req, res, next);
+});
 
 /**
  * @swagger
@@ -350,6 +399,9 @@ router.post('/change-password', authMiddleware.authenticate, authController.chan
  *       500:
  *         description: Cleanup failed
  */
-router.post('/cleanup-tokens', authMiddleware.authenticate, authMiddleware.isAdmin, authController.cleanupExpiredTokens);
+router.post('/cleanup-tokens', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res, next) => {
+  logger.info(`Token cleanup request by admin: ${req.user?.loginName || 'unknown'}`);
+  authController.cleanupExpiredTokens(req, res, next);
+});
 
 module.exports = router;

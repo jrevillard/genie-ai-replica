@@ -1,14 +1,34 @@
-// user-profile-service.js
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
+const { createLogger, format, transports } = require('winston'); // Import Winston
+
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
+
+// Set up Winston logger (consistent with other files)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 class UserProfileService {
   constructor() {
@@ -19,7 +39,9 @@ class UserProfileService {
     // Ensure uploads directory exists
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
+      logger.info(`Created uploads directory at ${this.uploadDir}`);
     }
+    logger.info('UserProfileService initialized');
   }
 
   /**
@@ -30,17 +52,19 @@ class UserProfileService {
    */
   async createUserProfile(profileData, files = {}) {
     try {
+      logger.info('Creating user profile');
+
       // Ensure profileData is an object
       if (typeof profileData === 'string') {
         try {
           profileData = JSON.parse(profileData);
         } catch (error) {
-          console.error('Error parsing profile data string:', error);
+          logger.error('Error parsing profile data string:', error);
           profileData = {};
         }
       }
 
-      console.log('Creating user profile with data:', JSON.stringify(profileData).substring(0, 100) + '...');
+      logger.info('Creating user profile with data:', JSON.stringify(profileData).substring(0, 100) + '...');
 
       // Create a minimal document first - let ArangoDB generate the key
       const basicDoc = {
@@ -53,10 +77,10 @@ class UserProfileService {
         basicDoc.personalIdentification = profileData.personalIdentification;
       }
 
-      console.log('Creating basic user document...');
+      logger.info('Creating basic user document...');
       const user = await this.users.save(basicDoc);
       const userId = user._key;
-      console.log(`User created with auto-generated key: ${userId}`);
+      logger.info(`User created with auto-generated key: ${userId}`);
 
       // Process and store file uploads if any
       const processedData = await this.processProfileData(profileData, files, userId);
@@ -66,14 +90,16 @@ class UserProfileService {
 
       // Update with full processed data
       if (Object.keys(processedData).length > 0) {
-        console.log(`Updating user ${userId} with full profile data...`);
+        logger.info(`Updating user ${userId} with full profile data...`);
         const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
+        logger.info(`User profile ${userId} created successfully`);
         return updatedUser.new;
       }
 
+      logger.info(`User profile ${userId} created successfully`);
       return user;
     } catch (error) {
-      console.error('Error creating user profile:', error);
+      logger.error('Error creating user profile:', error);
       throw error;
     }
   }
@@ -87,12 +113,14 @@ class UserProfileService {
    */
   async updateUserProfile(userId, profileData, files = {}) {
     try {
+      logger.info(`Updating user profile for user ${userId}`);
+
       // Ensure profileData is an object
       if (typeof profileData === 'string') {
         try {
           profileData = JSON.parse(profileData);
         } catch (error) {
-          console.error('Error parsing profile data string:', error);
+          logger.error('Error parsing profile data string:', error);
           profileData = {};
         }
       }
@@ -100,6 +128,7 @@ class UserProfileService {
       // Check if user exists
       const userExists = await this.userExists(userId);
       if (!userExists) {
+        logger.warn(`User with ID ${userId} not found`);
         throw new Error(`User with ID ${userId} not found`);
       }
 
@@ -115,9 +144,10 @@ class UserProfileService {
       // Update the user document
       const updatedUser = await this.users.update(userId, processedData, { returnNew: true });
 
+      logger.info(`User profile ${userId} updated successfully`);
       return updatedUser.new;
     } catch (error) {
-      console.error(`Error updating user profile ${userId}:`, error);
+      logger.error(`Error updating user profile ${userId}:`, error);
       throw error;
     }
   }
@@ -129,10 +159,13 @@ class UserProfileService {
    */
   async getUserProfile(userId) {
     try {
+      logger.info(`Fetching user profile for user ${userId}`);
+
       const user = await this.users.document(userId);
+      logger.info(`User profile ${userId} retrieved successfully`);
       return user;
     } catch (error) {
-      console.error(`Error getting user profile ${userId}:`, error);
+      logger.error(`Error getting user profile ${userId}:`, error);
       throw error;
     }
   }
@@ -144,18 +177,22 @@ class UserProfileService {
    */
   async deleteUserProfile(userId) {
     try {
+      logger.info(`Deleting user profile for user ${userId}`);
+
       // Get user to check for file paths to delete
       const user = await this.getUserProfile(userId);
 
       // Delete user files
       await this.deleteUserFiles(user);
+      logger.info(`User files deleted for user ${userId}`);
 
       // Delete user document
       const result = await this.users.remove(userId);
+      logger.info(`User profile ${userId} deleted successfully`);
 
       return result;
     } catch (error) {
-      console.error(`Error deleting user profile ${userId}:`, error);
+      logger.error(`Error deleting user profile ${userId}:`, error);
       throw error;
     }
   }
@@ -167,27 +204,35 @@ class UserProfileService {
    */
   async userExists(userId) {
     try {
+      logger.info(`Checking if user ${userId} exists`);
+
       await this.users.document(userId);
+      logger.info(`User ${userId} exists`);
       return true;
     } catch (error) {
       if (error.code === 404) {
+        logger.info(`User ${userId} does not exist`);
         return false;
       }
+      logger.error(`Error checking if user ${userId} exists:`, error);
       throw error;
     }
   }
 
   /**
- * Initiate email change process
- * @param {String} userId - User ID
- * @param {String} newEmail - New email address
- * @returns {Promise<Object>} Operation result
- */
+   * Initiate email change process
+   * @param {String} userId - User ID
+   * @param {String} newEmail - New email address
+   * @returns {Promise<Object>} Operation result
+   */
   async initiateEmailChange(userId, newEmail) {
     try {
+      logger.info(`Initiating email change for user ${userId} to ${newEmail}`);
+
       // Check if user exists
       const user = await this.getUserProfile(userId);
       if (!user) {
+        logger.warn(`User with ID ${userId} not found`);
         throw new Error(`User with ID ${userId} not found`);
       }
 
@@ -205,17 +250,19 @@ class UserProfileService {
 
       // Update user document with pending email change
       await this.users.update(userId, updateData);
+      logger.info(`Pending email change updated for user ${userId}`);
 
       // Send verification email to the new email address
       const userName = user.personalIdentification?.fullName || user.loginName || 'User';
       await emailService.sendVerificationEmail(newEmail, token, userName);
+      logger.info(`Verification email sent to ${newEmail} for user ${userId}`);
 
       return {
         success: true,
         message: 'Verification email sent to new address'
       };
     } catch (error) {
-      console.error(`Error initiating email change for user ${userId}:`, error);
+      logger.error(`Error initiating email change for user ${userId}:`, error);
       throw error;
     }
   }
@@ -228,12 +275,14 @@ class UserProfileService {
    * @returns {Promise<Object>} Processed profile data
    */
   async processProfileData(profileData, files, userId) {
+    logger.info(`Processing profile data for user ${userId}`);
+
     // Ensure profileData is an object
     if (typeof profileData === 'string') {
       try {
         profileData = JSON.parse(profileData);
       } catch (error) {
-        console.error('Error parsing profile data in processProfileData:', error);
+        logger.error('Error parsing profile data in processProfileData:', error);
         profileData = {};
       }
     }
@@ -287,15 +336,17 @@ class UserProfileService {
               const fileUrl = await this.storeFile(file, userId, `${section}-${fieldName}`);
               if (fileUrl) {
                 processedData[section][`${fieldName}Url`] = fileUrl;
+                logger.info(`Stored file for ${section}-${fieldName} for user ${userId}: ${fileUrl}`);
               }
             } catch (error) {
-              console.error(`Error storing file for field ${section}-${fieldName}:`, error);
+              logger.error(`Error storing file for field ${section}-${fieldName}:`, error);
             }
           }
         }
       }
     }
 
+    logger.info(`Profile data processed for user ${userId}`);
     return processedData;
   }
 
@@ -308,10 +359,13 @@ class UserProfileService {
    */
   async storeFile(file, userId, fieldName) {
     try {
+      logger.info(`Storing file for user ${userId}, field ${fieldName}`);
+
       // Create user directory if it doesn't exist
       const userDir = path.join(this.uploadDir, userId);
       if (!fs.existsSync(userDir)) {
         fs.mkdirSync(userDir, { recursive: true });
+        logger.info(`Created user directory for user ${userId} at ${userDir}`);
       }
 
       // Generate a unique filename
@@ -332,9 +386,11 @@ class UserProfileService {
       }
 
       // Return file URL (relative to upload dir)
-      return `/uploads/${userId}/${fileName}`;
+      const fileUrl = `/uploads/${userId}/${fileName}`;
+      logger.info(`File stored successfully for user ${userId}: ${fileUrl}`);
+      return fileUrl;
     } catch (error) {
-      console.error(`Error storing file for user ${userId}:`, error);
+      logger.error(`Error storing file for user ${userId}:`, error);
       return null; // Return null instead of throwing to prevent the entire process from failing
     }
   }
@@ -348,10 +404,15 @@ class UserProfileService {
     const userId = user._key;
     const userDir = path.join(this.uploadDir, userId);
 
+    logger.info(`Deleting user files for user ${userId}`);
+
     // Check if user directory exists
     if (fs.existsSync(userDir)) {
       // Delete all files in the directory
       await fs.promises.rm(userDir, { recursive: true, force: true });
+      logger.info(`User directory deleted for user ${userId}`);
+    } else {
+      logger.info(`No user directory found for user ${userId}`);
     }
   }
 
@@ -364,6 +425,8 @@ class UserProfileService {
    */
   async searchUsers(criteria, limit = 20, offset = 0) {
     try {
+      logger.info('Searching users with criteria:', criteria);
+
       const bindVars = { limit, offset };
       let filterConditions = [];
 
@@ -430,6 +493,7 @@ class UserProfileService {
       const countCursor = await this.db.query(countQuery);
       const totalCount = await countCursor.next() || 0;
 
+      logger.info(`Found ${users.length} users matching criteria`);
       return {
         users,
         pagination: {
@@ -441,35 +505,35 @@ class UserProfileService {
         }
       };
     } catch (error) {
-      console.error('Error searching users:', error);
+      logger.error('Error searching users:', error);
       throw error;
     }
   }
 
   /**
- * Check if an email is available (not used by another user)
- * @param {String} email - Email to check
- * @returns {Promise<Boolean>} True if email is available, false if already in use
- */
+   * Check if an email is available (not used by another user)
+   * @param {String} email - Email to check
+   * @returns {Promise<Boolean>} True if email is available, false if already in use
+   */
   async isEmailAvailable(email) {
     try {
-      console.log(`Checking if email ${email} is available`);
+      logger.info(`Checking if email ${email} is available`);
 
       const query = aql`
-      FOR u IN users
-        FILTER u.email == ${email}
-        RETURN u
-    `;
+        FOR u IN users
+          FILTER u.email == ${email}
+          RETURN u
+      `;
 
       const cursor = await this.db.query(query);
       const existingUser = await cursor.next();
 
       const isAvailable = !existingUser;
-      console.log(`Email ${email} is ${isAvailable ? 'available' : 'already in use'}`);
+      logger.info(`Email ${email} is ${isAvailable ? 'available' : 'already in use'}`);
 
       return isAvailable;
     } catch (error) {
-      console.error('Error checking email availability:', error);
+      logger.error('Error checking email availability:', error);
       return false; // Default to unavailable on error for safety
     }
   }
@@ -481,12 +545,13 @@ class UserProfileService {
    */
   async resetUserData(userId) {
     try {
-      console.log(`[USER PROFILE SERVICE] Resetting data for user: ${userId}`);
+      logger.info(`[USER PROFILE SERVICE] Resetting data for user: ${userId}`);
 
       // Get current user document
       const currentUserDoc = await this.getUserProfile(userId);
 
       if (!currentUserDoc) {
+        logger.warn(`User with ID ${userId} not found`);
         throw new Error(`User with ID ${userId} not found`);
       }
 
@@ -503,7 +568,7 @@ class UserProfileService {
       };
 
       // Log which fields we're preserving
-      console.log(`[USER PROFILE SERVICE] Preserving fields: ${Object.keys(preservedData).join(', ')}`);
+      logger.info(`[USER PROFILE SERVICE] Preserving fields: ${Object.keys(preservedData).join(', ')}`);
 
       // Check if there are any uploaded files to clean up
       await this.deleteUserFiles(currentUserDoc);
@@ -513,9 +578,9 @@ class UserProfileService {
       try {
         // Use replace operation which completely replaces the document
         await this.users.replace(userId, preservedData);
-        console.log(`[USER PROFILE SERVICE] User document replaced successfully`);
+        logger.info(`[USER PROFILE SERVICE] User document replaced successfully`);
       } catch (replaceError) {
-        console.warn(`[USER PROFILE SERVICE] Replace operation failed, falling back to update: ${replaceError.message}`);
+        logger.warn(`[USER PROFILE SERVICE] Replace operation failed, falling back to update: ${replaceError.message}`);
 
         // Fallback to update with options that make it act like replace
         await this.users.update(userId, preservedData, {
@@ -523,10 +588,10 @@ class UserProfileService {
           mergeObjects: false,  // Don't merge with existing document
           overwrite: true       // Completely overwrite the document
         });
-        console.log(`[USER PROFILE SERVICE] User document updated with overwrite`);
+        logger.info(`[USER PROFILE SERVICE] User document updated with overwrite`);
       }
 
-      console.log(`[USER PROFILE SERVICE] User data reset completed for user: ${userId}`);
+      logger.info(`[USER PROFILE SERVICE] User data reset completed for user: ${userId}`);
 
       return {
         userId,
@@ -534,26 +599,30 @@ class UserProfileService {
         success: true
       };
     } catch (error) {
-      console.error(`[USER PROFILE SERVICE] Error resetting user data for ${userId}:`, error);
+      logger.error(`[USER PROFILE SERVICE] Error resetting user data for ${userId}:`, error);
       throw error;
     }
   }
 
   /**
- * Permanently delete a user account
- * @param {String} userId - User ID
- * @returns {Promise<Object>} Result of the deletion operation
- */
+   * Permanently delete a user account
+   * @param {String} userId - User ID
+   * @returns {Promise<Object>} Result of the deletion operation
+   */
   async deleteUserAccountPermanently(userId) {
     try {
+      logger.info(`Permanently deleting user account for user ${userId}`);
+
       // Get user document
       const user = await this.getUserProfile(userId);
       if (!user) {
+        logger.warn(`User with ID ${userId} not found`);
         throw new Error(`User not found`);
       }
 
       // Delete user files
       await this.deleteUserFiles(user);
+      logger.info(`User files deleted for user ${userId}`);
 
       // Delete related tokens
       try {
@@ -562,32 +631,33 @@ class UserProfileService {
 
         // Delete tokens
         const verifyQuery = aql`
-        FOR t IN verificationTokens
-          FILTER t.userId == ${'users/' + userId}
-          REMOVE t IN verificationTokens
-      `;
+          FOR t IN verificationTokens
+            FILTER t.userId == ${'users/' + userId}
+            REMOVE t IN verificationTokens
+        `;
         const resetQuery = aql`
-        FOR t IN passwordResetTokens
-          FILTER t.userId == ${'users/' + userId}
-          REMOVE t IN passwordResetTokens
-      `;
+          FOR t IN passwordResetTokens
+            FILTER t.userId == ${'users/' + userId}
+            REMOVE t IN passwordResetTokens
+        `;
 
         await this.db.query(verifyQuery);
         await this.db.query(resetQuery);
+        logger.info(`Related tokens deleted for user ${userId}`);
       } catch (error) {
-        console.warn(`Error cleaning related data: ${error.message}`);
+        logger.warn(`Error cleaning related data: ${error.message}`);
       }
 
       // Delete user document
       await this.users.remove(userId);
+      logger.info(`User account ${userId} permanently deleted`);
 
       return { userId, success: true, deletedAt: new Date().toISOString() };
     } catch (error) {
-      console.error(`Error deleting account for ${userId}:`, error);
+      logger.error(`Error deleting account for ${userId}:`, error);
       throw error;
     }
   }
-
 }
 
 module.exports = UserProfileService;

@@ -1,11 +1,30 @@
-// service-category-service.js
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
+
+// Set up Winston logger (consistent with other files)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
 
 class ServiceCategoryService {
   constructor() {
@@ -13,6 +32,7 @@ class ServiceCategoryService {
     this.serviceCategories = this.db.collection('serviceCategories');
     this.services = this.db.collection('services');
     this.categoryServices = this.db.collection('categoryServices');
+    logger.info('ServiceCategoryService initialized');
   }
 
   /**
@@ -23,17 +43,17 @@ class ServiceCategoryService {
    */
   async upsertCategories(categories, locale = 'en') {
     try {
-      console.log(`Upserting ${categories.length} categories for locale ${locale}`);
+      logger.info(`Upserting ${categories.length} categories for locale ${locale}`);
       const results = [];
       const nameField = `name${locale.toUpperCase()}`;
 
       for (let i = 0; i < categories.length; i++) {
         const category = categories[i];
-        console.log(`Processing category ${i + 1}/${categories.length}: ${category.name}`);
+        logger.info(`Processing category ${i + 1}/${categories.length}: ${category.name}`);
         
         // Skip invalid categories
         if (!category || typeof category !== 'object') {
-          console.log(`Skipping invalid category at index ${i}`);
+          logger.warn(`Skipping invalid category at index ${i}`);
           continue;
         }
         
@@ -46,34 +66,35 @@ class ServiceCategoryService {
         // Set the locale-specific name
         categoryDoc[nameField] = category.name || `Category ${i + 1}`;
         
-        console.log(`Creating category with name: ${categoryDoc[nameField]}`);
+        logger.info(`Creating category with name: ${categoryDoc[nameField]}`);
         try {
           // Let ArangoDB generate the _key
           const newCategory = await this.serviceCategories.save(categoryDoc);
           results.push(newCategory);
-          console.log(`Category created successfully with key: ${newCategory._key}`);
+          logger.info(`Category created successfully with key: ${newCategory._key}`);
           
           // Handle children (services)
           if (category.children && Array.isArray(category.children)) {
-            console.log(`Processing ${category.children.length} services for category ${newCategory._key}`);
+            logger.info(`Processing ${category.children.length} services for category ${newCategory._key}`);
             
             try {
               await this.upsertServices(newCategory._key, category.children, locale);
-              console.log(`Services for ${newCategory._key} processed successfully`);
+              logger.info(`Services for ${newCategory._key} processed successfully`);
             } catch (servicesError) {
-              console.error(`Error processing services for ${newCategory._key}:`, servicesError);
+              logger.error(`Error processing services for ${newCategory._key}:`, servicesError);
             }
           } else {
-            console.log(`No services to process for category ${newCategory._key}`);
+            logger.info(`No services to process for category ${newCategory._key}`);
           }
         } catch (categoryError) {
-          console.error(`Error creating category ${category.name}:`, categoryError);
+          logger.error(`Error creating category ${category.name}:`, categoryError);
         }
       }
       
+      logger.info(`Upserted ${results.length}/${categories.length} categories successfully`);
       return results;
     } catch (error) {
-      console.error('Error upserting categories:', error);
+      logger.error('Error upserting categories:', error);
       throw error;
     }
   }
@@ -87,19 +108,19 @@ class ServiceCategoryService {
    */
   async upsertServices(categoryKey, services, locale = 'en') {
     try {
-      console.log(`Starting upsertServices for category ${categoryKey} with ${services.length} services`);
+      logger.info(`Starting upsertServices for category ${categoryKey} with ${services.length} services`);
       const results = [];
       const nameField = `name${locale.toUpperCase()}`;
       
       // Ensure we have a valid category key
       if (!categoryKey) {
-        console.error('Invalid category key provided');
+        logger.error('Invalid category key provided');
         return [];
       }
       
       // Ensure we have a valid services array
       if (!Array.isArray(services)) {
-        console.error('Invalid services array:', services);
+        logger.error('Invalid services array:', services);
         return [];
       }
       
@@ -107,11 +128,11 @@ class ServiceCategoryService {
       for (let i = 0; i < services.length; i++) {
         const serviceName = String(services[i] || '').trim();
         if (!serviceName) {
-          console.log(`Skipping empty service at index ${i}`);
+          logger.warn(`Skipping empty service at index ${i}`);
           continue;
         }
         
-        console.log(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
+        logger.info(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
         
         try {
           // Create service document without explicit _key
@@ -123,10 +144,10 @@ class ServiceCategoryService {
           
           serviceDoc[nameField] = serviceName;
           
-          console.log(`Creating service: ${serviceName}`);
+          logger.info(`Creating service: ${serviceName}`);
           const newService = await this.services.save(serviceDoc);
           results.push(newService);
-          console.log(`Service "${serviceName}" created with key ${newService._key}`);
+          logger.info(`Service "${serviceName}" created with key ${newService._key}`);
           
           // Create edge from category to service
           const edgeDoc = {
@@ -135,18 +156,18 @@ class ServiceCategoryService {
             order: i + 1
           };
           
-          console.log(`Creating edge for service "${serviceName}"`);
+          logger.info(`Creating edge for service "${serviceName}"`);
           await this.categoryServices.save(edgeDoc);
-          console.log(`Edge created for service "${serviceName}"`);
+          logger.info(`Edge created for service "${serviceName}"`);
         } catch (createError) {
-          console.error(`Error creating service "${serviceName}":`, createError);
+          logger.error(`Error creating service "${serviceName}":`, createError);
         }
       }
       
-      console.log(`Processed ${results.length}/${services.length} services for category ${categoryKey}`);
+      logger.info(`Processed ${results.length}/${services.length} services for category ${categoryKey}`);
       return results;
     } catch (error) {
-      console.error(`Error upserting services for category ${categoryKey}:`, error);
+      logger.error(`Error upserting services for category ${categoryKey}:`, error);
       return [];
     }
   }
@@ -158,15 +179,21 @@ class ServiceCategoryService {
    */
   async categoryExists(categoryKey) {
     try {
-      if (!categoryKey) return false;
+      logger.info(`Checking if category ${categoryKey} exists`);
+      if (!categoryKey) {
+        logger.warn('Invalid category key provided');
+        return false;
+      }
       
       await this.serviceCategories.document(categoryKey);
+      logger.info(`Category ${categoryKey} exists`);
       return true;
     } catch (error) {
       if (error.code === 404) {
+        logger.info(`Category ${categoryKey} does not exist`);
         return false;
       }
-      console.error(`Error checking if category ${categoryKey} exists:`, error);
+      logger.error(`Error checking if category ${categoryKey} exists:`, error);
       return false;
     }
   }
@@ -178,6 +205,7 @@ class ServiceCategoryService {
    */
   async getAllCategoriesWithServices(locale = 'en') {
     try {
+      logger.info(`Fetching all categories with services for locale ${locale}`);
       const nameField = `name${locale.toUpperCase()}`;
       
       const query = aql`
@@ -200,9 +228,11 @@ class ServiceCategoryService {
       `;
       
       const cursor = await this.db.query(query);
-      return await cursor.all();
+      const categories = await cursor.all();
+      logger.info(`Retrieved ${categories.length} categories with services`);
+      return categories;
     } catch (error) {
-      console.error('Error getting all categories with services:', error);
+      logger.error('Error getting all categories with services:', error);
       throw error;
     }
   }
@@ -215,7 +245,9 @@ class ServiceCategoryService {
    */
   async getCategoryWithServices(categoryKey, locale = 'en') {
     try {
+      logger.info(`Fetching category ${categoryKey} with services for locale ${locale}`);
       if (!categoryKey) {
+        logger.warn('Invalid category key provided');
         throw new Error('Invalid category key');
       }
       
@@ -243,12 +275,14 @@ class ServiceCategoryService {
       const result = await cursor.next();
       
       if (!result) {
+        logger.warn(`Category ${categoryKey} not found`);
         throw new Error(`Category ${categoryKey} not found`);
       }
       
+      logger.info(`Retrieved category ${categoryKey} with services`);
       return result;
     } catch (error) {
-      console.error(`Error getting category ${categoryKey} with services:`, error);
+      logger.error(`Error getting category ${categoryKey} with services:`, error);
       throw error;
     }
   }
@@ -260,7 +294,9 @@ class ServiceCategoryService {
    */
   async deleteCategory(categoryKey) {
     try {
+      logger.info(`Deleting category ${categoryKey}`);
       if (!categoryKey) {
+        logger.warn('Invalid category key provided');
         throw new Error('Invalid category key');
       }
       
@@ -272,11 +308,14 @@ class ServiceCategoryService {
           REMOVE edge IN categoryServices
           REMOVE service IN services
       `);
+      logger.info(`Services and edges deleted for category ${categoryKey}`);
       
       // Delete the category
-      return await this.serviceCategories.remove(categoryKey);
+      const result = await this.serviceCategories.remove(categoryKey);
+      logger.info(`Category ${categoryKey} deleted successfully`);
+      return result;
     } catch (error) {
-      console.error(`Error deleting category ${categoryKey}:`, error);
+      logger.error(`Error deleting category ${categoryKey}:`, error);
       throw error;
     }
   }
@@ -289,7 +328,9 @@ class ServiceCategoryService {
    */
   async searchCategoriesAndServices(searchQuery, locale = 'en') {
     try {
+      logger.info(`Searching categories and services for query "${searchQuery}" in locale ${locale}`);
       if (!searchQuery) {
+        logger.info('No search query provided, returning empty results');
         return { categories: [], services: [] };
       }
       
@@ -329,9 +370,11 @@ class ServiceCategoryService {
       `;
       
       const cursor = await this.db.query(query);
-      return await cursor.next();
+      const result = await cursor.next();
+      logger.info(`Found ${result.categories.length} categories and ${result.services.length} services matching query`);
+      return result;
     } catch (error) {
-      console.error(`Error searching categories and services for "${searchQuery}":`, error);
+      logger.error(`Error searching categories and services for "${searchQuery}":`, error);
       return { categories: [], services: [] };
     }
   }
@@ -342,7 +385,7 @@ class ServiceCategoryService {
    */
   async initializeDefaultCategoriesAndServices() {
     try {
-      console.log('=== Starting initialization of default categories and services ===');
+      logger.info('=== Starting initialization of default categories and services ===');
       
       // Check if we already have categories
       let count = 0;
@@ -354,14 +397,14 @@ class ServiceCategoryService {
         `);
         
         count = await existingCategories.next();
-        console.log(`Found ${count} existing categories`);
+        logger.info(`Found ${count} existing categories`);
         
         if (count > 0) {
-          console.log('Categories already exist, skipping initialization');
+          logger.info('Categories already exist, skipping initialization');
           return { message: 'Categories already initialized', count };
         }
       } catch (countError) {
-        console.error('Error counting existing categories:', countError);
+        logger.error('Error counting existing categories:', countError);
         // Continue with initialization even if count fails
       }
       
@@ -434,15 +477,16 @@ class ServiceCategoryService {
         }
       ];
       
-      console.log(`Initializing ${defaultCategories.length} categories with auto-generated keys`);
+      logger.info(`Initializing ${defaultCategories.length} categories with auto-generated keys`);
       const result = await this.upsertCategories(defaultCategories, 'en');
       
+      logger.info(`Initialized ${result.length} categories and their services`);
       return { 
         message: 'Successfully initialized categories and services',
         categoriesCreated: result.length
       };
     } catch (error) {
-      console.error('Error initializing default categories and services:', error);
+      logger.error('Error initializing default categories and services:', error);
       throw error;
     }
   }

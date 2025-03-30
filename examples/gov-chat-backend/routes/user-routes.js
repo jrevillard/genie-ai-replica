@@ -4,11 +4,9 @@ const UserProfileService = require('../services/user-profile-service');
 const multer = require('multer');
 const crypto = require('crypto');
 const emailService = require('../services/email-service');
-// Get access to the auth middleware
 const authMiddleware = require('../middleware/auth-middleware'); // Adjust the path as needed
-// Import aql from ArangoDB
 const { aql } = require('arangojs');
-
+const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Configure multer for in-memory file storage
 const upload = multer({
@@ -20,88 +18,110 @@ const upload = multer({
 
 const userService = new UserProfileService();
 
-// IMPORTANT: Route order matters in Express!
-// The '/email' route must be defined BEFORE the '/:userId' route
-// Otherwise, Express will interpret 'email' as a userId parameter
+// Set up Winston logger (consistent with index.js)
+const logFormat = format.printf(({ level, message, timestamp }) => {
+  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+});
+
+const logger = createLogger({
+  level: 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new transports.Console(),
+    new transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new transports.File({ filename: 'logs/combined.log' })
+  ],
+});
+
+// Helper function to mask sensitive fields in the request body
+const maskSensitiveFields = (body) => {
+  const safeBody = { ...body };
+  if (safeBody.password) safeBody.password = '******';
+  if (safeBody.token) safeBody.token = '******';
+  if (safeBody.encPassword) safeBody.encPassword = '******';
+  return safeBody;
+};
 
 // Update user's email address with verification
 router.put('/email', authMiddleware.authenticate, async (req, res) => {
-  console.log('\n=======================================================');
-  console.log(`[EMAIL ROUTE DEBUG] ${new Date().toISOString()} - Email Update Route Entered (After Auth Middleware)`);
-  console.log('=======================================================');
+  logger.info('\n=======================================================');
+  logger.info(`[EMAIL ROUTE DEBUG] ${new Date().toISOString()} - Email Update Route Entered (After Auth Middleware)`);
+  logger.info('=======================================================');
   
   // Log the complete request
-  console.log('[EMAIL ROUTE DEBUG] Request method:', req.method);
-  console.log('[EMAIL ROUTE DEBUG] Request URL:', req.url);
-  console.log('[EMAIL ROUTE DEBUG] Request path:', req.path);
-  console.log('[EMAIL ROUTE DEBUG] Content-Type:', req.get('Content-Type'));
+  logger.info('[EMAIL ROUTE DEBUG] Request method:', req.method);
+  logger.info('[EMAIL ROUTE DEBUG] Request URL:', req.url);
+  logger.info('[EMAIL ROUTE DEBUG] Request path:', req.path);
+  logger.info('[EMAIL ROUTE DEBUG] Content-Type:', req.get('Content-Type'));
   
   // Log headers (excluding full auth token)
-  console.log('[EMAIL ROUTE DEBUG] Headers:');
+  logger.info('[EMAIL ROUTE DEBUG] Headers:');
   Object.keys(req.headers).forEach(key => {
     const value = key.toLowerCase() === 'authorization' 
       ? req.headers[key].substring(0, 20) + '...' 
       : req.headers[key];
-    console.log(`  ${key}: ${value}`);
+    logger.info(`  ${key}: ${value}`);
   });
   
   // Log request body with sensitive information masked
-  const safePrintBody = { ...req.body };
-  if (safePrintBody.password) safePrintBody.password = '******';
-  if (safePrintBody.token) safePrintBody.token = '******';
-  console.log('[EMAIL ROUTE DEBUG] Request body:', JSON.stringify(safePrintBody, null, 2));
+  const safePrintBody = maskSensitiveFields(req.body);
+  logger.info('[EMAIL ROUTE DEBUG] Request body:', JSON.stringify(safePrintBody, null, 2));
   
   try {
     const { email, password, userId } = req.body;
     
-    console.log(`[EMAIL ROUTE DEBUG] 📧 Email update request details:`);
-    console.log(`  - New email: ${email || 'undefined'}`);
-    console.log(`  - Password provided: ${password ? 'Yes' : 'No'}`);
-    console.log(`  - UserId from body: ${userId || 'undefined'}`);
+    logger.info(`[EMAIL ROUTE DEBUG] 📧 Email update request details:`);
+    logger.info(`  - New email: ${email || 'undefined'}`);
+    logger.info(`  - Password provided: ${password ? 'Yes' : 'No'}`);
+    logger.info(`  - UserId from body: ${userId || 'undefined'}`);
     
     // Critical check - has the auth middleware run properly?
-    console.log('[EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):', req.user ? 'PRESENT' : 'MISSING');
+    logger.info('[EMAIL ROUTE DEBUG] 🔍 Checking auth middleware result (req.user):', req.user ? 'PRESENT' : 'MISSING');
     
     // Check if we have all required fields
     if (!email) {
-      console.log('[EMAIL ROUTE DEBUG] ❌ Missing email in request');
+      logger.warn('[EMAIL ROUTE DEBUG] ❌ Missing email in request');
       return res.status(400).json({ error: 'Email is required' });
     }
     
     if (!password) {
-      console.log('[EMAIL ROUTE DEBUG] ❌ Missing password in request');
+      logger.warn('[EMAIL ROUTE DEBUG] ❌ Missing password in request');
       return res.status(400).json({ error: 'Password is required for email change verification' });
     }
     
     // At this point, req.user should be populated by the auth middleware
     if (!req.user) {
-      console.error('[EMAIL ROUTE DEBUG] ❌ No authenticated user found - auth middleware failed');
+      logger.error('[EMAIL ROUTE DEBUG] ❌ No authenticated user found - auth middleware failed');
       return res.status(401).json({ error: 'Authentication required' });
     }
     
-    console.log('[EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:', JSON.stringify(req.user));
+    logger.info('[EMAIL ROUTE DEBUG] 👤 Authenticated user set by middleware:', JSON.stringify(req.user));
     
     // Get user ID from the authenticated user object
     const authenticatedUserId = req.user._key || req.user.id || req.user._id || req.user.userId;
     
     if (!authenticatedUserId) {
-      console.error('[EMAIL ROUTE DEBUG] ❌ Could not determine user ID from authenticated user data');
-      console.log('[EMAIL ROUTE DEBUG] User data structure:', JSON.stringify(req.user));
+      logger.error('[EMAIL ROUTE DEBUG] ❌ Could not determine user ID from authenticated user data');
+      logger.info('[EMAIL ROUTE DEBUG] User data structure:', JSON.stringify(req.user));
       return res.status(401).json({ error: 'Could not determine user ID from authentication data' });
     }
     
-    console.log(`[EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: ${authenticatedUserId}`);
+    logger.info(`[EMAIL ROUTE DEBUG] ✅ Using authenticated user ID: ${authenticatedUserId}`);
     
     // If userId provided in body, check it matches the authenticated user
     if (userId && userId !== authenticatedUserId) {
-      console.log(`[EMAIL ROUTE DEBUG] ⚠️ WARNING: UserId in body (${userId}) does not match authenticated userId (${authenticatedUserId})`);
+      logger.warn(`[EMAIL ROUTE DEBUG] ⚠️ WARNING: UserId in body (${userId}) does not match authenticated userId (${authenticatedUserId})`);
       // You might choose to reject this request or just log the warning
     }
     
     // Validate that password is correct
     // This is a placeholder - implement your actual password verification
     try {
-      console.log('[EMAIL ROUTE DEBUG] 🔍 Verifying password...');
+      logger.info('[EMAIL ROUTE DEBUG] 🔍 Verifying password...');
       // Call your password verification method here
       // const isPasswordValid = await authService.verifyPassword(authenticatedUserId, password);
       
@@ -109,49 +129,49 @@ router.put('/email', authMiddleware.authenticate, async (req, res) => {
       const isPasswordValid = true;
       
       if (!isPasswordValid) {
-        console.log('[EMAIL ROUTE DEBUG] ❌ Password verification failed');
+        logger.warn('[EMAIL ROUTE DEBUG] ❌ Password verification failed');
         return res.status(401).json({ error: 'Invalid password' });
       }
       
-      console.log('[EMAIL ROUTE DEBUG] ✅ Password verified successfully');
+      logger.info('[EMAIL ROUTE DEBUG] ✅ Password verified successfully');
     } catch (passwordError) {
-      console.error(`[EMAIL ROUTE DEBUG] ❌ Password verification error: ${passwordError.message}`);
+      logger.error(`[EMAIL ROUTE DEBUG] ❌ Password verification error: ${passwordError.message}`, passwordError);
       return res.status(401).json({ error: 'Password verification failed' });
     }
     
     // Generate verification token for the email change
-    console.log('[EMAIL ROUTE DEBUG] 🔑 Generating verification token');
+    logger.info('[EMAIL ROUTE DEBUG] 🔑 Generating verification token');
     let token;
     try {
       token = crypto.randomBytes(32).toString('hex');
-      console.log(`[EMAIL ROUTE DEBUG] ✅ Token generated successfully: ${token.substring(0, 10)}...`);
+      logger.info(`[EMAIL ROUTE DEBUG] ✅ Token generated successfully: ${token.substring(0, 10)}...`);
     } catch (tokenError) {
-      console.error(`[EMAIL ROUTE DEBUG] ❌ Error generating token: ${tokenError.message}`);
+      logger.error(`[EMAIL ROUTE DEBUG] ❌ Error generating token: ${tokenError.message}`, tokenError);
       return res.status(500).json({ error: 'Failed to generate verification token' });
     }
     
     // Get user to verify existence and get user name
-    console.log(`[EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: ${authenticatedUserId}`);
+    logger.info(`[EMAIL ROUTE DEBUG] 🔍 Getting user profile for ID: ${authenticatedUserId}`);
     let user;
     try {
       user = await userService.getUserProfile(authenticatedUserId);
       
       if (!user) {
-        console.error(`[EMAIL ROUTE DEBUG] ❌ User ${authenticatedUserId} not found in database`);
+        logger.error(`[EMAIL ROUTE DEBUG] ❌ User ${authenticatedUserId} not found in database`);
         return res.status(404).json({ error: 'User not found in database' });
       }
       
-      console.log(`[EMAIL ROUTE DEBUG] ✅ User found in database: ${JSON.stringify({
+      logger.info(`[EMAIL ROUTE DEBUG] ✅ User found in database: ${JSON.stringify({
         id: user._key || user.id,
         email: user.email
       })}`);
     } catch (userError) {
-      console.error(`[EMAIL ROUTE DEBUG] ❌ Error fetching user profile: ${userError.message}`);
+      logger.error(`[EMAIL ROUTE DEBUG] ❌ Error fetching user profile: ${userError.message}`, userError);
       return res.status(500).json({ error: 'Error fetching user profile' });
     }
     
     // Add pending email change to user document
-    console.log('[EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change');
+    logger.info('[EMAIL ROUTE DEBUG] 📝 Creating update data for pending email change');
     const updateData = {
       pendingEmailChange: {
         email: email,
@@ -161,47 +181,45 @@ router.put('/email', authMiddleware.authenticate, async (req, res) => {
       updatedAt: new Date().toISOString()
     };
     
-    console.log(`[EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: ${JSON.stringify({
+    logger.info(`[EMAIL ROUTE DEBUG] 💾 Updating user document with pending email change: ${JSON.stringify({
       pendingEmailChange: { email, token: token.substring(0, 10) + '...' },
-      emailVerified: false, // Log this change
+      emailVerified: false,
       updatedAt: updateData.updatedAt
     })}`);
     
     try {
       await userService.users.update(authenticatedUserId, updateData);
-      console.log(`[EMAIL ROUTE DEBUG] ✅ User document updated successfully`);
+      logger.info(`[EMAIL ROUTE DEBUG] ✅ User document updated successfully`);
     } catch (updateError) {
-      console.error(`[EMAIL ROUTE DEBUG] ❌ Error updating user document: ${updateError.message}`);
+      logger.error(`[EMAIL ROUTE DEBUG] ❌ Error updating user document: ${updateError.message}`, updateError);
       return res.status(500).json({ error: 'Failed to update user document' });
     }
     
     // Send verification email
-    console.log('[EMAIL ROUTE DEBUG] 📧 Preparing to send verification email');
+    logger.info('[EMAIL ROUTE DEBUG] 📧 Preparing to send verification email');
     const userName = user.personalIdentification?.fullName || user.loginName || 'User';
     
     try {
       await emailService.sendVerificationEmail(email, token, userName);
-      console.log(`[EMAIL ROUTE DEBUG] ✅ Verification email sent to ${email}`);
+      logger.info(`[EMAIL ROUTE DEBUG] ✅ Verification email sent to ${email}`);
     } catch (emailError) {
-      console.error(`[EMAIL ROUTE DEBUG] ❌ Error sending verification email: ${emailError.message}`);
-      console.error('[EMAIL ROUTE DEBUG] Email error stack:', emailError.stack);
-      
-      // We'll still return success even if email fails, but log the issue
-      console.log('[EMAIL ROUTE DEBUG] ⚠️ Continuing despite email error');
+      logger.error(`[EMAIL ROUTE DEBUG] ❌ Error sending verification email: ${emailError.message}`, emailError);
+      logger.error('[EMAIL ROUTE DEBUG] Email error stack:', emailError.stack);
+      logger.warn('[EMAIL ROUTE DEBUG] ⚠️ Continuing despite email error');
     }
     
     // Return success response
-    console.log('[EMAIL ROUTE DEBUG] ✅ Email update process completed successfully');
+    logger.info('[EMAIL ROUTE DEBUG] ✅ Email update process completed successfully');
     res.json({
       success: true,
       message: 'A verification email has been sent to your new address. You will now be logged out.',
       shouldLogout: true
     });
   } catch (error) {
-    console.log('=======================================================');
-    console.error(`[EMAIL ROUTE DEBUG] ❌ EMAIL UPDATE ERROR: ${error.message}`);
-    console.error('[EMAIL ROUTE DEBUG] Error stack:', error.stack);
-    console.log('=======================================================');
+    logger.info('=======================================================');
+    logger.error(`[EMAIL ROUTE DEBUG] ❌ EMAIL UPDATE ERROR: ${error.message}`, error);
+    logger.error('[EMAIL ROUTE DEBUG] Error stack:', error.stack);
+    logger.info('=======================================================');
     res.status(500).json({ error: error.message || 'Failed to initiate email change' });
   }
 });
@@ -211,10 +229,10 @@ router.get('/check-email', async (req, res) => {
   try {
     const email = req.query.email;
     
-    console.log(`Email check request received for: ${email}`);
+    logger.info(`Email check request received for: ${email}`);
     
     if (!email) {
-      console.log('Email check missing email parameter');
+      logger.warn('Email check missing email parameter');
       return res.status(400).json({ available: false, message: 'Email parameter is required' });
     }
     
@@ -223,7 +241,7 @@ router.get('/check-email', async (req, res) => {
     
     res.json({ available: isAvailable });
   } catch (error) {
-    console.error('Error checking email availability:', error);
+    logger.error('Error checking email availability:', error);
     res.status(500).json({ available: false, message: 'Error checking email availability' });
   }
 });
@@ -231,11 +249,11 @@ router.get('/check-email', async (req, res) => {
 // Get user profile
 router.get('/:userId', async (req, res) => {
   try {
-    console.log(`Getting user profile for ID: ${req.params.userId}`);
+    logger.info(`Getting user profile for ID: ${req.params.userId}`);
     const user = await userService.getUserProfile(req.params.userId);
     res.json(user);
   } catch (error) {
-    console.error(`Error getting user profile ${req.params.userId}:`, error);
+    logger.error(`Error getting user profile ${req.params.userId}:`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -243,8 +261,9 @@ router.get('/:userId', async (req, res) => {
 // Create user profile
 router.post('/', upload.any(), async (req, res) => {
   try {
-    console.log("Request body:", req.body);
-    console.log("Files:", req.files ? req.files.length : 0);
+    const safeBody = maskSensitiveFields(req.body);
+    logger.info("Request body:", JSON.stringify(safeBody, null, 2));
+    logger.info("Files:", req.files ? req.files.length : 0);
     
     let profileData = {};
     
@@ -253,27 +272,27 @@ router.post('/', upload.any(), async (req, res) => {
       try {
         profileData = JSON.parse(req.body.data);
       } catch (error) {
-        console.error('Error parsing profile data:', error);
+        logger.error('Error parsing profile data:', error);
         return res.status(400).json({ message: 'Invalid profile data format' });
       }
     }
     
-    console.log("Parsed profile data:", JSON.stringify(profileData));
+    logger.info("Parsed profile data:", JSON.stringify(profileData));
     
     const user = await userService.createUserProfile(profileData, req.files || []);
     res.status(201).json(user);
   } catch (error) {
-    console.error('Error creating user profile:', error);
+    logger.error('Error creating user profile:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 // Update user profile
-// Update user profile
 router.put('/:userId', upload.any(), async (req, res) => {
   try {
-    console.log("Update request body:", req.body);
-    console.log("Update files:", req.files ? req.files.length : 0);
+    const safeBody = maskSensitiveFields(req.body);
+    logger.info("Update request body:", JSON.stringify(safeBody, null, 2));
+    logger.info("Update files:", req.files ? req.files.length : 0);
     
     let profileData = {};
     
@@ -282,7 +301,7 @@ router.put('/:userId', upload.any(), async (req, res) => {
       try {
         profileData = JSON.parse(req.body.data);
       } catch (error) {
-        console.error('Error parsing profile data:', error);
+        logger.error('Error parsing profile data:', error);
         return res.status(400).json({ 
           success: false, 
           message: 'Invalid profile data format' 
@@ -293,19 +312,18 @@ router.put('/:userId', upload.any(), async (req, res) => {
       profileData = req.body;
     }
     
-    console.log("Parsed profile data for update:", JSON.stringify(profileData));
+    logger.info("Parsed profile data for update:", JSON.stringify(profileData));
     
     const user = await userService.updateUserProfile(req.params.userId, profileData, req.files || []);
     
     // Return a clean JSON response with success flag and message
-    // This avoids triggering alert dialogs on the frontend
     res.json({
       success: true,
       message: 'Profile saved successfully',
       user: user
     });
   } catch (error) {
-    console.error(`Error updating user profile ${req.params.userId}:`, error);
+    logger.error(`Error updating user profile ${req.params.userId}:`, error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Failed to update profile' 
@@ -316,11 +334,11 @@ router.put('/:userId', upload.any(), async (req, res) => {
 // Delete user profile
 router.delete('/:userId', async (req, res) => {
   try {
-    console.log(`Deleting user profile for ID: ${req.params.userId}`);
+    logger.info(`Deleting user profile for ID: ${req.params.userId}`);
     await userService.deleteUserProfile(req.params.userId);
     res.status(204).send();
   } catch (error) {
-    console.error(`Error deleting user profile ${req.params.userId}:`, error);
+    logger.error(`Error deleting user profile ${req.params.userId}:`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -329,13 +347,13 @@ router.delete('/:userId', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { limit = 20, offset = 0, ...criteria } = req.query;
-    console.log("Search criteria:", criteria);
-    console.log("Limit:", limit, "Offset:", offset);
+    logger.info("Search criteria:", criteria);
+    logger.info("Limit:", limit, "Offset:", offset);
     
     const results = await userService.searchUsers(criteria, parseInt(limit), parseInt(offset));
     res.json(results);
   } catch (error) {
-    console.error('Error searching users:', error);
+    logger.error('Error searching users:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -343,25 +361,27 @@ router.get('/', async (req, res) => {
 // Reset user profile data while preserving essential account information
 router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
   try {
-    console.log('[RESET DATA] Request received to reset user data');
+    logger.info('[RESET DATA] Request received to reset user data');
+    const safeBody = maskSensitiveFields(req.body);
+    logger.info('[RESET DATA] Request body:', JSON.stringify(safeBody, null, 2));
     
     // Debug the entire user object to see what properties are available
-    console.log('[RESET DATA] Complete req.user object:', JSON.stringify(req.user, null, 2));
+    logger.info('[RESET DATA] Complete req.user object:', JSON.stringify(req.user, null, 2));
     
     // Try all possible ways to get the user ID
     const possibleIdFields = ['_key', 'id', '_id', 'userId'];
-    console.log('[RESET DATA] Checking all possible ID fields:');
+    logger.info('[RESET DATA] Checking all possible ID fields:');
     possibleIdFields.forEach(field => {
-      console.log(`  - ${field}: ${req.user ? req.user[field] : 'undefined'}`);
+      logger.info(`  - ${field}: ${req.user ? req.user[field] : 'undefined'}`);
     });
     
     // If the user object has a different structure, check its properties
     if (req.user && typeof req.user === 'object') {
-      console.log('[RESET DATA] All properties of req.user:', Object.keys(req.user));
+      logger.info('[RESET DATA] All properties of req.user:', Object.keys(req.user));
     }
     
     // Try getting the ID directly from the token verification result
-    console.log('[RESET DATA] Token userId:', req.user ? req.user.userId : 'undefined');
+    logger.info('[RESET DATA] Token userId:', req.user ? req.user.userId : 'undefined');
     
     // Get user ID from authenticated user object - try all possible variants
     const userId = req.user && (
@@ -375,9 +395,9 @@ router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
     );
     
     if (!userId) {
-      console.error('[RESET DATA] Could not determine user ID from authentication data');
-      console.error('[RESET DATA] User object type:', typeof req.user);
-      console.error('[RESET DATA] Is user object present:', !!req.user);
+      logger.error('[RESET DATA] Could not determine user ID from authentication data');
+      logger.error('[RESET DATA] User object type:', typeof req.user);
+      logger.error('[RESET DATA] Is user object present:', !!req.user);
       
       return res.status(401).json({ 
         success: false, 
@@ -385,7 +405,7 @@ router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
       });
     }
     
-    console.log(`[RESET DATA] Processing reset request for user ID: ${userId}`);
+    logger.info(`[RESET DATA] Processing reset request for user ID: ${userId}`);
     
     // Call the user profile service to reset the user data
     const result = await userService.resetUserData(userId);
@@ -397,7 +417,7 @@ router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
       ...result
     });
   } catch (error) {
-    console.error('[RESET DATA] Error resetting user data:', error);
+    logger.error('[RESET DATA] Error resetting user data:', error);
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Failed to reset user data' 
@@ -408,6 +428,9 @@ router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
 // Permanently delete user account
 router.post('/delete', authMiddleware.authenticate, async (req, res) => {
   try {
+    const safeBody = maskSensitiveFields(req.body);
+    logger.info('Delete account request body:', JSON.stringify(safeBody, null, 2));
+    
     // Get the user ID from auth middleware
     const userId = req.user && (
       req.user._key || req.user.id || req.user._id || req.user.userId || 
@@ -416,24 +439,29 @@ router.post('/delete', authMiddleware.authenticate, async (req, res) => {
     );
     
     if (!userId) {
+      logger.error('Delete account failed: Could not determine user ID from auth data');
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
     
     // Validate the password
     const { password, reason } = req.body;
     if (!password) {
+      logger.warn('Delete account failed: Password is required');
       return res.status(400).json({ success: false, message: 'Password is required' });
     }
     
-    // Verify password
+    logger.info(`Processing account deletion for user ID: ${userId}, Reason: ${reason || 'Not provided'}`);
+    
     const authService = require('../services/auth-service');
     const user = await userService.getUserProfile(userId);
     if (!user) {
+      logger.error(`User ${userId} not found for deletion`);
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
     const isPasswordValid = await authService.verifyPassword(password, user.encPassword);
     if (!isPasswordValid) {
+      logger.warn('Delete account failed: Incorrect password');
       return res.status(403).json({ success: false, message: 'Incorrect password' });
     }
     
@@ -441,6 +469,7 @@ router.post('/delete', authMiddleware.authenticate, async (req, res) => {
     const result = await userService.deleteUserAccountPermanently(userId);
     res.json({ success: true, message: 'Account deleted', ...result });
   } catch (error) {
+    logger.error(`Error deleting account: ${error.message}`, error);
     res.status(500).json({ success: false, message: error.message || 'Failed to delete account' });
   }
 });

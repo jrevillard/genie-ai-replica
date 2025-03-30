@@ -701,6 +701,7 @@ export default {
 }
 </script>
 
+
 <style scoped>
 /* Base variables */
 :root {
@@ -759,6 +760,41 @@ export default {
   --slider-track: #334155;
   --slider-thumb: #3b82f6;
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Sidebar Theming */
+[data-theme="light"] .sidebar {
+  background-color: #334155; /* Dark background for light mode */
+  color: #f8fafc; /* Light text for readability */
+}
+
+[data-theme="dark"] .sidebar {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+
+/* Ensure consistent styling for sidebar elements in both themes */
+.sidebar .logo {
+  color: #f8fafc;
+}
+
+.sidebar .nav-header {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sidebar .nav-link {
+  color: #e2e8f0;
+}
+
+.sidebar .nav-link:hover, 
+.sidebar .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.sidebar .nav-link.active {
+  background-color: var(--primary);
+  color: white;
 }
 
 * {
@@ -832,7 +868,7 @@ export default {
 /* Sidebar */
 .sidebar {
   background-color: var(--dark);
-  color: white;
+  color: #f8fafc;
   padding: 1.5rem 1rem;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
@@ -845,6 +881,7 @@ export default {
   margin-bottom: 2rem;
   font-size: 1.25rem;
   font-weight: 600;
+  color: #f8fafc;
 }
 
 .logo-icon {
@@ -866,7 +903,7 @@ export default {
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 0.5rem;
 }
 
@@ -892,6 +929,7 @@ export default {
 
 .nav-link:hover, .nav-link.active {
   background-color: rgba(255, 255, 255, 0.1);
+  color: white;
 }
 
 .nav-link.active {
@@ -920,6 +958,7 @@ export default {
   color: var(--text-primary);
 }
 
+/* Rest of the existing styles... */
 .user-menu {
   display: flex;
   align-items: center;
@@ -1590,4 +1629,30 @@ input:checked + .slider:before {
     align-self: flex-start;
   }
 }
+
+/* Ensure text colors in dark mode */
+[data-theme="dark"] .page-title {
+  color: #f8fafc !important; /* Bright white for high contrast */
+}
+
+[data-theme="dark"] .header {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .card-title {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .stat-title {
+  color: #cbd5e1 !important; /* Slightly softer white for secondary titles */
+}
+
+[data-theme="dark"] .stat-value {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .dashboard-card {
+  color: #f8fafc;
+}
+
 </style>

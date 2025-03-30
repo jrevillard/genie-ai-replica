@@ -2515,3 +2515,231 @@
 2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
 2025-03-30 18:32:46 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
 2025-03-30 18:32:46 [INFO]: [0mGET /api/auth/me [36m304[0m 9.378 ms - -[0m
+2025-03-30 19:30:49 [INFO]: 
+=======================================================
+2025-03-30 19:30:49 [INFO]: Verifying JWT token
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] 2025-03-30T14:00:49.973Z - Authentication Started
+2025-03-30 19:30:49 [INFO]: =======================================================
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 19:30:49 [INFO]:   host: localhost:3000
+2025-03-30 19:30:49 [INFO]:   connection: keep-alive
+2025-03-30 19:30:49 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 19:30:49 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 19:30:49 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 19:30:49 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 19:30:49 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 19:30:49 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 19:30:49 [INFO]:   origin: http://localhost:8090
+2025-03-30 19:30:49 [INFO]:   sec-fetch-site: same-site
+2025-03-30 19:30:49 [INFO]:   sec-fetch-mode: cors
+2025-03-30 19:30:49 [INFO]:   sec-fetch-dest: empty
+2025-03-30 19:30:49 [INFO]:   referer: http://localhost:8090/
+2025-03-30 19:30:49 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 19:30:49 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 19:30:49 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 19:30:49 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:30:49 [INFO]: Token verified successfully for user:
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 19:30:49 [INFO]: Fetching current user info for: fordendk
+2025-03-30 19:30:49 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 19:30:49 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 19:30:49 [INFO]: [0mGET /api/auth/me [36m304[0m 8.287 ms - -[0m
+2025-03-30 19:40:59 [INFO]: 
+=======================================================
+2025-03-30 19:40:59 [INFO]: Verifying JWT token
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] 2025-03-30T14:10:59.387Z - Authentication Started
+2025-03-30 19:40:59 [INFO]: =======================================================
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 19:40:59 [INFO]:   host: localhost:3000
+2025-03-30 19:40:59 [INFO]:   connection: keep-alive
+2025-03-30 19:40:59 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 19:40:59 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 19:40:59 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 19:40:59 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 19:40:59 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 19:40:59 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 19:40:59 [INFO]:   origin: http://localhost:8090
+2025-03-30 19:40:59 [INFO]:   sec-fetch-site: same-site
+2025-03-30 19:40:59 [INFO]:   sec-fetch-mode: cors
+2025-03-30 19:40:59 [INFO]:   sec-fetch-dest: empty
+2025-03-30 19:40:59 [INFO]:   referer: http://localhost:8090/
+2025-03-30 19:40:59 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 19:40:59 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 19:40:59 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 19:40:59 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:40:59 [INFO]: Token verified successfully for user:
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 19:40:59 [INFO]: Fetching current user info for: fordendk
+2025-03-30 19:40:59 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 19:40:59 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 19:40:59 [INFO]: [0mGET /api/auth/me [36m304[0m 7.700 ms - -[0m
+2025-03-30 19:41:23 [INFO]: 
+=======================================================
+2025-03-30 19:41:23 [INFO]: Verifying JWT token
+2025-03-30 19:41:23 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] 2025-03-30T14:11:23.772Z - Authentication Started
+2025-03-30 19:41:23 [INFO]: =======================================================
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 19:41:23 [INFO]:   host: localhost:3000
+2025-03-30 19:41:23 [INFO]:   connection: keep-alive
+2025-03-30 19:41:23 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 19:41:23 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 19:41:23 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 19:41:23 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 19:41:23 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 19:41:23 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 19:41:23 [INFO]:   origin: http://localhost:8090
+2025-03-30 19:41:23 [INFO]:   sec-fetch-site: same-site
+2025-03-30 19:41:23 [INFO]:   sec-fetch-mode: cors
+2025-03-30 19:41:23 [INFO]:   sec-fetch-dest: empty
+2025-03-30 19:41:23 [INFO]:   referer: http://localhost:8090/
+2025-03-30 19:41:23 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 19:41:23 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 19:41:23 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 19:41:23 [INFO]: Token verified successfully for user:
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 19:41:23 [INFO]: Fetching current user info for: fordendk
+2025-03-30 19:41:23 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 19:41:23 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 19:41:23 [INFO]: [0mGET /api/auth/me [36m304[0m 6.928 ms - -[0m
+2025-03-30 19:46:26 [INFO]: 
+=======================================================
+2025-03-30 19:46:26 [INFO]: Verifying JWT token
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] 2025-03-30T14:16:26.408Z - Authentication Started
+2025-03-30 19:46:26 [INFO]: =======================================================
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 19:46:26 [INFO]:   host: localhost:3000
+2025-03-30 19:46:26 [INFO]:   connection: keep-alive
+2025-03-30 19:46:26 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 19:46:26 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 19:46:26 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 19:46:26 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 19:46:26 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 19:46:26 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 19:46:26 [INFO]:   origin: http://localhost:8090
+2025-03-30 19:46:26 [INFO]:   sec-fetch-site: same-site
+2025-03-30 19:46:26 [INFO]:   sec-fetch-mode: cors
+2025-03-30 19:46:26 [INFO]:   sec-fetch-dest: empty
+2025-03-30 19:46:26 [INFO]:   referer: http://localhost:8090/
+2025-03-30 19:46:26 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 19:46:26 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 19:46:26 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 19:46:26 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:46:26 [INFO]: Token verified successfully for user:
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 19:46:26 [INFO]: Fetching current user info for: fordendk
+2025-03-30 19:46:26 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 19:46:26 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 19:46:26 [INFO]: [0mGET /api/auth/me [36m304[0m 9.038 ms - -[0m
+2025-03-30 19:47:08 [INFO]: 
+=======================================================
+2025-03-30 19:47:08 [INFO]: Verifying JWT token
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] 2025-03-30T14:17:08.112Z - Authentication Started
+2025-03-30 19:47:08 [INFO]: =======================================================
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 19:47:08 [INFO]:   host: localhost:3000
+2025-03-30 19:47:08 [INFO]:   connection: keep-alive
+2025-03-30 19:47:08 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 19:47:08 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 19:47:08 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 19:47:08 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 19:47:08 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 19:47:08 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 19:47:08 [INFO]:   origin: http://localhost:8090
+2025-03-30 19:47:08 [INFO]:   sec-fetch-site: same-site
+2025-03-30 19:47:08 [INFO]:   sec-fetch-mode: cors
+2025-03-30 19:47:08 [INFO]:   sec-fetch-dest: empty
+2025-03-30 19:47:08 [INFO]:   referer: http://localhost:8090/
+2025-03-30 19:47:08 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 19:47:08 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 19:47:08 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 19:47:08 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:47:08 [INFO]: Token verified successfully for user:
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 19:47:08 [INFO]: Fetching current user info for: fordendk
+2025-03-30 19:47:08 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 19:47:08 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 19:47:08 [INFO]: [0mGET /api/auth/me [36m304[0m 6.636 ms - -[0m
+2025-03-30 19:52:08 [INFO]: 
+=======================================================
+2025-03-30 19:52:08 [INFO]: Verifying JWT token
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] 2025-03-30T14:22:08.922Z - Authentication Started
+2025-03-30 19:52:08 [INFO]: =======================================================
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] Request URL: GET /me
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-30 19:52:08 [INFO]:   host: localhost:3000
+2025-03-30 19:52:08 [INFO]:   connection: keep-alive
+2025-03-30 19:52:08 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-30 19:52:08 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-30 19:52:08 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-30 19:52:08 [INFO]:   accept: application/json, text/plain, */*
+2025-03-30 19:52:08 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-30 19:52:08 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-30 19:52:08 [INFO]:   origin: http://localhost:8090
+2025-03-30 19:52:08 [INFO]:   sec-fetch-site: same-site
+2025-03-30 19:52:08 [INFO]:   sec-fetch-mode: cors
+2025-03-30 19:52:08 [INFO]:   sec-fetch-dest: empty
+2025-03-30 19:52:08 [INFO]:   referer: http://localhost:8090/
+2025-03-30 19:52:08 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-30 19:52:08 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-30 19:52:08 [INFO]:   if-none-match: W/"1070f-GRiZcwEapVNxNUn+oYIgWRVBM8I"
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] Request body:
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-30 19:52:08 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:52:08 [INFO]: Token verified successfully for user:
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-30 19:52:08 [INFO]: Fetching current user info for: fordendk
+2025-03-30 19:52:08 [INFO]: Fetching user by ID: 2133
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-30 19:52:08 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-30 19:52:08 [INFO]: [0mGET /api/auth/me [36m304[0m 7.891 ms - -[0m

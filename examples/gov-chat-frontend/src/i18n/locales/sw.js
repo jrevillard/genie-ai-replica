@@ -858,7 +858,18 @@ export default {
     educationServices: "Huduma za elimu",
     transportLicenses: "Usafiri na leseni",
     housingPrograms: "Programu za nyumba",
-    findJobs: "Tafuta kazi"
+    findJobs: "Tafuta kazi",
+    justChat: "Ongea tu",
+    // Prompts as separate keys with a clear naming pattern
+    justChatPrompt: "Ningependa kuzungumza kuhusu huduma za serikali",
+    applyForIDPrompt: "Ninahitaji maelezo kuhusu jinsi ya kuomba kitambulisho cha kitaifa",
+    payTaxesPrompt: "Je, ni mchakato gani wa kulipa kodi zangu mtandaoni?",
+    startBusinessPrompt: "Niongoze kupitia hatua za kusajili biashara mpya",
+    findHealthcarePrompt: "Wapi ninaweza kupata maelezo kuhusu huduma za afya ya umma?",
+    educationServicesPrompt: "Ni huduma zipi za elimu zinazopatikana kwa watoto wangu?",
+    transportLicensesPrompt: "Je, ninawezaje kuhuisha leseni yangu ya udereva?",
+    housingProgramsPrompt: "Niambie kuhusu programu za nyumba za bei nafuu nchini Kenya",
+    findJobsPrompt: "Ni fursa zipi za kazi za serikali zinazopatikana kwa sasa?"
   },
   common: {
     cancel: 'Ghairi',

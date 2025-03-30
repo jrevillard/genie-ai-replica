@@ -58,6 +58,7 @@
         <div ref="messagesEnd"></div>
       </div>
       <!-- Updated Quick Help Overlay with proper internationalization -->
+      <!-- Quick Help Overlay -->
       <div class="quick-help-overlay" v-if="showQuickHelp && chatMessages.length <= 1">
         <div class="quick-help-content">
           <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp', 'How can I help you today?') }}</h2>
@@ -73,8 +74,7 @@
             <div v-for="(option, index) in quickHelpOptions" :key="index" class="quick-help-item"
               @click="selectQuickHelpOption(option)">
               <div class="quick-help-icon" v-html="option.icon"></div>
-              <div class="quick-help-text">{{ translate(option.textKey, option.text || option.textKey.split('.')[1]) }}
-              </div>
+              <div class="quick-help-text">{{ translate(option.textKey, option.textKey.split('.')[1]) }}</div>
             </div>
           </div>
         </div>
@@ -184,51 +184,53 @@ export default {
       },
 
       // Just Chat option defined separately so it can be referenced directly in the template
+      // Just Chat option with updated prompt reference
       justChatOption: {
-        textKey: "chatbot.justChat",
-        prompt: "I'd like to chat about government services",
+        textKey: "quickhelp.justChat",
+        promptKey: "quickhelp.justChatPrompt",
         icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'
       },
-      // Other quick help options with translation keys
+
+      // Other quick help options with updated prompt key references
       quickHelpOptions: [
         {
           textKey: "quickhelp.applyForID",
-          prompt: "I need information on how to apply for a national ID card",
+          promptKey: "quickhelp.applyForIDPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>'
         },
         {
           textKey: "quickhelp.payTaxes",
-          prompt: "What's the process for paying my taxes online?",
+          promptKey: "quickhelp.payTaxesPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>'
         },
         {
           textKey: "quickhelp.startBusiness",
-          prompt: "Guide me through the steps to register a new business",
+          promptKey: "quickhelp.startBusinessPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>'
         },
         {
           textKey: "quickhelp.findHealthcare",
-          prompt: "Where can I find information about public healthcare services?",
+          promptKey: "quickhelp.findHealthcarePrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>'
         },
         {
           textKey: "quickhelp.educationServices",
-          prompt: "What education services are available for my children?",
+          promptKey: "quickhelp.educationServicesPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>'
         },
         {
           textKey: "quickhelp.transportLicenses",
-          prompt: "How do I renew my driving license?",
+          promptKey: "quickhelp.transportLicensesPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>'
         },
         {
           textKey: "quickhelp.housingPrograms",
-          prompt: "Tell me about affordable housing programs in Kenya",
+          promptKey: "quickhelp.housingProgramsPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
         },
         {
           textKey: "quickhelp.findJobs",
-          prompt: "What government job opportunities are currently available?",
+          promptKey: "quickhelp.findJobsPrompt",
           icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>'
         }
       ],
@@ -438,8 +440,11 @@ export default {
     },
 
     selectQuickHelpOption(option) {
+      // Get the translated prompt text based on current locale
+      const translatedPrompt = this.translate(option.promptKey, '');
+
       // Set the prompt text in the input field
-      this.newMessage = option.prompt;
+      this.newMessage = translatedPrompt;
 
       // Hide the quick help overlay
       this.showQuickHelp = false;

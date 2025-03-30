@@ -858,7 +858,18 @@ export default {
     educationServices: "Services d'éducation",
     transportLicenses: "Transport et permis",
     housingPrograms: "Programmes de logement",
-    findJobs: "Trouver un emploi"
+    findJobs: "Trouver un emploi",
+    justChat: "Simplement discuter",
+    // Prompts as separate keys with a clear naming pattern
+    justChatPrompt: "Je voudrais discuter des services gouvernementaux",
+    applyForIDPrompt: "J'ai besoin d'informations sur la procédure de demande d'une carte d'identité nationale",
+    payTaxesPrompt: "Quelle est la procédure pour payer mes impôts en ligne ?",
+    startBusinessPrompt: "Guidez-moi à travers les étapes pour enregistrer une nouvelle entreprise",
+    findHealthcarePrompt: "Où puis-je trouver des informations sur les services de santé publique ?",
+    educationServicesPrompt: "Quels services éducatifs sont disponibles pour mes enfants ?",
+    transportLicensesPrompt: "Comment renouveler mon permis de conduire ?",
+    housingProgramsPrompt: "Parlez-moi des programmes de logement abordable au Kenya",
+    findJobsPrompt: "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles ?"
   },
   common: {
     cancel: 'Annuler',

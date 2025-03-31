@@ -1,0 +1,60 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "logs/.d38a28a3616cfd88b80cab6e0c887e15deed13b0-audit.json",
+    "files": [
+        {
+            "date": 1743346904975,
+            "name": "logs/error-2025-03-30.log",
+            "hash": "8442ca12f5be712672889c64596ea7de8f0e064af4adc06936dbbd8e35c36ef0"
+        },
+        {
+            "date": 1743347482538,
+            "name": "logs/error-2025-03-30.log.1",
+            "hash": "c8f28c1df5a00c95e4acaccdefd9ccb3d7d93a2686b6b28b993524e5e1c618c6"
+        },
+        {
+            "date": 1743347535622,
+            "name": "logs/error-2025-03-30.log.2",
+            "hash": "b0382b9d16e7f335199d90f8fe860ab4ee9cceb4a28d202828782528bf192bac"
+        },
+        {
+            "date": 1743347591385,
+            "name": "logs/error-2025-03-30.log.3",
+            "hash": "a2dfc7cec6285420d07eb4fd540229a72037383a94fe91cddc2b44934e0a16ef"
+        },
+        {
+            "date": 1743347676777,
+            "name": "logs/error-2025-03-30.log.4",
+            "hash": "ef6b4e0a4015848280c5124af7c30a9b2a418bd70a8288d4d52db59de6f7c3e2"
+        },
+        {
+            "date": 1743347754950,
+            "name": "logs/error-2025-03-30.log.5",
+            "hash": "1c770a94a52b554690b685bbe3828981166e1c0342af6b1beb90144bab0df658"
+        },
+        {
+            "date": 1743347823831,
+            "name": "logs/error-2025-03-30.log.6",
+            "hash": "f4db6033c48f02ca5802c5b3db706efc5b1af7c23adee37094c58dda15c6f33b"
+        },
+        {
+            "date": 1743347886626,
+            "name": "logs/error-2025-03-30.log.7",
+            "hash": "01ee4ffc0c7638202816cb1057d5ed70d5cc9b71247664bb88a0ce54113a394c"
+        },
+        {
+            "date": 1743347933091,
+            "name": "logs/error-2025-03-30.log.8",
+            "hash": "4e52829c674e7073d0a6bcf6c469b2a64e3eefb950ddb330e7a912f8086b251e"
+        },
+        {
+            "date": 1743380774344,
+            "name": "logs/error-2025-03-31.log",
+            "hash": "28e5bcb596f809d59e767fcddf6c03bc4449b8c35521424922d6d4d42c414ad1"
+        }
+    ],
+    "hashType": "sha256"
+}

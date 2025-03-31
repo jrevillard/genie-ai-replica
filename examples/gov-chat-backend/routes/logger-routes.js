@@ -1,0 +1,65 @@
+// routes/logger-routes.js
+const express = require('express');
+const router = express.Router();
+const authMiddleware = require('../middleware/auth-middleware');
+const { reconfigureLogger, triggerLogRollover } = require('../logger'); // Import the reconfiguration functions
+
+// Endpoint to reconfigure logger settings
+router.post('/configure', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  try {
+    const { level, errorMaxSize, combinedMaxSize, errorMaxFiles, combinedMaxFiles, zippedArchive } = req.body;
+
+    // Validate the request (optional)
+    if (!level && !errorMaxSize && !combinedMaxSize && !errorMaxFiles && !combinedMaxFiles && zippedArchive === undefined) {
+      return res.status(400).json({ success: false, message: 'At least one configuration parameter is required' });
+    }
+
+    // Validate level if provided
+    if (level && !['error', 'warn', 'info', 'debug'].includes(level)) {
+      return res.status(400).json({ success: false, message: 'Invalid log level. Must be one of: error, warn, info, debug' });
+    }
+
+    // Validate maxSize and maxFiles if provided
+    const sizeRegex = /^\d+(k|m|g)$/; // e.g., '10m', '500k', '1g'
+    const filesRegex = /^\d+d$/; // e.g., '30d', '14d'
+
+    if (errorMaxSize && !sizeRegex.test(errorMaxSize)) {
+      return res.status(400).json({ success: false, message: 'Invalid errorMaxSize. Must be in format: 10m, 500k, 1g' });
+    }
+    if (combinedMaxSize && !sizeRegex.test(combinedMaxSize)) {
+      return res.status(400).json({ success: false, message: 'Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g' });
+    }
+    if (errorMaxFiles && !filesRegex.test(errorMaxFiles)) {
+      return res.status(400).json({ success: false, message: 'Invalid errorMaxFiles. Must be in format: 30d, 14d' });
+    }
+    if (combinedMaxFiles && !filesRegex.test(combinedMaxFiles)) {
+      return res.status(400).json({ success: false, message: 'Invalid combinedMaxFiles. Must be in format: 30d, 14d' });
+    }
+
+    // Reconfigure the logger
+    reconfigureLogger({
+      level,
+      errorMaxSize,
+      combinedMaxSize,
+      errorMaxFiles,
+      combinedMaxFiles,
+      zippedArchive,
+    });
+
+    res.json({ success: true, message: 'Logger configuration updated successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to update logger configuration', error: error.message });
+  }
+});
+
+// Endpoint to trigger an immediate log rollover
+router.post('/rollover', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  try {
+    triggerLogRollover();
+    res.json({ success: true, message: 'Log rollover triggered successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to trigger log rollover', error: error.message });
+  }
+});
+
+module.exports = router;

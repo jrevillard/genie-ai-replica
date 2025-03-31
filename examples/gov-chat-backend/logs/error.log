@@ -1,1 +1,211 @@
 2025-03-30 10:07:18 [ERROR]: Error during login: Email not verified
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection userSessions: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection users: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection sessionQueries: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection analytics: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection analyticsMetrics: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection categoryServices: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection queries: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection queryCategories: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection services: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection passwordResetTokens: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection verificationTokens: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection serviceCategories: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection events: collection.dropIndexes is not a function
+2025-03-31 06:35:05 [ERROR]: Reindexing error for collection sessions: collection.dropIndexes is not a function
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection userSessions: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection users: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection sessionQueries: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection analytics: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection analyticsMetrics: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection categoryServices: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection queries: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection queryCategories: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection services: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection passwordResetTokens: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection verificationTokens: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection serviceCategories: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection events: aql is not defined
+2025-03-31 06:40:38 [ERROR]: Reindexing error for collection sessions: aql is not defined
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection userSessions: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection users: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection sessionQueries: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection analytics: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection analyticsMetrics: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection categoryServices: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection queries: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection queryCategories: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection services: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection passwordResetTokens: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection verificationTokens: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection serviceCategories: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection events: usage of unknown function 'INDEXES()'
+2025-03-31 06:42:53 [ERROR]: Reindexing error for collection sessions: usage of unknown function 'INDEXES()'
+2025-03-31 06:46:37 [ERROR]: Error creating index user_session_index for userSessions: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index email_unique_index for users: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index users_created_at_index for users: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index analytics_created_at_index for analytics: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index queries_created_at_index for queries: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index service_category_order_index for services: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index category_order_index for serviceCategories: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index events_created_at_index for events: collection.createIndex is not a function
+2025-03-31 06:46:37 [ERROR]: Error creating index user_session_index for sessions: collection.createIndex is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index user_session_index for userSessions: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index email_unique_index for users: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index users_created_at_index for users: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index analytics_created_at_index for analytics: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index queries_created_at_index for queries: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index service_category_order_index for services: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index category_order_index for serviceCategories: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index events_created_at_index for events: aql.join is not a function
+2025-03-31 06:49:54 [ERROR]: Error creating index user_session_index for sessions: aql.join is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index user_session_index for userSessions: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index email_unique_index for users: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index users_created_at_index for users: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index analytics_created_at_index for analytics: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index queries_created_at_index for queries: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index service_category_order_index for services: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index category_order_index for serviceCategories: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index events_created_at_index for events: aql.literal is not a function
+2025-03-31 06:52:05 [ERROR]: Error creating index user_session_index for sessions: aql.literal is not a function
+2025-03-31 06:53:46 [ERROR]: Error creating index user_session_index for userSessions: syntax error, unexpected identifier near 'CREATE  HASH 
+                IN...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index email_unique_index for users: syntax error, unexpected identifier near 'CREATE UNIQUE HASH 
+            ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index users_created_at_index for users: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index analytics_created_at_index for analytics: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index queries_created_at_index for queries: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index service_category_order_index for services: syntax error, unexpected identifier near 'CREATE  HASH 
+                IN...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index category_order_index for serviceCategories: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index events_created_at_index for events: syntax error, unexpected identifier near 'CREATE  SKIPLIST 
+              ...' at position 2:17
+2025-03-31 06:53:46 [ERROR]: Error creating index user_session_index for sessions: syntax error, unexpected identifier near 'CREATE  HASH 
+                IN...' at position 2:17
+2025-03-31 06:56:48 [ERROR]: Error creating index user_session_index for userSessions: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_user_session_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index email_unique_index for users: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_email_unique_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index users_created_at_index for users: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_users_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_sessionQueries_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index analytics_created_at_index for analytics: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_analytics_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_analyticsMetrics_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_categoryServices_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index queries_created_at_index for queries: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_queries_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_queryCategories_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index service_category_order_index for services: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_service_category_order_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_passwordResetTokens_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_verificationTokens_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index category_order_index for serviceCategories: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_category_order_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index events_created_at_index for events: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_events_created_at_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 06:56:48 [ERROR]: Error creating index user_session_index for sessions: AQL: unique constraint violated - in index primary of type primary over '_key'; conflicting key: index_user_session_index [node #7: InsertNode] [node #13: SubqueryEndNode] [node #10: ReturnNode] (while executing)
+2025-03-31 07:04:05 [ERROR]: Error creating index user_session_index for userSessions: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:49
+2025-03-31 07:04:05 [ERROR]: Error creating index email_unique_index for users: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:49
+2025-03-31 07:04:05 [ERROR]: Error creating index users_created_at_index for users: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:532025-03-31 06:58:48 [ERROR]: Error creating index user_session_index for userSessions: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index email_unique_index for users: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index users_created_at_index for users: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index analytics_created_at_index for analytics: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index queries_created_at_index for queries: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index service_category_order_index for services: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index category_order_index for serviceCategories: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index events_created_at_index for events: aql.literal is not a function
+2025-03-31 06:58:48 [ERROR]: Error creating index user_session_index for sessions: aql.literal is not a function
+
+2025-03-31 07:04:05 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:62
+2025-03-31 07:04:05 [ERROR]: Error creating index analytics_created_at_index for analytics: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:57
+2025-03-31 07:04:05 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:64
+2025-03-31 07:04:05 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:64
+2025-03-31 07:04:05 [ERROR]: Error creating index queries_created_at_index for queries: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:55
+2025-03-31 07:04:05 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:63
+2025-03-31 07:04:05 [ERROR]: Error creating index service_category_order_index for services: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:59
+2025-03-31 07:04:05 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:67
+2025-03-31 07:04:05 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:66
+2025-03-31 07:04:05 [ERROR]: Error creating index category_order_index for serviceCategories: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:51
+2025-03-31 07:04:05 [ERROR]: Error creating index events_created_at_index for events: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:54
+2025-03-31 07:04:05 [ERROR]: Error creating index user_session_index for sessions: unexpected qualifier 'OPTIONS', expecting 'SEARCH' and 'OPTIONS' near '` 
+                ON @@collecti...' at position 4:49
+2025-03-31 07:05:37 [ERROR]: Error creating index user_session_index for userSessions: syntax error, unexpected identifier near 'CREATE INDEX `user_session_index...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index email_unique_index for users: syntax error, unexpected identifier near 'CREATE INDEX `email_unique_index...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index users_created_at_index for users: syntax error, unexpected identifier near 'CREATE INDEX `users_created_at_i...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index sessionQueries_created_at_index for sessionQueries: syntax error, unexpected identifier near 'CREATE INDEX `sessionQueries_cre...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index analytics_created_at_index for analytics: syntax error, unexpected identifier near 'CREATE INDEX `analytics_created_...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index analyticsMetrics_created_at_index for analyticsMetrics: syntax error, unexpected identifier near 'CREATE INDEX `analyticsMetrics_c...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index categoryServices_created_at_index for categoryServices: syntax error, unexpected identifier near 'CREATE INDEX `categoryServices_c...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index queries_created_at_index for queries: syntax error, unexpected identifier near 'CREATE INDEX `queries_created_at...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index queryCategories_created_at_index for queryCategories: syntax error, unexpected identifier near 'CREATE INDEX `queryCategories_cr...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index service_category_order_index for services: syntax error, unexpected identifier near 'CREATE INDEX `service_category_o...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index passwordResetTokens_created_at_index for passwordResetTokens: syntax error, unexpected identifier near 'CREATE INDEX `passwordResetToken...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index verificationTokens_created_at_index for verificationTokens: syntax error, unexpected identifier near 'CREATE INDEX `verificationTokens...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index category_order_index for serviceCategories: syntax error, unexpected identifier near 'CREATE INDEX `category_order_ind...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index events_created_at_index for events: syntax error, unexpected identifier near 'CREATE INDEX `events_created_at_...' at position 2:17
+2025-03-31 07:05:37 [ERROR]: Error creating index user_session_index for sessions: syntax error, unexpected identifier near 'CREATE INDEX `user_session_index...' at position 2:17
+2025-03-31 08:03:43 [ERROR]: Failed to create index user_session_index for userSessions using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index email_unique_index for users using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index users_created_at_index for users using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index sessionQueries_created_at_index for sessionQueries using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index analytics_created_at_index for analytics using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index analyticsMetrics_created_at_index for analyticsMetrics using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index categoryServices_created_at_index for categoryServices using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index queries_created_at_index for queries using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index queryCategories_created_at_index for queryCategories using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index service_category_order_index for services using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index passwordResetTokens_created_at_index for passwordResetTokens using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index verificationTokens_created_at_index for verificationTokens using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index category_order_index for serviceCategories using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index events_created_at_index for events using any approach
+2025-03-31 08:03:43 [ERROR]: Failed to create index user_session_index for sessions using any approach
+2025-03-31 08:59:26 [ERROR]: Overall database optimization error: syntax error, unexpected identifier near 'OPTIMIZE DATABASE' at position 1:1
+2025-03-31 09:15:32 [ERROR]: Database backup error: fs.createWriteStream is not a function
+2025-03-31 09:19:43 [ERROR]: Database backup error: fs.createWriteStream is not a function

@@ -1,0 +1,101 @@
+2025-03-31 05:56:14 [INFO]: Server is running on port 3000
+2025-03-31 05:56:14 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 05:56:14 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger
+2025-03-31 06:04:13 [INFO]: [0mGET /api/auth/me [32m200[0m 16.371 ms - 67343[0m
+2025-03-31 06:25:58 [INFO]: Server is running on port 3000
+2025-03-31 06:25:58 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:25:58 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger
+2025-03-31 06:26:12 [INFO]: [0mGET /api-docs/ [32m200[0m 2.390 ms - 3075[0m
+2025-03-31 06:26:12 [INFO]: [0mGET /api-docs/swagger-ui-bundle.js [36m304[0m 0.579 ms - -[0m
+2025-03-31 06:26:12 [INFO]: [0mGET /api-docs/swagger-ui.css [32m200[0m 3.176 ms - 154985[0m
+2025-03-31 06:26:12 [INFO]: [0mGET /api-docs/swagger-ui-standalone-preset.js [36m304[0m 1.906 ms - -[0m
+2025-03-31 06:26:12 [INFO]: [0mGET /api-docs/swagger-ui-init.js [32m200[0m 0.534 ms - 73554[0m
+2025-03-31 06:26:13 [INFO]: [0mGET /api-docs/favicon-32x32.png [32m200[0m 1.828 ms - 628[0m
+2025-03-31 06:28:44 [INFO]: [0mPOST /api/database/reindex [33m404[0m 1.208 ms - 160[0m
+2025-03-31 06:34:50 [INFO]: Server is running on port 3000
+2025-03-31 06:34:50 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:34:50 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:35:05 [INFO]: [0mPOST /api/database/reindex [32m200[0m 7.549 ms - 1612[0m
+2025-03-31 06:40:21 [INFO]: Server is running on port 3000
+2025-03-31 06:40:21 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:40:21 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:40:38 [INFO]: [0mPOST /api/database/reindex [32m200[0m 4.959 ms - 1304[0m
+2025-03-31 06:42:47 [INFO]: Server is running on port 3000
+2025-03-31 06:42:47 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:42:47 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:42:53 [INFO]: [0mPOST /api/database/reindex [32m200[0m 20.577 ms - 1570[0m
+2025-03-31 06:44:22 [INFO]: Server is running on port 3000
+2025-03-31 06:44:22 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:44:22 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:44:32 [INFO]: [0mPOST /api/database/reindex [32m200[0m 43.230 ms - 1262[0m
+2025-03-31 06:46:28 [INFO]: Server is running on port 3000
+2025-03-31 06:46:28 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:46:28 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:46:37 [INFO]: [0mPOST /api/database/reindex [32m200[0m 28.227 ms - 1262[0m
+2025-03-31 06:49:44 [INFO]: Server is running on port 3000
+2025-03-31 06:49:44 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:49:44 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:49:54 [INFO]: [0mPOST /api/database/reindex [32m200[0m 28.191 ms - 1262[0m
+2025-03-31 06:51:52 [INFO]: Server is running on port 3000
+2025-03-31 06:51:52 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:51:52 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:52:05 [INFO]: [0mPOST /api/database/reindex [32m200[0m 26.508 ms - 1262[0m
+2025-03-31 06:53:38 [INFO]: Server is running on port 3000
+2025-03-31 06:53:38 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:53:38 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:53:46 [INFO]: [0mPOST /api/database/reindex [32m200[0m 29.650 ms - 1262[0m
+2025-03-31 06:56:38 [INFO]: Server is running on port 3000
+2025-03-31 06:56:38 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:56:38 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:56:48 [INFO]: [0mPOST /api/database/reindex [32m200[0m 136.805 ms - 1262[0m
+2025-03-31 06:58:42 [INFO]: Server is running on port 3000
+2025-03-31 06:58:42 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 06:58:42 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 06:58:48 [INFO]: [0mPOST /api/database/reindex [32m200[0m 35.969 ms - 1262[0m
+2025-03-31 07:03:58 [INFO]: Server is running on port 3000
+2025-03-31 07:03:58 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 07:03:58 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 07:04:05 [INFO]: [0mPOST /api/database/reindex [32m200[0m 34.019 ms - 1262[0m
+2025-03-31 07:05:33 [INFO]: Server is running on port 3000
+2025-03-31 07:05:33 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 07:05:33 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 07:05:37 [INFO]: [0mPOST /api/database/reindex [32m200[0m 34.224 ms - 1262[0m
+2025-03-31 07:59:44 [INFO]: Server is running on port 3000
+2025-03-31 07:59:44 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 07:59:44 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 08:03:36 [INFO]: Server is running on port 3000
+2025-03-31 08:03:36 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 08:03:36 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 08:03:43 [INFO]: [0mPOST /api/database/reindex [32m200[0m 42.684 ms - 1262[0m
+2025-03-31 08:08:55 [INFO]: Server is running on port 3000
+2025-03-31 08:08:55 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 08:08:55 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 08:09:03 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1841.565 ms - 1262[0m
+2025-03-31 08:11:06 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [32m200[0m 1318.596 ms - 2033[0m
+2025-03-31 08:11:07 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [32m200[0m 107.473 ms - 38[0m
+2025-03-31 08:11:07 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [32m200[0m 120.416 ms - 38[0m
+2025-03-31 08:11:08 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [32m200[0m 119.485 ms - 36[0m
+2025-03-31 08:11:09 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [32m200[0m 121.379 ms - 36[0m
+2025-03-31 08:11:09 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [32m200[0m 101.246 ms - 59[0m
+2025-03-31 08:11:10 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [32m200[0m 113.399 ms - 58[0m
+2025-03-31 08:11:10 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [32m200[0m 109.455 ms - 55[0m
+2025-03-31 08:11:11 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [32m200[0m 104.655 ms - 55[0m
+2025-03-31 08:11:13 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-02&endDate=2025-03-31&locale=en [32m200[0m 2131.858 ms - 1268[0m
+2025-03-31 08:11:13 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 3.892 ms - -[0m
+2025-03-31 08:57:12 [INFO]: [0mGET /api/auth/me [36m304[0m 11.040 ms - -[0m
+2025-03-31 08:57:22 [INFO]: [0mGET /api/database/stats [33m404[0m 1.407 ms - 157[0m
+2025-03-31 08:57:37 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1561.204 ms - 1262[0m
+2025-03-31 08:59:26 [INFO]: [0mPOST /api/database/optimize [31m500[0m 21.522 ms - 144[0m
+2025-03-31 09:06:06 [INFO]: Server is running on port 3000
+2025-03-31 09:06:06 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 09:06:06 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 09:06:17 [INFO]: [0mPOST /api/database/optimize [32m200[0m 25.451 ms - 1121[0m
+2025-03-31 09:15:21 [INFO]: Server is running on port 3000
+2025-03-31 09:15:21 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 09:15:21 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 09:15:32 [INFO]: [0mPOST /api/database/backup [31m500[0m 6.684 ms - 104[0m
+2025-03-31 09:19:43 [INFO]: [0mPOST /api/database/backup [31m500[0m 4.103 ms - 104[0m
+2025-03-31 09:20:02 [INFO]: Server is running on port 3000
+2025-03-31 09:20:02 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 09:20:02 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 09:20:29 [INFO]: [0mPOST /api/database/backup [32m200[0m 18249.115 ms - 282[0m

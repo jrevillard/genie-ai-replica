@@ -8,26 +8,8 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const { createLogger, format, transports } = require('winston'); // Add Winston
-
-// Set up Winston logger
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
+const { logger } = require('./logger'); // Import the centralized logger
+const loggerRoutes = require('./routes/logger-routes'); // Import the logger routes
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -121,7 +103,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-// Replace basic Morgan with Morgan piped to Winston
+// Pipe Morgan logs to Winston
 app.use(morgan('dev', {
   stream: {
     write: (message) => logger.info(message.trim())
@@ -151,7 +133,9 @@ const routeFiles = [
   'analytics-routes',
   'session-routes',
   'service-category-routes',
-  'auth-routes'
+  'auth-routes',
+  'logger-routes',
+  'database-operations-routes'
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -169,6 +153,8 @@ if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-rout
 if (routes['session-routes']) app.use('/api/sessions', routes['session-routes']);
 if (routes['service-category-routes']) app.use('/api/service-categories', routes['service-category-routes']);
 if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']);
+if (routes['logger-routes']) app.use('/api/logger', routes['logger-routes']); 
+if (routes['database-operations-routes']) app.use('/api/database', routes['database-operations-routes']);
 
 // Email verification redirect
 app.get('/verify-email/:token', (req, res) => {
@@ -192,7 +178,7 @@ app.get('/verify-email-success', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  logger.error(err.stack); // Replace console.error with logger
+  logger.error(err.stack);
   res.status(500).json({
     message: 'An unexpected error occurred',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined

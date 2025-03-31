@@ -1,348 +1,366 @@
 <template>
-    <!-- Add backdrop -->
-    <div class="admin-backdrop" @click="$emit('close')"></div>
+  <!-- Add backdrop -->
+  <div class="admin-backdrop" @click="$emit('close')"></div>
+  
+  <div class="admin-dashboard">
+    <!-- Close button -->
+    <button class="close-dashboard-btn" @click="$emit('close')" aria-label="Close dashboard">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
     
-    <div class="admin-dashboard">
-      <!-- Close button -->
-      <button class="close-dashboard-btn" @click="$emit('close')" aria-label="Close dashboard">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
+    <div class="dashboard">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="logo">
+          <div class="logo-icon">H</div>
+          <span>{{ translate('admin.huduma', 'Huduma AI') }}</span>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-header">{{ translate('admin.dashboard', 'Dashboard') }}</div>
+          <ul class="nav-items">
+            <li class="nav-item">
+              <a href="#" class="nav-link active" @click.prevent="setActiveTab('overview')">
+                <i>📊</i>
+                <span>{{ translate('admin.overview', 'Overview') }}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-header">{{ translate('admin.system', 'System') }}</div>
+          <ul class="nav-items">
+            <li class="nav-item">
+              <a href="#" class="nav-link" @click.prevent="setActiveTab('database')">
+                <i>💾</i>
+                <span>{{ translate('admin.database', 'Database') }}</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="#" class="nav-link" @click.prevent="setActiveTab('logs')">
+                <i>📋</i>
+                <span>{{ translate('admin.logs', 'Logs') }}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-header">{{ translate('admin.settings', 'Settings') }}</div>
+          <ul class="nav-items">
+            <li class="nav-item">
+              <a href="#" class="nav-link" @click.prevent="setActiveTab('users')">
+                <i>👥</i>
+                <span>{{ translate('admin.userManagement', 'User Management') }}</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="#" class="nav-link" @click.prevent="setActiveTab('security')">
+                <i>🔒</i>
+                <span>{{ translate('admin.security', 'Security') }}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
       
-      <div class="dashboard">
-        <!-- Sidebar -->
-        <div class="sidebar">
-          <div class="logo">
-            <div class="logo-icon">H</div>
-            <span>{{ translate('admin.huduma', 'Huduma AI') }}</span>
+      <!-- Main Content -->
+      <div class="main">
+        <div class="header">
+          <h1 class="page-title">{{ translate('admin.systemAdministration', 'System Administration') }}</h1>
+        </div>
+        
+        <!-- Quick Stats -->
+        <div class="quick-stats">
+          <div class="stat-card">
+            <div class="stat-title">{{ translate('admin.systemUptime', 'System Uptime') }}</div>
+            <div class="stat-value">99.98%</div>
+            <div class="stat-trend trend-up">
+              <span>↑ 0.2%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+            </div>
           </div>
-          
-          <div class="nav-section">
-            <div class="nav-header">{{ translate('admin.dashboard', 'Dashboard') }}</div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a href="#" class="nav-link active" @click.prevent="setActiveTab('overview')">
-                  <i>📊</i>
-                  <span>{{ translate('admin.overview', 'Overview') }}</span>
-                </a>
-              </li>
-            </ul>
+          <div class="stat-card">
+            <div class="stat-title">{{ translate('admin.avgResponseTime', 'Average Response Time') }}</div>
+            <div class="stat-value">245ms</div>
+            <div class="stat-trend trend-down">
+              <span>↓ 12%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+            </div>
           </div>
-          
-          <div class="nav-section">
-            <div class="nav-header">{{ translate('admin.system', 'System') }}</div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a href="#" class="nav-link" @click.prevent="setActiveTab('database')">
-                  <i>💾</i>
-                  <span>{{ translate('admin.database', 'Database') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link" @click.prevent="setActiveTab('logs')">
-                  <i>📋</i>
-                  <span>{{ translate('admin.logs', 'Logs') }}</span>
-                </a>
-              </li>
-            </ul>
+          <div class="stat-card">
+            <div class="stat-title">{{ translate('admin.errorRate', 'Error Rate') }}</div>
+            <div class="stat-value">0.05%</div>
+            <div class="stat-trend trend-up">
+              <span>↑ 0.01%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+            </div>
           </div>
-          
-          <div class="nav-section">
-            <div class="nav-header">{{ translate('admin.settings', 'Settings') }}</div>
-            <ul class="nav-items">
-              <li class="nav-item">
-                <a href="#" class="nav-link" @click.prevent="setActiveTab('users')">
-                  <i>👥</i>
-                  <span>{{ translate('admin.userManagement', 'User Management') }}</span>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="#" class="nav-link" @click.prevent="setActiveTab('security')">
-                  <i>🔒</i>
-                  <span>{{ translate('admin.security', 'Security') }}</span>
-                </a>
-              </li>
-            </ul>
+          <div class="stat-card">
+            <div class="stat-title">{{ translate('admin.activeUsers', 'Active Users') }}</div>
+            <div class="stat-value">2,453</div>
+            <div class="stat-trend trend-up">
+              <span>↑ 15%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+            </div>
           </div>
         </div>
         
-        <!-- Main Content -->
-        <div class="main">
-          <div class="header">
-            <h1 class="page-title">{{ translate('admin.systemAdministration', 'System Administration') }}</h1>
+        <!-- System Tabs -->
+        <div class="tabs">
+          <div class="tab-header">
+            <button 
+              v-for="tab in tabs" 
+              :key="tab.id"
+              class="tab-btn" 
+              :class="{ active: activeTab === tab.id }"
+              @click="setActiveTab(tab.id)"
+            >
+              {{ translate(`admin.tabs.${tab.id}`, tab.label) }}
+            </button>
           </div>
           
-          <!-- Quick Stats -->
-          <div class="quick-stats">
-            <div class="stat-card">
-              <div class="stat-title">{{ translate('admin.systemUptime', 'System Uptime') }}</div>
-              <div class="stat-value">99.98%</div>
-              <div class="stat-trend trend-up">
-                <span>↑ 0.2%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+          <div class="tab-content">
+            <div class="dashboard-grid">
+              <!-- System Health Card - Overview Tab Only -->
+              <div class="dashboard-card" v-if="activeTab === 'overview'">
+                <div class="card-header">
+                  <div class="card-title">{{ translate('admin.systemHealthStatus', 'System Health Status') }}</div>
+                  <div class="card-actions">
+                    <button class="btn btn-outline" @click="runDiagnostics">
+                      {{ translate('admin.runDiagnostics', 'Run Diagnostics') }}
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="health-status">
+                  <div v-for="service in healthServices" :key="service.name" 
+                       :class="['health-item', `status-${service.status}`]">
+                    <div :class="['status-badge', `badge-${service.status}`]"></div>
+                    <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">{{ translate('admin.avgResponseTime', 'Average Response Time') }}</div>
-              <div class="stat-value">245ms</div>
-              <div class="stat-trend trend-down">
-                <span>↓ 12%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              
+              <!-- Resource Usage - Overview Tab Only -->
+              <div class="dashboard-card" v-if="activeTab === 'overview'">
+                <div class="card-header">
+                  <div class="card-title">{{ translate('admin.resourceUsage', 'Resource Usage') }}</div>
+                </div>
+                
+                <div class="resource-usage">
+                  <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
+                    <div class="usage-header">
+                      <div class="usage-label">{{ translate(`admin.resources.${resource.id}`, resource.label) }}</div>
+                      <div class="usage-value">{{ resource.value }}%</div>
+                    </div>
+                    <div class="usage-bar">
+                      <div 
+                        :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]" 
+                        :style="{ width: `${resource.value}%` }"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">{{ translate('admin.errorRate', 'Error Rate') }}</div>
-              <div class="stat-value">0.05%</div>
-              <div class="stat-trend trend-up">
-                <span>↑ 0.01%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              
+              <!-- Database Management - Database Tab Only -->
+              <div class="dashboard-card" v-if="activeTab === 'database'" style="grid-column: span 2;">
+                <div class="card-header">
+                  <div class="card-title">{{ translate('admin.databaseManagement', 'Database Management') }}</div>
+                  <div class="card-actions">
+                    <button class="btn btn-primary" @click="reindexDatabase">
+                      {{ translate('admin.reindexDatabase', 'Reindex Database') }}
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="db-actions">
+                  <div class="db-action-card" @click="reindexDatabase">
+                    <div class="action-icon">🔄</div>
+                    <div class="action-title">{{ translate('admin.dbActions.reindex', 'Reindex') }}</div>
+                    <div class="action-desc">{{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}</div>
+                  </div>
+                  <div class="db-action-card" @click="backupDatabase">
+                    <div class="action-icon">💾</div>
+                    <div class="action-title">{{ translate('admin.dbActions.backup', 'Backup') }}</div>
+                    <div class="action-desc">{{ translate('admin.dbActions.backupDesc', 'Create database backup') }}</div>
+                  </div>
+                  <div class="db-action-card" @click="optimizeDatabase">
+                    <div class="action-icon">📊</div>
+                    <div class="action-title">{{ translate('admin.dbActions.optimize', 'Optimize') }}</div>
+                    <div class="action-desc">{{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance') }}</div>
+                  </div>
+                </div>
+                
+                <div class="db-stats">
+                  <div><strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong> {{ dbStats.lastReindex }}</div>
+                  <div><strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong> {{ dbStats.databaseSize }}</div>
+                  <div><strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong> {{ dbStats.totalTables }}</div>
+                </div>
               </div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">{{ translate('admin.activeUsers', 'Active Users') }}</div>
-              <div class="stat-value">2,453</div>
-              <div class="stat-trend trend-up">
-                <span>↑ 15%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
+              
+              <!-- Log Management - Logs Tab Only -->
+              <div class="dashboard-card" v-if="activeTab === 'logs'" style="grid-column: span 2;">
+                <div class="card-header">
+                  <div class="card-title">{{ translate('admin.logManagement', 'Log Management') }}</div>
+                  <div class="card-actions">
+                    <button class="btn btn-primary" @click="rolloverLogs">
+                      {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
+                    </button>
+                    <button class="btn btn-outline" @click="searchLogs">
+                      {{ translate('admin.searchLogs', 'Search Logs') }}
+                    </button>
+                  </div>
+                </div>
+                
+                <table class="log-table">
+                  <thead>
+                    <tr>
+                      <th>{{ translate('admin.logTime', 'Time') }}</th>
+                      <th>{{ translate('admin.logLevel', 'Level') }}</th>
+                      <th>{{ translate('admin.logService', 'Service') }}</th>
+                      <th>{{ translate('admin.logMessage', 'Message') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(log, index) in logs" :key="index">
+                      <td>{{ log.time }}</td>
+                      <td><span :class="['log-level', `log-${log.level.toLowerCase()}`]">{{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}</span></td>
+                      <td>{{ log.service }}</td>
+                      <td>{{ translate(`admin.logMessages.${log.messageKey}`, log.message) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                
+                <div class="table-footer">
+                  <div>{{ translate('admin.showingEntries', 'Showing {start}-{end} of {total} entries').replace('{start}', '1').replace('{end}', '3').replace('{total}', '1,284') }}</div>
+                  <div class="pagination">
+                    <button class="page-btn">«</button>
+                    <button class="page-btn active">1</button>
+                    <button class="page-btn">2</button>
+                    <button class="page-btn">3</button>
+                    <button class="page-btn">»</button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          
-          <!-- System Tabs -->
-          <div class="tabs">
-            <div class="tab-header">
-              <button 
-                v-for="tab in tabs" 
-                :key="tab.id"
-                class="tab-btn" 
-                :class="{ active: activeTab === tab.id }"
-                @click="setActiveTab(tab.id)"
-              >
-                {{ translate(`admin.tabs.${tab.id}`, tab.label) }}
-              </button>
-            </div>
-            
-            <div class="tab-content">
-              <div class="dashboard-grid">
-                <!-- System Health Card - Overview Tab Only -->
-                <div class="dashboard-card" v-if="activeTab === 'overview'">
-                  <div class="card-header">
-                    <div class="card-title">{{ translate('admin.systemHealthStatus', 'System Health Status') }}</div>
-                    <div class="card-actions">
-                      <button class="btn btn-outline" @click="runDiagnostics">
-                        {{ translate('admin.runDiagnostics', 'Run Diagnostics') }}
-                      </button>
+              
+              <!-- Security Monitoring - Security Tab Only -->
+              <div class="dashboard-card" v-if="activeTab === 'security'" style="grid-column: span 2;">
+                <div class="card-header">
+                  <div class="card-title">{{ translate('admin.securityMonitoring', 'Security Monitoring') }}</div>
+                  <div class="card-actions">
+                    <button class="btn btn-outline" @click="runSecurityScan">
+                      {{ translate('admin.securityScan', 'Security Scan') }}
+                    </button>
+                  </div>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                  <div class="usage-item">
+                    <div class="usage-header">
+                      <div class="usage-label">{{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)') }}</div>
+                      <div class="usage-value">23</div>
+                    </div>
+                    <div class="usage-bar">
+                      <div class="usage-fill usage-low" style="width: 23%"></div>
                     </div>
                   </div>
                   
-                  <div class="health-status">
-                    <div v-for="service in healthServices" :key="service.name" 
-                         :class="['health-item', `status-${service.status}`]">
-                      <div :class="['status-badge', `badge-${service.status}`]"></div>
-                      <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
+                  <div class="usage-item">
+                    <div class="usage-header">
+                      <div class="usage-label">{{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)') }}</div>
+                      <div class="usage-value">5</div>
+                    </div>
+                    <div class="usage-bar">
+                      <div class="usage-fill usage-low" style="width: 5%"></div>
                     </div>
                   </div>
                 </div>
                 
-                <!-- Resource Usage - Overview Tab Only -->
-                <div class="dashboard-card" v-if="activeTab === 'overview'">
-                  <div class="card-header">
-                    <div class="card-title">{{ translate('admin.resourceUsage', 'Resource Usage') }}</div>
-                  </div>
-                  
-                  <div class="resource-usage">
-                    <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
-                      <div class="usage-header">
-                        <div class="usage-label">{{ translate(`admin.resources.${resource.id}`, resource.label) }}</div>
-                        <div class="usage-value">{{ resource.value }}%</div>
-                      </div>
-                      <div class="usage-bar">
-                        <div 
-                          :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]" 
-                          :style="{ width: `${resource.value}%` }"
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
+                <div style="font-size: 0.875rem;">
+                  <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong> 2 {{ translate('admin.daysAgo', 'days ago') }}</div>
+                  <div><strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong> 0 {{ translate('admin.critical', 'critical') }}, 2 {{ translate('admin.medium', 'medium') }}, 5 {{ translate('admin.low', 'low') }}</div>
+                </div>
+              </div>
+              
+              <!-- User Management - Users Tab Only -->
+              <div class="dashboard-card" v-if="activeTab === 'users'" style="grid-column: span 2;">
+                <div class="card-header">
+                  <div class="card-title">{{ translate('admin.userManagement', 'User Management') }}</div>
                 </div>
                 
-                <!-- Database Management - Database Tab Only -->
-                <div class="dashboard-card" v-if="activeTab === 'database'" style="grid-column: span 2;">
-                  <div class="card-header">
-                    <div class="card-title">{{ translate('admin.databaseManagement', 'Database Management') }}</div>
-                    <div class="card-actions">
-                      <button class="btn btn-primary" @click="reindexDatabase">
-                        {{ translate('admin.reindexDatabase', 'Reindex Database') }}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="db-actions">
-                    <div class="db-action-card" @click="reindexDatabase">
-                      <div class="action-icon">🔄</div>
-                      <div class="action-title">{{ translate('admin.dbActions.reindex', 'Reindex') }}</div>
-                      <div class="action-desc">{{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}</div>
-                    </div>
-                    <div class="db-action-card" @click="backupDatabase">
-                      <div class="action-icon">💾</div>
-                      <div class="action-title">{{ translate('admin.dbActions.backup', 'Backup') }}</div>
-                      <div class="action-desc">{{ translate('admin.dbActions.backupDesc', 'Create database backup') }}</div>
-                    </div>
-                    <div class="db-action-card" @click="optimizeDatabase">
-                      <div class="action-icon">📊</div>
-                      <div class="action-title">{{ translate('admin.dbActions.optimize', 'Optimize') }}</div>
-                      <div class="action-desc">{{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance') }}</div>
-                    </div>
-                  </div>
-                  
-                  <div class="db-stats">
-                    <div><strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong> 5 {{ translate('admin.daysAgo', 'days ago') }}</div>
-                    <div><strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong> 42.3 GB</div>
-                    <div><strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong> 128</div>
-                  </div>
-                </div>
-                
-                <!-- Log Management - Logs Tab Only -->
-                <div class="dashboard-card" v-if="activeTab === 'logs'" style="grid-column: span 2;">
-                  <div class="card-header">
-                    <div class="card-title">{{ translate('admin.logManagement', 'Log Management') }}</div>
-                    <div class="card-actions">
-                      <button class="btn btn-primary" @click="rolloverLogs">
-                        {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
-                      </button>
-                      <button class="btn btn-outline" @click="searchLogs">
-                        {{ translate('admin.searchLogs', 'Search Logs') }}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <table class="log-table">
-                    <thead>
-                      <tr>
-                        <th>{{ translate('admin.logTime', 'Time') }}</th>
-                        <th>{{ translate('admin.logLevel', 'Level') }}</th>
-                        <th>{{ translate('admin.logService', 'Service') }}</th>
-                        <th>{{ translate('admin.logMessage', 'Message') }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="(log, index) in logs" :key="index">
-                        <td>{{ log.time }}</td>
-                        <td><span :class="['log-level', `log-${log.level.toLowerCase()}`]">{{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}</span></td>
-                        <td>{{ log.service }}</td>
-                        <td>{{ translate(`admin.logMessages.${log.messageKey}`, log.message) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  
-                  <div class="table-footer">
-                    <div>{{ translate('admin.showingEntries', 'Showing {start}-{end} of {total} entries').replace('{start}', '1').replace('{end}', '3').replace('{total}', '1,284') }}</div>
-                    <div class="pagination">
-                      <button class="page-btn">«</button>
-                      <button class="page-btn active">1</button>
-                      <button class="page-btn">2</button>
-                      <button class="page-btn">3</button>
-                      <button class="page-btn">»</button>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Security Monitoring - Security Tab Only -->
-                <div class="dashboard-card" v-if="activeTab === 'security'" style="grid-column: span 2;">
-                  <div class="card-header">
-                    <div class="card-title">{{ translate('admin.securityMonitoring', 'Security Monitoring') }}</div>
-                    <div class="card-actions">
-                      <button class="btn btn-outline" @click="runSecurityScan">
-                        {{ translate('admin.securityScan', 'Security Scan') }}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div style="margin-bottom: 1rem;">
-                    <div class="usage-item">
-                      <div class="usage-header">
-                        <div class="usage-label">{{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)') }}</div>
-                        <div class="usage-value">23</div>
-                      </div>
-                      <div class="usage-bar">
-                        <div class="usage-fill usage-low" style="width: 23%"></div>
-                      </div>
-                    </div>
-                    
-                    <div class="usage-item">
-                      <div class="usage-header">
-                        <div class="usage-label">{{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)') }}</div>
-                        <div class="usage-value">5</div>
-                      </div>
-                      <div class="usage-bar">
-                        <div class="usage-fill usage-low" style="width: 5%"></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div style="font-size: 0.875rem;">
-                    <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong> 2 {{ translate('admin.daysAgo', 'days ago') }}</div>
-                    <div><strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong> 0 {{ translate('admin.critical', 'critical') }}, 2 {{ translate('admin.medium', 'medium') }}, 5 {{ translate('admin.low', 'low') }}</div>
-                  </div>
-                </div>
-                
-                <!-- User Management - Users Tab Only -->
-                <div class="dashboard-card" v-if="activeTab === 'users'" style="grid-column: span 2;">
-                  <div class="card-header">
-                    <div class="card-title">{{ translate('admin.userManagement', 'User Management') }}</div>
-                  </div>
-                  
-                  <table class="log-table">
-                    <thead>
-                      <tr>
-                        <th>{{ translate('admin.userName', 'Name') }}</th>
-                        <th>{{ translate('admin.userEmail', 'Email') }}</th>
-                        <th>{{ translate('admin.userRole', 'Role') }}</th>
-                        <th>{{ translate('admin.userStatus', 'Status') }}</th>
-                        <th>{{ translate('admin.userActions', 'Actions') }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>Admin User</td>
-                        <td>admin@huduma.ai</td>
-                        <td>Administrator</td>
-                        <td><span class="log-level log-info">Active</span></td>
-                        <td>
-                          <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
-                            {{ translate('admin.edit', 'Edit') }}
-                          </button>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Test User</td>
-                        <td>test@huduma.ai</td>
-                        <td>User</td>
-                        <td><span class="log-level log-info">Active</span></td>
-                        <td>
-                          <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
-                            {{ translate('admin.edit', 'Edit') }}
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <table class="log-table">
+                  <thead>
+                    <tr>
+                      <th>{{ translate('admin.userName', 'Name') }}</th>
+                      <th>{{ translate('admin.userEmail', 'Email') }}</th>
+                      <th>{{ translate('admin.userRole', 'Role') }}</th>
+                      <th>{{ translate('admin.userStatus', 'Status') }}</th>
+                      <th>{{ translate('admin.userActions', 'Actions') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Admin User</td>
+                      <td>admin@huduma.ai</td>
+                      <td>Administrator</td>
+                      <td><span class="log-level log-info">Active</span></td>
+                      <td>
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
+                          {{ translate('admin.edit', 'Edit') }}
+                        </button>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Test User</td>
+                      <td>test@huduma.ai</td>
+                      <td>User</td>
+                      <td><span class="log-level log-info">Active</span></td>
+                      <td>
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
+                          {{ translate('admin.edit', 'Edit') }}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
-      <!-- Loading Indicator -->
-      <div class="loading-overlay" v-if="isLoading">
-        <div class="loading-spinner"></div>
-        <p>{{ translate('admin.loading', 'Loading...') }}</p>
-      </div>
     </div>
-  </template>
+    
+    <!-- Loading Indicator -->
+    <div class="loading-overlay" v-if="isLoading">
+      <div class="loading-spinner"></div>
+      <p>
+        {{ currentOperation 
+          ? translate(`admin.operations.${currentOperation}.loading`, `Processing ${currentOperation}...`) 
+          : translate('admin.loading', 'Loading...') }}
+      </p>
+    </div>
+    
+    <!-- Operation Results Modal -->
+    <OperationResultsModal 
+      v-if="showOperationResults && operationResults" 
+      :operation="currentOperation"
+      :results="operationResults"
+      @close="closeOperationResults"
+    />
+  </div>
+</template>
 
 <script>
+import databaseOperationsService from '../services/databaseOperationsService';
+import OperationResultsModal from './OperationResultsModal.vue';
+import { eventBus } from '../eventBus.js';
 
 export default {
+  components: {
+    OperationResultsModal
+  },
   name: 'AdminDashboard',
   emits: ['close'],
   data() {
@@ -366,6 +384,12 @@ export default {
       // Loading state
       isLoading: false,
       
+      // Operation in progress
+      currentOperation: null,
+      
+      // Operation results
+      operationResults: null,
+      
       // System health services
       healthServices: [
         { id: 'apiServices', name: 'API Services', status: 'good' },
@@ -375,6 +399,13 @@ export default {
         { id: 'messageQueue', name: 'Message Queue', status: 'good' },
         { id: 'externalApi', name: 'External API', status: 'error' }
       ],
+      
+      // Database stats
+      dbStats: {
+        lastReindex: '5 days ago',
+        databaseSize: '42.3 GB',
+        totalTables: 128
+      },
       
       // Resource usage metrics
       resourceUsage: [
@@ -458,28 +489,31 @@ export default {
       
       // Alert configuration modal
       showAlertsConfig: false,
+      
+      // Show operation results modal
+      showOperationResults: false,
     };
   },
-    mounted() {
+  mounted() {
+    // Apply current language settings
+    if (this.$i18n) {
+      this.$i18n.locale = this.currentLocale;
+    }
 
-        // Apply current language settings
-        if (this.$i18n) {
-            this.$i18n.locale = this.currentLocale;
-        }
+    // Apply theme from localStorage or default
+    this.applyTheme(this.currentTheme);
 
-        // Apply theme from localStorage or default
-        this.applyTheme(this.currentTheme);
-
-        // Listen for theme changes from other components
-        window.addEventListener('themeChange', this.handleThemeChange);
-    },
-
-    beforeDestroy() {
-        // Clean up event listeners when component is destroyed
-        window.removeEventListener('themeChange', this.handleThemeChange)
-    },
-  methods: {
+    // Listen for theme changes from other components
+    window.addEventListener('themeChange', this.handleThemeChange);
     
+    // Initial load of database stats (if available)
+    this.loadDatabaseStats();
+  },
+  beforeUnmount() {
+    // Clean up event listeners when component is destroyed
+    window.removeEventListener('themeChange', this.handleThemeChange);
+  },
+  methods: {
     // Translation method - similar to the one in SettingsComponent
     translate(key, fallback = '') {
       if (!this.$i18n) return fallback;
@@ -565,7 +599,6 @@ export default {
         document.body.classList.remove('dark-mode');
         document.body.classList.add('light-mode');
       }
-      
     },
     
     // Handle theme change event from other components
@@ -592,17 +625,53 @@ export default {
       return 'high';
     },
     
+    // Show notification using the event bus
+    showNotification(message, type = 'success', duration = 3000) {
+      eventBus.$emit('notification:show', {
+        message,
+        type,
+        duration
+      });
+    },
+    
+    // Load database statistics
+    async loadDatabaseStats() {
+      try {
+        // Call the stats endpoint if it exists
+        const response = await databaseOperationsService.getDatabaseStats();
+        if (response && response.data) {
+          this.dbStats = response.data;
+        }
+      } catch (error) {
+        console.error('Error loading database stats:', error);
+        // Just log the error, don't show a notification since this is background loading
+      }
+    },
+    
     // Database operations
-    reindexDatabase() {
-      this.showOperation('reindexDatabase');
+    async reindexDatabase() {
+      this.executeOperation('reindexDatabase', async () => {
+        const response = await databaseOperationsService.reindexDatabase();
+        // Update the last reindex time if successful
+        if (response.data && response.data.success) {
+          this.dbStats.lastReindex = 'Just now';
+        }
+        return response.data;
+      });
     },
     
-    backupDatabase() {
-      this.showOperation('backupDatabase');
+    async backupDatabase() {
+      this.executeOperation('backupDatabase', async () => {
+        const response = await databaseOperationsService.backupDatabase();
+        return response.data;
+      });
     },
     
-    optimizeDatabase() {
-      this.showOperation('optimizeDatabase');
+    async optimizeDatabase() {
+      this.executeOperation('optimizeDatabase', async () => {
+        const response = await databaseOperationsService.optimizeDatabase();
+        return response.data;
+      });
     },
     
     // Log operations
@@ -682,23 +751,82 @@ export default {
       this.showOperation('viewDetailedMetrics');
     },
     
-    // Helper to show operation feedback
+    // Helper to execute database operations with proper loading and error handling
+    async executeOperation(operation, apiCall) {
+      try {
+        // Set loading state and operation name
+        this.isLoading = true;
+        this.currentOperation = operation;
+        this.operationResults = null;
+        
+        // Execute the API call
+        const result = await apiCall();
+        
+        // Set operation results for potential display
+        this.operationResults = result;
+        
+        // Show success notification
+        if (result && result.success) {
+          this.showNotification(
+            this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`),
+            'success'
+          );
+        } else {
+          throw new Error(result.message || `Failed to ${operation}`);
+        }
+        
+        // Return the result
+        return result;
+      } catch (error) {
+        // Set error result
+        this.operationResults = {
+          success: false,
+          message: error.message || this.translate(`admin.operations.${operation}.error`, `Error during ${operation}`),
+          error: error.response?.data?.error || error.message
+        };
+        
+        // Show error notification
+        this.showNotification(this.operationResults.message, 'error');
+        
+        console.error(`Error during ${operation}:`, error);
+        return this.operationResults;
+      } finally {
+        // Reset loading state
+        this.isLoading = false;
+        
+        // Optionally show results modal
+        if (this.operationResults) {
+          this.showOperationResults = true;
+        }
+      }
+    },
+    
+    // Legacy method for operations that are not yet implemented with real API calls
     showOperation(operation, data = {}) {
       // In a real app, this would make API calls
       // For now, just show loading and a notification
       this.isLoading = true;
+      this.currentOperation = operation;
       
       setTimeout(() => {
         this.isLoading = false;
+        this.currentOperation = null;
         console.log(`Operation ${operation} executed with data:`, data);
         
-        // If using a notification service like in SettingsComponent:
-        // notificationService.success(this.translate(`admin.operations.${operation}.success`));
-        alert(this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`));
+        // If using the notification service via event bus:
+        this.showNotification(
+          this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`),
+          'info'
+        );
       }, 1500);
+    },
+    
+    // Close the operation results modal
+    closeOperationResults() {
+      this.showOperationResults = false;
     }
   }
-}
+};
 </script>
 
 

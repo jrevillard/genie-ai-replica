@@ -135,7 +135,8 @@ const routeFiles = [
   'service-category-routes',
   'auth-routes',
   'logger-routes',
-  'database-operations-routes'
+  'database-operations-routes',
+  'admin-routes' // Add admin routes to the list
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -155,6 +156,7 @@ if (routes['service-category-routes']) app.use('/api/service-categories', routes
 if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']);
 if (routes['logger-routes']) app.use('/api/logger', routes['logger-routes']); 
 if (routes['database-operations-routes']) app.use('/api/database', routes['database-operations-routes']);
+if (routes['admin-routes']) app.use('/api/admin', routes['admin-routes']); // Mount admin routes
 
 // Email verification redirect
 app.get('/verify-email/:token', (req, res) => {

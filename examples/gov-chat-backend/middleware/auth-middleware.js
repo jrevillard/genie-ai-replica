@@ -212,9 +212,11 @@ const authMiddleware = {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
       
-      // In this example, let's assume the first 10 users are admins (for testing)
-      // In a real application, you would check a proper role field
-      const isAdmin = parseInt(user._key) <= 10;
+      // Check if user is admin: either one of the first 10 users OR has role "Admin"
+      const isAdmin = parseInt(user._key) <= 10 || user.role === 'Admin';
+      
+      logger.info(`[ADMIN DEBUG] Checking role field: ${user.role}`);
+      logger.info(`[ADMIN DEBUG] Checking user ID: ${user._key} <= 10: ${parseInt(user._key) <= 10}`);
       logger.info(`[ADMIN DEBUG] User _key: ${user._key}, Is admin? ${isAdmin}`);
       
       if (!isAdmin) {

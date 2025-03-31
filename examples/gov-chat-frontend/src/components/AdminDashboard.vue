@@ -1,16 +1,18 @@
 <template>
   <!-- Add backdrop -->
   <div class="admin-backdrop" @click="$emit('close')"></div>
-  
+
   <div class="admin-dashboard">
     <!-- Close button -->
-    <button class="close-dashboard-btn" @click="$emit('close')" aria-label="Close dashboard">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <button class="close-dashboard-btn" @click="$emit('close')"
+      :aria-label="translate('admin.close', 'Close dashboard')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"></line>
         <line x1="6" y1="6" x2="18" y2="18"></line>
       </svg>
     </button>
-    
+
     <div class="dashboard">
       <!-- Sidebar -->
       <div class="sidebar">
@@ -18,7 +20,7 @@
           <div class="logo-icon">H</div>
           <span>{{ translate('admin.huduma', 'Huduma AI') }}</span>
         </div>
-        
+
         <div class="nav-section">
           <div class="nav-header">{{ translate('admin.dashboard', 'Dashboard') }}</div>
           <ul class="nav-items">
@@ -30,7 +32,7 @@
             </li>
           </ul>
         </div>
-        
+
         <div class="nav-section">
           <div class="nav-header">{{ translate('admin.system', 'System') }}</div>
           <ul class="nav-items">
@@ -48,7 +50,7 @@
             </li>
           </ul>
         </div>
-        
+
         <div class="nav-section">
           <div class="nav-header">{{ translate('admin.settings', 'Settings') }}</div>
           <ul class="nav-items">
@@ -67,59 +69,54 @@
           </ul>
         </div>
       </div>
-      
+
       <!-- Main Content -->
       <div class="main">
         <div class="header">
           <h1 class="page-title">{{ translate('admin.systemAdministration', 'System Administration') }}</h1>
         </div>
-        
+
         <!-- Quick Stats -->
         <div class="quick-stats">
           <div class="stat-card">
             <div class="stat-title">{{ translate('admin.systemUptime', 'System Uptime') }}</div>
-            <div class="stat-value">99.98%</div>
+            <div class="stat-value">{{ metrics.systemUptime }}%</div>
             <div class="stat-trend trend-up">
               <span>↑ 0.2%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-title">{{ translate('admin.avgResponseTime', 'Average Response Time') }}</div>
-            <div class="stat-value">245ms</div>
+            <div class="stat-value">{{ metrics.avgResponseTime }}ms</div>
             <div class="stat-trend trend-down">
               <span>↓ 12%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-title">{{ translate('admin.errorRate', 'Error Rate') }}</div>
-            <div class="stat-value">0.05%</div>
+            <div class="stat-value">{{ metrics.errorRate }}%</div>
             <div class="stat-trend trend-up">
               <span>↑ 0.01%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
             </div>
           </div>
           <div class="stat-card">
             <div class="stat-title">{{ translate('admin.activeUsers', 'Active Users') }}</div>
-            <div class="stat-value">2,453</div>
+            <div class="stat-value">{{ metrics.activeUsers.toLocaleString() }}</div>
             <div class="stat-trend trend-up">
               <span>↑ 15%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
             </div>
           </div>
         </div>
-        
+
         <!-- System Tabs -->
         <div class="tabs">
           <div class="tab-header">
-            <button 
-              v-for="tab in tabs" 
-              :key="tab.id"
-              class="tab-btn" 
-              :class="{ active: activeTab === tab.id }"
-              @click="setActiveTab(tab.id)"
-            >
+            <button v-for="tab in tabs" :key="tab.id" class="tab-btn" :class="{ active: activeTab === tab.id }"
+              @click="setActiveTab(tab.id)">
               {{ translate(`admin.tabs.${tab.id}`, tab.label) }}
             </button>
           </div>
-          
+
           <div class="tab-content">
             <div class="dashboard-grid">
               <!-- System Health Card - Overview Tab Only -->
@@ -132,38 +129,36 @@
                     </button>
                   </div>
                 </div>
-                
+
                 <div class="health-status">
-                  <div v-for="service in healthServices" :key="service.name" 
-                       :class="['health-item', `status-${service.status}`]">
+                  <div v-for="service in healthServices" :key="service.name"
+                    :class="['health-item', `status-${service.status}`]">
                     <div :class="['status-badge', `badge-${service.status}`]"></div>
                     <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
                   </div>
                 </div>
               </div>
-              
+
               <!-- Resource Usage - Overview Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'overview'">
                 <div class="card-header">
                   <div class="card-title">{{ translate('admin.resourceUsage', 'Resource Usage') }}</div>
                 </div>
-                
+
                 <div class="resource-usage">
                   <div v-for="resource in resourceUsage" :key="resource.id" class="usage-item">
                     <div class="usage-header">
-                      <div class="usage-label">{{ translate(`admin.resources.${resource.id}`, resource.label) }}</div>
+                      <div class="usage-label">{{ resource.label }}</div>
                       <div class="usage-value">{{ resource.value }}%</div>
                     </div>
                     <div class="usage-bar">
-                      <div 
-                        :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]" 
-                        :style="{ width: `${resource.value}%` }"
-                      ></div>
+                      <div :class="['usage-fill', `usage-${getUsageLevel(resource.value)}`]"
+                        :style="{ width: `${resource.value}%` }"></div>
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               <!-- Database Management - Database Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'database'" style="grid-column: span 2;">
                 <div class="card-header">
@@ -174,32 +169,38 @@
                     </button>
                   </div>
                 </div>
-                
+
                 <div class="db-actions">
                   <div class="db-action-card" @click="reindexDatabase">
                     <div class="action-icon">🔄</div>
                     <div class="action-title">{{ translate('admin.dbActions.reindex', 'Reindex') }}</div>
-                    <div class="action-desc">{{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}</div>
+                    <div class="action-desc">{{ translate('admin.dbActions.reindexDesc', 'Rebuild database indexes') }}
+                    </div>
                   </div>
                   <div class="db-action-card" @click="backupDatabase">
                     <div class="action-icon">💾</div>
                     <div class="action-title">{{ translate('admin.dbActions.backup', 'Backup') }}</div>
-                    <div class="action-desc">{{ translate('admin.dbActions.backupDesc', 'Create database backup') }}</div>
+                    <div class="action-desc">{{ translate('admin.dbActions.backupDesc', 'Create database backup') }}
+                    </div>
                   </div>
                   <div class="db-action-card" @click="optimizeDatabase">
                     <div class="action-icon">📊</div>
                     <div class="action-title">{{ translate('admin.dbActions.optimize', 'Optimize') }}</div>
-                    <div class="action-desc">{{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance') }}</div>
+                    <div class="action-desc">{{ translate('admin.dbActions.optimizeDesc', 'Optimize query performance')
+                      }}</div>
                   </div>
                 </div>
-                
+
                 <div class="db-stats">
-                  <div><strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong> {{ dbStats.lastReindex }}</div>
-                  <div><strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong> {{ dbStats.databaseSize }}</div>
-                  <div><strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong> {{ dbStats.totalTables }}</div>
+                  <div><strong>{{ translate('admin.lastReindex', 'Last Reindex') }}:</strong> {{ dbStats.lastReindex }}
+                  </div>
+                  <div><strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong> {{ dbStats.databaseSize
+                    }}</div>
+                  <div><strong>{{ translate('admin.totalTables', 'Total Tables') }}:</strong> {{ dbStats.totalTables }}
+                  </div>
                 </div>
               </div>
-              
+
               <!-- Log Management - Logs Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'logs'" style="grid-column: span 2;">
                 <div class="card-header">
@@ -213,7 +214,7 @@
                     </button>
                   </div>
                 </div>
-                
+
                 <table class="log-table">
                   <thead>
                     <tr>
@@ -226,15 +227,19 @@
                   <tbody>
                     <tr v-for="(log, index) in logs" :key="index">
                       <td>{{ log.time }}</td>
-                      <td><span :class="['log-level', `log-${log.level.toLowerCase()}`]">{{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}</span></td>
+                      <td><span :class="['log-level', `log-${log.level.toLowerCase()}`]">{{
+                          translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}</span></td>
                       <td>{{ log.service }}</td>
                       <td>{{ translate(`admin.logMessages.${log.messageKey}`, log.message) }}</td>
                     </tr>
                   </tbody>
                 </table>
-                
+
                 <div class="table-footer">
-                  <div>{{ translate('admin.showingEntries', 'Showing {start}-{end} of {total} entries').replace('{start}', '1').replace('{end}', '3').replace('{total}', '1,284') }}</div>
+                  <div>{{ translate('admin.showingEntries', 'Showing {start}-{end} of {total} entries')
+                    .replace('{start}', '1')
+                    .replace('{end}', logs.length)
+                    .replace('{total}', logsTotal) }}</div>
                   <div class="pagination">
                     <button class="page-btn">«</button>
                     <button class="page-btn active">1</button>
@@ -244,8 +249,8 @@
                   </div>
                 </div>
               </div>
-              
-              <!-- Security Monitoring - Security Tab Only -->
+
+              <!-- Security Monitoring -->
               <div class="dashboard-card" v-if="activeTab === 'security'" style="grid-column: span 2;">
                 <div class="card-header">
                   <div class="card-title">{{ translate('admin.securityMonitoring', 'Security Monitoring') }}</div>
@@ -255,68 +260,80 @@
                     </button>
                   </div>
                 </div>
-                
+
                 <div style="margin-bottom: 1rem;">
                   <div class="usage-item">
                     <div class="usage-header">
-                      <div class="usage-label">{{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)') }}</div>
-                      <div class="usage-value">23</div>
+                      <div class="usage-label">{{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)')
+                        }}</div>
+                      <div class="usage-value">{{ securityMetrics.failedLoginAttempts }}</div>
                     </div>
                     <div class="usage-bar">
-                      <div class="usage-fill usage-low" style="width: 23%"></div>
+                      <div class="usage-fill usage-low" :style="{ width: `${securityMetrics.failedLoginAttempts}%` }">
+                      </div>
                     </div>
                   </div>
-                  
+
                   <div class="usage-item">
                     <div class="usage-header">
-                      <div class="usage-label">{{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)') }}</div>
-                      <div class="usage-value">5</div>
+                      <div class="usage-label">{{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)')
+                        }}</div>
+                      <div class="usage-value">{{ securityMetrics.suspiciousActivities }}</div>
                     </div>
                     <div class="usage-bar">
-                      <div class="usage-fill usage-low" style="width: 5%"></div>
+                      <div class="usage-fill usage-low" :style="{ width: `${securityMetrics.suspiciousActivities}%` }">
+                      </div>
                     </div>
                   </div>
                 </div>
-                
+
                 <div style="font-size: 0.875rem;">
-                  <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong> 2 {{ translate('admin.daysAgo', 'days ago') }}</div>
-                  <div><strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong> 0 {{ translate('admin.critical', 'critical') }}, 2 {{ translate('admin.medium', 'medium') }}, 5 {{ translate('admin.low', 'low') }}</div>
+                  <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong> {{
+                    securityMetrics.lastSecurityScan }}</div>
+                  <div><strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong>
+                    {{ securityMetrics.vulnerabilities.critical }} {{ translate('admin.critical', 'critical') }},
+                    {{ securityMetrics.vulnerabilities.medium }} {{ translate('admin.medium', 'medium') }},
+                    {{ securityMetrics.vulnerabilities.low }} {{ translate('admin.low', 'low') }}
+                  </div>
                 </div>
               </div>
-              
+
               <!-- User Management - Users Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'users'" style="grid-column: span 2;">
                 <div class="card-header">
                   <div class="card-title">{{ translate('admin.userManagement', 'User Management') }}</div>
                 </div>
-                
+
+                <!-- User Stats Summary -->
+                <div class="user-stats-summary">
+                  <div class="stat-item">
+                    <div class="stat-label">{{ translate('admin.totalUsers', 'Total Users') }}</div>
+                    <div class="stat-value">{{ userStats.totalUsers }}</div>
+                  </div>
+                  <div class="stat-item">
+                    <div class="stat-label">{{ translate('admin.activeUsers', 'Active Users') }}</div>
+                    <div class="stat-value">{{ userStats.activeUsers }}</div>
+                  </div>
+                  <div class="stat-item">
+                    <div class="stat-label">{{ translate('admin.newUsers', 'New Users (Month)') }}</div>
+                    <div class="stat-value">{{ userStats.newUsers }}</div>
+                  </div>
+                </div>
+
                 <table class="log-table">
                   <thead>
                     <tr>
                       <th>{{ translate('admin.userName', 'Name') }}</th>
                       <th>{{ translate('admin.userEmail', 'Email') }}</th>
                       <th>{{ translate('admin.userRole', 'Role') }}</th>
-                      <th>{{ translate('admin.userStatus', 'Status') }}</th>
                       <th>{{ translate('admin.userActions', 'Actions') }}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>Admin User</td>
-                      <td>admin@huduma.ai</td>
-                      <td>Administrator</td>
-                      <td><span class="log-level log-info">Active</span></td>
-                      <td>
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
-                          {{ translate('admin.edit', 'Edit') }}
-                        </button>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td>Test User</td>
-                      <td>test@huduma.ai</td>
-                      <td>User</td>
-                      <td><span class="log-level log-info">Active</span></td>
+                    <tr v-for="user in userStats.users" :key="user._key">
+                      <td>{{ user.fullName || user.loginName }}</td>
+                      <td>{{ user.email }}</td>
+                      <td>{{ user.role }}</td>
                       <td>
                         <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
                           {{ translate('admin.edit', 'Edit') }}
@@ -331,29 +348,26 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Loading Indicator -->
     <div class="loading-overlay" v-if="isLoading">
       <div class="loading-spinner"></div>
       <p>
-        {{ currentOperation 
-          ? translate(`admin.operations.${currentOperation}.loading`, `Processing ${currentOperation}...`) 
-          : translate('admin.loading', 'Loading...') }}
+        {{ currentOperation
+        ? translate(`admin.operations.${currentOperation}.loading`, `Processing ${currentOperation}...`)
+        : translate('admin.loading', 'Loading...') }}
       </p>
     </div>
-    
+
     <!-- Operation Results Modal -->
-    <OperationResultsModal 
-      v-if="showOperationResults && operationResults" 
-      :operation="currentOperation"
-      :results="operationResults"
-      @close="closeOperationResults"
-    />
+    <OperationResultsModal v-if="showOperationResults && operationResults" :operation="currentOperation"
+      :results="operationResults" @close="closeOperationResults" />
   </div>
 </template>
 
 <script>
 import databaseOperationsService from '../services/databaseOperationsService';
+import adminDashboardService from '../services/adminDashboardService';
 import OperationResultsModal from './OperationResultsModal.vue';
 import { eventBus } from '../eventBus.js';
 
@@ -367,29 +381,29 @@ export default {
     return {
       // Current locale for translations
       currentLocale: this.getCurrentLanguage(),
-      
+
       // Theme settings
       currentTheme: document.documentElement.getAttribute('data-theme') || 'light',
-      
+
       // Tab navigation
       activeTab: 'overview',
-        tabs: [
-          { id: 'overview', label: 'System Health' },
-          { id: 'database', label: 'Database' },
-          { id: 'logs', label: 'Logs' },
-          { id: 'security', label: 'Security' },
-          { id: 'users', label: 'Users' }
-        ],
-      
+      tabs: [
+        { id: 'overview', label: 'System Health' },
+        { id: 'database', label: 'Database' },
+        { id: 'logs', label: 'Logs' },
+        { id: 'security', label: 'Security' },
+        { id: 'users', label: 'Users' }
+      ],
+
       // Loading state
       isLoading: false,
-      
+
       // Operation in progress
       currentOperation: null,
-      
+
       // Operation results
       operationResults: null,
-      
+
       // System health services
       healthServices: [
         { id: 'apiServices', name: 'API Services', status: 'good' },
@@ -399,14 +413,14 @@ export default {
         { id: 'messageQueue', name: 'Message Queue', status: 'good' },
         { id: 'externalApi', name: 'External API', status: 'error' }
       ],
-      
+
       // Database stats
       dbStats: {
         lastReindex: '5 days ago',
         databaseSize: '42.3 GB',
         totalTables: 128
       },
-      
+
       // Resource usage metrics
       resourceUsage: [
         { id: 'cpu', label: 'CPU Usage', value: 42 },
@@ -414,85 +428,135 @@ export default {
         { id: 'storage', label: 'Storage Usage', value: 92 },
         { id: 'network', label: 'Network Bandwidth', value: 35 }
       ],
-      
+
       // Logs data
       logs: [
-        { 
-          time: '10:42:15', 
-          level: 'ERROR', 
-          service: 'API Gateway', 
+        {
+          time: '10:42:15',
+          level: 'ERROR',
+          service: 'API Gateway',
           message: 'Connection timeout to external provider',
           messageKey: 'connectionTimeout'
         },
-        { 
-          time: '10:38:22', 
-          level: 'WARNING', 
-          service: 'Storage', 
+        {
+          time: '10:38:22',
+          level: 'WARNING',
+          service: 'Storage',
           message: 'Disk space below 10% threshold',
           messageKey: 'lowDiskSpace'
         },
-        { 
-          time: '10:35:47', 
-          level: 'INFO', 
-          service: 'Auth Service', 
+        {
+          time: '10:35:47',
+          level: 'INFO',
+          service: 'Auth Service',
           message: 'User role updated for admin@huduma.ai',
           messageKey: 'userRoleUpdated'
         }
       ],
-      
+
       // Feature flags
       featureFlags: [
-        { 
-          id: 'enhancedSearch', 
-          name: 'Enhanced Search', 
-          description: 'Enable AI-powered search capabilities', 
-          enabled: true 
+        {
+          id: 'enhancedSearch',
+          name: 'Enhanced Search',
+          description: 'Enable AI-powered search capabilities',
+          enabled: true
         },
-        { 
-          id: 'newDashboardUi', 
-          name: 'New Dashboard UI', 
-          description: 'Updated user interface for dashboards', 
-          enabled: false 
+        {
+          id: 'newDashboardUi',
+          name: 'New Dashboard UI',
+          description: 'Updated user interface for dashboards',
+          enabled: false
         },
-        { 
-          id: 'bulkProcessingApi', 
-          name: 'Bulk Processing API', 
-          description: 'Enable bulk data processing endpoints', 
-          enabled: true 
+        {
+          id: 'bulkProcessingApi',
+          name: 'Bulk Processing API',
+          description: 'Enable bulk data processing endpoints',
+          enabled: true
         }
       ],
-      
+
       // Alert configurations
       alertConfigs: [
-        { 
-          id: 'cpuUsage', 
-          title: 'CPU Usage > 90%', 
-          channels: 'Email, SMS to System Admin', 
-          enabled: true 
+        {
+          id: 'cpuUsage',
+          title: 'CPU Usage > 90%',
+          channels: 'Email, SMS to System Admin',
+          enabled: true
         },
-        { 
-          id: 'errorRate', 
-          title: 'Error Rate > 1%', 
-          channels: 'Email to Dev Team, Slack #alerts', 
-          enabled: true 
+        {
+          id: 'errorRate',
+          title: 'Error Rate > 1%',
+          channels: 'Email to Dev Team, Slack #alerts',
+          enabled: true
         },
-        { 
-          id: 'lowStorage', 
-          title: 'Storage < 10%', 
-          channels: 'Email, SMS, Automated cleanup', 
-          enabled: true 
+        {
+          id: 'lowStorage',
+          title: 'Storage < 10%',
+          channels: 'Email, SMS, Automated cleanup',
+          enabled: true
         }
       ],
-      
+
       // Maintenance mode toggle
       maintenanceMode: false,
-      
+
       // Alert configuration modal
       showAlertsConfig: false,
-      
+
       // Show operation results modal
       showOperationResults: false,
+
+      // System metrics
+      metrics: {
+        systemUptime: 99.98,
+        avgResponseTime: 245,
+        errorRate: 0.05,
+        activeUsers: 2453
+      },
+
+      // Log filter options
+      logFilter: {
+        level: '',
+        service: ''
+      },
+
+      // Total log count
+      logsTotal: 1284,
+
+      // Security metrics
+      securityMetrics: {
+        failedLoginAttempts: 23,
+        suspiciousActivities: 5,
+        lastSecurityScan: '2 days ago',
+        vulnerabilities: {
+          critical: 0,
+          medium: 2,
+          low: 5
+        }
+      },
+
+      // User statistics
+      userStats: {
+        totalUsers: 0,
+        activeUsers: 0,
+        newUsers: 0,
+        users: []
+      }
     };
+  },
+  created() {
+    // Initialize with the current language settings
+    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
+    
+    // Add watchers for language changes
+    if (this.$i18n) {
+      this.$watch('$i18n.locale', (newLocale) => {
+        console.log('Locale changed in AdminDashboard:', newLocale);
+        this.currentLocale = newLocale;
+        this.$forceUpdate();
+      });
+    }
   },
   mounted() {
     // Apply current language settings
@@ -505,21 +569,22 @@ export default {
 
     // Listen for theme changes from other components
     window.addEventListener('themeChange', this.handleThemeChange);
-    
-    // Initial load of database stats (if available)
-    this.loadDatabaseStats();
+
+    // Load initial data for the dashboard
+    this.loadInitialData();
   },
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
     window.removeEventListener('themeChange', this.handleThemeChange);
   },
   methods: {
-    // Translation method - similar to the one in SettingsComponent
+    // Translation method - improved to ensure consistent behavior with SettingsComponent
     translate(key, fallback = '') {
       if (!this.$i18n) return fallback;
       try {
         // Force the correct locale
         const translation = this.$i18n.t(key, { locale: this.currentLocale });
+        // Return fallback if the key is returned (meaning no translation found)
         if (translation === key) {
           return fallback || key;
         }
@@ -529,14 +594,14 @@ export default {
         return fallback || key;
       }
     },
-    
+
     // Get current language from i18n or localStorage
     getCurrentLanguage() {
       // First try to get from i18n instance
       if (this.$i18n && this.$i18n.locale) {
         return this.$i18n.locale;
       }
-      
+
       // Fallback to localStorage
       try {
         const savedLocale = localStorage.getItem('userLocale');
@@ -546,7 +611,7 @@ export default {
       } catch (e) {
         console.warn('Error accessing localStorage for language:', e);
       }
-      
+
       // Default to English if nothing else works
       return 'en';
     },
@@ -632,6 +697,162 @@ export default {
         type,
         duration
       });
+    },
+
+    // Load system health data
+async loadSystemHealth() {
+  try {
+    this.isLoading = true;
+    const response = await adminDashboardService.getSystemHealth();
+    
+    if (response && response.data && response.data.data) {
+      const data = response.data.data;
+      
+      // Update metrics
+      this.metrics = {
+        systemUptime: data.metrics.systemUptime,
+        avgResponseTime: data.metrics.avgResponseTime,
+        errorRate: data.metrics.errorRate,
+        activeUsers: data.metrics.activeUsers
+      };
+
+          // Update health services
+          this.healthServices = data.healthServices;
+
+          // Update resource usage
+          this.resourceUsage = Object.keys(data.resourceUsage).map(id => ({
+            id,
+            label: this.getResourceLabel(id),
+            value: data.resourceUsage[id]
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading system health:', error);
+        this.showNotification('Failed to load system health data', 'error');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Get resource label
+    getResourceLabel(resourceId) {
+      const labels = {
+        cpu: this.translate('admin.resources.cpu', 'CPU Usage'),
+        memory: this.translate('admin.resources.memory', 'Memory Usage'),
+        storage: this.translate('admin.resources.storage', 'Storage Usage'),
+        network: this.translate('admin.resources.network', 'Network Bandwidth')
+      };
+      return labels[resourceId] || resourceId;
+    },
+
+    // Load logs
+    async loadLogs() {
+      try {
+        this.isLoading = true;
+        const response = await adminDashboardService.getLogs({
+          limit: 10,
+          level: this.logFilter.level,
+          service: this.logFilter.service
+        });
+
+        if (response && response.data && response.data.data) {
+          this.logs = response.data.data.logs;
+          this.logsTotal = response.data.data.total;
+        }
+      } catch (error) {
+        console.error('Error loading logs:', error);
+        this.showNotification('Failed to load logs', 'error');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Load security metrics
+    async loadSecurityMetrics() {
+      try {
+        this.isLoading = true;
+        const response = await adminDashboardService.getSecurityMetrics();
+
+        if (response && response.data && response.data.data) {
+          this.securityMetrics = response.data.data;
+        }
+      } catch (error) {
+        console.error('Error loading security metrics:', error);
+        this.showNotification('Failed to load security metrics', 'error');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Load user stats
+    async loadUserStats() {
+      try {
+        this.isLoading = true;
+        const response = await adminDashboardService.getUserStats();
+
+        if (response && response.data && response.data.data) {
+          this.userStats = response.data.data;
+        }
+      } catch (error) {
+        console.error('Error loading user stats:', error);
+        this.showNotification('Failed to load user statistics', 'error');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Log operations
+    async rolloverLogs() {
+      this.executeOperation('rolloverLogs', async () => {
+        const response = await adminDashboardService.rolloverLogs();
+        // Refresh logs after rollover
+        if (response.data && response.data.success) {
+          this.loadLogs();
+        }
+        return response.data;
+      });
+    },
+
+    // Search logs with filters
+    async searchLogs() {
+      this.loadLogs();
+    },
+
+    // System diagnostics
+    async runDiagnostics() {
+      this.executeOperation('runDiagnostics', async () => {
+        const response = await adminDashboardService.runDiagnostics();
+        return response.data;
+      });
+    },
+
+    // Security operations
+    async runSecurityScan() {
+      this.executeOperation('runSecurityScan', async () => {
+        const response = await adminDashboardService.runSecurityScan();
+        // Refresh security metrics after scan
+        if (response.data && response.data.success) {
+          this.loadSecurityMetrics();
+        }
+        return response.data;
+      });
+    },
+
+    // Load all dashboard data
+    async loadInitialData() {
+      // Load system health by default
+      this.loadSystemHealth();
+
+      // Load tab-specific data based on active tab
+      if (this.activeTab === 'database') {
+        this.loadDatabaseStats();
+      } else if (this.activeTab === 'logs') {
+        this.loadLogs();
+      } else if (this.activeTab === 'security') {
+        this.loadSecurityMetrics();
+      } else if (this.activeTab === 'users') {
+        this.loadUserStats();
+      }
     },
     
     // Load database statistics

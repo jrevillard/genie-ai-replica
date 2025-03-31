@@ -1,118 +1,118 @@
 <template>
-    <div class="modal" :data-theme="theme">
-      <div class="overlay" @click="$emit('close')"></div>
-      <div class="modal-content">
-        <div class="modal-title">
-          <h2>{{ title }}</h2>
-          <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">×</button>
+  <div class="modal" :data-theme="theme">
+    <div class="overlay" @click="$emit('close')"></div>
+    <div class="modal-content">
+      <div class="modal-title">
+        <h2>{{ title }}</h2>
+        <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">×</button>
+      </div>
+      
+      <div class="modal-body">
+        <!-- Operation success/failure status -->
+        <div :class="['result-status', results.success ? 'status-success' : 'status-error']">
+          <div class="status-icon">{{ results.success ? '✓' : '✗' }}</div>
+          <div class="status-message">{{ results.message }}</div>
         </div>
         
-        <div class="modal-body">
-          <!-- Operation success/failure status -->
-          <div :class="['result-status', results.success ? 'status-success' : 'status-error']">
-            <div class="status-icon">{{ results.success ? '✓' : '✗' }}</div>
-            <div class="status-message">{{ results.message }}</div>
-          </div>
-          
-          <!-- Operation details: Backup results -->
-          <div v-if="operation === 'backupDatabase' && results.success" class="result-details">
-            <div class="result-section">
-              <h3>{{ $t('admin.operations.backupDetails', 'Backup Details') }}</h3>
-              <div class="detail-item">
-                <div class="detail-label">{{ $t('admin.operations.backupFile', 'Backup File') }}:</div>
-                <div class="detail-value">{{ results.backupFile }}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">{{ $t('admin.operations.backupLocation', 'Location') }}:</div>
-                <div class="detail-value">{{ results.backupLocation }}</div>
-              </div>
-              <div class="detail-item" v-if="results.size">
-                <div class="detail-label">{{ $t('admin.operations.backupSize', 'Size') }}:</div>
-                <div class="detail-value">{{ results.size }}</div>
-              </div>
+        <!-- Operation details: Backup results -->
+        <div v-if="operation === 'backupDatabase' && results.success" class="result-details">
+          <div class="result-section">
+            <h3>{{ translate('admin.operations.backupDetails', 'Backup Details') }}</h3>
+            <div class="detail-item">
+              <div class="detail-label">{{ translate('admin.operations.backupFile', 'Backup File') }}:</div>
+              <div class="detail-value">{{ results.backupFile }}</div>
             </div>
-          </div>
-          
-          <!-- Operation details: Reindex results -->
-          <div v-if="operation === 'reindexDatabase' && results.success && results.results" class="result-details">
-            <div class="result-section">
-              <h3>{{ $t('admin.operations.reindexResults', 'Reindex Results') }}</h3>
-              <div class="table-container">
-                <table class="results-table">
-                  <thead>
-                    <tr>
-                      <th>{{ $t('admin.operations.collection', 'Collection') }}</th>
-                      <th>{{ $t('admin.operations.status', 'Status') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(item, index) in results.results" :key="index">
-                      <td>{{ item.collection }}</td>
-                      <td>
-                        <span :class="['status-badge', item.status === 'success' ? 'badge-success' : 'badge-error']">
-                          {{ item.status }}
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div class="detail-item">
+              <div class="detail-label">{{ translate('admin.operations.backupLocation', 'Location') }}:</div>
+              <div class="detail-value">{{ results.backupLocation }}</div>
             </div>
-          </div>
-          
-          <!-- Operation details: Optimize results -->
-          <div v-if="operation === 'optimizeDatabase' && results.success && results.results" class="result-details">
-            <div class="result-section">
-              <h3>{{ $t('admin.operations.optimizeResults', 'Optimization Results') }}</h3>
-              <div class="table-container">
-                <table class="results-table">
-                  <thead>
-                    <tr>
-                      <th>{{ $t('admin.operations.collection', 'Collection') }}</th>
-                      <th>{{ $t('admin.operations.status', 'Status') }}</th>
-                      <th>{{ $t('admin.operations.indexSuggestions', 'Index Suggestions') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(item, index) in results.results" :key="index">
-                      <td>{{ item.collection }}</td>
-                      <td>
-                        <span :class="['status-badge', item.status === 'success' ? 'badge-success' : 'badge-error']">
-                          {{ item.status }}
-                        </span>
-                      </td>
-                      <td>
-                        <ul v-if="item.indexSuggestions && item.indexSuggestions.length">
-                          <li v-for="(suggestion, i) in item.indexSuggestions" :key="i">
-                            {{ suggestion }}
-                          </li>
-                        </ul>
-                        <span v-else>-</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Generic error details -->
-          <div v-if="!results.success && results.error" class="result-details error-details">
-            <div class="result-section">
-              <h3>{{ $t('admin.operations.errorDetails', 'Error Details') }}</h3>
-              <pre class="error-message">{{ results.error }}</pre>
+            <div class="detail-item" v-if="results.size">
+              <div class="detail-label">{{ translate('admin.operations.backupSize', 'Size') }}:</div>
+              <div class="detail-value">{{ results.size }}</div>
             </div>
           </div>
         </div>
         
-        <div class="modal-footer">
-          <button class="btn btn-primary" @click="$emit('close')">
-            {{ $t('admin.operations.close', 'Close') }}
-          </button>
+        <!-- Operation details: Reindex results -->
+        <div v-if="operation === 'reindexDatabase' && results.success && results.results" class="result-details">
+          <div class="result-section">
+            <h3>{{ translate('admin.operations.reindexResults', 'Reindex Results') }}</h3>
+            <div class="table-container">
+              <table class="results-table">
+                <thead>
+                  <tr>
+                    <th>{{ translate('admin.operations.collection', 'Collection') }}</th>
+                    <th>{{ translate('admin.operations.status', 'Status') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(item, index) in results.results" :key="index">
+                    <td>{{ item.collection }}</td>
+                    <td>
+                      <span :class="['status-badge', item.status === 'success' ? 'badge-success' : 'badge-error']">
+                        {{ item.status }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Operation details: Optimize results -->
+        <div v-if="operation === 'optimizeDatabase' && results.success && results.results" class="result-details">
+          <div class="result-section">
+            <h3>{{ translate('admin.operations.optimizeResults', 'Optimization Results') }}</h3>
+            <div class="table-container">
+              <table class="results-table">
+                <thead>
+                  <tr>
+                    <th>{{ translate('admin.operations.collection', 'Collection') }}</th>
+                    <th>{{ translate('admin.operations.status', 'Status') }}</th>
+                    <th>{{ translate('admin.operations.indexSuggestions', 'Index Suggestions') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(item, index) in results.results" :key="index">
+                    <td>{{ item.collection }}</td>
+                    <td>
+                      <span :class="['status-badge', item.status === 'success' ? 'badge-success' : 'badge-error']">
+                        {{ item.status }}
+                      </span>
+                    </td>
+                    <td>
+                      <ul v-if="item.indexSuggestions && item.indexSuggestions.length">
+                        <li v-for="(suggestion, i) in item.indexSuggestions" :key="i">
+                          {{ suggestion }}
+                        </li>
+                      </ul>
+                      <span v-else>-</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Generic error details -->
+        <div v-if="!results.success && results.error" class="result-details error-details">
+          <div class="result-section">
+            <h3>{{ translate('admin.operations.errorDetails', 'Error Details') }}</h3>
+            <pre class="error-message">{{ results.error }}</pre>
+          </div>
         </div>
       </div>
+      
+      <div class="modal-footer">
+        <button class="btn btn-primary" @click="$emit('close')">
+          {{ translate('admin.operations.close', 'Close') }}
+        </button>
+      </div>
     </div>
-  </template>
+  </div>
+</template>
   
   <script>
   export default {
@@ -128,19 +128,63 @@
       }
     },
     emits: ['close'],
+    data() {
+      return {
+        // Current locale for translations
+        currentLocale: this.getCurrentLanguage()
+      };
+    },
     computed: {
       title() {
         const operationTitles = {
-          reindexDatabase: this.$t('admin.operations.reindexTitle', 'Database Reindex Results'),
-          backupDatabase: this.$t('admin.operations.backupTitle', 'Database Backup Results'),
-          optimizeDatabase: this.$t('admin.operations.optimizeTitle', 'Database Optimization Results')
+          reindexDatabase: this.translate('admin.operations.reindexTitle', 'Database Reindex Results'),
+          backupDatabase: this.translate('admin.operations.backupTitle', 'Database Backup Results'),
+          optimizeDatabase: this.translate('admin.operations.optimizeTitle', 'Database Optimization Results')
         };
         
-        return operationTitles[this.operation] || this.$t('admin.operations.resultsTitle', 'Operation Results');
+        return operationTitles[this.operation] || this.translate('admin.operations.resultsTitle', 'Operation Results');
       },
       theme() {
         // Get theme from document
         return document.documentElement.getAttribute('data-theme') || 'light';
+      }
+    },
+    methods: {
+      // Translation method - copied from AdminDashboard for consistency
+      translate(key, fallback = '') {
+        if (!this.$i18n) return fallback;
+        try {
+          // Force the correct locale
+          const translation = this.$i18n.t(key, { locale: this.currentLocale });
+          if (translation === key) {
+            return fallback || key;
+          }
+          return translation;
+        } catch (e) {
+          console.error('Translation error:', e);
+          return fallback || key;
+        }
+      },
+      
+      // Get current language from i18n or localStorage - also copied from AdminDashboard
+      getCurrentLanguage() {
+        // First try to get from i18n instance
+        if (this.$i18n && this.$i18n.locale) {
+          return this.$i18n.locale;
+        }
+        
+        // Fallback to localStorage
+        try {
+          const savedLocale = localStorage.getItem('userLocale');
+          if (savedLocale) {
+            return savedLocale;
+          }
+        } catch (e) {
+          console.warn('Error accessing localStorage for language:', e);
+        }
+        
+        // Default to English if nothing else works
+        return 'en';
       }
     }
   };

@@ -99,3 +99,165 @@
 2025-03-31 09:20:02 [INFO]: API Documentation available at: http://localhost:3000/api-docs
 2025-03-31 09:20:02 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
 2025-03-31 09:20:29 [INFO]: [0mPOST /api/database/backup [32m200[0m 18249.115 ms - 282[0m
+2025-03-31 09:25:09 [INFO]: Accessed root endpoint
+2025-03-31 09:25:09 [INFO]: [0mGET / [32m200[0m 1.494 ms - 255[0m
+2025-03-31 09:25:11 [INFO]: [0mGET /favicon.ico [33m404[0m 1.268 ms - 150[0m
+2025-03-31 09:25:23 [INFO]: [0mGET /favicon.ico [33m404[0m 0.565 ms - 150[0m
+2025-03-31 09:27:42 [INFO]: [0mGET /api/database/stats [33m404[0m 1.077 ms - 157[0m
+2025-03-31 09:27:51 [INFO]: [0mGET /api/auth/me [36m304[0m 15.050 ms - -[0m
+2025-03-31 09:28:01 [INFO]: [0mGET /api/database/stats [33m404[0m 0.716 ms - 157[0m
+2025-03-31 09:28:08 [INFO]: [0mPOST /api/database/optimize [32m200[0m 20.670 ms - 1121[0m
+2025-03-31 09:28:24 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 1258.615 ms - -[0m
+2025-03-31 09:28:24 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 110.057 ms - -[0m
+2025-03-31 09:28:24 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 115.039 ms - -[0m
+2025-03-31 09:28:25 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 109.787 ms - -[0m
+2025-03-31 09:28:25 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 119.192 ms - -[0m
+2025-03-31 09:28:26 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 105.153 ms - -[0m
+2025-03-31 09:28:26 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 125.288 ms - -[0m
+2025-03-31 09:28:26 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 86.734 ms - -[0m
+2025-03-31 09:28:27 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 107.458 ms - -[0m
+2025-03-31 09:28:29 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-02&endDate=2025-03-31&locale=en [36m304[0m 2043.657 ms - -[0m
+2025-03-31 09:28:29 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 3.948 ms - -[0m
+2025-03-31 09:34:20 [INFO]: Server is running on port 3000
+2025-03-31 09:34:20 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 09:34:20 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations
+2025-03-31 09:34:27 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1572.535 ms - 1052[0m
+2025-03-31 09:40:19 [INFO]: [0mGET /api/database/stats [33m404[0m 1.708 ms - 157[0m
+2025-03-31 09:40:25 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1543.226 ms - 1052[0m
+2025-03-31 09:40:33 [INFO]: [0mPOST /api/database/optimize [32m200[0m 20.904 ms - 1121[0m
+2025-03-31 09:46:04 [INFO]: [0mGET /api/database/stats [33m404[0m 2.744 ms - 157[0m
+2025-03-31 09:46:08 [INFO]: [0mPOST /api/database/optimize [32m200[0m 18.961 ms - 1121[0m
+2025-03-31 09:46:26 [INFO]: [0mGET /api/database/stats [33m404[0m 0.318 ms - 157[0m
+2025-03-31 09:46:29 [INFO]: [0mPOST /api/database/optimize [32m200[0m 17.213 ms - 1121[0m
+2025-03-31 09:48:30 [INFO]: [0mPOST /api/database/optimize [32m200[0m 16.834 ms - 1121[0m
+2025-03-31 09:55:18 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1754.414 ms - 1052[0m
+2025-03-31 09:55:26 [INFO]: [0mGET /api/auth/me [36m304[0m 11.633 ms - -[0m
+2025-03-31 09:55:34 [INFO]: [0mGET /api/database/stats [33m404[0m 0.321 ms - 157[0m
+2025-03-31 09:55:41 [INFO]: [0mPOST /api/database/optimize [32m200[0m 19.614 ms - 1121[0m
+2025-03-31 09:55:55 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1531.311 ms - 1052[0m
+2025-03-31 09:56:32 [INFO]: [0mGET /api/database/stats [33m404[0m 0.538 ms - 157[0m
+2025-03-31 09:56:42 [INFO]: [0mPOST /api/database/optimize [32m200[0m 17.107 ms - 1121[0m
+2025-03-31 09:56:51 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1547.241 ms - 1052[0m
+2025-03-31 10:04:46 [INFO]: [0mGET /api/database/stats [33m404[0m 0.331 ms - 157[0m
+2025-03-31 10:04:52 [INFO]: [0mGET /api/database/stats [33m404[0m 0.478 ms - 157[0m
+2025-03-31 10:04:59 [INFO]: [0mPOST /api/database/optimize [32m200[0m 15.546 ms - 1121[0m
+2025-03-31 10:05:28 [INFO]: [0mGET /api/database/stats [33m404[0m 0.473 ms - 157[0m
+2025-03-31 10:05:32 [INFO]: [0mPOST /api/database/optimize [32m200[0m 16.657 ms - 1121[0m
+2025-03-31 10:06:01 [INFO]: [0mGET /api/database/stats [33m404[0m 0.665 ms - 157[0m
+2025-03-31 10:06:04 [INFO]: [0mPOST /api/database/optimize [32m200[0m 14.270 ms - 1121[0m
+2025-03-31 10:21:31 [INFO]: [0mGET /api/database/stats [33m404[0m 0.673 ms - 157[0m
+2025-03-31 10:26:16 [INFO]: [0mGET /api/database/stats [33m404[0m 0.447 ms - 157[0m
+2025-03-31 10:26:30 [INFO]: [0mGET /api/database/stats [33m404[0m 0.350 ms - 157[0m
+2025-03-31 18:13:38 [INFO]: Server is running on port 3000
+2025-03-31 18:13:38 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 18:13:38 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 18:14:13 [INFO]: [0mGET /api/database/stats [33m404[0m 1.709 ms - 157[0m
+2025-03-31 18:25:40 [INFO]: [0mGET /api/database/stats [33m404[0m 0.823 ms - 157[0m
+2025-03-31 18:25:53 [INFO]: [0mPOST /api/database/optimize [32m200[0m 23.999 ms - 1121[0m
+2025-03-31 18:26:01 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1591.606 ms - 1052[0m
+2025-03-31 18:32:30 [INFO]: Server is running on port 3000
+2025-03-31 18:32:30 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 18:32:30 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 18:32:52 [INFO]: [0mGET /api/admin/system-health [33m401[0m 6.532 ms - 62[0m
+2025-03-31 18:33:44 [INFO]: [0mPOST /api/auth/login [32m200[0m 80.379 ms - 67319[0m
+2025-03-31 18:40:52 [INFO]: [0mPOST /api/auth/login [32m200[0m 65.703 ms - 67319[0m
+2025-03-31 18:40:55 [INFO]: [0mGET /api/api/admin/system-health [33m404[0m 1.330 ms - 166[0m
+2025-03-31 18:43:49 [INFO]: [0mGET /api/admin/system-health [33m403[0m 9.135 ms - 51[0m
+2025-03-31 18:44:18 [INFO]: [0mGET /api/admin/system-health [33m403[0m 7.331 ms - 51[0m
+2025-03-31 18:53:20 [INFO]: [0mGET /api/admin/system-health [33m403[0m 7.301 ms - 51[0m
+2025-03-31 18:55:18 [INFO]: Server is running on port 3000
+2025-03-31 18:55:18 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 18:55:18 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 18:55:31 [INFO]: [0mPOST /api/auth/logout [33m401[0m 3.359 ms - 58[0m
+2025-03-31 18:55:31 [INFO]: [0mPOST /api/auth/logout [33m401[0m 2.333 ms - 58[0m
+2025-03-31 18:55:34 [INFO]: [0mPOST /api/auth/login [32m200[0m 66.766 ms - 67334[0m
+2025-03-31 18:55:38 [INFO]: [0mGET /api/admin/system-health [33m403[0m 8.025 ms - 51[0m
+2025-03-31 19:01:07 [INFO]: Server is running on port 3000
+2025-03-31 19:01:07 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 19:01:07 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 19:01:19 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 1325.171 ms - -[0m
+2025-03-31 19:01:20 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 107.983 ms - -[0m
+2025-03-31 19:01:20 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 122.662 ms - -[0m
+2025-03-31 19:01:21 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 109.309 ms - -[0m
+2025-03-31 19:01:21 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 117.217 ms - -[0m
+2025-03-31 19:01:22 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 116.484 ms - -[0m
+2025-03-31 19:01:23 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 116.559 ms - -[0m
+2025-03-31 19:01:23 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 94.654 ms - -[0m
+2025-03-31 19:01:24 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 103.995 ms - -[0m
+2025-03-31 19:01:27 [INFO]: [0mPOST /api/auth/logout [33m401[0m 2.166 ms - 58[0m
+2025-03-31 19:01:27 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-02&endDate=2025-03-31&locale=en [0m-[0m - ms - -[0m
+2025-03-31 19:01:29 [INFO]: [0mPOST /api/auth/login [32m200[0m 65.622 ms - 67334[0m
+2025-03-31 19:01:35 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:01:35 [INFO]: Getting system health metrics
+2025-03-31 19:01:35 [INFO]: [0mGET /api/admin/system-health [32m200[0m 177.031 ms - 644[0m
+2025-03-31 19:06:37 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:06:37 [INFO]: Getting system health metrics
+2025-03-31 19:06:37 [INFO]: [0mGET /api/admin/system-health [32m200[0m 185.246 ms - 644[0m
+2025-03-31 19:06:49 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:06:49 [INFO]: Getting system health metrics
+2025-03-31 19:06:49 [INFO]: [0mGET /api/admin/system-health [32m200[0m 171.279 ms - 644[0m
+2025-03-31 19:07:03 [INFO]: [0mPOST /api/database/optimize [32m200[0m 20.167 ms - 1121[0m
+2025-03-31 19:07:09 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1526.976 ms - 1052[0m
+2025-03-31 19:08:34 [INFO]: [0mGET /api-docs/ [36m304[0m 1.473 ms - -[0m
+2025-03-31 19:08:34 [INFO]: [0mGET /api-docs/swagger-ui.css [36m304[0m 0.956 ms - -[0m
+2025-03-31 19:08:34 [INFO]: [0mGET /api-docs/swagger-ui-bundle.js [36m304[0m 0.306 ms - -[0m
+2025-03-31 19:08:35 [INFO]: [0mGET /api-docs/swagger-ui-standalone-preset.js [36m304[0m 0.483 ms - -[0m
+2025-03-31 19:08:35 [INFO]: [0mGET /api-docs/swagger-ui-init.js [32m200[0m 0.370 ms - 79896[0m
+2025-03-31 19:08:36 [INFO]: [0mGET /api-docs/favicon-32x32.png [36m304[0m 0.404 ms - -[0m
+2025-03-31 19:09:04 [INFO]: [0mGET /api/admin/system-health [33m401[0m 1.214 ms - 58[0m
+2025-03-31 19:09:55 [INFO]: [0mGET /api/admin/database/stats [33m401[0m 1.169 ms - 58[0m
+2025-03-31 19:10:16 [INFO]: [0mPOST /api/admin/logs/rollover [33m401[0m 1.728 ms - 58[0m
+2025-03-31 19:10:36 [INFO]: [0mGET /api/admin/user-stats [33m401[0m 1.268 ms - 58[0m
+2025-03-31 19:10:57 [INFO]: [0mGET /api/admin/security-metrics [33m401[0m 1.060 ms - 58[0m
+2025-03-31 19:11:14 [INFO]: [0mPOST /api/admin/security-scan [33m401[0m 1.659 ms - 58[0m
+2025-03-31 19:11:28 [INFO]: [0mPOST /api/admin/diagnostics [33m401[0m 1.291 ms - 58[0m
+2025-03-31 19:16:35 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:16:35 [INFO]: Getting system health metrics
+2025-03-31 19:16:35 [INFO]: [0mGET /api/admin/system-health [32m200[0m 212.927 ms - 644[0m
+2025-03-31 19:31:11 [INFO]: Server is running on port 3000
+2025-03-31 19:31:11 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 19:31:11 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 19:31:18 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:31:18 [INFO]: Getting system health metrics
+2025-03-31 19:31:19 [INFO]: [0mGET /api/admin/system-health [32m200[0m 731.924 ms - 630[0m
+2025-03-31 19:36:04 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 1452.252 ms - -[0m
+2025-03-31 19:36:04 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 124.329 ms - -[0m
+2025-03-31 19:36:04 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 117.041 ms - -[0m
+2025-03-31 19:36:05 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 121.938 ms - -[0m
+2025-03-31 19:36:06 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 129.377 ms - -[0m
+2025-03-31 19:36:06 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 123.862 ms - -[0m
+2025-03-31 19:36:06 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 142.305 ms - -[0m
+2025-03-31 19:36:07 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-03-01T17:00:00.000Z&endDate=2025-03-31T16:59:59.999Z&locale=en [36m304[0m 105.601 ms - -[0m
+2025-03-31 19:36:07 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-02-01T17:00:00.000Z&endDate=2025-03-03T16:59:59.999Z&locale=en [36m304[0m 111.418 ms - -[0m
+2025-03-31 19:36:10 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-03-02&endDate=2025-03-31&locale=en [32m200[0m 2213.178 ms - 1268[0m
+2025-03-31 19:36:10 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 5.402 ms - -[0m
+2025-03-31 19:36:33 [INFO]: [0mGET /api/analytics/dashboard?startDate=2025-01-29T17:00:00.000Z&endDate=2025-02-28T16:59:59.999Z&locale=en [32m200[0m 1404.310 ms - 1934[0m
+2025-03-31 19:36:34 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2025-01-29T17:00:00.000Z&endDate=2025-02-28T16:59:59.999Z&locale=en [36m304[0m 127.615 ms - -[0m
+2025-03-31 19:36:34 [INFO]: [0mGET /api/analytics/metric/totalQueries?startDate=2024-12-29T17:00:00.000Z&endDate=2025-01-28T16:59:59.999Z&locale=en [32m200[0m 135.652 ms - 38[0m
+2025-03-31 19:36:35 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2025-01-29T17:00:00.000Z&endDate=2025-02-28T16:59:59.999Z&locale=en [36m304[0m 125.395 ms - -[0m
+2025-03-31 19:36:35 [INFO]: [0mGET /api/analytics/metric/uniqueUsers?startDate=2024-12-29T17:00:00.000Z&endDate=2025-01-28T16:59:59.999Z&locale=en [32m200[0m 128.709 ms - 36[0m
+2025-03-31 19:36:36 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2025-01-29T17:00:00.000Z&endDate=2025-02-28T16:59:59.999Z&locale=en [36m304[0m 139.096 ms - -[0m
+2025-03-31 19:36:36 [INFO]: [0mGET /api/analytics/metric/averageResponseTime?startDate=2024-12-29T17:00:00.000Z&endDate=2025-01-28T16:59:59.999Z&locale=en [32m200[0m 127.935 ms - 59[0m
+2025-03-31 19:36:37 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2025-01-29T17:00:00.000Z&endDate=2025-02-28T16:59:59.999Z&locale=en [36m304[0m 104.012 ms - -[0m
+2025-03-31 19:36:37 [INFO]: [0mGET /api/analytics/metric/satisfactionRate?startDate=2024-12-29T17:00:00.000Z&endDate=2025-01-28T16:59:59.999Z&locale=en [32m200[0m 109.870 ms - 55[0m
+2025-03-31 19:36:42 [INFO]: [0mGET /api/analytics/timeseries/queries?interval=daily&startDate=2025-01-30&endDate=2025-02-28&locale=en [32m200[0m 4256.914 ms - 2042[0m
+2025-03-31 19:36:43 [INFO]: [0mGET /api/services/categories?locale=en [36m304[0m 4.116 ms - -[0m
+2025-03-31 19:39:02 [INFO]: Server is running on port 3000
+2025-03-31 19:39:02 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 19:39:02 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 19:39:15 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:39:15 [INFO]: Getting system health metrics
+2025-03-31 19:39:16 [INFO]: [0mGET /api/admin/system-health [32m200[0m 796.206 ms - 630[0m
+2025-03-31 19:42:13 [INFO]: Accessed root endpoint
+2025-03-31 19:42:13 [INFO]: [0mGET / [32m200[0m 1.488 ms - 268[0m
+2025-03-31 19:56:39 [INFO]: [0mPOST /api/database/reindex [32m200[0m 1437.434 ms - 1052[0m
+2025-03-31 19:56:56 [INFO]: Controller: Fetching system health metrics
+2025-03-31 19:56:56 [INFO]: Getting system health metrics
+2025-03-31 19:56:57 [INFO]: [0mGET /api/admin/system-health [32m200[0m 715.902 ms - 629[0m
+2025-03-31 19:59:04 [INFO]: [0mPOST /api/queries [32m201[0m 16.041 ms - 285[0m
+2025-03-31 19:59:04 [INFO]: [0mPATCH /api/queries/34405973/responsetime [33m404[0m 0.894 ms - 174[0m
+2025-03-31 19:59:05 [INFO]: [0mPATCH /api/queries/34405973/answered [32m200[0m 4.432 ms - 301[0m
+2025-03-31 19:59:35 [INFO]: [0mPOST /api/queries [32m201[0m 13.568 ms - 270[0m
+2025-03-31 19:59:35 [INFO]: [0mPATCH /api/queries/34405974/responsetime [33m404[0m 0.544 ms - 174[0m
+2025-03-31 19:59:35 [INFO]: [0mPATCH /api/queries/34405974/answered [32m200[0m 4.376 ms - 286[0m
+2025-03-31 19:59:50 [INFO]: [0mPOST /api/queries/34405974/feedback [32m200[0m 7.740 ms - 375[0m

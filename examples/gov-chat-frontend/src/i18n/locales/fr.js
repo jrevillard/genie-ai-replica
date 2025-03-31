@@ -13,6 +13,124 @@ export default {
     backToLogin: 'Retour à la connexion'
   },
   admin: {
+    // Libellés généraux du tableau de bord
+    huduma: 'Huduma AI',
+    dashboard: 'Tableau de bord',
+    system: 'Système',
+    settings: 'Paramètres',
+    overview: 'Aperçu',
+    database: 'Base de données',
+    logs: 'Journaux',
+    userManagement: 'Gestion des utilisateurs',
+    security: 'Sécurité',
+    systemAdministration: 'Administration du système',
+    loading: 'Chargement...',
+    close: 'Fermer le tableau de bord',
+    edit: 'Modifier',
+
+    // Statistiques et métriques
+    systemUptime: 'Temps de fonctionnement',
+    avgResponseTime: 'Temps de réponse moyen',
+    errorRate: 'Taux d\'erreur',
+    activeUsers: 'Utilisateurs actifs',
+    fromLastMonth: 'par rapport au mois dernier',
+
+    // Étiquettes des onglets
+    tabs: {
+      overview: 'État du système',
+      database: 'Base de données',
+      logs: 'Journaux',
+      security: 'Sécurité',
+      users: 'Utilisateurs'
+    },
+
+    // Santé du système
+    systemHealthStatus: 'État de santé du système',
+    runDiagnostics: 'Exécuter les diagnostics',
+    resourceUsage: 'Utilisation des ressources',
+
+    // Noms des services
+    services: {
+      apiServices: 'Services API',
+      database: 'Base de données',
+      cache: 'Cache',
+      storage: 'Stockage',
+      messageQueue: 'File d\'attente de messages',
+      externalApi: 'API externe'
+    },
+
+    // Types de ressources
+    resources: {
+      cpu: 'Utilisation CPU',
+      memory: 'Utilisation mémoire',
+      storage: 'Utilisation stockage',
+      network: 'Bande passante réseau'
+    },
+
+    // Gestion de la base de données
+    databaseManagement: 'Gestion de la base de données',
+    reindexDatabase: 'Réindexer la base',
+    lastReindex: 'Dernière réindexation',
+    databaseSize: 'Taille de la base',
+    totalTables: 'Nombre de tables',
+
+    // Gestion des journaux
+    logManagement: 'Gestion des journaux',
+    rolloverLogs: 'Rotation des journaux',
+    searchLogs: 'Rechercher les journaux',
+    logTime: 'Heure',
+    logLevel: 'Niveau',
+    logService: 'Service',
+    logMessage: 'Message',
+    showingEntries: 'Affichage de {start} à {end} sur {total} entrées',
+
+    // Niveaux de journaux
+    logLevels: {
+      error: 'ERREUR',
+      warning: 'AVERTISSEMENT',
+      info: 'INFO',
+      debug: 'DEBUG'
+    },
+
+    // Messages de journaux
+    logMessages: {
+      connectionTimeout: 'Délai de connexion dépassé pour le fournisseur externe',
+      lowDiskSpace: 'Espace disque inférieur au seuil de 10%',
+      userRoleUpdated: 'Rôle d\'utilisateur mis à jour pour admin@huduma.ai'
+    },
+
+    // Surveillance de la sécurité
+    securityMonitoring: 'Surveillance de la sécurité',
+    securityScan: 'Analyse de sécurité',
+    failedLoginAttempts: 'Tentatives de connexion échouées (24h)',
+    suspiciousActivities: 'Activités suspectes (24h)',
+    lastSecurityScan: 'Dernière analyse de sécurité',
+    vulnerabilitiesFound: 'Vulnérabilités trouvées',
+    daysAgo: 'jours',
+    critical: 'critiques',
+    medium: 'moyennes',
+    low: 'faibles',
+
+    // Gestion des utilisateurs
+    userName: 'Nom',
+    userEmail: 'Email',
+    userRole: 'Rôle',
+    userStatus: 'Statut',
+    userActions: 'Actions',
+    roleAdministrator: 'Administrateur',
+    roleUser: 'Utilisateur',
+    statusActive: 'Actif',
+
+    // Actions sur la base de données
+    dbActions: {
+      reindex: 'Réindexer',
+      backup: 'Sauvegarder',
+      optimize: 'Optimiser',
+      reindexDesc: 'Reconstruire les index de la base',
+      backupDesc: 'Créer une sauvegarde de la base',
+      optimizeDesc: 'Optimiser les performances des requêtes'
+    },
+
     operations: {
       reindexTitle: 'Résultats de la Réindexation de Base de Données',
       backupTitle: 'Résultats de la Sauvegarde de Base de Données',

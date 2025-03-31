@@ -14,6 +14,124 @@ export default {
   },
 
   admin: {
+    // General dashboard labels
+    huduma: 'Huduma AI',
+    dashboard: 'Dashboard',
+    system: 'System',
+    settings: 'Settings',
+    overview: 'Overview',
+    database: 'Database',
+    logs: 'Logs',
+    userManagement: 'User Management',
+    security: 'Security',
+    systemAdministration: 'System Administration',
+    loading: 'Loading...',
+    close: 'Close dashboard',
+    edit: 'Edit',
+
+    // Stats and metrics
+    systemUptime: 'System Uptime',
+    avgResponseTime: 'Average Response Time',
+    errorRate: 'Error Rate',
+    activeUsers: 'Active Users',
+    fromLastMonth: 'from last month',
+
+    // Tab labels
+    tabs: {
+      overview: 'System Health',
+      database: 'Database',
+      logs: 'Logs',
+      security: 'Security',
+      users: 'Users'
+    },
+
+    // System health
+    systemHealthStatus: 'System Health Status',
+    runDiagnostics: 'Run Diagnostics',
+    resourceUsage: 'Resource Usage',
+
+    // Service names
+    services: {
+      apiServices: 'API Services',
+      database: 'Database',
+      cache: 'Cache',
+      storage: 'Storage',
+      messageQueue: 'Message Queue',
+      externalApi: 'External API'
+    },
+
+    // Resource types
+    resources: {
+      cpu: 'CPU Usage',
+      memory: 'Memory Usage',
+      storage: 'Storage Usage',
+      network: 'Network Bandwidth'
+    },
+
+    // Database management
+    databaseManagement: 'Database Management',
+    reindexDatabase: 'Reindex Database',
+    lastReindex: 'Last Reindex',
+    databaseSize: 'Database Size',
+    totalTables: 'Total Tables',
+
+    // Log management
+    logManagement: 'Log Management',
+    rolloverLogs: 'Rollover Logs',
+    searchLogs: 'Search Logs',
+    logTime: 'Time',
+    logLevel: 'Level',
+    logService: 'Service',
+    logMessage: 'Message',
+    showingEntries: 'Showing {start}-{end} of {total} entries',
+
+    // Log levels
+    logLevels: {
+      error: 'ERROR',
+      warning: 'WARNING',
+      info: 'INFO',
+      debug: 'DEBUG'
+    },
+
+    // Log messages
+    logMessages: {
+      connectionTimeout: 'Connection timeout to external provider',
+      lowDiskSpace: 'Disk space below 10% threshold',
+      userRoleUpdated: 'User role updated for admin@huduma.ai'
+    },
+
+    // Security monitoring
+    securityMonitoring: 'Security Monitoring',
+    securityScan: 'Security Scan',
+    failedLoginAttempts: 'Failed Login Attempts (24h)',
+    suspiciousActivities: 'Suspicious Activities (24h)',
+    lastSecurityScan: 'Last Security Scan',
+    vulnerabilitiesFound: 'Vulnerabilities Found',
+    daysAgo: 'days ago',
+    critical: 'critical',
+    medium: 'medium',
+    low: 'low',
+
+    // User management
+    userName: 'Name',
+    userEmail: 'Email',
+    userRole: 'Role',
+    userStatus: 'Status',
+    userActions: 'Actions',
+    roleAdministrator: 'Administrator',
+    roleUser: 'User',
+    statusActive: 'Active',
+
+    // Database actions
+    dbActions: {
+      reindex: 'Reindex',
+      backup: 'Backup',
+      optimize: 'Optimize',
+      reindexDesc: 'Rebuild database indexes',
+      backupDesc: 'Create database backup',
+      optimizeDesc: 'Optimize query performance'
+    },
+
     operations: {
       reindexTitle: 'Database Reindex Results',
       backupTitle: 'Database Backup Results',

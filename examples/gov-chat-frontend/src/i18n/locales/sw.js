@@ -13,6 +13,124 @@ export default {
     backToLogin: 'Rudi kwa Kuingia'
   },
   admin: {
+    // Lebo za jumla za dashibodi
+    huduma: 'Huduma AI',
+    dashboard: 'Dashibodi',
+    system: 'Mfumo',
+    settings: 'Mipangilio',
+    overview: 'Muhtasari',
+    database: 'Hifadhidata',
+    logs: 'Kumbukumbu',
+    userManagement: 'Usimamizi wa Watumiaji',
+    security: 'Usalama',
+    systemAdministration: 'Usimamizi wa Mfumo',
+    loading: 'Inapakia...',
+    close: 'Funga dashibodi',
+    edit: 'Hariri',
+
+    // Takwimu na vipimo
+    systemUptime: 'Muda wa Uendeshaji wa Mfumo',
+    avgResponseTime: 'Wastani wa Muda wa Majibu',
+    errorRate: 'Kiwango cha Hitilafu',
+    activeUsers: 'Watumiaji Hai',
+    fromLastMonth: 'kutoka mwezi uliopita',
+
+    // Lebo za tabo
+    tabs: {
+      overview: 'Afya ya Mfumo',
+      database: 'Hifadhidata',
+      logs: 'Kumbukumbu',
+      security: 'Usalama',
+      users: 'Watumiaji'
+    },
+
+    // Afya ya mfumo
+    systemHealthStatus: 'Hali ya Afya ya Mfumo',
+    runDiagnostics: 'Endesha Uchunguzi',
+    resourceUsage: 'Matumizi ya Rasilimali',
+
+    // Majina ya huduma
+    services: {
+      apiServices: 'Huduma za API',
+      database: 'Hifadhidata',
+      cache: 'Akiba',
+      storage: 'Hifadhi',
+      messageQueue: 'Foleni ya Ujumbe',
+      externalApi: 'API ya Nje'
+    },
+
+    // Aina za rasilimali
+    resources: {
+      cpu: 'Matumizi ya CPU',
+      memory: 'Matumizi ya Kumbukumbu',
+      storage: 'Matumizi ya Hifadhi',
+      network: 'Upeo wa Mtandao'
+    },
+
+    // Usimamizi wa hifadhidata
+    databaseManagement: 'Usimamizi wa Hifadhidata',
+    reindexDatabase: 'Faharisi Hifadhidata',
+    lastReindex: 'Faharisi ya Mwisho',
+    databaseSize: 'Ukubwa wa Hifadhidata',
+    totalTables: 'Jumla ya Jedwali',
+
+    // Usimamizi wa kumbukumbu
+    logManagement: 'Usimamizi wa Kumbukumbu',
+    rolloverLogs: 'Badilisha Kumbukumbu',
+    searchLogs: 'Tafuta Kumbukumbu',
+    logTime: 'Wakati',
+    logLevel: 'Kiwango',
+    logService: 'Huduma',
+    logMessage: 'Ujumbe',
+    showingEntries: 'Inaonyesha {start}-{end} kati ya {total} viingizo',
+
+    // Viwango vya kumbukumbu
+    logLevels: {
+      error: 'HITILAFU',
+      warning: 'ONYO',
+      info: 'TAARIFA',
+      debug: 'UTATUZI'
+    },
+
+    // Ujumbe wa kumbukumbu
+    logMessages: {
+      connectionTimeout: 'Muda wa kuunganisha umekwisha kwa mtoa huduma wa nje',
+      lowDiskSpace: 'Nafasi ya diski chini ya kiwango cha 10%',
+      userRoleUpdated: 'Wajibu wa mtumiaji umesasishwa kwa admin@huduma.ai'
+    },
+
+    // Ufuatiliaji wa usalama
+    securityMonitoring: 'Ufuatiliaji wa Usalama',
+    securityScan: 'Ukaguzi wa Usalama',
+    failedLoginAttempts: 'Majaribio ya Kuingia Yaliyoshindwa (24h)',
+    suspiciousActivities: 'Shughuli za Kushuku (24h)',
+    lastSecurityScan: 'Ukaguzi wa Mwisho wa Usalama',
+    vulnerabilitiesFound: 'Mapungufu Yaliyopatikana',
+    daysAgo: 'siku zilizopita',
+    critical: 'hatari',
+    medium: 'wastani',
+    low: 'ndogo',
+
+    // Usimamizi wa watumiaji
+    userName: 'Jina',
+    userEmail: 'Barua pepe',
+    userRole: 'Wajibu',
+    userStatus: 'Hali',
+    userActions: 'Vitendo',
+    roleAdministrator: 'Msimamizi',
+    roleUser: 'Mtumiaji',
+    statusActive: 'Hai',
+
+    // Vitendo vya hifadhidata
+    dbActions: {
+      reindex: 'Faharisi Upya',
+      backup: 'Hifadhi Nakala',
+      optimize: 'Boresha',
+      reindexDesc: 'Jenga upya faharasa za hifadhidata',
+      backupDesc: 'Tengeneza nakala ya hifadhidata',
+      optimizeDesc: 'Boresha utendaji wa utafutaji'
+    },
+
     operations: {
       reindexTitle: 'Matokeo ya Kurekebisha Faharasa ya Hifadhidata',
       backupTitle: 'Matokeo ya Nakala Rudufu ya Hifadhidata',

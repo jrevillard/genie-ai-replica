@@ -12,6 +12,72 @@ export default {
     proceedToLogin: 'Endelea kwa Kuingia',
     backToLogin: 'Rudi kwa Kuingia'
   },
+  admin: {
+    operations: {
+      reindexTitle: 'Matokeo ya Kurekebisha Faharasa ya Hifadhidata',
+      backupTitle: 'Matokeo ya Nakala Rudufu ya Hifadhidata',
+      optimizeTitle: 'Matokeo ya Uboreshaji wa Hifadhidata',
+      reindexResults: 'Matokeo ya Faharasa',
+      optimizeResults: 'Matokeo ya Uboreshaji',
+      collection: 'Mkusanyiko',
+      status: 'Hali',
+      indexSuggestions: 'Mapendekezo ya Faharasa',
+      backupDetails: 'Maelezo ya Nakala Rudufu',
+      backupFile: 'Faili la Nakala Rudufu',
+      backupLocation: 'Eneo',
+      backupSize: 'Ukubwa',
+      errorDetails: 'Maelezo ya Hitilafu',
+      close: 'Funga',
+      resultsTitle: 'Matokeo ya Operesheni',
+      reindexDatabase: 'Rekebisha Faharasa ya Hifadhidata',
+      backupDatabase: 'Tengeneza Nakala Rudufu ya Hifadhidata',
+      optimizeDatabase: 'Boresha Hifadhidata',
+      dbActions: {
+        reindex: 'Rekebisha Faharasa',
+        backup: 'Nakala Rudufu',
+        optimize: 'Boresha',
+        reindexDesc: 'Jenga upya faharasa za hifadhidata',
+        backupDesc: 'Tengeneza nakala rudufu ya hifadhidata',
+        optimizeDesc: 'Boresha utendaji wa utafutaji'
+      },
+      lastReindex: 'Urekebishaji wa Mwisho',
+      databaseSize: 'Ukubwa wa Hifadhidata',
+      totalTables: 'Jumla ya Jedwali',
+      operations: {
+        reindexDatabase: {
+          success: 'Urekebishaji wa faharasa ya hifadhidata umekamilika',
+          error: 'Hitilafu wakati wa kurekebishwa faharasa ya hifadhidata',
+          loading: 'Inarekebisha faharasa ya hifadhidata...'
+        },
+        backupDatabase: {
+          success: 'Nakala rudufu ya hifadhidata imekamilika',
+          error: 'Hitilafu wakati wa kufanya nakala rudufu ya hifadhidata',
+          loading: 'Inatengeneza nakala rudufu ya hifadhidata...'
+        },
+        optimizeDatabase: {
+          success: 'Uboreshaji wa hifadhidata umekamilika',
+          error: 'Hitilafu wakati wa kuboresha hifadhidata',
+          loading: 'Inaboresha hifadhidata...'
+        },
+        rolloverLogs: {
+          success: 'Upitishaji wa kumbukumbu umekamilika',
+          loading: 'Inapitisha kumbukumbu...'
+        },
+        searchLogs: {
+          success: 'Utafutaji wa kumbukumbu umekamilika',
+          loading: 'Inatafuta kumbukumbu...'
+        },
+        runDiagnostics: {
+          success: 'Uchunguzi umekamilika',
+          loading: 'Inafanya uchunguzi...'
+        },
+        runSecurityScan: {
+          success: 'Ukaguzi wa usalama umekamilika',
+          loading: 'Inafanya ukaguzi wa usalama...'
+        }
+      }
+    }
+  },
   passwordResetConfirm: {
     appTitle: 'Huduma AI',
     resetPassword: 'Tengeneza Nenosiri Mpya',

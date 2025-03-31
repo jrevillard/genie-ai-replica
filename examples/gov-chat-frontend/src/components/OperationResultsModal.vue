@@ -147,6 +147,7 @@
   </script>
   
   <style scoped>
+
   /* Modal Base Styles */
   .modal {
     position: fixed;
@@ -159,7 +160,7 @@
     align-items: center;
     justify-content: center;
   }
-  
+
   .overlay {
     position: absolute;
     top: 0;
@@ -168,7 +169,7 @@
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
   }
-  
+
   .modal-content {
     position: relative;
     width: 90%;
@@ -182,7 +183,7 @@
     flex-direction: column;
     z-index: 1101;
   }
-  
+
   .modal-title {
     display: flex;
     justify-content: space-between;
@@ -190,14 +191,14 @@
     padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--border-color, #dcdfe4);
   }
-  
+
   .modal-title h2 {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--text-primary, #333333);
   }
-  
+
   .close-btn {
     background: none;
     border: none;
@@ -214,26 +215,26 @@
     border-radius: 50%;
     transition: all 0.2s;
   }
-  
+
   .close-btn:hover {
     background-color: var(--bg-section, rgba(0, 0, 0, 0.05));
     color: var(--text-secondary, #4d4d4d);
   }
-  
+
   .modal-body {
     padding: 1.5rem;
     overflow-y: auto;
     flex-grow: 1;
     max-height: calc(90vh - 130px);
   }
-  
+
   .modal-footer {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--border-color, #dcdfe4);
     display: flex;
     justify-content: flex-end;
   }
-  
+
   /* Result Status Styles */
   .result-status {
     display: flex;
@@ -242,69 +243,69 @@
     border-radius: 6px;
     margin-bottom: 1.5rem;
   }
-  
+
   .status-success {
     background-color: rgba(16, 185, 129, 0.1);
   }
-  
+
   .status-error {
     background-color: rgba(239, 68, 68, 0.1);
   }
-  
+
   .status-icon {
     font-size: 1.5rem;
     margin-right: 1rem;
   }
-  
+
   .status-success .status-icon {
     color: var(--success, #10b981);
   }
-  
+
   .status-error .status-icon {
     color: var(--danger, #ef4444);
   }
-  
+
   .status-message {
     font-size: 1rem;
     font-weight: 500;
   }
-  
+
   .status-success .status-message {
     color: var(--success, #10b981);
   }
-  
+
   .status-error .status-message {
     color: var(--danger, #ef4444);
   }
-  
+
   /* Result Details Styles */
   .result-details {
     margin-bottom: 1.5rem;
   }
-  
+
   .result-section h3 {
     font-size: 1.125rem;
     font-weight: 600;
     margin: 0 0 1rem 0;
     color: var(--text-primary, #333333);
   }
-  
+
   .detail-item {
     display: flex;
     margin-bottom: 0.5rem;
   }
-  
+
   .detail-label {
     font-weight: 500;
     width: 120px;
     min-width: 120px;
     color: var(--text-secondary, #4d4d4d);
   }
-  
+
   .detail-value {
     color: var(--text-primary, #333333);
   }
-  
+
   /* Table Styles */
   .table-container {
     overflow-x: auto;
@@ -312,19 +313,19 @@
     border: 1px solid var(--border-color, #dcdfe4);
     border-radius: 4px;
   }
-  
+
   .results-table {
     width: 100%;
     border-collapse: collapse;
   }
-  
+
   .results-table th,
   .results-table td {
     padding: 0.75rem;
     border-bottom: 1px solid var(--border-color, #dcdfe4);
     text-align: left;
   }
-  
+
   .results-table th {
     font-weight: 600;
     background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
@@ -333,7 +334,7 @@
     top: 0;
     z-index: 1;
   }
-  
+
   .status-badge {
     display: inline-block;
     padding: 0.25rem 0.5rem;
@@ -342,24 +343,24 @@
     font-weight: 500;
     text-transform: capitalize;
   }
-  
+
   .badge-success {
     background-color: rgba(16, 185, 129, 0.1);
     color: var(--success, #10b981);
   }
-  
+
   .badge-error {
     background-color: rgba(239, 68, 68, 0.1);
     color: var(--danger, #ef4444);
   }
-  
+
   /* Error Details */
   .error-details {
     background-color: rgba(239, 68, 68, 0.05);
     border-radius: 6px;
     padding: 1rem;
   }
-  
+
   .error-message {
     margin: 0;
     padding: 1rem;
@@ -370,7 +371,7 @@
     white-space: pre-wrap;
     overflow-x: auto;
   }
-  
+
   /* Button Styles */
   .btn {
     padding: 0.5rem 1rem;
@@ -380,38 +381,81 @@
     border: none;
     transition: all 0.2s;
   }
-  
+
   .btn-primary {
     background-color: var(--bg-button-primary, #3b82f6);
     color: var(--text-button-primary, #ffffff);
   }
-  
+
   .btn-primary:hover {
     background-color: var(--primary-dark, #2563eb);
   }
-  
+
   /* Dark mode adjustments (handled by CSS variables) */
   [data-theme="dark"] .results-table th {
     background-color: rgba(255, 255, 255, 0.05);
   }
-  
+
   [data-theme="dark"] .error-message {
     background-color: rgba(0, 0, 0, 0.2);
   }
-  
+
   [data-theme="dark"] .status-success {
     background-color: rgba(16, 185, 129, 0.2);
   }
-  
+
   [data-theme="dark"] .status-error {
     background-color: rgba(239, 68, 68, 0.2);
   }
-  
+
   [data-theme="dark"] .badge-success {
     background-color: rgba(16, 185, 129, 0.2);
   }
-  
+
   [data-theme="dark"] .badge-error {
     background-color: rgba(239, 68, 68, 0.2);
   }
-  </style>
+/* In OperationResultsModal.vue */
+.modal {
+  /* This fixes the overall modal background */
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .modal-content {
+  /* This should match exactly the dark background in AdminDashboard.vue */
+  background-color: #1e1e1e; /* or #202020 - match exactly what AdminDashboard uses */
+}
+
+/* Also fix the table headers and other elements */
+[data-theme="dark"] .results-table th {
+  background-color: #292727; /* Slightly lighter than the main background */
+}
+
+/* Make sure the status badges maintain proper contrast */
+[data-theme="dark"] .status-badge {
+  color: white;
+}
+
+/* Fix the error details background if needed */
+[data-theme="dark"] .error-details {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Title text styling for dark mode */
+[data-theme="dark"] .modal-title h2,
+[data-theme="dark"] .result-section h3 {
+  color: #ffffff !important; /* Force white color for all headings */
+}
+
+/* Make sure the h2 (Database Optimization Results) is white */
+[data-theme="dark"] h2 {
+  color: #ffffff !important;
+}
+
+/* Make the subtitle text (Optimization Results) white too */
+[data-theme="dark"] .result-details h3,
+[data-theme="dark"] .modal-body h3 {
+  color: #ffffff !important;
+}
+
+</style>

@@ -12,6 +12,72 @@ export default {
     proceedToLogin: 'Continuer vers la connexion',
     backToLogin: 'Retour à la connexion'
   },
+  admin: {
+    operations: {
+      reindexTitle: 'Résultats de la Réindexation de Base de Données',
+      backupTitle: 'Résultats de la Sauvegarde de Base de Données',
+      optimizeTitle: 'Résultats de l\'Optimisation de Base de Données',
+      reindexResults: 'Résultats de Réindexation',
+      optimizeResults: 'Résultats d\'Optimisation',
+      collection: 'Collection',
+      status: 'Statut',
+      indexSuggestions: 'Suggestions d\'Index',
+      backupDetails: 'Détails de Sauvegarde',
+      backupFile: 'Fichier de Sauvegarde',
+      backupLocation: 'Emplacement',
+      backupSize: 'Taille',
+      errorDetails: 'Détails de l\'Erreur',
+      close: 'Fermer',
+      resultsTitle: 'Résultats de l\'Opération',
+      reindexDatabase: 'Réindexer la Base de Données',
+      backupDatabase: 'Sauvegarder la Base de Données',
+      optimizeDatabase: 'Optimiser la Base de Données',
+      dbActions: {
+        reindex: 'Réindexer',
+        backup: 'Sauvegarder',
+        optimize: 'Optimiser',
+        reindexDesc: 'Reconstruire les index de la base de données',
+        backupDesc: 'Créer une sauvegarde de la base de données',
+        optimizeDesc: 'Optimiser les performances de requête'
+      },
+      lastReindex: 'Dernière Réindexation',
+      databaseSize: 'Taille de la Base de Données',
+      totalTables: 'Nombre Total de Tables',
+      operations: {
+        reindexDatabase: {
+          success: 'Réindexation de la base de données terminée avec succès',
+          error: 'Erreur lors de la réindexation de la base de données',
+          loading: 'Réindexation de la base de données...'
+        },
+        backupDatabase: {
+          success: 'Sauvegarde de la base de données terminée avec succès',
+          error: 'Erreur lors de la sauvegarde de la base de données',
+          loading: 'Sauvegarde de la base de données...'
+        },
+        optimizeDatabase: {
+          success: 'Optimisation de la base de données terminée avec succès',
+          error: 'Erreur lors de l\'optimisation de la base de données',
+          loading: 'Optimisation de la base de données...'
+        },
+        rolloverLogs: {
+          success: 'Rotation des journaux terminée avec succès',
+          loading: 'Rotation des journaux...'
+        },
+        searchLogs: {
+          success: 'Recherche dans les journaux terminée',
+          loading: 'Recherche dans les journaux...'
+        },
+        runDiagnostics: {
+          success: 'Diagnostics terminés avec succès',
+          loading: 'Exécution des diagnostics...'
+        },
+        runSecurityScan: {
+          success: 'Analyse de sécurité terminée avec succès',
+          loading: 'Exécution de l\'analyse de sécurité...'
+        }
+      }
+    }
+  },
   passwordResetConfirm: {
     appTitle: 'Huduma AI',
     resetPassword: 'Créer un nouveau mot de passe',

@@ -13,6 +13,72 @@ export default {
     backToLogin: 'Back to Login'
   },
 
+  admin: {
+    operations: {
+      reindexTitle: 'Database Reindex Results',
+      backupTitle: 'Database Backup Results',
+      optimizeTitle: 'Database Optimization Results',
+      reindexResults: 'Reindex Results',
+      optimizeResults: 'Optimization Results',
+      collection: 'Collection',
+      status: 'Status',
+      indexSuggestions: 'Index Suggestions',
+      backupDetails: 'Backup Details',
+      backupFile: 'Backup File',
+      backupLocation: 'Location',
+      backupSize: 'Size',
+      errorDetails: 'Error Details',
+      close: 'Close',
+      resultsTitle: 'Operation Results',
+      reindexDatabase: 'Reindex Database',
+      backupDatabase: 'Backup Database',
+      optimizeDatabase: 'Optimize Database',
+      dbActions: {
+        reindex: 'Reindex',
+        backup: 'Backup',
+        optimize: 'Optimize',
+        reindexDesc: 'Rebuild database indexes',
+        backupDesc: 'Create database backup',
+        optimizeDesc: 'Optimize query performance'
+      },
+      lastReindex: 'Last Reindex',
+      databaseSize: 'Database Size',
+      totalTables: 'Total Tables',
+      operations: {
+        reindexDatabase: {
+          success: 'Database reindexing completed successfully',
+          error: 'Error during database reindexing',
+          loading: 'Reindexing database...'
+        },
+        backupDatabase: {
+          success: 'Database backup completed successfully',
+          error: 'Error during database backup',
+          loading: 'Backing up database...'
+        },
+        optimizeDatabase: {
+          success: 'Database optimization completed successfully',
+          error: 'Error during database optimization',
+          loading: 'Optimizing database...'
+        },
+        rolloverLogs: {
+          success: 'Log rollover completed successfully',
+          loading: 'Rolling over logs...'
+        },
+        searchLogs: {
+          success: 'Log search completed',
+          loading: 'Searching logs...'
+        },
+        runDiagnostics: {
+          success: 'Diagnostics completed successfully',
+          loading: 'Running diagnostics...'
+        },
+        runSecurityScan: {
+          success: 'Security scan completed successfully',
+          loading: 'Running security scan...'
+        }
+      }
+    }
+  },
   passwordResetConfirm: {
     appTitle: 'Huduma AI',
     resetPassword: 'Create New Password',

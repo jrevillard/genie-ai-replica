@@ -1,0 +1,2 @@
+2025-03-31 20:55:04 [ERROR]: Error in getSystemHealth: Cannot access 'activeUsersValue' before initialization
+2025-03-31 20:55:04 [ERROR]: Error getting system health: Cannot access 'activeUsersValue' before initialization

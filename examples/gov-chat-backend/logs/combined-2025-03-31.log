@@ -261,3 +261,22 @@
 2025-03-31 19:59:35 [INFO]: [0mPATCH /api/queries/34405974/responsetime [33m404[0m 0.544 ms - 174[0m
 2025-03-31 19:59:35 [INFO]: [0mPATCH /api/queries/34405974/answered [32m200[0m 4.376 ms - 286[0m
 2025-03-31 19:59:50 [INFO]: [0mPOST /api/queries/34405974/feedback [32m200[0m 7.740 ms - 375[0m
+2025-03-31 20:09:48 [INFO]: Accessed root endpoint
+2025-03-31 20:09:48 [INFO]: [0mGET / [32m200[0m 0.816 ms - 268[0m
+2025-03-31 20:54:52 [INFO]: Server is running on port 3000
+2025-03-31 20:54:52 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 20:54:52 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 20:55:04 [INFO]: Controller: Fetching system health metrics
+2025-03-31 20:55:04 [INFO]: Getting system health metrics
+2025-03-31 20:55:04 [ERROR]: Error in getSystemHealth: Cannot access 'activeUsersValue' before initialization
+2025-03-31 20:55:04 [ERROR]: Error getting system health: Cannot access 'activeUsersValue' before initialization
+2025-03-31 20:55:04 [INFO]: [0mGET /api/admin/system-health [31m500[0m 15.560 ms - 132[0m
+2025-03-31 21:04:54 [INFO]: Server is running on port 3000
+2025-03-31 21:04:54 [INFO]: API Documentation available at: http://localhost:3000/api-docs
+2025-03-31 21:04:54 [INFO]: Available endpoints: /api/user, /api/query, /api/service, /api/analytics, /api/session, /api/service-category, /api/auth, /api/logger, /api/database-operations, /api/admin
+2025-03-31 21:05:04 [INFO]: Controller: Fetching system health metrics
+2025-03-31 21:05:04 [INFO]: Getting system health metrics
+2025-03-31 21:05:05 [INFO]: [0mGET /api/admin/system-health [32m200[0m 681.371 ms - 636[0m
+2025-03-31 21:05:47 [INFO]: Controller: Fetching system health metrics
+2025-03-31 21:05:47 [INFO]: Getting system health metrics
+2025-03-31 21:05:48 [INFO]: [0mGET /api/admin/system-health [32m200[0m 691.673 ms - 636[0m

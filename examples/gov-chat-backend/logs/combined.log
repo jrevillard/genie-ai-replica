@@ -8492,3 +8492,231 @@
 2025-03-31 19:59:50 [INFO]: Feedback record created with auto-generated key: 34406000
 2025-03-31 19:59:50 [INFO]: Analytics updated with feedback for query 34405974
 2025-03-31 19:59:50 [INFO]: Feedback added to query 34405974
+2025-03-31 20:54:52 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:52 [INFO]: Initializing AuthService...
+2025-03-31 20:54:52 [INFO]: UserProfileService initialized
+2025-03-31 20:54:52 [INFO]: QueryService initialized
+2025-03-31 20:54:52 [INFO]: Initializing AnalyticsService...
+2025-03-31 20:54:52 [INFO]: ServiceCategoryService initialized
+2025-03-31 20:54:52 [INFO]: SessionService initialized with expiration time:
+2025-03-31 20:54:52 [INFO]: DatabaseOperationsService initialized
+2025-03-31 20:54:52 [INFO]: EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - 2025-03-31T15:24:52.468Z
+2025-03-31 20:54:52 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:52 [INFO]: {
+  "host": "in-V3.mailjet.com",
+  "port": "587",
+  "secure": false,
+  "auth": {
+    "user": "187ad3288090609e6e282b07f359acd4",
+    "pass": "******"
+  },
+  "fromEmail": "fordendk@gmail.com",
+  "appName": "Huduma AI",
+  "baseUrl": "http://localhost:8090"
+}
+2025-03-31 20:54:52 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:52 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:52 [INFO]: EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - 2025-03-31T15:24:52.473Z
+2025-03-31 20:54:52 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:52 [INFO]: Analytics service set for QueryService
+2025-03-31 20:54:52 [INFO]: Initializing AnalyticsService...
+2025-03-31 20:54:52 [INFO]: Initializing AnalyticsService...
+2025-03-31 20:54:52 [INFO]: ServiceCategoryService initialized
+2025-03-31 20:54:52 [INFO]: Using backup directory: ./database_backups
+2025-03-31 20:54:52 [INFO]: Max backups retained: 5
+2025-03-31 20:54:52 [INFO]: Backup format: json
+2025-03-31 20:54:52 [INFO]: Compress backups: true
+2025-03-31 20:54:52 [INFO]: Backup directory created/verified: ./database_backups
+2025-03-31 20:54:52 [INFO]: Collections initialized successfully
+2025-03-31 20:54:52 [INFO]: Collections initialized successfully
+2025-03-31 20:54:52 [INFO]: Collections initialized successfully
+2025-03-31 20:54:52 [INFO]: Auth service initialized successfully
+2025-03-31 20:54:54 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:54 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - 2025-03-31T15:24:54.755Z
+2025-03-31 20:54:54 [INFO]: -----------------------------------------------------
+2025-03-31 20:54:54 [INFO]: true
+2025-03-31 20:54:54 [INFO]: -----------------------------------------------------
+2025-03-31 20:55:04 [INFO]: 
+=======================================================
+2025-03-31 20:55:04 [INFO]: Verifying JWT token
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] 2025-03-31T15:25:04.417Z - Authentication Started
+2025-03-31 20:55:04 [INFO]: =======================================================
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] Request URL: GET /system-health
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-31 20:55:04 [INFO]:   host: localhost:3000
+2025-03-31 20:55:04 [INFO]:   connection: keep-alive
+2025-03-31 20:55:04 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-31 20:55:04 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-31 20:55:04 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-31 20:55:04 [INFO]:   accept: application/json, text/plain, */*
+2025-03-31 20:55:04 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-31 20:55:04 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-31 20:55:04 [INFO]:   origin: http://localhost:8090
+2025-03-31 20:55:04 [INFO]:   sec-fetch-site: same-site
+2025-03-31 20:55:04 [INFO]:   sec-fetch-mode: cors
+2025-03-31 20:55:04 [INFO]:   sec-fetch-dest: empty
+2025-03-31 20:55:04 [INFO]:   referer: http://localhost:8090/
+2025-03-31 20:55:04 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-31 20:55:04 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-31 20:55:04 [INFO]:   if-none-match: W/"275-cpLV7uMqlqf43k410Cywpp3JGxk"
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] Request body:
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-31 20:55:04 [INFO]: Fetching user by ID: 2133
+2025-03-31 20:55:04 [INFO]: Token verified successfully for user:
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-31 20:55:04 [INFO]: Fetching user by ID: 2133
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-31 20:55:04 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-31 20:55:04 [INFO]: 
+=======================================================
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] 2025-03-31T15:25:04.426Z - Admin Check Started
+2025-03-31 20:55:04 [INFO]: =======================================================
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] 👤 Checking admin status for user ID: 2133
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] 🔍 Fetching user details from database...
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] User details:
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] Checking role field: Admin
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] Checking user ID: 2133 <= 10: false
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] User _key: 2133, Is admin? true
+2025-03-31 20:55:04 [INFO]: [ADMIN DEBUG] ✅ Admin check passed, calling next()
+2025-03-31 21:04:54 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:54 [INFO]: Initializing AuthService...
+2025-03-31 21:04:54 [INFO]: UserProfileService initialized
+2025-03-31 21:04:54 [INFO]: QueryService initialized
+2025-03-31 21:04:54 [INFO]: Initializing AnalyticsService...
+2025-03-31 21:04:54 [INFO]: ServiceCategoryService initialized
+2025-03-31 21:04:54 [INFO]: SessionService initialized with expiration time:
+2025-03-31 21:04:54 [INFO]: DatabaseOperationsService initialized
+2025-03-31 21:04:54 [INFO]: EMAIL SERVICE DEBUG [INITIALIZING EMAIL SERVICE] - 2025-03-31T15:34:54.661Z
+2025-03-31 21:04:54 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:54 [INFO]: {
+  "host": "in-V3.mailjet.com",
+  "port": "587",
+  "secure": false,
+  "auth": {
+    "user": "187ad3288090609e6e282b07f359acd4",
+    "pass": "******"
+  },
+  "fromEmail": "fordendk@gmail.com",
+  "appName": "Huduma AI",
+  "baseUrl": "http://localhost:8090"
+}
+2025-03-31 21:04:54 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:54 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:54 [INFO]: EMAIL SERVICE DEBUG [TESTING SMTP CONNECTION] - 2025-03-31T15:34:54.666Z
+2025-03-31 21:04:54 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:54 [INFO]: Analytics service set for QueryService
+2025-03-31 21:04:54 [INFO]: Initializing AnalyticsService...
+2025-03-31 21:04:54 [INFO]: Initializing AnalyticsService...
+2025-03-31 21:04:54 [INFO]: ServiceCategoryService initialized
+2025-03-31 21:04:54 [INFO]: Using backup directory: ./database_backups
+2025-03-31 21:04:54 [INFO]: Max backups retained: 5
+2025-03-31 21:04:54 [INFO]: Backup format: json
+2025-03-31 21:04:54 [INFO]: Compress backups: true
+2025-03-31 21:04:54 [INFO]: Backup directory created/verified: ./database_backups
+2025-03-31 21:04:54 [INFO]: Collections initialized successfully
+2025-03-31 21:04:54 [INFO]: Collections initialized successfully
+2025-03-31 21:04:54 [INFO]: Collections initialized successfully
+2025-03-31 21:04:54 [INFO]: Auth service initialized successfully
+2025-03-31 21:04:56 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:56 [INFO]: EMAIL SERVICE DEBUG [SMTP CONNECTION SUCCESSFUL] - 2025-03-31T15:34:56.833Z
+2025-03-31 21:04:56 [INFO]: -----------------------------------------------------
+2025-03-31 21:04:56 [INFO]: true
+2025-03-31 21:04:56 [INFO]: -----------------------------------------------------
+2025-03-31 21:05:04 [INFO]: 
+=======================================================
+2025-03-31 21:05:04 [INFO]: Verifying JWT token
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] 2025-03-31T15:35:04.326Z - Authentication Started
+2025-03-31 21:05:04 [INFO]: =======================================================
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] Request URL: GET /system-health
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-31 21:05:04 [INFO]:   host: localhost:3000
+2025-03-31 21:05:04 [INFO]:   connection: keep-alive
+2025-03-31 21:05:04 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-31 21:05:04 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-31 21:05:04 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-31 21:05:04 [INFO]:   accept: application/json, text/plain, */*
+2025-03-31 21:05:04 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-31 21:05:04 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-31 21:05:04 [INFO]:   origin: http://localhost:8090
+2025-03-31 21:05:04 [INFO]:   sec-fetch-site: same-site
+2025-03-31 21:05:04 [INFO]:   sec-fetch-mode: cors
+2025-03-31 21:05:04 [INFO]:   sec-fetch-dest: empty
+2025-03-31 21:05:04 [INFO]:   referer: http://localhost:8090/
+2025-03-31 21:05:04 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-31 21:05:04 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] Request body:
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-31 21:05:04 [INFO]: Fetching user by ID: 2133
+2025-03-31 21:05:04 [INFO]: Token verified successfully for user:
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-31 21:05:04 [INFO]: Fetching user by ID: 2133
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-31 21:05:04 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-31 21:05:04 [INFO]: 
+=======================================================
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] 2025-03-31T15:35:04.336Z - Admin Check Started
+2025-03-31 21:05:04 [INFO]: =======================================================
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] 👤 Checking admin status for user ID: 2133
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] 🔍 Fetching user details from database...
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] User details:
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] Checking role field: Admin
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] Checking user ID: 2133 <= 10: false
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] User _key: 2133, Is admin? true
+2025-03-31 21:05:04 [INFO]: [ADMIN DEBUG] ✅ Admin check passed, calling next()
+2025-03-31 21:05:47 [INFO]: 
+=======================================================
+2025-03-31 21:05:47 [INFO]: Verifying JWT token
+2025-03-31 21:05:47 [INFO]: Fetching user by ID: 2133
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] 2025-03-31T15:35:47.859Z - Authentication Started
+2025-03-31 21:05:47 [INFO]: =======================================================
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] Request URL: GET /system-health
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] Route parameters:
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] Query parameters:
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] Request headers:
+2025-03-31 21:05:47 [INFO]:   host: localhost:3000
+2025-03-31 21:05:47 [INFO]:   connection: keep-alive
+2025-03-31 21:05:47 [INFO]:   sec-ch-ua-platform: "Windows"
+2025-03-31 21:05:47 [INFO]:   authorization: Bearer eyJhbGciOiJIU...
+2025-03-31 21:05:47 [INFO]:   user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36
+2025-03-31 21:05:47 [INFO]:   accept: application/json, text/plain, */*
+2025-03-31 21:05:47 [INFO]:   sec-ch-ua: "Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"
+2025-03-31 21:05:47 [INFO]:   sec-ch-ua-mobile: ?0
+2025-03-31 21:05:47 [INFO]:   origin: http://localhost:8090
+2025-03-31 21:05:47 [INFO]:   sec-fetch-site: same-site
+2025-03-31 21:05:47 [INFO]:   sec-fetch-mode: cors
+2025-03-31 21:05:47 [INFO]:   sec-fetch-dest: empty
+2025-03-31 21:05:47 [INFO]:   referer: http://localhost:8090/
+2025-03-31 21:05:47 [INFO]:   accept-encoding: gzip, deflate, br, zstd
+2025-03-31 21:05:47 [INFO]:   accept-language: en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7
+2025-03-31 21:05:47 [INFO]:   if-none-match: W/"27c-B8QtQK9YNeUhaKGReS/qxIrNsqI"
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] Request body:
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] Content-Type:
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] 🔑 Token extracted (first 10 chars): eyJhbGciOi...
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] 🔍 Attempting to verify token...
+2025-03-31 21:05:47 [INFO]: Token verified successfully for user:
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] ✅ Token verification result:
+2025-03-31 21:05:47 [INFO]: Fetching user by ID: 2133
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] 👤 User ID from token: 2133
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] ✅ User attached to request. Authentication successful
+2025-03-31 21:05:47 [INFO]: [AUTH DEBUG] ✅ Authentication middleware complete, calling next()
+2025-03-31 21:05:47 [INFO]: 
+=======================================================
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] 2025-03-31T15:35:47.863Z - Admin Check Started
+2025-03-31 21:05:47 [INFO]: =======================================================
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] 👤 Checking admin status for user ID: 2133
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] 🔍 Fetching user details from database...
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] User details:
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] Checking role field: Admin
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] Checking user ID: 2133 <= 10: false
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] User _key: 2133, Is admin? true
+2025-03-31 21:05:47 [INFO]: [ADMIN DEBUG] ✅ Admin check passed, calling next()

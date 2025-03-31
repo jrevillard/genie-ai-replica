@@ -28,233 +28,224 @@ const db = new Database({
  * Service for admin dashboard operations
  */
 const adminDashboardService = {
+  
   /**
-   * Get system health statistics
-   * @returns {Promise<Object>} System health metrics
-   */
-  async getSystemHealth() {
-    logger.info('Getting system health metrics');
+ * Get system health statistics
+ * @returns {Promise<Object>} System health metrics
+ */
+async getSystemHealth() {
+  logger.info('Getting system health metrics');
 
+  try {
+    // Initialize default values to prevent undefined errors
+    let activeUsersValue = 0;
+    let errorRate = 0;
+    let systemUptime = 0;
+    let uptimeTrend = 0;
+    let activeUsersTrend = 0;
+    let responseTimeTrend = 0;
+    let errorRateTrend = 0;
+
+    // Get date ranges for metrics
+    const now = new Date();
+    const oneDayAgo = new Date(now);
+    oneDayAgo.setDate(now.getDate() - 1);
+    const oneMonthAgo = new Date(now);
+    oneMonthAgo.setDate(now.getDate() - 30); // Last 30 days for current MAUs
+    const twoMonthsAgo = new Date(now);
+    twoMonthsAgo.setDate(now.getDate() - 60); // Previous 30 days for trend
+    const startDate = oneDayAgo.toISOString();
+    const oneMonthAgoDate = oneMonthAgo.toISOString();
+    const twoMonthsAgoDate = twoMonthsAgo.toISOString();
+    logger.debug(`Date ranges: now=${now.toISOString()}, oneDayAgo=${startDate}, oneMonthAgo=${oneMonthAgoDate}, twoMonthsAgo=${twoMonthsAgoDate}`);
+
+    // Calculate system uptime
+    const systemUptimeSeconds = os.uptime();
+    const expectedUptimeSeconds = 30 * 24 * 60 * 60; // 30 days in seconds
+    systemUptime = Math.min((systemUptimeSeconds / expectedUptimeSeconds) * 100, 100).toFixed(2);
+    logger.debug(`System Uptime Calculation: systemUptimeSeconds=${systemUptimeSeconds}, expectedUptimeSeconds=${expectedUptimeSeconds}, systemUptime=${systemUptime}%`);
+
+    // Calculate error rate from logs
+    const today = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
+    logger.debug(`Reading log file for error rate: ${logFile}`);
     try {
-      // Get date ranges for metrics
-      const now = new Date();
-      const oneDayAgo = new Date(now);
-      oneDayAgo.setDate(now.getDate() - 1);
-      const oneMonthAgo = new Date(now);
-      oneMonthAgo.setMonth(now.getMonth() - 1);
-      const startDate = oneDayAgo.toISOString();
-      const lastMonthStart = oneMonthAgo.toISOString();
-      logger.debug(`Date ranges: now=${now.toISOString()}, startDate=${startDate}, lastMonthStart=${lastMonthStart}`);
-
-      // Calculate system uptime
-      const systemUptimeSeconds = os.uptime();
-      const expectedUptimeSeconds = 30 * 24 * 60 * 60; // 30 days in seconds
-      const systemUptime = Math.min((systemUptimeSeconds / expectedUptimeSeconds) * 100, 100).toFixed(2);
-      logger.debug(`System Uptime Calculation: systemUptimeSeconds=${systemUptimeSeconds}, expectedUptimeSeconds=${expectedUptimeSeconds}, systemUptime=${systemUptime}%`);
-
-      // Store current uptime in analytics for future trend calculations
-      logger.debug('Storing current uptime in analytics collection');
-      await this.storeAnalyticsData({
-        period: 'daily',
-        startDate: now.toISOString(),
-        uptime: parseFloat(systemUptime),
-        uniqueUsers: 0, // Will be updated later
-        errorRate: 0 // Will be updated later
-      });
-
-      // Get last month's uptime for trend
-      logger.debug('Fetching last month\'s uptime from analytics for trend calculation');
-      const lastMonthAnalyticsCursor = await db.query(`
-        FOR a IN analytics
-          FILTER a.period == 'monthly' AND a.startDate >= @lastMonthStart AND a.startDate < @startDate
-          SORT a.startDate DESC
-          LIMIT 1
-          RETURN a
-      `, { startDate, lastMonthStart });
-      const lastMonthAnalytics = await lastMonthAnalyticsCursor.next();
-      logger.debug(`Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`);
-      const uptimeTrend = lastMonthAnalytics ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) : 0;
-      logger.debug(`Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`);
-
-      // Get session data for active users
-      logger.debug('Fetching active sessions from sessions collection');
-      const sessionsCursor = await db.query(`
-        FOR s IN sessions
-          FILTER s.startTime >= @startDate AND s.active == true
-          COLLECT AGGREGATE count = COUNT()
-          RETURN count
-      `, { startDate });
-      const activeSessions = await sessionsCursor.next() || 0;
-      logger.debug(`Active sessions count: ${activeSessions}`);
-
-      // Get unique user count from analytics
-      logger.debug('Fetching unique user count from analytics collection');
-      const analyticsCursor = await db.query(`
-        FOR a IN analytics
-          FILTER a.period == 'daily' AND a.startDate >= @startDate
-          SORT a.startDate DESC
-          LIMIT 1
-          RETURN a
-      `, { startDate });
-      let analytics = await analyticsCursor.next();
-      logger.debug(`Analytics data for unique users: ${JSON.stringify(analytics)}`);
-
-      // Get total users as fallback
-      logger.debug('Fetching total users count as fallback');
-      const usersCursor = await db.query(`
-        FOR u IN users
-          COLLECT AGGREGATE count = COUNT()
-          RETURN count
-      `);
-      const totalUsers = await usersCursor.next() || 0;
-      logger.debug(`Total users count: ${totalUsers}`);
-
-      // Calculate active users
-      const activeUsersValue = analytics?.uniqueUsers || activeSessions || totalUsers;
-      logger.debug(`Active Users Calculation: analytics.uniqueUsers=${analytics?.uniqueUsers}, activeSessions=${activeSessions}, totalUsers=${totalUsers}, final activeUsersValue=${activeUsersValue}`);
-
-      // Update analytics with active users
-      logger.debug('Updating analytics with active users count');
-      await this.storeAnalyticsData({
-        period: 'daily',
-        startDate: now.toISOString(),
-        uptime: parseFloat(systemUptime),
-        uniqueUsers: activeUsersValue,
-        errorRate: 0 // Will be updated later
-      });
-
-      // Calculate active users trend
-      logger.debug('Fetching last month\'s unique users for trend calculation');
-      const lastMonthUsersCursor = await db.query(`
-        FOR a IN analytics
-          FILTER a.period == 'monthly' AND a.startDate >= @lastMonthStart AND a.startDate < @startDate
-          SORT a.startDate DESC
-          LIMIT 1
-          RETURN a.uniqueUsers
-      `, { startDate, lastMonthStart });
-      const lastMonthUsers = await lastMonthUsersCursor.next() || 0;
-      logger.debug(`Last month's unique users: ${lastMonthUsers}`);
-      const activeUsersTrend = lastMonthUsers ? (((activeUsersValue - lastMonthUsers) / lastMonthUsers) * 100).toFixed(2) : 0;
-      logger.debug(`Active Users Trend Calculation: currentActiveUsers=${activeUsersValue}, lastMonthUsers=${lastMonthUsers}, activeUsersTrend=${activeUsersTrend}%`);
-
-      // Get response time from queries
-      logger.debug('Fetching average response time from queries collection');
-      const queriesCursor = await db.query(`
-        FOR q IN queries
-          FILTER q.timestamp >= @startDate
-          COLLECT AGGREGATE 
-            avgTime = AVERAGE(q.responseTime),
-            count = COUNT()
-          RETURN { avgTime, count }
-      `, { startDate });
-      const queriesStats = await queriesCursor.next() || { avgTime: 0, count: 0 };
-      logger.debug(`Queries stats: avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`);
-
-      // Calculate response time trend
-      logger.debug('Fetching last month\'s average response time for trend calculation');
-      const lastMonthQueriesCursor = await db.query(`
-        FOR q IN queries
-          FILTER q.timestamp >= @lastMonthStart AND q.timestamp < @startDate
-          COLLECT AGGREGATE 
-            avgTime = AVERAGE(q.responseTime)
-          RETURN avgTime
-      `, { lastMonthStart, startDate });
-      const lastMonthAvgTime = await lastMonthQueriesCursor.next() || 0;
-      logger.debug(`Last month's average response time: ${lastMonthAvgTime}`);
-      const responseTimeTrend = lastMonthAvgTime ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2) : 0;
-      logger.debug(`Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`);
-
-      // Calculate error rate from logs
-      const today = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-      const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
-      let errorRate = 0;
-      logger.debug(`Reading log file for error rate: ${logFile}`);
-      try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
-        const totalLogs = logLines.length;
-        const errorLogs = logLines.filter(line => line.includes('[ERROR]')).length;
-        errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
-        logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
-      } catch (error) {
-        logger.error(`Error reading log file for error rate: ${error.message}`);
-      }
-
-      // Update analytics with error rate
-      logger.debug('Updating analytics with error rate');
-      await this.storeAnalyticsData({
-        period: 'daily',
-        startDate: now.toISOString(),
-        uptime: parseFloat(systemUptime),
-        uniqueUsers: activeUsersValue,
-        errorRate: parseFloat(errorRate)
-      });
-
-      // Calculate error rate trend
-      logger.debug('Fetching last month\'s error rate for trend calculation');
-      const lastMonthErrorRateCursor = await db.query(`
-        FOR a IN analytics
-          FILTER a.period == 'monthly' AND a.startDate >= @lastMonthStart AND a.startDate < @startDate
-          SORT a.startDate DESC
-          LIMIT 1
-          RETURN a.errorRate
-      `, { startDate, lastMonthStart });
-      const lastMonthErrorRate = await lastMonthErrorRateCursor.next() || 0;
-      logger.debug(`Last month's error rate: ${lastMonthErrorRate}`);
-      const errorRateTrend = lastMonthErrorRate ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2) : 0;
-      logger.debug(`Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`);
-
-      // Get resource usage
-      logger.debug('Calculating resource usage');
-      const cpuUsage = Math.round((os.loadavg()[0] / os.cpus().length) * 100);
-      const memoryUsage = Math.round((process.memoryUsage().rss / os.totalmem()) * 100);
-      const storageUsage = await this.getStorageUsage();
-      const networkUsage = await this.getNetworkUsage();
-      const resourceUsage = {
-        cpu: cpuUsage,
-        memory: memoryUsage,
-        storage: storageUsage,
-        network: networkUsage
-      };
-      logger.debug(`Resource Usage: cpu=${cpuUsage}%, memory=${memoryUsage}%, storage=${storageUsage}%, network=${networkUsage}%`);
-
-      // Determine health status of services
-      logger.debug('Determining health status of services');
-      const healthServices = [
-        { id: 'apiServices', name: 'API Services', status: resourceUsage.cpu < 80 ? 'good' : 'warning' },
-        { id: 'database', name: 'Database', status: 'good' }, // Would need actual DB health check
-        { id: 'cache', name: 'Cache', status: 'good' }, // Would need actual cache health check
-        { id: 'storage', name: 'Storage', status: resourceUsage.storage < 90 ? 'good' : 'warning' },
-        { id: 'messageQueue', name: 'Message Queue', status: 'good' }, // Would need actual queue health check
-        { id: 'externalApi', name: 'External API', status: 'good' } // Would need actual external API check
-      ];
-      logger.debug(`Health Services: ${JSON.stringify(healthServices)}`);
-
-      // Build response object
-      const response = {
-        metrics: {
-          systemUptime: parseFloat(systemUptime),
-          avgResponseTime: Math.round(queriesStats.avgTime),
-          errorRate: parseFloat(errorRate),
-          activeUsers: activeUsersValue
-        },
-        trends: {
-          uptime: parseFloat(uptimeTrend),
-          responseTime: parseFloat(responseTimeTrend),
-          errorRate: parseFloat(errorRateTrend),
-          activeUsers: parseFloat(activeUsersTrend)
-        },
-        resourceUsage,
-        healthServices
-      };
-      logger.debug(`Final response: ${JSON.stringify(response)}`);
-
-      return response;
+      const logContent = await fs.readFile(logFile, 'utf8');
+      const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+      const totalLogs = logLines.length;
+      const errorLogs = logLines.filter(line => line.includes('[ERROR]')).length;
+      errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
+      logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
     } catch (error) {
-      logger.error(`Error in getSystemHealth: ${error.message}`, { stack: error.stack });
-      throw error;
+      logger.error(`Error reading log file for error rate: ${error.message}`);
     }
-  },
+
+    // Calculate Unique Monthly Active Users (MAUs) over the last 30 days
+    logger.debug('Fetching unique monthly active users from sessions collection (last 30 days)');
+    const mauCursor = await db.query(`
+      FOR s IN sessions
+      FILTER s.startTime >= @oneMonthAgoDate
+      COLLECT userId = s.userId INTO groups
+      RETURN userId`, { oneMonthAgoDate });
+    const uniqueUsers = await mauCursor.all();
+    activeUsersValue = uniqueUsers.length;
+    logger.debug(`Unique Monthly Active Users (MAUs): ${activeUsersValue}`);
+
+    // Get last month's uptime for trend
+    logger.debug('Fetching last month\'s uptime from analytics for trend calculation');
+    const lastMonthAnalyticsCursor = await db.query(`
+      FOR a IN analytics
+        FILTER a.period == 'monthly' AND a.startDate >= @twoMonthsAgoDate AND a.startDate < @oneMonthAgoDate
+        SORT a.startDate DESC
+        LIMIT 1
+        RETURN a
+    `, { oneMonthAgoDate, twoMonthsAgoDate });
+    const lastMonthAnalytics = await lastMonthAnalyticsCursor.next();
+    logger.debug(`Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`);
+    
+    // Calculate uptime trend
+    uptimeTrend = lastMonthAnalytics 
+      ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) 
+      : 0;
+    logger.debug(`Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`);
+
+    // Store current uptime in analytics for future trend calculations
+    logger.debug('Storing current uptime in analytics collection');
+    await this.storeAnalyticsData({
+      period: 'monthly',
+      startDate: now.toISOString(),
+      uptime: parseFloat(systemUptime),
+      uniqueUsers: activeUsersValue,
+      errorRate: parseFloat(errorRate)
+    });
+
+    // Calculate MAUs trend by comparing with the previous 30-day period
+    logger.debug('Fetching MAUs for the previous 30-day period (two months ago to one month ago)');
+    const previousMauCursor = await db.query(`
+      FOR s IN sessions
+      FILTER s.startTime >= @twoMonthsAgoDate AND s.startTime < @oneMonthAgoDate
+      COLLECT userId = s.userId INTO groups
+      RETURN userId`, { twoMonthsAgoDate, oneMonthAgoDate });
+    const previousUniqueUsers = await previousMauCursor.all();
+    const previousMau = previousUniqueUsers.length;
+    logger.debug(`Previous MAUs (from ${twoMonthsAgoDate} to ${oneMonthAgoDate}): ${previousMau}`);
+    
+    // Calculate active users trend
+    activeUsersTrend = previousMau 
+      ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2) 
+      : 0;
+    logger.debug(`MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`);
+
+    // Get response time from queries
+    logger.debug('Fetching average response time from queries collection');
+    const queriesCursor = await db.query(`
+      FOR q IN queries
+        FILTER q.timestamp >= @startDate
+        COLLECT AGGREGATE 
+          avgTime = AVERAGE(q.responseTime),
+          count = COUNT()
+        RETURN { avgTime, count }
+    `, { startDate });
+    const queriesStats = await queriesCursor.next() || { avgTime: 0, count: 0 };
+    logger.debug(`Queries stats: avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`);
+
+    // Calculate response time trend
+    logger.debug('Fetching last month\'s average response time for trend calculation');
+    const lastMonthQueriesCursor = await db.query(`
+      FOR q IN queries
+        FILTER q.timestamp >= @twoMonthsAgoDate AND q.timestamp < @oneMonthAgoDate
+        COLLECT AGGREGATE 
+          avgTime = AVERAGE(q.responseTime)
+        RETURN avgTime
+    `, { twoMonthsAgoDate, oneMonthAgoDate });
+    const lastMonthAvgTime = await lastMonthQueriesCursor.next() || 0;
+    logger.debug(`Last month's average response time: ${lastMonthAvgTime}`);
+    
+    // Calculate response time trend
+    responseTimeTrend = lastMonthAvgTime 
+      ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2) 
+      : 0;
+    logger.debug(`Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`);
+
+    // Calculate error rate trend
+    logger.debug('Fetching last month\'s error rate for trend calculation');
+    const lastMonthErrorRateCursor = await db.query(`
+      FOR a IN analytics
+        FILTER a.period == 'monthly' AND a.startDate >= @twoMonthsAgoDate AND a.startDate < @oneMonthAgoDate
+        SORT a.startDate DESC
+        LIMIT 1
+        RETURN a.errorRate
+    `, { twoMonthsAgoDate, oneMonthAgoDate });
+    const lastMonthErrorRate = await lastMonthErrorRateCursor.next() || 0;
+    logger.debug(`Last month's error rate: ${lastMonthErrorRate}`);
+    
+    // Calculate error rate trend
+    errorRateTrend = lastMonthErrorRate 
+      ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2) 
+      : 0;
+    logger.debug(`Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`);
+
+    // Update analytics with error rate
+    logger.debug('Updating analytics with error rate');
+    await this.storeAnalyticsData({
+      period: 'daily',
+      startDate: now.toISOString(),
+      uptime: parseFloat(systemUptime),
+      uniqueUsers: activeUsersValue,
+      errorRate: parseFloat(errorRate)
+    });
+
+    // Get resource usage
+    logger.debug('Calculating resource usage');
+    const cpuUsage = Math.round((os.loadavg()[0] / os.cpus().length) * 100);
+    const memoryUsage = Math.round((process.memoryUsage().rss / os.totalmem()) * 100);
+    const storageUsage = await this.getStorageUsage();
+    const networkUsage = await this.getNetworkUsage();
+    const resourceUsage = {
+      cpu: cpuUsage,
+      memory: memoryUsage,
+      storage: storageUsage,
+      network: networkUsage
+    };
+    logger.debug(`Resource Usage: cpu=${cpuUsage}%, memory=${memoryUsage}%, storage=${storageUsage}%, network=${networkUsage}%`);
+
+    // Determine health status of services
+    logger.debug('Determining health status of services');
+    const healthServices = [
+      { id: 'apiServices', name: 'API Services', status: resourceUsage.cpu < 80 ? 'good' : 'warning' },
+      { id: 'database', name: 'Database', status: 'good' }, // Would need actual DB health check
+      { id: 'cache', name: 'Cache', status: 'good' }, // Would need actual cache health check
+      { id: 'storage', name: 'Storage', status: resourceUsage.storage < 90 ? 'good' : 'warning' },
+      { id: 'messageQueue', name: 'Message Queue', status: 'good' }, // Would need actual queue health check
+      { id: 'externalApi', name: 'External API', status: 'good' } // Would need actual external API check
+    ];
+    logger.debug(`Health Services: ${JSON.stringify(healthServices)}`);
+
+    // Build response object
+    const response = {
+      metrics: {
+        systemUptime: parseFloat(systemUptime),
+        avgResponseTime: Math.round(queriesStats.avgTime),
+        errorRate: parseFloat(errorRate),
+        activeUsers: activeUsersValue
+      },
+      trends: {
+        uptime: parseFloat(uptimeTrend),
+        responseTime: parseFloat(responseTimeTrend),
+        errorRate: parseFloat(errorRateTrend),
+        activeUsers: parseFloat(activeUsersTrend)
+      },
+      resourceUsage,
+      healthServices
+    };
+    logger.debug(`Final response: ${JSON.stringify(response)}`);
+
+    return response;
+  } catch (error) {
+    logger.error(`Error in getSystemHealth: ${error.message}`, { stack: error.stack });
+    throw error;
+  }
+},
 
   /**
    * Store analytics data in the database

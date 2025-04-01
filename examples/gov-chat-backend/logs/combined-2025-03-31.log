@@ -280,3 +280,5 @@
 2025-03-31 21:05:47 [INFO]: Controller: Fetching system health metrics
 2025-03-31 21:05:47 [INFO]: Getting system health metrics
 2025-03-31 21:05:48 [INFO]: [0mGET /api/admin/system-health [32m200[0m 691.673 ms - 636[0m
+2025-03-31 21:12:35 [INFO]: Accessed root endpoint
+2025-03-31 21:12:35 [INFO]: [0mGET / [32m200[0m 1.118 ms - 268[0m

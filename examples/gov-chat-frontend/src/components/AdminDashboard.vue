@@ -202,51 +202,91 @@
               </div>
 
               <!-- Log Management - Logs Tab Only -->
+              <!-- Log Management - Logs Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'logs'" style="grid-column: span 2;">
                 <div class="card-header">
                   <div class="card-title">{{ translate('admin.logManagement', 'Log Management') }}</div>
                   <div class="card-actions">
-                    <button class="btn btn-primary" @click="rolloverLogs">
-                      {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
-                    </button>
                     <button class="btn btn-outline" @click="searchLogs">
-                      {{ translate('admin.searchLogs', 'Search Logs') }}
+                      <span style="display: flex; align-items: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                          style="margin-right: 4px;">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        {{ translate('admin.searchLogs', 'Search Logs') }}
+                      </span>
                     </button>
                   </div>
                 </div>
 
-                <table class="log-table">
-                  <thead>
-                    <tr>
-                      <th>{{ translate('admin.logTime', 'Time') }}</th>
-                      <th>{{ translate('admin.logLevel', 'Level') }}</th>
-                      <th>{{ translate('admin.logService', 'Service') }}</th>
-                      <th>{{ translate('admin.logMessage', 'Message') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(log, index) in logs" :key="index">
-                      <td>{{ log.time }}</td>
-                      <td><span :class="['log-level', `log-${log.level.toLowerCase()}`]">{{
-                          translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}</span></td>
-                      <td>{{ log.service }}</td>
-                      <td>{{ translate(`admin.logMessages.${log.messageKey}`, log.message) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div class="table-footer">
-                  <div>{{ translate('admin.showingEntries', 'Showing {start}-{end} of {total} entries')
-                    .replace('{start}', '1')
-                    .replace('{end}', logs.length)
-                    .replace('{total}', logsTotal) }}</div>
-                  <div class="pagination">
-                    <button class="page-btn">«</button>
-                    <button class="page-btn active">1</button>
-                    <button class="page-btn">2</button>
-                    <button class="page-btn">3</button>
-                    <button class="page-btn">»</button>
+                <!-- Error Logs Summary -->
+                <div class="logs-summary">
+                  <h3 class="summary-title">
+                    <span class="status-indicator error"></span>
+                    {{ translate('admin.errorLogs', 'Error Logs') }} ({{ translate('admin.today', 'Today') }})
+                  </h3>
+                  <div class="log-summary-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{{ translate('admin.logType', 'Type') }}</th>
+                          <th>{{ translate('admin.logService', 'Service') }}</th>
+                          <th>{{ translate('admin.logCount', 'Count') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(log, index) in errorLogsSummary" :key="'error-' + index">
+                          <td>{{ translate(`admin.logTypes.${log.typeKey}`, log.type) }}</td>
+                          <td>{{ log.service }}</td>
+                          <td class="log-count">{{ log.count }}</td>
+                        </tr>
+                        <tr v-if="errorLogsSummary.length === 0">
+                          <td colspan="3" class="empty-logs">{{ translate('admin.noErrorLogs', 'No error logs recorded today.') }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
+                </div>
+
+                <!-- Warning Logs Summary -->
+                <div class="logs-summary">
+                  <h3 class="summary-title">
+                    <span class="status-indicator warning"></span>
+                    {{ translate('admin.warningLogs', 'Warning Logs') }} ({{ translate('admin.today', 'Today') }})
+                  </h3>
+                  <div class="log-summary-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{{ translate('admin.logType', 'Type') }}</th>
+                          <th>{{ translate('admin.logService', 'Service') }}</th>
+                          <th>{{ translate('admin.logCount', 'Count') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(log, index) in warningLogsSummary" :key="'warning-' + index">
+                          <td>{{ translate(`admin.logTypes.${log.typeKey}`, log.type) }}</td>
+                          <td>{{ log.service }}</td>
+                          <td class="log-count">{{ log.count }}</td>
+                        </tr>
+                        <tr v-if="warningLogsSummary.length === 0">
+                          <td colspan="3" class="empty-logs">{{ translate('admin.noWarningLogs', 'No warning logs recorded today.') }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="logs-info">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                  <span>{{ translate('admin.infoLogsNote', 'Info logs are not shown in the summary. Use the search function to view all log types.') }}</span>
                 </div>
               </div>
 
@@ -363,17 +403,22 @@
     <OperationResultsModal v-if="showOperationResults && operationResults" :operation="currentOperation"
       :results="operationResults" @close="closeOperationResults" />
   </div>
+
+  <!-- Log Search Dialog -->
+  <LogSearchDialog v-if="showLogSearchDialog" @close="showLogSearchDialog = false" :theme="currentTheme" />
 </template>
 
 <script>
 import databaseOperationsService from '../services/databaseOperationsService';
 import adminDashboardService from '../services/adminDashboardService';
 import OperationResultsModal from './OperationResultsModal.vue';
+import LogSearchDialog from './LogSearchDialog.vue';
 import { eventBus } from '../eventBus.js';
 
 export default {
   components: {
-    OperationResultsModal
+    OperationResultsModal,
+    LogSearchDialog
   },
   name: 'AdminDashboard',
   emits: ['close'],
@@ -453,6 +498,19 @@ export default {
           messageKey: 'userRoleUpdated'
         }
       ],
+
+      // Add these to the data object
+      errorLogsSummary: [
+        { typeKey: 'connectionTimeout', type: 'Connection timeout', service: 'API Gateway', count: 5 },
+        { typeKey: 'databaseFailed', type: 'Database query failed', service: 'Data Service', count: 3 },
+        { typeKey: 'authFailed', type: 'Authentication failure', service: 'Auth Service', count: 2 }
+      ],
+      warningLogsSummary: [
+        { typeKey: 'lowDiskSpace', type: 'Disk space below threshold', service: 'Storage', count: 1 },
+        { typeKey: 'slowQuery', type: 'Slow query performance', service: 'Database', count: 8 },
+        { typeKey: 'rateLimit', type: 'Rate limit approaching', service: 'External API', count: 4 }
+      ],
+      showLogSearchDialog: false,
 
       // Feature flags
       featureFlags: [
@@ -813,9 +871,8 @@ async loadSystemHealth() {
       });
     },
 
-    // Search logs with filters
-    async searchLogs() {
-      this.loadLogs();
+    searchLogs() {
+      this.showLogSearchDialog = true;
     },
 
     // System diagnostics
@@ -893,15 +950,6 @@ async loadSystemHealth() {
         const response = await databaseOperationsService.optimizeDatabase();
         return response.data;
       });
-    },
-    
-    // Log operations
-    rolloverLogs() {
-      this.showOperation('rolloverLogs');
-    },
-    
-    searchLogs() {
-      this.showOperation('searchLogs');
     },
     
     // System diagnostics
@@ -2002,6 +2050,93 @@ input:checked + .slider:before {
 
 [data-theme="dark"] .dashboard-card {
   color: #f8fafc;
+}
+
+/* Log Summary Styles */
+.logs-summary {
+  margin-bottom: 1.5rem;
+}
+
+.summary-title {
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.status-indicator.error {
+  background-color: var(--danger);
+}
+
+.status-indicator.warning {
+  background-color: var(--warning);
+}
+
+.log-summary-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.log-summary-table th, 
+.log-summary-table td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.log-summary-table th {
+  background-color: var(--bg-section);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.log-summary-table td.log-count {
+  font-weight: 600;
+  text-align: center;
+}
+
+.logs-info {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: var(--bg-section);
+  border-radius: 0.375rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.logs-info svg {
+  margin-right: 0.5rem;
+  color: var(--primary);
+}
+
+.empty-logs {
+  text-align: center;
+  color: var(--text-tertiary);
+  padding: 1rem;
+}
+
+[data-theme="dark"] .logs-summary h3,
+[data-theme="dark"] .summary-title {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] h3 {
+  color: #f8fafc !important;
 }
 
 </style>

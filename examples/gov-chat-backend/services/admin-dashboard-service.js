@@ -59,21 +59,35 @@ async getSystemHealth() {
     const twoMonthsAgoDate = twoMonthsAgo.toISOString();
     logger.debug(`Date ranges: now=${now.toISOString()}, oneDayAgo=${startDate}, oneMonthAgo=${oneMonthAgoDate}, twoMonthsAgo=${twoMonthsAgoDate}`);
 
-    // Calculate system uptime
-    const systemUptimeSeconds = os.uptime();
-    const expectedUptimeSeconds = 30 * 24 * 60 * 60; // 30 days in seconds
-    systemUptime = Math.min((systemUptimeSeconds / expectedUptimeSeconds) * 100, 100).toFixed(2);
-    logger.debug(`System Uptime Calculation: systemUptimeSeconds=${systemUptimeSeconds}, expectedUptimeSeconds=${expectedUptimeSeconds}, systemUptime=${systemUptime}%`);
+    // Calculate system uptime as availability over the last 30 days using os.uptime()
+    const totalTimeSeconds = 30 * 24 * 60 * 60; // 30 days in seconds
+    const currentUptimeSeconds = os.uptime(); // Time since last reboot
 
-    // Calculate error rate from logs
-    const today = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-    const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
+    // Estimate downtime: if uptime is less than 30 days, there was a reboot
+    let totalDowntimeSeconds = 0;
+    if (currentUptimeSeconds < totalTimeSeconds) {
+      // Assume the system was down for 5 minutes during the last reboot
+      const downtimePerRebootSeconds = 5 * 60; // 5 minutes in seconds
+      totalDowntimeSeconds = downtimePerRebootSeconds;
+      logger.debug(`System rebooted ${currentUptimeSeconds} seconds ago; assuming ${downtimePerRebootSeconds} seconds of downtime`);
+    } else {
+      logger.debug('System has been up for more than 30 days; assuming no downtime in the last 30 days');
+    }
+
+    // Calculate availability
+    systemUptime = ((totalTimeSeconds - totalDowntimeSeconds) / totalTimeSeconds * 100).toFixed(2);
+    logger.debug(`System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`);
+    // Calculate error rate from yesterday's logs for a full day's data
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
     logger.debug(`Reading log file for error rate: ${logFile}`);
     try {
       const logContent = await fs.readFile(logFile, 'utf8');
       const logLines = logContent.split('\n').filter(line => line.trim() !== '');
       const totalLogs = logLines.length;
-      const errorLogs = logLines.filter(line => line.includes('[ERROR]')).length;
+      const errorLogs = logLines.filter(line => line.toUpperCase().includes('[ERROR]')).length;
       errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
       logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
     } catch (error) {
@@ -136,30 +150,28 @@ async getSystemHealth() {
       : 0;
     logger.debug(`MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`);
 
-    // Get response time from queries
+    // Get response time from queries (convert seconds to milliseconds)
     logger.debug('Fetching average response time from queries collection');
     const queriesCursor = await db.query(`
       FOR q IN queries
-        FILTER q.timestamp >= @startDate
-        COLLECT AGGREGATE 
-          avgTime = AVERAGE(q.responseTime),
-          count = COUNT()
-        RETURN { avgTime, count }
-    `, { startDate });
+      FILTER q.timestamp >= @startDate
+      COLLECT AGGREGATE 
+      avgTime = AVERAGE(q.responseTime * 1000), 
+      count = COUNT()
+      RETURN { avgTime, count }`, { startDate });
     const queriesStats = await queriesCursor.next() || { avgTime: 0, count: 0 };
-    logger.debug(`Queries stats: avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`);
+    logger.debug(`Queries stats (in milliseconds): avgTime=${queriesStats.avgTime}, count=${queriesStats.count}`);
 
-    // Calculate response time trend
+    // Calculate response time trend (convert seconds to milliseconds)
     logger.debug('Fetching last month\'s average response time for trend calculation');
     const lastMonthQueriesCursor = await db.query(`
       FOR q IN queries
-        FILTER q.timestamp >= @twoMonthsAgoDate AND q.timestamp < @oneMonthAgoDate
-        COLLECT AGGREGATE 
-          avgTime = AVERAGE(q.responseTime)
-        RETURN avgTime
-    `, { twoMonthsAgoDate, oneMonthAgoDate });
+      FILTER q.timestamp >= @twoMonthsAgoDate AND q.timestamp < @oneMonthAgoDate
+      COLLECT AGGREGATE 
+      avgTime = AVERAGE(q.responseTime * 1000)
+      RETURN avgTime`, { twoMonthsAgoDate, oneMonthAgoDate });
     const lastMonthAvgTime = await lastMonthQueriesCursor.next() || 0;
-    logger.debug(`Last month's average response time: ${lastMonthAvgTime}`);
+    logger.debug(`Last month's average response time (in milliseconds): ${lastMonthAvgTime}`);
     
     // Calculate response time trend
     responseTimeTrend = lastMonthAvgTime 

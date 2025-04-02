@@ -202,7 +202,6 @@
               </div>
 
               <!-- Log Management - Logs Tab Only -->
-              <!-- Log Management - Logs Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'logs'" style="grid-column: span 2;">
                 <div class="card-header">
                   <div class="card-title">{{ translate('admin.logManagement', 'Log Management') }}</div>
@@ -216,6 +215,16 @@
                           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                         {{ translate('admin.searchLogs', 'Search Logs') }}
+                      </span>
+                    </button>
+                    <button class="btn btn-outline" @click="rolloverLogs" style="margin-left: 8px;">
+                      <span style="display: flex; align-items: center;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                          style="margin-right: 4px;">
+                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
+                        </svg>
+                        {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
                       </span>
                     </button>
                   </div>
@@ -276,6 +285,44 @@
                         </tr>
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                <!-- Latest Search Results Section (shown when search results are available) -->
+                <div class="logs-summary" v-if="searchResults && searchResults.length > 0">
+                  <h3 class="summary-title">
+                    <span class="status-indicator info"></span>
+                    {{ translate('admin.searchResults', 'Latest Search Results') }}
+                    <span class="results-count">({{ searchResults.length }} {{ translate('admin.entriesFound', 'entries found') }})</span>
+                  </h3>
+                  <div class="log-summary-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{{ translate('admin.logTime', 'Time') }}</th>
+                          <th>{{ translate('admin.logLevel', 'Level') }}</th>
+                          <th>{{ translate('admin.logService', 'Service') }}</th>
+                          <th>{{ translate('admin.logMessage', 'Message') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(log, index) in searchResults.slice(0, 5)" :key="'search-' + index">
+                          <td>{{ log.time }}</td>
+                          <td>
+                            <span :class="['log-level', `log-${log.level.toLowerCase()}`]">
+                              {{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}
+                            </span>
+                          </td>
+                          <td>{{ log.service }}</td>
+                          <td>{{ log.message }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div v-if="searchResults.length > 5" class="view-more-logs">
+                      <button class="btn btn-outline btn-sm" @click="searchLogs">
+                        {{ translate('admin.viewAllResults', 'View All Results') }}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -374,8 +421,10 @@
                       <td>{{ user.fullName || user.loginName }}</td>
                       <td>{{ user.email }}</td>
                       <td>{{ user.role }}</td>
+                      <!-- Update this line in the users table -->
                       <td>
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;">
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;"
+                          @click="openUserEditDialog(user._key)">
                           {{ translate('admin.edit', 'Edit') }}
                         </button>
                       </td>
@@ -402,10 +451,15 @@
     <!-- Operation Results Modal -->
     <OperationResultsModal v-if="showOperationResults && operationResults" :operation="currentOperation"
       :results="operationResults" @close="closeOperationResults" />
+
+    <UserEditDialog v-if="showUserEditDialog && selectedUserId" :userId="selectedUserId"
+      :currentUserId="currentUser.userId || currentUser._key" :theme="currentTheme" @close="showUserEditDialog = false"
+      @user-updated="handleUserUpdated" />
   </div>
 
   <!-- Log Search Dialog -->
-  <LogSearchDialog v-if="showLogSearchDialog" @close="showLogSearchDialog = false" :theme="currentTheme" />
+  <LogSearchDialog v-if="showLogSearchDialog" @close="showLogSearchDialog = false"
+    @search-completed="handleSearchResults" :theme="currentTheme" />
 </template>
 
 <script>
@@ -413,12 +467,14 @@ import databaseOperationsService from '../services/databaseOperationsService';
 import adminDashboardService from '../services/adminDashboardService';
 import OperationResultsModal from './OperationResultsModal.vue';
 import LogSearchDialog from './LogSearchDialog.vue';
+import UserEditDialog from './UserEditDialog.vue';
 import { eventBus } from '../eventBus.js';
 
 export default {
   components: {
     OperationResultsModal,
-    LogSearchDialog
+    LogSearchDialog,
+    UserEditDialog
   },
   name: 'AdminDashboard',
   emits: ['close'],
@@ -600,6 +656,22 @@ export default {
         activeUsers: 0,
         newUsers: 0,
         users: []
+      },
+
+      // User edit dialog
+      showUserEditDialog: false,
+      selectedUserId: null,
+      currentUser: {}, // Will hold the current logged-in user's information
+
+      // For search functionality
+      searchResults: [],
+
+      // Status indicator styling for info logs
+      status: {
+        info: {
+          color: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)'
+        }
       }
     };
   },
@@ -630,6 +702,9 @@ export default {
 
     // Load initial data for the dashboard
     this.loadInitialData();
+
+    // Get current user data
+    this.getCurrentUser();
   },
   beforeUnmount() {
     // Clean up event listeners when component is destroyed
@@ -673,43 +748,43 @@ export default {
       // Default to English if nothing else works
       return 'en';
     },
-    
+
     // Change language
     changeLanguage() {
       if (this.$i18n) {
         // Set the i18n locale
         this.$i18n.locale = this.currentLocale;
-        
+
         // Save to localStorage
         try {
           localStorage.setItem('userLocale', this.currentLocale);
         } catch (e) {
           console.warn('Error saving language preference:', e);
         }
-        
+
         // Force update this component
         this.$forceUpdate();
       }
     },
-    
+
     // Toggle between light and dark theme
     toggleTheme() {
       const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
       this.applyTheme(newTheme);
     },
-    
+
     // Apply theme
     applyTheme(theme) {
       // Update local state
       this.currentTheme = theme;
-      
+
       // Save to localStorage
       localStorage.setItem('theme', theme);
-      
+
       // Apply to document
       document.documentElement.setAttribute('data-theme', theme);
       document.body.setAttribute('data-theme', theme);
-      
+
       // Update class names
       if (theme === 'dark') {
         document.documentElement.classList.add('dark-mode');
@@ -723,31 +798,43 @@ export default {
         document.body.classList.add('light-mode');
       }
     },
-    
+
     // Handle theme change event from other components
     handleThemeChange(event) {
       if (event.detail && event.detail.theme) {
         this.applyTheme(event.detail.theme);
       }
     },
-    
+
     // Get current effective theme (useful for components that need the actual theme)
     getCurrentTheme() {
       return this.currentTheme;
     },
-    
+
     // Set active tab
     setActiveTab(tabId) {
       this.activeTab = tabId;
+
+      // Load tab-specific data based on active tab
+      if (tabId === 'database') {
+        this.loadDatabaseStats();
+      } else if (tabId === 'logs') {
+        this.loadLogsSummary();
+        this.loadLogs();
+      } else if (tabId === 'security') {
+        this.loadSecurityMetrics();
+      } else if (tabId === 'users') {
+        this.loadUserStats();
+      }
     },
-    
+
     // Get usage level based on percentage
     getUsageLevel(value) {
       if (value < 50) return 'low';
       if (value < 80) return 'medium';
       return 'high';
     },
-    
+
     // Show notification using the event bus
     showNotification(message, type = 'success', duration = 3000) {
       eventBus.$emit('notification:show', {
@@ -758,21 +845,21 @@ export default {
     },
 
     // Load system health data
-async loadSystemHealth() {
-  try {
-    this.isLoading = true;
-    const response = await adminDashboardService.getSystemHealth();
-    
-    if (response && response.data && response.data.data) {
-      const data = response.data.data;
-      
-      // Update metrics
-      this.metrics = {
-        systemUptime: data.metrics.systemUptime,
-        avgResponseTime: data.metrics.avgResponseTime,
-        errorRate: data.metrics.errorRate,
-        activeUsers: data.metrics.activeUsers
-      };
+    async loadSystemHealth() {
+      try {
+        this.isLoading = true;
+        const response = await adminDashboardService.getSystemHealth();
+
+        if (response && response.data && response.data.data) {
+          const data = response.data.data;
+
+          // Update metrics
+          this.metrics = {
+            systemUptime: data.metrics.systemUptime,
+            avgResponseTime: data.metrics.avgResponseTime,
+            errorRate: data.metrics.errorRate,
+            activeUsers: data.metrics.activeUsers
+          };
 
           // Update health services
           this.healthServices = data.healthServices;
@@ -808,14 +895,14 @@ async loadSystemHealth() {
       try {
         this.isLoading = true;
         const response = await adminDashboardService.getLogs({
-          limit: 10,
-          level: this.logFilter.level,
-          service: this.logFilter.service
+          limit: 20, // Get more logs than we'll display in the summary
+          level: this.logFilter ? this.logFilter.level : '',
+          service: this.logFilter ? this.logFilter.service : ''
         });
 
         if (response && response.data && response.data.data) {
-          this.logs = response.data.data.logs;
-          this.logsTotal = response.data.data.total;
+          this.logs = response.data.data.logs || [];
+          this.logsTotal = response.data.data.total || 0;
         }
       } catch (error) {
         console.error('Error loading logs:', error);
@@ -823,6 +910,91 @@ async loadSystemHealth() {
       } finally {
         this.isLoading = false;
       }
+    },
+
+    // Load log summaries from the API
+    async loadLogsSummary() {
+      try {
+        this.isLoading = true;
+        const response = await adminDashboardService.getLogsSummary({
+          date: new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
+        });
+
+        if (response && response.data && response.data.data) {
+          this.errorLogsSummary = response.data.data.errors || [];
+          this.warningLogsSummary = response.data.data.warnings || [];
+        }
+      } catch (error) {
+        console.error('Error loading logs summary:', error);
+        this.showNotification('Failed to load logs summary', 'error');
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Security operations
+    async runSecurityScan() {
+      this.executeOperation('runSecurityScan', async () => {
+        const response = await adminDashboardService.runSecurityScan();
+        // Refresh security metrics after scan
+        if (response.data && response.data.success) {
+          this.loadSecurityMetrics();
+        }
+        return response.data;
+      });
+    },
+
+    // Search logs method - launches the search dialog
+    searchLogs() {
+      // Make sure the current theme is properly set
+      this.currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+
+      // Show the log search dialog
+      this.showLogSearchDialog = true;
+
+      // Load error and warning log summaries if they haven't been loaded yet
+      if (this.activeTab === 'logs' && (!this.errorLogsSummary.length && !this.warningLogsSummary.length)) {
+        this.loadLogsSummary();
+      }
+    },
+
+    // Handle search results from the LogSearchDialog component
+    handleSearchResults(results) {
+      // Store the search results
+      this.searchResults = results;
+
+      // Notify the user about the results
+      if (results.length === 0) {
+        this.showNotification(
+          this.translate('admin.logSearch.noResultsFound', 'No logs matched your search criteria'),
+          'info'
+        );
+      } else {
+        this.showNotification(
+          this.translate('admin.logSearch.resultsFound', `Found ${results.length} log entries`),
+          'success'
+        );
+
+        // If we're not on the logs tab, switch to it to display the results
+        if (this.activeTab !== 'logs') {
+          this.setActiveTab('logs');
+        }
+      }
+    },
+
+    // Log operations
+    async rolloverLogs() {
+      this.executeOperation('rolloverLogs', async () => {
+        const response = await adminDashboardService.rolloverLogs();
+        // Refresh logs after rollover
+        if (response.data && response.data.success) {
+          await Promise.all([
+            this.loadLogsSummary(),
+            this.loadLogs()
+          ]);
+        }
+        return response.data;
+      });
     },
 
     // Load security metrics
@@ -859,38 +1031,10 @@ async loadSystemHealth() {
       }
     },
 
-    // Log operations
-    async rolloverLogs() {
-      this.executeOperation('rolloverLogs', async () => {
-        const response = await adminDashboardService.rolloverLogs();
-        // Refresh logs after rollover
-        if (response.data && response.data.success) {
-          this.loadLogs();
-        }
-        return response.data;
-      });
-    },
-
-    searchLogs() {
-      this.showLogSearchDialog = true;
-    },
-
     // System diagnostics
     async runDiagnostics() {
       this.executeOperation('runDiagnostics', async () => {
         const response = await adminDashboardService.runDiagnostics();
-        return response.data;
-      });
-    },
-
-    // Security operations
-    async runSecurityScan() {
-      this.executeOperation('runSecurityScan', async () => {
-        const response = await adminDashboardService.runSecurityScan();
-        // Refresh security metrics after scan
-        if (response.data && response.data.success) {
-          this.loadSecurityMetrics();
-        }
         return response.data;
       });
     },
@@ -904,6 +1048,7 @@ async loadSystemHealth() {
       if (this.activeTab === 'database') {
         this.loadDatabaseStats();
       } else if (this.activeTab === 'logs') {
+        this.loadLogsSummary();
         this.loadLogs();
       } else if (this.activeTab === 'security') {
         this.loadSecurityMetrics();
@@ -911,7 +1056,7 @@ async loadSystemHealth() {
         this.loadUserStats();
       }
     },
-    
+
     // Load database statistics
     async loadDatabaseStats() {
       try {
@@ -925,7 +1070,7 @@ async loadSystemHealth() {
         // Just log the error, don't show a notification since this is background loading
       }
     },
-    
+
     // Database operations
     async reindexDatabase() {
       this.executeOperation('reindexDatabase', async () => {
@@ -937,89 +1082,79 @@ async loadSystemHealth() {
         return response.data;
       });
     },
-    
+
     async backupDatabase() {
       this.executeOperation('backupDatabase', async () => {
         const response = await databaseOperationsService.backupDatabase();
         return response.data;
       });
     },
-    
+
     async optimizeDatabase() {
       this.executeOperation('optimizeDatabase', async () => {
         const response = await databaseOperationsService.optimizeDatabase();
         return response.data;
       });
     },
-    
-    // System diagnostics
-    runDiagnostics() {
-      this.showOperation('runDiagnostics');
-    },
-    
-    // Security operations
-    runSecurityScan() {
-      this.showOperation('runSecurityScan');
-    },
-    
+
     // Job operations
     viewAllJobs() {
       this.showOperation('viewAllJobs');
     },
-    
+
     cancelJob(jobId) {
       this.showOperation('cancelJob', { jobId });
     },
-    
+
     restartJob(jobId) {
       this.showOperation('restartJob', { jobId });
     },
-    
+
     // Feature flag operations
     addNewFlag() {
       this.showOperation('addNewFlag');
     },
-    
+
     updateFeatureFlag(feature) {
-      this.showOperation('updateFeatureFlag', { 
-        id: feature.id, 
-        enabled: feature.enabled 
+      this.showOperation('updateFeatureFlag', {
+        id: feature.id,
+        enabled: feature.enabled
       });
     },
-    
+
     // Alert operations
     addNewAlert() {
       this.showOperation('addNewAlert');
     },
-    
+
     updateAlertConfig(alert) {
-      this.showOperation('updateAlertConfig', { 
-        id: alert.id, 
-        enabled: alert.enabled 
+      this.showOperation('updateAlertConfig', {
+        id: alert.id,
+        enabled: alert.enabled
       });
     },
-    
+
     saveAlertConfigs() {
       this.showOperation('saveAlertConfigs');
       this.showAlertsConfig = false;
     },
-    
+
     // Deployment operations
     deployVersion() {
       this.showOperation('deployVersion');
     },
-    
+
     toggleMaintenanceMode() {
-      this.showOperation('toggleMaintenanceMode', { 
-        enabled: this.maintenanceMode 
+      this.showOperation('toggleMaintenanceMode', {
+        enabled: this.maintenanceMode
       });
     },
-    
+
     // Performance operations
     viewDetailedMetrics() {
       this.showOperation('viewDetailedMetrics');
     },
-    
+
     // Helper to execute database operations with proper loading and error handling
     async executeOperation(operation, apiCall) {
       try {
@@ -1027,13 +1162,13 @@ async loadSystemHealth() {
         this.isLoading = true;
         this.currentOperation = operation;
         this.operationResults = null;
-        
+
         // Execute the API call
         const result = await apiCall();
-        
+
         // Set operation results for potential display
         this.operationResults = result;
-        
+
         // Show success notification
         if (result && result.success) {
           this.showNotification(
@@ -1043,7 +1178,7 @@ async loadSystemHealth() {
         } else {
           throw new Error(result.message || `Failed to ${operation}`);
         }
-        
+
         // Return the result
         return result;
       } catch (error) {
@@ -1053,35 +1188,35 @@ async loadSystemHealth() {
           message: error.message || this.translate(`admin.operations.${operation}.error`, `Error during ${operation}`),
           error: error.response?.data?.error || error.message
         };
-        
+
         // Show error notification
         this.showNotification(this.operationResults.message, 'error');
-        
+
         console.error(`Error during ${operation}:`, error);
         return this.operationResults;
       } finally {
         // Reset loading state
         this.isLoading = false;
-        
+
         // Optionally show results modal
         if (this.operationResults) {
           this.showOperationResults = true;
         }
       }
     },
-    
+
     // Legacy method for operations that are not yet implemented with real API calls
     showOperation(operation, data = {}) {
       // In a real app, this would make API calls
       // For now, just show loading and a notification
       this.isLoading = true;
       this.currentOperation = operation;
-      
+
       setTimeout(() => {
         this.isLoading = false;
         this.currentOperation = null;
         console.log(`Operation ${operation} executed with data:`, data);
-        
+
         // If using the notification service via event bus:
         this.showNotification(
           this.translate(`admin.operations.${operation}.success`, `Operation ${operation} completed successfully`),
@@ -1089,10 +1224,46 @@ async loadSystemHealth() {
         );
       }, 1500);
     },
-    
+
     // Close the operation results modal
     closeOperationResults() {
       this.showOperationResults = false;
+    },
+
+    // Get current user information
+    getCurrentUser() {
+      // Get current user data from localStorage or other source
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        try {
+          this.currentUser = JSON.parse(userData);
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+          this.currentUser = {};
+        }
+      }
+    },
+
+    // Open user edit dialog
+    openUserEditDialog(userId) {
+      this.selectedUserId = userId;
+      this.showUserEditDialog = true;
+    },
+
+    // Handle user updated event from dialog
+    handleUserUpdated(updatedData) {
+      console.log('User updated:', updatedData);
+
+      // Refresh user list if we're on the Users tab
+      if (this.activeTab === 'users') {
+        this.loadUserStats();
+      }
+
+      // Show notification
+      this.showNotification(
+        this.translate('admin.userEdit.userUpdated', 'User updated successfully'),
+        'success'
+      );
     }
   }
 };

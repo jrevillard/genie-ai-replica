@@ -190,6 +190,91 @@ router.post('/security-scan', adminController.runSecurityScan);
  */
 router.post('/diagnostics', adminController.runDiagnostics);
 
+// Updates for admin-routes.js - Add these routes
+
+/**
+ * @swagger
+ * /admin/logs/summary:
+ *   get:
+ *     summary: Get logs summary by type and service
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *         description: Date for which to get logs (YYYY-MM-DD)
+ *       - in: query
+ *         name: level
+ *         schema:
+ *           type: string
+ *         description: Filter by log level
+ *     responses:
+ *       200:
+ *         description: Logs summary retrieved successfully
+ *       401:
+ *         description: Unauthorized - authentication required
+ *       403:
+ *         description: Forbidden - admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/logs/summary', adminController.getLogsSummary);
+
+/**
+ * @swagger
+ * /admin/logs/search:
+ *   get:
+ *     summary: Search logs with filtering
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: term
+ *         schema:
+ *           type: string
+ *         description: Search term
+ *       - in: query
+ *         name: level
+ *         schema:
+ *           type: string
+ *         description: Filter by log level
+ *       - in: query
+ *         name: service
+ *         schema:
+ *           type: string
+ *         description: Filter by service name
+ *       - in: query
+ *         name: dateRange
+ *         schema:
+ *           type: string
+ *           enum: [today, yesterday, week, month, custom]
+ *         description: Date range preset
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *         description: Custom start date (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *         description: Custom end date (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Search completed successfully
+ *       401:
+ *         description: Unauthorized - authentication required
+ *       403:
+ *         description: Forbidden - admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/logs/search', adminController.searchLogs);
+
 // Database operations - utilize the existing database routes
 router.post('/database-operations/reindex', adminController.reindexDatabase);
 router.post('/database-operations/backup', adminController.backupDatabase);

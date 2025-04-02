@@ -682,6 +682,156 @@ async checkEmailAvailability(email) {
       throw error;
     }
   }
+
+  // Add these methods to your existing userService.js class
+
+  /**
+   * ===== ADMIN USER MANAGEMENT METHODS =====
+   * These methods should be added to your existing UserService class
+   */
+
+  /**
+   * Update user role (admin only)
+   * @param {String} userId - User ID
+   * @param {Object} updateData - Data to update (role, disabled status)
+   * @returns {Promise} Update result
+   */
+  async updateUserRole(userId, updateData) {
+    try {
+      console.log(`Updating role for user ${userId} to ${updateData.role}`);
+
+      // Use the direct user endpoint - this matches the backend route
+      // The route is PUT /api/users/:userId
+      const response = await httpService.put(`${this.userEndpoint}/${userId}`, updateData);
+
+      // Log the response
+      console.log(`Role update response for ${userId}:`, response);
+
+      return response;
+    } catch (error) {
+      console.error(`Error updating user role for ${userId}:`, error);
+
+      // Additional logging for diagnosis
+      if (error.response) {
+        console.error('Error response status:', error.response.status);
+        console.error('Error response data:', error.response.data);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Verify user email (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async verifyUserEmail(userId) {
+    try {
+      const response = await httpService.post(`admin/users/${userId}/verify-email`);
+      return response;
+    } catch (error) {
+      console.error('Error verifying user email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Force user logout by invalidating their token (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async forceUserLogout(userId) {
+    try {
+      const response = await httpService.post(`admin/users/${userId}/force-logout`);
+      return response;
+    } catch (error) {
+      console.error('Error forcing user logout:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a list of all users (admin only)
+   * @param {Object} options - Query options (limit, offset, sort)
+   * @returns {Promise} List of users
+   */
+  async getAllUsers(options = {}) {
+    try {
+      const response = await httpService.get('admin/users', { params: options });
+      return response;
+    } catch (error) {
+      console.error('Error fetching users list:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user profile by ID (for admin use)
+   * Using this method allows admins to view any user's profile
+   * @param {String} userId - User ID
+   * @returns {Promise} User profile data
+   */
+  async getUserProfile(userId) {
+    try {
+      // For admin purposes, let's use the standard getProfile method
+      // but add an admin flag to the request
+      return await httpService.get(`users/${userId}`, {
+        params: { admin: true }
+      });
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
+  }
+
+  // These methods should be added to your existing UserService class:
+
+  /**
+   * Update user role and status (admin only)
+   * @param {String} userId - User ID
+   * @param {Object} updateData - Data to update (role, disabled status)
+   * @returns {Promise} Update result
+   */
+  async updateUserRole(userId, updateData) {
+    try {
+      const response = await httpService.put(`admin/users/${userId}/role`, updateData);
+      return response;
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify user email (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async verifyUserEmail(userId) {
+    try {
+      const response = await httpService.post(`admin/users/${userId}/verify-email`);
+      return response;
+    } catch (error) {
+      console.error('Error verifying user email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Force user logout by invalidating their token (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async forceUserLogout(userId) {
+    try {
+      const response = await httpService.post(`admin/users/${userId}/force-logout`);
+      return response;
+    } catch (error) {
+      console.error('Error forcing user logout:', error);
+      throw error;
+    }
+  }
 }
 
 export default new UserService();

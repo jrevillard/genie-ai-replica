@@ -180,6 +180,38 @@ class UserProfileService {
       throw error;
     }
   }
+
+
+  /**
+   * Update user role (admin only)
+   * @param {String} userId - User ID to update
+   * @param {Object} updateData - Data containing the new role
+   * @returns {Promise} Update result
+   */
+  async updateUserRole(userId, updateData) {
+    try {
+      console.log(`Updating role for user ${userId} to ${updateData.role}`);
+
+      // First try the admin-specific endpoint
+      try {
+        const response = await httpService.put(`admin/users/${userId}/role`, updateData);
+        return response;
+      } catch (adminError) {
+        console.warn('Admin-specific role update failed, falling back to standard user update:', adminError.message);
+
+        // If that fails, try the standard user update endpoint
+        // This matches the route in user-routes.js 
+        const response = await httpService.put(`users/${userId}`, {
+          role: updateData.role
+        });
+        return response;
+      }
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      throw error;
+    }
+  }
+
 }
 
 export default new UserProfileService();

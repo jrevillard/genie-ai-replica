@@ -1,5 +1,6 @@
 // src/controllers/adminController.js
 const adminDashboardService = require('../services/admin-dashboard-service');
+const logsService = require('../services/logs-service');
 const { logger, triggerLogRollover } = require('../logger');
 
 // Admin controller methods
@@ -146,6 +147,55 @@ const adminController = {
       res.status(500).json({ 
         success: false, 
         message: 'Failed to fetch logs',
+        error: error.message
+      });
+    }
+  },
+  
+  /**
+   * Get logs summary grouped by type and service
+   */
+  async getLogsSummary(req, res) {
+    try {
+      logger.info('Controller: Fetching logs summary');
+      
+      const options = req.query; // Pass all query parameters to the service
+      
+      const logsSummary = await logsService.getLogsSummary(options);
+      
+      res.json({ 
+        success: true, 
+        data: logsSummary
+      });
+    } catch (error) {
+      logger.error(`Error fetching logs summary: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch logs summary',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * Search logs with filtering
+   */
+  async searchLogs(req, res) {
+    try {
+      logger.info('Controller: Searching logs');
+      
+      // Pass the complete query object to the service
+      // The logs service now handles parsing params if needed
+      const result = await logsService.searchLogs(req.query);
+      
+      // Return the service result directly
+      // The logs service now returns the correct structure
+      return res.json(result);
+    } catch (error) {
+      logger.error(`Error searching logs: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to search logs',
         error: error.message
       });
     }

@@ -287,50 +287,6 @@ router.post('/', upload.any(), async (req, res) => {
   }
 });
 
-// Update user profile
-router.put('/:userId', upload.any(), async (req, res) => {
-  try {
-    const safeBody = maskSensitiveFields(req.body);
-    logger.info("Update request body:", JSON.stringify(safeBody, null, 2));
-    logger.info("Update files:", req.files ? req.files.length : 0);
-    
-    let profileData = {};
-    
-    // Parse profile data from request body
-    if (req.body.data) {
-      try {
-        profileData = JSON.parse(req.body.data);
-      } catch (error) {
-        logger.error('Error parsing profile data:', error);
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid profile data format' 
-        });
-      }
-    } else {
-      // If req.body.data doesn't exist, assume the entire body is the profile data
-      profileData = req.body;
-    }
-    
-    logger.info("Parsed profile data for update:", JSON.stringify(profileData));
-    
-    const user = await userService.updateUserProfile(req.params.userId, profileData, req.files || []);
-    
-    // Return a clean JSON response with success flag and message
-    res.json({
-      success: true,
-      message: 'Profile saved successfully',
-      user: user
-    });
-  } catch (error) {
-    logger.error(`Error updating user profile ${req.params.userId}:`, error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Failed to update profile' 
-    });
-  }
-});
-
 // Delete user profile
 router.delete('/:userId', async (req, res) => {
   try {
@@ -471,6 +427,110 @@ router.post('/delete', authMiddleware.authenticate, async (req, res) => {
   } catch (error) {
     logger.error(`Error deleting account: ${error.message}`, error);
     res.status(500).json({ success: false, message: error.message || 'Failed to delete account' });
+  }
+});
+
+
+/**
+ * Update user role - admin-specific route
+ * This route allows admins to change user roles without needing the whole profile
+ */
+router.put('/:userId', upload.any(), authMiddleware.authenticate, async (req, res) => {
+  try {
+    // Check if the request is for a role update
+    if (req.body.role) {
+      // For role updates, check admin permissions
+      const isAdmin = req.user && req.user.role === 'Admin';
+      if (!isAdmin) {
+        logger.warn(`Non-admin attempt to change role for user ${req.params.userId}`);
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Admin privileges required to update user roles' 
+        });
+      }
+
+      logger.info(`[ADMIN] Update user role request for user ID: ${req.params.userId}`);
+      logger.info(`[ADMIN] Update data: ${JSON.stringify(req.body)}`);
+      
+      // Validate the role is one of the allowed values
+      const allowedRoles = ['User', 'Admin', 'Manager'];
+      if (!allowedRoles.includes(req.body.role)) {
+        logger.warn(`[ADMIN] Invalid role ${req.body.role} requested for user ${req.params.userId}`);
+        return res.status(400).json({ 
+          success: false, 
+          message: `Role must be one of: ${allowedRoles.join(', ')}` 
+        });
+      }
+      
+      // Get user to verify existence
+      const user = await userService.getUserProfile(req.params.userId);
+      if (!user) {
+        logger.warn(`[ADMIN] User with ID ${req.params.userId} not found for role update`);
+        return res.status(404).json({ 
+          success: false, 
+          message: 'User not found' 
+        });
+      }
+      
+      // Create update data with just the role
+      const updateData = {
+        role: req.body.role,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Update the user document directly in the database
+      await userService.users.update(req.params.userId, updateData);
+      
+      logger.info(`[ADMIN] User ${req.params.userId} role updated to ${req.body.role} successfully`);
+      
+      // Return a clean JSON response with success flag and message
+      return res.json({
+        success: true,
+        message: 'User role updated successfully',
+        role: req.body.role
+      });
+    } 
+    // Otherwise, treat as a normal profile update
+    else {
+      const safeBody = maskSensitiveFields(req.body);
+      logger.info("Update request body:", JSON.stringify(safeBody, null, 2));
+      logger.info("Update files:", req.files ? req.files.length : 0);
+      
+      let profileData = {};
+      
+      // Parse profile data from request body
+      if (req.body.data) {
+        try {
+          profileData = JSON.parse(req.body.data);
+        } catch (error) {
+          logger.error('Error parsing profile data:', error);
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid profile data format' 
+          });
+        }
+      } else {
+        // If req.body.data doesn't exist, assume the entire body is the profile data
+        profileData = req.body;
+      }
+      
+      logger.info("Parsed profile data for update:", JSON.stringify(profileData));
+      
+      const user = await userService.updateUserProfile(req.params.userId, profileData, req.files || []);
+      
+      // Return a clean JSON response with success flag and message
+      return res.json({
+        success: true,
+        message: 'Profile saved successfully',
+        user: user
+      });
+    }
+  } catch (error) {
+    logger.error(`Error updating user ${req.params.userId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to update user' 
+    });
   }
 });
 

@@ -85,23 +85,23 @@ const logsService = {
       throw error;
     }
   },
-  
+
   /**
-   * Search logs with filtering
-   * @param {Object} options - Search options
-   * @param {string} options.term - Search term
-   * @param {string} options.level - Log level filter
-   * @param {string} options.service - Service name filter
-   * @param {string} options.dateRange - Date range (today, yesterday, week, month)
-   * @param {string} options.startDate - Custom start date (YYYY-MM-DD)
-   * @param {string} options.endDate - Custom end date (YYYY-MM-DD)
-   * @param {boolean} options.includeArchived - Whether to include archived logs
-   * @returns {Promise<Array>} Filtered log entries
-   */
+ * Search logs with filtering
+ * @param {Object} options - Search options
+ * @param {string} options.term - Search term
+ * @param {string} options.level - Log level filter
+ * @param {string} options.service - Service name filter
+ * @param {string} options.dateRange - Date range (today, yesterday, week, month)
+ * @param {string} options.startDate - Custom start date (YYYY-MM-DD)
+ * @param {string} options.endDate - Custom end date (YYYY-MM-DD)
+ * @param {boolean} options.includeArchived - Whether to include archived logs
+ * @returns {Promise<Array>} Filtered log entries
+ */
   async searchLogs(options = {}) {
     try {
       logger.info('Searching logs with options:', options);
-      
+
       // Extract search parameters from options.params if it exists
       let searchParams = options;
       if (options.params && typeof options.params === 'string') {
@@ -112,30 +112,30 @@ const logsService = {
           logger.error('Failed to parse search parameters:', e);
         }
       }
-      
+
       // Determine date range
       const { startDate, endDate } = this.getDateRange(searchParams);
       logger.debug(`Using date range: ${startDate} to ${endDate}`);
-      
+
       // Get all log files in the range
       const logFiles = await this.getLogFilesInRange(startDate, endDate, searchParams.includeArchived);
-      
+
       logger.info(`Found ${logFiles.length} log files to search:`, logFiles);
-      
+
       // Read and parse all log files
       const allLogs = [];
-      
+
       for (const file of logFiles) {
         try {
           logger.debug(`Reading log file: ${file}`);
           const logContent = await fs.readFile(file, 'utf8');
           const logLines = logContent.split('\n').filter(line => line.trim() !== '');
           logger.debug(`Found ${logLines.length} lines in ${file}`);
-          
+
           // Special handling for error log files
           const isErrorLog = file.includes('error');
           let parsedLogs;
-          
+
           if (isErrorLog) {
             // For error logs, set level to ERROR
             parsedLogs = this.parseLogs(logLines, 'ERROR');
@@ -145,91 +145,108 @@ const logsService = {
             parsedLogs = this.parseLogs(logLines);
             logger.debug(`Parsed ${parsedLogs.length} logs from combined log file`);
           }
-          
+
           // Log levels found in the parsed logs
           const logLevels = new Set(parsedLogs.map(log => log.level ? log.level.toUpperCase() : 'UNKNOWN'));
           logger.debug(`Log levels found in ${file}: ${Array.from(logLevels).join(', ')}`);
-          
+
           allLogs.push(...parsedLogs);
         } catch (error) {
           logger.error(`Error reading log file ${file}: ${error.message}`);
         }
       }
-      
+
       logger.info(`Parsed ${allLogs.length} log entries before filtering`);
-      
+
+      // Apply date filtering based on the date range
+      let filteredLogs = allLogs.filter(log => {
+        // Make sure log has a valid date
+        if (!log.date) return false;
+
+        // Compare with the date range
+        return log.date >= startDate && log.date <= endDate;
+      });
+
+      logger.debug(`After date filtering: ${filteredLogs.length} logs remain`);
+
       // Apply filters - Modified to handle case insensitive filtering with detailed logging
-      let filteredLogs = allLogs;
-      
+      let levelFilteredLogs = filteredLogs;
+
       // Debug: show all unique levels in logs
-      const uniqueLevels = new Set(allLogs.map(log => log.level ? log.level.toUpperCase() : 'UNKNOWN'));
+      const uniqueLevels = new Set(filteredLogs.map(log => log.level ? log.level.toUpperCase() : 'UNKNOWN'));
       logger.debug(`Unique log levels in all logs: ${Array.from(uniqueLevels).join(', ')}`);
-      
+
       // Apply level filter if specified
       if (searchParams.level && searchParams.level.trim() !== '') {
         const targetLevel = searchParams.level.toUpperCase();
         logger.debug(`Filtering for log level: "${targetLevel}"`);
-        const beforeCount = filteredLogs.length;
-        
-        filteredLogs = filteredLogs.filter(log => {
+        const beforeCount = levelFilteredLogs.length;
+
+        levelFilteredLogs = levelFilteredLogs.filter(log => {
           const logLevel = log.level ? log.level.toUpperCase() : '';
           const matches = logLevel === targetLevel;
           return matches;
         });
-        
-        logger.debug(`After level filter (${targetLevel}): ${filteredLogs.length} logs (from ${beforeCount})`);
-        
+
+        logger.debug(`After level filter (${targetLevel}): ${levelFilteredLogs.length} logs (from ${beforeCount})`);
+
         // If we have zero results, log some sample entries to diagnose the issue
-        if (filteredLogs.length === 0 && beforeCount > 0) {
+        if (levelFilteredLogs.length === 0 && beforeCount > 0) {
           logger.debug('Level filter resulted in zero logs. Sample log entries:');
-          const sampleLogs = allLogs.slice(0, 5);
+          const sampleLogs = filteredLogs.slice(0, 5);
           sampleLogs.forEach((log, index) => {
             logger.debug(`Sample log ${index + 1}: level=${log.level}, time=${log.time}, message=${log.message.substring(0, 50)}...`);
           });
         }
       }
-      
+
       // Apply service filter if specified
       if (searchParams.service && searchParams.service.trim() !== '') {
         logger.debug(`Filtering for service: "${searchParams.service}"`);
-        const beforeCount = filteredLogs.length;
-        
-        filteredLogs = filteredLogs.filter(log => {
+        const beforeCount = levelFilteredLogs.length;
+
+        levelFilteredLogs = levelFilteredLogs.filter(log => {
           return log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase());
         });
-        
-        logger.debug(`After service filter (${searchParams.service}): ${filteredLogs.length} logs (from ${beforeCount})`);
+
+        logger.debug(`After service filter (${searchParams.service}): ${levelFilteredLogs.length} logs (from ${beforeCount})`);
       }
-      
+
       // Apply search term filter if specified
       if (searchParams.term && searchParams.term.trim() !== '') {
         logger.debug(`Filtering for search term: "${searchParams.term}"`);
-        const beforeCount = filteredLogs.length;
-        
-        filteredLogs = filteredLogs.filter(log => {
+        const beforeCount = levelFilteredLogs.length;
+
+        levelFilteredLogs = levelFilteredLogs.filter(log => {
           return log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase());
         });
-        
-        logger.debug(`After term filter (${searchParams.term}): ${filteredLogs.length} logs (from ${beforeCount})`);
+
+        logger.debug(`After term filter (${searchParams.term}): ${levelFilteredLogs.length} logs (from ${beforeCount})`);
       }
-      
+
       // Sort by date and time (most recent first)
-      filteredLogs.sort((a, b) => {
+      levelFilteredLogs.sort((a, b) => {
+        // First compare by date
+        if (a.date !== b.date) {
+          return b.date.localeCompare(a.date);
+        }
+        // If dates are the same, compare by time
         const dateA = new Date(`${a.date} ${a.time}`);
         const dateB = new Date(`${b.date} ${b.time}`);
         return dateB - dateA;
       });
-      
-      logger.info(`Returning ${filteredLogs.length} filtered log entries`);
-      
+
+      logger.info(`Returning ${levelFilteredLogs.length} filtered log entries`);
+
       // Format logs for frontend
-      const formattedLogs = filteredLogs.map(log => ({
+      const formattedLogs = levelFilteredLogs.map(log => ({
+        date: log.date,  // Include date in response
         time: log.time,
         level: log.level,
         service: log.service,
         message: log.message
       }));
-      
+
       return {
         logs: formattedLogs,
         total: formattedLogs.length
@@ -330,11 +347,11 @@ const logsService = {
   },
   
   /**
-   * Parse raw log lines into structured log objects
-   * @param {Array} logLines - Raw log lines
-   * @param {string} defaultLevel - Default log level if not detected
-   * @returns {Array} Parsed log entries
-   */
+ * Parse raw log lines into structured log objects
+ * @param {Array} logLines - Raw log lines
+ * @param {string} defaultLevel - Default log level if not detected
+ * @returns {Array} Parsed log entries
+ */
   parseLogs(logLines, defaultLevel = null) {
     const logs = logLines
       .map(line => {
@@ -343,27 +360,27 @@ const logsService = {
         if (standardMatch) {
           const [, date, time, level, message] = standardMatch;
           return {
-            date,
+            date,  // This is YYYY-MM-DD format
             time,
             level: defaultLevel || level,
             message,
             service: this.detectService(message)
           };
         }
-        
+
         // Try alternative format: 2025-04-02 16:00:29 [INFO] Message
         const altMatch1 = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
         if (altMatch1) {
           const [, date, time, level, message] = altMatch1;
           return {
-            date,
+            date,  // This is YYYY-MM-DD format
             time,
             level: defaultLevel || level,
             message,
             service: this.detectService(message)
           };
         }
-        
+
         // Try format without level: 2025-04-02 16:00:29 Message
         const dateTimeOnlyMatch = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
         if (dateTimeOnlyMatch) {
@@ -371,20 +388,20 @@ const logsService = {
           // Determine log level from message content or use default
           const detectedLevel = defaultLevel || this.detectLogLevel(message);
           return {
-            date,
+            date,  // This is YYYY-MM-DD format
             time,
             level: detectedLevel,
             message,
             service: this.detectService(message)
           };
         }
-        
+
         // No recognized format, try to extract what we can
         if (line.trim()) {
           const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
           const timeMatch = line.match(/(\d{2}:\d{2}:\d{2})/);
           const levelMatch = line.match(/\[(ERROR|WARNING|INFO)\]/i);
-          
+
           if (dateMatch || timeMatch) {
             return {
               date: dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0],
@@ -395,20 +412,20 @@ const logsService = {
             };
           }
         }
-        
+
         return null;
       })
       .filter(log => log !== null);
-    
+
     // Log level distribution stats
     const levelCounts = {};
     logs.forEach(log => {
       const level = log.level ? log.level.toUpperCase() : 'UNKNOWN';
       levelCounts[level] = (levelCounts[level] || 0) + 1;
     });
-    
+
     logger.debug(`Log level distribution: ${JSON.stringify(levelCounts)}`);
-    
+
     return logs;
   },
   

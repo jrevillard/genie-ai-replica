@@ -289,6 +289,8 @@ export default {
                     }));
 
                     this.searchResults = logs;
+
+                    this.searchResults = logs;
                 } else {
                     console.log('No valid response data'); // Debug: Log if response is invalid
                     this.searchResults = [];

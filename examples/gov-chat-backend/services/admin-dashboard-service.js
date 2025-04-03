@@ -640,6 +640,7 @@ const adminDashboardService = {
           }
           const [, timestamp, level, service, message] = match;
           const parsedLog = {
+            date: date.toISOString().split('T')[0], 
             time: new Date(timestamp).toLocaleTimeString(),
             level: level.toUpperCase(),
             service,

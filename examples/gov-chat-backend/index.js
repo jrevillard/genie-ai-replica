@@ -21,6 +21,23 @@ if (!fs.existsSync(uploadsDir)) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Disable ETag generation completely
+app.disable('etag');
+
+// Add a global middleware to disable caching for all responses
+app.use((req, res, next) => {
+  // Set strong cache control headers to prevent caching
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  
+  // These headers ensure no 304 responses
+  res.set('Last-Modified', (new Date()).toUTCString());
+  logger.info(`[REQUEST DEBUG] ${req.method} ${req.url} - No route matched`);
+  // Continue to the next middleware
+  next();
+});
+
 // Swagger definition (unchanged)
 const swaggerOptions = {
   definition: {
@@ -98,8 +115,12 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials']
+  exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials'],
+  preflightContinue: false, // This is important
+  optionsSuccessStatus: 204 // This is also important
 }));
+
+app.options('*', cors());
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -147,7 +168,13 @@ availableRoutes.forEach(file => {
 });
 
 // Use available routes
-if (routes['user-routes']) app.use('/api/users', routes['user-routes']);
+//if (routes['user-routes']) app.use('/api/users', routes['user-routes']);
+// In your index.js, add this log
+if (routes['user-routes']) {
+  logger.info('Mounting user routes at /api/users');
+  logger.info(`Route paths: ${JSON.stringify(Object.keys(routes['user-routes'].stack.map(r => r.route?.path).filter(Boolean)))}`);
+  app.use('/api/users', routes['user-routes']);
+};
 if (routes['query-routes']) app.use('/api/queries', routes['query-routes']);
 if (routes['service-routes']) app.use('/api/services', routes['service-routes']);
 if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
@@ -193,5 +220,7 @@ app.listen(PORT, () => {
   logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
   logger.info(`Available endpoints: ${availableRoutes.map(route => `/api/${route.replace('-routes', '')}`).join(', ')}`);
 });
+
+
 
 module.exports = app; // For testing

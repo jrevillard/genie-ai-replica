@@ -62,6 +62,7 @@ export default {
     LoginScreen,
     AdminDashboard
   },
+
   data() {
     return {
       isSidebarOpen: true,

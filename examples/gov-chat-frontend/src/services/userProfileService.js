@@ -212,6 +212,28 @@ class UserProfileService {
     }
   }
 
+  /**
+   * Update user role only (specific method for role changes)
+   * @param {String} userId - User ID to update
+   * @param {String} role - New role value
+   * @returns {Promise} Update result
+   */
+  async updateUserRoleOnly(userId, role) {
+    try {
+      console.log(`Updating role for user ${userId} to ${role}`);
+
+      // Make the API request to the endpoint that matches the backend route
+      // This matches the PUT /api/users/:userId/role endpoint in user-routes.js
+      const response = await httpService.put(`users/${userId}/role`, { role });
+
+      console.log(`Role update response:`, response);
+      return response;
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      throw error;
+    }
+  }
+
 }
 
 export default new UserProfileService();

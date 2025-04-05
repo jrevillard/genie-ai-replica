@@ -46,6 +46,27 @@ const maskSensitiveFields = (body) => {
   return safeBody;
 };
 
+// Debug route to list all registered routes
+router.get('/debug-routes', (req, res) => {
+  logger.info('Debug routes endpoint accessed');
+  
+  // List all registered routes
+  const routes = [];
+  router.stack.forEach(layer => {
+    if (layer.route) {
+      const path = layer.route.path;
+      const methods = Object.keys(layer.route.methods).map(m => m.toUpperCase()).join(', ');
+      routes.push(`${methods}: ${path}`);
+    }
+  });
+  
+  res.json({ 
+    success: true, 
+    message: 'Routes registered on this router',
+    routes: routes
+  });
+});
+
 // Update user's email address with verification
 router.put('/email', authMiddleware.authenticate, async (req, res) => {
   logger.info('\n=======================================================');
@@ -436,6 +457,19 @@ router.post('/delete', authMiddleware.authenticate, async (req, res) => {
  * This route allows admins to change user roles without needing the whole profile
  */
 router.put('/:userId', upload.any(), authMiddleware.authenticate, async (req, res) => {
+  // Debug logging
+  logger.info('\n=======================================================');
+  logger.info('========= PUT USER ROUTE ACCESSED =========');
+  logger.info(`Method: ${req.method}`);
+  logger.info(`Full URL: ${req.originalUrl}`);
+  logger.info(`User ID from params: ${req.params.userId}`);
+  logger.info(`Request body: ${JSON.stringify(req.body)}`);
+  logger.info(`Is authenticated: ${!!req.user}`);
+  logger.info(`User role: ${req.user?.role}`);
+  logger.info(`Content-Type: ${req.get('Content-Type')}`);
+  logger.info(`Files: ${req.files ? JSON.stringify(req.files.map(f => f.fieldname)) : 'none'}`);
+  logger.info('=======================================');
+
   try {
     // Check if the request is for a role update
     if (req.body.role) {
@@ -530,6 +564,82 @@ router.put('/:userId', upload.any(), authMiddleware.authenticate, async (req, re
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Failed to update user' 
+    });
+  }
+});
+
+/**
+ * Update user role only - admin-specific route 
+ */
+router.put('/:userId/role', authMiddleware.authenticate, async (req, res) => {
+  // Debug logging
+  logger.info('\n=======================================================');
+  logger.info('========= PUT USER/ROLE ROUTE ACCESSED =========');
+  logger.info(`Method: ${req.method}`);
+  logger.info(`Full URL: ${req.originalUrl}`);
+  logger.info(`User ID from params: ${req.params.userId}`);
+  logger.info(`Request body: ${JSON.stringify(req.body)}`);
+  logger.info(`Is authenticated: ${!!req.user}`);
+  logger.info(`User role: ${req.user?.role}`);
+  logger.info(`Content-Type: ${req.get('Content-Type')}`);
+  logger.info('=======================================');
+
+  try {
+    // Check admin permissions
+    const isAdmin = req.user && req.user.role === 'Admin';
+    if (!isAdmin) {
+      logger.warn(`Non-admin attempt to change role for user ${req.params.userId}`);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Admin privileges required to update user roles' 
+      });
+    }
+
+    logger.info(`[ADMIN] Update user role only request for user ID: ${req.params.userId}`);
+    logger.info(`[ADMIN] New role: ${req.body.role}`);
+    
+    // Validate the role is one of the allowed values
+    const allowedRoles = ['User', 'Admin', 'Manager'];
+    if (!allowedRoles.includes(req.body.role)) {
+      logger.warn(`[ADMIN] Invalid role ${req.body.role} requested for user ${req.params.userId}`);
+      return res.status(400).json({ 
+        success: false, 
+        message: `Role must be one of: ${allowedRoles.join(', ')}` 
+      });
+    }
+    
+    // Get user to verify existence
+    const user = await userService.getUserProfile(req.params.userId);
+    if (!user) {
+      logger.warn(`[ADMIN] User with ID ${req.params.userId} not found for role update`);
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+    
+    // Create update data with just the role
+    const updateData = {
+      role: req.body.role,
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Update the user document directly in the database
+    await userService.users.update(req.params.userId, updateData);
+    
+    logger.info(`[ADMIN] User ${req.params.userId} role updated to ${req.body.role} successfully`);
+    
+    // Return success response
+    return res.json({
+      success: true,
+      message: 'User role updated successfully',
+      role: req.body.role
+    });
+  } catch (error) {
+    logger.error(`Error updating user role for ${req.params.userId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to update user role' 
     });
   }
 });

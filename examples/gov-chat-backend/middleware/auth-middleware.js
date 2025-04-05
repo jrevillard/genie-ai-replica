@@ -150,9 +150,24 @@ const authMiddleware = {
         }
       }
       
-      // Set user in request object
-      req.user = decoded;
-      logger.info(`[AUTH DEBUG] ✅ User attached to request. Authentication successful`);
+      try {
+        // Get complete user data from database to obtain role information
+        const user = await authService.getUserById(decoded.userId);
+        
+        // Combine token data with user data from database
+        req.user = {
+          ...decoded,
+          role: user.role || 'User', // Get role from database, default to 'User'
+          _key: user._key || decoded.userId
+        };
+        
+        logger.info(`[AUTH DEBUG] ✅ User attached to request with role: ${req.user.role}`);
+      } catch (userError) {
+        logger.warn(`[AUTH DEBUG] ⚠️ Failed to fetch user details: ${userError.message}`);
+        // Still set basic user data even if fetching details fails
+        req.user = decoded;
+        logger.info(`[AUTH DEBUG] ✅ User attached to request (without role)`);
+      }
       
       // Check if we need to get additional user data
       if (req.originalUrl.includes('/email')) {

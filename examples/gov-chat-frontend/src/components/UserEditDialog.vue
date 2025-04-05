@@ -326,64 +326,43 @@
       },
   
       // Save changes to user settings
+      // Save changes to user settings
+      // Save changes to user settings
+      // Save changes to user settings
+      // Save changes to user settings
+      // Save changes to user settings
       async saveChanges() {
         try {
           this.isSaving = true;
           this.operationMessage = '';
 
-          // Prepare update data with just the role change
-          const updateData = {
-            role: this.userSettings.isAdmin ? 'Admin' : 'User'
-          };
+          // Prepare update data with just the role
+          const role = this.userSettings.isAdmin ? 'Admin' : 'User';
 
-          console.log(`Saving role changes for user ${this.userId}:`, updateData);
+          console.log(`Saving role changes for user ${this.userId}: ${role}`);
 
-          // Get auth token from localStorage - match how your app stores it
-          const user = JSON.parse(localStorage.getItem('user') || '{}');
-          const token = user.accessToken || '';
+          // Use the userProfileService to update the role
+          const response = await userProfileService.updateUserRoleOnly(this.userId, role);
 
-          // Make direct API call to the correct endpoint
-          const response = await fetch(`/api/users/${this.userId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              // Add cache-busting headers
-              'Pragma': 'no-cache',
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
-            },
-            body: JSON.stringify(updateData)
-          });
+          console.log(`Response:`, response);
 
-          console.log(`Response status: ${response.status}`);
-
-          const result = await response.json().catch(() => {
-            // If response can't be parsed as JSON, create a basic response
-            return { success: response.ok, message: response.ok ? 'Update successful' : 'Update failed' };
-          });
-
-          console.log('Response data:', result);
-
-          if (response.ok) {
-            // Update original settings to match current settings
-            this.originalSettings.enabled = this.userSettings.enabled;
+          if (response && response.data && response.data.success) {
+            // Update original settings
             this.originalSettings.isAdmin = this.userSettings.isAdmin;
-
             this.showMessage(this.translate('admin.userEdit.saveSuccess', 'User settings updated successfully'), true);
-
-            // Emit event to parent component
-            this.$emit('user-updated', {
-              userId: this.userId,
-              changes: updateData
-            });
+            this.$emit('user-updated', { userId: this.userId, changes: { role } });
           } else {
-            const errorMessage = result.message || result.error || 'Failed to update user settings';
+            let errorMessage = 'Failed to update user settings';
+            if (response && response.data && response.data.message) {
+              errorMessage = response.data.message;
+            }
             this.showMessage(errorMessage, false);
-            console.error('Error response:', result);
           }
         } catch (error) {
           console.error('Error saving user settings:', error);
-          this.showMessage(this.translate('admin.userEdit.errorSaving', 'Error saving user settings'), false);
+          const errorMessage = error.response?.data?.message ||
+            this.translate('admin.userEdit.errorSaving', 'Error saving user settings');
+          this.showMessage(errorMessage, false);
         } finally {
           this.isSaving = false;
         }

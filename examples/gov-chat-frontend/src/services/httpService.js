@@ -230,6 +230,35 @@ class HttpService {
       return Promise.reject(error);
     }
   }
+
+  /**
+ * Special PUT method that completely bypasses caching
+ * @param {string} url - API endpoint
+ * @param {Object} data - Data to send
+ * @returns {Promise} Promise with server response
+ */
+  async putNoCache(url, data) {
+    // Add a timestamp to both URL and data to ensure uniqueness
+    const timestamp = Date.now();
+    const noCacheUrl = `${url}?_nocache=${timestamp}`;
+
+    // Add timestamp to data as well
+    const noCacheData = {
+      ...data,
+      _timestamp: timestamp
+    };
+
+    // Make the request with cache-busting headers
+    return this.instance.put(noCacheUrl, noCacheData, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate, private',
+        'Pragma': 'no-cache',
+        'Expires': '-1',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Timestamp': timestamp
+      }
+    });
+  }
 }
 
 export default new HttpService();

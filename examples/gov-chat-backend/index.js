@@ -168,13 +168,24 @@ availableRoutes.forEach(file => {
 });
 
 // Use available routes
-//if (routes['user-routes']) app.use('/api/users', routes['user-routes']);
-// In your index.js, add this log
 if (routes['user-routes']) {
   logger.info('Mounting user routes at /api/users');
-  logger.info(`Route paths: ${JSON.stringify(Object.keys(routes['user-routes'].stack.map(r => r.route?.path).filter(Boolean)))}`);
+  
+  // Detailed route logging
+  logger.info('Detailed User Routes:');
+  routes['user-routes'].stack.forEach((middleware, index) => {
+    if (middleware.route) {
+      logger.info(`Route ${index}: 
+        Path: ${middleware.route.path}
+        Methods: ${JSON.stringify(Object.keys(middleware.route.methods))}
+      `);
+    } else if (middleware.name === 'router') {
+      logger.info(`Nested Router detected at index ${index}`);
+    }
+  });
+
   app.use('/api/users', routes['user-routes']);
-};
+}
 if (routes['query-routes']) app.use('/api/queries', routes['query-routes']);
 if (routes['service-routes']) app.use('/api/services', routes['service-routes']);
 if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
@@ -220,7 +231,5 @@ app.listen(PORT, () => {
   logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
   logger.info(`Available endpoints: ${availableRoutes.map(route => `/api/${route.replace('-routes', '')}`).join(', ')}`);
 });
-
-
 
 module.exports = app; // For testing

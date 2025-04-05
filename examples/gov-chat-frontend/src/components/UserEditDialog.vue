@@ -1,49 +1,45 @@
 <template>
-    <div class="modal" :data-theme="theme">
-      <div class="overlay" @click="$emit('close')"></div>
-      <div class="modal-content">
-        <div class="modal-title">
-          <h2>{{ translate('admin.userEdit.title', 'Edit User') }}</h2>
-          <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">×</button>
+  <div class="modal" :data-theme="theme">
+    <div class="overlay" @click="$emit('close')"></div>
+    <div class="modal-content">
+      <div class="modal-title">
+        <h2>{{ translate('admin.userEdit.title', 'Edit User') }}</h2>
+        <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">×</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Loading indicator -->
+        <div class="loading-overlay" v-if="isLoading">
+          <div class="loading-spinner"></div>
+          <p>{{ translate('admin.userEdit.loading', 'Loading user data...') }}</p>
         </div>
-  
-        <div class="modal-body">
-          <!-- Loading indicator -->
-          <div class="loading-overlay" v-if="isLoading">
-            <div class="loading-spinner"></div>
-            <p>{{ translate('admin.userEdit.loading', 'Loading user data...') }}</p>
-          </div>
-  
-          <!-- User information section -->
+
+        <!-- Horizontal layout for sections -->
+        <div class="content-wrapper">
+          <!-- User Information Section -->
           <div class="user-info-section">
             <h3>{{ translate('admin.userEdit.userInfo', 'User Information') }}</h3>
-            
             <div class="info-grid">
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.userId', 'User ID') }}:</span>
                 <span class="info-value">{{ userData._key || userData.userId }}</span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.loginName', 'Login Name') }}:</span>
                 <span class="info-value">{{ userData.loginName }}</span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.fullName', 'Full Name') }}:</span>
                 <span class="info-value">{{ userData.personalIdentification?.fullName || '-' }}</span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.dob', 'Date of Birth') }}:</span>
                 <span class="info-value">{{ userData.personalIdentification?.dob || '-' }}</span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.email', 'Email') }}:</span>
                 <span class="info-value">{{ userData.email }}</span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.emailVerified', 'Email Verified') }}:</span>
                 <span class="info-value">
@@ -51,120 +47,117 @@
                   {{ userData.emailVerified ? translate('admin.userEdit.verified', 'Verified') : translate('admin.userEdit.notVerified', 'Not Verified') }}
                 </span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.createdAt', 'Created') }}:</span>
                 <span class="info-value">{{ formatDate(userData.createdAt) }}</span>
               </div>
-              
               <div class="info-row">
                 <span class="info-label">{{ translate('admin.userEdit.lastLogin', 'Last Login') }}:</span>
                 <span class="info-value">{{ userData.lastLogin ? formatDate(userData.lastLogin) : translate('admin.userEdit.never', 'Never') }}</span>
               </div>
             </div>
           </div>
-  
-          <!-- Account settings section -->
-          <div class="account-settings-section">
-            <h3>{{ translate('admin.userEdit.accountSettings', 'Account Settings') }}</h3>
-            
-            <div class="settings-grid">
-              <div class="settings-card">
-                <div class="card-header">
-                  <h4>{{ translate('admin.userEdit.accountStatus', 'Account Status') }}</h4>
-                </div>
-                <div class="card-body">
-                  <div class="toggle-wrapper">
-                    <div class="toggle-label">
-                      {{ translate('admin.userEdit.accountEnabled', 'Account Enabled') }}
-                    </div>
-                    <label class="toggle">
-                      <input type="checkbox" v-model="userSettings.enabled" :disabled="isCurrentUser || isSaving">
-                      <span class="slider"></span>
-                    </label>
+
+          <!-- Account Settings and Admin Actions combined vertically on the right -->
+          <div class="settings-actions-wrapper">
+            <!-- Account Settings Section -->
+            <div class="account-settings-section">
+              <h3>{{ translate('admin.userEdit.accountSettings', 'Account Settings') }}</h3>
+              <div class="settings-grid">
+                <div class="settings-card">
+                  <div class="card-header">
+                    <h4>{{ translate('admin.userEdit.accountStatus', 'Account Status') }}</h4>
                   </div>
-                  <div class="setting-hint" v-if="isCurrentUser">
-                    {{ translate('admin.userEdit.cannotDisableSelf', 'You cannot disable your own account') }}
+                  <div class="card-body">
+                    <div class="toggle-wrapper">
+                      <div class="toggle-label">
+                        {{ translate('admin.userEdit.accountEnabled', 'Account Enabled') }}
+                      </div>
+                      <label class="toggle">
+                        <input type="checkbox" v-model="userSettings.enabled" :disabled="isCurrentUser || isSaving">
+                        <span class="slider"></span>
+                      </label>
+                    </div>
+                    <div class="setting-hint" v-if="isCurrentUser">
+                      {{ translate('admin.userEdit.cannotDisableSelf', 'You cannot disable your own account') }}
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-card">
+                  <div class="card-header">
+                    <h4>{{ translate('admin.userEdit.accountRole', 'Account Role') }}</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="toggle-wrapper">
+                      <div class="toggle-label">
+                        {{ translate('admin.userEdit.adminRole', 'Admin Role') }}
+                      </div>
+                      <label class="toggle">
+                        <input type="checkbox" v-model="userSettings.isAdmin" :disabled="isCurrentUser || isSaving">
+                        <span class="slider"></span>
+                      </label>
+                    </div>
+                    <div class="setting-hint" v-if="isCurrentUser">
+                      {{ translate('admin.userEdit.cannotChangeOwnRole', 'You cannot change your own role') }}
+                    </div>
                   </div>
                 </div>
               </div>
-              
-              <div class="settings-card">
-                <div class="card-header">
-                  <h4>{{ translate('admin.userEdit.accountRole', 'Account Role') }}</h4>
-                </div>
-                <div class="card-body">
-                  <div class="toggle-wrapper">
-                    <div class="toggle-label">
-                      {{ translate('admin.userEdit.adminRole', 'Admin Role') }}
-                    </div>
-                    <label class="toggle">
-                      <input type="checkbox" v-model="userSettings.isAdmin" :disabled="isCurrentUser || isSaving">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                  <div class="setting-hint" v-if="isCurrentUser">
-                    {{ translate('admin.userEdit.cannotChangeOwnRole', 'You cannot change your own role') }}
-                  </div>
-                </div>
+            </div>
+
+            <!-- Admin Actions Section -->
+            <div class="admin-actions-section">
+              <h3>{{ translate('admin.userEdit.adminActions', 'Admin Actions') }}</h3>
+              <div class="actions-grid">
+                <button 
+                  class="action-button verify-email-button" 
+                  @click="verifyEmail"
+                  :disabled="isSaving">
+                  {{ translate('admin.userEdit.verifyEmail', 'Verify Email') }}
+                </button>
+                <button 
+                  class="action-button reset-password-button" 
+                  @click="resetPassword"
+                  :disabled="!userData.email || isSaving">
+                  {{ translate('admin.userEdit.resetPassword', 'Send Password Reset') }}
+                </button>
+                <button 
+                  class="action-button force-logout-button" 
+                  @click="forceLogout"
+                  :disabled="!userData.accessToken || isSaving">
+                  {{ translate('admin.userEdit.forceLogout', 'Force Logout') }}
+                </button>
               </div>
-            </div>
-          </div>
-  
-          <!-- Admin actions section -->
-          <div class="admin-actions-section">
-            <h3>{{ translate('admin.userEdit.adminActions', 'Admin Actions') }}</h3>
-            
-            <div class="actions-grid">
-              <button 
-                class="action-button verify-email-button" 
-                @click="verifyEmail"
-                :disabled="userData.emailVerified || isSaving">
-                {{ translate('admin.userEdit.verifyEmail', 'Verify Email') }}
-              </button>
-              
-              <button 
-                class="action-button reset-password-button" 
-                @click="resetPassword"
-                :disabled="!userData.email || isSaving">
-                {{ translate('admin.userEdit.resetPassword', 'Send Password Reset') }}
-              </button>
-              
-              <button 
-                class="action-button force-logout-button" 
-                @click="forceLogout"
-                :disabled="!userData.accessToken || isSaving">
-                {{ translate('admin.userEdit.forceLogout', 'Force Logout') }}
-              </button>
-            </div>
-          </div>
-        </div>
-  
-        <div class="modal-footer">
-          <div class="footer-content">
-            <div class="footer-message" v-if="operationMessage">
-              <span :class="['message', operationSuccess ? 'success' : 'error']">{{ operationMessage }}</span>
-            </div>
-            <div class="footer-actions">
-              <button class="btn btn-outline" @click="$emit('close')">
-                {{ translate('admin.operations.cancel', 'Cancel') }}
-              </button>
-              <button class="btn btn-primary" @click="saveChanges" :disabled="!hasChanges || isSaving">
-                <span class="btn-content">
-                  <svg v-if="isSaving" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round" class="spin-icon">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                  </svg>
-                  {{ translate('admin.operations.save', 'Save Changes') }}
-                </span>
-              </button>
             </div>
           </div>
         </div>
       </div>
+
+      <div class="modal-footer">
+        <div class="footer-content">
+          <div class="footer-message" v-if="operationMessage">
+            <span :class="['message', operationSuccess ? 'success' : 'error']">{{ operationMessage }}</span>
+          </div>
+          <div class="footer-actions">
+            <button class="btn btn-outline" @click="$emit('close')">
+              {{ translate('admin.operations.cancel', 'Cancel') }}
+            </button>
+            <button class="btn btn-primary" @click="saveChanges" :disabled="!hasChanges || isSaving">
+              <span class="btn-content">
+                <svg v-if="isSaving" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" class="spin-icon">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+                {{ translate('admin.operations.save', 'Save Changes') }}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-  </template>
+  </div>
+</template>
   
   <script>
   import userService from '../services/userService';
@@ -369,30 +362,31 @@
       },
   
       // Manually verify user's email
+          // Manually verify user's email
       async verifyEmail() {
         try {
           this.isSaving = true;
           this.operationMessage = '';
-          
-          // Call service to verify email - using the new admin method
-          const response = await userService.verifyUserEmail(this.userId);
-          
-          if (response && response.data && response.data.success) {
-            // Update user data
-            this.userData.emailVerified = true;
-            this.showMessage(this.translate('admin.userEdit.emailVerified', 'Email marked as verified'), true);
-            
+
+          // Call the new admin-specific method to resend verification email
+          const response = await userService.resendVerificationEmailAdmin(this.userId);
+
+          if (response && response.success) {
+            // Update user data to reflect that email verification is pending
+            this.userData.emailVerified = false;
+            this.showMessage(this.translate('admin.userEdit.verifyEmailSuccess', 'Verification email sent successfully'), true);
+
             // Emit event to parent component
             this.$emit('user-updated', {
               userId: this.userId,
-              changes: { emailVerified: true }
+              changes: { emailVerified: false }
             });
           } else {
-            this.showMessage(this.translate('admin.userEdit.emailVerificationFailed', 'Failed to verify email'), false);
+            this.showMessage(this.translate('admin.userEdit.emailVerificationFailed', 'Failed to send verification email'), false);
           }
         } catch (error) {
-          console.error('Error verifying email:', error);
-          this.showMessage(this.translate('admin.userEdit.errorVerifyingEmail', 'Error verifying email'), false);
+          console.error('Error resending verification email:', error);
+          this.showMessage(this.translate('admin.userEdit.errorVerifyingEmail', 'Error sending verification email'), false);
         } finally {
           this.isSaving = false;
         }
@@ -470,536 +464,510 @@
   </script>
   
   <style scoped>
-  /* Modal Base Styles - Matching LogSearchDialog for consistency */
-  .modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 0, 0, 0.5);
+/* Modal Base Styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.modal-content {
+  position: relative;
+  width: 90%;
+  max-width: 1000px; /* Increased width for horizontal layout */
+  max-height: 90vh;
+  background-color: var(--bg-dialog, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem; /* Reduced padding */
+  border-bottom: 1px solid var(--border-color, #dcdfe4);
+}
+
+.modal-title h2 {
+  margin: 0;
+  font-size: 1.1rem; /* Slightly smaller */
+  font-weight: 600;
+  color: var(--text-primary, #333333);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: var(--text-tertiary, #767676);
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background-color: var(--bg-section, rgba(0, 0, 0, 0.05));
+  color: var(--text-secondary, #4d4d4d);
+}
+
+.modal-body {
+  padding: 1rem;
+  overflow-y: hidden; /* No scrollbars */
+  flex-grow: 1;
+  position: relative;
+}
+
+.content-wrapper {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  height: 100%;
+}
+
+/* User Information Section */
+.user-info-section {
+  flex: 1;
+  background-color: var(--bg-dialog, #ffffff);
+  border: 1px solid var(--border-color, #dcdfe4);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.user-info-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #333333);
+}
+
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+}
+
+.info-label {
+  width: 120px; /* Reduced width */
+  flex-shrink: 0;
+  font-weight: 500;
+  color: var(--text-secondary, #4d4d4d);
+  font-size: 0.8rem;
+}
+
+.info-value {
+  font-size: 0.8rem;
+  color: var(--text-primary, #333333);
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.status-good {
+  background-color: var(--success, #10b981);
+}
+
+.status-error {
+  background-color: var(--danger, #ef4444);
+}
+
+/* Settings and Actions Wrapper */
+.settings-actions-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Account Settings Section */
+.account-settings-section {
+  background-color: var(--bg-dialog, #ffffff);
+  border: 1px solid var(--border-color, #dcdfe4);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.account-settings-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #333333);
+}
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-card {
+  border: 1px solid var(--border-color, #dcdfe4);
+  border-radius: 4px;
+}
+
+.card-header {
+  background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color, #dcdfe4);
+}
+
+.card-header h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary, #333333);
+}
+
+.card-body {
+  padding: 0.75rem;
+}
+
+/* Toggle Switch */
+.toggle-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.toggle-label {
+  font-size: 0.8rem;
+  color: var(--text-primary, #333333);
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--switch-track-off, #d0d0d0);
+  transition: .4s;
+  border-radius: 20px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--switch-thumb, #ffffff);
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--switch-track-on, #3b82f6);
+}
+
+input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.setting-hint {
+  font-size: 0.7rem;
+  color: var(--text-tertiary, #767676);
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+/* Admin Actions Section */
+.admin-actions-section {
+  background-color: var(--bg-dialog, #ffffff);
+  border: 1px solid var(--border-color, #dcdfe4);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.admin-actions-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #333333);
+}
+
+.actions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.action-button {
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color, #dcdfe4);
+  background-color: var(--bg-dialog, #ffffff);
+  color: var(--text-primary, #333333);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-button:hover:not(:disabled) {
+  background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.verify-email-button {
+  border-color: var(--primary, #3b82f6);
+  color: var(--primary, #3b82f6);
+}
+
+.verify-email-button:hover:not(:disabled) {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.reset-password-button {
+  border-color: var(--warning, #f59e0b);
+  color: var(--warning, #f59e0b);
+}
+
+.reset-password-button:hover:not(:disabled) {
+  background-color: rgba(245, 158, 11, 0.05);
+}
+
+.force-logout-button {
+  border-color: var(--danger, #ef4444);
+  color: var(--danger, #ef4444);
+}
+
+.force-logout-button:hover:not(:disabled) {
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+/* Modal Footer */
+.modal-footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border-color, #dcdfe4);
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-message {
+  flex-grow: 1;
+  margin-right: 1rem;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Button Styles */
+.btn {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  border: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--bg-button-primary, #3b82f6);
+  color: var(--text-button-primary, #ffffff);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-dark, #2563eb);
+}
+
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid var(--border-color, #dcdfe4);
+  color: var(--text-secondary, #4d4d4d);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary, #3b82f6);
+  animation: spin 1s linear infinite;
+  margin-bottom: 0.75rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
-  
-  .overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+  margin-right: 4px;
+}
+
+.btn-content {
+  display: flex;
+  align-items: center;
+}
+
+/* Status Messages */
+.message {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.message.success {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success, #10b981);
+}
+
+.message.error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger, #ef4444);
+}
+
+/* Dark Mode Adjustments */
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .modal-body,
+[data-theme="dark"] .user-info-section,
+[data-theme="dark"] .account-settings-section,
+[data-theme="dark"] .admin-actions-section {
+  background-color: #2b2b2b !important;
+  border-color: #3d3d3d !important;
+}
+
+[data-theme="dark"] .modal-title,
+[data-theme="dark"] .modal-footer {
+  background-color: #2b2b2b !important;
+  border-color: #3d3d3d !important;
+}
+
+[data-theme="dark"] .modal-title h2,
+[data-theme="dark"] .user-info-section h3,
+[data-theme="dark"] .account-settings-section h3,
+[data-theme="dark"] .admin-actions-section h3,
+[data-theme="dark"] .card-header h4 {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .info-label {
+  color: #bbbbbb !important;
+}
+
+[data-theme="dark"] .info-value,
+[data-theme="dark"] .toggle-label {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .setting-hint {
+  color: #888888 !important;
+}
+
+[data-theme="dark"] .action-button,
+[data-theme="dark"] .btn-outline {
+  background-color: #2b2b2b !important;
+  border-color: #3d3d3d !important;
+  color: #bbbbbb !important;
+}
+
+[data-theme="dark"] .btn-outline:hover:not(:disabled) {
+  background-color: #3a3a3a !important;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .content-wrapper {
+    flex-direction: column;
   }
-  
   .modal-content {
-    position: relative;
-    width: 90%;
-    max-width: 750px;
-    max-height: 90vh;
-    background-color: var(--bg-dialog, #ffffff);
-    border-radius: 8px;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    z-index: 1101;
+    max-width: 90%;
   }
-  
-  .modal-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color, #dcdfe4);
-  }
-  
-  .modal-title h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--text-primary, #333333);
-  }
-  
-  .close-btn {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-    color: var(--text-tertiary, #767676);
-    padding: 0;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition: all 0.2s;
-  }
-  
-  .close-btn:hover {
-    background-color: var(--bg-section, rgba(0, 0, 0, 0.05));
-    color: var(--text-secondary, #4d4d4d);
-  }
-  
-  .modal-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-    flex-grow: 1;
-    max-height: calc(90vh - 130px);
-    position: relative;
-  }
-  
-  .modal-footer {
-    padding: 1rem 1.5rem;
-    border-top: 1px solid var(--border-color, #dcdfe4);
-  }
-  
-  .footer-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .footer-message {
-    flex-grow: 1;
-    margin-right: 1rem;
-  }
-  
-  .footer-actions {
-    display: flex;
-    gap: 0.5rem;
-  }
-  
-  /* Loading overlay */
-  .loading-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.7);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 10;
-  }
-  
-  .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(59, 130, 246, 0.3);
-    border-radius: 50%;
-    border-top-color: var(--primary, #3b82f6);
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
-  }
-  
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  
-  .spin-icon {
-    animation: spin 1s linear infinite;
-    margin-right: 4px;
-  }
-  
-  .btn-content {
-    display: flex;
-    align-items: center;
-  }
-  
-  /* Button Styles (matching AdminDashboard) */
-  .btn {
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.375rem;
-    border: none;
-    font-size: 0.875rem;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: all 0.2s;
-  }
-  
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  
-  .btn-primary {
-    background-color: var(--bg-button-primary, #3b82f6);
-    color: var(--text-button-primary, #ffffff);
-  }
-  
-  .btn-primary:hover:not(:disabled) {
-    background-color: var(--primary-dark, #2563eb);
-  }
-  
-  .btn-outline {
-    background-color: transparent;
-    border: 1px solid var(--border-color, #dcdfe4);
-    color: var(--text-secondary, #4d4d4d);
-  }
-  
-  .btn-outline:hover:not(:disabled) {
-    background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
-  }
-  
-  /* User Information Section */
-  .user-info-section,
-  .account-settings-section,
-  .admin-actions-section {
-    background-color: var(--bg-dialog, #ffffff);
-    border: 1px solid var(--border-color, #dcdfe4);
-    border-radius: 6px;
-    padding: 1.25rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .user-info-section h3,
-  .account-settings-section h3,
-  .admin-actions-section h3 {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-primary, #333333);
-  }
-  
-  .info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 0.75rem;
-  }
-  
-  .info-row {
-    display: flex;
-    align-items: center;
-  }
-  
-  .info-label {
-    width: 140px;
-    flex-shrink: 0;
-    font-weight: 500;
-    color: var(--text-secondary, #4d4d4d);
-    font-size: 0.875rem;
-  }
-  
-  .info-value {
-    font-size: 0.875rem;
-    color: var(--text-primary, #333333);
-  }
-  
-  /* Status badge for verified/not verified */
-  .status-badge {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-right: 5px;
-  }
-  
-  .status-good {
-    background-color: var(--success, #10b981);
-  }
-  
-  .status-error {
-    background-color: var(--danger, #ef4444);
-  }
-  
-  /* Settings Grid */
-  .settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1rem;
-  }
-  
-  .settings-card {
-    border: 1px solid var(--border-color, #dcdfe4);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  
-  .card-header {
-    background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-color, #dcdfe4);
-  }
-  
-  .card-header h4 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-primary, #333333);
-  }
-  
-  .card-body {
-    padding: 1rem;
-  }
-  
-  /* Toggle Switch */
-  .toggle-wrapper {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-  }
-  
-  .toggle-label {
-    font-size: 0.875rem;
-    color: var(--text-primary, #333333);
-  }
-  
-  .toggle {
-    position: relative;
-    display: inline-block;
-    width: 46px;
-    height: 24px;
-  }
-  
-  .toggle input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-  
-  .slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: var(--switch-track-off, #d0d0d0);
-    transition: .4s;
-    border-radius: 24px;
-  }
-  
-  .slider:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: var(--switch-thumb, #ffffff);
-    transition: .4s;
-    border-radius: 50%;
-  }
-  
-  input:checked + .slider {
-    background-color: var(--switch-track-on, #3b82f6);
-  }
-  
-  input:disabled + .slider {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  input:checked + .slider:before {
-    transform: translateX(22px);
-  }
-  
-  .setting-hint {
-    font-size: 0.75rem;
-    color: var(--text-tertiary, #767676);
-    margin-top: 0.5rem;
-    font-style: italic;
-  }
-  
-  /* Admin Actions */
+  .info-grid,
+  .settings-grid,
   .actions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
+    gap: 0.4rem;
   }
-  
-  .action-button {
-    padding: 0.75rem 1rem;
-    border-radius: 4px;
-    border: 1px solid var(--border-color, #dcdfe4);
-    background-color: var(--bg-dialog, #ffffff);
-    color: var(--text-primary, #333333);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  
-  .action-button:hover:not(:disabled) {
-    background-color: var(--bg-section, rgba(0, 0, 0, 0.02));
-  }
-  
-  .action-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  .verify-email-button {
-    border-color: var(--primary, #3b82f6);
-    color: var(--primary, #3b82f6);
-  }
-  
-  .verify-email-button:hover:not(:disabled) {
-    background-color: rgba(59, 130, 246, 0.05);
-  }
-  
-  .reset-password-button {
-    border-color: var(--warning, #f59e0b);
-    color: var(--warning, #f59e0b);
-  }
-  
-  .reset-password-button:hover:not(:disabled) {
-    background-color: rgba(245, 158, 11, 0.05);
-  }
-  
-  .force-logout-button {
-    border-color: var(--danger, #ef4444);
-    color: var(--danger, #ef4444);
-  }
-  
-  .force-logout-button:hover:not(:disabled) {
-    background-color: rgba(239, 68, 68, 0.05);
-  }
-  
-  /* Status messages */
-  .message {
-    padding: 0.5rem 0.75rem;
-    border-radius: 4px;
-    font-size: 0.875rem;
-  }
-  
-  .message.success {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: var(--success, #10b981);
-  }
-  
-  .message.error {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: var(--danger, #ef4444);
-  }
-  
-  /* Dark mode adjustments - Matching the provided screenshot's gray shade */
-  [data-theme="dark"] .modal-content {
-    background-color: #2b2b2b !important;
-  }
-  
-  [data-theme="dark"] .modal-body {
-    background-color: #2b2b2b !important;
-  }
-  
-  [data-theme="dark"] .loading-overlay {
-    background-color: rgba(43, 43, 43, 0.7) !important;
-  }
-  
-  [data-theme="dark"] .modal-title {
-    background-color: #2b2b2b !important;
-    border-color: #3d3d3d !important;
-  }
-  
-  [data-theme="dark"] .modal-title h2 {
-    color: #f8fafc !important;
-  }
-  
-  [data-theme="dark"] .modal-footer {
-    background-color: #2b2b2b !important;
-    border-color: #3d3d3d !important;
-  }
-  
-  [data-theme="dark"] .user-info-section,
-  [data-theme="dark"] .account-settings-section,
-  [data-theme="dark"] .admin-actions-section {
-    background-color: #2b2b2b !important;
-    border-color: #3d3d3d !important;
-  }
-  
-  [data-theme="dark"] .user-info-section h3,
-  [data-theme="dark"] .account-settings-section h3,
-  [data-theme="dark"] .admin-actions-section h3 {
-    color: #f8fafc !important;
-  }
-  
-  [data-theme="dark"] .info-label {
-    color: #bbbbbb !important;
-  }
-  
-  [data-theme="dark"] .info-value {
-    color: #e0e0e0 !important;
-  }
-  
-  [data-theme="dark"] .card-header {
-    background-color: #333333 !important;
-    border-color: #3d3d3d !important;
-  }
-  
-  [data-theme="dark"] .card-header h4 {
-    color: #f8fafc !important;
-  }
-  
-  [data-theme="dark"] .settings-card {
-    background-color: #2b2b2b !important;
-    border-color: #3d3d3d !important;
-  }
-  
-  [data-theme="dark"] .toggle-label {
-    color: #e0e0e0 !important;
-  }
-  
-  [data-theme="dark"] .setting-hint {
-    color: #888888 !important;
-  }
-  
-  [data-theme="dark"] .action-button {
-    background-color: #2b2b2b !important;
-    border-color: #3d3d3d !important;
-  }
-  
-  [data-theme="dark"] .verify-email-button {
-    border-color: #3b82f6 !important;
-    color: #3b82f6 !important;
-  }
-  
-  [data-theme="dark"] .reset-password-button {
-    border-color: #f59e0b !important;
-    color: #f59e0b !important;
-  }
-  
-  [data-theme="dark"] .force-logout-button {
-    border-color: #ef4444 !important;
-    color: #ef4444 !important;
-  }
-  
-  [data-theme="dark"] .btn-outline {
-    border-color: #3d3d3d !important;
-    color: #bbbbbb !important;
-  }
-  
-  [data-theme="dark"] .btn-outline:hover:not(:disabled) {
-    background-color: #3a3a3a !important;
-  }
-  
-  /* Responsive adjustments */
-  @media (max-width: 768px) {
-    .info-grid,
-    .settings-grid,
-    .actions-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .info-row {
-      flex-direction: column;
-      align-items: flex-start;
-      margin-bottom: 1rem;
-    }
-    
-    .info-label {
-      width: 100%;
-      margin-bottom: 0.25rem;
-    }
-  }
-  </style>
+}
+</style>

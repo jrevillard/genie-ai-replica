@@ -8,6 +8,7 @@ const authMiddleware = require('../middleware/auth-middleware'); // Adjust the p
 const { aql } = require('arangojs');
 const { createLogger, format, transports } = require('winston'); // Import Winston
 
+
 // Configure multer for in-memory file storage
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -35,6 +36,15 @@ const logger = createLogger({
     new transports.File({ filename: 'logs/error.log', level: 'error' }),
     new transports.File({ filename: 'logs/combined.log' })
   ],
+});
+
+
+logger.info('User Routes Module: LOADED');
+logger.info('Total routes in stack:', router.stack.length);
+router.stack.forEach((middleware, index) => {
+  if (middleware.route) {
+    logger.info(`Route ${index}: ${JSON.stringify(middleware.route.methods)} - ${middleware.route.path}`);
+  }
 });
 
 // Helper function to mask sensitive fields in the request body
@@ -640,6 +650,83 @@ router.put('/:userId/role', authMiddleware.authenticate, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Failed to update user role' 
+    });
+  }
+});
+
+// In user-routes.js, add this new route after existing routes but before the module.exports
+// In user-routes.js, replace the existing admin resend verification route with this:
+router.post('/admin/users/:userId/resend-verification', authMiddleware.authenticate, async (req, res) => {
+  logger.info('\n=======================================================');
+  logger.info('========= POST ADMIN/USERS/:userId/RESEND-VERIFICATION ROUTE ACCESSED =========');
+  logger.info(`Method: ${req.method}`);
+  logger.info(`Full URL: ${req.originalUrl}`);
+  logger.info(`User ID from params: ${req.params.userId}`);
+  logger.info(`Is authenticated: ${!!req.user}`);
+  logger.info(`User role: ${req.user?.role}`);
+  logger.info('\n=======================================================');
+
+  try {
+    // Check admin permissions
+    const isAdmin = req.user && req.user.role === 'Admin';
+    if (!isAdmin) {
+      logger.warn(`Non-admin attempt to resend verification email for user ${req.params.userId}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Admin privileges required to resend verification email'
+      });
+    }
+
+    const userId = req.params.userId;
+    logger.info(`[ADMIN] Resend verification email request for user ID: ${userId}`);
+
+    // Get user profile to verify existence and get current email
+    const user = await userService.getUserProfile(userId);
+    if (!user) {
+      logger.warn(`[ADMIN] User with ID ${userId} not found`);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if email is already verified (optional check)
+    if (user.emailVerified) {
+      logger.info(`[ADMIN] User ${userId} email is already verified, marking as unverified`);
+      
+      // Update user document to set emailVerified to false
+      await userService.users.update(userId, {
+        emailVerified: false,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      logger.info(`[ADMIN] User ${userId} email is not verified, proceeding with resend`);
+    }
+
+    // Use the auth service to send the verification email
+    // This will handle token generation, storage in verificationTokens collection, and sending the email
+    const authService = require('../services/auth-service');
+    try {
+      await authService.sendVerificationEmail(user);
+      logger.info(`[ADMIN] Verification email sent to ${user.email} for user ${userId}`);
+    } catch (emailError) {
+      logger.error(`[ADMIN] Failed to send verification email to ${user.email}: ${emailError.message}`, emailError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send verification email'
+      });
+    }
+
+    // Return success response
+    return res.json({
+      success: true,
+      message: 'Verification email sent successfully'
+    });
+  } catch (error) {
+    logger.error(`[ADMIN] Error resending verification email for user ${req.params.userId}:`, error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to resend verification email'
     });
   }
 });

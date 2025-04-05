@@ -175,9 +175,9 @@ class HttpService {
    * @param {Object} options - Additional axios options
    * @returns {Promise} Response promise
    */
-  async post(endpoint, data = {}, options = {}) {
+  async post(endpoint, data = {}, options = {}, appendBaseUrl = true) {
     try {
-      const url = this.getUrl(endpoint);
+      const url = appendBaseUrl ? this.getUrl(endpoint) : endpoint;
       return await this.axios.post(url, data, options);
     } catch (error) {
       return Promise.reject(error);

@@ -683,13 +683,6 @@ async checkEmailAvailability(email) {
     }
   }
 
-  // Add these methods to your existing userService.js class
-
-  /**
-   * ===== ADMIN USER MANAGEMENT METHODS =====
-   * These methods should be added to your existing UserService class
-   */
-
   /**
    * Update user role (admin only)
    * @param {String} userId - User ID
@@ -785,8 +778,6 @@ async checkEmailAvailability(email) {
     }
   }
 
-  // These methods should be added to your existing UserService class:
-
   /**
    * Update user role and status (admin only)
    * @param {String} userId - User ID
@@ -829,6 +820,22 @@ async checkEmailAvailability(email) {
       return response;
     } catch (error) {
       console.error('Error forcing user logout:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resend email verification for a user (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+  async resendVerificationEmailAdmin(userId) {
+    try {
+      console.log(`Attempting to resend verification email for user: ${userId}`);
+      const response = await httpService.post(`users/admin/users/${userId}/resend-verification`);
+      return response.data;
+    } catch (error) {
+      console.error('Verification email resend error:', error.response || error);
       throw error;
     }
   }

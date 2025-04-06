@@ -205,7 +205,28 @@ const adminDashboardService = {
    */
   formatDate(date) {
     return date.toISOString().split('T')[0];
+  },
+
+  /**
+ * Search users with filtering
+ * @param {Object} options - Search options
+ * @param {string} options.term - Search term
+ * @param {string} options.field - Field to search (name, email, role, or all)
+ * @param {number} options.limit - Maximum number of users to return
+ * @param {number} options.offset - Offset for pagination
+ * @returns {Promise} Search results
+ */
+  async searchUsers(options = {}) {
+    try {
+      // Pass options directly as first parameter, not wrapped in { params: ... }
+      return await httpService.get('/admin/users/search', options);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      throw error;
+    }
   }
 };
+
+
 
 export default adminDashboardService;

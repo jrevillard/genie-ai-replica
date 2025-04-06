@@ -393,18 +393,73 @@
 
                 <!-- User Stats Summary -->
                 <div class="user-stats-summary">
-                  <div class="stat-item">
-                    <div class="stat-label">{{ translate('admin.totalUsers', 'Total Users') }}</div>
-                    <div class="stat-value">{{ userStats.totalUsers }}</div>
+                  <div class="stats-row">
+                    <div class="stat-item">
+                      <span class="stat-label">{{ translate('admin.totalUsers', 'Total Users') }}:</span>
+                      <span class="stat-value">{{ userStats.totalUsers }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">{{ translate('admin.activeUsers', 'Active Users') }}:</span>
+                      <span class="stat-value">{{ userStats.activeUsers }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">{{ translate('admin.newUsers', 'New Users (Month)') }}:</span>
+                      <span class="stat-value">{{ userStats.newUsers }}</span>
+                    </div>
                   </div>
-                  <div class="stat-item">
-                    <div class="stat-label">{{ translate('admin.activeUsers', 'Active Users') }}</div>
-                    <div class="stat-value">{{ userStats.activeUsers }}</div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="search-bar">
+                  <div class="search-input-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                      class="search-icon">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" class="search-input" v-model="userSearchTerm"
+                      :placeholder="translate('admin.searchUsers', 'Search users...')" @keyup.enter="searchUsers" />
+                    <button v-if="userSearchTerm" class="search-clear-btn" @click="resetUserSearch"
+                      :aria-label="translate('admin.clearSearch', 'Clear search')">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
                   </div>
-                  <div class="stat-item">
-                    <div class="stat-label">{{ translate('admin.newUsers', 'New Users (Month)') }}</div>
-                    <div class="stat-value">{{ userStats.newUsers }}</div>
+
+                  <div class="search-filter">
+                    <select v-model="userSearchField" class="search-field-select">
+                      <option value="all">{{ translate('admin.searchFields.all', 'All Fields') }}</option>
+                      <option value="name">{{ translate('admin.searchFields.name', 'Name') }}</option>
+                      <option value="email">{{ translate('admin.searchFields.email', 'Email') }}</option>
+                      <option value="role">{{ translate('admin.searchFields.role', 'Role') }}</option>
+                    </select>
                   </div>
+
+                  <div class="search-button">
+                    <button class="btn btn-primary" @click="searchUsers" :disabled="isSearchingUsers">
+                      {{ translate('admin.search', 'Search') }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Search Results Info -->
+                <div class="search-results-info" v-if="userSearchResults">
+                  <span>
+                    {{ userSearchTotal }} {{ translate('admin.usersFound', 'users found') }}
+                    <button v-if="userSearchResults" class="btn btn-outline btn-sm" @click="resetUserSearch">
+                      {{ translate('admin.showAllUsers', 'Show All Users') }}
+                    </button>
+                  </span>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div class="search-loading" v-if="isSearchingUsers">
+                  <div class="loading-spinner-small"></div>
+                  <span>{{ translate('admin.searching', 'Searching...') }}</span>
                 </div>
 
                 <table class="log-table">
@@ -417,11 +472,10 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="user in userStats.users" :key="user._key">
+                    <tr v-for="user in displayedUsers" :key="user._key">
                       <td>{{ user.fullName || user.loginName }}</td>
                       <td>{{ user.email }}</td>
                       <td>{{ user.role }}</td>
-                      <!-- Update this line in the users table -->
                       <td>
                         <button class="btn btn-outline" style="padding: 0.25rem 0.5rem;"
                           @click="openUserEditDialog(user._key)">
@@ -429,8 +483,41 @@
                         </button>
                       </td>
                     </tr>
+                    <!-- Empty state when no users are found -->
+                    <tr v-if="displayedUsers.length === 0">
+                      <td colspan="4" style="text-align: center; padding: 2rem;">
+                        <div v-if="isSearchingUsers">
+                          {{ translate('admin.searchingUsers', 'Searching for users...') }}
+                        </div>
+                        <div v-else-if="userSearchResults !== null">
+                          {{ translate('admin.noUsersFound', 'No users found matching your search criteria.') }}
+                        </div>
+                        <div v-else>
+                          {{ translate('admin.noUsers', 'No users available.') }}
+                        </div>
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
+
+                <!-- Pagination Controls -->
+                <div class="pagination" v-if="userSearchResults && userSearchTotal > userSearchLimit">
+                  <button class="page-btn" :disabled="userSearchOffset === 0"
+                    @click="handleUserSearchPagination(Math.max(0, userSearchOffset - userSearchLimit))">
+                    &laquo; {{ translate('admin.previous', 'Previous') }}
+                  </button>
+
+                  <span class="pagination-info">
+                    {{ translate('admin.showing', 'Showing') }}
+                    {{ userSearchOffset + 1 }}-{{ Math.min(userSearchOffset + userSearchLimit, userSearchTotal) }}
+                    {{ translate('admin.of', 'of') }} {{ userSearchTotal }}
+                  </span>
+
+                  <button class="page-btn" :disabled="userSearchOffset + userSearchLimit >= userSearchTotal"
+                    @click="handleUserSearchPagination(userSearchOffset + userSearchLimit)">
+                    {{ translate('admin.next', 'Next') }} &raquo;
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -672,8 +759,34 @@ export default {
           color: '#3b82f6',
           backgroundColor: 'rgba(59, 130, 246, 0.1)'
         }
-      }
+      },
+      
+      // User Search Properties - NEW
+      userSearchTerm: '',
+      userSearchField: 'all', // Default to search all fields
+      isSearchingUsers: false,
+      userSearchResults: null,
+      userSearchTotal: 0,
+      userSearchLimit: 20,
+      userSearchOffset: 0
     };
+  },
+  computed: {
+    // User list to display (either search results or all users)
+    displayedUsers() {
+      // If we have search results, show them
+      if (this.userSearchResults) {
+        return this.userSearchResults;
+      }
+      
+      // If we're actively searching but have no results yet
+      if (this.isSearchingUsers) {
+        return [];
+      }
+      
+      // Otherwise, show all users
+      return this.userStats.users || [];
+    }
   },
   created() {
     // Initialize with the current language settings
@@ -1264,6 +1377,70 @@ export default {
         this.translate('admin.userEdit.userUpdated', 'User updated successfully'),
         'success'
       );
+    },
+
+    // NEW METHODS FOR USER SEARCH
+    /**
+     * Search users from the server
+     */
+    async searchUsers() {
+      try {
+        this.isSearchingUsers = true;
+        
+        // Only perform search if there's a search term
+        if (this.userSearchTerm.trim()) {
+          const response = await adminDashboardService.searchUsers({
+            term: this.userSearchTerm,
+            field: this.userSearchField,
+            limit: this.userSearchLimit,
+            offset: this.userSearchOffset
+          });
+          
+          if (response && response.data && response.data.data) {
+            const data = response.data.data;
+            this.userSearchResults = data.users;
+            this.userSearchTotal = data.total;
+            
+            // Show notification about search results
+            this.showNotification(
+              this.translate('admin.userSearch.resultsFound', `Found ${data.total} users matching "${this.userSearchTerm}"`),
+              'info'
+            );
+          }
+        } else {
+          // If search term is empty, clear results and reload all users
+          this.resetUserSearch();
+          this.loadUserStats();
+        }
+      } catch (error) {
+        console.error('Error searching users:', error);
+        this.showNotification(
+          this.translate('admin.userSearch.error', 'Error searching users'),
+          'error'
+        );
+      } finally {
+        this.isSearchingUsers = false;
+      }
+    },
+
+    /**
+     * Reset user search and reload all users
+     */
+    resetUserSearch() {
+      this.userSearchTerm = '';
+      this.userSearchField = 'all';
+      this.userSearchResults = null;
+      this.userSearchTotal = 0;
+      this.userSearchOffset = 0;
+    },
+
+    /**
+     * Handle user search pagination
+     * @param {number} offset - New offset for pagination
+     */
+    handleUserSearchPagination(offset) {
+      this.userSearchOffset = offset;
+      this.searchUsers();
     }
   }
 };
@@ -2308,6 +2485,159 @@ input:checked + .slider:before {
 
 [data-theme="dark"] h3 {
   color: #f8fafc !important;
+}
+
+/* Add these styles to your <style> section in AdminDashboard.vue */
+
+/* Update search bar for better spacing with button */
+.search-bar {
+  display: flex;
+  margin-bottom: 1rem;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.search-input-container {
+  position: relative;
+  flex: 1;
+}
+
+.search-button .btn {
+  height: 100%;
+  min-height: 38px;
+}
+
+/* Loading indicator for search */
+.search-loading {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.loading-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
+/* Pagination styles */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.page-btn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  background-color: var(--bg-button-secondary);
+  color: var(--text-button-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.page-btn:hover:not(:disabled) {
+  background-color: var(--bg-section);
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+}
+
+/* Make search results info more prominent */
+.search-results-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background-color: var(--bg-section);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Dark mode specific adjustments */
+[data-theme="dark"] .loading-spinner-small {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary);
+}
+
+/* User Stats Summary */
+.user-stats-summary {
+  margin-bottom: 1rem;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  gap: 1rem; /* Add spacing between items */
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* Space between label and value */
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap; /* Prevent label from wrapping */
+}
+
+.stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .stats-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .stat-item {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-label {
+    font-size: 0.75rem;
+  }
+  
+  .stat-value {
+    font-size: 0.875rem;
+  }
 }
 
 </style>

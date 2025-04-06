@@ -321,6 +321,36 @@ const adminController = {
         error: error.message
       });
     }
+  },
+
+  /**
+ * Search users with filtering
+ */
+  async searchUsers(req, res) {
+    logger.info('Controller: Searching users');
+    try {
+      const rawLimit = parseInt(req.query.limit || 20);
+      const rawOffset = parseInt(req.query.offset || 0);
+      const options = {
+        term: req.query.term || '',
+        field: req.query.field || 'all',
+        limit: isNaN(rawLimit) ? 20 : rawLimit, // Fallback to 20 if NaN
+        offset: isNaN(rawOffset) ? 0 : rawOffset // Fallback to 0 if NaN
+      };
+      logger.debug(`User search options: ${JSON.stringify(options)}`);
+      const searchResults = await adminDashboardService.searchUsers(options);
+      res.json({
+        success: true,
+        data: searchResults
+      });
+    } catch (error) {
+      logger.error(`Error searching users: ${error.message}`, { stack: error.stack });
+      res.status(500).json({
+        success: false,
+        message: 'Failed to search users',
+        error: error.message
+      });
+    }
   }
 };
 
@@ -337,5 +367,6 @@ try {
     optimizeDatabase: async () => ({ success: false, message: 'Database operations service not available' })
   };
 }
+
 
 module.exports = adminController;

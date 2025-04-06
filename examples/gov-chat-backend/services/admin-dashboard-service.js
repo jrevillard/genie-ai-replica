@@ -1070,6 +1070,134 @@ const adminDashboardService = {
       logger.error(`Error in runSecurityScan: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  },
+  /**
+ * Search users with filtering
+ * @param {Object} options - Search options
+ * @param {string} options.term - Search term
+ * @param {string} options.field - Field to search (name, email, role, or all)
+ * @param {number} options.limit - Maximum number of users to return
+ * @param {number} options.offset - Offset for pagination
+ * @returns {Promise<Object>} Search results
+ */
+  async searchUsers(options = {}) {
+    logger.info(`Searching users with options: ${JSON.stringify(options)}`);
+    
+    try {
+      let { term = '', field = 'all', limit = 20, offset = 0 } = options;
+      
+      // Validate limit and offset
+      limit = Number.isInteger(limit) && limit > 0 ? limit : 20;
+      offset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
+      
+      let countQuery, usersQuery, queryParams;
+      
+      if (term) {
+        // Case 1: Search with a term
+        queryParams = {};
+        
+        let filterCondition;
+        switch (field) {
+          case 'name':
+            queryParams.term = `%${term.toLowerCase()}%`;
+            filterCondition = `
+              LOWER(u.loginName) LIKE @term
+              OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
+            `;
+            break;
+          case 'email':
+            queryParams.term = `%${term.toLowerCase()}%`;
+            filterCondition = `LOWER(u.email) LIKE @term`;
+            break;
+          case 'exactEmail':
+            queryParams.exactTerm = term.toLowerCase();
+            filterCondition = `LOWER(u.email) == @exactTerm`;
+            break;
+          case 'role':
+            queryParams.term = `%${term.toLowerCase()}%`;
+            filterCondition = `HAS(u, "role") AND LOWER(u.role) LIKE @term`;
+            break;
+          case 'all':
+          default:
+            queryParams.term = `%${term.toLowerCase()}%`;
+            filterCondition = `
+              LOWER(u.loginName) LIKE @term
+              OR LOWER(u.email) LIKE @term
+              OR (HAS(u, "personalIdentification") AND LOWER(u.personalIdentification.fullName) LIKE @term)
+              OR (HAS(u, "role") AND LOWER(u.role) LIKE @term)
+            `;
+            break;
+        }
+        
+        countQuery = `
+          RETURN LENGTH(
+            FOR u IN users
+              FILTER ${filterCondition}
+              RETURN 1
+          )
+        `;
+        
+        usersQuery = `
+          FOR u IN users
+            FILTER ${filterCondition}
+            SORT u.updatedAt DESC
+            LIMIT ${offset}, ${limit}
+            RETURN {
+              _key: u._key,
+              loginName: u.loginName,
+              email: u.email,
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
+              role: HAS(u, "role") ? u.role : "User",
+              createdAt: u.createdAt,
+              updatedAt: u.updatedAt
+            }
+        `;
+      } else {
+        // Case 2: No search term (fetch all users with pagination)
+        queryParams = {};
+        
+        countQuery = `
+          RETURN LENGTH(
+            FOR u IN users
+              RETURN 1
+          )
+        `;
+        
+        usersQuery = `
+          FOR u IN users
+            SORT u.updatedAt DESC
+            LIMIT ${offset}, ${limit}
+            RETURN {
+              _key: u._key,
+              loginName: u.loginName,
+              email: u.email,
+              fullName: HAS(u, "personalIdentification") ? u.personalIdentification.fullName : "",
+              role: HAS(u, "role") ? u.role : "User",
+              createdAt: u.createdAt,
+              updatedAt: u.updatedAt
+            }
+        `;
+      }
+  
+      // Execute the queries
+      const countCursor = await db.query(countQuery, queryParams);
+      const usersCursor = await db.query(usersQuery, queryParams);
+  
+      const totalCount = await countCursor.next();
+      const users = await usersCursor.all();
+  
+      logger.debug(`User search found ${totalCount} total matches, returning ${users.length} results`);
+  
+      return {
+        users,
+        total: totalCount,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      };
+    } catch (error) {
+      logger.error(`Error in searchUsers: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
 };
 

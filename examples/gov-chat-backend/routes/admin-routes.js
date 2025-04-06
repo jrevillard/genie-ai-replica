@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/auth-middleware');
+const { logger } = require('../logger'); // Import the centralized logger
 
 // Apply authentication and admin role check middleware
 router.use(authMiddleware.authenticate);
@@ -279,5 +280,51 @@ router.get('/logs/search', adminController.searchLogs);
 router.post('/database-operations/reindex', adminController.reindexDatabase);
 router.post('/database-operations/backup', adminController.backupDatabase);
 router.post('/database-operations/optimize', adminController.optimizeDatabase);
+
+/**
+ * @swagger
+ * /admin/users/search:
+ *   get:
+ *     summary: Search users with filtering
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: term
+ *         schema:
+ *           type: string
+ *         description: Search term
+ *       - in: query
+ *         name: field
+ *         schema:
+ *           type: string
+ *           enum: [all, name, email, role]
+ *         description: Field to search (all, name, email, role)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Maximum number of users to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *         description: Offset for pagination
+ *     responses:
+ *       200:
+ *         description: Search completed successfully
+ *       401:
+ *         description: Unauthorized - authentication required
+ *       403:
+ *         description: Forbidden - admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/users/search', (req, res, next) => {
+    logger.info('Route /api/admin/users/search hit');
+    adminController.searchUsers(req, res, next);
+  });
+//router.get('/users/search', adminController.searchUsers);
 
 module.exports = router;

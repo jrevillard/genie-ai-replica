@@ -193,6 +193,81 @@ export default {
           success: 'Analyse de sécurité terminée avec succès',
           loading: 'Exécution de l\'analyse de sécurité...'
         }
+      },
+      monthlyActiveUsers: 'Utilisateurs Actifs Mensuels (UAM)',
+      searchUsers: 'Rechercher des utilisateurs...',
+      clearSearch: 'Effacer la recherche',
+      search: 'Rechercher',
+      usersFound: 'utilisateurs trouvés',
+      showAllUsers: 'Afficher tous les utilisateurs',
+      searching: 'Recherche en cours...',
+      searchingUsers: 'Recherche d\'utilisateurs en cours...',
+      noUsersFound: 'Aucun utilisateur trouvé correspondant à vos critères de recherche.',
+      noUsers: 'Aucun utilisateur disponible.',
+      showing: 'Affichage de',
+      of: 'sur',
+      previous: 'Précédent',
+      next: 'Suivant',
+      runningSecurityScan: 'Analyse en cours...',
+      securityRecommendations: 'Recommandations de sécurité',
+      totalUsers: 'Total des utilisateurs',
+      newUsers: 'Nouveaux utilisateurs (Mois)',
+      today: 'Aujourd\'hui',
+      errorLogs: 'Journaux d\'erreurs',
+      warningLogs: 'Journaux d\'avertissements',
+      noErrorLogs: 'Aucun journal d\'erreur enregistré aujourd\'hui.',
+      noWarningLogs: 'Aucun journal d\'avertissement enregistré aujourd\'hui.',
+      infoLogsNote: 'Les journaux d\'information ne sont pas affichés dans le résumé. Utilisez la fonction de recherche pour voir tous les types de journaux.',
+      searchResults: 'Derniers résultats de recherche',
+      entriesFound: 'entrées trouvées',
+      viewAllResults: 'Voir tous les résultats',
+      logType: 'Type',
+      logCount: 'Nombre',
+      
+      // Log types
+      logTypes: {
+        connectionTimeout: 'Délai de connexion dépassé',
+        databaseFailed: 'Échec de requête de base de données',
+        authFailed: 'Échec d\'authentification',
+        lowDiskSpace: 'Espace disque en dessous du seuil',
+        slowQuery: 'Performance lente de requête',
+        rateLimit: 'Limite de taux proche'
+      },
+      
+      // Security section
+      security: {
+        criticalVulnerabilities: 'Vulnérabilités critiques',
+        authenticationIssues: 'Problèmes d\'authentification',
+        occurrences: 'Occurrences',
+        firstSeen: 'Première apparition',
+        lastSeen: 'Dernière apparition',
+        timestamp: 'Horodatage',
+        message: 'Message',
+        service: 'Service',
+        showLess: 'Afficher moins',
+        showMore: 'Afficher tous les problèmes d\'authentification',
+        recommendedAction: 'Action recommandée',
+        noVulnerabilitiesFound: 'Aucune vulnérabilité trouvée',
+        systemSecure: 'Votre système semble être sécurisé. Continuez à le surveiller régulièrement.'
+      },
+      
+      // Search fields
+      searchFields: {
+        all: 'Tous les champs',
+        name: 'Nom',
+        email: 'Email',
+        role: 'Rôle'
+      },
+      
+      // User search
+      userSearch: {
+        resultsFound: 'Trouvé {total} utilisateurs correspondant à "{term}"',
+        error: 'Erreur lors de la recherche d\'utilisateurs'
+      },
+      
+      logSearch: {
+        noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
+        resultsFound: 'Trouvé {count} entrées de journal'
       }
     },
     userEdit: {

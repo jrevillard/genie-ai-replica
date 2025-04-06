@@ -193,6 +193,81 @@ export default {
           success: 'Ukaguzi wa usalama umekamilika',
           loading: 'Inafanya ukaguzi wa usalama...'
         }
+      },
+      monthlyActiveUsers: 'Watumiaji Hai wa Kila Mwezi (WAM)',
+      searchUsers: 'Tafuta watumiaji...',
+      clearSearch: 'Futa utafutaji',
+      search: 'Tafuta',
+      usersFound: 'watumiaji wamepatikana',
+      showAllUsers: 'Onyesha Watumiaji Wote',
+      searching: 'Inatafuta...',
+      searchingUsers: 'Inatafuta watumiaji...',
+      noUsersFound: 'Hakuna watumiaji waliopatikana wanaofanana na vigezo vyako vya utafutaji.',
+      noUsers: 'Hakuna watumiaji wanapatikana.',
+      showing: 'Inaonyesha',
+      of: 'kati ya',
+      previous: 'Iliyotangulia',
+      next: 'Inayofuata',
+      runningSecurityScan: 'Uchunguzi Unaendelea...',
+      securityRecommendations: 'Mapendekezo ya Usalama',
+      totalUsers: 'Jumla ya Watumiaji',
+      newUsers: 'Watumiaji Wapya (Mwezi)',
+      today: 'Leo',
+      errorLogs: 'Kumbukumbu za Hitilafu',
+      warningLogs: 'Kumbukumbu za Tahadhari',
+      noErrorLogs: 'Hakuna kumbukumbu za hitilafu zilizorekodiwa leo.',
+      noWarningLogs: 'Hakuna kumbukumbu za tahadhari zilizorekodiwa leo.',
+      infoLogsNote: 'Kumbukumbu za habari hazionyeshwi kwenye muhtasari. Tumia kazi ya utafutaji kuona aina zote za kumbukumbu.',
+      searchResults: 'Matokeo ya Utafutaji ya Hivi Karibuni',
+      entriesFound: 'viingizo vimepatikana',
+      viewAllResults: 'Ona Matokeo Yote',
+      logType: 'Aina',
+      logCount: 'Idadi',
+      
+      // Log types
+      logTypes: {
+        connectionTimeout: 'Muda wa muunganisho umekwisha',
+        databaseFailed: 'Hoja ya hifadhidata imeshindwa',
+        authFailed: 'Uthibitishaji umeshindwa',
+        lowDiskSpace: 'Nafasi ya diski chini ya kiwango',
+        slowQuery: 'Utendaji wa polepole wa hoja',
+        rateLimit: 'Kikomo cha kiwango kinakaribia'
+      },
+      
+      // Security section
+      security: {
+        criticalVulnerabilities: 'Udhaifu Mkubwa',
+        authenticationIssues: 'Masuala ya Uthibitishaji',
+        occurrences: 'Matukio',
+        firstSeen: 'Ilionekana Kwanza',
+        lastSeen: 'Ilionekana Mwisho',
+        timestamp: 'Muhuri wa Wakati',
+        message: 'Ujumbe',
+        service: 'Huduma',
+        showLess: 'Onyesha Kidogo',
+        showMore: 'Onyesha Masuala Yote ya Uthibitishaji',
+        recommendedAction: 'Hatua Inayopendekezwa',
+        noVulnerabilitiesFound: 'Hakuna Udhaifu Uliopatikana',
+        systemSecure: 'Mfumo wako unaonekana kuwa salama. Endelea kufuatilia mara kwa mara.'
+      },
+      
+      // Search fields
+      searchFields: {
+        all: 'Sehemu Zote',
+        name: 'Jina',
+        email: 'Barua pepe',
+        role: 'Wajibu'
+      },
+      
+      // User search
+      userSearch: {
+        resultsFound: 'Imepatikana {total} watumiaji wanaofanana na "{term}"',
+        error: 'Hitilafu katika kutafuta watumiaji'
+      },
+      
+      logSearch: {
+        noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
+        resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu'
       }
     },
     userEdit: {
@@ -668,7 +743,7 @@ export default {
     saveSettings: 'Hifadhi Mipangilio',
     cancel: 'Ghairi',
     edit: 'Hariri',
-    
+
     language: {
       title: 'Lugha',
       selectLabel: 'Lugha ya Onyesho'
@@ -680,7 +755,7 @@ export default {
       french: 'Kifaransa',
       swahili: 'Kiswahili'
     },
-    
+
     appearance: {
       title: 'Muonekano',
       theme: 'Mandhari',
@@ -696,7 +771,7 @@ export default {
       system: 'Mfumo'
     },
     fontSize: 'Ukubwa wa Fonti',
-    
+
     notifications: {
       title: 'Arifa',
       emailUpdates: 'Arifa za barua pepe',
@@ -705,7 +780,7 @@ export default {
     notifications: 'Arifa',
     emailUpdates: 'Arifa za barua pepe',
     soundNotifications: 'Arifa za sauti',
-    
+
     account: {
       title: 'Akaunti',
       resetUserData: 'Rudisha Data za Mtumiaji',
@@ -722,7 +797,7 @@ export default {
     resetUserDataDesc: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
     deleteAccount: 'Futa Akaunti',
     deleteAccountDesc: 'Hii itafuta kabisa akaunti yako na data zote zinazohusiana.',
-    
+
     // Additional entries for modals and confirmations
     standardAccount: 'Akaunti ya Kawaida',
     confirmEmailChange: 'Thibitisha Mabadiliko ya Barua Pepe',

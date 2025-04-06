@@ -157,7 +157,8 @@ const routeFiles = [
   'auth-routes',
   'logger-routes',
   'database-operations-routes',
-  'admin-routes' // Add admin routes to the list
+  'admin-routes',
+  'security-routes'
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -186,6 +187,7 @@ if (routes['user-routes']) {
 
   app.use('/api/users', routes['user-routes']);
 }
+
 if (routes['query-routes']) app.use('/api/queries', routes['query-routes']);
 if (routes['service-routes']) app.use('/api/services', routes['service-routes']);
 if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
@@ -207,7 +209,26 @@ if (routes['admin-routes']) {
     }
   });
   app.use('/api/admin', routes['admin-routes']);
-}
+};
+
+if (routes['security-routes']) {
+  logger.info('Mounting security routes at /api/security');
+  
+  // Detailed route logging
+  logger.info('Detailed Security Routes:');
+  routes['security-routes'].stack.forEach((middleware, index) => {
+    if (middleware.route) {
+      logger.info(`Route ${index}: 
+        Path: ${middleware.route.path}
+        Methods: ${JSON.stringify(Object.keys(middleware.route.methods))}
+      `);
+    } else if (middleware.name === 'router') {
+      logger.info(`Nested Router detected at index ${index}`);
+    }
+  });
+
+  app.use('/api/security', routes['security-routes']);
+};
 
 // Email verification redirect
 app.get('/verify-email/:token', (req, res) => {

@@ -194,6 +194,81 @@ export default {
           success: 'Security scan completed successfully',
           loading: 'Running security scan...'
         }
+      },
+      monthlyActiveUsers: 'Monthly Active Users (MAU)',
+      searchUsers: 'Search users...',
+      clearSearch: 'Clear search',
+      search: 'Search',
+      usersFound: 'users found',
+      showAllUsers: 'Show All Users',
+      searching: 'Searching...',
+      searchingUsers: 'Searching for users...',
+      noUsersFound: 'No users found matching your search criteria.',
+      noUsers: 'No users available.',
+      showing: 'Showing',
+      of: 'of',
+      previous: 'Previous',
+      next: 'Next',
+      runningSecurityScan: 'Running Scan...',
+      securityRecommendations: 'Security Recommendations',
+      totalUsers: 'Total Users',
+      newUsers: 'New Users (Month)',
+      today: 'Today',
+      errorLogs: 'Error Logs',
+      warningLogs: 'Warning Logs',
+      noErrorLogs: 'No error logs recorded today.',
+      noWarningLogs: 'No warning logs recorded today.',
+      infoLogsNote: 'Info logs are not shown in the summary. Use the search function to view all log types.',
+      searchResults: 'Latest Search Results',
+      entriesFound: 'entries found',
+      viewAllResults: 'View All Results',
+      logType: 'Type',
+      logCount: 'Count',
+      
+      // Log types
+      logTypes: {
+        connectionTimeout: 'Connection timeout',
+        databaseFailed: 'Database query failed',
+        authFailed: 'Authentication failure',
+        lowDiskSpace: 'Disk space below threshold',
+        slowQuery: 'Slow query performance',
+        rateLimit: 'Rate limit approaching'
+      },
+      
+      // Security section
+      security: {
+        criticalVulnerabilities: 'Critical Vulnerabilities',
+        authenticationIssues: 'Authentication Issues',
+        occurrences: 'Occurrences',
+        firstSeen: 'First Seen',
+        lastSeen: 'Last Seen',
+        timestamp: 'Timestamp',
+        message: 'Message',
+        service: 'Service',
+        showLess: 'Show Less',
+        showMore: 'Show All Authentication Issues',
+        recommendedAction: 'Recommended Action',
+        noVulnerabilitiesFound: 'No Vulnerabilities Found',
+        systemSecure: 'Your system appears to be secure. Continue monitoring regularly.'
+      },
+      
+      // Search fields
+      searchFields: {
+        all: 'All Fields',
+        name: 'Name',
+        email: 'Email',
+        role: 'Role'
+      },
+      
+      // User search
+      userSearch: {
+        resultsFound: 'Found {total} users matching "{term}"',
+        error: 'Error searching users'
+      },
+      
+      logSearch: {
+        noResultsFound: 'No logs matched your search criteria',
+        resultsFound: 'Found {count} log entries'
       }
     },
     userEdit: {

@@ -338,49 +338,199 @@
               </div>
 
               <!-- Security Monitoring -->
+              <!-- Updated Security Tab with Detailed Vulnerability Display -->
               <div class="dashboard-card" v-if="activeTab === 'security'" style="grid-column: span 2;">
                 <div class="card-header">
                   <div class="card-title">{{ translate('admin.securityMonitoring', 'Security Monitoring') }}</div>
                   <div class="card-actions">
-                    <button class="btn btn-outline" @click="runSecurityScan">
-                      {{ translate('admin.securityScan', 'Security Scan') }}
+                    <button class="btn btn-primary" @click="runSecurityScan"
+                      :disabled="isLoading && currentOperation === 'runSecurityScan'">
+                      <span v-if="isLoading && currentOperation === 'runSecurityScan'">
+                        <span class="loading-indicator-inline"></span>
+                        {{ translate('admin.runningSecurityScan', 'Running Scan...') }}
+                      </span>
+                      <span v-else>
+                        {{ translate('admin.securityScan', 'Security Scan') }}
+                      </span>
                     </button>
                   </div>
                 </div>
 
+                <!-- Security Metrics -->
                 <div style="margin-bottom: 1rem;">
                   <div class="usage-item">
                     <div class="usage-header">
-                      <div class="usage-label">{{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)')
-                        }}</div>
+                      <div class="usage-label">
+                        {{ translate('admin.failedLoginAttempts', 'Failed Login Attempts (24h)') }}
+                      </div>
                       <div class="usage-value">{{ securityMetrics.failedLoginAttempts }}</div>
                     </div>
                     <div class="usage-bar">
-                      <div class="usage-fill usage-low" :style="{ width: `${securityMetrics.failedLoginAttempts}%` }">
+                      <div :class="['usage-fill', getSecurityBarColor(securityMetrics.failedLoginAttempts)]"
+                        :style="{ width: `${formatSecurityMetrics().failedLoginPercent}%` }">
                       </div>
                     </div>
                   </div>
 
                   <div class="usage-item">
                     <div class="usage-header">
-                      <div class="usage-label">{{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)')
-                        }}</div>
+                      <div class="usage-label">
+                        {{ translate('admin.suspiciousActivities', 'Suspicious Activities (24h)') }}
+                      </div>
                       <div class="usage-value">{{ securityMetrics.suspiciousActivities }}</div>
                     </div>
                     <div class="usage-bar">
-                      <div class="usage-fill usage-low" :style="{ width: `${securityMetrics.suspiciousActivities}%` }">
+                      <div :class="['usage-fill', getSecurityBarColor(securityMetrics.suspiciousActivities)]"
+                        :style="{ width: `${formatSecurityMetrics().suspiciousActivityPercent}%` }">
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div style="font-size: 0.875rem;">
-                  <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong> {{
-                    securityMetrics.lastSecurityScan }}</div>
+                <!-- Scan Summary -->
+                <div class="security-details">
+                  <div><strong>{{ translate('admin.lastSecurityScan', 'Last Security Scan') }}:</strong>
+                    {{ securityMetrics.lastSecurityScan }}
+                  </div>
                   <div><strong>{{ translate('admin.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong>
-                    {{ securityMetrics.vulnerabilities.critical }} {{ translate('admin.critical', 'critical') }},
-                    {{ securityMetrics.vulnerabilities.medium }} {{ translate('admin.medium', 'medium') }},
-                    {{ securityMetrics.vulnerabilities.low }} {{ translate('admin.low', 'low') }}
+                    <span :class="securityMetrics.vulnerabilities.critical > 0 ? 'text-danger' : ''">
+                      {{ securityMetrics.vulnerabilities.critical }} {{ translate('admin.critical', 'critical') }}
+                    </span>,
+                    <span :class="securityMetrics.vulnerabilities.medium > 0 ? 'text-warning' : ''">
+                      {{ securityMetrics.vulnerabilities.medium }} {{ translate('admin.medium', 'medium') }}
+                    </span>,
+                    <span :class="securityMetrics.vulnerabilities.low > 0 ? 'text-info' : ''">
+                      {{ securityMetrics.vulnerabilities.low }} {{ translate('admin.low', 'low') }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Detailed Vulnerability Information -->
+                <div v-if="securityDetails" class="security-findings-section">
+                  <!-- Critical Vulnerabilities -->
+                  <div
+                    v-if="securityDetails.vulnerabilityDetails && securityDetails.vulnerabilityDetails.critical && securityDetails.vulnerabilityDetails.critical.length > 0"
+                    class="vulnerability-section critical-section">
+                    <h3 class="section-title">
+                      <span class="severity-indicator critical"></span>
+                      {{ translate('admin.security.criticalVulnerabilities', 'Critical Vulnerabilities') }}
+                    </h3>
+                    <div class="vulnerability-list">
+                      <div v-for="(vuln, index) in securityDetails.vulnerabilityDetails.critical" :key="'crit-' + index"
+                        class="vulnerability-card">
+                        <div class="vuln-type">{{ vuln.type }}</div>
+                        <div class="vuln-description">{{ vuln.description }}</div>
+                        <div class="vuln-detail">
+                          <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong> {{
+                          vuln.occurrences }}
+                        </div>
+                        <div v-if="vuln.firstSeen" class="vuln-detail">
+                          <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong> {{ vuln.firstSeen
+                          }}
+                        </div>
+                        <div v-if="vuln.lastSeen" class="vuln-detail">
+                          <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong> {{ vuln.lastSeen }}
+                        </div>
+                        <div v-if="vuln.recommendation" class="vuln-recommendation">
+                          {{ vuln.recommendation }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Failed Login Attempts -->
+                  <div v-if="securityDetails.failedLoginDetails && securityDetails.failedLoginDetails.length > 0"
+                    class="vulnerability-section login-section">
+                    <h3 class="section-title">
+                      <span class="severity-indicator warning"></span>
+                      {{ translate('admin.security.authenticationIssues', 'Authentication Issues') }}
+                    </h3>
+                    <div class="detail-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{{ translate('admin.security.timestamp', 'Timestamp') }}</th>
+                            <th>{{ translate('admin.security.message', 'Message') }}</th>
+                            <th>{{ translate('admin.security.service', 'Service') }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(issue, index) in securityDetails.failedLoginDetails.slice(0, 5)"
+                            :key="'login-' + index">
+                            <td>{{ issue.timestamp }}</td>
+                            <td>{{ issue.message }}</td>
+                            <td>{{ issue.service }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <div v-if="securityDetails.failedLoginDetails.length > 5" class="show-more">
+                        <button class="btn btn-outline btn-sm" @click="toggleShowAllLogins">
+                          {{ showAllLogins ? translate('admin.security.showLess', 'Show Less') :
+                            translate('admin.security.showMore', 'Show All Authentication Issues') + ' (' +
+                          securityDetails.failedLoginDetails.length + ')' }}
+                        </button>
+                      </div>
+                    </div>
+                    <!-- Full list when expanded -->
+                    <div v-if="showAllLogins && securityDetails.failedLoginDetails.length > 5"
+                      class="detail-table full-list">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{{ translate('admin.security.timestamp', 'Timestamp') }}</th>
+                            <th>{{ translate('admin.security.message', 'Message') }}</th>
+                            <th>{{ translate('admin.security.service', 'Service') }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(issue, index) in securityDetails.failedLoginDetails.slice(5)"
+                            :key="'login-more-' + index">
+                            <td>{{ issue.timestamp }}</td>
+                            <td>{{ issue.message }}</td>
+                            <td>{{ issue.service }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <!-- Security Recommendations -->
+                  <div
+                    v-if="operationResults && operationResults.recommendations && operationResults.recommendations.length > 0"
+                    class="security-recommendations">
+                    <h3 class="section-title">
+                      <span class="severity-indicator info"></span>
+                      {{ translate('admin.securityRecommendations', 'Security Recommendations') }}
+                    </h3>
+                    <div class="recommendations-list">
+                      <div v-for="(rec, index) in operationResults.recommendations" :key="'rec-' + index"
+                        :class="['recommendation-item', 'severity-' + rec.severity]">
+                        <div class="recommendation-header">
+                          <span class="severity-indicator" :class="rec.severity"></span>
+                          <span class="recommendation-title">{{ rec.title }}</span>
+                        </div>
+                        <div class="recommendation-description">{{ rec.description }}</div>
+                        <div class="recommendation-action">
+                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong> {{
+                          rec.action }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- No Vulnerabilities Found Message -->
+                <div v-if="securityDetails &&
+                  (!securityDetails.vulnerabilityDetails ||
+                    (securityDetails.vulnerabilityDetails.critical.length === 0 &&
+                      securityDetails.vulnerabilityDetails.medium.length === 0 &&
+                      securityDetails.vulnerabilityDetails.low.length === 0 &&
+                      (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0)))"
+                  class="no-vulnerabilities">
+                  <div class="empty-state">
+                    <div class="empty-icon">✓</div>
+                    <div class="empty-title">{{ translate('admin.security.noVulnerabilitiesFound', 'No Vulnerabilities Found') }}</div>
+                    <div class="empty-description">{{ translate('admin.security.systemSecure', 'Your system appears to be secure.Continue monitoring regularly.') }}</div>
                   </div>
                 </div>
               </div>
@@ -399,7 +549,8 @@
                       <span class="stat-value">{{ userStats.totalUsers }}</span>
                     </div>
                     <div class="stat-item">
-                      <span class="stat-label">{{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}:</span>
+                      <span class="stat-label">{{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)')
+                        }}:</span>
                       <span class="stat-value">{{ userStats.activeUsers }}</span>
                     </div>
                     <div class="stat-item">
@@ -556,6 +707,7 @@ import OperationResultsModal from './OperationResultsModal.vue';
 import LogSearchDialog from './LogSearchDialog.vue';
 import UserEditDialog from './UserEditDialog.vue';
 import { eventBus } from '../eventBus.js';
+import securityService from '../services/securityService';
 
 export default {
   components: {
@@ -1441,6 +1593,145 @@ export default {
     handleUserSearchPagination(offset) {
       this.userSearchOffset = offset;
       this.searchUsers();
+    },
+
+    // Load security metrics from the service
+    async loadSecurityMetrics() {
+      try {
+        this.isLoading = true;
+        console.log('Loading security metrics...');
+        const response = await securityService.getSecurityMetrics();
+
+        if (response && response.data) {
+          console.log('Security metrics loaded successfully:', response.data);
+          this.securityMetrics = {
+            failedLoginAttempts: response.data.failedLoginAttempts || 0,
+            suspiciousActivities: response.data.suspiciousActivities || 0,
+            lastSecurityScan: response.data.lastSecurityScan || 'Never',
+            vulnerabilities: response.data.vulnerabilities || {
+              critical: 0,
+              medium: 0,
+              low: 0
+            }
+          };
+
+          // Get detailed security information
+          this.loadSecurityDetails();
+        } else {
+          console.warn('Security metrics response missing data property');
+        }
+      } catch (error) {
+        console.error('Error loading security metrics:', error);
+        // Use fallback data instead of showing notification
+        this.securityMetrics = {
+          failedLoginAttempts: 0,
+          suspiciousActivities: 0,
+          lastSecurityScan: 'Never',
+          vulnerabilities: {
+            critical: 0,
+            medium: 0,
+            low: 0
+          }
+        };
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Load detailed security information
+    async loadSecurityDetails() {
+      try {
+        const details = await securityService.getLastScanDetails();
+        console.log('Security details loaded:', details);
+
+        if (details) {
+          this.securityDetails = details;
+        }
+      } catch (error) {
+        console.error('Error loading security details:', error);
+        this.securityDetails = null;
+      }
+    },
+
+    // Run security scan with progress indication and results display
+    async runSecurityScan() {
+      try {
+        // Show loading state with operation name
+        this.isLoading = true;
+        this.currentOperation = 'runSecurityScan';
+        this.operationResults = null;
+
+        console.log('Starting security scan...');
+        // Execute the API call
+        const response = await securityService.runSecurityScan();
+        console.log('Security scan response:', response);
+
+        // Store the scan results for display
+        if (response && response.data) {
+          this.operationResults = response.data;
+
+          // Show success notification
+          this.showNotification(
+            this.translate('admin.operations.runSecurityScan.success', 'Security scan completed successfully'),
+            'success'
+          );
+        }
+
+        // Update security metrics with new data
+        await this.loadSecurityMetrics();
+
+        return response;
+      } catch (error) {
+        console.error('Error during security scan:', error);
+        // Set error result
+        this.operationResults = {
+          success: false,
+          message: error.message || this.translate('admin.operations.runSecurityScan.error', 'Error during security scan'),
+          error: error.response?.data?.error || error.message
+        };
+
+        // Show error notification
+        this.showNotification(this.operationResults.message, 'error');
+        return this.operationResults;
+      } finally {
+        // Reset loading state
+        this.isLoading = false;
+      }
+    },
+
+    // Get color for the usage bar based on value
+    getSecurityBarColor(value) {
+      if (value < 10) return 'usage-low';
+      if (value < 30) return 'usage-medium';
+      return 'usage-high';
+    },
+
+    // Toggle showing all login issues
+    toggleShowAllLogins() {
+      this.showAllLogins = !this.showAllLogins;
+    },
+
+    // Format the security metrics for display
+    formatSecurityMetrics() {
+      // Calculate percentage for UI display (capped at 100%)
+      const failedLoginPercent = Math.min(
+        Math.ceil((this.securityMetrics.failedLoginAttempts / 100) * 100),
+        100
+      );
+
+      const suspiciousActivityPercent = Math.min(
+        Math.ceil((this.securityMetrics.suspiciousActivities / 20) * 100),
+        100
+      );
+
+      return {
+        failedLoginAttempts: this.securityMetrics.failedLoginAttempts,
+        failedLoginPercent: failedLoginPercent,
+        suspiciousActivities: this.securityMetrics.suspiciousActivities,
+        suspiciousActivityPercent: suspiciousActivityPercent,
+        lastSecurityScan: this.securityMetrics.lastSecurityScan,
+        vulnerabilities: this.securityMetrics.vulnerabilities
+      };
     }
   }
 };
@@ -2637,6 +2928,271 @@ input:checked + .slider:before {
   
   .stat-value {
     font-size: 0.875rem;
+  }
+}
+
+.security-findings-section {
+  margin-top: 1.5rem;
+}
+
+.vulnerability-section {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  background-color: var(--bg-section);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.severity-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.severity-indicator.critical {
+  background-color: var(--danger);
+}
+
+.severity-indicator.medium, 
+.severity-indicator.warning {
+  background-color: var(--warning);
+}
+
+.severity-indicator.low {
+  background-color: var(--text-tertiary);
+}
+
+.severity-indicator.info {
+  background-color: var(--primary);
+}
+
+.vulnerability-list {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.vulnerability-card {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1rem;
+  background-color: var(--bg-dialog);
+}
+
+.vuln-type {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.vuln-description {
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.vuln-detail {
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.vuln-examples {
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.vuln-examples ul {
+  margin-top: 0.25rem;
+  padding-left: 1.5rem;
+}
+
+.vuln-examples li {
+  margin-bottom: 0.25rem;
+}
+
+.vuln-recommendation {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  background-color: var(--bg-section);
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.detail-table {
+  padding: 0 1rem 1rem;
+  overflow-x: auto;
+}
+
+.detail-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.detail-table th, .detail-table td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detail-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.show-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.full-list {
+  border-top: 1px dashed var(--border-color);
+  padding-top: 1rem;
+}
+
+.recommendations-list {
+  padding: 1rem;
+}
+
+.recommendation-item {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-dialog);
+}
+
+.recommendation-item.severity-critical {
+  border-left: 4px solid var(--danger);
+}
+
+.recommendation-item.severity-medium {
+  border-left: 4px solid var(--warning);
+}
+
+.recommendation-item.severity-low {
+  border-left: 4px solid var(--text-tertiary);
+}
+
+.recommendation-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.recommendation-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recommendation-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.recommendation-action {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background-color: var(--bg-section);
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 2.5rem;
+  color: var(--success);
+  margin-bottom: 1rem;
+  height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  background-color: rgba(16, 185, 129, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.empty-description {
+  color: var(--text-secondary);
+  max-width: 400px;
+}
+
+.text-danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.text-warning {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.text-info {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.loading-indicator-inline {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .vuln-description,
+[data-theme="dark"] .vuln-detail,
+[data-theme="dark"] .empty-title,
+[data-theme="dark"] .recommendation-title {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .empty-description,
+[data-theme="dark"] .recommendation-description {
+  color: #cbd5e1 !important;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

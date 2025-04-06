@@ -8,6 +8,47 @@ const authMiddleware = require('../middleware/auth-middleware'); // Adjust the p
 const { aql } = require('arangojs');
 const { createLogger, format, transports } = require('winston'); // Import Winston
 
+/**
+ * @swagger
+ * tags:
+ *   - name: User
+ *     description: User profile management
+ *   - name: User Administration
+ *     description: Admin-specific user management operations
+ * 
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ *   schemas:
+ *     User:
+ *       type: object
+ *       properties:
+ *         _key:
+ *           type: string
+ *           description: Unique identifier
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: User's email address
+ *         emailVerified:
+ *           type: boolean
+ *           description: Whether email has been verified
+ *         role:
+ *           type: string
+ *           enum: [User, Admin, Manager]
+ *           description: User's role
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: Account creation timestamp
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Last update timestamp
+ */
 
 // Configure multer for in-memory file storage
 const upload = multer({
@@ -56,6 +97,35 @@ const maskSensitiveFields = (body) => {
   return safeBody;
 };
 
+/**
+ * @swagger
+ * /api/users/debug-routes:
+ *   get:
+ *     summary: List all registered routes for debugging
+ *     description: Lists all registered routes on the user router for debugging purposes
+ *     tags: [User]
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Routes registered on this router
+ *                 routes:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: ["GET: /debug-routes", "PUT: /email"]
+ *       500:
+ *         description: Server error
+ */
 // Debug route to list all registered routes
 router.get('/debug-routes', (req, res) => {
   logger.info('Debug routes endpoint accessed');
@@ -77,6 +147,61 @@ router.get('/debug-routes', (req, res) => {
   });
 });
 
+/**
+ * @swagger
+ * /api/users/email:
+ *   put:
+ *     summary: Update user's email address
+ *     description: Initiates the process to update a user's email address with verification
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: New email address
+ *                 example: newemail@example.com
+ *               password:
+ *                 type: string
+ *                 description: Current password for verification
+ *                 example: password123
+ *               userId:
+ *                 type: string
+ *                 description: User ID (optional, will be overridden by authenticated user)
+ *     responses:
+ *       200:
+ *         description: Email update initiated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: A verification email has been sent to your new address. You will now be logged out.
+ *                 shouldLogout:
+ *                   type: boolean
+ *                   example: true
+ *       400:
+ *         description: Bad request, missing required fields
+ *       401:
+ *         description: Authentication error, invalid password
+ *       500:
+ *         description: Server error
+ */
 // Update user's email address with verification
 router.put('/email', authMiddleware.authenticate, async (req, res) => {
   logger.info('\n=======================================================');
@@ -255,6 +380,41 @@ router.put('/email', authMiddleware.authenticate, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users/check-email:
+ *   get:
+ *     summary: Check if email is available
+ *     description: Checks if an email address is available for registration or email change
+ *     tags: [User]
+ *     parameters:
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *           format: email
+ *         required: true
+ *         description: Email address to check
+ *         example: test@example.com
+ *     responses:
+ *       200:
+ *         description: Email availability check result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 available:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Email parameter is required
+ *       400:
+ *         description: Bad request, missing email parameter
+ *       500:
+ *         description: Server error
+ */
 // Check if email is available
 router.get('/check-email', async (req, res) => {
   try {
@@ -277,6 +437,32 @@ router.get('/check-email', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users/{userId}:
+ *   get:
+ *     summary: Get user profile
+ *     description: Retrieves a user profile by ID
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to retrieve
+ *     responses:
+ *       200:
+ *         description: User profile information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
 // Get user profile
 router.get('/:userId', async (req, res) => {
   try {
@@ -289,6 +475,40 @@ router.get('/:userId', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users:
+ *   post:
+ *     summary: Create user profile
+ *     description: Creates a new user profile with optional file uploads
+ *     tags: [User]
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               data:
+ *                 type: string
+ *                 description: JSON string containing user profile data
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Files to upload (optional)
+ *     responses:
+ *       201:
+ *         description: User profile created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Invalid profile data format
+ *       500:
+ *         description: Server error
+ */
 // Create user profile
 router.post('/', upload.any(), async (req, res) => {
   try {
@@ -317,7 +537,28 @@ router.post('/', upload.any(), async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
-
+/**
+ * @swagger
+ * /api/users/{userId}:
+ *   delete:
+ *     summary: Delete user profile
+ *     description: Deletes a user profile by ID
+ *     tags: [User]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to delete
+ *     responses:
+ *       204:
+ *         description: User profile deleted successfully
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
 // Delete user profile
 router.delete('/:userId', async (req, res) => {
   try {
@@ -330,6 +571,61 @@ router.delete('/:userId', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Search users
+ *     description: Search for users based on criteria with pagination
+ *     tags: [User]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Maximum number of users to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of users to skip
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by email (optional)
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [User, Admin, Manager]
+ *         description: Filter by role (optional)
+ *     responses:
+ *       200:
+ *         description: Search results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
+ *                 total:
+ *                   type: integer
+ *                   example: 42
+ *                 limit:
+ *                   type: integer
+ *                   example: 20
+ *                 offset:
+ *                   type: integer
+ *                   example: 0
+ *       500:
+ *         description: Server error
+ */
 // Search users
 router.get('/', async (req, res) => {
   try {
@@ -345,6 +641,34 @@ router.get('/', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users/reset-data:
+ *   post:
+ *     summary: Reset user profile data
+ *     description: Resets a user profile data while preserving essential account information
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile data reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User profile data has been reset successfully
+ *       401:
+ *         description: Authentication required
+ *       500:
+ *         description: Server error
+ */
 // Reset user profile data while preserving essential account information
 router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
   try {
@@ -412,6 +736,55 @@ router.post('/reset-data', authMiddleware.authenticate, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/users/delete:
+ *   post:
+ *     summary: Permanently delete user account
+ *     description: Permanently deletes a user account with password verification
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: Current password for verification
+ *               reason:
+ *                 type: string
+ *                 description: Reason for deleting the account (optional)
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Account deleted
+ *       400:
+ *         description: Bad request, missing password
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Incorrect password
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
 // Permanently delete user account
 router.post('/delete', authMiddleware.authenticate, async (req, res) => {
   try {
@@ -463,8 +836,79 @@ router.post('/delete', authMiddleware.authenticate, async (req, res) => {
 
 
 /**
- * Update user role - admin-specific route
- * This route allows admins to change user roles without needing the whole profile
+ * @swagger
+ * /api/users/{userId}:
+ *   put:
+ *     summary: Update user profile or role
+ *     description: Updates a user's profile data or role (admin only for role updates)
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to update
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               data:
+ *                 type: string
+ *                 description: JSON string containing user profile data
+ *               role:
+ *                 type: string
+ *                 enum: [User, Admin, Manager]
+ *                 description: User role (admin only)
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Files to upload (optional)
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [User, Admin, Manager]
+ *                 description: User role (admin only)
+ *     responses:
+ *       200:
+ *         description: User profile or role updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Profile saved successfully
+ *                 user:
+ *                   type: object
+ *                   description: Updated user data (only when profile is updated)
+ *                 role:
+ *                   type: string
+ *                   description: Updated role (only when role is updated)
+ *                   example: Admin
+ *       400:
+ *         description: Bad request, invalid profile data or role
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden, admin privileges required for role updates
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
  */
 router.put('/:userId', upload.any(), authMiddleware.authenticate, async (req, res) => {
   // Debug logging
@@ -579,7 +1023,61 @@ router.put('/:userId', upload.any(), authMiddleware.authenticate, async (req, re
 });
 
 /**
- * Update user role only - admin-specific route 
+ * @swagger
+ * /api/users/{userId}/role:
+ *   put:
+ *     summary: Update user role
+ *     description: Updates a user's role (admin only)
+ *     tags: [User Administration]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - role
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [User, Admin, Manager]
+ *                 description: New role to assign to the user
+ *     responses:
+ *       200:
+ *         description: User role updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User role updated successfully
+ *                 role:
+ *                   type: string
+ *                   example: Admin
+ *       400:
+ *         description: Bad request, invalid role
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden, admin privileges required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
  */
 router.put('/:userId/role', authMiddleware.authenticate, async (req, res) => {
   // Debug logging
@@ -654,8 +1152,45 @@ router.put('/:userId/role', authMiddleware.authenticate, async (req, res) => {
   }
 });
 
-// In user-routes.js, add this new route after existing routes but before the module.exports
-// In user-routes.js, replace the existing admin resend verification route with this:
+/**
+ * @swagger
+ * /api/users/admin/users/{userId}/resend-verification:
+ *   post:
+ *     summary: Resend email verification
+ *     description: Admin only endpoint to resend verification email to a user
+ *     tags: [User Administration]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to resend verification email to
+ *     responses:
+ *       200:
+ *         description: Verification email sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Verification email sent successfully
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden, admin privileges required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
 router.post('/admin/users/:userId/resend-verification', authMiddleware.authenticate, async (req, res) => {
   logger.info('\n=======================================================');
   logger.info('========= POST ADMIN/USERS/:userId/RESEND-VERIFICATION ROUTE ACCESSED =========');

@@ -319,43 +319,79 @@
       },
   
       // Save changes to user settings
-      // Save changes to user settings
-      // Save changes to user settings
-      // Save changes to user settings
-      // Save changes to user settings
-      // Save changes to user settings
       async saveChanges() {
         try {
           this.isSaving = true;
           this.operationMessage = '';
 
-          // Prepare update data with just the role
-          const role = this.userSettings.isAdmin ? 'Admin' : 'User';
+          // For debugging
+          console.log('Current settings:', {
+            enabled: this.userSettings.enabled,
+            isAdmin: this.userSettings.isAdmin
+          });
+          console.log('Original settings:', {
+            enabled: this.originalSettings.enabled,
+            isAdmin: this.originalSettings.isAdmin
+          });
 
-          console.log(`Saving role changes for user ${this.userId}: ${role}`);
+          // Track if we have changes to make
+          const roleChanged = this.userSettings.isAdmin !== this.originalSettings.isAdmin;
+          const enabledChanged = this.userSettings.enabled !== this.originalSettings.enabled;
 
-          // Use the userProfileService to update the role
-          const response = await userProfileService.updateUserRoleOnly(this.userId, role);
+          console.log('Changes detected:', { roleChanged, enabledChanged });
 
-          console.log(`Response:`, response);
+          // Prepare update data
+          const updateData = {};
 
-          if (response && response.data && response.data.success) {
-            // Update original settings
-            this.originalSettings.isAdmin = this.userSettings.isAdmin;
-            this.showMessage(this.translate('admin.userEdit.saveSuccess', 'User settings updated successfully'), true);
-            this.$emit('user-updated', { userId: this.userId, changes: { role } });
-          } else {
-            let errorMessage = 'Failed to update user settings';
-            if (response && response.data && response.data.message) {
-              errorMessage = response.data.message;
+          if (roleChanged) {
+            updateData.role = this.userSettings.isAdmin ? 'Admin' : 'User';
+          }
+
+          if (enabledChanged) {
+            updateData.disabled = !this.userSettings.enabled; // Note: API expects 'disabled' (true when account is disabled)
+          }
+
+          console.log('Update data being sent:', updateData);
+
+          // Only proceed if we have changes
+          if (Object.keys(updateData).length > 0) {
+            // Try to use userProfileService.updateProfile which should handle both properties
+            console.log(`Saving changes for user ${this.userId}`);
+
+            try {
+              const response = await userProfileService.updateProfile(this.userId, updateData);
+              console.log('Response from update:', response);
+
+              if (response && response.success) {
+                // Update original settings
+                if (roleChanged) this.originalSettings.isAdmin = this.userSettings.isAdmin;
+                if (enabledChanged) this.originalSettings.enabled = this.userSettings.enabled;
+
+                this.showMessage(this.translate('admin.userEdit.saveSuccess', 'User settings updated successfully'), true);
+
+                // Emit event to parent component
+                this.$emit('user-updated', {
+                  userId: this.userId,
+                  changes: updateData
+                });
+              } else {
+                let errorMessage = 'Failed to update user settings';
+                if (response && response.message) {
+                  errorMessage = response.message;
+                }
+                this.showMessage(errorMessage, false);
+              }
+            } catch (error) {
+              console.error('Error saving user settings:', error);
+              this.showMessage(error.message || this.translate('admin.userEdit.errorSaving', 'Error saving user settings'), false);
             }
-            this.showMessage(errorMessage, false);
+          } else {
+            console.log('No changes detected, skipping update');
+            this.showMessage(this.translate('admin.userEdit.noChanges', 'No changes to save'), true);
           }
         } catch (error) {
-          console.error('Error saving user settings:', error);
-          const errorMessage = error.response?.data?.message ||
-            this.translate('admin.userEdit.errorSaving', 'Error saving user settings');
-          this.showMessage(errorMessage, false);
+          console.error('Unexpected error in saveChanges:', error);
+          this.showMessage(this.translate('admin.userEdit.errorSaving', 'Error saving user settings'), false);
         } finally {
           this.isSaving = false;
         }

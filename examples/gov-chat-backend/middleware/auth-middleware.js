@@ -154,6 +154,12 @@ const authMiddleware = {
         // Get complete user data from database to obtain role information
         const user = await authService.getUserById(decoded.userId);
         
+        // Check if user account is disabled
+        if (user.disabled === true) {
+          logger.info(`[AUTH DEBUG] ❌ User account is disabled: ${decoded.userId}`);
+          return res.status(403).json({ success: false, message: 'Your account has been disabled' });
+        }
+        
         // Combine token data with user data from database
         req.user = {
           ...decoded,

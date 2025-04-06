@@ -194,6 +194,50 @@ export default {
           loading: 'Exécution de l\'analyse de sécurité...'
         }
       }
+    },
+    userEdit: {
+      title: 'Modifier l\'Utilisateur',
+      loading: 'Chargement des données utilisateur...',
+      userInfo: 'Informations de l\'Utilisateur',
+      userId: 'ID Utilisateur',
+      loginName: 'Nom d\'Utilisateur',
+      fullName: 'Nom Complet',
+      dob: 'Date de Naissance',
+      email: 'E-mail',
+      emailVerified: 'E-mail Vérifié',
+      verified: 'Vérifié',
+      notVerified: 'Non Vérifié',
+      createdAt: 'Créé le',
+      lastLogin: 'Dernière Connexion',
+      never: 'Jamais',
+      accountSettings: 'Paramètres du Compte',
+      accountStatus: 'Statut du Compte',
+      accountEnabled: 'Compte Activé',
+      cannotDisableSelf: 'Vous ne pouvez pas désactiver votre propre compte',
+      accountRole: 'Rôle du Compte',
+      adminRole: 'Rôle Administrateur',
+      cannotChangeOwnRole: 'Vous ne pouvez pas modifier votre propre rôle',
+      adminActions: 'Actions d\'Administration',
+      verifyEmail: 'Vérifier l\'E-mail',
+      resetPassword: 'Envoyer Réinitialisation de Mot de Passe',
+      forceLogout: 'Forcer la Déconnexion',
+      failedToLoad: 'Échec du chargement des données utilisateur',
+      errorLoading: 'Erreur lors du chargement des données utilisateur',
+      saveSuccess: 'Paramètres utilisateur mis à jour avec succès',
+      errorSaving: 'Erreur lors de l\'enregistrement des paramètres utilisateur',
+      verifyEmailSuccess: 'E-mail de vérification envoyé avec succès',
+      emailVerificationFailed: 'Échec de l\'envoi de l\'e-mail de vérification',
+      errorVerifyingEmail: 'Erreur lors de l\'envoi de l\'e-mail de vérification',
+      passwordResetSent: 'E-mail de réinitialisation de mot de passe envoyé',
+      passwordResetFailed: 'Échec de l\'envoi de la réinitialisation du mot de passe',
+      errorSendingReset: 'Erreur lors de l\'envoi de la réinitialisation du mot de passe',
+      logoutForced: 'L\'utilisateur a été déconnecté',
+      logoutFailed: 'Échec de la déconnexion forcée',
+      errorForcingLogout: 'Erreur lors de la déconnexion forcée'
+    },
+    operations: {
+      cancel: 'Annuler',
+      save: 'Enregistrer les Modifications'
     }
   },
   passwordResetConfirm: {

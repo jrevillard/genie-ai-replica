@@ -195,6 +195,50 @@ export default {
           loading: 'Running security scan...'
         }
       }
+    },
+    userEdit: {
+      title: 'Edit User',
+      loading: 'Loading user data...',
+      userInfo: 'User Information',
+      userId: 'User ID',
+      loginName: 'Login Name',
+      fullName: 'Full Name',
+      dob: 'Date of Birth',
+      email: 'Email',
+      emailVerified: 'Email Verified',
+      verified: 'Verified',
+      notVerified: 'Not Verified',
+      createdAt: 'Created',
+      lastLogin: 'Last Login',
+      never: 'Never',
+      accountSettings: 'Account Settings',
+      accountStatus: 'Account Status',
+      accountEnabled: 'Account Enabled',
+      cannotDisableSelf: 'You cannot disable your own account',
+      accountRole: 'Account Role',
+      adminRole: 'Admin Role',
+      cannotChangeOwnRole: 'You cannot change your own role',
+      adminActions: 'Admin Actions',
+      verifyEmail: 'Verify Email',
+      resetPassword: 'Send Password Reset',
+      forceLogout: 'Force Logout',
+      failedToLoad: 'Failed to load user data',
+      errorLoading: 'Error loading user data',
+      saveSuccess: 'User settings updated successfully',
+      errorSaving: 'Error saving user settings',
+      verifyEmailSuccess: 'Verification email sent successfully',
+      emailVerificationFailed: 'Failed to send verification email',
+      errorVerifyingEmail: 'Error sending verification email',
+      passwordResetSent: 'Password reset email sent',
+      passwordResetFailed: 'Failed to send password reset',
+      errorSendingReset: 'Error sending password reset',
+      logoutForced: 'User has been logged out',
+      logoutFailed: 'Failed to force logout',
+      errorForcingLogout: 'Error forcing logout'
+    },
+    operations: {
+      cancel: 'Cancel',
+      save: 'Save Changes'
     }
   },
   passwordResetConfirm: {

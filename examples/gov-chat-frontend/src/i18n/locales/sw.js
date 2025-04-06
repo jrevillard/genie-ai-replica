@@ -194,6 +194,50 @@ export default {
           loading: 'Inafanya ukaguzi wa usalama...'
         }
       }
+    },
+    userEdit: {
+      title: 'Hariri Mtumiaji',
+      loading: 'Inapakia data ya mtumiaji...',
+      userInfo: 'Taarifa za Mtumiaji',
+      userId: 'Kitambulisho cha Mtumiaji',
+      loginName: 'Jina la Kuingia',
+      fullName: 'Jina Kamili',
+      dob: 'Tarehe ya Kuzaliwa',
+      email: 'Barua Pepe',
+      emailVerified: 'Barua Pepe Imethibitishwa',
+      verified: 'Imethibitishwa',
+      notVerified: 'Haijathibitishwa',
+      createdAt: 'Imeundwa',
+      lastLogin: 'Kuingia kwa Mwisho',
+      never: 'Kamwe',
+      accountSettings: 'Mipangilio ya Akaunti',
+      accountStatus: 'Hali ya Akaunti',
+      accountEnabled: 'Akaunti Imewezeshwa',
+      cannotDisableSelf: 'Huwezi kuzima akaunti yako mwenyewe',
+      accountRole: 'Jukumu la Akaunti',
+      adminRole: 'Jukumu la Msimamizi',
+      cannotChangeOwnRole: 'Huwezi kubadilisha jukumu lako mwenyewe',
+      adminActions: 'Vitendo vya Msimamizi',
+      verifyEmail: 'Thibitisha Barua Pepe',
+      resetPassword: 'Tuma Kurekebisha Nenosiri',
+      forceLogout: 'Lazimisha Kutoka',
+      failedToLoad: 'Imeshindwa kupakia data ya mtumiaji',
+      errorLoading: 'Hitilafu katika kupakia data ya mtumiaji',
+      saveSuccess: 'Mipangilio ya mtumiaji imesasishwa kwa mafanikio',
+      errorSaving: 'Hitilafu katika kuhifadhi mipangilio ya mtumiaji',
+      verifyEmailSuccess: 'Barua pepe ya uthibitisho imetumwa kwa mafanikio',
+      emailVerificationFailed: 'Imeshindwa kutuma barua pepe ya uthibitisho',
+      errorVerifyingEmail: 'Hitilafu katika kutuma barua pepe ya uthibitisho',
+      passwordResetSent: 'Barua pepe ya kurekebisha nenosiri imetumwa',
+      passwordResetFailed: 'Imeshindwa kutuma barua pepe ya kurekebisha nenosiri',
+      errorSendingReset: 'Hitilafu katika kutuma barua pepe ya kurekebisha nenosiri',
+      logoutForced: 'Mtumiaji ameondolewa',
+      logoutFailed: 'Imeshindwa kumtoa mtumiaji',
+      errorForcingLogout: 'Hitilafu katika kutoa mtumiaji kwa lazima'
+    },
+    operations: {
+      cancel: 'Ghairi',
+      save: 'Hifadhi Mabadiliko'
     }
   },
   passwordResetConfirm: {

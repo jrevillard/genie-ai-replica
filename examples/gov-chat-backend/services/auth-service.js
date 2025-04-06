@@ -260,6 +260,12 @@ class AuthService {
         throw new Error('Invalid password');
       }
 
+      // Check if the account is disabled
+      if (user.disabled === true) {
+        logger.warn(`Disabled account login attempt for user: ${loginName}`);
+        throw new Error('This account has been disabled');
+      }
+
       // Check if email is verified
       if (!user.emailVerified) {
         logger.warn(`Email not verified for user: ${loginName}`);

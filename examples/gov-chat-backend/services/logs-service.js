@@ -2,6 +2,11 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { logger } = require('../logger');
+const zlib = require('zlib');
+const util = require('util');
+
+// Promisify zlib methods
+const gunzip = util.promisify(zlib.gunzip);
 
 /**
  * Service for managing system logs
@@ -41,16 +46,26 @@ const logsService = {
         let logContent;
         
         try {
+          // First try reading uncompressed file
           logContent = await fs.readFile(logFile, 'utf8');
           logger.debug(`Successfully read log file: ${logFile}`);
         } catch (err) {
-          // If dated file doesn't exist, try the current combined.log
-          if (date === new Date().toISOString().split('T')[0]) {
-            const currentLogFile = path.join(__dirname, '../logs/combined.log');
-            logContent = await fs.readFile(currentLogFile, 'utf8');
-            logger.debug(`Reading current log file instead: ${currentLogFile}`);
-          } else {
-            throw err; // Re-throw if it's not today's date
+          // Try compressed file if uncompressed doesn't exist
+          const compressedLogFile = `${logFile}.gz`;
+          try {
+            logger.debug(`Trying compressed log file: ${compressedLogFile}`);
+            const compressedData = await fs.readFile(compressedLogFile);
+            logContent = (await gunzip(compressedData)).toString('utf8');
+            logger.debug(`Successfully read compressed log file: ${compressedLogFile}`);
+          } catch (compressedErr) {
+            // If dated file doesn't exist, try the current combined.log
+            if (date === new Date().toISOString().split('T')[0]) {
+              const currentLogFile = path.join(__dirname, '../logs/combined.log');
+              logContent = await fs.readFile(currentLogFile, 'utf8');
+              logger.debug(`Reading current log file instead: ${currentLogFile}`);
+            } else {
+              throw err; // Re-throw if it's not today's date
+            }
           }
         }
         
@@ -83,6 +98,36 @@ const logsService = {
     } catch (error) {
       logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
       throw error;
+    }
+  },
+
+  /**
+   * Read file content, handling both compressed and uncompressed files
+   * @param {string} filePath - Path to the file
+   * @returns {Promise<string>} File content as string
+   */
+  async readLogFile(filePath) {
+    try {
+      // Try reading as uncompressed first
+      return await fs.readFile(filePath, 'utf8');
+    } catch (err) {
+      // If the file doesn't exist, check if a compressed version exists
+      if (err.code === 'ENOENT' && !filePath.endsWith('.gz')) {
+        const compressedFilePath = `${filePath}.gz`;
+        logger.debug(`Trying compressed file: ${compressedFilePath}`);
+        
+        try {
+          const compressedData = await fs.readFile(compressedFilePath);
+          const decompressedData = await gunzip(compressedData);
+          logger.debug(`Successfully read and decompressed: ${compressedFilePath}`);
+          return decompressedData.toString('utf8');
+        } catch (compressedErr) {
+          logger.debug(`Compressed file not found either: ${compressedFilePath}`);
+          throw err; // Re-throw the original error
+        }
+      } else {
+        throw err;
+      }
     }
   },
 
@@ -128,7 +173,16 @@ const logsService = {
       for (const file of logFiles) {
         try {
           logger.debug(`Reading log file: ${file}`);
-          const logContent = await fs.readFile(file, 'utf8');
+          let logContent;
+          
+          try {
+            // Use the readLogFile method which handles both compressed and uncompressed
+            logContent = await this.readLogFile(file);
+          } catch (readError) {
+            logger.error(`Error reading log file ${file}: ${readError.message}`);
+            continue; // Skip to the next file
+          }
+          
           const logLines = logContent.split('\n').filter(line => line.trim() !== '');
           logger.debug(`Found ${logLines.length} lines in ${file}`);
 
@@ -152,7 +206,7 @@ const logsService = {
 
           allLogs.push(...parsedLogs);
         } catch (error) {
-          logger.error(`Error reading log file ${file}: ${error.message}`);
+          logger.error(`Error processing log file ${file}: ${error.message}`);
         }
       }
 
@@ -562,29 +616,17 @@ const logsService = {
         const currentCombinedLog = path.join(logDir, 'combined.log');
         const currentErrorLog = path.join(logDir, 'error.log');
         
-        try {
-          // Check if the files exist before adding
-          await fs.access(currentCombinedLog);
-          logFiles.push(currentCombinedLog);
-          logger.debug(`Added current combined log: ${currentCombinedLog}`);
-        } catch (e) {
-          logger.debug('Current combined.log not found');
-        }
-        
-        try {
-          await fs.access(currentErrorLog);
-          logFiles.push(currentErrorLog);
-          logger.debug(`Added current error log: ${currentErrorLog}`);
-        } catch (e) {
-          logger.debug('Current error.log not found');
-        }
+        // Add current combined.log and error.log to the list to check
+        logFiles.push(currentCombinedLog);
+        logFiles.push(currentErrorLog);
+        logger.debug(`Added current logs to check: combined.log, error.log`);
       }
       
       if (includeArchived) {
         // Add archived log files that fall within the date range
         for (const file of files) {
-          // Check for combined-YYYY-MM-DD.log pattern
-          const combinedMatch = file.match(/^combined-(\d{4}-\d{2}-\d{2})\.log$/);
+          // Check for combined-YYYY-MM-DD.log pattern (uncompressed)
+          let combinedMatch = file.match(/^combined-(\d{4}-\d{2}-\d{2})\.log$/);
           if (combinedMatch) {
             const fileDate = combinedMatch[1];
             if (fileDate >= startDate && fileDate <= endDate) {
@@ -594,13 +636,35 @@ const logsService = {
             continue;
           }
           
-          // Check for error-YYYY-MM-DD.log pattern
-          const errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log$/);
+          // Check for combined-YYYY-MM-DD.log.gz pattern (compressed)
+          combinedMatch = file.match(/^combined-(\d{4}-\d{2}-\d{2})\.log\.gz$/);
+          if (combinedMatch) {
+            const fileDate = combinedMatch[1];
+            if (fileDate >= startDate && fileDate <= endDate) {
+              logFiles.push(path.join(logDir, file));
+              logger.debug(`Added archived compressed combined log: ${file}`);
+            }
+            continue;
+          }
+          
+          // Check for error-YYYY-MM-DD.log pattern (uncompressed)
+          let errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log$/);
           if (errorMatch) {
             const fileDate = errorMatch[1];
             if (fileDate >= startDate && fileDate <= endDate) {
               logFiles.push(path.join(logDir, file));
               logger.debug(`Added archived error log: ${file}`);
+            }
+            continue;
+          }
+          
+          // Check for error-YYYY-MM-DD.log.gz pattern (compressed)
+          errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log\.gz$/);
+          if (errorMatch) {
+            const fileDate = errorMatch[1];
+            if (fileDate >= startDate && fileDate <= endDate) {
+              logFiles.push(path.join(logDir, file));
+              logger.debug(`Added archived compressed error log: ${file}`);
             }
           }
         }

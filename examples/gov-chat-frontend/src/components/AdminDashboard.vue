@@ -100,8 +100,8 @@
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-title">{{ translate('admin.activeUsers', 'Active Users') }}</div>
-            <div class="stat-value">{{ metrics.activeUsers.toLocaleString() }}</div>
+            <div class="stat-title">{{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}</div>
+            <div class="stat-value">{{ (metrics.monthlyActiveUsers ?? 0).toLocaleString() }}</div>
             <div class="stat-trend trend-up">
               <span>↑ 15%</span> {{ translate('admin.fromLastMonth', 'from last month') }}
             </div>
@@ -399,7 +399,7 @@
                       <span class="stat-value">{{ userStats.totalUsers }}</span>
                     </div>
                     <div class="stat-item">
-                      <span class="stat-label">{{ translate('admin.activeUsers', 'Active Users') }}:</span>
+                      <span class="stat-label">{{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}:</span>
                       <span class="stat-value">{{ userStats.activeUsers }}</span>
                     </div>
                     <div class="stat-item">
@@ -504,7 +504,7 @@
                 <div class="pagination" v-if="userSearchResults && userSearchTotal > userSearchLimit">
                   <button class="page-btn" :disabled="userSearchOffset === 0"
                     @click="handleUserSearchPagination(Math.max(0, userSearchOffset - userSearchLimit))">
-                    &laquo; {{ translate('admin.previous', 'Previous') }}
+                    « {{ translate('admin.previous', 'Previous') }}
                   </button>
 
                   <span class="pagination-info">
@@ -515,7 +515,7 @@
 
                   <button class="page-btn" :disabled="userSearchOffset + userSearchLimit >= userSearchTotal"
                     @click="handleUserSearchPagination(userSearchOffset + userSearchLimit)">
-                    {{ translate('admin.next', 'Next') }} &raquo;
+                    {{ translate('admin.next', 'Next') }} »
                   </button>
                 </div>
               </div>
@@ -542,11 +542,11 @@
     <UserEditDialog v-if="showUserEditDialog && selectedUserId" :userId="selectedUserId"
       :currentUserId="currentUser.userId || currentUser._key" :theme="currentTheme" @close="showUserEditDialog = false"
       @user-updated="handleUserUpdated" />
-  </div>
 
-  <!-- Log Search Dialog -->
-  <LogSearchDialog v-if="showLogSearchDialog" @close="showLogSearchDialog = false"
-    @search-completed="handleSearchResults" :theme="currentTheme" />
+    <!-- Log Search Dialog -->
+    <LogSearchDialog v-if="showLogSearchDialog" @close="showLogSearchDialog = false"
+      @search-completed="handleSearchResults" :theme="currentTheme" />
+  </div>
 </template>
 
 <script>
@@ -713,7 +713,7 @@ export default {
         systemUptime: 99.98,
         avgResponseTime: 245,
         errorRate: 0.05,
-        activeUsers: 2453
+        monthlyActiveUsers: 0
       },
 
       // Log filter options
@@ -971,7 +971,7 @@ export default {
             systemUptime: data.metrics.systemUptime,
             avgResponseTime: data.metrics.avgResponseTime,
             errorRate: data.metrics.errorRate,
-            activeUsers: data.metrics.activeUsers
+            monthlyActiveUsers: data.metrics.monthlyActiveUsers // Ensure this matches the backend field
           };
 
           // Update health services

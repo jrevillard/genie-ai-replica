@@ -124,7 +124,8 @@ const adminDashboardService = {
  * Get system health statistics
  * @returns {Promise<Object>} System health metrics
  */
-  async getSystemHealth() {
+// In src/services/admin-dashboard-service.js
+async getSystemHealth() {
   logger.info('Getting system health metrics');
 
   try {
@@ -168,6 +169,7 @@ const adminDashboardService = {
     // Calculate availability
     systemUptime = ((totalTimeSeconds - totalDowntimeSeconds) / totalTimeSeconds * 100).toFixed(2);
     logger.debug(`System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`);
+
     // Calculate error rate from yesterday's logs for a full day's data
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
@@ -320,13 +322,13 @@ const adminDashboardService = {
         systemUptime: parseFloat(systemUptime),
         avgResponseTime: Math.round(queriesStats.avgTime),
         errorRate: parseFloat(errorRate),
-        activeUsers: activeUsersValue
+        monthlyActiveUsers: activeUsersValue // Renamed from activeUsers to monthlyActiveUsers
       },
       trends: {
         uptime: parseFloat(uptimeTrend),
         responseTime: parseFloat(responseTimeTrend),
         errorRate: parseFloat(errorRateTrend),
-        activeUsers: parseFloat(activeUsersTrend)
+        activeUsers: parseFloat(activeUsersTrend) // Trend field name remains as-is for consistency
       },
       resourceUsage,
       healthServices

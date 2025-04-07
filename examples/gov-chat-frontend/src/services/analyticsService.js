@@ -541,6 +541,241 @@ class AnalyticsService {
 
     return isPositive ? 'positive' : 'negative';
   }
+
+  // Add these new methods to analyticsService.js
+
+  /**
+   * Get satisfaction heatmap data
+   * @param {string} period - Time period (daily, weekly, monthly, all-time)
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {string} locale - Locale override (optional)
+   * @returns {Promise<Array>} Satisfaction heatmap data
+   */
+  async getSatisfactionHeatmap(period, date, locale = null) {
+    try {
+      // Calculate start and end dates based on period and date
+      const { startDate, endDate } = this.calculateDateRange(period, date);
+
+      // Get current locale from parameter, instance, or fallback
+      const currentLocale = this.getCurrentLocale(locale);
+
+      console.log(`Fetching satisfaction heatmap with locale: ${currentLocale}`);
+
+      // Make API call to get the satisfaction heatmap data
+      const response = await axios.get(`${this.baseUrl}/analytics/satisfaction/heatmap`, {
+        params: {
+          startDate,
+          endDate,
+          locale: currentLocale
+        }
+      });
+
+      if (!response.data || !Array.isArray(response.data)) {
+        console.warn('Invalid response format for satisfaction heatmap:', response.data);
+        return this.getFallbackSatisfactionHeatmap(currentLocale);
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching satisfaction heatmap data:', error);
+      return this.getFallbackSatisfactionHeatmap(this.getCurrentLocale(locale));
+    }
+  }
+
+  /**
+   * Get fallback satisfaction heatmap data
+   * @param {string} locale - Locale for translations
+   * @returns {Array} Sample satisfaction heatmap data
+   */
+  getFallbackSatisfactionHeatmap(locale = 'en') {
+    // Define knowledge areas based on locale
+    const getLocalizedAreas = () => {
+      if (locale === 'fr') {
+        return [
+          'Immigration et Citoyenneté',
+          'Entreprise et Commerce',
+          'Identité et État Civil',
+          'Sécurité Sociale et Retraites',
+          'Éducation et Apprentissage',
+          'Emploi et Services du Travail',
+          'Santé et Services Sociaux'
+        ];
+      } else if (locale === 'sw') {
+        return [
+          'Uhamiaji na Uraia',
+          'Biashara na Biashara',
+          'Utambulisho na Usajili wa Kiraia',
+          'Usalama wa Jamii na Pensheni',
+          'Elimu na Mafunzo',
+          'Ajira na Huduma za Kazi',
+          'Afya na Huduma za Kijamii'
+        ];
+      } else {
+        // Default to English
+        return [
+          'Immigration & Citizenship',
+          'Business & Trade',
+          'Identity & Civil Registration',
+          'Social Security & Pensions',
+          'Education & Learning',
+          'Employment & Labor Services',
+          'Health & Social Services'
+        ];
+      }
+    };
+
+    // Define time periods based on locale
+    const getLocalizedPeriods = () => {
+      if (locale === 'fr') {
+        return [
+          'Il y a 4 semaines',
+          'Il y a 3 semaines',
+          'Il y a 2 semaines',
+          'Semaine dernière',
+          'Actuel'
+        ];
+      } else if (locale === 'sw') {
+        return [
+          'Wiki 4 iliyopita',
+          'Wiki 3 iliyopita',
+          'Wiki 2 iliyopita',
+          'Wiki iliyopita',
+          'Sasa'
+        ];
+      } else {
+        // Default to English
+        return [
+          '4 Weeks Ago',
+          '3 Weeks Ago',
+          '2 Weeks Ago',
+          'Last Week',
+          'Current'
+        ];
+      }
+    };
+
+    const areas = getLocalizedAreas();
+    const periods = getLocalizedPeriods();
+
+    // Generate sample data for each area and time period
+    return areas.map(area => {
+      const data = {};
+      data.name = area;
+      data.data = periods.map((period, index) => {
+        // Generate random satisfaction scores that trend slightly upward
+        let baseScore = 75 + Math.floor(Math.random() * 15);
+        // Add a small upward trend (with some randomness)
+        baseScore += index * (1 + Math.random());
+        // Ensure score doesn't exceed 100
+        const score = Math.min(Math.round(baseScore), 100);
+
+        return {
+          x: period,
+          y: score
+        };
+      });
+      return data;
+    });
+  }
+
+  /**
+   * Get satisfaction gauge data
+   * @param {string} period - Time period (daily, weekly, monthly, all-time)
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {string} locale - Locale override (optional)
+   * @returns {Promise<Object>} Satisfaction gauge data
+   */
+  async getSatisfactionGauge(period, date, locale = null) {
+    try {
+      // Calculate start and end dates based on period and date
+      const { startDate, endDate } = this.calculateDateRange(period, date);
+
+      // Get current locale from parameter, instance, or fallback
+      const currentLocale = this.getCurrentLocale(locale);
+
+      console.log(`Fetching satisfaction gauge with locale: ${currentLocale}`);
+
+      // Make API call to get the satisfaction gauge data
+      const response = await axios.get(`${this.baseUrl}/analytics/satisfaction/gauge`, {
+        params: {
+          startDate,
+          endDate,
+          locale: currentLocale
+        }
+      });
+
+      if (!response.data) {
+        console.warn('Invalid response format for satisfaction gauge:', response.data);
+        return this.getFallbackSatisfactionGauge(currentLocale);
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching satisfaction gauge data:', error);
+      return this.getFallbackSatisfactionGauge(this.getCurrentLocale(locale));
+    }
+  }
+
+  /**
+   * Get fallback satisfaction gauge data
+   * @param {string} locale - Locale for translations
+   * @returns {Object} Sample satisfaction gauge data
+   */
+  getFallbackSatisfactionGauge(locale = 'en') {
+    // Define periods based on locale for historical data
+    const getLocalizedPeriods = () => {
+      if (locale === 'fr') {
+        return [
+          'Il y a 4 semaines',
+          'Il y a 3 semaines',
+          'Il y a 2 semaines',
+          'Semaine dernière',
+          'Actuel'
+        ];
+      } else if (locale === 'sw') {
+        return [
+          'Wiki 4 iliyopita',
+          'Wiki 3 iliyopita',
+          'Wiki 2 iliyopita',
+          'Wiki iliyopita',
+          'Sasa'
+        ];
+      } else {
+        // Default to English
+        return [
+          '4 Weeks Ago',
+          '3 Weeks Ago',
+          '2 Weeks Ago',
+          'Last Week',
+          'Current'
+        ];
+      }
+    };
+
+    const periods = getLocalizedPeriods();
+
+    // Define sample values
+    const currentValue = 72.5;
+    const previousValue = 73.1;
+    const changePercentage = -0.6;
+
+    // Create sample historical data
+    const historicalData = [
+      { label: periods[0], value: 71.2 },
+      { label: periods[1], value: 72.4 },
+      { label: periods[2], value: 73.8 },
+      { label: periods[3], value: 73.1 },
+      { label: periods[4], value: 72.5 },
+    ];
+
+    return {
+      currentValue,
+      previousValue,
+      changePercentage,
+      target: 85,
+      historicalData
+    };
+  }
 }
 
 export default new AnalyticsService();

@@ -11,7 +11,8 @@
         <!-- Period selector (for dynamic mode) -->
         <div v-if="useDynamicData" class="period-selector">
           <label style="color: var(--text-primary) !important;">{{ translate('analytics.period') }}</label>
-          <select v-model="selectedPeriod" @change="loadAnalytics" style="background-color: var(--bg-dialog) !important;"> 
+          <select v-model="selectedPeriod" @change="loadAnalytics"
+            style="background-color: var(--bg-dialog) !important;">
             <option value="daily">{{ translate('analytics.periods.daily') }}</option>
             <option value="weekly">{{ translate('analytics.periods.weekly') }}</option>
             <option value="monthly">{{ translate('analytics.periods.monthly') }}</option>
@@ -20,7 +21,8 @@
 
           <!-- Date picker (hidden for all-time) -->
           <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
-            <input type="date" v-model="selectedDate" @change="loadAnalytics" :max="todayStr" style="background-color: var(--bg-dialog) !important;" />
+            <input type="date" v-model="selectedDate" @change="loadAnalytics" :max="todayStr"
+              style="background-color: var(--bg-dialog) !important;" />
           </div>
         </div>
 
@@ -82,6 +84,25 @@
             </div>
           </div>
 
+          <!-- Satisfaction charts section -->
+          <div class="satisfaction-charts">
+            <h3 class="satisfaction-title">{{ translate('analytics.satisfactionAnalysis', 'User Satisfaction Analysis')
+              }}</h3>
+            <div class="satisfaction-container">
+              <!-- Satisfaction Gauge Chart -->
+              <div class="analytics-section half-width">
+                <satisfaction-gauge :value="analytics.satisfactionRate" :target="85" :externalData="true"
+                  :renderKey="currentLocale" />
+              </div>
+
+              <!-- Satisfaction Heatmap Chart -->
+              <div class="analytics-section half-width">
+                <satisfaction-heatmap :externalData="false" :period="selectedPeriod" :selectedDate="selectedDate"
+                  :renderKey="currentLocale" />
+              </div>
+            </div>
+          </div>
+
           <div class="charts-container">
             <!-- Top Queries Section -->
             <div class="analytics-section half-width">
@@ -119,6 +140,8 @@
 import UsageTrendChart from './charts/UsageTrendChart.vue';
 import TopQueriesChart from './charts/TopQueriesChart.vue';
 import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
+import SatisfactionGauge from './charts/SatisfactionGauge.vue';
+import SatisfactionHeatmap from './charts/SatisfactionHeatmap.vue';
 import analyticsService from '../services/analyticsService';
 
 export default {
@@ -126,7 +149,9 @@ export default {
   components: {
     UsageTrendChart,
     TopQueriesChart,
-    CategoryDistributionChart
+    CategoryDistributionChart,
+    SatisfactionGauge,
+    SatisfactionHeatmap
   },
 
   emits: ['close'],
@@ -1095,5 +1120,45 @@ export default {
 .dark-theme .half-width,
 .dark-mode .half-width {
   background-color: #414141 !important; /* Match main background for dark mode */
+}
+
+.satisfaction-charts {
+  margin-bottom: 20px;
+}
+
+.satisfaction-title {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  color: var(--text-primary, #333);
+  font-weight: 600;
+}
+
+.satisfaction-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+
+/* Add this to the existing media query for mobile screens */
+@media (max-width: 768px) {
+  .satisfaction-container {
+    flex-direction: column;
+  }
+  
+  /* Force white text for satisfaction title in dark mode */
+  [data-theme="dark"] .satisfaction-title {
+    color: #ffffff !important;
+  }
+}
+
+/* Add this to the existing dark mode overrides */
+[data-theme="dark"] .satisfaction-title,
+.dark-theme .satisfaction-title,
+.dark-mode .satisfaction-title {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  text-shadow: 0 0 1px rgba(255,255,255,0.5) !important;
 }
 </style>

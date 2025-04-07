@@ -177,23 +177,64 @@ class SessionService {
    * @param {String} sessionId - Session ID
    * @returns {Promise<Object>} The updated session
    */
+  /**
+ * End a session
+ * @param {String} sessionId - Session ID
+ * @returns {Promise<Object>} The updated session
+ */
   async endSession(sessionId) {
     try {
       logger.info(`Ending session ${sessionId}`);
 
+      // Verify session exists and get current state
+      try {
+        const currentSession = await this.sessions.document(sessionId);
+        logger.info(`Current session state before update: ${JSON.stringify(currentSession)}`);
+
+        if (!currentSession.active) {
+          logger.info(`Session ${sessionId} is already inactive, no update needed`);
+          return currentSession;
+        }
+      } catch (readError) {
+        logger.error(`Error reading session before update: ${readError.message}`);
+      }
+
+      // Perform update with debugging
+      logger.info(`Attempting to update session ${sessionId}`);
+
+      const updateData = {
+        active: false,
+        endTime: new Date().toISOString()
+      };
+
+      logger.info(`Update data: ${JSON.stringify(updateData)}`);
+
       const updatedSession = await this.sessions.update(
         sessionId,
-        {
-          active: false,
-          endTime: new Date().toISOString()
-        },
+        updateData,
         { returnNew: true }
       );
+
+      logger.info(`Session update result: ${JSON.stringify(updatedSession.new)}`);
+
+      // Verify the update was successful
+      try {
+        const verifiedSession = await this.sessions.document(sessionId);
+        logger.info(`Verified session state after update: ${JSON.stringify(verifiedSession)}`);
+
+        if (verifiedSession.active) {
+          logger.warn(`❗ Session ${sessionId} is still active after update!`);
+        } else {
+          logger.info(`✅ Session ${sessionId} is now inactive with endTime: ${verifiedSession.endTime}`);
+        }
+      } catch (verifyError) {
+        logger.error(`Error verifying session after update: ${verifyError.message}`);
+      }
 
       logger.info(`Session ${sessionId} ended successfully`);
       return updatedSession.new;
     } catch (error) {
-      logger.error(`Error ending session ${sessionId}:`, error);
+      logger.error(`Error ending session ${sessionId}: ${error.message}`, error);
       throw error;
     }
   }

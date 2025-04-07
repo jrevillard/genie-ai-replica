@@ -549,7 +549,7 @@
                       <span class="stat-value">{{ userStats.totalUsers }}</span>
                     </div>
                     <div class="stat-item">
-                      <span class="stat-label">{{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)')
+                      <span class="stat-label">{{ translate('admin.monthlyActiveUsers', 'Currently Active Users (CAU)')
                         }}:</span>
                       <span class="stat-value">{{ userStats.activeUsers }}</span>
                     </div>

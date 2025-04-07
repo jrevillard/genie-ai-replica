@@ -237,11 +237,11 @@ class AuthService {
   }
 
   /**
-   * Authenticate a user
-   * @param {string} loginName - Username or email
-   * @param {string} encPassword - Encrypted/hashed password from client (SHA-256)
-   * @returns {Promise<Object>} Authenticated user with token
-   */
+ * Authenticate a user
+ * @param {string} loginName - Username or email
+ * @param {string} encPassword - Encrypted/hashed password from client (SHA-256)
+ * @returns {Promise<Object>} Authenticated user with token
+ */
   async login(loginName, encPassword) {
     try {
       logger.info(`Attempting login for user: ${loginName}`);
@@ -281,6 +281,18 @@ class AuthService {
         updatedAt: new Date().toISOString()
       });
 
+      // Create a session for the user - use basic info since we don't have device/IP
+      const SessionService = require('./session-service');
+      const sessionService = new SessionService();
+
+      logger.info(`Creating session for user ${user._key} during login`);
+      try {
+        await sessionService.createSession(user._key);
+      } catch (sessionError) {
+        // Log but don't fail the login if session creation fails
+        logger.error(`Failed to create session, but continuing login: ${sessionError.message}`);
+      }
+
       // Return user data with token (exclude password)
       const { encPassword: password, ...userWithoutPassword } = user;
       logger.info(`User logged in successfully: ${loginName}`);
@@ -308,6 +320,22 @@ class AuthService {
         accessToken: null,
         updatedAt: new Date().toISOString()
       });
+
+      // End any active sessions for this user
+      try {
+        const SessionService = require('./session-service');
+        const sessionService = new SessionService();
+
+        // Get active session for the user
+        const activeSession = await sessionService.getActiveSession(userId);
+        if (activeSession) {
+          logger.info(`Ending active session ${activeSession._key} for user ${userId} during logout`);
+          await sessionService.endSession(activeSession._key);
+        }
+      } catch (sessionError) {
+        // Log but don't fail the logout if session ending fails
+        logger.error(`Failed to end session, but continuing logout: ${sessionError.message}`);
+      }
 
       logger.info(`User logged out successfully: ${userId}`);
       return { success: true, message: 'Logged out successfully' };

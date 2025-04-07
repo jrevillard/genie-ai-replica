@@ -401,78 +401,82 @@ export default {
   beforeUnmount() {
     document.removeEventListener('click', this.handleClickOutside);
   },
+
   methods: {
-  // FIXED: Logout handler that properly handles errors
-  async handleLogout() {
-  try {
-    console.log('Logout started');
-    
-    // Clear local storage first - this is the most important part
-    localStorage.removeItem('user');
-    
-    // Try to call the logout API, but don't await it to prevent navigation issues
-    if (this.$store && this.$store.dispatch) {
-      // Use a timeout to prevent blocking the UI
-      setTimeout(() => {
-        try {
-          this.$store.dispatch('logout').catch(err => console.error('API logout error:', err));
-        } catch (e) {
-          console.error('Store dispatch error:', e);
-        }
-      }, 0);
-    }
-    
-    // Emit the event before navigation
-    this.$emit('logout');
-    
-    // Navigate using window.location instead of Vue Router for a cleaner break
-    console.log('Redirecting to login page');
-    window.location.href = '/login';
-    
-  } catch (error) {
-    console.error('Logout error:', error);
-    
-    // Still clear storage and redirect on error
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-  }
-},
-  changeLocale() {
-    // Use the global method defined in main.js if available
-    if (this.$setLocale) {
-      this.$setLocale(this.currentLocale);
-    } else {
-      this.$i18n.locale = this.currentLocale;
-      
-      // Save preference
+    //Logout handler that properly handles backend and frontend
+    async handleLogout() {
       try {
-        localStorage.setItem('userLocale', this.currentLocale);
-      } catch (e) {
-        console.warn('Unable to save locale preference:', e);
+        console.log('Logout started');
+
+        // Import userService
+        const userService = require('../services/userService').default;
+
+        // Call the userService logout method which handles the API call
+        try {
+          console.log('Calling userService.logout()');
+          await userService.logout();
+          console.log('Logout API called successfully via userService');
+        } catch (apiError) {
+          console.error('Error calling logout API:', apiError);
+        }
+
+        // Clear local storage (even though userService should do this as well)
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+
+        // Emit the event before navigation
+        this.$emit('logout');
+
+        // Navigate using window.location
+        console.log('Redirecting to login page');
+        window.location.href = '/login';
+
+      } catch (error) {
+        console.error('Logout error:', error);
+
+        // Still clear storage and redirect on error
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        window.location.href = '/login';
       }
-    }
-  },
-  toggleSidebar() {
-    this.$emit('toggleSidebar')
-  },
-  toggleStatusDropdown() {
-    this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
-  },
-  handleClickOutside(event) {
-    // Handle both desktop and mobile status containers
-    const desktopContainer = this.$refs.statusContainer;
-    const mobileContainer = this.$refs.mobileStatusContainer;
-    
-    if ((desktopContainer && !desktopContainer.contains(event.target)) && 
+    },
+    changeLocale() {
+      // Use the global method defined in main.js if available
+      if (this.$setLocale) {
+        this.$setLocale(this.currentLocale);
+      } else {
+        this.$i18n.locale = this.currentLocale;
+
+        // Save preference
+        try {
+          localStorage.setItem('userLocale', this.currentLocale);
+        } catch (e) {
+          console.warn('Unable to save locale preference:', e);
+        }
+      }
+    },
+    toggleSidebar() {
+      this.$emit('toggleSidebar')
+    },
+    toggleStatusDropdown() {
+      this.isStatusDropdownOpen = !this.isStatusDropdownOpen;
+    },
+    handleClickOutside(event) {
+      // Handle both desktop and mobile status containers
+      const desktopContainer = this.$refs.statusContainer;
+      const mobileContainer = this.$refs.mobileStatusContainer;
+
+      if ((desktopContainer && !desktopContainer.contains(event.target)) &&
         (mobileContainer && !mobileContainer.contains(event.target))) {
+        this.isStatusDropdownOpen = false;
+      }
+    },
+    viewStatusPage() {
+      this.$emit('viewStatusPage');
       this.isStatusDropdownOpen = false;
     }
-  },
-  viewStatusPage() {
-    this.$emit('viewStatusPage');
-    this.isStatusDropdownOpen = false;
   }
-}}
+}
 </script>
 
 <style scoped>

@@ -86,10 +86,30 @@ class UserService {
    * Log out the user
    * @returns {Promise} Promise with logout result
    */
+  
   async logout() {
     try {
-      // Call the server to invalidate the token
-      const response = await httpService.post(`${this.authEndpoint}/logout`);
+      const userData = this.getCurrentUser();
+      const accessToken = userData?.accessToken;
+
+      if (!accessToken) {
+        console.warn('No access token found for logout');
+        this.clearUserData();
+        return { success: true, message: 'Logged out successfully (no token)' };
+      }
+
+      console.log('Sending logout request with Authorization header');
+
+      // Set Authorization header explicitly
+      const response = await httpService.post(
+        `${this.authEndpoint}/logout`,
+        {}, // Empty body
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        }
+      );
 
       // Remove user data from local storage regardless of server response
       this.clearUserData();

@@ -1,4 +1,4 @@
-<!-- ServiceTreePanelComponent.vue with comprehensive scrollbar fix and no bullet points -->
+<!-- ServiceTreePanelComponent.vue - Fixed to handle missing name property -->
 <template>
   <div class="service-tree-panel">
     <h4>{{ $t('sidebar.governmentServices', 'Government Services') }}</h4>
@@ -22,20 +22,20 @@
 
     <!-- No scrolling in this element, let the parent handle it -->
     <ul class="service-tree-list">
-      <li v-for="(node, index) in nodes" :key="index">
+      <li v-for="(node, index) in nodes" :key="node.catKey">
         <div class="node-label" @click="toggleNode(node)">
-          <span v-if="hasChildren(node.catKey)" class="toggle-icon">
+          <span v-if="node.children && node.children.length > 0" class="toggle-icon">
             {{ node.expanded ? '▼' : '▶' }}
           </span>
-          <span class="node-name">{{ removeNumberPrefix(getCatName(node.catKey)) }}</span>
+          <span class="node-name">{{ node.name }}</span>
         </div>
 
         <ul
-          v-if="node.expanded && hasChildren(node.catKey)"
+          v-if="node.expanded && node.children && node.children.length > 0"
           class="child-list"
         >
           <li
-            v-for="(childName, cIndex) in getCatChildren(node.catKey)"
+            v-for="(childName, cIndex) in node.children"
             :key="cIndex"
             @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
             :class="{ 'selected': isChildSelected(node.catKey, cIndex) }"
@@ -53,6 +53,7 @@
 
 <script>
 import { eventBus } from '../eventBus.js'
+import serviceTreeService from '../services/serviceTreeService.js'
 
 export default {
   name: 'ServiceTreePanelComponent',
@@ -61,188 +62,7 @@ export default {
     return {
       searchQuery: '',
       selectedNodes: {},
-      nodes: [
-        { catKey: 'cat1', expanded: false },
-        { catKey: 'cat2', expanded: false },
-        { catKey: 'cat3', expanded: false },
-        { catKey: 'cat4', expanded: false },
-        { catKey: 'cat5', expanded: false },
-        { catKey: 'cat6', expanded: false },
-        { catKey: 'cat7', expanded: false },
-        { catKey: 'cat8', expanded: false },
-        { catKey: 'cat9', expanded: false },
-        { catKey: 'cat10', expanded: false },
-        { catKey: 'cat11', expanded: false },
-        { catKey: 'cat12', expanded: false },
-        { catKey: 'cat13', expanded: false }
-      ],
-      // CORRECTED DATA: Categories properly aligned based on the first child node
-      fallbackData: {
-        en: {
-          cat1: {
-            name: 'Identity & Civil Registration',
-            children: ['Birth Registration', 'National ID Cards', 'Passport Services', 'Vital Records']
-          },
-          cat2: {
-            name: 'Healthcare & Social Services',
-            children: ['Medical Services', 'Social Assistance', 'Healthcare Programs', 'Mental Health']
-          },
-          cat3: {
-            name: 'Education & Learning',
-            children: ['K-12 Schools', 'Higher Education', 'Adult Learning', 'Educational Resources']
-          },
-          cat4: {
-            name: 'Employment & Labor Services',
-            children: ['Job Search', 'Labor Rights', 'Workplace Safety', 'Career Development']
-          },
-          cat5: {
-            name: 'Taxes & Revenue',
-            children: ['Income Tax', 'Sales Tax', 'Property Tax', 'Tax Credits']
-          },
-          cat6: {
-            name: 'Public Safety & Justice',
-            children: ['Police Services', 'Courts', 'Legal Services', 'Emergency Services']
-          },
-          cat7: {
-            name: 'Transportation & Mobility',
-            children: ['Driver Services', 'Public Transit', 'Roads & Highways', 'Aviation']
-          },
-          cat8: {
-            name: 'Business & Trade',
-            children: ['Housing Programs', 'Property Assessment', 'Rental Assistance', 'Homeownership']
-          },
-          cat9: {
-            name: 'Housing & Urban Development',
-            children: ['Natural Resources', 'Environmental Protection', 'Parks & Recreation', 'Wildlife']
-          },
-          cat10: {
-            name: 'Utilities & Environment',
-            children: ['Business Registration', 'Economic Development', 'Trade', 'Small Business Support']
-          },
-          cat11: {
-            name: 'Culture & Recreation',
-            children: ['Arts & Culture', 'Heritage', 'Sports & Recreation', 'Tourism']
-          },
-          cat12: {
-            name: 'Immigration & Citizenship',
-            children: ['Immigration Services', 'Citizenship Applications', 'Visas', 'Refugee Programs', 'Elections and Voting']
-          },
-          cat13: {
-            name: 'Social Security & Pensions',
-            children: ['Retirement benefits', 'Pension fund management', 'Survivor benefits', 'Disability pensions']
-          }
-        },
-        // French translations with corrected alignment
-        fr: {
-          cat1: {
-            name: 'Identité et état civil',
-            children: ['Enregistrement des naissances', 'Cartes d\'identité nationale', 'Services de passeport', 'État civil']
-          },
-          cat2: {
-            name: 'Santé et services sociaux',
-            children: ['Services médicaux', 'Aide sociale', 'Programmes de santé', 'Santé mentale']
-          },
-          cat3: {
-            name: 'Éducation et apprentissage',
-            children: ['Écoles K-12', 'Enseignement supérieur', 'Formation des adultes', 'Ressources éducatives']
-          },
-          cat4: {
-            name: 'Emploi et services du travail',
-            children: ['Recherche d\'emploi', 'Droits du travail', 'Sécurité au travail', 'Développement de carrière']
-          },
-          cat5: {
-            name: 'Impôts et revenus',
-            children: ['Impôt sur le revenu', 'Taxe de vente', 'Impôt foncier', 'Crédits d\'impôt']
-          },
-          cat6: {
-            name: 'Sécurité publique et justice',
-            children: ['Services de police', 'Tribunaux', 'Services juridiques', 'Services d\'urgence']
-          },
-          cat7: {
-            name: 'Transport et mobilité',
-            children: ['Services aux conducteurs', 'Transport en commun', 'Routes et autoroutes', 'Aviation']
-          },
-          cat8: {
-            name: 'Affaires et commerce',
-            children: ['Programmes de logement', 'Évaluation des propriétés', 'Aide à la location', 'Accession à la propriété']
-          },
-          cat9: {
-            name: 'Logement et développement urbain',
-            children: ['Ressources naturelles', 'Protection de l\'environnement', 'Parcs et loisirs', 'Faune']
-          },
-          cat10: {
-            name: 'Services publics et environnement',
-            children: ['Enregistrement d\'entreprise', 'Développement économique', 'Commerce', 'Soutien aux petites entreprises']
-          },
-          cat11: {
-            name: 'Culture et loisirs',
-            children: ['Arts et culture', 'Patrimoine', 'Sports et loisirs', 'Tourisme']
-          },
-          cat12: {
-            name: 'Immigration et citoyenneté',
-            children: ['Services d\'immigration', 'Demandes de citoyenneté', 'Visas', 'Programmes pour réfugiés', 'Élections et vote']
-          },
-          cat13: {
-            name: 'Sécurité sociale et retraites',
-            children: ['Allocations de retraite', 'Gestion des fonds de pension', 'Allocations de survivant', 'Pensions pour invalidité']
-          }
-        },
-        // Swahili translations with corrected alignment
-        sw: {
-          cat1: {
-            name: 'Utambulisho na Usajili wa Raia',
-            children: ['Usajili wa Kuzaliwa', 'Vitambulisho vya Kitaifa', 'Huduma za Pasipoti', 'Kumbukumbu za Muhimu']
-          },
-          cat2: {
-            name: 'Afya na Huduma za Kijamii',
-            children: ['Huduma za Matibabu', 'Msaada wa Kijamii', 'Programu za Afya', 'Afya ya Akili']
-          },
-          cat3: {
-            name: 'Elimu na Mafunzo',
-            children: ['Shule za K-12', 'Elimu ya Juu', 'Mafunzo ya Watu Wazima', 'Rasilimali za Elimu']
-          },
-          cat4: {
-            name: 'Ajira na Huduma za Kazi',
-            children: ['Utafutaji wa Kazi', 'Haki za Wafanyakazi', 'Usalama Kazini', 'Maendeleo ya Kazi']
-          },
-          cat5: {
-            name: 'Kodi na Mapato',
-            children: ['Kodi ya Mapato', 'Kodi ya Mauzo', 'Kodi ya Mali', 'Punguzo za Kodi']
-          },
-          cat6: {
-            name: 'Usalama wa Umma na Haki',
-            children: ['Huduma za Polisi', 'Mahakama', 'Huduma za Kisheria', 'Huduma za Dharura']
-          },
-          cat7: {
-            name: 'Usafiri na Usafiri',
-            children: ['Huduma za Dereva', 'Usafiri wa Umma', 'Barabara na Barabara Kuu', 'Usafiri wa Anga']
-          },
-          cat8: {
-            name: 'Biashara na Biashara',
-            children: ['Programu za Nyumba', 'Tathmini ya Mali', 'Msaada wa Kukodi', 'Umiliki wa Nyumba']
-          },
-          cat9: {
-            name: 'Nyumba na Maendeleo ya Mjini',
-            children: ['Rasilimali za Asili', 'Uhifadhi wa Mazingira', 'Mbuga na Burudani', 'Wanyamapori']
-          },
-          cat10: {
-            name: 'Huduma na Mazingira',
-            children: ['Usajili wa Biashara', 'Maendeleo ya Kiuchumi', 'Biashara', 'Msaada wa Biashara Ndogo']
-          },
-          cat11: {
-            name: 'Utamaduni na Burudani',
-            children: ['Sanaa na Utamaduni', 'Urithi', 'Michezo na Burudani', 'Utalii']
-          },
-          cat12: {
-            name: 'Uhamiaji na Uraia',
-            children: ['Huduma za Uhamiaji', 'Maombi ya Uraia', 'Visa', 'Programu za Wakimbizi', 'Uchaguzi na Kupiga Kura']
-          },
-          cat13: {
-            name: 'Hifadhi ya Jamii na Pensheni',
-            children: ['Manufaa ya kustaafu', 'Usimamizi wa mfuko wa pensheni', 'Manufaa ya warithi', 'Pensheni za ulemavu']
-          }
-        }
-      },
+      nodes: [],
       currentLocale: 'en'
     }
   },
@@ -264,13 +84,17 @@ export default {
       this.$watch(() => this.$i18n.locale, (newLocale) => {
         console.log('Locale changed to:', newLocale);
         this.currentLocale = newLocale;
+        // Reload categories when locale changes
+        this.loadCategories(newLocale);
       });
     }
+    
+    // Initial load of categories
+    this.loadCategories(this.currentLocale);
   },
   
   mounted() {
     console.log('ServiceTreePanel - mounted');
-    console.log('Current locale:', this.currentLocale);
     eventBus.$on('contextItemRemoved', this.handleContextItemRemoved);
   },
   
@@ -279,6 +103,37 @@ export default {
   },
   
   methods: {
+    // No longer needed
+    
+    // Load categories from the API
+    async loadCategories(locale) {
+      try {
+        const categories = await serviceTreeService.getAllCategories(locale);
+        console.log('Raw API response:', categories);
+        
+        // Verify each category has the expected properties
+        if (!categories || !Array.isArray(categories)) {
+          throw new Error('Invalid API response format');
+        }
+        
+        categories.forEach((cat, index) => {
+          if (!cat.name) {
+            console.warn(`Category at index ${index} is missing name property:`, cat);
+          }
+        });
+        
+        // Process the API response - just add expanded property
+        this.nodes = categories.map(category => ({
+          ...category,
+          expanded: false
+        }));
+        
+        console.log('Categories loaded:', this.nodes);
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    },
+    
     toggleNode(node) {
       node.expanded = !node.expanded;
     },
@@ -294,7 +149,7 @@ export default {
       if (!item || !item.category || !item.service) return;
       
       const catKey = item.category;
-      const children = this.getCatChildren(catKey);
+      const children = this.nodes.find(n => n.catKey === catKey)?.children || [];
       const childIndex = children.findIndex(child => String(child) === String(item.service));
       
       if (childIndex !== -1 && this.selectedNodes[catKey]) {
@@ -302,91 +157,6 @@ export default {
         const nodeSelection = this.selectedNodes[catKey] || [];
         this.selectedNodes[catKey] = nodeSelection.filter(idx => idx !== childIndex);
       }
-    },
-    
-    // Remove number prefix from category names (e.g. "1. Health" -> "Health")
-    removeNumberPrefix(text) {
-      if (!text) return '';
-      // This regex matches patterns like "1. ", "12. ", etc., at the beginning of the string
-      return text.replace(/^\d+\.\s*/, '');
-    },
-    
-    getCurrentLocale() {
-      return this.$i18n ? this.$i18n.locale : this.currentLocale;
-    },
-    
-    getCatName(catKey) {
-      const locale = this.getCurrentLocale();
-      
-      // Special case for cat11 to ensure it shows the correct name
-      if (catKey === 'cat11') {
-        return locale === 'fr' ? 'Culture et loisirs' : 
-               locale === 'sw' ? 'Utamaduni na Burudani' : 
-               'Culture & Recreation';
-      }
-      
-      try {
-        // Try getting from i18n first
-        const i18nKey = `leftPanel.${catKey}.name`;
-        const i18nName = this.$t(i18nKey);
-        
-        // Check if it's a valid translation (not just the key repeated)
-        if (i18nName && typeof i18nName === 'string' && i18nName !== i18nKey) {
-          return i18nName;
-        }
-        
-        // Try getting from fallback data
-        const fallback = this.fallbackData[locale]?.[catKey]?.name || 
-                         this.fallbackData['en']?.[catKey]?.name;
-        
-        if (fallback) {
-          return fallback;
-        }
-        
-        // Last resort: return the key itself
-        return catKey;
-      } catch (error) {
-        console.error(`Error getting name for ${catKey}:`, error);
-        return this.fallbackData['en']?.[catKey]?.name || catKey;
-      }
-    },
-    
-    getCatChildren(catKey) {
-      const locale = this.getCurrentLocale();
-      
-      try {
-        // Try getting from i18n first
-        const i18nKey = `leftPanel.${catKey}.children`;
-        const i18nChildren = this.$t(i18nKey);
-        
-        // Check if it's a valid array of translations
-        if (i18nChildren && Array.isArray(i18nChildren) && i18nChildren.length > 0) {
-          return i18nChildren;
-        }
-        
-        // Try getting from fallback data for current locale
-        const currentLocaleFallback = this.fallbackData[locale]?.[catKey]?.children;
-        if (currentLocaleFallback && Array.isArray(currentLocaleFallback)) {
-          return currentLocaleFallback;
-        }
-        
-        // Fallback to English
-        const englishFallback = this.fallbackData['en']?.[catKey]?.children;
-        if (englishFallback && Array.isArray(englishFallback)) {
-          return englishFallback;
-        }
-        
-        // Last resort: return an empty array
-        return [];
-      } catch (error) {
-        console.error(`Error getting children for ${catKey}:`, error);
-        return this.fallbackData['en']?.[catKey]?.children || [];
-      }
-    },
-    
-    hasChildren(catKey) {
-      const children = this.getCatChildren(catKey);
-      return Array.isArray(children) && children.length > 0;
     },
     
     toggleChildSelection(catKey, childName, childIndex) {
@@ -415,8 +185,6 @@ export default {
         service: childName,
         selected: isSelected
       });
-      
-      console.log(`${isSelected ? 'Selected' : 'Deselected'} child: ${childName}`);
     },
     
     isChildSelected(catKey, childIndex) {
@@ -427,16 +195,15 @@ export default {
       const query = this.searchQuery.toLowerCase();
       
       this.nodes.forEach(node => {
-        // Remove number prefix for search
-        const catName = this.removeNumberPrefix(this.getCatName(node.catKey)).toLowerCase();
-        const childNames = this.getCatChildren(node.catKey).map(name => 
+        const categoryName = (node.name || '').toLowerCase();
+        const childNames = (node.children || []).map(name => 
           typeof name === 'string' ? name.toLowerCase() : ''
         );
         
         if (!query) {
           node.expanded = false;
         } else {
-          const matchesCategory = catName.includes(query);
+          const matchesCategory = categoryName.includes(query);
           const matchesChild = childNames.some(name => name.includes(query));
           node.expanded = matchesCategory || matchesChild;
         }
@@ -449,11 +216,11 @@ export default {
 <style scoped>
 .service-tree-panel {
   margin-bottom: 0;
-  height: 100%; /* Change from auto to 100% */
+  height: 100%;
   display: flex;
   flex-direction: column;
   font-size: 10pt;
-  overflow-y: auto; /* Changed from visible to auto */
+  overflow-y: auto;
 }
 
 /* Dark mode specific scrollbar */
@@ -477,14 +244,14 @@ export default {
   font-weight: 600;
   color: #333;
   font-size: 12pt;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
 
 .search-container {
   position: relative;
   display: flex;
   margin-bottom: 8px;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
 
 .search-box {
@@ -494,7 +261,7 @@ export default {
   border: 1px solid #ccc;
   border-radius: 4px;
   outline: none;
-  padding-right: 30px; /* Make room for the button */
+  padding-right: 30px;
 }
 
 .expand-collapse-btn {
@@ -527,12 +294,12 @@ export default {
   list-style: none;
   padding: 0;
   margin: 0;
-  overflow: visible !important; /* Force no scrolling */
+  overflow: visible !important;
   flex-grow: 1;
 }
 
 .service-tree-list li {
-  list-style: none !important; /* Remove bullets at every level */
+  list-style: none !important;
 }
 
 .node-label {
@@ -567,19 +334,19 @@ export default {
   border-left: 1px dashed #ccc;
   padding-left: 8px;
   margin-top: 2px;
-  list-style-type: none !important; /* Remove bullets from the child list */
+  list-style-type: none !important;
 }
 
 .child-list li {
-  list-style-type: none !important; /* Remove bullets from each child list item */
+  list-style-type: none !important;
 }
 
 .child-list li::before {
-  content: none !important; /* Ensure no pseudo-element adds bullets */
+  content: none !important;
 }
 
 .selected .node-label {
-  background-color: rgba(78, 151, 209, 0.3); /* Use theme accent color with opacity */
+  background-color: rgba(78, 151, 209, 0.3);
   border-left: 2px solid var(--accent-color);
 }
 
@@ -618,7 +385,7 @@ html[data-theme="dark"] .knowledge-areas-title {
 }
 
 .service-tree-panel h4 {
-  color: #333; /* Replace with var(--text-primary) */
+  color: #333;
 }
 
 [data-theme="dark"] .service-tree-panel {

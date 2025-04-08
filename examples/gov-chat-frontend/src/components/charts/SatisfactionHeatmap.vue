@@ -1,4 +1,4 @@
-<!-- SatisfactionHeatmap.vue - Fixed version with consistent dark tooltip styling -->
+<!-- SatisfactionHeatmap.vue - Fixed with tooltip background matching CategoryDistributionChart -->
 <template>
     <div class="heatmap-wrapper">
       <div ref="chart" class="chart-container">
@@ -170,18 +170,18 @@
             color: #FFFFFF !important;
           }
           
-          /* Force tooltips to always have dark background with white text */
+          /* Force tooltips to match CategoryDistributionChart */
           .apexcharts-tooltip {
-            background-color: rgba(0, 0, 0, 0.75) !important;
+            background-color: rgba(0, 0, 0, 0.65) !important;
             color: #FFFFFF !important;
             border: none !important;
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
           }
           
           .apexcharts-tooltip-title {
-            background-color: rgba(0, 0, 0, 0.85) !important;
+            background-color: rgba(0, 0, 0, 0.65) !important;
             color: #FFFFFF !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
           }
           
           .apexcharts-tooltip-text-y-label, 
@@ -531,16 +531,17 @@
             style: {
               fontSize: '12px'
             },
-            // Force tooltip colors to match dark theme
+            // Custom tooltip formatter to match CategoryDistributionChart
             custom: function({ series, seriesIndex, dataPointIndex, w }) {
               // Get the value and category
               const value = series[seriesIndex][dataPointIndex];
               const category = w.globals.seriesNames[seriesIndex];
               const xLabel = w.globals.labels[dataPointIndex];
               
+              // Use exact same tooltip style as CategoryDistributionChart
               return `
-                <div class="apexcharts-tooltip-box" style="background: rgba(0,0,0,0.75); color: #fff; padding: 6px 8px; border-radius: 3px;">
-                  <div style="font-weight: bold; margin-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 3px;">
+                <div class="apexcharts-tooltip-box" style="background: rgba(0, 0, 0, 0.65); color: #fff; padding: 8px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                  <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px;">
                     ${category}
                   </div>
                   <div>
@@ -698,18 +699,18 @@
     fill: white !important;
   }
   
-  /* Make tooltips always use dark theme styling */
+  /* Match tooltip styling exactly with CategoryDistributionChart */
   :deep(.apexcharts-tooltip) {
-    background-color: rgba(0, 0, 0, 0.75) !important;
+    background-color: rgba(0, 0, 0, 0.65) !important;
     color: white !important;
     border: none !important;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
   }
   
   :deep(.apexcharts-tooltip-title) {
-    background-color: rgba(0, 0, 0, 0.85) !important;
+    background-color: rgba(0, 0, 0, 0.65) !important;
     color: white !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
   }
   
   :deep(.apexcharts-tooltip-text), 

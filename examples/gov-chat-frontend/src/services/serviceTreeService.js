@@ -31,6 +31,7 @@ export default {
   transformCategoriesToTreeNodes(categories, locale) {
     return categories.map(category => ({
       catKey: category.catKey,
+      name: category.name,  // Preserve the name property!
       expanded: false,
       children: category.children || []
     }));

@@ -109,11 +109,20 @@
       
       // Set up theme change observer
       this.setupThemeChangeListener();
+      
+      // Apply a document style to force text colors in dark mode
+      this.injectGlobalStyleForDarkMode();
     },
     beforeUnmount() {
       // Clean up theme change listener
       if (this.themeObserver) {
         this.themeObserver.disconnect();
+      }
+      
+      // Remove the injected style if it exists
+      const injectedStyle = document.getElementById('satisfaction-gauge-dark-mode-style');
+      if (injectedStyle) {
+        document.head.removeChild(injectedStyle);
       }
     },
     methods: {
@@ -221,7 +230,7 @@
         
         const gradientColors = getGradientColors(this.actualSatisfactionValue);
         
-        // Create a speedometer-style gauge chart
+        // Create a speedometer-style gauge chart with appropriate text colors
         this.chartOptions = {
           chart: {
             type: 'radialBar',
@@ -231,7 +240,8 @@
               enabled: true,
               easing: 'easeinout',
               speed: 800
-            }
+            },
+            fontFamily: 'inherit',
           },
           plotOptions: {
             radialBar: {
@@ -298,10 +308,81 @@
             dashArray: 0
           },
           labels: [this.$t('analytics.metrics.satisfaction', 'User Satisfaction')],
-          theme: {
-            mode: isDarkMode ? 'dark' : 'light'
+          tooltip: {
+            enabled: false
           }
         };
+
+        // Force refresh the CSS after chart initialization
+        this.$nextTick(() => {
+          this.forceTextColorUpdate();
+        });
+        
+        // In case ApexCharts is slow to initialize, try again after a delay
+        setTimeout(() => {
+          this.forceTextColorUpdate();
+        }, 200);
+      },
+      
+      /**
+       * Inject a global stylesheet that targets ApexCharts elements
+       * This ensures all text elements are white in dark mode regardless
+       * of how ApexCharts renders them
+       */
+      injectGlobalStyleForDarkMode() {
+        // Check if the style already exists
+        if (document.getElementById('satisfaction-gauge-dark-mode-style')) {
+          return;
+        }
+        
+        // Create style element
+        const styleEl = document.createElement('style');
+        styleEl.id = 'satisfaction-gauge-dark-mode-style';
+        styleEl.textContent = `
+          /* Force all ApexCharts text to be white in dark mode */
+          [data-theme="dark"] .apexcharts-text,
+          [data-theme="dark"] .apexcharts-datalabel-label,
+          [data-theme="dark"] .apexcharts-datalabel-value,
+          [data-theme="dark"] .apexcharts-radialbar-label text,
+          [data-theme="dark"] .apexcharts-radialbar text {
+            fill: #FFFFFF !important;
+          }
+        `;
+        
+        // Append to document head
+        document.head.appendChild(styleEl);
+      },
+      
+      /**
+       * Force ApexCharts text elements to use correct color in dark mode
+       * This method will be called after chart initialization
+       */
+      forceTextColorUpdate() {
+        const theme = this.getThemeInfo();
+        const isDarkMode = theme.isDarkMode;
+        
+        if (isDarkMode) {
+          // Get the chart element
+          const chartElement = this.$refs.chart;
+          if (!chartElement) return;
+          
+          // Use setTimeout to ensure this runs after ApexCharts has rendered
+          setTimeout(() => {
+            // Select all text elements in the chart
+            const textElements = chartElement.querySelectorAll('.apexcharts-text, .apexcharts-datalabel-label, .apexcharts-datalabel-value');
+            
+            // Set fill attribute to white
+            textElements.forEach(el => {
+              el.setAttribute('fill', '#FFFFFF');
+              
+              // Also update any tspan elements that might be children
+              const tspans = el.querySelectorAll('tspan');
+              tspans.forEach(tspan => {
+                tspan.setAttribute('fill', '#FFFFFF');
+              });
+            });
+          }, 100);
+        }
       }
     }
   };
@@ -379,16 +460,19 @@
     z-index: 20;
   }
   
-  /* Fix for ApexCharts text in dark mode */
-  :deep([data-theme="dark"]) .apexcharts-text {
+  /* Simple and direct dark mode text fixes */
+  :deep([data-theme="dark"]) .apexcharts-text,
+  :deep([data-theme="dark"]) .apexcharts-datalabel-label,
+  :deep([data-theme="dark"]) .apexcharts-datalabel-value {
     fill: white !important;
   }
   
-  :deep([data-theme="dark"]) .apexcharts-datalabel-value,
-  :deep([data-theme="dark"]) .apexcharts-datalabel-label {
+  /* SVG text elements */
+  :deep([data-theme="dark"]) text tspan {
     fill: white !important;
   }
   
+  /* Track color in dark mode */
   :deep([data-theme="dark"]) .apexcharts-radialbar .apexcharts-radialbar-track .apexcharts-radialbar-area {
     stroke: #666666 !important;
   }

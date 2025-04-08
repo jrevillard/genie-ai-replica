@@ -1,3 +1,4 @@
+<!-- UsageTrendChart.vue - Modified to ensure all axis text, title and legend text is white in dark mode -->
 <template>
   <div class="usage-trend-chart">
     <div v-if="loading" class="loading-overlay">
@@ -98,6 +99,9 @@ export default {
   },
   mounted() {
     this.initChartDimensions();
+    
+    // Inject global stylesheet for dark mode text
+    this.injectGlobalStyleForDarkMode();
 
     if (this.externalData && this.data.length > 0) {
       this.chartData = this.data;
@@ -111,8 +115,58 @@ export default {
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
     cleanupTooltips();
+    
+    // Remove the injected style if it exists
+    const injectedStyle = document.getElementById('usage-trend-chart-dark-mode-style');
+    if (injectedStyle) {
+      document.head.removeChild(injectedStyle);
+    }
   },
   methods: {
+    /**
+     * Inject a global stylesheet for dark mode text
+     * Targets only axis, title, and legend text
+     */
+    injectGlobalStyleForDarkMode() {
+      // Check if the style already exists
+      if (document.getElementById('usage-trend-chart-dark-mode-style')) {
+        return;
+      }
+      
+      // Create style element
+      const styleEl = document.createElement('style');
+      styleEl.id = 'usage-trend-chart-dark-mode-style';
+      styleEl.textContent = `
+        /* Force x-axis text to be white in dark mode */
+        [data-theme="dark"] .x-axis text {
+          fill: #FFFFFF !important;
+        }
+        
+        /* Force y-axis left text to be white in dark mode */
+        [data-theme="dark"] .y-axis-left text {
+          fill: #FFFFFF !important;
+        }
+        
+        /* Force y-axis right text to be white in dark mode */
+        [data-theme="dark"] .y-axis-right text {
+          fill: #FFFFFF !important;
+        }
+        
+        /* Force chart title to be white in dark mode */
+        [data-theme="dark"] svg text[font-size="14px"] {
+          fill: #FFFFFF !important;
+        }
+        
+        /* Force legend text to be white in dark mode */
+        [data-theme="dark"] .legend text {
+          fill: #FFFFFF !important;
+        }
+      `;
+      
+      // Append to document head
+      document.head.appendChild(styleEl);
+    },
+    
     async fetchData() {
       if (this.externalData) return;
 
@@ -205,6 +259,52 @@ export default {
       this.initChartDimensions();
       this.renderChart();
     },
+    
+    /**
+     * Force text elements to use white fill in dark mode
+     */
+    forceAxisTextColorInDarkMode() {
+      // Check if dark mode is active
+      const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
+      
+      if (!isDarkMode) return;
+      
+      // Target specific text elements in the chart
+      const chartContainer = this.$refs.chartContainer;
+      if (!chartContainer) return;
+      
+      setTimeout(() => {
+        // X-axis text
+        const xAxisText = chartContainer.querySelectorAll('.x-axis text');
+        xAxisText.forEach(el => {
+          el.setAttribute('fill', '#FFFFFF');
+        });
+        
+        // Y-axis left text
+        const yAxisLeftText = chartContainer.querySelectorAll('.y-axis-left text');
+        yAxisLeftText.forEach(el => {
+          el.setAttribute('fill', '#FFFFFF');
+        });
+        
+        // Y-axis right text
+        const yAxisRightText = chartContainer.querySelectorAll('.y-axis-right text');
+        yAxisRightText.forEach(el => {
+          el.setAttribute('fill', '#FFFFFF');
+        });
+        
+        // Chart title
+        const chartTitle = chartContainer.querySelectorAll('text[font-size="14px"]');
+        chartTitle.forEach(el => {
+          el.setAttribute('fill', '#FFFFFF');
+        });
+        
+        // Legend text
+        const legendText = chartContainer.querySelectorAll('.legend text');
+        legendText.forEach(el => {
+          el.setAttribute('fill', '#FFFFFF');
+        });
+      }, 100);
+    },
 
     renderChart() {
       if (!this.chartData || this.chartData.length === 0 || !this.$refs.chartContainer) return;
@@ -215,6 +315,9 @@ export default {
       // Get theme colors using the utility function
       const theme = getThemeColors();
       const { textColor, backgroundColor, borderColor, gridColor, isDarkMode } = theme;
+
+      // Set text color to white in dark mode, or original textColor in light mode
+      const darkModeTextColor = isDarkMode ? '#FFFFFF' : textColor;
 
       // Use a LIGHT GRAY background for dark mode that contrasts with black text
       // This color will be used for all background elements
@@ -475,15 +578,15 @@ export default {
           return `${month} ${day}`;
         });
 
-      // X-axis with BLACK text that will be visible on light gray background
+      // X-axis - use white text in dark mode
       const xAxisGroup = mainGroup.append('g')
         .attr('class', 'x-axis')
         .attr('transform', `translate(0,${height})`)
         .call(xAxis);
 
-      // Use black text in dark mode for all axes (since we have light gray background)
-      const axisTextColor = isDarkMode ? '#333333' : textColor;
-      const axisLineColor = isDarkMode ? '#333333' : textColor;
+      // Use white text in dark mode for axes
+      const axisTextColor = isDarkMode ? '#FFFFFF' : textColor;
+      const axisLineColor = isDarkMode ? '#FFFFFF' : textColor;
 
       xAxisGroup.selectAll('text')
         .style('text-anchor', 'end')
@@ -500,7 +603,7 @@ export default {
       xAxisGroup.selectAll('line')
         .attr('stroke', axisLineColor);
 
-      // Y-axis left with proper text color
+      // Y-axis left with white text in dark mode
       const yAxisLeftGroup = mainGroup.append('g')
         .attr('class', 'y-axis-left')
         .call(d3.axisLeft(yLeft).ticks(5));
@@ -516,7 +619,7 @@ export default {
       yAxisLeftGroup.selectAll('line')
         .attr('stroke', axisLineColor);
 
-      // Y-axis right with proper text color
+      // Y-axis right with white text in dark mode
       const yAxisRightGroup = mainGroup.append('g')
         .attr('class', 'y-axis-right')
         .attr('transform', `translate(${width},0)`)
@@ -533,17 +636,17 @@ export default {
       yAxisRightGroup.selectAll('line')
         .attr('stroke', axisLineColor);
 
-      // Enhanced chart title with dark text
+      // Chart title with white text in dark mode
       mainGroup.append('text')
         .attr('x', width / 2)
-        .attr('y', -30)  // Change from -20 to -30 or even -35
+        .attr('y', -30)
         .attr('text-anchor', 'middle')
         .attr('font-size', '14px')
         .attr('font-weight', 'bold')
         .attr('fill', axisTextColor)
         .text(this.$t('charts.usageTrend'));
 
-      // Add enhanced legend with 3D effects
+      // Add enhanced legend with white text in dark mode
       const legendBox = mainGroup.append('g')
         .attr('class', 'legend-box')
         .attr('transform', `translate(${width / 2 - 170}, -15)`);
@@ -572,7 +675,7 @@ export default {
         .attr('rx', 1)
         .attr('ry', 1);
 
-      // Legend text with black color for contrast on light gray
+      // Legend text with white text in dark mode
       const totalQueriesText = legend.append('text')
         .attr('x', 30)
         .attr('y', 0)
@@ -599,7 +702,7 @@ export default {
         .attr('stroke', '#fff')
         .attr('stroke-width', 1);
 
-      // Legend text with black color for contrast on light gray
+      // Legend text with white text in dark mode
       const uniqueUsersText = legend.append('text')
         .attr('x', 210)
         .attr('y', 0)
@@ -725,6 +828,9 @@ export default {
             .style('left', (event.pageX + 15) + 'px')
             .style('top', (event.pageY - 60) + 'px');
         });
+        
+      // Force text colors for dark mode after chart is rendered
+      this.forceAxisTextColorInDarkMode();
     }
   }
 };
@@ -816,8 +922,12 @@ export default {
   font-weight: bold;
 }
 
-/* Fix styles for dark mode only */
-[data-theme="dark"] svg text {
+/* Force axis text and labels to be white in dark mode */
+[data-theme="dark"] :deep(.x-axis text),
+[data-theme="dark"] :deep(.y-axis-left text),
+[data-theme="dark"] :deep(.y-axis-right text),
+[data-theme="dark"] :deep(.legend text),
+[data-theme="dark"] :deep(text[font-size="14px"]) {
   fill: white !important;
 }
 

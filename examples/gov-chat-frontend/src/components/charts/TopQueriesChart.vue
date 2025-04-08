@@ -1,3 +1,4 @@
+<!-- TopQueriesChart.vue - Modified to force white data labels in dark mode -->
 <template>
   <div class="top-queries-chart">
     <div v-if="loading" class="loading-overlay">
@@ -137,6 +138,9 @@ export default {
     // Check if mobile on mount
     this.checkMobile();
 
+    // Inject global stylesheet for dark mode
+    this.injectGlobalStyleForDarkMode();
+
     // Use data from props or fetch from API
     if (this.externalData && this.data.length > 0) {
       this.chartData = this.data;
@@ -156,8 +160,46 @@ export default {
 
     // Clean up tooltip
     this.cleanupTooltip();
+    
+    // Remove the injected style if it exists
+    const injectedStyle = document.getElementById('top-queries-chart-dark-mode-style');
+    if (injectedStyle) {
+      document.head.removeChild(injectedStyle);
+    }
   },
   methods: {
+    /**
+     * Inject a global stylesheet that targets ApexCharts data labels specifically
+     * This ensures data label elements are white in dark mode
+     */
+    injectGlobalStyleForDarkMode() {
+      // Check if the style already exists
+      if (document.getElementById('top-queries-chart-dark-mode-style')) {
+        return;
+      }
+      
+      // Create style element
+      const styleEl = document.createElement('style');
+      styleEl.id = 'top-queries-chart-dark-mode-style';
+      styleEl.textContent = `
+        /* Force ApexCharts data labels to be white in dark mode */
+        [data-theme="dark"] .apexcharts-datalabels text,
+        [data-theme="dark"] .apexcharts-datalabel-value,
+        [data-theme="dark"] .apexcharts-datalabel,
+        [data-theme="dark"] .apexcharts-datalabel-label {
+          fill: #FFFFFF !important;
+        }
+        
+        /* Target specifically the bar chart data labels */
+        [data-theme="dark"] .apexcharts-bar-series .apexcharts-datalabels text {
+          fill: #FFFFFF !important;
+        }
+      `;
+      
+      // Append to document head
+      document.head.appendChild(styleEl);
+    },
+
     /**
      * Check if the device is mobile based on screen width
      */
@@ -456,7 +498,8 @@ export default {
           offsetY: -20,
           style: {
             fontSize: '10px',
-            colors: [textColor] // Set to match the theme
+            colors: [textColor], // Set to match the theme
+            fontWeight: '600'
           },
           background: {
             enabled: false
@@ -529,24 +572,36 @@ export default {
       // Apply the correct color based on theme
       textElements.forEach(element => {
         // Don't change dataLabel colors (they're inside the bars)
-        if (!element.classList.contains('apexcharts-datalabel-label')) {
-          element.setAttribute('fill', textColor);
-        }
+        element.setAttribute('fill', textColor);
       });
 
-      // Specifically target axis labels
-      const axisLabels = chartContainer.querySelectorAll('.apexcharts-xaxis-label, .apexcharts-yaxis-label');
-      axisLabels.forEach(label => {
-        label.setAttribute('fill', textColor);
-      });
-
-      // Target data labels on top of bars
-      const dataLabels = chartContainer.querySelectorAll('.apexcharts-datalabel text');
+      // Specifically target data labels for bar values
+      const dataLabels = chartContainer.querySelectorAll('.apexcharts-datalabels text');
       dataLabels.forEach(label => {
         label.setAttribute('fill', textColor);
+
+        // Find any child elements and set them too
+        const children = label.querySelectorAll('*');
+        children.forEach(child => {
+          if (child.tagName === 'tspan') {
+            child.setAttribute('fill', textColor);
+          }
+        });
       });
 
-      console.log(`[DEBUG] Fixed label colors to ${textColor}`);
+      // Target data labels on top of bars specifically
+      const topDataLabels = chartContainer.querySelectorAll('.apexcharts-bar-top-datalabels text, .apexcharts-datalabel-value');
+      topDataLabels.forEach(label => {
+        label.setAttribute('fill', textColor);
+      });
+
+      // If we are in dark mode, force white text for data labels
+      if (textColor === '#FFFFFF') {
+        const allDataLabelElements = chartContainer.querySelectorAll('.apexcharts-datalabels text, .apexcharts-datalabel, .apexcharts-datalabel-label, .apexcharts-datalabel-value');
+        allDataLabelElements.forEach(el => {
+          el.setAttribute('fill', '#FFFFFF');
+        });
+      }
     }
   }
 };
@@ -669,6 +724,19 @@ export default {
   background-color: transparent;
 }
 
+/* Force data labels to be white in dark mode - focused selector */
+:deep([data-theme="dark"]) .apexcharts-datalabels text,
+:deep([data-theme="dark"]) .apexcharts-datalabel-value,
+:deep([data-theme="dark"]) .apexcharts-datalabel-label {
+  fill: white !important;
+}
+
+/* Target specifically the data labels above the bars */
+:deep([data-theme="dark"]) .apexcharts-bar-series .apexcharts-datalabels text {
+  fill: white !important;
+}
+
+/* Retain existing dark mode styles */
 /* Force all text in charts to follow theme colors */
 :deep([data-theme="dark"]) .apexcharts-text,
 :deep(.dark-theme) .apexcharts-text,
@@ -703,50 +771,6 @@ export default {
 :deep(.dark-mode) .apexcharts-datalabels text {
   fill: white !important;
   color: white !important;
-}
-
-/* Target specific X-axis and Y-axis labels - even more specific selectors */
-:deep([data-theme="dark"]) g.apexcharts-xaxis g text,
-:deep([data-theme="dark"]) g.apexcharts-yaxis g text,
-:deep(.dark-theme) g.apexcharts-xaxis g text,
-:deep(.dark-theme) g.apexcharts-yaxis g text,
-:deep(.dark-mode) g.apexcharts-xaxis g text,
-:deep(.dark-mode) g.apexcharts-yaxis g text {
-  fill: white !important;
-}
-
-/* This is an emergency approach - force ALL text in dark mode to be white */
-:deep([data-theme="dark"]) text,
-:deep(.dark-theme) text,
-:deep(.dark-mode) text {
-  fill: white !important;
-}
-
-/* Target the bars' data labels specifically */
-:deep([data-theme="dark"]) .apexcharts-bar-series .apexcharts-datalabel text,
-:deep(.dark-theme) .apexcharts-bar-series .apexcharts-datalabel text,
-:deep(.dark-mode) .apexcharts-bar-series .apexcharts-datalabel text {
-  fill: white !important;
-}
-
-/* Make sure axis title texts are also properly colored */
-:deep([data-theme="dark"]) .apexcharts-yaxis-title text,
-:deep([data-theme="dark"]) .apexcharts-xaxis-title text,
-:deep(.dark-theme) .apexcharts-yaxis-title text,
-:deep(.dark-theme) .apexcharts-xaxis-title text,
-:deep(.dark-mode) .apexcharts-yaxis-title text,
-:deep(.dark-mode) .apexcharts-xaxis-title text {
-  fill: white !important;
-}
-
-/* Target axis ticks */
-:deep([data-theme="dark"]) .apexcharts-yaxis text,
-:deep([data-theme="dark"]) .apexcharts-xaxis text,
-:deep(.dark-theme) .apexcharts-yaxis text,
-:deep(.dark-theme) .apexcharts-xaxis text,
-:deep(.dark-mode) .apexcharts-yaxis text,
-:deep(.dark-mode) .apexcharts-xaxis text {
-  fill: white !important;
 }
 
 /* Dark mode overrides - these will only apply in dark mode */

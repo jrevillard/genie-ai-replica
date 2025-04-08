@@ -1,4 +1,4 @@
-<!-- SatisfactionHeatmap.vue - Fixed version with forced white text in dark mode -->
+<!-- SatisfactionHeatmap.vue - Fixed version with consistent dark tooltip styling -->
 <template>
     <div class="heatmap-wrapper">
       <div ref="chart" class="chart-container">
@@ -101,6 +101,9 @@
   
       // Add theme change listener
       this.setupThemeChangeListener();
+      
+      // Inject global style to ensure text is properly colored
+      this.injectGlobalStyleForDarkMode();
   
       // Use data from props or fetch from API
       if (this.externalData && this.data.length > 0) {
@@ -127,8 +130,74 @@
   
       // Clean up theme change listeners
       this.cleanupThemeChangeListener();
+      
+      // Remove the injected style if it exists
+      const injectedStyle = document.getElementById('satisfaction-heatmap-dark-mode-style');
+      if (injectedStyle) {
+        document.head.removeChild(injectedStyle);
+      }
     },
     methods: {
+      /**
+       * Inject a global stylesheet that targets ApexCharts elements
+       * This ensures all text elements are white in dark mode
+       */
+      injectGlobalStyleForDarkMode() {
+        // Check if the style already exists
+        if (document.getElementById('satisfaction-heatmap-dark-mode-style')) {
+          return;
+        }
+        
+        // Create style element
+        const styleEl = document.createElement('style');
+        styleEl.id = 'satisfaction-heatmap-dark-mode-style';
+        styleEl.textContent = `
+          /* Force ApexCharts title and subtitle to be white in dark mode */
+          [data-theme="dark"] .apexcharts-title-text,
+          [data-theme="dark"] .apexcharts-subtitle-text {
+            fill: #FFFFFF !important;
+          }
+          
+          /* Additional styling for other text elements */
+          [data-theme="dark"] .apexcharts-text,
+          [data-theme="dark"] .apexcharts-xaxis-label text,
+          [data-theme="dark"] .apexcharts-yaxis-label text {
+            fill: #FFFFFF !important;
+          }
+          
+          /* Legend text needs color property, not fill */
+          [data-theme="dark"] .apexcharts-legend-text {
+            color: #FFFFFF !important;
+          }
+          
+          /* Force tooltips to always have dark background with white text */
+          .apexcharts-tooltip {
+            background-color: rgba(0, 0, 0, 0.75) !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
+          }
+          
+          .apexcharts-tooltip-title {
+            background-color: rgba(0, 0, 0, 0.85) !important;
+            color: #FFFFFF !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+          }
+          
+          .apexcharts-tooltip-text-y-label, 
+          .apexcharts-tooltip-text-y-value,
+          .apexcharts-tooltip-text-z-label,
+          .apexcharts-tooltip-text-z-value,
+          .apexcharts-tooltip-marker,
+          .apexcharts-tooltip * {
+            color: #FFFFFF !important;
+          }
+        `;
+        
+        // Append to document head
+        document.head.appendChild(styleEl);
+      },
+      
       /**
        * Check if the device is mobile based on screen width
        */
@@ -325,20 +394,18 @@
               });
             });
             
-            // Specifically target legend text
-            const legendItems = chartContainer.querySelectorAll('.apexcharts-legend-text');
-            legendItems.forEach(item => {
-              item.style.color = '#FFFFFF';
-            });
-            
-            // Target title and subtitle
+            // Specifically target title and subtitle
             const title = chartContainer.querySelector('.apexcharts-title-text');
             if (title) title.setAttribute('fill', '#FFFFFF');
             
             const subtitle = chartContainer.querySelector('.apexcharts-subtitle-text');
             if (subtitle) subtitle.setAttribute('fill', '#FFFFFF');
             
-            console.log('Enforced white text for dark mode');
+            // Specifically target legend text
+            const legendItems = chartContainer.querySelectorAll('.apexcharts-legend-text');
+            legendItems.forEach(item => {
+              item.style.color = '#FFFFFF';
+            });
           }, 200);
         }
       },
@@ -388,7 +455,7 @@
           }
         };
   
-        // Set up chart options with forced white text for dark mode
+        // Set up chart options with proper text colors for dark mode
         this.chartOptions = {
           chart: {
             type: 'heatmap',
@@ -420,7 +487,7 @@
           dataLabels: {
             enabled: true,
             style: {
-              colors: theme.isDarkMode ? ['#FFFFFF'] : ['#FFFFFF'],  // Always white for better visibility on colored cells
+              colors: ['#FFFFFF'],  // Always white for better visibility on colored cells
               fontSize: '12px',
               fontWeight: 'bold'
             },
@@ -438,7 +505,8 @@
             style: {
               fontSize: '16px',
               fontWeight: 'bold',
-              color: textColor
+              color: textColor,
+              fill: textColor // Added fill property for SVG text
             }
           },
           subtitle: {
@@ -446,7 +514,8 @@
             align: 'center',
             style: {
               fontSize: '12px',
-              color: textColor
+              color: textColor,
+              fill: textColor // Added fill property for SVG text
             }
           },
           legend: {
@@ -457,7 +526,30 @@
           },
           tooltip: {
             enabled: true,
-            theme: theme.isDarkMode ? 'dark' : 'light',
+            // Always use dark theme for tooltips regardless of current theme
+            theme: 'dark',
+            style: {
+              fontSize: '12px'
+            },
+            // Force tooltip colors to match dark theme
+            custom: function({ series, seriesIndex, dataPointIndex, w }) {
+              // Get the value and category
+              const value = series[seriesIndex][dataPointIndex];
+              const category = w.globals.seriesNames[seriesIndex];
+              const xLabel = w.globals.labels[dataPointIndex];
+              
+              return `
+                <div class="apexcharts-tooltip-box" style="background: rgba(0,0,0,0.75); color: #fff; padding: 6px 8px; border-radius: 3px;">
+                  <div style="font-weight: bold; margin-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 3px;">
+                    ${category}
+                  </div>
+                  <div>
+                    <span style="display: inline-block; margin-right: 5px;">${xLabel}:</span>
+                    <span style="font-weight: bold;">${value}%</span>
+                  </div>
+                </div>
+              `;
+            },
             y: {
               formatter: function(val) {
                 return val + '%';
@@ -482,7 +574,8 @@
               style: {
                 colors: textColor,
                 fontSize: '12px'
-              }
+              },
+              offsetX: -14 // Add a moderate offset to move labels left
             }
           },
           grid: {
@@ -582,55 +675,47 @@
     border-top-color: var(--accent-color, #4E97D1);
   }
   
-  /* Dark mode overrides - for theme consistency */
-  [data-theme="dark"] .heatmap-wrapper,
-  .dark-theme .heatmap-wrapper,
-  .dark-mode .heatmap-wrapper {
-    background-color: #414141 !important;
-  }
-  
-  /* Force ALL TEXT elements to be white in dark mode */
-  :deep([data-theme="dark"]) .apexcharts-text,
-  :deep(.dark-theme) .apexcharts-text,
-  :deep(.dark-mode) .apexcharts-text {
-    fill: white !important;
-  }
-  
-  /* Title color fix */
+  /* Force title and subtitle to be white in dark mode */
   :deep([data-theme="dark"]) .apexcharts-title-text,
-  :deep(.dark-theme) .apexcharts-title-text,
-  :deep(.dark-mode) .apexcharts-title-text {
+  :deep([data-theme="dark"]) .apexcharts-subtitle-text {
     fill: white !important;
   }
   
-  /* Subtitle color fix */
-  :deep([data-theme="dark"]) .apexcharts-subtitle-text,
-  :deep(.dark-theme) .apexcharts-subtitle-text,
-  :deep(.dark-mode) .apexcharts-subtitle-text {
+  /* Force axis labels to be white in dark mode */
+  :deep([data-theme="dark"]) .apexcharts-yaxis-label text,
+  :deep([data-theme="dark"]) .apexcharts-xaxis-label text {
     fill: white !important;
   }
   
-  /* Legend text fix */
-  :deep([data-theme="dark"]) .apexcharts-legend-text,
-  :deep(.dark-theme) .apexcharts-legend-text,
-  :deep(.dark-mode) .apexcharts-legend-text {
+  /* Force legend text to be white in dark mode */
+  :deep([data-theme="dark"]) .apexcharts-legend-text {
     color: white !important;
   }
   
-  /* Ensure axis labels are visible in dark mode */
-  :deep([data-theme="dark"]) .apexcharts-yaxis-label text,
-  :deep([data-theme="dark"]) .apexcharts-xaxis-label text,
-  :deep(.dark-theme) .apexcharts-yaxis-label text,
-  :deep(.dark-theme) .apexcharts-xaxis-label text,
-  :deep(.dark-mode) .apexcharts-yaxis-label text,
-  :deep(.dark-mode) .apexcharts-xaxis-label text {
+  /* Ensure all text elements are white in dark mode */
+  :deep([data-theme="dark"]) text,
+  :deep([data-theme="dark"]) tspan {
     fill: white !important;
   }
   
-  /* Comprehensive fix for all text elements in dark mode */
-  :deep([data-theme="dark"]) text,
-  :deep(.dark-theme) text,
-  :deep(.dark-mode) text {
-    fill: white !important;
+  /* Make tooltips always use dark theme styling */
+  :deep(.apexcharts-tooltip) {
+    background-color: rgba(0, 0, 0, 0.75) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  :deep(.apexcharts-tooltip-title) {
+    background-color: rgba(0, 0, 0, 0.85) !important;
+    color: white !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+  }
+  
+  :deep(.apexcharts-tooltip-text), 
+  :deep(.apexcharts-tooltip-y-group),
+  :deep(.apexcharts-tooltip-text-y-label),
+  :deep(.apexcharts-tooltip-text-y-value) {
+    color: white !important;
   }
   </style>

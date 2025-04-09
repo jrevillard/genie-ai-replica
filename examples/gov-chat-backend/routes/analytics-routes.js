@@ -480,4 +480,64 @@ router.get('/events', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /analytics/satisfaction/gauge:
+ *   get:
+ *     summary: Get satisfaction gauge data
+ *     description: Retrieves satisfaction percentage data for the gauge visualization
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date (ISO format)
+ *       - in: query
+ *         name: locale
+ *         schema:
+ *           type: string
+ *           enum: [en, fr, sw]
+ *           default: en
+ *         description: Language locale
+ *     responses:
+ *       200:
+ *         description: Satisfaction gauge data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 currentValue:
+ *                   type: number
+ *                 previousValue:
+ *                   type: number
+ *                 changePercentage:
+ *                   type: number
+ *                 target:
+ *                   type: number
+ *                 historicalData:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       label:
+ *                         type: string
+ *                       value:
+ *                         type: number
+ *       500:
+ *         description: Server error
+ */
+router.get('/satisfaction/gauge', (req, res) => {
+  logger.info(`Fetching satisfaction gauge data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`);
+  analyticsController.getSatisfactionGauge(req, res);
+});
+
 module.exports = router;

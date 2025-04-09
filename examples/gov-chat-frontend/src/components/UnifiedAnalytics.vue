@@ -91,7 +91,7 @@
             <div class="satisfaction-container">
               <!-- Satisfaction Gauge Chart -->
               <div class="analytics-section half-width">
-                <satisfaction-gauge :value="analytics.satisfactionRate" :target="85" :externalData="true"
+                <satisfaction-gauge :value="analytics.satisfactionRate" :target="85" :externalData="false"
                   :renderKey="currentLocale" />
               </div>
 

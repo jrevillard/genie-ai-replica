@@ -216,6 +216,35 @@ class AnalyticsController {
       res.status(500).json({ error: 'Failed to retrieve time series data' });
     }
   }
+
+  /**
+ * Get satisfaction gauge data
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+  async getSatisfactionGauge(req, res) {
+    try {
+      logger.info('Fetching satisfaction gauge data');
+      const { startDate, endDate, locale } = req.query;
+
+      // Validate required parameters
+      if (!startDate || !endDate) {
+        logger.warn('Missing required parameters: startDate and endDate are required');
+        return res.status(400).json({
+          error: 'Missing required parameters: startDate and endDate are required'
+        });
+      }
+
+      // Get satisfaction gauge data from service
+      const gaugeData = await analyticsService.getSatisfactionGaugeData(startDate, endDate, locale);
+
+      logger.info('Satisfaction gauge data retrieved successfully');
+      res.json(gaugeData);
+    } catch (error) {
+      logger.error('Error in getSatisfactionGauge:', error);
+      res.status(500).json({ error: 'Failed to retrieve satisfaction gauge data' });
+    }
+  }
 }
 
 module.exports = new AnalyticsController();

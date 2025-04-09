@@ -25,6 +25,7 @@ const PORT = process.env.PORT || 3000;
 app.disable('etag');
 
 // Add a global middleware to disable caching for all responses
+
 app.use((req, res, next) => {
   // Set strong cache control headers to prevent caching
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -33,10 +34,14 @@ app.use((req, res, next) => {
   
   // These headers ensure no 304 responses
   res.set('Last-Modified', (new Date()).toUTCString());
-  logger.info(`[REQUEST DEBUG] ${req.method} ${req.url} - No route matched`);
+  
+  // Just log the incoming request without claiming no route matched
+  logger.info(`[REQUEST DEBUG] ${req.method} ${req.url}`);
+  
   // Continue to the next middleware
   next();
 });
+
 
 // Swagger definition (unchanged)
 const swaggerOptions = {

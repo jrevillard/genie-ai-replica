@@ -245,6 +245,35 @@ class AnalyticsController {
       res.status(500).json({ error: 'Failed to retrieve satisfaction gauge data' });
     }
   }
+
+  /**
+ * Get satisfaction heatmap data
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+  async getSatisfactionHeatmap(req, res) {
+    try {
+      logger.info('Fetching satisfaction heatmap data');
+      const { startDate, endDate, locale } = req.query;
+
+      // Validate required parameters
+      if (!startDate || !endDate) {
+        logger.warn('Missing required parameters: startDate and endDate are required');
+        return res.status(400).json({
+          error: 'Missing required parameters: startDate and endDate are required'
+        });
+      }
+
+      // Get satisfaction heatmap data from service
+      const heatmapData = await analyticsService.getSatisfactionHeatmapData(startDate, endDate, locale);
+
+      logger.info('Satisfaction heatmap data retrieved successfully');
+      res.json(heatmapData);
+    } catch (error) {
+      logger.error('Error in getSatisfactionHeatmap:', error);
+      res.status(500).json({ error: 'Failed to retrieve satisfaction heatmap data' });
+    }
+  }
 }
 
 module.exports = new AnalyticsController();

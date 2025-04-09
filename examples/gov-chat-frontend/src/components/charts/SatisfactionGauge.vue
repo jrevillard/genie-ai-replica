@@ -720,4 +720,12 @@ export default {
 :deep([data-theme="dark"]) .apexcharts-radialbar .apexcharts-radialbar-track .apexcharts-radialbar-area {
   stroke: #666666 !important;
 }
+
+[data-theme="dark"] .historical-trends h3,
+[data-theme="dark"] .trend-label,
+[data-theme="dark"] .trend-value {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5) !important;
+}
 </style>

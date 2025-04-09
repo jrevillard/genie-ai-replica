@@ -457,6 +457,28 @@ export default {
     title: 'Data Analytics & Insights',
     period: 'Time Period',
 
+    charts: {
+      satisfactionHeatmap: "Satisfaction by Knowledge Area",
+      satisfactionSubtitle: "Percentage scores over time"
+    },
+
+    timePeriods: {
+      week4: "4 Weeks Ago",
+      week3: "3 Weeks Ago",
+      week2: "2 Weeks Ago",
+      week1: "Last Week",
+      current: "Current"
+    },
+    
+    errors: {
+      loading: "Failed to load satisfaction data. Please try again.",
+    },
+    
+    status: {
+      loading: "Loading...",
+      noData: "No data available"
+    },
+
     // Period dropdown options
     periods: {
       daily: 'Daily',
@@ -501,6 +523,11 @@ export default {
       loading: 'Loading analytics data...',
       noData: 'No data available for this period',
       error: 'Failed to load analytics data'
+    },
+    gauge: {
+      historical: 'Historical Trends',
+      vsPrevious: 'vs previous period',
+      target: 'Target'
     },
 
     // Trend indicators

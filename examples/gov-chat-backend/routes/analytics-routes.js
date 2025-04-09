@@ -540,4 +540,60 @@ router.get('/satisfaction/gauge', (req, res) => {
   analyticsController.getSatisfactionGauge(req, res);
 });
 
+/**
+ * @swagger
+ * /analytics/satisfaction/heatmap:
+ *   get:
+ *     summary: Get satisfaction heatmap data
+ *     description: Retrieves satisfaction percentage data by knowledge area over time
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date (ISO format)
+ *       - in: query
+ *         name: locale
+ *         schema:
+ *           type: string
+ *           enum: [en, fr, sw]
+ *           default: en
+ *         description: Language locale
+ *     responses:
+ *       200:
+ *         description: Satisfaction heatmap data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   data:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         x:
+ *                           type: string
+ *                         y:
+ *                           type: number
+ *       500:
+ *         description: Server error
+ */
+router.get('/satisfaction/heatmap', (req, res) => {
+  logger.info(`Fetching satisfaction heatmap data from ${req.query.startDate} to ${req.query.endDate} with locale ${req.query.locale || 'en'}`);
+  analyticsController.getSatisfactionHeatmap(req, res);
+});
+
 module.exports = router;

@@ -2,7 +2,7 @@
 <template>
   <div class="heatmap-wrapper">
     <div ref="chart" class="chart-container">
-      <apexchart v-if="!loading && !error && chartOptions" type="heatmap" height="290" :options="chartOptions"
+      <apexchart v-if="!loading && !error && chartOptions" type="heatmap" height="580" :options="chartOptions"
         :series="chartSeries"></apexchart>
     </div>
     <div v-if="loading" class="loading-overlay">

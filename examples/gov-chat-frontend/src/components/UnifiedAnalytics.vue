@@ -431,8 +431,8 @@ export default {
     },
 
     /**
-     * Load dynamic analytics data from the API
-     */
+    * Load dynamic analytics data from the API
+    */
     async loadAnalytics() {
       if (!this.useDynamicData) {
         this.loadStaticData();
@@ -464,6 +464,26 @@ export default {
 
         // Get time series data
         await this.loadTimeSeriesData();
+
+        // === IMPORTANT FIX: Get satisfaction rate from the analytics service ===
+        try {
+          // Use the same method that the gauge component uses
+          const gaugeData = await analyticsService.getSatisfactionGauge(
+            this.selectedPeriod,
+            this.selectedDate,
+            this.currentLocale
+          );
+
+          if (gaugeData && typeof gaugeData.currentValue === 'number') {
+            console.log('Updated satisfaction rate from service:', gaugeData.currentValue);
+            this.analytics.satisfactionRate = gaugeData.currentValue;
+          }
+        } catch (error) {
+          console.error('Error syncing satisfaction rate:', error);
+          // Non-critical error, continue without stopping the dashboard load
+        }
+        // === END OF FIX ===
+
       } catch (error) {
         console.error('Error loading analytics data:', error);
         this.error = this.translate('analytics.errors.loading', 'Failed to load analytics data. Please try again.');
@@ -1160,5 +1180,15 @@ export default {
   color: white !important;
   -webkit-text-fill-color: white !important;
   text-shadow: 0 0 1px rgba(255,255,255,0.5) !important;
+}
+
+[data-theme="dark"] .analytics-modal {
+  --bg-dialog: #414141 !important; /* Set the variable at the modal level */
+}
+
+/* Ensure it propagates to the content and body */
+[data-theme="dark"] .analytics-content,
+[data-theme="dark"] .analytics-body {
+  background-color: var(--bg-dialog) !important; /* Use the variable */
 }
 </style>

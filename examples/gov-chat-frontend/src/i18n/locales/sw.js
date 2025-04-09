@@ -456,6 +456,28 @@ export default {
     title: 'Data za Uchanganuzi & Maoni',
     period: 'Kipindi cha Muda',
 
+    charts: {
+      satisfactionHeatmap: "Kuridhika kwa Eneo la Maarifa",
+      satisfactionSubtitle: "Alama za asilimia kwa wakati"
+    },
+
+    timePeriods: {
+      week4: "Wiki 4 iliyopita",
+      week3: "Wiki 3 iliyopita",
+      week2: "Wiki 2 iliyopita",
+      week1: "Wiki iliyopita",
+      current: "Sasa"
+    },
+    
+    errors: {
+      loading: "Imeshindwa kupakia data ya kuridhika. Tafadhali jaribu tena.",
+    },
+    
+    status: {
+      loading: "Inapakia...",
+      noData: "Hakuna data inayopatikana"
+    },
+
     // Period dropdown options
     periods: {
       daily: 'Kila Siku',
@@ -500,6 +522,12 @@ export default {
       loading: 'Inapakia data za uchanganuzi...',
       noData: 'Hakuna data inayopatikana kwa kipindi hiki',
       error: 'Imeshindwa kupakia data za uchanganuzi'
+    },
+
+    gauge: {
+      historical: 'Mwenendo wa Kihistoria',
+      vsPrevious: 'dhidi ya kipindi cha awali',
+      target: 'Lengo'
     },
 
     // Trend indicators

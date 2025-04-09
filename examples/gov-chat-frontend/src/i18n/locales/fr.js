@@ -458,6 +458,28 @@ export default {
     title: 'Données Analytiques & Aperçus',
     period: 'Période',
 
+    charts: {
+      satisfactionHeatmap: "Satisfaction par domaine de connaissance",
+      satisfactionSubtitle: "Pourcentages au fil du temps"
+    },
+
+    timePeriods: {
+      week4: "Il y a 4 semaines",
+      week3: "Il y a 3 semaines",
+      week2: "Il y a 2 semaines",
+      week1: "Semaine dernière",
+      current: "Actuel"
+    },
+    
+    errors: {
+      loading: "Échec du chargement des données de satisfaction. Veuillez réessayer.",
+    },
+    
+    status: {
+      loading: "Chargement...",
+      noData: "Aucune donnée disponible"
+    },
+
     // Period dropdown options
     periods: {
       daily: 'Quotidien',
@@ -503,7 +525,11 @@ export default {
       noData: 'Aucune donnée disponible pour cette période',
       error: 'Échec du chargement des données analytiques'
     },
-
+    gauge: {
+      historical: 'Tendances historiques',
+      vsPrevious: 'par rapport à la période précédente',
+      target: 'Cible'
+    },
     // Trend indicators
     slower: 'plus lent',
     faster: 'plus rapide',

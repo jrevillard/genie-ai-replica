@@ -22,16 +22,33 @@
         :key="chartKey" 
         type="radialBar" 
         height="290" 
-        :options="chartOptions"
+        :options="{
+          ...chartOptions, 
+          plotOptions: {
+            ...chartOptions.plotOptions,
+            radialBar: {
+              ...chartOptions.plotOptions.radialBar,
+              dataLabels: {
+                ...chartOptions.plotOptions.radialBar.dataLabels,
+                value: {
+                  ...chartOptions.plotOptions.radialBar.dataLabels.value,
+                  formatter: function(val) {
+                    return val.toFixed(2) + '%';
+                  }
+                }
+              }
+            }
+          }
+        }"
         :series="[actualSatisfactionValue]"
       ></apexchart>
     </div>
     
     <div class="historical-trends" v-if="!loading && !error && historicalData.length > 0">
-      <h3>{{ $t('analytics.gauge.historical', 'Historical Trends') }}</h3>
+      <h3>{{ translate('analytics.gauge.historical', 'Historical Trends') }}</h3>
       <div class="trend-item" v-for="(item, index) in historicalData" :key="index">
         <span class="trend-label">{{ item.label }}</span>
-        <span class="trend-value">{{ item.value }}%</span>
+        <span class="trend-value">{{ item.value.toFixed(2) }}%</span>
         <div class="trend-bar" :style="{ width: `${item.value}%` }"></div>
       </div>
     </div>
@@ -40,16 +57,16 @@
       :class="changePercentage >= 0 ? 'positive' : 'negative'">
       <span class="change-arrow">{{ changePercentage >= 0 ? '↑' : '↓' }}</span>
       <span>{{ Math.abs(changePercentage).toFixed(1) }}%</span>
-      <span class="change-period">{{ $t('analytics.gauge.vsPrevious', 'vs previous period') }}</span>
+      <span class="change-period">{{ translate('analytics.gauge.vsPrevious', 'vs previous period') }}</span>
     </div>
     
     <div class="target-indicator" v-if="!loading && !error">
-      <span>{{ $t('analytics.gauge.target', 'Target') }}: {{ target }}%</span>
+      <span>{{ translate('analytics.gauge.target', 'Target') }}: {{ target }}%</span>
     </div>
     
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t('analytics.status.loading', 'Loading...') }}</span>
+      <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
     </div>
     
     <div v-if="error" class="error-message">
@@ -229,6 +246,20 @@ export default {
     console.log("[SatisfactionGauge] UNMOUNTED");
   },
   methods: {
+    /**
+     * Translation helper method
+     */
+    translate(key, defaultValue) {
+      // Check if i18n is available
+      if (this.$i18n && this.$t) {
+        // Try to get the translation, fall back to default if not found
+        const translation = this.$t(key);
+        // If the translation is the same as the key, it means it wasn't found
+        return translation === key ? defaultValue : translation;
+      }
+      return defaultValue;
+    },
+    
     // Add a global error handler
     handleGlobalError(event) {
       if (event.message && event.message.includes('chart')) {
@@ -282,7 +313,7 @@ export default {
 
       } catch (error) {
         console.error('[SatisfactionGauge] Error fetching data:', error);
-        this.error = 'Failed to load satisfaction data';
+        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data');
         this.satisfactionValue = 72.5;
 
         // Force a complete chart recreation
@@ -435,7 +466,7 @@ export default {
                 color: textColor,
                 offsetY: 5,
                 formatter: function(val) {
-                  return val + '%';
+                  return val.toFixed(2) + '%';
                 }
               }
             }
@@ -466,7 +497,7 @@ export default {
           lineCap: 'round',
           dashArray: 0
         },
-        labels: [this.$t('analytics.metrics.satisfaction', 'User Satisfaction')],
+        labels: [this.translate('analytics.metrics.satisfaction', 'User Satisfaction')],
         tooltip: {
           enabled: false
         }

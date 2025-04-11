@@ -530,6 +530,13 @@ export default {
       target: 'Lengo'
     },
 
+    ratings: {
+      poor: "Dhaifu",
+      average: "Wastani",
+      good: "Nzuri", 
+      excellent: "Bora"
+    },
+
     // Trend indicators
     slower: 'polepole zaidi',
     faster: 'haraka zaidi',
@@ -569,7 +576,8 @@ export default {
     quarter: 'Robo Mwaka Iliyopita',
     year: 'Mwaka Uliopita',
     uniqueUsers: 'Watumiaji wa Kipekee',
-    satisfactionRate: 'Kiwango cha Kuridhika'
+    satisfactionRate: 'Kiwango cha Kuridhika',
+    satisfactionAnalysis: 'Uchambuzi wa Kuridhika kwa Watumiaji'
   },
   brandName: 'Huduma AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
   nav: {

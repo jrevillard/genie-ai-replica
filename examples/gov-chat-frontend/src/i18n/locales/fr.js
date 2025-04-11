@@ -530,6 +530,12 @@ export default {
       vsPrevious: 'par rapport à la période précédente',
       target: 'Cible'
     },
+    ratings: {
+      poor: "Faible",
+      average: "Moyen",
+      good: "Bon", 
+      excellent: "Excellent"
+    },
     // Trend indicators
     slower: 'plus lent',
     faster: 'plus rapide',
@@ -569,7 +575,8 @@ export default {
     quarter: 'Dernier Trimestre',
     year: 'Dernière Année',
     uniqueUsers: 'Utilisateurs Uniques',
-    satisfactionRate: 'Taux de Satisfaction'
+    satisfactionRate: 'Taux de Satisfaction',
+    satisfactionAnalysis: 'Analyse de Satisfaction des Utilisateurs'
   },
   brandName: 'Huduma AI: Votre Assistant Gouvernemental Numérique',
   nav: {

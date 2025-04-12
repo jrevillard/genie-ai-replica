@@ -37,7 +37,7 @@
         <div class="tab-content">
           <!-- Personal Identification Data -->
           <div v-if="activeTab === 0">
-            <!-- Add this at the top of the Personal Identification tab content -->
+            <!-- Profile Icon Section -->
             <div class="profile-icon-section">
               <label>Profile Icon</label>
               <div class="profile-icon-container">
@@ -128,8 +128,12 @@
             </div>
             <div class="field-group">
               <label>{{ $t('userProfile.fields.nationality') }}</label>
-              <input v-model="formData.personalIdentification.nationality" type="text"
-                :placeholder="$t('userProfile.placeholders.nationality')" />
+              <searchable-country-dropdown v-model="formData.personalIdentification.nationality" :label="''"
+                ref="nationalityDropdown"
+                :placeholder="$t('userProfile.placeholders.selectCountry', 'Select a country')"
+                :search-placeholder="$t('userProfile.placeholders.searchCountries', 'Search countries...')"
+                :no-results-text="$t('userProfile.noMatchingCountries', 'No matching countries found')"
+                @update:name="updateNationalityName" @change="onNationalityChange" />
             </div>
           </div>
 
@@ -161,7 +165,11 @@
             </div>
             <div class="field-group">
               <label>{{ $t('userProfile.fields.country') }}</label>
-              <input v-model="formData.addressResidency.country" type="text" />
+              <searchable-country-dropdown v-model="formData.addressResidency.country" :label="''" ref="countryDropdown"
+                :placeholder="$t('userProfile.placeholders.selectCountry', 'Select a country')"
+                :search-placeholder="$t('userProfile.placeholders.searchCountries', 'Search countries...')"
+                :no-results-text="$t('userProfile.noMatchingCountries', 'No matching countries found')"
+                @update:name="updateCountryName" @change="onCountryChange" />
             </div>
             <div class="field-group">
               <label>{{ $t('userProfile.fields.residencyStatus') }}</label>
@@ -326,11 +334,13 @@ import userProfileService from '@/services/userProfileService';
 import userService from '@/services/userService';
 import notificationService from '@/services/notificationService';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import SearchableCountryDropdown from '@/components/SearchableCountryDropdown.vue';
 
 export default {
   name: 'UserProfileComponent',
   components: {
-    ConfirmDialog
+    ConfirmDialog,
+    SearchableCountryDropdown
   },
   data() {
     return {
@@ -343,8 +353,8 @@ export default {
         { key: 'identityDocuments' },
         { key: 'healthInfo' },
         { key: 'employmentInfo' },
-        { key: 'educationRecords' },   // Education tab
-        { key: 'financialInfo' }       // Financial tab
+        { key: 'educationRecords' },
+        { key: 'financialInfo' }
       ],
       formData: {
         personalIdentification: {
@@ -352,7 +362,7 @@ export default {
           dob: '',
           gender: '',
           nationality: '',
-          profileIcon: '' // Add this line
+          profileIcon: ''
         },
         civilRegistration: {
           birthCert: '',
@@ -379,7 +389,7 @@ export default {
           currentEmployer: '',
           taxId: ''
         },
-        educationRecords: {       // Education Records section
+        educationRecords: {
           education: '',
           degrees: '',
           certifications: '',
@@ -390,30 +400,23 @@ export default {
           bankAccounts: ''
         }
       },
-      // API integration properties
+      nationalityName: '',
+      countryName: '',
       isLoading: false,
       errorMessage: null,
       currentUserId: '',
       isSubmitting: false,
-
-      // Education dropdown properties
       showEducationSearch: false,
       educationSearchTerm: '',
       educationOptions: [],
       filteredEducationOptions: [],
       selectedEducationIndex: -1,
-
-      // Education and degrees dropdown properties
       degreeOptions: [],
       showDegreeSearch: false,
       degreeSearchTerm: '',
       filteredDegreeOptions: [],
       selectedDegreeIndex: -1,
- 
-      // The conformation dialog
       showConfirmDialog: false,
-
-          // Profile icon properties
       showIconSelector: false,
       iconTab: 'preset',
       presetIcons: [
@@ -439,19 +442,16 @@ export default {
         '#D35400'  // Burnt Orange
       ]
     };
-
   },
   computed: {
     isDarkMode() {
-      // Simplified check based directly on DOM
-      return document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.body.getAttribute('data-theme') === 'dark';
+      return (
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.getAttribute('data-theme') === 'dark'
+      );
     },
-
     dialogThemeStyles() {
-      // Create a minimal required set of styles based on current theme
       const isDark = this.isDarkMode;
-
       return {
         '--dialog-background': isDark ? '#2a2a2a' : '#ffffff',
         '--dialog-title-color': isDark ? '#ffffff' : '#333333',
@@ -478,8 +478,142 @@ export default {
     }
   },
   methods: {
+    onNationalityChange(code) {
+      console.log('Nationality changed to:', code, 'Type:', typeof code);
+      // Only update if we received a valid code
+      if (code !== undefined) {
+        this.formData.personalIdentification.nationality = code;
+      }
+    },
+    
+    onCountryChange(code) {
+      console.log('Country changed to:', code, 'Type:', typeof code);
+      // Only update if we received a valid code
+      if (code !== undefined) {
+        this.formData.addressResidency.country = code;
+      }
+    },
+    
+    updateNationalityName(name) {
+      console.log('Updating nationality name:', name);
+      this.nationalityName = name || '';
+
+      if (name && !this.formData.personalIdentification.nationality) {
+        console.warn('Country name set but code is missing, attempting to find code');
+        // Try to find the code from the name (this could be expanded if needed)
+      }
+
+      // Store this in localStorage to persist across tab changes
+      if (name && this.formData.personalIdentification.nationality) {
+        try {
+          localStorage.setItem('user_nationality_name', name);
+          localStorage.setItem('user_nationality_code', this.formData.personalIdentification.nationality);
+        } catch (e) {
+          console.warn('Could not store nationality in localStorage', e);
+        }
+      }
+    },
+
+    updateCountryName(name) {
+      console.log('Updating country name:', name);
+      this.countryName = name || '';
+
+      if (name && !this.formData.addressResidency.country) {
+        console.warn('Country name set but code is missing, attempting to find code');
+        // Try to find the code from the name (this could be expanded if needed)
+      }
+
+      // Store this in localStorage to persist across tab changes
+      if (name && this.formData.addressResidency.country) {
+        try {
+          localStorage.setItem('user_country_name', name);
+          localStorage.setItem('user_country_code', this.formData.addressResidency.country);
+        } catch (e) {
+          console.warn('Could not store country in localStorage', e);
+        }
+      }
+    },
+    
+    refreshCountryDropdowns() {
+      console.log('Refreshing country dropdowns due to locale change');
+      this.$nextTick(() => {
+        // Refresh nationality dropdown if it exists
+        if (this.$refs.nationalityDropdown) {
+          this.$refs.nationalityDropdown.loadCountries();
+          if (this.formData.personalIdentification.nationality) {
+            setTimeout(() => {
+              this.$refs.nationalityDropdown.manuallySetCountryName(
+                this.formData.personalIdentification.nationality
+              );
+            }, 200);
+          }
+        }
+
+        // Refresh country dropdown if it exists
+        if (this.$refs.countryDropdown) {
+          this.$refs.countryDropdown.loadCountries();
+          if (this.formData.addressResidency.country) {
+            setTimeout(() => {
+              this.$refs.countryDropdown.manuallySetCountryName(
+                this.formData.addressResidency.country
+              );
+            }, 200);
+          }
+        }
+      });
+    },
+
+    // New method to restore country data after tab switching
+    restoreCountryState() {
+      // Try to restore from localStorage
+      try {
+        const nationalityCode = localStorage.getItem('user_nationality_code');
+        const countryCode = localStorage.getItem('user_country_code');
+        const nationalityName = localStorage.getItem('user_nationality_name');
+        const countryName = localStorage.getItem('user_country_name');
+
+        console.log('Restoring from localStorage:', { nationalityCode, nationalityName, countryCode, countryName });
+
+        // Restore nationality if needed
+        if (nationalityCode && this.activeTab === 0 && this.$refs.nationalityDropdown) {
+          if (!this.formData.personalIdentification.nationality ||
+            this.formData.personalIdentification.nationality !== nationalityCode) {
+            console.log('Restoring nationality from localStorage');
+            this.formData.personalIdentification.nationality = nationalityCode;
+            this.nationalityName = nationalityName || '';
+            this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
+          }
+        }
+
+        // Restore country if needed
+        if (countryCode && this.activeTab === 2 && this.$refs.countryDropdown) {
+          if (!this.formData.addressResidency.country ||
+            this.formData.addressResidency.country !== countryCode) {
+            console.log('Restoring country from localStorage');
+            this.formData.addressResidency.country = countryCode;
+            this.countryName = countryName || '';
+            this.$refs.countryDropdown.manuallySetCountryName(countryCode);
+          }
+        }
+      } catch (e) {
+        console.warn('Error restoring country state from localStorage', e);
+      }
+    },
+
+
+    updateCountryDisplay() {
+      // This function ensures the country dropdowns properly display the correct values
+      if (this.formData.personalIdentification.nationality) {
+        console.log('Setting nationality display for:', this.formData.personalIdentification.nationality);
+        // The SearchableCountryDropdown component will handle this through its value prop
+      }
+      
+      if (this.formData.addressResidency.country) {
+        console.log('Setting country display for:', this.formData.addressResidency.country);
+        // The SearchableCountryDropdown component will handle this through its value prop
+      }
+    },
     updateTheme() {
-      // Force-update the theme variables
       this.isThemeReady = false;
       this.$nextTick(() => {
         this.isThemeReady = true;
@@ -490,38 +624,66 @@ export default {
     },
     saveProfile() {
       console.log('Save profile button clicked');
-      
-      // Instead of browser confirm, show custom dialog
       this.showConfirmDialog = true;
     },
-    
     async confirmSave() {
       this.showConfirmDialog = false;
       this.isSubmitting = true;
+      
+      // Safety check to make sure we have a valid user ID
+      if (!this.currentUserId) {
+        console.error('Missing currentUserId in confirmSave, attempting to retrieve it');
+        this.currentUserId = await this.getCurrentUserId();
+        
+        if (!this.currentUserId) {
+          notificationService.error(this.$t('userProfile.errors.savingFailed', 'Failed to save profile: Missing user ID'));
+          this.isSubmitting = false;
+          return;
+        }
+      }
+      
       console.log('Submitting form, currentUserId:', this.currentUserId);
 
       try {
-        // Validation and save logic (your existing code)
         const validation = this.validateForm();
         console.log('Form validation result:', validation);
 
         if (!validation.isValid) {
-          // Error handling code
+          notificationService.error(this.$t('userProfile.errors.invalidForm', 'Please fill all required fields'));
           return;
         }
 
-        // Create a deep copy to avoid mutation
         const profileData = JSON.parse(JSON.stringify(this.formData));
-        console.log('Profile data to submit:', profileData);
+        console.log('Profile data before submission:', profileData);
 
-        // Call the API to update the profile
+        console.log('Country data before submission:', {
+          nationality: profileData.personalIdentification.nationality,
+          nationalityName: this.nationalityName,
+          country: profileData.addressResidency.country,
+          countryName: this.countryName
+        });
+
+        if (this.formData.personalIdentification.nationality) {
+          profileData.personalIdentification.nationality = this.formData.personalIdentification.nationality;
+          console.log('Explicitly set nationality to:', profileData.personalIdentification.nationality);
+        } else {
+          console.warn('Nationality code is missing from form data');
+        }
+
+        if (this.formData.addressResidency.country) {
+          profileData.addressResidency.country = this.formData.addressResidency.country;
+          console.log('Explicitly set country to:', profileData.addressResidency.country);
+        } else {
+          console.warn('Country code is missing from form data');
+        }
+
+        console.log('Profile data being sent to API:', profileData);
+        console.log('API URL will be /api/users/' + this.currentUserId);
+        
         const result = await userProfileService.updateProfile(this.currentUserId, profileData);
         console.log('Update profile API response:', result);
 
-        // Use notification service for success message
         notificationService.success(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
-
-        // Emit save event
         this.$emit('save', profileData);
       } catch (error) {
         console.error('Error saving profile:', error);
@@ -530,28 +692,23 @@ export default {
         this.isSubmitting = false;
       }
     },
-    
     cancelSave() {
       this.showConfirmDialog = false;
       console.log('User cancelled save operation');
     },
-
     onFileChange(e, section, fieldKey) {
       const file = e.target.files[0];
       if (!file) return;
 
-      // Validate file type and size
       const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
       const maxSize = 5 * 1024 * 1024; // 5MB
 
       if (!allowedTypes.includes(file.type)) {
-        //this.$emit('error', this.$t('userProfile.errors.invalidFileType'));
         notificationService.error(this.$t('userProfile.errors.invalidFileType'));
         return;
       }
 
       if (file.size > maxSize) {
-        //this.$emit('error', this.$t('userProfile.errors.fileTooLarge'));
         notificationService.error(this.$t('userProfile.errors.fileTooLarge'));
         return;
       }
@@ -559,7 +716,6 @@ export default {
       this.formData[section][fieldKey] = file;
     },
     validateForm() {
-      // Basic form validation (simplified from original)
       const validations = {
         personalIdentification: [
           { field: 'fullName', required: true },
@@ -572,7 +728,6 @@ export default {
       Object.keys(validations).forEach(section => {
         validations[section].forEach(validation => {
           const value = this.formData[section][validation.field];
-
           if (validation.required && !value) {
             errors[`${section}.${validation.field}`] = this.$t('userProfile.validation.nameRequired');
           }
@@ -588,75 +743,92 @@ export default {
         errors
       };
     },
-
-    // Add this method to your component
     isTabComplete(tabIndex) {
-      // Check if all required fields in this tab are filled
-      // Return true or false
       const tab = this.tabs[tabIndex];
       if (!tab) return false;
-
-      const sectionKey = tab.key;
-      // Basic implementation - consider all tabs complete for now
-      return true;
+      if (tab.key === 'personalIdentification') {
+        return !!this.formData.personalIdentification.fullName && !!this.formData.personalIdentification.dob;
+      }
+      return true; // Other tabs considered complete for simplicity
     },
-
-    // Get current user ID
     getCurrentUserId() {
       try {
-        // First try to get from cached user data (fast)
         const userData = userService.getCurrentUser();
-
         if (!userData) {
           console.error('No user data available');
           return '';
         }
-
-        // Extract the numeric ID part if it includes 'users/' prefix
         let userId = userData.id || userData.userId || userData._id || '';
-
-        // Remove 'users/' prefix if present
         if (typeof userId === 'string' && userId.includes('/')) {
           userId = userId.split('/').pop();
         }
-
+        console.log('Retrieved user ID:', userId);
         return userId;
       } catch (error) {
         console.error('Error getting current user ID:', error);
         return '';
       }
     },
-
-    // Load user profile data from the API
     async loadUserProfileData() {
       this.isLoading = true;
       this.errorMessage = null;
-
       try {
-        // Get the current user ID
-        this.currentUserId = this.getCurrentUserId();
+        // Get and STORE the user ID in the component property
+        this.currentUserId = await this.getCurrentUserId();
 
         if (!this.currentUserId) {
           throw new Error('Unable to determine current user ID');
         }
 
-        // Fetch user profile data from the API
-        const profileData = await userProfileService.getProfile(this.currentUserId);
+        console.log('Loading profile data for user ID:', this.currentUserId);
 
-        // Populate the form with received data
+        const profileData = await userProfileService.getProfile(this.currentUserId);
+        console.log('Retrieved profile data:', profileData);
+
         if (profileData) {
-          // Loop through each section in our form data
+          // Extract the nationality and country codes before mapping other data
+          const nationalityCode = profileData.personalIdentification?.nationality || '';
+          const countryCode = profileData.addressResidency?.country || '';
+
+          // Map profile data to form data
           Object.keys(this.formData).forEach(section => {
-            // Check if this section exists in the API response
             if (profileData[section]) {
-              // Loop through each field in this section
               Object.keys(this.formData[section]).forEach(field => {
-                // If this field exists in the API response, update our form
                 if (profileData[section][field] !== undefined) {
                   this.formData[section][field] = profileData[section][field];
                 }
               });
             }
+          });
+
+          console.log('Form data after population:', this.formData);
+
+          // Store country values to localStorage for tab-switching persistence
+          try {
+            if (nationalityCode) {
+              localStorage.setItem('user_nationality_code', nationalityCode);
+            }
+            if (countryCode) {
+              localStorage.setItem('user_country_code', countryCode);
+            }
+          } catch (e) {
+            console.warn('Could not store country codes in localStorage', e);
+          }
+
+          // Ensuring the country dropdowns get initialized with their values
+          this.$nextTick(() => {
+            // Set nationality dropdown with a delay to ensure component is mounted
+            setTimeout(() => {
+              if (nationalityCode && this.$refs.nationalityDropdown) {
+                console.log('Setting nationality dropdown with code:', nationalityCode);
+                this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
+              }
+
+              if (countryCode && this.$refs.countryDropdown) {
+                console.log('Setting country dropdown with code:', countryCode);
+                this.$refs.countryDropdown.manuallySetCountryName(countryCode);
+              }
+            }, 300); // Small delay to ensure components are ready
           });
         }
       } catch (error) {
@@ -666,15 +838,10 @@ export default {
         this.isLoading = false;
       }
     },
-
-    // Handle retry when loading fails
     retryLoading() {
       this.loadUserProfileData();
     },
-
-    // 2. Add this method to load degree options (similar to education options):
     loadDegreeOptions() {
-      // Default degree options if translations are not available
       const defaultOptions = [
         'Associate Degree',
         'Bachelor of Arts (BA)',
@@ -705,20 +872,10 @@ export default {
         'Post-Graduate Diploma',
         'Post-Doctoral'
       ];
-
-      // Get translations or fallback to default options
-      this.degreeOptions = this.$te('userProfile.degreeOptions')
-        ? this.$t('userProfile.degreeOptions')
-        : defaultOptions;
-
-      // Sort options alphabetically according to current locale
-      if (Array.isArray(this.degreeOptions) && this.degreeOptions.length > 0) {
-        const locale = this.$i18n ? this.$i18n.locale : 'en';
-        this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
-      }
+      this.degreeOptions = this.$te('userProfile.degreeOptions') ? this.$t('userProfile.degreeOptions') : defaultOptions;
+      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
     },
-
-    // 3. Add these methods to handle degree dropdown:
     toggleDegreeSearch() {
       this.showDegreeSearch = true;
       this.degreeSearchTerm = this.formData.educationRecords.degrees || '';
@@ -729,7 +886,6 @@ export default {
         }
       });
     },
-
     filterDegreeOptions() {
       if (!this.degreeSearchTerm) {
         this.filteredDegreeOptions = [...this.degreeOptions];
@@ -741,46 +897,36 @@ export default {
       }
       this.selectedDegreeIndex = -1;
     },
-
     selectDegreeOption(option) {
       this.formData.educationRecords.degrees = option;
       this.showDegreeSearch = false;
     },
-
     handleDegreeBlur(event) {
-      // Check if related target is inside the dropdown
-      if (!event.relatedTarget ||
-        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
+      if (
+        !event.relatedTarget ||
+        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))
+      ) {
         setTimeout(() => {
           this.showDegreeSearch = false;
         }, 150);
       }
     },
-
     selectFirstDegreeOption() {
       if (this.filteredDegreeOptions.length > 0) {
         this.selectDegreeOption(this.filteredDegreeOptions[0]);
       }
     },
-
     navigateDegreeOptions(direction) {
       const optionsLength = this.filteredDegreeOptions.length;
       if (optionsLength > 0) {
-        // Calculate new index with wrapping
         this.selectedDegreeIndex =
           (this.selectedDegreeIndex + direction + optionsLength) % optionsLength;
-
-        // If an option is selected with keyboard, use Enter to select it
         if (this.selectedDegreeIndex >= 0 && this.selectedDegreeIndex < optionsLength) {
-          // Keep focus on the input
           this.$refs.degreeSearchInput.focus();
         }
       }
     },
-
-    // Load education options from i18n
     loadEducationOptions() {
-      // Default education options if translations are not available
       const defaultOptions = [
         'Accounting',
         'Aerospace Engineering',
@@ -882,20 +1028,10 @@ export default {
         'Wildlife Biology',
         'Zoology'
       ];
-
-      // Get translations or fallback to default options
-      this.educationOptions = this.$te('userProfile.educationOptions')
-        ? this.$t('userProfile.educationOptions')
-        : defaultOptions;
-
-      // Sort options alphabetically according to current locale
-      if (Array.isArray(this.educationOptions) && this.educationOptions.length > 0) {
-        const locale = this.$i18n ? this.$i18n.locale : 'en';
-        this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
-      }
+      this.educationOptions = this.$te('userProfile.educationOptions') ? this.$t('userProfile.educationOptions') : defaultOptions;
+      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
     },
-
-    // Education dropdown methods
     toggleEducationSearch() {
       this.showEducationSearch = true;
       this.educationSearchTerm = this.formData.educationRecords.education || '';
@@ -906,7 +1042,6 @@ export default {
         }
       });
     },
-
     filterEducationOptions() {
       if (!this.educationSearchTerm) {
         this.filteredEducationOptions = [...this.educationOptions];
@@ -918,151 +1053,169 @@ export default {
       }
       this.selectedEducationIndex = -1;
     },
-
     selectEducationOption(option) {
       this.formData.educationRecords.education = option;
       this.showEducationSearch = false;
     },
-
     handleEducationBlur(event) {
-      // Check if related target is inside the dropdown
-      if (!event.relatedTarget ||
-        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))) {
+      if (
+        !event.relatedTarget ||
+        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))
+      ) {
         setTimeout(() => {
           this.showEducationSearch = false;
         }, 150);
       }
     },
-
     selectFirstEducationOption() {
       if (this.filteredEducationOptions.length > 0) {
         this.selectEducationOption(this.filteredEducationOptions[0]);
       }
     },
-
     navigateEducationOptions(direction) {
       const optionsLength = this.filteredEducationOptions.length;
       if (optionsLength > 0) {
-        // Calculate new index with wrapping
         this.selectedEducationIndex =
           (this.selectedEducationIndex + direction + optionsLength) % optionsLength;
-
-        // If an option is selected with keyboard, use Enter to select it
         if (this.selectedEducationIndex >= 0 && this.selectedEducationIndex < optionsLength) {
-          // Keep focus on the input
           this.$refs.educationSearchInput.focus();
         }
       }
     },
+    openIconSelector() {
+      this.showIconSelector = true;
+    },
+    closeIconSelector() {
+      this.showIconSelector = false;
+      this.uploadedImage = null;
+    },
+    getInitials(name) {
+      if (!name) return '?';
+      return name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .substring(0, 2);
+    },
+    selectPresetIcon(icon) {
+      this.formData.personalIdentification.profileIcon = icon;
+      this.closeIconSelector();
+    },
+    triggerFileUpload() {
+      this.$refs.fileInput.click();
+    },
+    handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
 
-      // Icon selector methods
-  openIconSelector() {
-    this.showIconSelector = true;
-  },
-  
-  closeIconSelector() {
-    this.showIconSelector = false;
-    this.uploadedImage = null;
-  },
-  
-  getInitials(name) {
-    if (!name) return '?';
-    return name.split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
-  },
-  
-  selectPresetIcon(icon) {
-    this.formData.personalIdentification.profileIcon = icon;
-    this.closeIconSelector();
-  },
-  
-  triggerFileUpload() {
-    this.$refs.fileInput.click();
-  },
-  
-  handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // File validation
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      notificationService.error('Please upload a valid image (JPEG, PNG, GIF)');
-      return;
-    }
-    
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit
-      notificationService.error('Image size must be less than 2MB');
-      return;
-    }
-      // Create preview
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        notificationService.error('Please upload a valid image (JPEG, PNG, GIF)');
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        notificationService.error('Image size must be less than 2MB');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = e => {
         this.uploadedImage = e.target.result;
       };
       reader.readAsDataURL(file);
     },
-
     confirmUpload() {
       this.formData.personalIdentification.profileIcon = this.uploadedImage;
       this.closeIconSelector();
     },
-
     useInitials() {
-      // Create a canvas to generate an image from initials
       const canvas = document.createElement('canvas');
       const size = 200;
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
 
-      // Draw background
       ctx.fillStyle = this.initialsColor;
       ctx.fillRect(0, 0, size, size);
 
-      // Draw text
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 80px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(this.getInitials(this.formData.personalIdentification.fullName), size / 2, size / 2);
 
-      // Convert to image
       this.formData.personalIdentification.profileIcon = canvas.toDataURL('image/png');
       this.closeIconSelector();
     }
   },
-  // 4. Modify the mounted hook to load degree options
-  mounted() {
-    // Add theme change listener
-    window.addEventListener('themeChange', this.updateTheme);
+  watch: {
+    'formData.personalIdentification.nationality': {
+      handler(newVal) {
+        console.log('Nationality model changed to:', newVal);
+        // Rely on SearchableCountryDropdown to emit the name via update:name
+      },
+      immediate: true
+    },
+    'formData.addressResidency.country': {
+      handler(newVal) {
+        console.log('Country model changed to:', newVal);
+        // Rely on SearchableCountryDropdown to emit the name via update:name
+      },
+      immediate: true
+    },
+    '$i18n.locale'() {
+      this.loadEducationOptions();
+      this.loadDegreeOptions();
+      this.refreshCountryDropdowns();
+    },
 
-    // Set initial theme after a small delay to ensure DOM is ready
+    // Watch for tab changes to ensure dropdown state persists
+    activeTab: {
+      handler(newTabIndex, oldTabIndex) {
+        console.log(`Tab changed from ${oldTabIndex} to ${newTabIndex}`);
+
+        // If we're switching to the Personal Identification tab (0)
+        if (newTabIndex === 0 && this.formData.personalIdentification.nationality) {
+          this.$nextTick(() => {
+            setTimeout(() => {
+              if (this.$refs.nationalityDropdown) {
+                console.log('Restoring nationality dropdown after tab switch');
+                this.$refs.nationalityDropdown.manuallySetCountryName(
+                  this.formData.personalIdentification.nationality
+                );
+              }
+            }, 50);
+          });
+        }
+
+        // If we're switching to the Address & Residency tab (2)
+        if (newTabIndex === 2 && this.formData.addressResidency.country) {
+          this.$nextTick(() => {
+            setTimeout(() => {
+              if (this.$refs.countryDropdown) {
+                console.log('Restoring country dropdown after tab switch');
+                this.$refs.countryDropdown.manuallySetCountryName(
+                  this.formData.addressResidency.country
+                );
+              }
+            }, 50);
+          });
+        }
+      }
+    }
+  },
+  mounted() {
+    window.addEventListener('themeChange', this.updateTheme);
     this.$nextTick(() => {
-      // Update theme variables
       this.isThemeReady = true;
     });
-
-    // Load education and degree options
     this.loadEducationOptions();
     this.loadDegreeOptions();
-
-    // Add watcher for locale changes to update options if i18n is available
-    if (this.$i18n) {
-      this.$watch('$i18n.locale', () => {
-        this.loadEducationOptions();
-        this.loadDegreeOptions();
-      });
-    }
-
-    // Load user profile data when component mounts
     this.loadUserProfileData();
   },
   beforeDestroy() {
-    // Remove theme change listener
     window.removeEventListener('themeChange', this.updateTheme);
   }
 };

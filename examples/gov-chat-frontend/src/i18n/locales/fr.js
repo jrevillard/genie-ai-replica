@@ -666,6 +666,7 @@ export default {
     profile: 'Mon Profil',
     toggleSidebar: 'Basculer la barre latérale',
     changeLanguage: 'Changer de langue',
+    administration: "Administration",
     languages: {
       english: 'Anglais',
       french: 'Français',

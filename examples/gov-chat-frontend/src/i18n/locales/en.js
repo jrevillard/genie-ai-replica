@@ -664,7 +664,8 @@ export default {
     logout: 'Log Out',
     profile: 'My Profile',
     toggleSidebar: 'Toggle sidebar',
-    changeLanguage: 'Change language'
+    changeLanguage: 'Change language',
+    administration: "Administration"
   },
   systemStatus: {
     title: 'Service Status',

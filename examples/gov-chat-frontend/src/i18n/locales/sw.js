@@ -788,6 +788,7 @@ export default {
     profile: 'Profaili Yangu',
     toggleSidebar: 'Geuza upau wa pembeni',
     changeLanguage: 'Badilisha lugha',
+    administration: "Utawala",
     languages: {
       english: 'Kiingereza',
       french: 'Kifaransa',

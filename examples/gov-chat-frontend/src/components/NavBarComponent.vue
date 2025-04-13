@@ -1,4 +1,5 @@
 <!-- NavBarComponent.vue with logout button -->
+<!-- NavBarComponent.vue with logout button and admin role check -->
 <template>
   <div class="nav-container">
     <header class="nav-bar">
@@ -127,7 +128,9 @@
           </div>
 
           <!-- Other mobile controls -->
-          <button class="icon-btn mobile-btn" @click="$emit('openAnalytics')" aria-label="Analytics">
+          <!-- Analytics button for Mobile -->
+          <button class="icon-btn mobile-btn" @click="$emit('openAnalytics')" aria-label="Analytics"
+                 :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
@@ -136,7 +139,9 @@
             <span class="tooltip">{{ $t('nav.analytics') }}</span>
           </button>
 
-          <button class="icon-btn admin-btn mobile-btn" @click="$emit('openAdmin')" aria-label="Administration">
+          <!-- Admin button for Mobile -->
+          <button class="icon-btn admin-btn mobile-btn" @click="$emit('openAdmin')" aria-label="Administration"
+                 :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -247,7 +252,9 @@
           <div class="select-arrow"></div>
         </div>
 
-        <button class="icon-btn" @click="$emit('openAnalytics')" aria-label="Analytics">
+        <!-- Analytics button for Desktop -->
+        <button class="icon-btn" @click="$emit('openAnalytics')" aria-label="Analytics"
+               :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
@@ -256,7 +263,9 @@
           <span class="tooltip">{{ $t('nav.analytics') }}</span>
         </button>
 
-        <button class="icon-btn admin-btn" @click="$emit('openAdmin')" aria-label="Administration">
+        <!-- Admin button for Desktop -->
+        <button class="icon-btn admin-btn" @click="$emit('openAdmin')" aria-label="Administration"
+               :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -319,6 +328,7 @@ export default {
     return {
       currentLocale: this.$i18n.locale,
       isStatusDropdownOpen: false,
+      currentUser: null,
       // Sample system status data - would be fetched from an API
       systemStatus: {
         overall: 'degraded', // 'operational', 'degraded', or 'outage'
@@ -366,6 +376,27 @@ export default {
         case 'outage': return this.$t('systemStatus.majorIssues');
         default: return this.$t('systemStatus.checking');
       }
+    },
+    // Compute if the user has admin role
+    isAdmin() {
+      // Debug the user object and its role value
+      console.log('Current user:', this.currentUser);
+
+      if (!this.currentUser) {
+        console.log('No user found');
+        return false;
+      }
+
+      // Check for role in various formats/locations
+      const userRole = this.currentUser.role ||
+        (this.currentUser.user && this.currentUser.user.role) ||
+        '';
+
+      console.log('User role:', userRole);
+
+      // Case-insensitive comparison for 'admin', 'Admin', etc.
+      return typeof userRole === 'string' &&
+        userRole.toLowerCase() === 'admin';
     }
   },
   watch: {
@@ -395,6 +426,9 @@ export default {
     // Close dropdown when clicking outside
     document.addEventListener('click', this.handleClickOutside);
 
+    // Get current user from local storage
+    this.getCurrentUserFromStorage();
+
     // In a real app, you would fetch the system status from an API here
     // this.fetchSystemStatus();
   },
@@ -403,6 +437,46 @@ export default {
   },
 
   methods: {
+    // Get current user info from localStorage
+    getCurrentUserFromStorage() {
+      try {
+        console.log('Checking localStorage for user data...');
+
+        // Try the standard 'user' key first
+        let userStr = localStorage.getItem('user');
+
+        // Log raw data for debugging
+        console.log('Raw user data from localStorage:', userStr);
+
+        if (!userStr) {
+          // Check alternative keys if the main one isn't found
+          console.log('Checking alternative token key...');
+          userStr = localStorage.getItem('token');
+          console.log('Raw token data:', userStr);
+        }
+
+        if (userStr) {
+          // Parse the user data
+          this.currentUser = JSON.parse(userStr);
+          console.log('Parsed user data:', this.currentUser);
+
+          // Check different possible structures
+          if (this.currentUser.user) {
+            console.log('User data is nested in .user property');
+          }
+
+          // Check role information
+          const role = this.currentUser.role ||
+            (this.currentUser.user && this.currentUser.user.role);
+          console.log('Detected role:', role);
+        } else {
+          console.log('No user found in localStorage');
+        }
+      } catch (error) {
+        console.error('Error parsing user from localStorage:', error);
+      }
+    },
+    
     //Logout handler that properly handles backend and frontend
     async handleLogout() {
       try {
@@ -852,6 +926,28 @@ export default {
 
 .icon-btn:hover svg {
   transform: scale(1.1);
+}
+
+/* Disabled button styling */
+.icon-btn:disabled, .disabled-btn {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+}
+
+.icon-btn:disabled:hover, .disabled-btn:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+}
+
+.icon-btn:disabled svg, .disabled-btn svg {
+  opacity: 0.6;
+}
+
+.icon-btn:disabled:hover svg, .disabled-btn:hover svg {
+  transform: none;
 }
 
 /* Logout button styling */

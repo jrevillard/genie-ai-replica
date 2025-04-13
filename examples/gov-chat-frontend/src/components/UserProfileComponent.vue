@@ -481,61 +481,25 @@ export default {
   methods: {
     // Centralized translation function
     translate(key, fallback = '') {
-      // Handle dynamic field names better by supporting nesting
-      let fullKey = key;
+      // Try direct path first
+      const fullKey = key.startsWith('userProfile.') ? key : `userProfile.${key}`;
 
-      // Check if the key already starts with 'userProfile.'
-      if (!key.startsWith('userProfile.')) {
-        fullKey = `userProfile.${key}`;
+      // Next try with fields prefix if it's not already there
+      let result;
+      if (this.$te(fullKey)) {
+        result = this.$t(fullKey);
       }
-
-      // Special handling for fields that use the 'fields.' prefix
-      if (key.startsWith('fields.') && !this.$te(fullKey)) {
-        fullKey = `userProfile.${key}`;
-      }
-
-      // Handle nested keys for education/certification fields that don't follow pattern
-      if (key === 'education' || key === 'degrees' || key === 'academicRecords' || key === 'certifications') {
-        fullKey = `userProfile.fields.${key}`;
-      }
-
-      return this.$te(fullKey) ? this.$t(fullKey) : (fallback || key);
-    },
-
-    getFieldTranslation(fieldName) {
-      // This specifically handles fields that don't translate correctly in tabs
-      const specialFieldMappings = {
-        // Education tab
-        'education': 'education',
-        'degrees': 'degrees',
-        'certifications': 'certifications',
-        'academicRecords': 'academicRecords',
-
-        // Health tab
-        'bloodType': 'bloodType',
-        'organDonor': 'organDonor',
-
-        // Employment tab
-        'eHistory': 'eHistory',
-        'currentEmployer': 'currentEmployer',
-        'tin': 'tin',
-
-        // Financial tab
-        'incomeTax': 'incomeTax',
-        'bankAccounts': 'bankAccounts'
-      };
-
-      if (specialFieldMappings[fieldName]) {
-        // Try direct translation with the userProfile.fields prefix
-        const directKey = `userProfile.fields.${specialFieldMappings[fieldName]}`;
-        if (this.$te(directKey)) {
-          return this.$t(directKey);
+      // If the key doesn't contain "fields." already, try with it
+      else if (!key.includes('fields.')) {
+        const fieldsKey = `userProfile.fields.${key}`;
+        if (this.$te(fieldsKey)) {
+          result = this.$t(fieldsKey);
         }
       }
 
-      // Fall back to normal translation
-      return this.translate(`fields.${fieldName}`);
+      return result || fallback || key;
     },
+
 
     onNationalityChange(code) {
       console.log('Nationality changed to:', code, 'Type:', typeof code);

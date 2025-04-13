@@ -1,35 +1,37 @@
-<template>
+// UserProfileComponent.vue with centralized translation function
+
+<<template>
   <div class="user-profile-modal" :style="dialogThemeStyles" :data-themed="isThemeReady" ref="modalContainer">
     <div class="overlay" @click="cancel"></div>
     <div class="modal-content">
-      <h2 :data-themed="isThemeReady">{{ $t('userProfile.title') }}</h2>
+      <h2 :data-themed="isThemeReady">{{ translate('title') }}</h2>
 
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <p>{{ $t('userProfile.loading', 'Loading user profile...') }}</p>
+        <p>{{ translate('loadingProfile', 'Loading user profile...') }}</p>
       </div>
 
       <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
         <button @click="retryLoading" class="retry-btn">
-          {{ $t('userProfile.retry', 'Retry') }}
+          {{ translate('retryLoading', 'Retry') }}
         </button>
       </div>
 
       <!-- Main content - shown when not loading and no errors -->
       <div v-else>
         <p class="privacy-info" :data-themed="isThemeReady">
-          {{ $t('userProfile.privacyInfo') }}
-          <a href="#" class="privacy-link">{{ $t('userProfile.privacyPolicyLink') }}</a>
+          {{ translate('privacyInfo') }}
+          <a href="#" class="privacy-link">{{ translate('privacyPolicyLink') }}</a>
         </p>
 
         <!-- Tabs -->
         <div class="tabs">
           <button v-for="(tab, index) in tabs" :key="index" :class="{ active: activeTab === index }"
             @click="activeTab = index">
-            {{ $t(`userProfile.tabs.tab${index+1}`) }}
+            {{ translate(`tabs.tab${index+1}`) }}
           </button>
         </div>
 
@@ -39,7 +41,7 @@
           <div v-if="activeTab === 0">
             <!-- Profile Icon Section -->
             <div class="profile-icon-section">
-              <label>Profile Icon</label>
+              <label>{{ translate('profileIcon') }}</label>
               <div class="profile-icon-container">
                 <div class="current-icon" @click="openIconSelector">
                   <img v-if="formData.personalIdentification.profileIcon"
@@ -48,7 +50,7 @@
                     {{ getInitials(formData.personalIdentification.fullName) }}
                   </div>
                   <div class="icon-overlay">
-                    <span>Change</span>
+                    <span>{{ translate('change') }}</span>
                   </div>
                 </div>
               </div>
@@ -56,12 +58,12 @@
               <!-- Icon Selection Modal -->
               <div v-if="showIconSelector" class="icon-selector-overlay" @click="closeIconSelector">
                 <div class="icon-selector-modal" @click.stop>
-                  <h4>Choose a Profile Icon</h4>
+                  <h4>{{ translate('chooseProfileIcon') }}</h4>
 
                   <div class="icon-tabs">
-                    <button :class="{ active: iconTab === 'preset' }" @click="iconTab = 'preset'">Preset Icons</button>
-                    <button :class="{ active: iconTab === 'upload' }" @click="iconTab = 'upload'">Upload</button>
-                    <button :class="{ active: iconTab === 'initials' }" @click="iconTab = 'initials'">Initials</button>
+                    <button :class="{ active: iconTab === 'preset' }" @click="iconTab = 'preset'">{{ translate('presetIcons') }}</button>
+                    <button :class="{ active: iconTab === 'upload' }" @click="iconTab = 'upload'">{{ translate('upload') }}</button>
+                    <button :class="{ active: iconTab === 'initials' }" @click="iconTab = 'initials'">{{ translate('initials') }}</button>
                   </div>
 
                   <div class="icon-content">
@@ -77,12 +79,12 @@
                     <!-- Upload Option -->
                     <div v-if="iconTab === 'upload'" class="upload-icon">
                       <div class="upload-zone" @click="triggerFileUpload">
-                        <span v-if="!uploadedImage">Click to upload</span>
+                        <span v-if="!uploadedImage">{{ translate('clickToUpload') }}</span>
                         <img v-else :src="uploadedImage" alt="Uploaded icon" />
                       </div>
                       <input type="file" ref="fileInput" style="display:none" accept="image/*"
                         @change="handleFileUpload" />
-                      <button v-if="uploadedImage" class="btn-confirm" @click="confirmUpload">Use This Image</button>
+                      <button v-if="uploadedImage" class="btn-confirm" @click="confirmUpload">{{ translate('useThisImage') }}</button>
                     </div>
 
                     <!-- Initials Option -->
@@ -97,42 +99,42 @@
                           :style="{ backgroundColor: color }" :class="{ selected: initialsColor === color }"
                           @click="initialsColor = color"></div>
                       </div>
-                      <button class="btn-confirm" @click="useInitials">Use Initials</button>
+                      <button class="btn-confirm" @click="useInitials">{{ translate('useInitials') }}</button>
                     </div>
                   </div>
 
                   <div class="icon-selector-footer">
-                    <button class="btn-cancel" @click="closeIconSelector">Cancel</button>
+                    <button class="btn-cancel" @click="closeIconSelector">{{ translate('actions.cancel') }}</button>
                   </div>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.fullName') }}</label>
+              <label>{{ translate('fields.fullName') }}</label>
               <input v-model="formData.personalIdentification.fullName" type="text"
-                :placeholder="$t('userProfile.placeholders.fullName')" />
+                :placeholder="translate('placeholders.fullName')" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.dob') }}</label>
+              <label>{{ translate('fields.dob') }}</label>
               <input v-model="formData.personalIdentification.dob" type="date" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.gender') }}</label>
+              <label>{{ translate('fields.gender') }}</label>
               <select v-model="formData.personalIdentification.gender">
-                <option value="">{{ $t('userProfile.select') }}</option>
-                <option value="male">{{ $t('userProfile.gender.male') }}</option>
-                <option value="female">{{ $t('userProfile.gender.female') }}</option>
-                <option value="other">{{ $t('userProfile.gender.other') }}</option>
-                <option value="prefer-not-to-say">{{ $t('userProfile.gender.preferNot') }}</option>
+                <option value="">{{ translate('select') }}</option>
+                <option value="male">{{ translate('gender.male') }}</option>
+                <option value="female">{{ translate('gender.female') }}</option>
+                <option value="other">{{ translate('gender.other') }}</option>
+                <option value="prefer-not-to-say">{{ translate('gender.preferNot') }}</option>
               </select>
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.nationality') }}</label>
+              <label>{{ translate('fields.nationality') }}</label>
               <searchable-country-dropdown v-model="formData.personalIdentification.nationality" :label="''"
                 ref="nationalityDropdown"
-                :placeholder="$t('userProfile.placeholders.selectCountry', 'Select a country')"
-                :search-placeholder="$t('userProfile.placeholders.searchCountries', 'Search countries...')"
-                :no-results-text="$t('userProfile.noMatchingCountries', 'No matching countries found')"
+                :placeholder="translate('placeholders.selectCountry')"
+                :search-placeholder="translate('placeholders.searchCountries')"
+                :no-results-text="translate('noMatchingCountries')"
                 @update:name="updateNationalityName" @change="onNationalityChange" />
             </div>
           </div>
@@ -140,15 +142,15 @@
           <!-- Civil Registration & Documentation -->
           <div v-else-if="activeTab === 1">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.birthCert') }}</label>
+              <label>{{ translate('fields.birthCert') }}</label>
               <input v-model="formData.civilRegistration.birthCert" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.citizenship') }}</label>
+              <label>{{ translate('fields.citizenship') }}</label>
               <input v-model="formData.civilRegistration.citizenship" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.immigration') }}</label>
+              <label>{{ translate('fields.immigration') }}</label>
               <input v-model="formData.civilRegistration.immigration" type="text" />
             </div>
           </div>
@@ -156,28 +158,28 @@
           <!-- Address & Residency Information -->
           <div v-else-if="activeTab === 2">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.currentAddress') }}</label>
+              <label>{{ translate('fields.currentAddress') }}</label>
               <textarea v-model="formData.addressResidency.currentAddress"></textarea>
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.postalCode') }}</label>
+              <label>{{ translate('fields.postalCode') }}</label>
               <input v-model="formData.addressResidency.postalCode" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.country') }}</label>
+              <label>{{ translate('fields.country') }}</label>
               <searchable-country-dropdown v-model="formData.addressResidency.country" :label="''" ref="countryDropdown"
-                :placeholder="$t('userProfile.placeholders.selectCountry', 'Select a country')"
-                :search-placeholder="$t('userProfile.placeholders.searchCountries', 'Search countries...')"
-                :no-results-text="$t('userProfile.noMatchingCountries', 'No matching countries found')"
+                :placeholder="translate('placeholders.selectCountry')"
+                :search-placeholder="translate('placeholders.searchCountries')"
+                :no-results-text="translate('noMatchingCountries')"
                 @update:name="updateCountryName" @change="onCountryChange" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.residencyStatus') }}</label>
+              <label>{{ translate('fields.residencyStatus') }}</label>
               <select v-model="formData.addressResidency.residencyStatus">
-                <option value="citizen">{{ $t('userProfile.residencyStatuses.citizen') }}</option>
-                <option value="permanent-resident">{{ $t('userProfile.residencyStatuses.permanentResident') }}</option>
-                <option value="temporary-resident">{{ $t('userProfile.residencyStatuses.temporaryResident') }}</option>
-                <option value="other">{{ $t('userProfile.residencyStatuses.other') }}</option>
+                <option value="citizen">{{ translate('residencyStatuses.citizen') }}</option>
+                <option value="permanent-resident">{{ translate('residencyStatuses.permanentResident') }}</option>
+                <option value="temporary-resident">{{ translate('residencyStatuses.temporaryResident') }}</option>
+                <option value="other">{{ translate('residencyStatuses.other') }}</option>
               </select>
             </div>
           </div>
@@ -185,15 +187,15 @@
           <!-- Identity & Travel Documents -->
           <div v-else-if="activeTab === 3">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.idCard') }}</label>
+              <label>{{ translate('fields.idCard') }}</label>
               <input v-model="formData.identityDocuments.idCard" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.passport') }}</label>
+              <label>{{ translate('fields.passport') }}</label>
               <input v-model="formData.identityDocuments.passport" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.driversLicense') }}</label>
+              <label>{{ translate('fields.driversLicense') }}</label>
               <input v-model="formData.identityDocuments.driversLicense" type="text" />
             </div>
           </div>
@@ -201,7 +203,7 @@
           <!-- Health & Medical Records -->
           <div v-else-if="activeTab === 4">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.bloodType') }}</label>
+              <label>{{ translate('fields.bloodType') }}</label>
               <select v-model="formData.healthInfo.bloodType">
                 <option value="a-positive">A+</option>
                 <option value="a-negative">A-</option>
@@ -214,10 +216,10 @@
               </select>
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.organDonor') }}</label>
+              <label>{{ translate('fields.organDonor') }}</label>
               <select v-model="formData.healthInfo.organDonor">
-                <option value="yes">{{ $t('userProfile.yesNo.yes') }}</option>
-                <option value="no">{{ $t('userProfile.yesNo.no') }}</option>
+                <option value="yes">{{ translate('yesNo.yes') }}</option>
+                <option value="no">{{ translate('yesNo.no') }}</option>
               </select>
             </div>
           </div>
@@ -225,15 +227,15 @@
           <!-- Employment & Economic Data -->
           <div v-else-if="activeTab === 5">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.eHistory') }}</label>
+              <label>{{ translate('fields.eHistory') }}</label>
               <input v-model="formData.employmentInfo.employmentHistory" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.currentEmployer') }}</label>
+              <label>{{ translate('fields.currentEmployer') }}</label>
               <input v-model="formData.employmentInfo.currentEmployer" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.tin') }}</label>
+              <label>{{ translate('fields.tin') }}</label>
               <input v-model="formData.employmentInfo.taxId" type="text" />
             </div>
           </div>
@@ -241,15 +243,15 @@
           <!-- Education & Academic Records -->
           <div v-else-if="activeTab === 6">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.education', 'Education') }}</label>
+              <label>{{ translate('fields.education') }}</label>
               <div class="select-wrapper">
                 <input v-if="showEducationSearch" type="text" v-model="educationSearchTerm" class="search-input"
-                  :placeholder="$t('userProfile.placeholders.searchDisciplines', 'Search disciplines...')"
+                  :placeholder="translate('placeholders.searchDisciplines')"
                   @input="filterEducationOptions" @blur="handleEducationBlur"
                   @keydown.enter="selectFirstEducationOption" @keydown.down="navigateEducationOptions(1)"
                   @keydown.up="navigateEducationOptions(-1)" ref="educationSearchInput" />
                 <div v-else class="selected-option" @click="toggleEducationSearch">
-                  {{ formData.educationRecords.education || $t('userProfile.placeholders.selectDiscipline', 'Select a discipline') }}
+                  {{ formData.educationRecords.education || translate('placeholders.selectDiscipline') }}
                 </div>
                 <div v-if="showEducationSearch" class="options-dropdown">
                   <div v-for="(option, index) in filteredEducationOptions" :key="index" class="option"
@@ -258,22 +260,21 @@
                     {{ option }}
                   </div>
                   <div v-if="filteredEducationOptions.length === 0" class="no-results">
-                    {{ $t('userProfile.noMatchingDisciplines', 'No matching disciplines found') }}
+                    {{ translate('noMatchingDisciplines') }}
                   </div>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.degrees', 'Degrees') }}</label>
+              <label>{{ translate('fields.degrees') }}</label>
               <div class="select-wrapper">
                 <input v-if="showDegreeSearch" type="text" v-model="degreeSearchTerm" class="search-input"
-                  :placeholder="$t('userProfile.placeholders.searchDegrees', 'Search degrees...')"
+                  :placeholder="translate('placeholders.searchDegrees')"
                   @input="filterDegreeOptions" @blur="handleDegreeBlur" @keydown.enter="selectFirstDegreeOption"
                   @keydown.down="navigateDegreeOptions(1)" @keydown.up="navigateDegreeOptions(-1)"
                   ref="degreeSearchInput" />
                 <div v-else class="selected-option" @click="toggleDegreeSearch">
-                  {{ formData.educationRecords.degrees || $t('userProfile.placeholders.selectDegree', 'Select a degree')
-                  }}
+                  {{ formData.educationRecords.degrees || translate('placeholders.selectDegree') }}
                 </div>
                 <div v-if="showDegreeSearch" class="options-dropdown">
                   <div v-for="(option, index) in filteredDegreeOptions" :key="index" class="option"
@@ -282,17 +283,17 @@
                     {{ option }}
                   </div>
                   <div v-if="filteredDegreeOptions.length === 0" class="no-results">
-                    {{ $t('userProfile.noMatchingDegrees', 'No matching degrees found') }}
+                    {{ translate('noMatchingDegrees') }}
                   </div>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.certifications', 'Certifications') }}</label>
+              <label>{{ translate('fields.certifications') }}</label>
               <input v-model="formData.educationRecords.certifications" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.academicRecords', 'Academic Records') }}</label>
+              <label>{{ translate('fields.academicRecords') }}</label>
               <textarea v-model="formData.educationRecords.academicRecords"></textarea>
             </div>
           </div>
@@ -300,11 +301,11 @@
           <!-- Financial & Tax Data -->
           <div v-else-if="activeTab === 7">
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.incomeTax') }}</label>
+              <label>{{ translate('fields.incomeTax') }}</label>
               <input v-model="formData.financialInfo.incomeTax" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ $t('userProfile.fields.bankAccounts') }}</label>
+              <label>{{ translate('fields.bankAccounts') }}</label>
               <input v-model="formData.financialInfo.bankAccounts" type="text" />
             </div>
           </div>
@@ -313,17 +314,17 @@
         <!-- Action buttons -->
         <div class="actions">
           <button class="cancel-btn" @click="cancel" :disabled="isSubmitting">
-            {{ $t('userProfile.actions.cancel') }}
+            {{ translate('actions.cancel') }}
           </button>
           <button class="save-btn" @click="saveProfile" :disabled="isSubmitting">
-            {{ isSubmitting ? $t('userProfile.actions.saving', 'Saving...') : $t('userProfile.actions.save') }}
+            {{ isSubmitting ? translate('actions.saving') : translate('actions.save') }}
           </button>
         </div>
       </div>
     </div>
-    <confirm-dialog :visible="showConfirmDialog" :title="$t('userProfile.confirmSaveTitle', 'Save Profile')"
-      :message="$t('userProfile.confirmSave', 'Are you sure you want to save these changes?')"
-      :confirm-text="$t('userProfile.actions.save', 'Save')" :cancel-text="$t('userProfile.actions.cancel', 'Cancel')"
+    <confirm-dialog :visible="showConfirmDialog" :title="translate('confirmSaveTitle')"
+      :message="translate('confirmSave')"
+      :confirm-text="translate('actions.save')" :cancel-text="translate('actions.cancel')"
       :theme="isDarkMode ? 'dark' : 'light'" :parent-styles="dialogThemeStyles" @confirm="confirmSave"
       @cancel="cancelSave" />
   </div>
@@ -478,6 +479,64 @@ export default {
     }
   },
   methods: {
+    // Centralized translation function
+    translate(key, fallback = '') {
+      // Handle dynamic field names better by supporting nesting
+      let fullKey = key;
+
+      // Check if the key already starts with 'userProfile.'
+      if (!key.startsWith('userProfile.')) {
+        fullKey = `userProfile.${key}`;
+      }
+
+      // Special handling for fields that use the 'fields.' prefix
+      if (key.startsWith('fields.') && !this.$te(fullKey)) {
+        fullKey = `userProfile.${key}`;
+      }
+
+      // Handle nested keys for education/certification fields that don't follow pattern
+      if (key === 'education' || key === 'degrees' || key === 'academicRecords' || key === 'certifications') {
+        fullKey = `userProfile.fields.${key}`;
+      }
+
+      return this.$te(fullKey) ? this.$t(fullKey) : (fallback || key);
+    },
+
+    getFieldTranslation(fieldName) {
+      // This specifically handles fields that don't translate correctly in tabs
+      const specialFieldMappings = {
+        // Education tab
+        'education': 'education',
+        'degrees': 'degrees',
+        'certifications': 'certifications',
+        'academicRecords': 'academicRecords',
+
+        // Health tab
+        'bloodType': 'bloodType',
+        'organDonor': 'organDonor',
+
+        // Employment tab
+        'eHistory': 'eHistory',
+        'currentEmployer': 'currentEmployer',
+        'tin': 'tin',
+
+        // Financial tab
+        'incomeTax': 'incomeTax',
+        'bankAccounts': 'bankAccounts'
+      };
+
+      if (specialFieldMappings[fieldName]) {
+        // Try direct translation with the userProfile.fields prefix
+        const directKey = `userProfile.fields.${specialFieldMappings[fieldName]}`;
+        if (this.$te(directKey)) {
+          return this.$t(directKey);
+        }
+      }
+
+      // Fall back to normal translation
+      return this.translate(`fields.${fieldName}`);
+    },
+
     onNationalityChange(code) {
       console.log('Nationality changed to:', code, 'Type:', typeof code);
       // Only update if we received a valid code
@@ -600,7 +659,6 @@ export default {
       }
     },
 
-
     updateCountryDisplay() {
       // This function ensures the country dropdowns properly display the correct values
       if (this.formData.personalIdentification.nationality) {
@@ -636,7 +694,7 @@ export default {
         this.currentUserId = await this.getCurrentUserId();
         
         if (!this.currentUserId) {
-          notificationService.error(this.$t('userProfile.errors.savingFailed', 'Failed to save profile: Missing user ID'));
+          notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile: Missing user ID'));
           this.isSubmitting = false;
           return;
         }
@@ -649,7 +707,7 @@ export default {
         console.log('Form validation result:', validation);
 
         if (!validation.isValid) {
-          notificationService.error(this.$t('userProfile.errors.invalidForm', 'Please fill all required fields'));
+          notificationService.error(this.translate('errors.invalidForm', 'Please fill all required fields'));
           return;
         }
 
@@ -683,11 +741,11 @@ export default {
         const result = await userProfileService.updateProfile(this.currentUserId, profileData);
         console.log('Update profile API response:', result);
 
-        notificationService.success(this.$t('userProfile.saveSuccess', 'Profile saved successfully'));
+        notificationService.success(this.translate('saveSuccess', 'Profile saved successfully'));
         this.$emit('save', profileData);
       } catch (error) {
         console.error('Error saving profile:', error);
-        notificationService.error(this.$t('userProfile.errors.savingFailed', 'Failed to save profile'));
+        notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile'));
       } finally {
         this.isSubmitting = false;
       }
@@ -704,12 +762,12 @@ export default {
       const maxSize = 5 * 1024 * 1024; // 5MB
 
       if (!allowedTypes.includes(file.type)) {
-        notificationService.error(this.$t('userProfile.errors.invalidFileType'));
+        notificationService.error(this.translate('errors.invalidFileType', 'Invalid file type'));
         return;
       }
 
       if (file.size > maxSize) {
-        notificationService.error(this.$t('userProfile.errors.fileTooLarge'));
+        notificationService.error(this.translate('errors.fileTooLarge', 'File is too large'));
         return;
       }
 
@@ -729,13 +787,13 @@ export default {
         validations[section].forEach(validation => {
           const value = this.formData[section][validation.field];
           if (validation.required && !value) {
-            errors[`${section}.${validation.field}`] = this.$t('userProfile.validation.nameRequired');
+            errors[`${section}.${validation.field}`] = this.translate('validation.nameRequired');
           }
         });
       });
 
       if (this.isTabComplete(this.activeTab)) {
-        notificationService.info(this.$t('userProfile.tabComplete', 'Tab completed!'), 1500);
+        notificationService.info(this.translate('tabComplete', 'Tab completed!'), 1500);
       }
 
       return {
@@ -833,7 +891,7 @@ export default {
         }
       } catch (error) {
         console.error('Error loading user profile:', error);
-        this.errorMessage = this.$t('userProfile.errors.loadingFailed', 'Failed to load profile data');
+        this.errorMessage = this.translate('errors.loadingFailed', 'Failed to load profile data');
       } finally {
         this.isLoading = false;
       }
@@ -842,7 +900,7 @@ export default {
       this.loadUserProfileData();
     },
     loadDegreeOptions() {
-      const defaultOptions = [
+      const defaultOptions = this.translate('degreeOptions', [
         'Associate Degree',
         'Bachelor of Arts (BA)',
         'Bachelor of Science (BS)',
@@ -871,8 +929,9 @@ export default {
         'Graduate Certificate',
         'Post-Graduate Diploma',
         'Post-Doctoral'
-      ];
-      this.degreeOptions = this.$te('userProfile.degreeOptions') ? this.$t('userProfile.degreeOptions') : defaultOptions;
+      ]);
+      
+      this.degreeOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
       const locale = this.$i18n ? this.$i18n.locale : 'en';
       this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
     },
@@ -927,7 +986,7 @@ export default {
       }
     },
     loadEducationOptions() {
-      const defaultOptions = [
+      const defaultOptions = this.translate('educationOptions', [
         'Accounting',
         'Aerospace Engineering',
         'Agricultural Science',
@@ -1027,8 +1086,9 @@ export default {
         'Web Development',
         'Wildlife Biology',
         'Zoology'
-      ];
-      this.educationOptions = this.$te('userProfile.educationOptions') ? this.$t('userProfile.educationOptions') : defaultOptions;
+      ]);
+      
+      this.educationOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
       const locale = this.$i18n ? this.$i18n.locale : 'en';
       this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
     },
@@ -1111,12 +1171,12 @@ export default {
 
       const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
       if (!validTypes.includes(file.type)) {
-        notificationService.error('Please upload a valid image (JPEG, PNG, GIF)');
+        notificationService.error(this.translate('errors.invalidFileType', 'Please upload a valid image (JPEG, PNG, GIF)'));
         return;
       }
 
       if (file.size > 2 * 1024 * 1024) {
-        notificationService.error('Image size must be less than 2MB');
+        notificationService.error(this.translate('errors.fileTooLarge', 'Image size must be less than 2MB'));
         return;
       }
 

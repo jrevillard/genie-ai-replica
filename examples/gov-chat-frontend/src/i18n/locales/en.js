@@ -1057,9 +1057,85 @@ export default {
       country: 'Country',
       residencyStatus: 'Residency Status',
       bloodType: 'Blood Type',
-      "education": "Education",
-      "degrees": "Degrees",
-      "academicRecords": "Academic Records"
+      education: "Education",
+      degrees: "Degrees",
+      academicRecords: "Academic Records",
+      // Most of the core fields are already translated
+      dateOfBirth: 'Date of Birth',
+      profilePhoto: 'Profile Photo',
+      phoneNumber: 'Phone Number',
+      emailAddress: 'Email Address',
+      preferredLanguage: 'Preferred Language',
+
+      // Tab 2 - Civil Registration & Documentation
+      // Some of these fields are already translated
+      deathCertificate: 'Death Certificate',
+      marriageRecords: 'Marriage Records',
+      divorceRecords: 'Divorce Records',
+      adoptionRecords: 'Adoption Records',
+      citizenshipDocuments: 'Citizenship Documents',
+      naturalizationDocuments: 'Naturalization Documents',
+      visaHistory: 'Visa History',
+
+      // Tab 3 - Address & Residency
+      // Some of these fields are already translated
+      previousAddresses: 'Previous Addresses',
+      homeOwnership: 'Home Ownership',
+      rentalDetails: 'Rental Details',
+      utilityBills: 'Utility Bills',
+      propertyRecords: 'Property Records',
+      residencyDuration: 'Residency Duration',
+
+      // Tab 4 - Identity & Travel Documents
+      // Some of these fields are already translated
+      nationalIDNumber: 'National ID Number',
+      passportNumber: 'Passport Number',
+      passportExpiry: 'Passport Expiry',
+      visaType: 'Visa Type',
+      visaNumber: 'Visa Number',
+      visaExpiry: 'Visa Expiry',
+
+      // Tab 5 - Health & Medical Records
+      medicalHistory: 'Medical History',
+      vaccinations: 'Vaccinations',
+      healthInsurance: 'Health Insurance',
+      bloodType: 'Blood Type',
+      organDonor: 'Organ Donor Status',
+      allergies: 'Allergies',
+      currentMedications: 'Current Medications',
+      chronicConditions: 'Chronic Conditions',
+
+      // Tab 6 - Employment & Economic Data
+      // Some of these fields are already translated
+      employmentStatus: 'Employment Status',
+      occupation: 'Occupation',
+      employerName: 'Employer Name',
+      employerAddress: 'Employer Address',
+      employmentHistory: 'Employment History',
+      annualIncome: 'Annual Income',
+      workPermitNumber: 'Work Permit Number',
+      workPermitExpiry: 'Work Permit Expiry',
+
+      // Tab 7 - Education & Academic Records
+      // Some of these fields are already translated
+      highestEducation: 'Highest Education Level',
+      institutionName: 'Institution Name',
+      graduationYear: 'Graduation Year',
+      fieldOfStudy: 'Field of Study',
+      additionalCertifications: 'Additional Certifications',
+      languages: 'Languages Spoken',
+      academicAchievements: 'Academic Achievements',
+
+      // Tab 8 - Financial & Tax Data
+      // Some of these fields are already translated
+      accountNumber: 'Account Number',
+      bankName: 'Bank Name',
+      financialAssets: 'Financial Assets',
+      liabilities: 'Liabilities',
+      creditScore: 'Credit Score',
+      taxIdentificationNumber: 'Tax Identification Number',
+      lastTaxReturn: 'Last Tax Return',
+      taxExemptions: 'Tax Exemptions'
     },
     actions: {
       cancel: 'Cancel',
@@ -1250,7 +1326,172 @@ export default {
       searchCountries: 'Search countries...',
       selectCountry: 'Select a country'
     },
-    noMatchingCountries: 'No matching countries found'
+    noMatchingCountries: 'No matching countries found',
+    profileIcon: 'Profile Icon',
+    change: 'Change',
+    chooseProfileIcon: 'Choose a Profile Icon',
+    presetIcons: 'Preset Icons',
+    upload: 'Upload',
+    initials: 'Initials',
+    clickToUpload: 'Click to upload',
+    useThisImage: 'Use This Image',
+    useInitials: 'Use Initials',
+    // Country Selection
+    countryLoadError: 'Error loading countries',
+    countryUpdateError: 'Error updating country',
+
+    // Education Section
+    searchResults: 'Search Results',
+    noResults: 'No Results',
+    searchingFor: 'Searching for',
+
+    // Loading States
+    retryLoading: 'Retry',
+    loadingProfile: 'Loading user profile...',
+    savingProfile: 'Saving profile...',
+
+    // Error Messages
+    errors: {
+      savingFailed: 'Failed to save profile',
+      loadingFailed: 'Failed to load profile data',
+      invalidForm: 'Please fill all required fields',
+      invalidFileType: 'Invalid file type',
+      fileTooLarge: 'File is too large'
+    },
+
+    // Confirmation & Success
+    tabComplete: 'Tab completed!',
+    confirmDiscardChanges: 'Discard unsaved changes?',
+    confirmLeave: 'Are you sure you want to leave? Any unsaved changes will be lost.',
+    profileComplete: 'Profile successfully completed',
+    fieldUpdated: 'Field updated successfully',
+    nextSection: 'Next section',
+    previousSection: 'Previous section',
+    uploadProgress: 'Upload progress: {percent}%',
+    navigationWarning: 'Please complete this section before proceeding',
+
+    // For form validation
+    validation: {
+      // Add to existing validation object
+      requiredField: '{field} is required',
+      invalidFormat: 'Invalid format for {field}',
+      futureDate: 'Date cannot be in the future',
+      invalidSelection: 'Please make a valid selection',
+      passwordLength: 'Password must be at least 8 characters',
+      matchError: 'Fields do not match'
+    },
+
+    // For accessibility
+    aria: {
+      tabList: 'Profile form sections',
+      nextButton: 'Go to next section',
+      prevButton: 'Go to previous section',
+      closeButton: 'Close profile form',
+      saveButton: 'Save profile data',
+      requiredField: 'Required field',
+      dropdownSelect: 'Select an option'
+    },
+    // Employment status options
+    employmentStatuses: {
+      employed: 'Employed',
+      selfEmployed: 'Self-Employed',
+      unemployed: 'Unemployed',
+      student: 'Student',
+      retired: 'Retired',
+      homemaker: 'Homemaker',
+      other: 'Other'
+    },
+
+    // Education level options
+    educationLevels: {
+      primary: 'Primary Education',
+      secondary: 'Secondary Education',
+      highSchool: 'High School',
+      vocational: 'Vocational Training',
+      associate: 'Associate Degree',
+      bachelor: 'Bachelor\'s Degree',
+      master: 'Master\'s Degree',
+      doctoral: 'Doctoral Degree',
+      professional: 'Professional Degree',
+      other: 'Other'
+    },
+
+    // Language proficiency levels
+    proficiencyLevels: {
+      native: 'Native',
+      fluent: 'Fluent',
+      advanced: 'Advanced',
+      intermediate: 'Intermediate',
+      basic: 'Basic'
+    },
+
+    // Blood type options (shown in dropdown)
+    bloodTypes: {
+      aPositive: 'A+',
+      aNegative: 'A-',
+      bPositive: 'B+',
+      bNegative: 'B-',
+      abPositive: 'AB+',
+      abNegative: 'AB-',
+      oPositive: 'O+',
+      oNegative: 'O-',
+      unknown: 'Unknown'
+    },
+
+    // Languages spoken
+    languages: {
+      english: 'English',
+      french: 'French',
+      swahili: 'Swahili',
+      arabic: 'Arabic',
+      spanish: 'Spanish',
+      portuguese: 'Portuguese',
+      chinese: 'Chinese',
+      japanese: 'Japanese',
+      german: 'German',
+      russian: 'Russian',
+      hindi: 'Hindi',
+      urdu: 'Urdu',
+      other: 'Other'
+    },
+    // Notification messages
+    notifications: {
+      saveSuccess: 'Profile saved successfully',
+      saveFailed: 'Failed to save profile',
+      loadSuccess: 'Profile loaded successfully',
+      loadFailed: 'Failed to load profile',
+      fieldRequired: 'This field is required',
+      uploadSuccess: 'File uploaded successfully',
+      uploadFailed: 'Failed to upload file',
+      formChanged: 'You have unsaved changes',
+      sessionExpired: 'Your session has expired, please log in again',
+      profileUpdated: 'Your profile has been updated',
+      profileIncomplete: 'Your profile is incomplete'
+    },
+
+    // Form instructions and help text
+    instructions: {
+      fullNameHelp: 'Enter your full legal name as it appears on your official documents',
+      dobHelp: 'Enter your date of birth in MM/DD/YYYY format',
+      uploadPhotoHelp: 'Upload a recent photo. File must be JPG, PNG, or GIF and less than 2MB',
+      passwordHelp: 'Password must be at least 8 characters with one uppercase letter, one number, and one special character',
+      documentHelp: 'Accepted formats: PDF, JPG, PNG (max 5MB)',
+      requiredFields: 'Fields marked with * are required',
+      selectFromList: 'Please select an option from the list',
+      nextTab: 'Continue to next section',
+      previousTab: 'Return to previous section',
+      saveInstructions: 'Click Save to store your information',
+      cancelInstructions: 'Click Cancel to discard changes'
+    },
+
+    // Section completion status
+    completionStatus: {
+      notStarted: 'Not Started',
+      inProgress: 'In Progress',
+      complete: 'Complete',
+      percentComplete: '{percent}% Complete',
+      tabsCompleted: '{completed} of {total} sections completed'
+    }
   },
   chatbot: {
     placeholder: 'Type your query here...',

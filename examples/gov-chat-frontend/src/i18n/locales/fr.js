@@ -1050,9 +1050,85 @@ export default {
       country: 'Pays',
       residencyStatus: 'Statut de Résidence',
       bloodType: 'Groupe Sanguin',
-      "education": "Éducation",
-      "degrees": "Diplômes",
-      "academicRecords": "Dossiers Académiques"
+      education: "Éducation",
+      degrees: "Diplômes",
+      academicRecords: "Dossiers Académiques",
+      // Most of the core fields are already translated
+      dateOfBirth: 'Date de Naissance',
+      profilePhoto: 'Photo de Profil',
+      phoneNumber: 'Numéro de Téléphone',
+      emailAddress: 'Adresse Email',
+      preferredLanguage: 'Langue Préférée',
+
+      // Tab 2 - Civil Registration & Documentation
+      // Some of these fields are already translated
+      deathCertificate: 'Certificat de Décès',
+      marriageRecords: 'Actes de Mariage',
+      divorceRecords: 'Actes de Divorce',
+      adoptionRecords: 'Documents d\'Adoption',
+      citizenshipDocuments: 'Documents de Citoyenneté',
+      naturalizationDocuments: 'Documents de Naturalisation',
+      visaHistory: 'Historique des Visas',
+
+      // Tab 3 - Address & Residency
+      // Some of these fields are already translated
+      previousAddresses: 'Adresses Précédentes',
+      homeOwnership: 'Propriété du Domicile',
+      rentalDetails: 'Détails de Location',
+      utilityBills: 'Factures de Services Publics',
+      propertyRecords: 'Registres de Propriété',
+      residencyDuration: 'Durée de Résidence',
+
+      // Tab 4 - Identity & Travel Documents
+      // Some of these fields are already translated
+      nationalIDNumber: 'Numéro de Carte d\'Identité Nationale',
+      passportNumber: 'Numéro de Passeport',
+      passportExpiry: 'Date d\'Expiration du Passeport',
+      visaType: 'Type de Visa',
+      visaNumber: 'Numéro de Visa',
+      visaExpiry: 'Date d\'Expiration du Visa',
+
+      // Tab 5 - Health & Medical Records
+      medicalHistory: 'Antécédents Médicaux',
+      vaccinations: 'Vaccinations',
+      healthInsurance: 'Assurance Santé',
+      bloodType: 'Groupe Sanguin',
+      organDonor: 'Statut de Donneur d\'Organes',
+      allergies: 'Allergies',
+      currentMedications: 'Médicaments Actuels',
+      chronicConditions: 'Conditions Chroniques',
+
+      // Tab 6 - Employment & Economic Data
+      // Some of these fields are already translated
+      employmentStatus: 'Statut d\'Emploi',
+      occupation: 'Profession',
+      employerName: 'Nom de l\'Employeur',
+      employerAddress: 'Adresse de l\'Employeur',
+      employmentHistory: 'Historique d\'Emploi',
+      annualIncome: 'Revenu Annuel',
+      workPermitNumber: 'Numéro de Permis de Travail',
+      workPermitExpiry: 'Date d\'Expiration du Permis de Travail',
+
+      // Tab 7 - Education & Academic Records
+      // Some of these fields are already translated
+      highestEducation: 'Niveau d\'Éducation le Plus Élevé',
+      institutionName: 'Nom de l\'Institution',
+      graduationYear: 'Année d\'Obtention du Diplôme',
+      fieldOfStudy: 'Domaine d\'Étude',
+      additionalCertifications: 'Certifications Supplémentaires',
+      languages: 'Langues Parlées',
+      academicAchievements: 'Réalisations Académiques',
+
+      // Tab 8 - Financial & Tax Data
+      // Some of these fields are already translated
+      accountNumber: 'Numéro de Compte',
+      bankName: 'Nom de la Banque',
+      financialAssets: 'Actifs Financiers',
+      liabilities: 'Passifs',
+      creditScore: 'Score de Crédit',
+      taxIdentificationNumber: 'Numéro d\'Identification Fiscale',
+      lastTaxReturn: 'Dernière Déclaration Fiscale',
+      taxExemptions: 'Exonérations Fiscales'
     },
     actions: {
       cancel: 'Annuler',
@@ -1246,6 +1322,174 @@ export default {
     fields: {
       nationality: 'Nationalité',
       country: 'Pays'
+    },
+    // Profile Icon Section
+    profileIcon: 'Icône de Profil',
+    change: 'Modifier',
+    chooseProfileIcon: 'Choisir une Icône de Profil',
+    presetIcons: 'Icônes Prédéfinies',
+    upload: 'Télécharger',
+    initials: 'Initiales',
+    clickToUpload: 'Cliquer pour télécharger',
+    useThisImage: 'Utiliser Cette Image',
+    useInitials: 'Utiliser les Initiales',
+
+    // Country Selection
+    countryLoadError: 'Erreur lors du chargement des pays',
+    countryUpdateError: 'Erreur lors de la mise à jour du pays',
+
+    // Education Section
+    searchResults: 'Résultats de Recherche',
+    noResults: 'Aucun Résultat',
+    searchingFor: 'Recherche de',
+
+    // Loading States
+    retryLoading: 'Réessayer',
+    loadingProfile: 'Chargement du profil utilisateur...',
+    savingProfile: 'Enregistrement du profil...',
+
+    // Error Messages
+    errors: {
+      savingFailed: 'Échec de l\'enregistrement du profil',
+      loadingFailed: 'Échec du chargement des données du profil',
+      invalidForm: 'Veuillez remplir tous les champs obligatoires',
+      invalidFileType: 'Type de fichier invalide',
+      fileTooLarge: 'Le fichier est trop volumineux'
+    },
+
+    // Confirmation & Success
+    tabComplete: 'Onglet complété!',
+    confirmDiscardChanges: 'Abandonner les modifications non enregistrées?',
+    // For consistency and completeness
+    confirmLeave: 'Êtes-vous sûr de vouloir quitter? Les modifications non enregistrées seront perdues.',
+    profileComplete: 'Profil complété avec succès',
+    fieldUpdated: 'Champ mis à jour avec succès',
+    nextSection: 'Section suivante',
+    previousSection: 'Section précédente',
+    uploadProgress: 'Progression du téléchargement: {percent}%',
+    navigationWarning: 'Veuillez compléter cette section avant de continuer',
+
+    // For form validation
+    validation: {
+      // Add to existing validation object
+      requiredField: '{field} est requis',
+      invalidFormat: 'Format invalide pour {field}',
+      futureDate: 'La date ne peut pas être dans le futur',
+      invalidSelection: 'Veuillez faire une sélection valide',
+      passwordLength: 'Le mot de passe doit comporter au moins 8 caractères',
+      matchError: 'Les champs ne correspondent pas'
+    },
+
+    // For accessibility
+    aria: {
+      tabList: 'Sections du formulaire de profil',
+      nextButton: 'Aller à la section suivante',
+      prevButton: 'Aller à la section précédente',
+      closeButton: 'Fermer le formulaire de profil',
+      saveButton: 'Enregistrer les données du profil',
+      requiredField: 'Champ obligatoire',
+      dropdownSelect: 'Sélectionner une option'
+    },
+    // Employment status options
+    employmentStatuses: {
+      employed: 'Employé',
+      selfEmployed: 'Travailleur Indépendant',
+      unemployed: 'Sans Emploi',
+      student: 'Étudiant',
+      retired: 'Retraité',
+      homemaker: 'Au Foyer',
+      other: 'Autre'
+    },
+
+    // Education level options
+    educationLevels: {
+      primary: 'Éducation Primaire',
+      secondary: 'Éducation Secondaire',
+      highSchool: 'Lycée',
+      vocational: 'Formation Professionnelle',
+      associate: 'Diplôme d\'Associé',
+      bachelor: 'Licence',
+      master: 'Master',
+      doctoral: 'Doctorat',
+      professional: 'Diplôme Professionnel',
+      other: 'Autre'
+    },
+
+    // Language proficiency levels
+    proficiencyLevels: {
+      native: 'Langue Maternelle',
+      fluent: 'Courant',
+      advanced: 'Avancé',
+      intermediate: 'Intermédiaire',
+      basic: 'Notions de Base'
+    },
+
+    // Blood type options (shown in dropdown)
+    bloodTypes: {
+      aPositive: 'A+',
+      aNegative: 'A-',
+      bPositive: 'B+',
+      bNegative: 'B-',
+      abPositive: 'AB+',
+      abNegative: 'AB-',
+      oPositive: 'O+',
+      oNegative: 'O-',
+      unknown: 'Inconnu'
+    },
+
+    // Languages spoken
+    languages: {
+      english: 'Anglais',
+      french: 'Français',
+      swahili: 'Swahili',
+      arabic: 'Arabe',
+      spanish: 'Espagnol',
+      portuguese: 'Portugais',
+      chinese: 'Chinois',
+      japanese: 'Japonais',
+      german: 'Allemand',
+      russian: 'Russe',
+      hindi: 'Hindi',
+      urdu: 'Ourdou',
+      other: 'Autre'
+    },
+    // Notification messages
+    notifications: {
+      saveSuccess: 'Profil enregistré avec succès',
+      saveFailed: 'Échec de l\'enregistrement du profil',
+      loadSuccess: 'Profil chargé avec succès',
+      loadFailed: 'Échec du chargement du profil',
+      fieldRequired: 'Ce champ est obligatoire',
+      uploadSuccess: 'Fichier téléchargé avec succès',
+      uploadFailed: 'Échec du téléchargement du fichier',
+      formChanged: 'Vous avez des modifications non enregistrées',
+      sessionExpired: 'Votre session a expiré, veuillez vous reconnecter',
+      profileUpdated: 'Votre profil a été mis à jour',
+      profileIncomplete: 'Votre profil est incomplet'
+    },
+
+    // Form instructions and help text
+    instructions: {
+      fullNameHelp: 'Entrez votre nom complet légal tel qu\'il apparaît sur vos documents officiels',
+      dobHelp: 'Entrez votre date de naissance au format JJ/MM/AAAA',
+      uploadPhotoHelp: 'Téléchargez une photo récente. Le fichier doit être au format JPG, PNG ou GIF et inférieur à 2 Mo',
+      passwordHelp: 'Le mot de passe doit comporter au moins 8 caractères avec une lettre majuscule, un chiffre et un caractère spécial',
+      documentHelp: 'Formats acceptés : PDF, JPG, PNG (max 5 Mo)',
+      requiredFields: 'Les champs marqués d\'un * sont obligatoires',
+      selectFromList: 'Veuillez sélectionner une option dans la liste',
+      nextTab: 'Continuer vers la section suivante',
+      previousTab: 'Retourner à la section précédente',
+      saveInstructions: 'Cliquez sur Enregistrer pour stocker vos informations',
+      cancelInstructions: 'Cliquez sur Annuler pour abandonner les modifications'
+    },
+
+    // Section completion status
+    completionStatus: {
+      notStarted: 'Non Commencé',
+      inProgress: 'En Cours',
+      complete: 'Terminé',
+      percentComplete: '{percent}% Complété',
+      tabsCompleted: '{completed} sur {total} sections complétées'
     }
   },
   chatbot: {

@@ -1174,9 +1174,85 @@ export default {
       country: 'Nchi',
       residencyStatus: 'Hali ya Makazi',
       bloodType: 'Aina ya Damu',
-      "education": "Elimu",
-      "degrees": "Shahada",
-      "academicRecords": "Rekodi za Kitaaluma"
+      education: "Elimu",
+      degrees: "Shahada",
+      academicRecords: "Rekodi za Kitaaluma",
+      // Most of the core fields are already translated
+      dateOfBirth: 'Tarehe ya Kuzaliwa',
+      profilePhoto: 'Picha ya Wasifu',
+      phoneNumber: 'Nambari ya Simu',
+      emailAddress: 'Anwani ya Barua Pepe',
+      preferredLanguage: 'Lugha Inayopendelewa',
+
+      // Tab 2 - Civil Registration & Documentation
+      // Some of these fields are already translated
+      deathCertificate: 'Cheti cha Kifo',
+      marriageRecords: 'Rekodi za Ndoa',
+      divorceRecords: 'Rekodi za Talaka',
+      adoptionRecords: 'Rekodi za Kuasili',
+      citizenshipDocuments: 'Nyaraka za Uraia',
+      naturalizationDocuments: 'Nyaraka za Uraia wa Kujiandikisha',
+      visaHistory: 'Historia ya Visa',
+
+      // Tab 3 - Address & Residency
+      // Some of these fields are already translated
+      previousAddresses: 'Anwani za Awali',
+      homeOwnership: 'Umiliki wa Nyumba',
+      rentalDetails: 'Maelezo ya Upangaji',
+      utilityBills: 'Bili za Huduma',
+      propertyRecords: 'Rekodi za Mali',
+      residencyDuration: 'Muda wa Makazi',
+
+      // Tab 4 - Identity & Travel Documents
+      // Some of these fields are already translated
+      nationalIDNumber: 'Nambari ya Kitambulisho cha Taifa',
+      passportNumber: 'Nambari ya Pasipoti',
+      passportExpiry: 'Mwisho wa Pasipoti',
+      visaType: 'Aina ya Visa',
+      visaNumber: 'Nambari ya Visa',
+      visaExpiry: 'Mwisho wa Visa',
+
+      // Tab 5 - Health & Medical Records
+      medicalHistory: 'Historia ya Matibabu',
+      vaccinations: 'Chanjo',
+      healthInsurance: 'Bima ya Afya',
+      bloodType: 'Aina ya Damu',
+      organDonor: 'Hali ya Mchango wa Viungo',
+      allergies: 'Mzio',
+      currentMedications: 'Dawa za Sasa',
+      chronicConditions: 'Magonjwa ya Muda Mrefu',
+
+      // Tab 6 - Employment & Economic Data
+      // Some of these fields are already translated
+      employmentStatus: 'Hali ya Ajira',
+      occupation: 'Kazi',
+      employerName: 'Jina la Mwajiri',
+      employerAddress: 'Anwani ya Mwajiri',
+      employmentHistory: 'Historia ya Ajira',
+      annualIncome: 'Mapato ya Mwaka',
+      workPermitNumber: 'Nambari ya Kibali cha Kazi',
+      workPermitExpiry: 'Mwisho wa Kibali cha Kazi',
+
+      // Tab 7 - Education & Academic Records
+      // Some of these fields are already translated
+      highestEducation: 'Kiwango cha Juu cha Elimu',
+      institutionName: 'Jina la Taasisi',
+      graduationYear: 'Mwaka wa Kuhitimu',
+      fieldOfStudy: 'Fani ya Masomo',
+      additionalCertifications: 'Vyeti vya Ziada',
+      languages: 'Lugha Zinazozungumzwa',
+      academicAchievements: 'Mafanikio ya Kitaaluma',
+
+      // Tab 8 - Financial & Tax Data
+      // Some of these fields are already translated
+      accountNumber: 'Nambari ya Akaunti',
+      bankName: 'Jina la Benki',
+      financialAssets: 'Mali za Kifedha',
+      liabilities: 'Madeni',
+      creditScore: 'Alama ya Mikopo',
+      taxIdentificationNumber: 'Nambari ya Utambulisho wa Kodi',
+      lastTaxReturn: 'Kurudisha Kodi ya Mwisho',
+      taxExemptions: 'Misamaha ya Kodi'
     },
     actions: {
       cancel: 'Ghairi',
@@ -1370,6 +1446,174 @@ export default {
     fields: {
       nationality: 'Uraia',
       country: 'Nchi'
+    },
+    // Profile Icon Section
+    profileIcon: 'Aikoni ya Wasifu',
+    change: 'Badilisha',
+    chooseProfileIcon: 'Chagua Aikoni ya Wasifu',
+    presetIcons: 'Aikoni Zilizowekwa',
+    upload: 'Pakia',
+    initials: 'Herufi za Kwanza',
+    clickToUpload: 'Bofya kupakia',
+    useThisImage: 'Tumia Picha Hii',
+    useInitials: 'Tumia Herufi za Kwanza',
+
+    // Country Selection
+    countryLoadError: 'Hitilafu katika kupakia nchi',
+    countryUpdateError: 'Hitilafu katika kusasisha nchi',
+
+    // Education Section
+    searchResults: 'Matokeo ya Utafutaji',
+    noResults: 'Hakuna Matokeo',
+    searchingFor: 'Inatafuta',
+
+    // Loading States
+    retryLoading: 'Jaribu tena',
+    loadingProfile: 'Inapakia wasifu wa mtumiaji...',
+    savingProfile: 'Inahifadhi wasifu...',
+
+    // Error Messages
+    errors: {
+      savingFailed: 'Imeshindwa kuhifadhi wasifu',
+      loadingFailed: 'Imeshindwa kupakia data ya wasifu',
+      invalidForm: 'Tafadhali jaza sehemu zote zinazohitajika',
+      invalidFileType: 'Aina ya faili batili',
+      fileTooLarge: 'Faili ni kubwa sana'
+    },
+
+    // Confirmation & Success
+    tabComplete: 'Kichupo kimekamilika!',
+    confirmDiscardChanges: 'Tupa mabadiliko ambayo hayajahifadhiwa?',
+    // For consistency and completeness
+    confirmLeave: 'Je, una uhakika unataka kuondoka? Mabadiliko yoyote ambayo hayajahifadhiwa yatapotea.',
+    profileComplete: 'Wasifu umekamilishwa kwa mafanikio',
+    fieldUpdated: 'Sehemu imesasishwa kwa mafanikio',
+    nextSection: 'Sehemu inayofuata',
+    previousSection: 'Sehemu iliyotangulia',
+    uploadProgress: 'Maendeleo ya kupakia: {percent}%',
+    navigationWarning: 'Tafadhali kamilisha sehemu hii kabla ya kuendelea',
+
+    // For form validation
+    validation: {
+      // Add to existing validation object
+      requiredField: '{field} inahitajika',
+      invalidFormat: 'Muundo batili wa {field}',
+      futureDate: 'Tarehe haiwezi kuwa katika siku zijazo',
+      invalidSelection: 'Tafadhali fanya uchaguzi halali',
+      passwordLength: 'Nenosiri lazima liwe na angalau herufi 8',
+      matchError: 'Sehemu hazilingani'
+    },
+
+    // For accessibility
+    aria: {
+      tabList: 'Sehemu za fomu ya wasifu',
+      nextButton: 'Nenda kwenye sehemu inayofuata',
+      prevButton: 'Nenda kwenye sehemu iliyotangulia',
+      closeButton: 'Funga fomu ya wasifu',
+      saveButton: 'Hifadhi data ya wasifu',
+      requiredField: 'Sehemu inayohitajika',
+      dropdownSelect: 'Chagua chaguo'
+    },
+    // Employment status options
+    employmentStatuses: {
+      employed: 'Ameajiriwa',
+      selfEmployed: 'Ajira Binafsi',
+      unemployed: 'Hana Ajira',
+      student: 'Mwanafunzi',
+      retired: 'Mstaafu',
+      homemaker: 'Mama wa Nyumbani',
+      other: 'Nyingine'
+    },
+
+    // Education level options
+    educationLevels: {
+      primary: 'Elimu ya Msingi',
+      secondary: 'Elimu ya Sekondari',
+      highSchool: 'Shule ya Sekondari ya Juu',
+      vocational: 'Mafunzo ya Ufundi',
+      associate: 'Shahada ya Uhusiano',
+      bachelor: 'Shahada ya Kwanza',
+      master: 'Shahada ya Uzamili',
+      doctoral: 'Shahada ya Uzamivu',
+      professional: 'Shahada ya Kitaaluma',
+      other: 'Nyingine'
+    },
+
+    // Language proficiency levels
+    proficiencyLevels: {
+      native: 'Lugha ya Asili',
+      fluent: 'Anazungumza kwa Ufasaha',
+      advanced: 'Ya Juu',
+      intermediate: 'Ya Kati',
+      basic: 'Msingi'
+    },
+
+    // Blood type options (shown in dropdown)
+    bloodTypes: {
+      aPositive: 'A+',
+      aNegative: 'A-',
+      bPositive: 'B+',
+      bNegative: 'B-',
+      abPositive: 'AB+',
+      abNegative: 'AB-',
+      oPositive: 'O+',
+      oNegative: 'O-',
+      unknown: 'Haijulikani'
+    },
+
+    // Languages spoken
+    languages: {
+      english: 'Kiingereza',
+      french: 'Kifaransa',
+      swahili: 'Kiswahili',
+      arabic: 'Kiarabu',
+      spanish: 'Kihispania',
+      portuguese: 'Kireno',
+      chinese: 'Kichina',
+      japanese: 'Kijapani',
+      german: 'Kijerumani',
+      russian: 'Kirusi',
+      hindi: 'Kihindi',
+      urdu: 'Kiurdu',
+      other: 'Nyingine'
+    },
+    // Notification messages
+    notifications: {
+      saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
+      saveFailed: 'Imeshindwa kuhifadhi wasifu',
+      loadSuccess: 'Wasifu umepakiwa kwa mafanikio',
+      loadFailed: 'Imeshindwa kupakia wasifu',
+      fieldRequired: 'Sehemu hii inahitajika',
+      uploadSuccess: 'Faili imepakiwa kwa mafanikio',
+      uploadFailed: 'Imeshindwa kupakia faili',
+      formChanged: 'Una mabadiliko ambayo hayajahifadhiwa',
+      sessionExpired: 'Kipindi chako kimeisha, tafadhali ingia tena',
+      profileUpdated: 'Wasifu wako umesasishwa',
+      profileIncomplete: 'Wasifu wako haujakamilika'
+    },
+
+    // Form instructions and help text
+    instructions: {
+      fullNameHelp: 'Ingiza jina lako kamili la kisheria kama linavyoonekana kwenye nyaraka zako rasmi',
+      dobHelp: 'Ingiza tarehe yako ya kuzaliwa kwa muundo wa DD/MM/YYYY',
+      uploadPhotoHelp: 'Pakia picha ya hivi karibuni. Faili lazima iwe JPG, PNG, au GIF na chini ya 2MB',
+      passwordHelp: 'Nenosiri lazima liwe na angalau herufi 8 zenye herufi kubwa moja, namba moja, na herufi maalum moja',
+      documentHelp: 'Muundo unaokubaliwa: PDF, JPG, PNG (max 5MB)',
+      requiredFields: 'Sehemu zilizowekwa alama ya * zinahitajika',
+      selectFromList: 'Tafadhali chagua chaguo kutoka kwa orodha',
+      nextTab: 'Endelea kwa sehemu inayofuata',
+      previousTab: 'Rudi kwa sehemu iliyotangulia',
+      saveInstructions: 'Bofya Hifadhi ili kuhifadhi maelezo yako',
+      cancelInstructions: 'Bofya Ghairi ili kutupilia mbali mabadiliko'
+    },
+
+    // Section completion status
+    completionStatus: {
+      notStarted: 'Haijaanza',
+      inProgress: 'Inaendelea',
+      complete: 'Imekamilika',
+      percentComplete: 'Imekamilika {percent}%',
+      tabsCompleted: 'Sehemu {completed} kati ya {total} zimekamilika'
     }
   },
   chatbot: {

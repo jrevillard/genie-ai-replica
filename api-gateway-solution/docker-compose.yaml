@@ -58,9 +58,10 @@ services:
       NODE_ENV: production
       TOKEN_SECRET: your-secret-key
       DB_ADAPTER: mongo
+      DB_DATABASE: konga
       DB_URI: mongodb://mongo:27017/konga
       KONGA_HOOK_TIMEOUT: 120000
-      KONG_ADMIN_URL: http://e2e-82-109:8001
+      KONG_ADMIN_URL: http://kong:8001
     ports:
       - "1337:1337"
 

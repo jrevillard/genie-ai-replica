@@ -2,20 +2,7 @@
 module.exports = {
   devServer: {
     hot: true,
-    port: 8090,
-    allowedHosts: 'all',
-    headers: {
-      'Access-Control-Allow-Origin': '*'
-    },
-    host: '0.0.0.0',
-    client: {
-      webSocketURL: {
-        hostname: '0.0.0.0',
-        pathname: '/ws',
-        port: 8090
-      }
-    },
-    webSocketServer: 'ws'
+    port: 8090
   },
   configureWebpack: {
     resolve: {

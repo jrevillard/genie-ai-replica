@@ -8,8 +8,6 @@ volumes:
   kong_data:
   keycloak_data:
   mongo_data:
-  nginx_certs:
-  nginx_conf:
 
 services:
   kong-database:
@@ -113,19 +111,3 @@ services:
     networks:
       - kong-net
 
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
-      - nginx_conf:/etc/nginx
-      - nginx_certs:/etc/ssl/private
-    networks:
-      - kong-net
-    depends_on:
-      - kong

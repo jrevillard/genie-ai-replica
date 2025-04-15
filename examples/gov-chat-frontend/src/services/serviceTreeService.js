@@ -1,5 +1,5 @@
 // src/services/serviceTreeService.js - Connect ServiceTreePanelComponent to backend
-import api from './api';
+import httpService from './httpService';
 
 export default {
   /**
@@ -9,7 +9,7 @@ export default {
    */
   async getAllCategories(locale = 'en') {
     try {
-      const response = await api.get('/services/categories', {
+      const response = await httpService.get('services/categories', {
         params: { locale }
       });
       
@@ -45,7 +45,7 @@ export default {
    */
   async getCategoryServices(categoryId, locale = 'en') {
     try {
-      const response = await api.get(`/services/categories/${categoryId}`, {
+      const response = await httpService.get(`services/categories/${categoryId}`, {
         params: { locale }
       });
       
@@ -64,7 +64,7 @@ export default {
    */
   async searchServices(query, locale = 'en') {
     try {
-      const response = await api.get('/services/search', {
+      const response = await httpService.get('services/search', {
         params: { query, locale }
       });
       
@@ -138,7 +138,7 @@ export default {
    */
   async saveSelectedServices(userId, selectedServices) {
     try {
-      const response = await api.post(`/users/${userId}/preferences/services`, {
+      const response = await httpService.post(`users/${userId}/preferences/services`, {
         selectedServices
       });
       
@@ -156,7 +156,7 @@ export default {
    */
   async getUserSelectedServices(userId) {
     try {
-      const response = await api.get(`/users/${userId}/preferences/services`);
+      const response = await httpService.get(`users/${userId}/preferences/services`);
       return response.data.selectedServices || [];
     } catch (error) {
       console.error('Error getting user selected services:', error);

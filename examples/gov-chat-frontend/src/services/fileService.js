@@ -1,5 +1,5 @@
 // src/services/fileService.js - File Upload Service
-import api from './api';
+import httpService from './httpService';
 
 export default {
   /**
@@ -16,7 +16,7 @@ export default {
       formData.append('context', context);
       formData.append('entityId', entityId);
       
-      const response = await api.post('/files/upload', formData, {
+      const response = await httpService.post('files/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -47,7 +47,7 @@ export default {
       formData.append('context', context);
       formData.append('entityId', entityId);
       
-      const response = await api.post('/files/upload-multiple', formData, {
+      const response = await httpService.post('files/upload-multiple', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -66,7 +66,7 @@ export default {
    * @returns {String} File URL
    */
   getFileUrl(fileId) {
-    return `${api.defaults.baseURL}/files/${fileId}`;
+    return `${httpService.baseUrl}/files/${fileId}`;
   },
 
   /**
@@ -76,7 +76,7 @@ export default {
    */
   async deleteFile(fileId) {
     try {
-      const response = await api.delete(`/files/${fileId}`);
+      const response = await httpService.delete(`files/${fileId}`);
       return response.data;
     } catch (error) {
       console.error('Error deleting file:', error);
@@ -91,7 +91,7 @@ export default {
    */
   async getFileMetadata(fileId) {
     try {
-      const response = await api.get(`/files/${fileId}/metadata`);
+      const response = await httpService.get(`files/${fileId}/metadata`);
       return response.data;
     } catch (error) {
       console.error('Error getting file metadata:', error);
@@ -107,7 +107,7 @@ export default {
    */
   async getEntityFiles(entityId, context) {
     try {
-      const response = await api.get('/files', {
+      const response = await httpService.get('files', {
         params: { entityId, context }
       });
       
@@ -126,7 +126,7 @@ export default {
    */
   getPreviewUrl(fileId, options = {}) {
     const { width, height, quality } = options;
-    let url = `${api.defaults.baseURL}/files/${fileId}/preview`;
+    let url = `${httpService.baseUrl}/files/${fileId}/preview`;
     
     const params = new URLSearchParams();
     if (width) params.append('width', width);

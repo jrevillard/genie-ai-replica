@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const DatabaseOperationsService = require('../services/database-operations-service');
+const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
 const { createLogger, format, transports } = require('winston');
 
 const databaseService = new DatabaseOperationsService();
@@ -23,6 +24,9 @@ const logger = createLogger({
     new transports.File({ filename: 'logs/combined.log' })
   ],
 });
+
+// Apply authentication middleware to all routes
+router.use(authMiddleware.authenticate);
 
 /**
  * @swagger

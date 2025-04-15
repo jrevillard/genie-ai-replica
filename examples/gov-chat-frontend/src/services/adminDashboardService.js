@@ -12,7 +12,7 @@ const adminDashboardService = {
    */
   async getSystemHealth() {
     try {
-      return await httpService.get('/admin/system-health');
+      return await httpService.get('admin/system-health');
     } catch (error) {
       console.error('Error fetching system health:', error);
       throw error;
@@ -29,7 +29,7 @@ const adminDashboardService = {
    */
   async getLogs(options = {}) {
     try {
-      return await httpService.get('/admin/logs', { params: options });
+      return await httpService.get('admin/logs', { params: options });
     } catch (error) {
       console.error('Error fetching logs:', error);
       throw error;
@@ -43,7 +43,7 @@ const adminDashboardService = {
    */
   async getUserStats(options = {}) {
     try {
-      return await httpService.get('/admin/user-stats', { params: options });
+      return await httpService.get('admin/user-stats', { params: options });
     } catch (error) {
       console.error('Error fetching user stats:', error);
       throw error;
@@ -56,7 +56,7 @@ const adminDashboardService = {
    */
   async getSecurityMetrics() {
     try {
-      return await httpService.get('/admin/security-metrics');
+      return await httpService.get('admin/security-metrics');
     } catch (error) {
       console.error('Error fetching security metrics:', error);
       throw error;
@@ -69,7 +69,7 @@ const adminDashboardService = {
    */
   async rolloverLogs() {
     try {
-      return await httpService.post('/admin/logs/rollover');
+      return await httpService.post('admin/logs/rollover');
     } catch (error) {
       console.error('Error rolling over logs:', error);
       throw error;
@@ -82,7 +82,7 @@ const adminDashboardService = {
    */
   async runDiagnostics() {
     try {
-      return await httpService.post('/admin/diagnostics');
+      return await httpService.post('admin/diagnostics');
     } catch (error) {
       console.error('Error running diagnostics:', error);
       throw error;
@@ -95,7 +95,7 @@ const adminDashboardService = {
    */
   async runSecurityScan() {
     try {
-      return await httpService.post('/admin/security-scan');
+      return await httpService.post('admin/security-scan');
     } catch (error) {
       console.error('Error running security scan:', error);
       throw error;
@@ -110,7 +110,7 @@ const adminDashboardService = {
    */
   async getLogsSummary(options = {}) {
     try {
-      return await httpService.get('/admin/logs/summary', { params: options });
+      return await httpService.get('admin/logs/summary', { params: options });
     } catch (error) {
       console.error('Error fetching logs summary:', error);
       throw error;
@@ -141,7 +141,7 @@ const adminDashboardService = {
       };
 
       console.log('Search logs request params:', searchParams); // Debug: Log the request parameters
-      const response = await httpService.get('/admin/logs/search', { params: searchParams });
+      const response = await httpService.get('admin/logs/search', { params: searchParams });
       console.log('Search logs response status:', response.status); // Debug: Log the response status
       console.log('Search logs response headers:', response.headers); // Debug: Log the response headers
       console.log('Search logs raw response data:', response.data); // Debug: Log the raw response data
@@ -208,25 +208,23 @@ const adminDashboardService = {
   },
 
   /**
- * Search users with filtering
- * @param {Object} options - Search options
- * @param {string} options.term - Search term
- * @param {string} options.field - Field to search (name, email, role, or all)
- * @param {number} options.limit - Maximum number of users to return
- * @param {number} options.offset - Offset for pagination
- * @returns {Promise} Search results
- */
+   * Search users with filtering
+   * @param {Object} options - Search options
+   * @param {string} options.term - Search term
+   * @param {string} options.field - Field to search (name, email, role, or all)
+   * @param {number} options.limit - Maximum number of users to return
+   * @param {number} options.offset - Offset for pagination
+   * @returns {Promise} Search results
+   */
   async searchUsers(options = {}) {
     try {
-      // Pass options directly as first parameter, not wrapped in { params: ... }
-      return await httpService.get('/admin/users/search', options);
+      // Correctly pass options as query parameters
+      return await httpService.get('admin/users/search', { params: options });
     } catch (error) {
       console.error('Error searching users:', error);
       throw error;
     }
   }
 };
-
-
 
 export default adminDashboardService;

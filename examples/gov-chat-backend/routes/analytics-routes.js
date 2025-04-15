@@ -3,6 +3,7 @@ const router = express.Router();
 const AnalyticsService = require('../services/analytics-service');
 const analyticsController = require('../controllers/analyticsController');
 const { createLogger, format, transports } = require('winston'); // Import Winston
+const authMiddleware = require('../middleware/auth-middleware');
 
 const analyticsService = new AnalyticsService();
 
@@ -24,6 +25,8 @@ const logger = createLogger({
     new transports.File({ filename: 'logs/combined.log' })
   ],
 });
+
+router.use(authMiddleware.authenticate);
 
 /**
  * @swagger

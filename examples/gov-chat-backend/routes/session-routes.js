@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const SessionService = require('../services/session-service');
+const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
 const { createLogger, format, transports } = require('winston'); // Import Winston
 
 const sessionService = new SessionService();
@@ -77,6 +78,9 @@ router.post('/', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+// Apply authentication middleware to all remaining routes
+router.use(authMiddleware.authenticate);
 
 /**
  * @swagger

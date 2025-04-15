@@ -1,5 +1,5 @@
 // src/services/analyticsService.js
-import axios from 'axios';
+import httpService from './httpService';
 
 /**
  * Service for interacting with the Analytics API
@@ -46,7 +46,7 @@ class AnalyticsService {
       const currentLocale = this.getCurrentLocale(locale);
       console.log(`Directly getting unique users count from ${startDate} to ${endDate} with locale: ${currentLocale}`);
       
-      const response = await axios.get(`${this.baseUrl}/analytics/metric/uniqueUsers`, {
+      const response = await httpService.get('analytics/metric/uniqueUsers', {
         params: { 
           startDate, 
           endDate,
@@ -85,8 +85,7 @@ class AnalyticsService {
 
       console.log(`Fetching dashboard analytics with locale: ${currentLocale}`);
 
-      // Change this URL to include /analytics/
-      const response = await axios.get(`${this.baseUrl}/analytics/dashboard`, {
+      const response = await httpService.get('analytics/dashboard', {
         params: {
           startDate,
           endDate,
@@ -131,7 +130,7 @@ class AnalyticsService {
       const apiMetric = metricMap[metric] || metric;
 
       // Get current period data
-      const currentResponse = await axios.get(`${this.baseUrl}/analytics/metric/${apiMetric}`, {
+      const currentResponse = await httpService.get(`analytics/metric/${apiMetric}`, {
         params: { 
           startDate: current.startDate, 
           endDate: current.endDate,
@@ -140,7 +139,7 @@ class AnalyticsService {
       });
 
       // Get previous period data
-      const previousResponse = await axios.get(`${this.baseUrl}/analytics/metric/${apiMetric}`, {
+      const previousResponse = await httpService.get(`analytics/metric/${apiMetric}`, {
         params: { 
           startDate: previous.startDate, 
           endDate: previous.endDate,
@@ -185,7 +184,7 @@ class AnalyticsService {
       
       console.log(`Fetching time series data for ${metricType}, interval ${interval}, locale: ${currentLocale}`);
 
-      const response = await axios.get(`${this.baseUrl}/analytics/timeseries/${metricType}`, {
+      const response = await httpService.get(`analytics/timeseries/${metricType}`, {
         params: { 
           interval, 
           startDate, 
@@ -542,8 +541,6 @@ class AnalyticsService {
     return isPositive ? 'positive' : 'negative';
   }
 
-  // Add these new methods to analyticsService.js
-
   /**
    * Get satisfaction heatmap data
    * @param {string} period - Time period (daily, weekly, monthly, all-time)
@@ -562,7 +559,7 @@ class AnalyticsService {
       console.log(`Fetching satisfaction heatmap with locale: ${currentLocale}`);
 
       // Make API call to get the satisfaction heatmap data
-      const response = await axios.get(`${this.baseUrl}/analytics/satisfaction/heatmap`, {
+      const response = await httpService.get('analytics/satisfaction/heatmap', {
         params: {
           startDate,
           endDate,
@@ -679,12 +676,12 @@ class AnalyticsService {
   }
 
   /**
- * Get satisfaction gauge data
- * @param {string} period - Time period (daily, weekly, monthly, all-time)
- * @param {string} date - Selected date (YYYY-MM-DD)
- * @param {string} locale - Locale override (optional)
- * @returns {Promise<Object>} Satisfaction gauge data
- */
+   * Get satisfaction gauge data
+   * @param {string} period - Time period (daily, weekly, monthly, all-time)
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {string} locale - Locale override (optional)
+   * @returns {Promise<Object>} Satisfaction gauge data
+   */
   async getSatisfactionGauge(period, date, locale = null) {
     try {
       // Calculate start and end dates based on period and date
@@ -696,7 +693,7 @@ class AnalyticsService {
       console.log(`Fetching satisfaction gauge with locale: ${currentLocale}`);
 
       // Make API call to get the satisfaction gauge data
-      const response = await axios.get(`${this.baseUrl}/analytics/metric/satisfactionRate`, {
+      const response = await httpService.get('analytics/metric/satisfactionRate', {
         params: {
           startDate,
           endDate,
@@ -717,7 +714,7 @@ class AnalyticsService {
       const previousEndDate = new Date(new Date(endDate).getTime() - periodLength).toISOString();
 
       // Get previous period data
-      const previousResponse = await axios.get(`${this.baseUrl}/analytics/metric/satisfactionRate`, {
+      const previousResponse = await httpService.get('analytics/metric/satisfactionRate', {
         params: {
           startDate: previousStartDate,
           endDate: previousEndDate,

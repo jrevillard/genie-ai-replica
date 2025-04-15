@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const QueryService = require('../services/query-service');
 const AnalyticsService = require('../services/analytics-service');
+const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
 const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Initialize services
@@ -29,6 +30,9 @@ const logger = createLogger({
     new transports.File({ filename: 'logs/combined.log' })
   ],
 });
+
+// Apply authentication middleware to all routes
+router.use(authMiddleware.authenticate);
 
 // Middleware to ensure analytics service is set
 router.use((req, res, next) => {

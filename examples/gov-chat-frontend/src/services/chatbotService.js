@@ -1,5 +1,5 @@
 // src/services/chatbotService.js - Chatbot and Analytics Service
-import api from './api';
+import httpService from './httpService';
 
 export default {
   /**
@@ -11,8 +11,8 @@ export default {
     try {
       const startTime = Date.now();
       
-      // Send query to backend
-      const response = await api.post('/queries', {
+      // Send query to backend using httpService instead of api
+      const response = await httpService.post('queries', {
         ...queryData,
         timestamp: new Date().toISOString()
       });
@@ -38,7 +38,7 @@ export default {
    */
   async updateQueryResponseTime(queryId, responseTime) {
     try {
-      const response = await api.patch(`/queries/${queryId}/responsetime`, {
+      const response = await httpService.patch(`queries/${queryId}/responsetime`, {
         responseTime
       });
       
@@ -58,7 +58,7 @@ export default {
    */
   async markQueryAsAnswered(queryId, responseTime) {
     try {
-      const response = await api.patch(`/queries/${queryId}/answered`, {
+      const response = await httpService.patch(`queries/${queryId}/answered`, {
         responseTime
       });
       
@@ -77,7 +77,7 @@ export default {
    */
   async submitFeedback(queryId, feedback) {
     try {
-      const response = await api.post(`/queries/${queryId}/feedback`, feedback);
+      const response = await httpService.post(`queries/${queryId}/feedback`, feedback);
       return response.data;
     } catch (error) {
       console.error('Error submitting feedback:', error);
@@ -96,7 +96,7 @@ export default {
     try {
       const offset = (page - 1) * limit;
       
-      const response = await api.get('/queries/history', {
+      const response = await httpService.get('queries/history', {
         params: { userId, limit, offset }
       });
       
@@ -118,7 +118,7 @@ export default {
     try {
       const offset = (page - 1) * limit;
       
-      const response = await api.get('/queries/saved', {
+      const response = await httpService.get('queries/saved', {
         params: { userId, limit, offset }
       });
       
@@ -136,7 +136,7 @@ export default {
    */
   async saveQuery(queryData) {
     try {
-      const response = await api.post('/queries/saved', queryData);
+      const response = await httpService.post('queries/saved', queryData);
       return response.data;
     } catch (error) {
       console.error('Error saving query:', error);
@@ -152,7 +152,7 @@ export default {
    */
   async getQueryRecommendations(userId, limit = 5) {
     try {
-      const response = await api.get('/queries/recommendations', {
+      const response = await httpService.get('queries/recommendations', {
         params: { userId, limit }
       });
       
@@ -171,7 +171,7 @@ export default {
    */
   async getSimilarQueries(queryText, limit = 5) {
     try {
-      const response = await api.get('/queries/similar', {
+      const response = await httpService.get('queries/similar', {
         params: { query: queryText, limit }
       });
       
@@ -190,7 +190,7 @@ export default {
    */
   async getAnalytics(period = 'daily', date = new Date().toISOString().split('T')[0]) {
     try {
-      const response = await api.get('/analytics', {
+      const response = await httpService.get('analytics', {
         params: { period, date }
       });
       
@@ -210,7 +210,7 @@ export default {
    */
   async getUserStats(userId, startDate, endDate) {
     try {
-      const response = await api.get(`/analytics/users/${userId}`, {
+      const response = await httpService.get(`analytics/users/${userId}`, {
         params: { startDate, endDate }
       });
       
@@ -228,7 +228,7 @@ export default {
    */
   async getSessionInfo(sessionId) {
     try {
-      const response = await api.get(`/sessions/${sessionId}`);
+      const response = await httpService.get(`sessions/${sessionId}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching session information:', error);
@@ -244,7 +244,7 @@ export default {
    */
   async startSession(userId, deviceInfo = {}) {
     try {
-      const response = await api.post('/sessions', {
+      const response = await httpService.post('sessions', {
         userId,
         deviceInfo,
         timestamp: new Date().toISOString()
@@ -264,7 +264,7 @@ export default {
    */
   async endSession(sessionId) {
     try {
-      const response = await api.patch(`/sessions/${sessionId}/end`, {
+      const response = await httpService.patch(`sessions/${sessionId}/end`, {
         endTime: new Date().toISOString()
       });
       
@@ -282,7 +282,7 @@ export default {
    */
   async keepSessionAlive(sessionId) {
     try {
-      const response = await api.patch(`/sessions/${sessionId}/keepalive`, {
+      const response = await httpService.patch(`sessions/${sessionId}/keepalive`, {
         lastActiveTime: new Date().toISOString()
       });
       

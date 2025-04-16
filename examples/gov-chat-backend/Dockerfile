@@ -42,8 +42,13 @@ ENV EMAIL_USER=187ad3288090609e6e282b07f359acd4
 ENV EMAIL_PASSWORD=6615d81ddd46faab7e69eb6710ac364a
 ENV EMAIL_FROM="fordendk@gmail.com"
 ENV APP_NAME="Huduma AI"
-ENV FRONTEND_URL=http://localhost:8090
+ENV FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/
 
+# Database connection setup
+ENV ARANGO_URL=http://arango-vector-db:8529
+ENV ARANGO_DB=node-services
+ENV ARANGO_USER=root
+ENV ARANGO_PASSWORD=test
 
 # Start the backend service
 CMD ["node", "index.js"]

@@ -1,5 +1,5 @@
 // src/services/admin-dashboard-service.js
-const { Database } = require('arangojs');
+const dbService = require('../utils/db-connect-service'); // Import the database service singleton
 const { logger } = require('../logger');
 const os = require('os');
 const fs = require('fs').promises;
@@ -8,11 +8,8 @@ const util = require('util');
 const childProcess = require('child_process');
 const exec = util.promisify(childProcess.exec);
 
-// Database connection
-const DB_URL = process.env.ARANGO_URL || 'http://localhost:8529';
-const DB_NAME = process.env.ARANGO_DB || 'node-services';
-const DB_USER = process.env.ARANGO_USER || 'root';
-const DB_PASS = process.env.ARANGO_PASSWORD || 'test';
+// Get database connection from the service
+const db = dbService.getConnection();
 
 // ResourceUsageMonitor class
 class ResourceUsageMonitor {
@@ -97,16 +94,6 @@ class ResourceUsageMonitor {
 // Create a singleton instance
 const resourceUsageMonitor = new ResourceUsageMonitor();
 
-// Connect to ArangoDB with explicit credentials
-const db = new Database({
-  url: DB_URL,
-  databaseName: DB_NAME,
-  auth: {
-    username: DB_USER,
-    password: DB_PASS
-  }
-});
-
 /**
  * Service for admin dashboard operations
  */
@@ -124,7 +111,6 @@ const adminDashboardService = {
  * Get system health statistics
  * @returns {Promise<Object>} System health metrics
  */
-// In src/services/admin-dashboard-service.js
 async getSystemHealth() {
   logger.info('Getting system health metrics');
 
@@ -641,9 +627,10 @@ async getSystemHealth() {
             return null;
           }
           const [, timestamp, level, service, message] = match;
+          const date = new Date(timestamp);
           const parsedLog = {
             date: date.toISOString().split('T')[0], 
-            time: new Date(timestamp).toLocaleTimeString(),
+            time: date.toLocaleTimeString(),
             level: level.toUpperCase(),
             service,
             message,
@@ -1073,6 +1060,7 @@ async getSystemHealth() {
       throw error;
     }
   },
+  
   /**
  * Search users with filtering
  * @param {Object} options - Search options

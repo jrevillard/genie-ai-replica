@@ -1,19 +1,31 @@
 <!-- SideBarComponent.vue with improved theme compatibility -->
+<!-- SideBarComponent.vue with improved mobile keyboard handling (corrected styles) -->
+<!-- SideBarComponent.vue with Android keyboard fix -->
 <template>
-  <aside class="side-bar" :class="{ 'side-bar-open': isOpen }" :data-theme="$route.meta.theme || 'light'">
+  <aside class="side-bar" 
+         :class="{ 
+           'side-bar-open': isOpen, 
+           'keyboard-active': isKeyboardActive,
+           'android-device': isAndroid
+         }" 
+         :data-theme="$route.meta.theme || 'light'"
+         ref="sideBar">
+    
     <!-- Overlay that only appears on mobile when sidebar is open -->
     <div class="mobile-sidebar-overlay" v-if="isOpen" @click="closeOverlay"></div>
 
     <div class="sidebar-inner">
       <!-- Tabbed navigation -->
       <div class="sidebar-tabs">
-        <button class="tab-button" :class="{ 'tab-button-active': activeTab === 'services' }"
-          @click="activeTab = 'services'">
+        <button class="tab-button" 
+                :class="{ 'tab-button-active': activeTab === 'services' }"
+                @click="activeTab = 'services'">
           <i class="fas fa-list"></i>
           {{ $t('sidebar.governmentServices', 'Government Services') }}
         </button>
-        <button class="tab-button" :class="{ 'tab-button-active': activeTab === 'history' }"
-          @click="activeTab = 'history'">
+        <button class="tab-button" 
+                :class="{ 'tab-button-active': activeTab === 'history' }"
+                @click="activeTab = 'history'">
           <i class="fas fa-history"></i>
           {{ $t('sidebar.chatHistory', 'Chat History') }}
         </button>
@@ -22,11 +34,15 @@
       <!-- Main flex container for content -->
       <div class="sidebar-content-wrapper">
         <!-- Scrollable content area -->
-        <div class="sidebar-content">
+        <div class="sidebar-content" ref="sidebarContent">
           <!-- Government Services Tab -->
           <div v-if="activeTab === 'services'" class="services-list">
             <!-- Service Tree Panel -->
-            <service-tree-panel-component />
+            <service-tree-panel-component 
+              ref="serviceTree" 
+              @keyboard-focus="handleKeyboardFocus" 
+              @keyboard-blur="handleKeyboardBlur" 
+            />
           </div>
 
           <!-- Chat History Tab -->
@@ -36,7 +52,9 @@
         </div>
 
         <!-- Weather Panel in its own container, not part of the scroll area -->
-        <div class="weather-container">
+        <div class="weather-container" 
+             :class="{ 'hide-on-keyboard': isKeyboardActive }"
+             v-show="!isKeyboardActive">
           <weather-panel class="weather-panel-fixed" />
         </div>
       </div>
@@ -57,18 +75,166 @@ export default {
     WeatherPanel
   },
   props: {
-    isOpen: { type: Boolean, default: true }
+    isOpen: { 
+      type: Boolean, 
+      default: true 
+    }
   },
   data() {
     return {
-      activeTab: 'services'
+      activeTab: 'services',
+      isKeyboardActive: false,
+      initialHeight: 0,
+      isMobileDevice: false,
+      isAndroid: false,
+      sidebarHeight: 0
+    }
+  },
+  mounted() {
+    // Store initial window height
+    this.initialHeight = window.innerHeight;
+    this.sidebarHeight = this.$refs.sideBar ? this.$refs.sideBar.offsetHeight : 0;
+    
+    // Check if mobile device and if Android
+    this.checkDevice();
+    
+    // Add resize event listener
+    window.addEventListener('resize', this.handleResize);
+    
+    // For iOS devices, use VisualViewport API if available
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this.handleVisualViewportResize);
+    }
+    
+    // Add a class to document body for global styling
+    if (this.isAndroid) {
+      document.body.classList.add('android-device');
+    }
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize);
+    
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
+    }
+    
+    // Remove body class
+    if (this.isAndroid) {
+      document.body.classList.remove('android-device');
     }
   },
   methods: {
+    checkDevice() {
+      this.isMobileDevice = window.innerWidth <= 768 || 
+                             /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // Specifically check for Android
+      this.isAndroid = /Android/i.test(navigator.userAgent);
+    },
+    
+    handleResize() {
+      this.checkDevice();
+      
+      // Only run keyboard detection on mobile devices
+      if (this.isMobileDevice) {
+        // If we're on Android and keyboard is active, handle specially
+        if (this.isAndroid && this.isKeyboardActive) {
+          this.handleAndroidKeyboard();
+        } else {
+          // General mobile check (mostly for Android)
+          const heightDifference = this.initialHeight - window.innerHeight;
+          const isKeyboardLikelyOpen = heightDifference > 150;
+          
+          if (isKeyboardLikelyOpen !== this.isKeyboardActive) {
+            this.isKeyboardActive = isKeyboardLikelyOpen;
+            
+            if (isKeyboardLikelyOpen && this.isAndroid) {
+              this.handleAndroidKeyboard();
+            }
+          }
+        }
+      }
+    },
+    
+    // Special Android keyboard handler
+    handleAndroidKeyboard() {
+      if (!this.$refs.sideBar || !this.$refs.sidebarContent) return;
+      
+      // Calculate keyboard height (approximate)
+      const keyboardHeight = this.initialHeight - window.innerHeight;
+      
+      if (keyboardHeight > 150) {
+        // Adjust the sidebar content to remain visible above keyboard
+        const viewportHeight = window.innerHeight;
+        const headerHeight = 60; // Height of the header (approximate)
+        const tabsHeight = 40;   // Height of the tabs (approximate)
+        
+        // Calculate available height for content
+        const availableHeight = viewportHeight - headerHeight - tabsHeight;
+        
+        // Set a minimum content height to keep tree visible
+        const minContentHeight = Math.max(250, availableHeight * 0.7);
+        
+        // Apply content height directly
+        this.$refs.sidebarContent.style.maxHeight = `${minContentHeight}px`;
+        this.$refs.sidebarContent.style.height = `${minContentHeight}px`;
+      }
+    },
+    
+    // Handle visual viewport resize (better for iOS)
+    handleVisualViewportResize() {
+      if (window.visualViewport && this.isMobileDevice) {
+        // If the viewport height is significantly reduced, keyboard is probably open
+        const viewportHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        
+        // If viewport height is less than 75% of window height, keyboard is probably open
+        this.isKeyboardActive = viewportHeight < (windowHeight * 0.75);
+      }
+    },
+    
+    // Handle keyboard focus event from child component
+    handleKeyboardFocus() {
+      this.isKeyboardActive = true;
+      
+      // Add class to body
+      document.body.classList.add('keyboard-open');
+      
+      // Special handling for Android
+      if (this.isAndroid) {
+        this.handleAndroidKeyboard();
+        
+        // Make sure the search box is visible
+        this.$nextTick(() => {
+          if (this.$refs.sidebarContent) {
+            this.$refs.sidebarContent.scrollTop = 0;
+          }
+        });
+      }
+    },
+    
+    // Handle keyboard blur event from child component
+    handleKeyboardBlur() {
+      // Small delay to ensure keyboard has fully closed
+      setTimeout(() => {
+        this.isKeyboardActive = false;
+        
+        // Remove class from body
+        document.body.classList.remove('keyboard-open');
+        
+        // Reset styles for Android
+        if (this.isAndroid && this.$refs.sidebarContent) {
+          this.$refs.sidebarContent.style.maxHeight = '';
+          this.$refs.sidebarContent.style.height = '';
+        }
+      }, 300);
+    },
+    
     openChat(chatId) {
       // Emit the event to parent component
       this.$emit('open-chat', chatId);
     },
+    
     closeOverlay() {
       // Just emit a close event that parent can listen to
       this.$emit('close-sidebar');
@@ -214,8 +380,29 @@ export default {
   margin-top: 5px;
 }
 
+/* Hide weather panel when keyboard is active on mobile */
+.weather-container.hide-on-keyboard {
+  display: none;
+}
+
 .weather-panel-fixed {
   width: 100%;
+}
+
+/* Special styles for when keyboard is active */
+.side-bar.keyboard-active .sidebar-content {
+  /* Give more space to content when keyboard is open */
+  height: 100%;
+  flex-grow: 1;
+}
+
+/* Android-specific styles */
+.side-bar.android-device.keyboard-active {
+  /* Fixed positioning when keyboard is active */
+  position: fixed !important;
+  height: auto !important;
+  /* Ensure the sidebar doesn't extend under the keyboard */
+  bottom: auto !important;
 }
 
 /* Mobile: offscreen unless side-bar-open is set */
@@ -237,12 +424,34 @@ export default {
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
   }
   
+  /* Special treatment for Android keyboard issues */
+  .side-bar.side-bar-open.keyboard-active.android-device {
+    /* Override any height constraints when keyboard is active */
+    height: auto !important;
+    bottom: auto !important; /* Don't extend below keyboard */
+    /* Ensure search remains at the top */
+    transform: translateX(0) !important;
+  }
+  
   .mobile-sidebar-overlay {
     display: block;
   }
   
   .tab-button {
     padding: 12px 0;
+  }
+  
+  /* Make sure search is always visible when keyboard is active */
+  .side-bar.keyboard-active .sidebar-content {
+    padding-bottom: 50px;
+  }
+  
+  /* Android-specific mobile adjustments */
+  .side-bar.android-device.keyboard-active .sidebar-content {
+    height: auto !important;
+    /* Ensure a minimum height for content visibility */
+    min-height: 200px;
+    max-height: 70vh;
   }
 }
 
@@ -268,112 +477,67 @@ export default {
 
 /* Theme Styles - Dark and System Mode */
 /* Dark mode tab styling to match navbar */
-[data-theme="dark"] .tab-button-active,
-html[data-theme="dark"] .tab-button-active,
-[data-theme="system"].dark-mode .tab-button-active,
-html[data-theme="system"].dark-mode .tab-button-active {
+[data-theme="dark"] .tab-button-active {
   background-color: #1e3a58; /* Match navbar dark blue */
   color: white;
 }
 
-[data-theme="dark"] .tab-button:hover:not(.tab-button-active),
-html[data-theme="dark"] .tab-button:hover:not(.tab-button-active),
-[data-theme="system"].dark-mode .tab-button:hover:not(.tab-button-active),
-html[data-theme="system"].dark-mode .tab-button:hover:not(.tab-button-active) {
+[data-theme="dark"] .tab-button:hover:not(.tab-button-active) {
   background-color: rgba(78, 151, 209, 0.15); /* Darker blue hover for dark mode */
   color: rgba(255, 255, 255, 0.9);
 }
 
-[data-theme="dark"] .tab-button,
-html[data-theme="dark"] .tab-button,
-[data-theme="system"].dark-mode .tab-button,
-html[data-theme="system"].dark-mode .tab-button {
+[data-theme="dark"] .tab-button {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .tab-button i,
-html[data-theme="dark"] .tab-button i,
-[data-theme="system"].dark-mode .tab-button i,
-html[data-theme="system"].dark-mode .tab-button i {
+[data-theme="dark"] .tab-button i {
   color: rgba(255, 255, 255, 0.7);
 }
 
-[data-theme="dark"] .tab-button-active i,
-html[data-theme="dark"] .tab-button-active i,
-[data-theme="system"].dark-mode .tab-button-active i,
-html[data-theme="system"].dark-mode .tab-button-active i {
+[data-theme="dark"] .tab-button-active i {
   color: white;
 }
 
 /* Ensure tab bottom border is visible in both modes */
-[data-theme="dark"] .sidebar-tabs,
-html[data-theme="dark"] .sidebar-tabs,
-[data-theme="system"].dark-mode .sidebar-tabs,
-html[data-theme="system"].dark-mode .sidebar-tabs {
+[data-theme="dark"] .sidebar-tabs {
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Section title styling in dark mode */
 [data-theme="dark"] .sidebar-section-title,
-[data-theme="dark"] .sidebar-header h3,
-html[data-theme="dark"] .sidebar-section-title,
-html[data-theme="dark"] .sidebar-header h3,
-[data-theme="system"].dark-mode .sidebar-section-title,
-[data-theme="system"].dark-mode .sidebar-header h3,
-html[data-theme="system"].dark-mode .sidebar-section-title,
-html[data-theme="system"].dark-mode .sidebar-header h3 {
+[data-theme="dark"] .sidebar-header h3 {
   color: rgba(255, 255, 255, 0.7);
 }
 
 /* Dark mode scrollbar styling */
-[data-theme="dark"] *::-webkit-scrollbar,
-html[data-theme="dark"] *::-webkit-scrollbar,
-[data-theme="system"].dark-mode *::-webkit-scrollbar,
-html[data-theme="system"].dark-mode *::-webkit-scrollbar {
+[data-theme="dark"] .sidebar-content::-webkit-scrollbar {
   width: 8px;
   background-color: #2a2a2a;
 }
 
-[data-theme="dark"] *::-webkit-scrollbar-track,
-html[data-theme="dark"] *::-webkit-scrollbar-track,
-[data-theme="system"].dark-mode *::-webkit-scrollbar-track,
-html[data-theme="system"].dark-mode *::-webkit-scrollbar-track {
+[data-theme="dark"] .sidebar-content::-webkit-scrollbar-track {
   background-color: #2a2a2a;
 }
 
-[data-theme="dark"] *::-webkit-scrollbar-thumb,
-html[data-theme="dark"] *::-webkit-scrollbar-thumb,
-[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb,
-html[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb {
+[data-theme="dark"] .sidebar-content::-webkit-scrollbar-thumb {
   background-color: rgba(100, 100, 100, 0.3);
   border-radius: 4px;
 }
 
-[data-theme="dark"] *::-webkit-scrollbar-thumb:hover,
-html[data-theme="dark"] *::-webkit-scrollbar-thumb:hover,
-[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb:hover,
-html[data-theme="system"].dark-mode *::-webkit-scrollbar-thumb:hover {
+[data-theme="dark"] .sidebar-content::-webkit-scrollbar-thumb:hover {
   background-color: rgba(150, 150, 150, 0.4);
 }
 
 /* Firefox scrollbar consistency */
-[data-theme="dark"] *,
-html[data-theme="dark"] *,
-[data-theme="system"].dark-mode *,
-html[data-theme="system"].dark-mode * {
+[data-theme="dark"] .sidebar-content {
   scrollbar-color: rgba(100, 100, 100, 0.3) #2a2a2a;
   scrollbar-width: thin;
 }
 
 /* Dark mode search input and add button */
 [data-theme="dark"] .search-box,
-[data-theme="dark"] .search-container input,
-html[data-theme="dark"] .search-box,
-html[data-theme="dark"] .search-container input,
-[data-theme="system"].dark-mode .search-box,
-[data-theme="system"].dark-mode .search-container input,
-html[data-theme="system"].dark-mode .search-box,
-html[data-theme="system"].dark-mode .search-container input {
+[data-theme="dark"] .search-container input {
   background-color: #333;
   color: var(--text-primary);
   border-color: #444;
@@ -381,16 +545,7 @@ html[data-theme="system"].dark-mode .search-container input {
 
 [data-theme="dark"] .search-container .add-btn,
 [data-theme="dark"] .search-container .plus-btn,
-[data-theme="dark"] .search-container button.add-btn,
-html[data-theme="dark"] .search-container .add-btn,
-html[data-theme="dark"] .search-container .plus-btn,
-html[data-theme="dark"] .search-container button.add-btn,
-[data-theme="system"].dark-mode .search-container .add-btn,
-[data-theme="system"].dark-mode .search-container .plus-btn,
-[data-theme="system"].dark-mode .search-container button.add-btn,
-html[data-theme="system"].dark-mode .search-container .add-btn,
-html[data-theme="system"].dark-mode .search-container .plus-btn,
-html[data-theme="system"].dark-mode .search-container button.add-btn {
+[data-theme="dark"] .search-container button.add-btn {
   background-color: #444;
   color: var(--text-primary);
   border: none;

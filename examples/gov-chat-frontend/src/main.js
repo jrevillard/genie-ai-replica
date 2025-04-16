@@ -144,3 +144,107 @@ app.mount('#app')
 if (process.env.NODE_ENV === 'development') {
   console.log("Active locale (after mount):", i18n.global.locale)
 }
+
+// Function to set the actual viewport height as a CSS variable
+function setViewportHeight() {
+  // Get the actual viewport height
+  const vh = window.innerHeight * 0.01;
+  // Set the value as a CSS variable
+  document.documentElement.style.setProperty('--window-height', `${window.innerHeight}px`);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  // Set initial height
+  setViewportHeight();
+  
+  // Update on resize
+  window.addEventListener('resize', setViewportHeight);
+  
+  // For iOS devices, use VisualViewport API if available
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      // Update the CSS variable with the visual viewport height
+      document.documentElement.style.setProperty('--window-height', `${window.visualViewport.height}px`);
+      
+      // Check if keyboard is likely open (viewport significantly smaller)
+      const heightDifference = window.innerHeight - window.visualViewport.height;
+      const isKeyboardOpen = heightDifference > 150;
+      
+      // Add/remove class from body
+      if (isKeyboardOpen) {
+        document.body.classList.add('keyboard-open');
+      } else {
+        document.body.classList.remove('keyboard-open');
+      }
+    });
+  }
+});
+
+// Helper function to detect iOS devices
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// Add iOS-specific class if needed
+if (isIOS()) {
+  document.documentElement.classList.add('ios-device');
+}
+
+// Add this code to your main.js file or create a separate file and import it
+
+// Function to handle Android keyboard behavior
+const handleAndroidKeyboard = () => {
+  // Detect Android devices
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  
+  if (!isAndroid) return;
+  
+  // Add Android flag to document
+  document.documentElement.classList.add('android-device');
+  
+  // Store initial window height
+  const initialWindowHeight = window.innerHeight;
+  
+  // Listen for resize events to detect keyboard
+  window.addEventListener('resize', () => {
+    const currentHeight = window.innerHeight;
+    const heightDifference = initialWindowHeight - currentHeight;
+    
+    // If height difference is significant, keyboard is likely open
+    if (heightDifference > 150) {
+      document.documentElement.classList.add('keyboard-open');
+      
+      // Set CSS variable for keyboard height
+      document.documentElement.style.setProperty('--keyboard-height', `${heightDifference}px`);
+      document.documentElement.style.setProperty('--visible-height', `${currentHeight}px`);
+    } else {
+      document.documentElement.classList.remove('keyboard-open');
+      document.documentElement.style.removeProperty('--keyboard-height');
+      document.documentElement.style.removeProperty('--visible-height');
+    }
+  });
+  
+  // Add listener for input focus/blur
+  document.addEventListener('focusin', (event) => {
+    // Only handle input and textarea elements
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+      document.documentElement.classList.add('input-focused');
+    }
+  });
+  
+  document.addEventListener('focusout', (event) => {
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+      // Use timeout to ensure keyboard is fully closed
+      setTimeout(() => {
+        document.documentElement.classList.remove('input-focused');
+      }, 300);
+    }
+  });
+};
+
+// Initialize when the DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  handleAndroidKeyboard();
+});

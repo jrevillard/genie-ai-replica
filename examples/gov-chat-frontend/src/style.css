@@ -532,3 +532,101 @@ text.value {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Add these styles to your global CSS file (e.g., App.vue or main.css) */
+
+/* Handle keyboard appearance on mobile devices */
+@media screen and (max-width: 768px) {
+  /* Applied to body when virtual keyboard is open */
+  body.keyboard-open {
+    /* Prevent scrolling of background content */
+    height: var(--window-height, 100%);
+    overflow: hidden;
+  }
+  
+  /* Prevent content jumps when keyboard appears */
+  body.keyboard-open .app-container {
+    height: var(--window-height, 100vh);
+    overflow: hidden;
+  }
+  
+  /* Fix iOS-specific issues with viewport height */
+  @supports (-webkit-touch-callout: none) {
+    .side-bar.keyboard-active {
+      /* Use a fixed position strategy for iOS */
+      position: fixed !important;
+      top: 60px !important; /* Match header height */
+      left: 0 !important;
+      height: calc(var(--window-height, 100vh) - 60px) !important;
+      z-index: 1000 !important;
+    }
+    
+    /* Fix iOS safari address bar issues */
+    .side-bar.keyboard-active .sidebar-content {
+      /* Add extra padding to ensure content is visible above keyboard */
+      padding-bottom: 100px !important;
+    }
+  }
+}
+
+/* Add variables for viewport height management */
+:root {
+  --window-height: 100vh;
+}
+
+/* Android-specific fixes for virtual keyboard */
+:root {
+  --keyboard-height: 0px;
+  --visible-height: 100vh;
+}
+
+/* Apply to html element to handle Android keyboard */
+html.android-device.keyboard-open {
+  /* Prevent scrolling of the main content behind sidebars */
+  overflow: hidden;
+  height: var(--visible-height);
+}
+
+/* Special handling for inputs when keyboard is open */
+html.android-device.keyboard-open.input-focused .side-bar.side-bar-open {
+  /* Ensure sidebar doesn't get pushed off screen */
+  position: fixed !important;
+  top: 60px !important; /* Adjust based on your header height */
+  bottom: auto !important;
+  height: auto !important;
+  max-height: var(--visible-height) !important;
+  overflow: hidden !important;
+}
+
+/* Ensure sidebar content is scrollable */
+html.android-device.keyboard-open.input-focused .sidebar-content {
+  max-height: calc(var(--visible-height) - 110px) !important; /* Adjust for header + tabs */
+  overflow-y: auto !important;
+}
+
+/* Keep search component visible */
+html.android-device.keyboard-open.input-focused .search-container {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 50 !important;
+  background-color: var(--bg-sidebar) !important;
+}
+
+/* Hide weather panel when keyboard is open */
+html.android-device.keyboard-open.input-focused .weather-container {
+  display: none !important;
+}
+
+/* Create more space for tree when keyboard is open */
+html.android-device.keyboard-open.input-focused .tree-list-container {
+  min-height: 200px !important;
+  max-height: calc(var(--visible-height) - 150px) !important;
+  overflow-y: auto !important;
+}
+
+/* Android focus specific styling */
+.search-box:focus {
+  /* Add a subtle highlight when focused */
+  box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.3) !important;
+  border-color: #4E97D1 !important;
+}

@@ -1,15 +1,17 @@
-<!-- ServiceTreePanelComponent.vue - Fixed to handle missing name property -->
+<!-- ServiceTreePanelComponent.vue with Android keyboard fix -->
 <template>
-  <div class="service-tree-panel">
+  <div class="service-tree-panel" ref="treePanel">
     <h4>{{ $t('sidebar.governmentServices', 'Government Services') }}</h4>
 
-    <div class="search-container">
+    <div class="search-container" ref="searchContainer">
       <input
         v-model="searchQuery"
         class="search-box"
         type="text"
         :placeholder="$t('sidebar.searchPlaceholder', 'Search services...')"
         @input="performSearch"
+        @focus="handleInputFocus"
+        @blur="handleInputBlur"
       />
       <button 
         class="expand-collapse-btn" 
@@ -20,34 +22,35 @@
       </button>
     </div>
 
-    <!-- No scrolling in this element, let the parent handle it -->
-    <ul class="service-tree-list">
-      <li v-for="(node, index) in nodes" :key="node.catKey">
-        <div class="node-label" @click="toggleNode(node)">
-          <span v-if="node.children && node.children.length > 0" class="toggle-icon">
-            {{ node.expanded ? '▼' : '▶' }}
-          </span>
-          <span class="node-name">{{ node.name }}</span>
-        </div>
+    <div class="tree-list-container" ref="treeListContainer">
+      <ul class="service-tree-list">
+        <li v-for="node in nodes" :key="node.catKey">
+          <div class="node-label" @click="toggleNode(node)">
+            <span v-if="node.children && node.children.length > 0" class="toggle-icon">
+              {{ node.expanded ? '▼' : '▶' }}
+            </span>
+            <span class="node-name">{{ node.name }}</span>
+          </div>
 
-        <ul
-          v-if="node.expanded && node.children && node.children.length > 0"
-          class="child-list"
-        >
-          <li
-            v-for="(childName, cIndex) in node.children"
-            :key="cIndex"
-            @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
-            :class="{ 'selected': isChildSelected(node.catKey, cIndex) }"
+          <ul
+            v-if="node.expanded && node.children && node.children.length > 0"
+            class="child-list"
           >
-            <div class="node-label child-row">
-              <span class="toggle-icon placeholder"></span>
-              <span class="node-name">{{ childName }}</span>
-            </div>
-          </li>
-        </ul>
-      </li>
-    </ul>
+            <li
+              v-for="(childName, cIndex) in node.children"
+              :key="cIndex"
+              @click.stop="toggleChildSelection(node.catKey, childName, cIndex)"
+              :class="{ 'selected': isChildSelected(node.catKey, cIndex) }"
+            >
+              <div class="node-label child-row">
+                <span class="toggle-icon placeholder"></span>
+                <span class="node-name">{{ childName }}</span>
+              </div>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -63,7 +66,8 @@ export default {
       searchQuery: '',
       selectedNodes: {},
       nodes: [],
-      currentLocale: 'en'
+      currentLocale: 'en',
+      isAndroid: false
     }
   },
   
@@ -91,11 +95,73 @@ export default {
     
     // Initial load of categories
     this.loadCategories(this.currentLocale);
+    
+    // Detect Android
+    this.isAndroid = /Android/i.test(navigator.userAgent);
   },
   
   mounted() {
     console.log('ServiceTreePanel - mounted');
     eventBus.$on('contextItemRemoved', this.handleContextItemRemoved);
+
+    // Add Android keyboard detection
+    if (/Android/i.test(navigator.userAgent)) {
+      const originalHeight = window.innerHeight;
+
+      // Listen for resize events (keyboard opening/closing)
+      window.addEventListener('resize', () => {
+        // If keyboard is likely open (height decreased significantly)
+        if (window.innerHeight < originalHeight * 0.75) {
+          // Force sidebar open
+          const sideBar = document.querySelector('.side-bar');
+          if (sideBar) {
+            sideBar.classList.add('side-bar-open');
+            sideBar.style.transform = 'translateX(0)';
+            sideBar.style.display = 'block';
+            sideBar.style.position = 'fixed';
+            sideBar.style.top = '60px'; // Adjust based on your header height
+            sideBar.style.bottom = '0';
+            sideBar.style.zIndex = '9999';
+          }
+
+          // Add fixed position to sidebar content
+          const sidebarContent = document.querySelector('.sidebar-content');
+          if (sidebarContent) {
+            sidebarContent.style.display = 'block';
+            sidebarContent.style.overflow = 'auto';
+            sidebarContent.style.height = 'auto';
+            sidebarContent.style.maxHeight = '70vh';
+          }
+
+          // Hide any elements that might interfere
+          const weatherContainer = document.querySelector('.weather-container');
+          if (weatherContainer) {
+            weatherContainer.style.display = 'none';
+          }
+        } else {
+          // Restore normal state
+          const sideBar = document.querySelector('.side-bar');
+          if (sideBar) {
+            sideBar.style.position = '';
+            sideBar.style.top = '';
+            sideBar.style.bottom = '';
+            sideBar.style.zIndex = '';
+          }
+
+          const sidebarContent = document.querySelector('.sidebar-content');
+          if (sidebarContent) {
+            sidebarContent.style.overflow = '';
+            sidebarContent.style.height = '';
+            sidebarContent.style.maxHeight = '';
+          }
+
+          const weatherContainer = document.querySelector('.weather-container');
+          if (weatherContainer) {
+            weatherContainer.style.display = '';
+          }
+        }
+      });
+    }
   },
   
   beforeUnmount() {
@@ -103,8 +169,73 @@ export default {
   },
   
   methods: {
-    // No longer needed
-    
+
+    // Handle focus on search input
+    handleInputFocus() {
+      // Specifically for Android devices
+      if (/Android/i.test(navigator.userAgent)) {
+        // Prevent the sidebar from being toggled/closed when keyboard opens
+        const sideBar = document.querySelector('.side-bar');
+        if (sideBar) {
+          // Force sidebar to stay open regardless of toggle state
+          sideBar.style.transform = 'translateX(0)';
+
+          // Store original width to restore it later
+          sideBar._originalWidth = sideBar.style.width;
+
+          // Ensure sidebar has proper width
+          sideBar.style.width = '85%';
+          sideBar.style.maxWidth = '320px';
+
+          // Set a high z-index to keep it above other elements
+          sideBar.style.zIndex = '9999';
+        }
+
+        // Force the sidebar content to stay visible
+        const sidebarContent = document.querySelector('.sidebar-content');
+        if (sidebarContent) {
+          sidebarContent.style.display = 'block';
+          sidebarContent.style.visibility = 'visible';
+        }
+
+        // Add a flag to body to indicate keyboard is open
+        document.body.classList.add('android-keyboard-open');
+      }
+    },
+
+    // Handle blur on search input
+    handleInputBlur() {
+      // For Android devices
+      if (/Android/i.test(navigator.userAgent)) {
+        // Use timeout to ensure keyboard has fully closed
+        setTimeout(() => {
+          // Restore sidebar to its original state
+          const sideBar = document.querySelector('.side-bar');
+          if (sideBar) {
+            // If sidebar is meant to be closed, restore transform
+            if (!sideBar.classList.contains('side-bar-open')) {
+              sideBar.style.transform = 'translateX(-100%)';
+            } else {
+              sideBar.style.transform = '';
+            }
+
+            // Restore original width if it was stored
+            if (sideBar._originalWidth !== undefined) {
+              sideBar.style.width = sideBar._originalWidth;
+              delete sideBar._originalWidth;
+            } else {
+              sideBar.style.width = '';
+            }
+
+            sideBar.style.maxWidth = '';
+            sideBar.style.zIndex = '';
+          }
+
+          // Remove the flag from body
+          document.body.classList.remove('android-keyboard-open');
+        }, 300);
+      }
+    },
     // Load categories from the API
     async loadCategories(locale) {
       try {
@@ -116,9 +247,10 @@ export default {
           throw new Error('Invalid API response format');
         }
         
-        categories.forEach((cat, index) => {
+        // Check categories without using unused index variable
+        categories.forEach(cat => {
           if (!cat.name) {
-            console.warn(`Category at index ${index} is missing name property:`, cat);
+            console.warn(`Category ${cat.catKey || 'unknown'} is missing name property:`, cat);
           }
         });
         
@@ -131,6 +263,60 @@ export default {
         console.log('Categories loaded:', this.nodes);
       } catch (error) {
         console.error('Error loading categories:', error);
+      }
+    },
+    
+    // Handle focus on search input - for Android keyboard issues
+    handleInputFocus() {
+      // Only apply on Android
+      if (this.isAndroid) {
+        // Force the sidebar content to remain visible
+        const sidebarContent = document.querySelector('.sidebar-content');
+        if (sidebarContent) {
+          sidebarContent.style.position = 'fixed';
+          sidebarContent.style.top = '60px';
+          sidebarContent.style.bottom = '0';
+          sidebarContent.style.left = '0';
+          sidebarContent.style.width = '85%';
+          sidebarContent.style.maxWidth = '320px';
+          sidebarContent.style.zIndex = '9999';
+          sidebarContent.style.backgroundColor = 'var(--bg-sidebar, #222)';
+          sidebarContent.style.overflowY = 'auto';
+        }
+        
+        // Show the weather container
+        const weatherContainer = document.querySelector('.weather-container');
+        if (weatherContainer) {
+          weatherContainer.style.display = 'none';
+        }
+      }
+    },
+    
+    // Handle blur on search input
+    handleInputBlur() {
+      // Reset styles after delay to ensure keyboard closed
+      if (this.isAndroid) {
+        setTimeout(() => {
+          // Reset sidebar content position
+          const sidebarContent = document.querySelector('.sidebar-content');
+          if (sidebarContent) {
+            sidebarContent.style.position = '';
+            sidebarContent.style.top = '';
+            sidebarContent.style.bottom = '';
+            sidebarContent.style.left = '';
+            sidebarContent.style.width = '';
+            sidebarContent.style.maxWidth = '';
+            sidebarContent.style.zIndex = '';
+            sidebarContent.style.backgroundColor = '';
+            sidebarContent.style.overflowY = '';
+          }
+          
+          // Show the weather container
+          const weatherContainer = document.querySelector('.weather-container');
+          if (weatherContainer) {
+            weatherContainer.style.display = '';
+          }
+        }, 300);
       }
     },
     
@@ -221,22 +407,9 @@ export default {
   flex-direction: column;
   font-size: 10pt;
   overflow-y: auto;
-}
-
-/* Dark mode specific scrollbar */
-[data-theme="dark"] .service-tree-panel::-webkit-scrollbar {
-  width: 8px;
-  background-color: var(--bg-sidebar);
-}
-
-[data-theme="dark"] .service-tree-panel::-webkit-scrollbar-thumb {
-  background-color: rgba(150, 150, 150, 0.2);
-  border-radius: 4px;
-}
-
-[data-theme="dark"] .service-tree-panel {
-  scrollbar-color: rgba(150, 150, 150, 0.2) var(--bg-sidebar);
-  scrollbar-width: thin;
+  /* Ensure the panel stays attached to the screen */
+  position: relative;
+  z-index: 10;
 }
 
 .service-tree-panel h4 {
@@ -252,6 +425,12 @@ export default {
   display: flex;
   margin-bottom: 8px;
   flex-shrink: 0;
+  /* Keep search at top when scrolling */
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: var(--bg-sidebar, #fff);
+  padding: 4px 0;
 }
 
 .search-box {
@@ -289,13 +468,20 @@ export default {
   background-color: #e5e5e5;
 }
 
-/* Main tree list - NO SCROLLING, parent handles it */
+/* Container for tree list to control dimensions */
+.tree-list-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  /* Default min-height to ensure tree is always visible */
+  min-height: 200px;
+  transition: height 0.3s ease;
+}
+
+/* Main tree list */
 .service-tree-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  overflow: visible !important;
-  flex-grow: 1;
 }
 
 .service-tree-list li {
@@ -314,6 +500,7 @@ export default {
 .node-label:hover {
   background-color: #f0f0f0;
 }
+
 .toggle-icon {
   width: 18px;
   text-align: center;
@@ -321,9 +508,11 @@ export default {
   color: #666;
   font-size: 10pt;
 }
+
 .toggle-icon.placeholder {
   visibility: hidden;
 }
+
 .node-name {
   flex: 1;
   color: #333;
@@ -359,52 +548,13 @@ li {
   list-style-type: none !important;
 }
 
-/* Add these styles to the component's scoped CSS */
-h4,
-.service-tree-panel h4,
-.service-categories-title,
-.knowledge-areas-title {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 10px 16px;
-}
-
-[data-theme="dark"] h4,
-[data-theme="dark"] .service-tree-panel h4,
-[data-theme="dark"] .service-categories-title,
-[data-theme="dark"] .knowledge-areas-title,
-html[data-theme="dark"] h4,
-html[data-theme="dark"] .service-tree-panel h4,
-html[data-theme="dark"] .service-categories-title,
-html[data-theme="dark"] .knowledge-areas-title {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-.service-tree-panel h4 {
-  color: #333;
-}
-
-[data-theme="dark"] .service-tree-panel {
-  scrollbar-color: rgba(100, 100, 100, 0.3) var(--bg-sidebar);
-  scrollbar-width: thin;
-}
-
-[data-theme="dark"] .service-tree-panel::-webkit-scrollbar {
-  width: 8px;
-  background-color: var(--bg-sidebar);
-}
-
-[data-theme="dark"] .service-tree-panel::-webkit-scrollbar-thumb {
-  background-color: rgba(150, 150, 150, 0.2);
-  border-radius: 4px;
+/* Dark mode specific styles */
+[data-theme="dark"] .service-tree-panel h4 {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 [data-theme="dark"] .search-container {
-  background-color: transparent;
+  background-color: var(--bg-sidebar);
 }
 
 [data-theme="dark"] .search-box {
@@ -413,18 +563,44 @@ html[data-theme="dark"] .knowledge-areas-title {
   border: 1px solid var(--border-input) !important;
 }
 
-[data-theme="dark"] .expand-collapse-btn,
-[data-theme="dark"] .search-container .add-btn,
-[data-theme="dark"] .search-container .plus-btn {
+[data-theme="dark"] .expand-collapse-btn {
   background-color: var(--bg-button-secondary) !important;
   color: var(--text-button-secondary) !important;
   border: 1px solid var(--border-light);
   border-radius: 4px;
 }
 
-[data-theme="dark"] .search-container .expand-collapse-btn:hover,
-[data-theme="dark"] .search-container .add-btn:hover,
-[data-theme="dark"] .search-container .plus-btn:hover {
-  background-color: rgba(150, 150, 150, 0.2) !important;
+[data-theme="dark"] .node-name {
+  color: var(--text-primary);
+}
+
+/* Mobile specific styles */
+@media screen and (max-width: 768px) {
+  /* Make search sticky in mobile view */
+  .search-container {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    padding: 8px 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Ensure tree is visible when keyboard is open */
+  .tree-list-container {
+    /* Default min-height for mobile */
+    min-height: 200px;
+  }
+}
+
+[data-theme="dark"] h4,
+[data-theme="dark"] .service-tree-panel h4,
+[data-theme="dark"] .service-categories-title,
+[data-theme="dark"] .knowledge-areas-title {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+[data-theme="dark"] .sidebar-section-title,
+[data-theme="dark"] .sidebar-header h3 {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 </style>

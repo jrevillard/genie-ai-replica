@@ -1,12 +1,25 @@
 # Use Node.js 22.14.0 as the base image
-FROM node:22.14.0-alpine
+FROM node:22.14.0
+
+# Use alternative approach for package installation
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        make \
+        build-essential \
+        && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
-COPY package.json package-lock.json ./
-RUN npm install
+# Copy package.json and package-lock.json first
+COPY package*.json ./
+
+# Use a robust NPM installation strategy
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm install --verbose --fetch-timeout 600000 || \
+    npm install --prefer-offline || \
+    npm ci
 
 # Copy the entire backend project
 COPY . .
@@ -32,7 +45,7 @@ ENV SESSION_SECRET=your_session_secret_here
 ENV SESSION_EXPIRATION_TIME=1800000
 
 # CORS Configuration
-ENV CORS_ORIGIN=http://localhost:8080
+ENV CORS_ORIGIN=https://e2e-82-109.ssdcloudindia.net/
 
 # Email configuration
 ENV EMAIL_HOST=in-V3.mailjet.com
@@ -50,6 +63,13 @@ ENV ARANGO_DB=node-services
 ENV ARANGO_USER=root
 ENV ARANGO_PASSWORD=test
 
+# Database backups
+ENV BACKUP_DIR=./database_backups
+ENV MAX_BACKUPS=5
+ENV BACKUP_FORMAT=json
+
+# Logger config
+ENV LOG_LEVEL=debug
+
 # Start the backend service
 CMD ["node", "index.js"]
-

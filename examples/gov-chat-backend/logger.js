@@ -38,10 +38,11 @@ let loggerConfig = {
 let logger = createLogger(loggerConfig);
 
 // Store references to the DailyRotateFile transports for manual rotation
-const errorTransport = logger.transports.find(
+// Changed from const to let so we can update the references
+let errorTransport = logger.transports.find(
   (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
 );
-const combinedTransport = logger.transports.find(
+let combinedTransport = logger.transports.find(
   (transport) => transport instanceof DailyRotateFile && !transport.level
 );
 
@@ -91,13 +92,34 @@ const reconfigureLogger = (newConfig) => {
 
 // Function to trigger an immediate log rollover
 const triggerLogRollover = () => {
-  if (errorTransport) {
-    errorTransport.rotate();
-    logger.info('Error log rolled over manually');
-  }
-  if (combinedTransport) {
-    combinedTransport.rotate();
-    logger.info('Combined log rolled over manually');
+  try {
+    // Re-find the transports in case they've changed
+    const currentErrorTransport = logger.transports.find(
+      (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
+    );
+    
+    const currentCombinedTransport = logger.transports.find(
+      (transport) => transport instanceof DailyRotateFile && !transport.level
+    );
+    
+    if (currentErrorTransport && typeof currentErrorTransport.rotate === 'function') {
+      currentErrorTransport.rotate();
+      logger.info('Error log rolled over manually');
+    } else {
+      logger.warn('Error log transport not found or does not support rotation');
+    }
+    
+    if (currentCombinedTransport && typeof currentCombinedTransport.rotate === 'function') {
+      currentCombinedTransport.rotate();
+      logger.info('Combined log rolled over manually');
+    } else {
+      logger.warn('Combined log transport not found or does not support rotation');
+    }
+    
+    logger.info('Log rollover operation completed');
+  } catch (error) {
+    logger.error(`Error during log rollover: ${error.message}`);
+    throw error; // Re-throw to be caught by the controller
   }
 };
 

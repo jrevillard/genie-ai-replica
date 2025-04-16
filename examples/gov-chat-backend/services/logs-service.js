@@ -8,6 +8,11 @@ const util = require('util');
 // Promisify zlib methods
 const gunzip = util.promisify(zlib.gunzip);
 
+// Set maximum log file size to prevent stack overflow
+const MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// Set maximum number of lines to process at once
+const MAX_LINES_TO_PROCESS = 50000;
+
 /**
  * Service for managing system logs
  */
@@ -46,13 +51,32 @@ const logsService = {
         let logContent;
         
         try {
+          // Check if file exists before reading
+          await this.fileExists(logFile);
+          
           // First try reading uncompressed file
-          logContent = await fs.readFile(logFile, 'utf8');
+          const stats = await fs.stat(logFile);
+          
+          // Check file size to prevent stack overflow
+          if (stats.size > MAX_LOG_FILE_SIZE) {
+            logger.warn(`Log file is too large (${Math.round(stats.size / 1024 / 1024)}MB), reading first ${Math.round(MAX_LOG_FILE_SIZE / 1024 / 1024)}MB only`);
+            const fileHandle = await fs.open(logFile, 'r');
+            const buffer = Buffer.alloc(MAX_LOG_FILE_SIZE);
+            await fileHandle.read(buffer, 0, MAX_LOG_FILE_SIZE, 0);
+            await fileHandle.close();
+            logContent = buffer.toString('utf8');
+          } else {
+            logContent = await fs.readFile(logFile, 'utf8');
+          }
+          
           logger.debug(`Successfully read log file: ${logFile}`);
         } catch (err) {
           // Try compressed file if uncompressed doesn't exist
           const compressedLogFile = `${logFile}.gz`;
           try {
+            // Check if compressed file exists before reading
+            await this.fileExists(compressedLogFile);
+            
             logger.debug(`Trying compressed log file: ${compressedLogFile}`);
             const compressedData = await fs.readFile(compressedLogFile);
             logContent = (await gunzip(compressedData)).toString('utf8');
@@ -61,15 +85,53 @@ const logsService = {
             // If dated file doesn't exist, try the current combined.log
             if (date === new Date().toISOString().split('T')[0]) {
               const currentLogFile = path.join(__dirname, '../logs/combined.log');
-              logContent = await fs.readFile(currentLogFile, 'utf8');
-              logger.debug(`Reading current log file instead: ${currentLogFile}`);
+              
+              try {
+                // Check if current log file exists before reading
+                await this.fileExists(currentLogFile);
+                
+                const stats = await fs.stat(currentLogFile);
+                
+                // Check file size to prevent stack overflow
+                if (stats.size > MAX_LOG_FILE_SIZE) {
+                  logger.warn(`Current log file is too large (${Math.round(stats.size / 1024 / 1024)}MB), reading first ${Math.round(MAX_LOG_FILE_SIZE / 1024 / 1024)}MB only`);
+                  const fileHandle = await fs.open(currentLogFile, 'r');
+                  const buffer = Buffer.alloc(MAX_LOG_FILE_SIZE);
+                  await fileHandle.read(buffer, 0, MAX_LOG_FILE_SIZE, 0);
+                  await fileHandle.close();
+                  logContent = buffer.toString('utf8');
+                } else {
+                  logContent = await fs.readFile(currentLogFile, 'utf8');
+                }
+                
+                logger.debug(`Reading current log file instead: ${currentLogFile}`);
+              } catch (currentFileErr) {
+                logger.error(`Error reading current log file: ${currentFileErr.message}`);
+                return {
+                  errors: [],
+                  warnings: [],
+                  date
+                };
+              }
             } else {
-              throw err; // Re-throw if it's not today's date
+              logger.error(`No log file found for date ${date}`);
+              return {
+                errors: [],
+                warnings: [],
+                date
+              };
             }
           }
         }
         
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+        // Split logs into lines and limit the number to process
+        let logLines = logContent.split('\n').filter(line => line.trim() !== '');
+        
+        if (logLines.length > MAX_LINES_TO_PROCESS) {
+          logger.warn(`Too many log lines (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
+          logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
+        }
+        
         logger.debug(`Processing ${logLines.length} log lines for summary`);
         
         // Extract error and warning logs
@@ -102,6 +164,24 @@ const logsService = {
   },
 
   /**
+   * Check if a file exists
+   * @param {string} filePath - Path to the file
+   * @returns {Promise<boolean>} Whether the file exists
+   */
+  async fileExists(filePath) {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        logger.debug(`File does not exist: ${filePath}`);
+        throw new Error(`File not found: ${filePath}`);
+      }
+      throw error;
+    }
+  },
+
+  /**
    * Read file content, handling both compressed and uncompressed files
    * @param {string} filePath - Path to the file
    * @returns {Promise<string>} File content as string
@@ -109,7 +189,22 @@ const logsService = {
   async readLogFile(filePath) {
     try {
       // Try reading as uncompressed first
-      return await fs.readFile(filePath, 'utf8');
+      // Check if file exists
+      await this.fileExists(filePath);
+      
+      // Check file size to prevent stack overflow
+      const stats = await fs.stat(filePath);
+      
+      if (stats.size > MAX_LOG_FILE_SIZE) {
+        logger.warn(`Log file is too large (${Math.round(stats.size / 1024 / 1024)}MB), reading first ${Math.round(MAX_LOG_FILE_SIZE / 1024 / 1024)}MB only`);
+        const fileHandle = await fs.open(filePath, 'r');
+        const buffer = Buffer.alloc(MAX_LOG_FILE_SIZE);
+        await fileHandle.read(buffer, 0, MAX_LOG_FILE_SIZE, 0);
+        await fileHandle.close();
+        return buffer.toString('utf8');
+      } else {
+        return await fs.readFile(filePath, 'utf8');
+      }
     } catch (err) {
       // If the file doesn't exist, check if a compressed version exists
       if (err.code === 'ENOENT' && !filePath.endsWith('.gz')) {
@@ -117,6 +212,9 @@ const logsService = {
         logger.debug(`Trying compressed file: ${compressedFilePath}`);
         
         try {
+          // Check if compressed file exists
+          await this.fileExists(compressedFilePath);
+          
           const compressedData = await fs.readFile(compressedFilePath);
           const decompressedData = await gunzip(compressedData);
           logger.debug(`Successfully read and decompressed: ${compressedFilePath}`);
@@ -179,11 +277,19 @@ const logsService = {
             // Use the readLogFile method which handles both compressed and uncompressed
             logContent = await this.readLogFile(file);
           } catch (readError) {
+            // Log the error but continue with other files
             logger.error(`Error reading log file ${file}: ${readError.message}`);
             continue; // Skip to the next file
           }
           
-          const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+          // Limit the number of lines to process
+          let logLines = logContent.split('\n').filter(line => line.trim() !== '');
+          
+          if (logLines.length > MAX_LINES_TO_PROCESS) {
+            logger.warn(`Too many log lines in ${file} (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
+            logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
+          }
+          
           logger.debug(`Found ${logLines.length} lines in ${file}`);
 
           // Special handling for error log files
@@ -207,6 +313,7 @@ const logsService = {
           allLogs.push(...parsedLogs);
         } catch (error) {
           logger.error(`Error processing log file ${file}: ${error.message}`);
+          // Continue with the next file
         }
       }
 
@@ -329,25 +436,29 @@ const logsService = {
         
         const [, date, time, logLevel, message] = match;
         
-        // Extract service information from the message
+        // Extract service information from the message - use a safer approach
         let service = 'System';
         
-        // Try to extract service from typical patterns
-        const serviceMatch = message.match(/\[([^\]]+)\]/); // Look for service in brackets
-        if (serviceMatch) {
-          service = serviceMatch[1];
-        } else if (message.includes('API Gateway')) {
-          service = 'API Gateway';
-        } else if (message.includes('Auth Service')) {
-          service = 'Auth Service';
-        } else if (message.includes('Database')) {
-          service = 'Database';
-        } else if (message.includes('Storage')) {
-          service = 'Storage';
-        } else if (message.includes('External API')) {
-          service = 'External API';
-        } else if (message.includes('Cache')) {
-          service = 'Cache';
+        try {
+          // Try to extract service from typical patterns
+          const serviceMatch = message.match(/\[([^\]]+)\]/); // Look for service in brackets
+          if (serviceMatch) {
+            service = serviceMatch[1];
+          } else if (message.includes('API Gateway')) {
+            service = 'API Gateway';
+          } else if (message.includes('Auth Service')) {
+            service = 'Auth Service';
+          } else if (message.includes('Database')) {
+            service = 'Database';
+          } else if (message.includes('Storage')) {
+            service = 'Storage';
+          } else if (message.includes('External API')) {
+            service = 'External API';
+          } else if (message.includes('Cache')) {
+            service = 'Cache';
+          }
+        } catch (error) {
+          logger.warn(`Error detecting service from message: ${error.message}`);
         }
         
         return {
@@ -374,27 +485,40 @@ const logsService = {
     const groups = {};
     
     logs.forEach(log => {
-      // Create a simple "type" from the message by taking the first part
-      let type = log.message.split(':')[0];
-      
-      // If no colon, use first few words
-      if (type === log.message) {
-        const words = log.message.split(' ').slice(0, 3).join(' ');
-        type = words + (words.length < log.message.length ? '...' : '');
+      try {
+        // Create a simple "type" from the message by taking the first part
+        let type = '';
+        
+        if (log.message && log.message.split) {
+          type = log.message.split(':')[0] || '';
+          
+          // If no colon, use first few words (safely)
+          if (type === log.message) {
+            const words = log.message.split(' ').slice(0, 3).join(' ');
+            type = words + (words.length < log.message.length ? '...' : '');
+          }
+        } else {
+          // Handle case where message is not a string
+          type = 'Unknown';
+          logger.warn(`Invalid log message format: ${typeof log.message}`);
+        }
+        
+        const service = log.service || 'System';
+        const key = `${type}|${service}`;
+        
+        if (!groups[key]) {
+          groups[key] = {
+            type,
+            typeKey: type.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+            service,
+            count: 0
+          };
+        }
+        
+        groups[key].count++;
+      } catch (error) {
+        logger.warn(`Error grouping log: ${error.message}`);
       }
-      
-      const key = `${type}|${log.service}`;
-      
-      if (!groups[key]) {
-        groups[key] = {
-          type,
-          typeKey: type.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
-          service: log.service,
-          count: 0
-        };
-      }
-      
-      groups[key].count++;
     });
     
     return Object.values(groups);
@@ -407,80 +531,104 @@ const logsService = {
  * @returns {Array} Parsed log entries
  */
   parseLogs(logLines, defaultLevel = null) {
-    const logs = logLines
-      .map(line => {
-        // Try standard log format first: 2025-04-02 16:00:29 [INFO]: Message
-        const standardMatch = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
-        if (standardMatch) {
-          const [, date, time, level, message] = standardMatch;
-          return {
-            date,  // This is YYYY-MM-DD format
-            time,
-            level: defaultLevel || level,
-            message,
-            service: this.detectService(message)
-          };
-        }
+    try {
+      const logs = logLines
+        .map((line, index) => {
+          try {
+            // Skip empty lines or non-string values
+            if (!line || typeof line !== 'string' || line.trim() === '') {
+              return null;
+            }
+            
+            // Prevent stack overflow by limiting line length
+            const truncatedLine = line.length > 2000 ? line.substring(0, 2000) + '...' : line;
+            
+            // Try standard log format first: 2025-04-02 16:00:29 [INFO]: Message
+            const standardMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
+            if (standardMatch) {
+              const [, date, time, level, message] = standardMatch;
+              return {
+                date,  // This is YYYY-MM-DD format
+                time,
+                level: defaultLevel || level,
+                message,
+                service: this.detectService(message)
+              };
+            }
 
-        // Try alternative format: 2025-04-02 16:00:29 [INFO] Message
-        const altMatch1 = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
-        if (altMatch1) {
-          const [, date, time, level, message] = altMatch1;
-          return {
-            date,  // This is YYYY-MM-DD format
-            time,
-            level: defaultLevel || level,
-            message,
-            service: this.detectService(message)
-          };
-        }
+            // Try alternative format: 2025-04-02 16:00:29 [INFO] Message
+            const altMatch1 = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
+            if (altMatch1) {
+              const [, date, time, level, message] = altMatch1;
+              return {
+                date,  // This is YYYY-MM-DD format
+                time,
+                level: defaultLevel || level,
+                message,
+                service: this.detectService(message)
+              };
+            }
 
-        // Try format without level: 2025-04-02 16:00:29 Message
-        const dateTimeOnlyMatch = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
-        if (dateTimeOnlyMatch) {
-          const [, date, time, message] = dateTimeOnlyMatch;
-          // Determine log level from message content or use default
-          const detectedLevel = defaultLevel || this.detectLogLevel(message);
-          return {
-            date,  // This is YYYY-MM-DD format
-            time,
-            level: detectedLevel,
-            message,
-            service: this.detectService(message)
-          };
-        }
+            // Try format without level: 2025-04-02 16:00:29 Message
+            const dateTimeOnlyMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
+            if (dateTimeOnlyMatch) {
+              const [, date, time, message] = dateTimeOnlyMatch;
+              // Determine log level from message content or use default
+              const detectedLevel = defaultLevel || this.detectLogLevel(message);
+              return {
+                date,  // This is YYYY-MM-DD format
+                time,
+                level: detectedLevel,
+                message,
+                service: this.detectService(message)
+              };
+            }
 
-        // No recognized format, try to extract what we can
-        if (line.trim()) {
-          const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
-          const timeMatch = line.match(/(\d{2}:\d{2}:\d{2})/);
-          const levelMatch = line.match(/\[(ERROR|WARNING|INFO)\]/i);
+            // No recognized format, try to extract what we can
+            if (truncatedLine.trim()) {
+              const dateMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})/);
+              const timeMatch = truncatedLine.match(/(\d{2}:\d{2}:\d{2})/);
+              const levelMatch = truncatedLine.match(/\[(ERROR|WARNING|INFO)\]/i);
 
-          if (dateMatch || timeMatch) {
-            return {
-              date: dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0],
-              time: timeMatch ? timeMatch[1] : '00:00:00',
-              level: levelMatch ? levelMatch[1] : (defaultLevel || 'INFO'),
-              message: line,
-              service: this.detectService(line)
-            };
+              if (dateMatch || timeMatch) {
+                return {
+                  date: dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0],
+                  time: timeMatch ? timeMatch[1] : '00:00:00',
+                  level: levelMatch ? levelMatch[1] : (defaultLevel || 'INFO'),
+                  message: truncatedLine,
+                  service: this.detectService(truncatedLine)
+                };
+              }
+            }
+
+            return null;
+          } catch (lineError) {
+            logger.warn(`Error parsing log line ${index}: ${lineError.message}`);
+            return null;
           }
-        }
+        })
+        .filter(log => log !== null);
 
-        return null;
-      })
-      .filter(log => log !== null);
+      // Log level distribution stats (safely)
+      try {
+        const levelCounts = {};
+        logs.forEach(log => {
+          if (log && log.level) {
+            const level = log.level.toUpperCase();
+            levelCounts[level] = (levelCounts[level] || 0) + 1;
+          }
+        });
 
-    // Log level distribution stats
-    const levelCounts = {};
-    logs.forEach(log => {
-      const level = log.level ? log.level.toUpperCase() : 'UNKNOWN';
-      levelCounts[level] = (levelCounts[level] || 0) + 1;
-    });
+        logger.debug(`Log level distribution: ${JSON.stringify(levelCounts)}`);
+      } catch (error) {
+        logger.warn(`Error calculating log level distribution: ${error.message}`);
+      }
 
-    logger.debug(`Log level distribution: ${JSON.stringify(levelCounts)}`);
-
-    return logs;
+      return logs;
+    } catch (error) {
+      logger.error(`Error in parseLogs: ${error.message}`);
+      return []; // Return empty array on error
+    }
   },
   
   /**
@@ -489,15 +637,20 @@ const logsService = {
    * @returns {string} Detected log level
    */
   detectLogLevel(message) {
-    if (!message) return 'INFO';
-    
-    const lowerMessage = message.toLowerCase();
-    if (lowerMessage.includes('error') || lowerMessage.includes('exception') || lowerMessage.includes('fail')) {
-      return 'ERROR';
-    } else if (lowerMessage.includes('warn')) {
-      return 'WARNING';
-    } else {
-      return 'INFO';
+    try {
+      if (!message) return 'INFO';
+      
+      const lowerMessage = message.toLowerCase();
+      if (lowerMessage.includes('error') || lowerMessage.includes('exception') || lowerMessage.includes('fail')) {
+        return 'ERROR';
+      } else if (lowerMessage.includes('warn')) {
+        return 'WARNING';
+      } else {
+        return 'INFO';
+      }
+    } catch (error) {
+      logger.warn(`Error detecting log level: ${error.message}`);
+      return 'INFO'; // Default to INFO on error
     }
   },
   
@@ -507,46 +660,51 @@ const logsService = {
    * @returns {string} Detected service
    */
   detectService(message) {
-    if (!message) return 'System';
-    
-    // Try to extract service from typical patterns in the message
-    const serviceMatchers = [
-      { pattern: 'API Gateway', service: 'API Gateway' },
-      { pattern: 'Auth Service', service: 'Auth Service' },
-      { pattern: 'Database', service: 'Database' },
-      { pattern: 'Storage', service: 'Storage' },
-      { pattern: 'External API', service: 'External API' },
-      { pattern: 'Cache', service: 'Cache' },
-      { pattern: 'Data Service', service: 'Data Service' }
-    ];
-    
-    // Look for service names in message
-    for (const matcher of serviceMatchers) {
-      if (message.includes(matcher.pattern)) {
-        return matcher.service;
+    try {
+      if (!message) return 'System';
+      
+      // Try to extract service from typical patterns in the message
+      const serviceMatchers = [
+        { pattern: 'API Gateway', service: 'API Gateway' },
+        { pattern: 'Auth Service', service: 'Auth Service' },
+        { pattern: 'Database', service: 'Database' },
+        { pattern: 'Storage', service: 'Storage' },
+        { pattern: 'External API', service: 'External API' },
+        { pattern: 'Cache', service: 'Cache' },
+        { pattern: 'Data Service', service: 'Data Service' }
+      ];
+      
+      // Look for service names in message
+      for (const matcher of serviceMatchers) {
+        if (message.includes(matcher.pattern)) {
+          return matcher.service;
+        }
       }
-    }
-    
-    // Look for patterns like [AUTH DEBUG], [ADMIN DEBUG]
-    const debugMatch = message.match(/\[(AUTH|ADMIN|API|DB|CACHE)\s+DEBUG\]/i);
-    if (debugMatch) {
-      const serviceType = debugMatch[1].toUpperCase();
-      switch (serviceType) {
-        case 'AUTH': return 'Auth Service';
-        case 'ADMIN': return 'Admin Service';
-        case 'API': return 'API Gateway';
-        case 'DB': return 'Database';
-        case 'CACHE': return 'Cache';
+      
+      // Look for patterns like [AUTH DEBUG], [ADMIN DEBUG]
+      const debugMatch = message.match(/\[(AUTH|ADMIN|API|DB|CACHE)\s+DEBUG\]/i);
+      if (debugMatch) {
+        const serviceType = debugMatch[1].toUpperCase();
+        switch (serviceType) {
+          case 'AUTH': return 'Auth Service';
+          case 'ADMIN': return 'Admin Service';
+          case 'API': return 'API Gateway';
+          case 'DB': return 'Database';
+          case 'CACHE': return 'Cache';
+        }
       }
+      
+      // Try to extract service from brackets
+      const bracketMatch = message.match(/\[([^\]]+)\]/);
+      if (bracketMatch) {
+        return bracketMatch[1];
+      }
+      
+      return 'System';
+    } catch (error) {
+      logger.warn(`Error detecting service: ${error.message}`);
+      return 'System'; // Default to System on error
     }
-    
-    // Try to extract service from brackets
-    const bracketMatch = message.match(/\[([^\]]+)\]/);
-    if (bracketMatch) {
-      return bracketMatch[1];
-    }
-    
-    return 'System';
   },
   
   /**
@@ -555,46 +713,56 @@ const logsService = {
    * @returns {Object} Start and end dates
    */
   getDateRange(options) {
-    const now = new Date();
-    let startDate, endDate;
-    
-    switch (options.dateRange) {
-      case 'yesterday':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 1);
-        endDate = new Date(startDate);
-        break;
-        
-      case 'week':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 7);
-        endDate = new Date(now);
-        break;
-        
-      case 'month':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 30);
-        endDate = new Date(now);
-        break;
-        
-      case 'custom':
-        if (options.startDate && options.endDate) {
-          startDate = new Date(options.startDate);
-          endDate = new Date(options.endDate);
+    try {
+      const now = new Date();
+      let startDate, endDate;
+      
+      switch (options.dateRange) {
+        case 'yesterday':
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - 1);
+          endDate = new Date(startDate);
           break;
-        }
-        // Fall through to default if dates not provided
-        
-      default: // today
-        startDate = new Date(now);
-        endDate = new Date(now);
+          
+        case 'week':
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - 7);
+          endDate = new Date(now);
+          break;
+          
+        case 'month':
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - 30);
+          endDate = new Date(now);
+          break;
+          
+        case 'custom':
+          if (options.startDate && options.endDate) {
+            startDate = new Date(options.startDate);
+            endDate = new Date(options.endDate);
+            break;
+          }
+          // Fall through to default if dates not provided
+          
+        default: // today
+          startDate = new Date(now);
+          endDate = new Date(now);
+      }
+      
+      // Format dates as YYYY-MM-DD
+      return {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0]
+      };
+    } catch (error) {
+      logger.error(`Error getting date range: ${error.message}`);
+      const now = new Date();
+      // Return today as fallback
+      return {
+        startDate: now.toISOString().split('T')[0],
+        endDate: now.toISOString().split('T')[0]
+      };
     }
-    
-    // Format dates as YYYY-MM-DD
-    return {
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0]
-    };
   },
   
   /**
@@ -607,6 +775,15 @@ const logsService = {
   async getLogFilesInRange(startDate, endDate, includeArchived = true) {
     try {
       const logDir = path.join(__dirname, '../logs');
+      
+      // First check if the logs directory exists
+      try {
+        await fs.access(logDir);
+      } catch (dirError) {
+        logger.error(`Logs directory does not exist: ${logDir}`);
+        return [];
+      }
+      
       const files = await fs.readdir(logDir);
       const logFiles = [];
       
@@ -616,55 +793,69 @@ const logsService = {
         const currentCombinedLog = path.join(logDir, 'combined.log');
         const currentErrorLog = path.join(logDir, 'error.log');
         
-        // Add current combined.log and error.log to the list to check
-        logFiles.push(currentCombinedLog);
-        logFiles.push(currentErrorLog);
-        logger.debug(`Added current logs to check: combined.log, error.log`);
+        // Check if files exist before adding them
+        try {
+          await fs.access(currentCombinedLog);
+          logFiles.push(currentCombinedLog);
+          logger.debug(`Added current combined log to check`);
+        } catch (error) {
+          logger.debug(`Current combined log not found: ${currentCombinedLog}`);
+        }
+        
+        try {
+          await fs.access(currentErrorLog);
+          logFiles.push(currentErrorLog);
+          logger.debug(`Added current error log to check`);
+        } catch (error) {
+          logger.debug(`Current error log not found: ${currentErrorLog}`);
+        }
       }
       
       if (includeArchived) {
         // Add archived log files that fall within the date range
         for (const file of files) {
+          let filePath = path.join(logDir, file);
+          let fileDate = null;
+          
           // Check for combined-YYYY-MM-DD.log pattern (uncompressed)
           let combinedMatch = file.match(/^combined-(\d{4}-\d{2}-\d{2})\.log$/);
           if (combinedMatch) {
-            const fileDate = combinedMatch[1];
-            if (fileDate >= startDate && fileDate <= endDate) {
-              logFiles.push(path.join(logDir, file));
-              logger.debug(`Added archived combined log: ${file}`);
-            }
-            continue;
+            fileDate = combinedMatch[1];
           }
           
           // Check for combined-YYYY-MM-DD.log.gz pattern (compressed)
-          combinedMatch = file.match(/^combined-(\d{4}-\d{2}-\d{2})\.log\.gz$/);
-          if (combinedMatch) {
-            const fileDate = combinedMatch[1];
-            if (fileDate >= startDate && fileDate <= endDate) {
-              logFiles.push(path.join(logDir, file));
-              logger.debug(`Added archived compressed combined log: ${file}`);
+          if (!fileDate) {
+            combinedMatch = file.match(/^combined-(\d{4}-\d{2}-\d{2})\.log\.gz$/);
+            if (combinedMatch) {
+              fileDate = combinedMatch[1];
             }
-            continue;
           }
           
           // Check for error-YYYY-MM-DD.log pattern (uncompressed)
-          let errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log$/);
-          if (errorMatch) {
-            const fileDate = errorMatch[1];
-            if (fileDate >= startDate && fileDate <= endDate) {
-              logFiles.push(path.join(logDir, file));
-              logger.debug(`Added archived error log: ${file}`);
+          if (!fileDate) {
+            let errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log$/);
+            if (errorMatch) {
+              fileDate = errorMatch[1];
             }
-            continue;
           }
           
           // Check for error-YYYY-MM-DD.log.gz pattern (compressed)
-          errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log\.gz$/);
-          if (errorMatch) {
-            const fileDate = errorMatch[1];
-            if (fileDate >= startDate && fileDate <= endDate) {
-              logFiles.push(path.join(logDir, file));
-              logger.debug(`Added archived compressed error log: ${file}`);
+          if (!fileDate) {
+            let errorMatch = file.match(/^error-(\d{4}-\d{2}-\d{2})\.log\.gz$/);
+            if (errorMatch) {
+              fileDate = errorMatch[1];
+            }
+          }
+          
+          // If we found a valid date and it's in range, add the file
+          if (fileDate && fileDate >= startDate && fileDate <= endDate) {
+            try {
+              // Verify file exists and is readable before adding
+              await fs.access(filePath);
+              logFiles.push(filePath);
+              logger.debug(`Added archived log file: ${file}`);
+            } catch (error) {
+              logger.warn(`Could not access log file ${filePath}: ${error.message}`);
             }
           }
         }

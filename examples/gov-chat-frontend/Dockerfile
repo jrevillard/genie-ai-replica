@@ -9,7 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm install
 
 #Set the required environment
-ENV VUE_APP_API_URL=https://e2e-82-109.ssdcloudindia.net/api
+ENV VUE_APP_API_URL=https://e2e-82-109.ssdcloudindia.net:443/api
 
 # Copy the entire project
 COPY . .

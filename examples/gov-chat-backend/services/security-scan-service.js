@@ -301,7 +301,7 @@ const securityScanService = {
       const criticalVulnerabilities = [];
       const mediumVulnerabilities = [];
       const lowVulnerabilities = [];
-      
+
       // Check for 404 errors (missing resources)
       try {
         const notFoundResults = await logsService.searchLogs({
@@ -310,16 +310,40 @@ const securityScanService = {
           dateRange: "today",
           includeArchived: true
         });
-        
+
         if (notFoundResults.logs && notFoundResults.logs.length > 0) {
           // Group 404 errors by endpoint to avoid listing each occurrence separately
           const endpoints = {};
-          
+
           for (const log of notFoundResults.logs) {
-            // Extract endpoint from log message using regex
-            const endpointMatch = log.message.match(/\[0mGET ([^ ]+) \[33m404\]/);
-            if (endpointMatch && endpointMatch[1]) {
-              const endpoint = endpointMatch[1];
+            // Extract endpoint from log message using different regex patterns to match your log format
+            // Try multiple patterns to handle different log formats
+            let endpoint = null;
+
+            // Pattern 1: Standard format with [0mGET or [0mPOST
+            const standardMatch = log.message.match(/\[0m(GET|POST|PUT|DELETE) ([^ ]+) \[33m404/);
+            if (standardMatch && standardMatch[2]) {
+              endpoint = standardMatch[2];
+            }
+
+            // Pattern 2: Simple format without color codes
+            if (!endpoint) {
+              const simpleMatch = log.message.match(/(GET|POST|PUT|DELETE) ([^ ]+) 404/);
+              if (simpleMatch && simpleMatch[2]) {
+                endpoint = simpleMatch[2];
+              }
+            }
+
+            // If we still don't have an endpoint, try to extract it from the full message
+            if (!endpoint && log.message.includes('404')) {
+              // Look for common URL patterns
+              const urlMatch = log.message.match(/\/api\/([^\s]+)/);
+              if (urlMatch) {
+                endpoint = '/api/' + urlMatch[1];
+              }
+            }
+
+            if (endpoint) {
               if (!endpoints[endpoint]) {
                 endpoints[endpoint] = {
                   count: 0,
@@ -327,29 +351,55 @@ const securityScanService = {
                   lastSeen: log.date + ' ' + log.time
                 };
               }
-              
+
               endpoints[endpoint].count++;
               endpoints[endpoint].lastSeen = log.date + ' ' + log.time;
             }
           }
-          
+
           // Convert grouped endpoints to vulnerability entries
           for (const [endpoint, data] of Object.entries(endpoints)) {
-            lowVulnerabilities.push({
-              type: 'Missing Resource',
-              severity: 'low',
-              description: `Endpoint not found: ${endpoint}`,
-              occurrences: data.count,
-              firstSeen: data.firstSeen,
-              lastSeen: data.lastSeen,
-              recommendation: 'Review API routes and update application to remove references to this endpoint'
-            });
+            // Determine if this is a security probe
+            const isSecurityProbe =
+              endpoint.includes('/.env') ||
+              endpoint.includes('/.git') ||
+              endpoint.includes('/wp-') ||
+              endpoint.includes('/admin') ||
+              endpoint.includes('/config') ||
+              endpoint.includes('/install') ||
+              endpoint.includes('/backup') ||
+              endpoint.includes('/phpMyAdmin') ||
+              endpoint.includes('/client/update');
+
+            if (isSecurityProbe) {
+              // Security probes get medium severity
+              mediumVulnerabilities.push({
+                type: 'Security Probe Attempt',
+                severity: 'medium',
+                description: `Security probe detected: ${endpoint}`,
+                occurrences: data.count,
+                firstSeen: data.firstSeen,
+                lastSeen: data.lastSeen,
+                recommendation: 'Monitor these attempts for patterns. Consider implementing rate limiting or blocking persistent offenders.'
+              });
+            } else {
+              // Regular 404s get low severity
+              lowVulnerabilities.push({
+                type: 'Missing Resource',
+                severity: 'low',
+                description: `Endpoint not found: ${endpoint}`,
+                occurrences: data.count,
+                firstSeen: data.firstSeen,
+                lastSeen: data.lastSeen,
+                recommendation: 'Review API routes and update application to remove references to this endpoint'
+              });
+            }
           }
         }
       } catch (error) {
         logger.error(`Error checking for 404 errors: ${error.message}`);
       }
-      
+
       // Check for database errors
       try {
         const dbErrorResults = await logsService.searchLogs({
@@ -358,17 +408,17 @@ const securityScanService = {
           dateRange: "today",
           includeArchived: true
         });
-        
+
         if (dbErrorResults.logs && dbErrorResults.logs.length > 0) {
           const dbIssues = {};
-          
+
           for (const log of dbErrorResults.logs) {
             // Extract the specific error type
             // This is a simplified approach - a more robust implementation would use
             // regex patterns to categorize different types of database errors
             const errorMessage = log.message.toLowerCase();
             let errorType = 'Database Error';
-            
+
             if (errorMessage.includes('index')) {
               errorType = 'Database Index Error';
             } else if (errorMessage.includes('reindex')) {
@@ -376,7 +426,7 @@ const securityScanService = {
             } else if (errorMessage.includes('collection')) {
               errorType = 'Collection Error';
             }
-            
+
             if (!dbIssues[errorType]) {
               dbIssues[errorType] = {
                 count: 0,
@@ -385,17 +435,17 @@ const securityScanService = {
                 lastSeen: log.date + ' ' + log.time
               };
             }
-            
+
             dbIssues[errorType].count++;
             dbIssues[errorType].lastSeen = log.date + ' ' + log.time;
-            
+
             // Keep track of unique error messages (up to 5)
-            if (dbIssues[errorType].examples.length < 5 && 
-                !dbIssues[errorType].examples.includes(log.message)) {
+            if (dbIssues[errorType].examples.length < 5 &&
+              !dbIssues[errorType].examples.includes(log.message)) {
               dbIssues[errorType].examples.push(log.message);
             }
           }
-          
+
           // Convert grouped database issues to vulnerability entries
           for (const [errorType, data] of Object.entries(dbIssues)) {
             mediumVulnerabilities.push({
@@ -413,7 +463,7 @@ const securityScanService = {
       } catch (error) {
         logger.error(`Error checking for database errors: ${error.message}`);
       }
-      
+
       // Check for server errors (500 level)
       try {
         const serverErrorResults = await logsService.searchLogs({
@@ -422,15 +472,32 @@ const securityScanService = {
           dateRange: "today",
           includeArchived: true
         });
-        
+
         if (serverErrorResults.logs && serverErrorResults.logs.length > 0) {
           const endpoints = {};
-          
+
           for (const log of serverErrorResults.logs) {
             // Extract endpoint from log message using regex
-            const endpointMatch = log.message.match(/\[0mPOST ([^ ]+) \[31m500\]/);
-            if (endpointMatch && endpointMatch[1]) {
-              const endpoint = endpointMatch[1];
+            let endpoint = null;
+
+            // Try different patterns to match the endpoint
+            const postMatch = log.message.match(/\[0mPOST ([^ ]+) \[31m500\]/);
+            if (postMatch && postMatch[1]) {
+              endpoint = postMatch[1];
+            } else {
+              const getMatch = log.message.match(/\[0mGET ([^ ]+) \[31m500\]/);
+              if (getMatch && getMatch[1]) {
+                endpoint = getMatch[1];
+              } else {
+                // Simple format without color codes
+                const simpleMatch = log.message.match(/(GET|POST|PUT|DELETE) ([^ ]+) 500/);
+                if (simpleMatch && simpleMatch[2]) {
+                  endpoint = simpleMatch[2];
+                }
+              }
+            }
+
+            if (endpoint) {
               if (!endpoints[endpoint]) {
                 endpoints[endpoint] = {
                   count: 0,
@@ -438,12 +505,12 @@ const securityScanService = {
                   lastSeen: log.date + ' ' + log.time
                 };
               }
-              
+
               endpoints[endpoint].count++;
               endpoints[endpoint].lastSeen = log.date + ' ' + log.time;
             }
           }
-          
+
           // Convert grouped endpoints to vulnerability entries
           for (const [endpoint, data] of Object.entries(endpoints)) {
             criticalVulnerabilities.push({
@@ -460,7 +527,7 @@ const securityScanService = {
       } catch (error) {
         logger.error(`Error checking for server errors: ${error.message}`);
       }
-      
+
       // Check for JWT token issues
       try {
         const tokenResults = await logsService.searchLogs({
@@ -469,13 +536,13 @@ const securityScanService = {
           dateRange: "today",
           includeArchived: true
         });
-        
+
         if (tokenResults.logs && tokenResults.logs.length > 0) {
           const uniqueErrors = new Set();
           for (const log of tokenResults.logs) {
             uniqueErrors.add(log.message);
           }
-          
+
           if (uniqueErrors.size > 0) {
             mediumVulnerabilities.push({
               type: 'JWT Token Issues',
@@ -490,7 +557,79 @@ const securityScanService = {
       } catch (error) {
         logger.error(`Error checking for JWT token issues: ${error.message}`);
       }
-      
+
+      // Add a specific check for security probes (in case the 404 check misses some)
+      try {
+        const securityProbeTerms = ['.env', '.git/config', 'wp-', 'admin', 'phpMyAdmin', 'client/update'];
+
+        for (const term of securityProbeTerms) {
+          const probeResults = await logsService.searchLogs({
+            term: term,
+            level: "INFO",
+            dateRange: "today",
+            includeArchived: true
+          });
+
+          if (probeResults.logs && probeResults.logs.length > 0) {
+            const probeAttempts = probeResults.logs.filter(log =>
+              log.message.includes('404') || log.message.includes('GET') || log.message.includes('POST')
+            );
+
+            if (probeAttempts.length > 0) {
+              // Group by specific probe URL
+              const probeUrls = {};
+              for (const log of probeAttempts) {
+                let probeUrl = null;
+
+                // Try to extract the full URL
+                const urlMatch = log.message.match(/\/(api\/[^\s]+)/);
+                if (urlMatch) {
+                  probeUrl = '/' + urlMatch[1];
+                } else if (log.message.includes(term)) {
+                  // If we can't extract the full URL, use the term as a fallback
+                  probeUrl = term;
+                }
+
+                if (probeUrl) {
+                  if (!probeUrls[probeUrl]) {
+                    probeUrls[probeUrl] = {
+                      count: 0,
+                      firstSeen: log.date + ' ' + log.time,
+                      lastSeen: log.date + ' ' + log.time
+                    };
+                  }
+
+                  probeUrls[probeUrl].count++;
+                  probeUrls[probeUrl].lastSeen = log.date + ' ' + log.time;
+                }
+              }
+
+              // Add each probe URL as a separate vulnerability
+              for (const [url, data] of Object.entries(probeUrls)) {
+                // Check if this is already in the mediumVulnerabilities
+                const alreadyExists = mediumVulnerabilities.some(v =>
+                  v.type === 'Security Probe Attempt' && v.description.includes(url)
+                );
+
+                if (!alreadyExists) {
+                  mediumVulnerabilities.push({
+                    type: 'Security Probe Attempt',
+                    severity: 'medium',
+                    description: `Security probe detected: ${url}`,
+                    occurrences: data.count,
+                    firstSeen: data.firstSeen,
+                    lastSeen: data.lastSeen,
+                    recommendation: 'Monitor these attempts for patterns. Consider implementing rate limiting or blocking persistent offenders.'
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        logger.error(`Error checking for security probes: ${error.message}`);
+      }
+
       // Return all vulnerability findings
       return {
         critical: criticalVulnerabilities,
@@ -537,13 +676,13 @@ const securityScanService = {
    */
   generateRecommendations(loginIssues, suspiciousActivities, vulnerabilities) {
     const recommendations = [];
-    
+
     // Login-related recommendations
     if (loginIssues.count > 0) {
       const disabledAccountCount = loginIssues.details.filter(
         issue => issue.message.includes('disabled')
       ).length;
-      
+
       if (disabledAccountCount > 0) {
         recommendations.push({
           severity: 'medium',
@@ -552,7 +691,7 @@ const securityScanService = {
           action: 'Review account status in user management and verify if account disabling is legitimate'
         });
       }
-      
+
       recommendations.push({
         severity: 'medium',
         title: 'Improve Authentication Security',
@@ -560,7 +699,7 @@ const securityScanService = {
         action: 'Consider implementing account lockout policies and multi-factor authentication'
       });
     }
-    
+
     // Recommendations based on vulnerabilities
     if (vulnerabilities.critical.length > 0) {
       recommendations.push({
@@ -570,13 +709,13 @@ const securityScanService = {
         action: 'Investigate and fix server errors immediately to prevent service disruption and potential security breaches'
       });
     }
-    
+
     if (vulnerabilities.medium.length > 0) {
       // Database-specific recommendations
       const dbIssues = vulnerabilities.medium.filter(
         v => v.type.includes('Database')
       );
-      
+
       if (dbIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -585,12 +724,12 @@ const securityScanService = {
           action: 'Review database configuration, connections, and query handling'
         });
       }
-      
+
       // JWT-specific recommendations
       const jwtIssues = vulnerabilities.medium.filter(
         v => v.type.includes('JWT')
       );
-      
+
       if (jwtIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -599,14 +738,51 @@ const securityScanService = {
           action: 'Review token expiration settings and refresh token implementation'
         });
       }
+
+      // Security probe recommendations
+      const securityProbes = vulnerabilities.medium.filter(
+        v => v.type === 'Security Probe Attempt'
+      );
+
+      if (securityProbes.length > 0) {
+        recommendations.push({
+          severity: 'medium',
+          title: 'Security Probe Attempts Detected',
+          description: `${securityProbes.length} attempts to access sensitive files or endpoints detected`,
+          action: 'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place'
+        });
+
+        // If we have multiple types of probes, add more specific recommendations
+        const envProbes = securityProbes.filter(p => p.description.includes('.env'));
+        const gitProbes = securityProbes.filter(p => p.description.includes('.git'));
+        const clientProbes = securityProbes.filter(p => p.description.includes('client/update'));
+
+        if (envProbes.length > 0) {
+          recommendations.push({
+            severity: 'medium',
+            title: 'Environment File Access Attempts',
+            description: `${envProbes.length} attempts to access .env files detected`,
+            action: 'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files'
+          });
+        }
+
+        if (gitProbes.length > 0) {
+          recommendations.push({
+            severity: 'medium',
+            title: 'Git Repository Access Attempts',
+            description: `${gitProbes.length} attempts to access Git repository files detected`,
+            action: 'Make sure .git directories are properly secured and not accessible from the web'
+          });
+        }
+      }
     }
-    
+
     if (vulnerabilities.low.length > 0) {
       // 404-specific recommendations
       const missingResources = vulnerabilities.low.filter(
         v => v.type === 'Missing Resource'
       );
-      
+
       if (missingResources.length > 0) {
         recommendations.push({
           severity: 'low',
@@ -616,7 +792,7 @@ const securityScanService = {
         });
       }
     }
-    
+
     // Add general recommendations
     recommendations.push({
       severity: 'low',
@@ -624,7 +800,7 @@ const securityScanService = {
       description: 'Proactive security measures',
       action: 'Implement regular security audits, keep dependencies updated, and consider penetration testing'
     });
-    
+
     return recommendations;
   },
   

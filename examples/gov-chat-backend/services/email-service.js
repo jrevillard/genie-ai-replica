@@ -41,7 +41,7 @@ class EmailService {
         },
         fromEmail: process.env.EMAIL_FROM || 'noreply@huduma.com',
         appName: process.env.APP_NAME || 'Huduma AI',
-        baseUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
+        defaultFrontendUrl: process.env.FRONTEND_URL || 'http://localhost:8090'
       }, null, 2));
       logger.info('-----------------------------------------------------');
     }
@@ -63,8 +63,8 @@ class EmailService {
     // App name for email templates
     this.appName = process.env.APP_NAME || 'Huduma AI';
 
-    // Base URL for links in emails
-    this.baseUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+    // Default frontend URL for links in emails - will be overridden by request origin if provided
+    this.defaultFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:8090';
 
     // Test SMTP connection at startup
     this.verifyConnection();
@@ -131,9 +131,10 @@ class EmailService {
    * @param {string} email - Recipient email
    * @param {string} token - Password reset token
    * @param {string} userName - User's name
+   * @param {string} frontendUrl - Frontend URL for UI links
    * @returns {Promise<Object>} Send result
    */
-  async sendPasswordResetEmail(email, token, userName) {
+  async sendPasswordResetEmail(email, token, userName, frontendUrl) {
     if (DEBUG) {
       logger.info('-----------------------------------------------------');
       logger.info(`EMAIL SERVICE DEBUG [PASSWORD RESET EMAIL REQUEST] - ${new Date().toISOString()}`);
@@ -141,13 +142,25 @@ class EmailService {
       logger.info(JSON.stringify({
         to: email,
         token: token.substring(0, 10) + '...', // Show only beginning of token for security
-        userName
+        userName,
+        frontendUrl: frontendUrl || 'not provided'
       }, null, 2));
       logger.info('-----------------------------------------------------');
     }
 
+    // Use provided frontend URL or fall back to default
+    const baseUrl = frontendUrl || this.defaultFrontendUrl;
+    
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [USING BASE URL] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(`Using base URL for password reset email: ${baseUrl}`);
+      logger.info('-----------------------------------------------------');
+    }
+
     // Create reset password link
-    const resetLink = `${this.baseUrl}/reset-password/${token}`;
+    const resetLink = `${baseUrl}/reset-password/${token}`;
     if (DEBUG) {
       logger.info('-----------------------------------------------------');
       logger.info(`EMAIL SERVICE DEBUG [RESET LINK] - ${new Date().toISOString()}`);
@@ -271,9 +284,11 @@ The ${this.appName} Team
    * @param {string} email - Recipient email
    * @param {string} token - Verification token
    * @param {string} userName - User's name
+   * @param {string} frontendUrl - Frontend URL for UI links
+   * @param {string} verificationUrl - The complete verification URL to use (back-end endpoint)
    * @returns {Promise<Object>} Send result
    */
-  async sendVerificationEmail(email, token, userName) {
+  async sendVerificationEmail(email, token, userName, frontendUrl, verificationUrl) {
     if (!email) {
       if (DEBUG) {
         logger.error('-----------------------------------------------------');
@@ -282,7 +297,9 @@ The ${this.appName} Team
         logger.error(JSON.stringify({
           email: 'undefined or null',
           token: token ? `${token.substring(0, 10)}...` : 'undefined',
-          userName: userName || 'undefined'
+          userName: userName || 'undefined',
+          frontendUrl: frontendUrl || 'undefined',
+          verificationUrl: verificationUrl || 'undefined'
         }, null, 2));
         logger.error('-----------------------------------------------------');
       }
@@ -296,18 +313,33 @@ The ${this.appName} Team
       logger.info(JSON.stringify({
         to: email,
         token: token ? `${token.substring(0, 10)}...` : 'undefined',
-        userName
+        userName,
+        frontendUrl: frontendUrl || 'not provided',
+        verificationUrl: verificationUrl || 'not provided'
       }, null, 2));
       logger.info('-----------------------------------------------------');
     }
 
-    // Create verification link
-    const verificationLink = `${this.baseUrl}/verify-email/${token}`;
+    // Use provided frontend URL or fall back to default
+    const baseUrl = frontendUrl || this.defaultFrontendUrl;
+    
+    if (DEBUG) {
+      logger.info('-----------------------------------------------------');
+      logger.info(`EMAIL SERVICE DEBUG [USING BASE URL] - ${new Date().toISOString()}`);
+      logger.info('-----------------------------------------------------');
+      logger.info(`Using base URL for verification email UI links: ${baseUrl}`);
+      logger.info('-----------------------------------------------------');
+    }
+
+    // Use the complete verification URL provided or construct a fallback
+    // The verification URL should point to the backend API endpoint
+    const verificationLink = verificationUrl || `${baseUrl}/api/auth/verify-email/${token}`;
+    
     if (DEBUG) {
       logger.info('-----------------------------------------------------');
       logger.info(`EMAIL SERVICE DEBUG [VERIFICATION LINK] - ${new Date().toISOString()}`);
       logger.info('-----------------------------------------------------');
-      logger.info(verificationLink);
+      logger.info(`Using verification link: ${verificationLink}`);
       logger.info('-----------------------------------------------------');
     }
 

@@ -438,6 +438,35 @@
                     </div>
                   </div>
 
+                  <!-- Medium Vulnerabilities -->
+                  <div
+                    v-if="securityDetails.vulnerabilityDetails && securityDetails.vulnerabilityDetails.medium && securityDetails.vulnerabilityDetails.medium.length > 0"
+                    class="vulnerability-section medium-section">
+                    <h3 class="section-title">
+                      <span class="severity-indicator warning"></span>
+                      {{ translate('admin.security.mediumVulnerabilities', 'Medium Vulnerabilities') }}
+                    </h3>
+                    <div class="vulnerability-list">
+                      <div v-for="(vuln, index) in securityDetails.vulnerabilityDetails.medium" :key="'med-' + index"
+                        class="vulnerability-card">
+                        <div class="vuln-type">{{ vuln.type }}</div>
+                        <div class="vuln-description">{{ vuln.description }}</div>
+                        <div class="vuln-detail">
+                          <strong>{{ translate('admin.security.occurrences', 'Occurrences') }}:</strong> {{ vuln.occurrences }}
+                        </div>
+                        <div v-if="vuln.firstSeen" class="vuln-detail">
+                          <strong>{{ translate('admin.security.firstSeen', 'First Seen') }}:</strong> {{ vuln.firstSeen }}
+                        </div>
+                        <div v-if="vuln.lastSeen" class="vuln-detail">
+                          <strong>{{ translate('admin.security.lastSeen', 'Last Seen') }}:</strong> {{ vuln.lastSeen }}
+                        </div>
+                        <div v-if="vuln.recommendation" class="vuln-recommendation">
+                          {{ vuln.recommendation }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Failed Login Attempts -->
                   <div v-if="securityDetails.failedLoginDetails && securityDetails.failedLoginDetails.length > 0"
                     class="vulnerability-section login-section">
@@ -495,42 +524,74 @@
                   </div>
 
                   <!-- Security Recommendations -->
-                  <div
-                    v-if="operationResults && operationResults.recommendations && operationResults.recommendations.length > 0"
+                  <div v-if="securityDetails && securityDetails.vulnerabilityDetails && securityDetails.vulnerabilityDetails.medium && securityDetails.vulnerabilityDetails.medium.length > 0"
                     class="security-recommendations">
                     <h3 class="section-title">
                       <span class="severity-indicator info"></span>
                       {{ translate('admin.securityRecommendations', 'Security Recommendations') }}
                     </h3>
                     <div class="recommendations-list">
-                      <div v-for="(rec, index) in operationResults.recommendations" :key="'rec-' + index"
-                        :class="['recommendation-item', 'severity-' + rec.severity]">
+                      <div class="recommendation-item severity-medium">
                         <div class="recommendation-header">
-                          <span class="severity-indicator" :class="rec.severity"></span>
-                          <span class="recommendation-title">{{ rec.title }}</span>
+                          <span class="severity-indicator medium"></span>
+                          <span class="recommendation-title">Security Probe Attempts Detected</span>
                         </div>
-                        <div class="recommendation-description">{{ rec.description }}</div>
+                        <div class="recommendation-description">{{ securityDetails.vulnerabilityDetails.medium.length }} attempts to access sensitive files or endpoints detected</div>
                         <div class="recommendation-action">
-                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong> {{
-                          rec.action }}
+                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong> 
+                          Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place
+                        </div>
+                      </div>
+                      
+                      <!-- Additional specific recommendation for .env files if they exist -->
+                      <div v-if="securityDetails.vulnerabilityDetails.medium.some(v => v.description && v.description.includes('.env'))" 
+                        class="recommendation-item severity-medium">
+                        <div class="recommendation-header">
+                          <span class="severity-indicator medium"></span>
+                          <span class="recommendation-title">Environment File Access Attempts</span>
+                        </div>
+                        <div class="recommendation-description">
+                          {{ securityDetails.vulnerabilityDetails.medium.filter(v => v.description && v.description.includes('.env')).length }} 
+                          attempts to access .env files detected
+                        </div>
+                        <div class="recommendation-action">
+                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong> 
+                          Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files
+                        </div>
+                      </div>
+                      
+                      <!-- Additional specific recommendation for .git files if they exist -->
+                      <div v-if="securityDetails.vulnerabilityDetails.medium.some(v => v.description && v.description.includes('.git'))" 
+                        class="recommendation-item severity-medium">
+                        <div class="recommendation-header">
+                          <span class="severity-indicator medium"></span>
+                          <span class="recommendation-title">Git Repository Access Attempts</span>
+                        </div>
+                        <div class="recommendation-description">
+                          {{ securityDetails.vulnerabilityDetails.medium.filter(v => v.description && v.description.includes('.git')).length }} 
+                          attempts to access Git repository files detected
+                        </div>
+                        <div class="recommendation-action">
+                          <strong>{{ translate('admin.security.recommendedAction', 'Recommended Action') }}:</strong> 
+                          Make sure .git directories are properly secured and not accessible from the web
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- No Vulnerabilities Found Message -->
-                <div v-if="securityDetails &&
+<!-- No Vulnerabilities Found Message -->
+<div v-if="securityDetails &&
                   (!securityDetails.vulnerabilityDetails ||
-                    (securityDetails.vulnerabilityDetails.critical.length === 0 &&
+                    ((securityDetails.vulnerabilityDetails.critical.length === 0 &&
                       securityDetails.vulnerabilityDetails.medium.length === 0 &&
-                      securityDetails.vulnerabilityDetails.low.length === 0 &&
+                      securityDetails.vulnerabilityDetails.low.length === 0) &&
                       (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0)))"
                   class="no-vulnerabilities">
                   <div class="empty-state">
                     <div class="empty-icon">✓</div>
                     <div class="empty-title">{{ translate('admin.security.noVulnerabilitiesFound', 'No Vulnerabilities Found') }}</div>
-                    <div class="empty-description">{{ translate('admin.security.systemSecure', 'Your system appears to be secure.Continue monitoring regularly.') }}</div>
+                    <div class="empty-description">{{ translate('admin.security.systemSecure', 'Your system appears to be secure. Continue monitoring regularly.') }}</div>
                   </div>
                 </div>
               </div>
@@ -1642,7 +1703,16 @@ export default {
     async loadSecurityDetails() {
       try {
         const details = await securityService.getLastScanDetails();
-        console.log('Security details loaded:', details);
+        console.log('Security details loaded:', details);  // Add this line
+
+        // Also add more detailed logging to see the structure:
+        if (details) {
+          console.log('Vulnerability details structure:', {
+            hasMedium: details.vulnerabilityDetails && details.vulnerabilityDetails.medium,
+            mediumCount: details.vulnerabilityDetails?.medium?.length,
+            fullMediumDetails: details.vulnerabilityDetails?.medium
+          });
+        }
 
         if (details) {
           this.securityDetails = details;
@@ -3194,6 +3264,15 @@ input:checked + .slider:before {
   to {
     transform: rotate(360deg);
   }
+}
+
+.medium-section {
+  border-left: 4px solid var(--warning);
+}
+
+.severity-indicator.medium, 
+.severity-indicator.warning {
+  background-color: var(--warning);
 }
 
 </style>

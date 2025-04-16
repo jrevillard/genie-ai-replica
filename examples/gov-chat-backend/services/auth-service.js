@@ -144,11 +144,25 @@ class AuthService {
   /**
    * Register a new user
    * @param {Object} userData - User registration data
+   * @param {string} frontendUrl - Frontend URL for UI links
+   * @param {string} backendUrl - Backend URL for API endpoints
    * @returns {Promise<Object>} The registered user with token
    */
   async register(userData) {
     try {
       logger.info('Registering new user with loginName:', userData.loginName);
+
+      // Extract URLs from userData if they exist
+      const frontendUrl = userData.frontendUrl;
+      const backendUrl = userData.backendUrl;
+
+      if (frontendUrl) {
+        logger.info(`Frontend URL for registration: ${frontendUrl}`);
+      }
+
+      if (backendUrl) {
+        logger.info(`Backend URL for registration: ${backendUrl}`);
+      }
 
       // Validate required fields
       if (!userData.loginName || !userData.email || !userData.encPassword) {
@@ -206,7 +220,8 @@ class AuthService {
           const freshUser = await this.getUserById(savedUser._key);
 
           if (freshUser) {
-            await this.sendVerificationEmail(freshUser);
+            // Pass URLs to the sendVerificationEmail method
+            await this.sendVerificationEmail(freshUser, frontendUrl, backendUrl);
           } else {
             logger.error('Could not retrieve fresh user for email verification');
           }
@@ -237,11 +252,11 @@ class AuthService {
   }
 
   /**
- * Authenticate a user
- * @param {string} loginName - Username or email
- * @param {string} encPassword - Encrypted/hashed password from client (SHA-256)
- * @returns {Promise<Object>} Authenticated user with token
- */
+   * Authenticate a user
+   * @param {string} loginName - Username or email
+   * @param {string} encPassword - Encrypted/hashed password from client (SHA-256)
+   * @returns {Promise<Object>} Authenticated user with token
+   */
   async login(loginName, encPassword) {
     try {
       logger.info(`Attempting login for user: ${loginName}`);
@@ -348,9 +363,12 @@ class AuthService {
   /**
    * Send verification email to user
    * @param {Object} user - User object
+   * @param {string} frontendUrl - Frontend URL for UI links
+   * @param {string} backendUrl - Backend URL for API endpoints
    * @returns {Promise<Object>} Send result
    */
-  async sendVerificationEmail(user) {
+
+  async sendVerificationEmail(user, frontendUrl, backendUrl) {
     try {
       // Add validation to ensure user and email exist
       if (!user || !user.email) {
@@ -358,15 +376,31 @@ class AuthService {
         throw new Error('User or email is missing for verification');
       }
 
-      // Log user email for debugging
+      // Prioritize environment variable for frontend URL if available
+      const envFrontendUrl = process.env.FRONTEND_URL;
+      const finalFrontendUrl = envFrontendUrl || frontendUrl;
+
+      // Log user email and URLs for debugging
       logger.info(`Preparing to send verification email to ${user.email}`);
+
+      if (envFrontendUrl) {
+        logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+      } else if (frontendUrl) {
+        logger.info(`Using provided frontend URL: ${frontendUrl}`);
+      } else {
+        logger.info('No frontend URL provided, using email service default');
+      }
+
+      if (backendUrl) {
+        logger.info(`Using backend URL: ${backendUrl}`);
+      }
 
       // Remove any existing unused tokens for this user
       const cleanupQuery = aql`
-        FOR t IN verificationTokens
-          FILTER t.userId == ${'users/' + user._key} AND t.used == false
-          REMOVE t IN verificationTokens
-      `;
+      FOR t IN verificationTokens
+        FILTER t.userId == ${'users/' + user._key} AND t.used == false
+        REMOVE t IN verificationTokens
+    `;
       await this.db.query(cleanupQuery);
 
       // Generate a unique token
@@ -391,12 +425,21 @@ class AuthService {
         throw new Error('Failed to create verification token');
       }
 
+      // Create the verification endpoint URL (backend)
+      let verificationEndpointUrl;
+      if (backendUrl) {
+        verificationEndpointUrl = `${backendUrl}/api/auth/verify-email/${token}`;
+        logger.info(`Using backend verification endpoint URL: ${verificationEndpointUrl}`);
+      }
+
       // Send email with verification token
       try {
         await emailService.sendVerificationEmail(
           user.email,
           token,
-          user.personalIdentification?.fullName || user.loginName
+          user.personalIdentification?.fullName || user.loginName,
+          finalFrontendUrl, // For UI elements in the email
+          verificationEndpointUrl // The actual verification link
         );
 
         // Log token in development environment for testing
@@ -411,10 +454,10 @@ class AuthService {
 
         // Remove the just-created token if email sending fails
         const removeTokenQuery = aql`
-          FOR t IN verificationTokens
-            FILTER t.token == ${token}
-            REMOVE t IN verificationTokens
-        `;
+        FOR t IN verificationTokens
+          FILTER t.token == ${token}
+          REMOVE t IN verificationTokens
+      `;
         await this.db.query(removeTokenQuery);
 
         // Continue with registration despite email error in development
@@ -434,11 +477,29 @@ class AuthService {
   /**
    * Resend verification email
    * @param {string} email - User's email
+   * @param {string} frontendUrl - Frontend URL for UI links
+   * @param {string} backendUrl - Backend URL for API endpoints
    * @returns {Promise<Object>} Send result
    */
-  async resendVerificationEmail(email) {
+  async resendVerificationEmail(email, frontendUrl, backendUrl) {
     try {
       logger.info(`Resending verification email to: ${email}`);
+
+      // Prioritize environment variable for frontend URL if available
+      const envFrontendUrl = process.env.FRONTEND_URL;
+      const finalFrontendUrl = envFrontendUrl || frontendUrl;
+
+      if (envFrontendUrl) {
+        logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+      } else if (frontendUrl) {
+        logger.info(`Using provided frontend URL: ${frontendUrl}`);
+      } else {
+        logger.info('No frontend URL provided, using email service default');
+      }
+
+      if (backendUrl) {
+        logger.info(`Using backend URL: ${backendUrl}`);
+      }
 
       // Find user by email
       const user = await this.getUserByEmail(email);
@@ -460,8 +521,8 @@ class AuthService {
         };
       }
 
-      // Send a new verification email
-      await this.sendVerificationEmail(user);
+      // Send a new verification email with the provided URLs
+      await this.sendVerificationEmail(user, finalFrontendUrl, backendUrl);
 
       logger.info(`Verification email resent to: ${email}`);
       return {
@@ -556,7 +617,7 @@ class AuthService {
 
         logger.info(`Email changed successfully for user ${userId} to ${tokenDoc.email}`);
         return { success: true, message: 'Email changed successfully' };
-      } 
+      }
       // For regular email verification
       else {
         // Get user ID from token
@@ -585,11 +646,29 @@ class AuthService {
   /**
    * Generate a reset token and send it to the user's email
    * @param {string} email - User's email
+   * @param {string} frontendUrl - Frontend URL for UI links
+   * @param {string} backendUrl - Backend URL for API endpoints
    * @returns {Promise<Object>} Reset token result
    */
-  async initiatePasswordReset(email) {
+  async initiatePasswordReset(email, frontendUrl, backendUrl) {
     try {
       logger.info(`Initiating password reset for email: ${email}`);
+
+      // Prioritize environment variable for frontend URL if available
+      const envFrontendUrl = process.env.FRONTEND_URL;
+      const finalFrontendUrl = envFrontendUrl || frontendUrl;
+
+      if (envFrontendUrl) {
+        logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+      } else if (frontendUrl) {
+        logger.info(`Using provided frontend URL: ${frontendUrl}`);
+      } else {
+        logger.info('No frontend URL provided, using email service default');
+      }
+
+      if (backendUrl) {
+        logger.info(`Using backend URL: ${backendUrl}`);
+      }
 
       // Check if the email exists
       const user = await this.getUserByEmail(email);
@@ -618,11 +697,12 @@ class AuthService {
         used: false
       });
 
-      // Send email with reset token
+      // Send email with reset token and frontend URL
       await emailService.sendPasswordResetEmail(
         email,
         token,
-        user.personalIdentification?.fullName || user.loginName
+        user.personalIdentification?.fullName || user.loginName,
+        finalFrontendUrl // For the password reset form URL
       );
 
       // Log token in development environment for testing

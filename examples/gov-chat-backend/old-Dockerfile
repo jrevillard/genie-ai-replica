@@ -27,8 +27,9 @@ COPY . .
 # Expose the backend server port
 EXPOSE 3000
 
-# Define environment variables without sensitive values
-# These will be provided at runtime
+# Setup the required environment
+ENV JWT_SECRET="UJeFROw+yRJeVOPiUTgdcXzlE2eukTfATZPxBfPkptQLZs+ER+iuSA1BIXiJtw1sS181kiRqdncodVZOWD4sfA=="
+ENV JWT_EXPIRES_IN=24h
 
 # Server Configuration
 ENV PORT=3000
@@ -40,6 +41,7 @@ ENV UPLOAD_DIR=./uploads
 ENV MAX_FILE_SIZE=5242880
 
 # Session Configuration
+ENV SESSION_SECRET=your_session_secret_here
 ENV SESSION_EXPIRATION_TIME=1800000
 
 # CORS Configuration
@@ -50,6 +52,7 @@ ENV EMAIL_HOST=in-V3.mailjet.com
 ENV EMAIL_PORT=587
 ENV EMAIL_SECURE=false
 ENV EMAIL_USER=187ad3288090609e6e282b07f359acd4
+ENV EMAIL_PASSWORD=6615d81ddd46faab7e69eb6710ac364a
 ENV EMAIL_FROM="fordendk@gmail.com"
 ENV APP_NAME="Huduma AI"
 ENV FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/
@@ -58,6 +61,7 @@ ENV FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/
 ENV ARANGO_URL=http://arango-vector-db:8529
 ENV ARANGO_DB=node-services
 ENV ARANGO_USER=root
+ENV ARANGO_PASSWORD=test
 
 # Database backups
 ENV BACKUP_DIR=./database_backups

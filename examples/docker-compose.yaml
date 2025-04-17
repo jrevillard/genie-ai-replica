@@ -18,6 +18,7 @@ services:
       - "3000:3000"
     volumes:
       - ./database_backups:/app/database_backups
+      - ./logs:/app/logs
     environment:
       # Server Configuration
       - NODE_ENV=production

@@ -10,6 +10,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const { logger } = require('./logger'); // Import the centralized logger
 const loggerRoutes = require('./routes/logger-routes'); // Import the logger routes
+const { applySecurityMiddleware } = require('./security-middleware'); // Import security middleware
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -25,7 +26,6 @@ const PORT = process.env.PORT || 3000;
 app.disable('etag');
 
 // Add a global middleware to disable caching for all responses
-
 app.use((req, res, next) => {
   // Set strong cache control headers to prevent caching
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -126,6 +126,9 @@ app.use(cors({
 }));
 
 app.options('*', cors());
+
+// Apply all security middleware here, after helmet and cors
+applySecurityMiddleware(app);
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));

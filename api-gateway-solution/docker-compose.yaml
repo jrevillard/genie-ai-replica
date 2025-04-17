@@ -14,7 +14,7 @@ volumes:
 services:
   kong-database:
     image: postgres:13
-    restart: always
+    restart: unless-stopped
     networks:
       - kong-net
     environment:
@@ -28,7 +28,7 @@ services:
 
   kong:
     image: kong:latest
-    restart: always
+    restart: unless-stopped
     networks:
       - kong-net
     depends_on:
@@ -49,8 +49,8 @@ services:
       - "8001:8001"
 
   konga:
-    image: pantsel/konga:next
-    restart: always
+    image: pantsel/konga:0.14.9
+    restart: unless-stopped
     networks:
       - kong-net
     depends_on:
@@ -58,7 +58,7 @@ services:
       - mongo
     environment:
       NODE_ENV: production
-      TOKEN_SECRET: your-secret-key
+      TOKEN_SECRET: ef7a351c6f1c7f673af0cf3755498884b5e8b13656767a08120e2b2c524fc6f8 
       DB_ADAPTER: mongo
       DB_DATABASE: konga
       DB_URI: mongodb://mongo:27017/konga
@@ -69,7 +69,7 @@ services:
 
   mongo:
     image: mongo:4.4
-    restart: always
+    restart: unless-stopped
     volumes:
       - mongo_data:/data/db
     networks:
@@ -79,6 +79,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
+    restart: unless-stopped
     container_name: keycloak
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -104,6 +105,7 @@ services:
   keycloak-db:
     image: postgres:15
     container_name: keycloak-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -116,7 +118,7 @@ services:
   nginx:
     image: nginx:latest
     container_name: nginx
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"

@@ -16,6 +16,8 @@ services:
     build: ./gov-chat-backend
     ports:
       - "3000:3000"
+    volumes:
+      - ./database_backups:/app/database_backups
     environment:
       # Server Configuration
       - NODE_ENV=production

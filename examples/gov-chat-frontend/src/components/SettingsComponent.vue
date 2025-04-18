@@ -70,10 +70,6 @@
                 <button class="theme-toggle" :class="{ active: settings.theme === 'dark' }" @click="applyTheme('dark')">
                   {{ translate('settings.themes.dark', 'Dark') }}
                 </button>
-                <button class="theme-toggle" :class="{ active: settings.theme === 'system' }"
-                  @click="applyTheme('system')">
-                  {{ translate('settings.themes.system', 'System') }}
-                </button>
               </div>
             </div>
 
@@ -174,7 +170,8 @@
           <h3 class="modal-title" :data-themed="true">{{ translate('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
 
           <div class="modal-body">
-            <p :data-themed="true">{{ translate('settings.changingEmailTo', 'Changing your email to') }} <strong>{{ newEmail }}</strong> {{
+            <p :data-themed="true">{{ translate('settings.changingEmailTo', 'Changing your email to') }} <strong>{{
+                newEmail }}</strong> {{
               translate('settings.will', 'will') }}:</p>
             <ul>
               <li>{{ translate('settings.logOutSystem', 'Log you out of the system') }}</li>

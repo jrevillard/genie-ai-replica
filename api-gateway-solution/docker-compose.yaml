@@ -10,6 +10,7 @@ volumes:
   mongo_data:
   nginx_certs:
   nginx_conf:
+  zap_data:
 
 services:
   kong-database:
@@ -131,3 +132,16 @@ services:
       - kong-net
     depends_on:
       - kong
+
+  # OWASP ZAP service with alternative ports
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: zap
+    restart: unless-stopped
+    ports:
+      - "8095:8080"
+    volumes:
+      - zap_data:/zap/wrk
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
+    networks:
+      - kong-net

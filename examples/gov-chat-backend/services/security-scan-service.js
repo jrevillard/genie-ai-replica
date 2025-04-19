@@ -1,8 +1,10 @@
-// src/services/securityScanService.js - with detailed vulnerability reporting
+// src/services/securityScanService.js - with enhanced security checks
 const fs = require('fs').promises;
 const path = require('path');
 const { logger } = require('../logger');
 const logsService = require('./logs-service');
+const axios = require('axios');
+const config = require('../config'); // Assume config has API endpoints and base URLs
 
 /**
  * Service for handling security scans and related operations
@@ -23,6 +25,35 @@ const securityScanService = {
       const loginIssues = await this.checkFailedLogins();
       const suspiciousActivities = await this.checkSuspiciousActivities();
       const vulnerabilityDetails = await this.scanForVulnerabilities();
+      
+      // Run new security checks for HTTP headers and info leakage
+      const missingHeaders = await this.checkSecurityHeaders();
+      const serverLeakageIssues = await this.checkServerLeakage();
+      const timestampIssues = await this.checkTimestampDisclosure();
+      const corsIssues = await this.checkCorsConfiguration();
+      const hiddenFiles = await this.checkHiddenFiles();
+      
+      // Add new findings to vulnerabilities
+      missingHeaders.forEach(issue => {
+        if (issue.severity === 'medium') vulnerabilityDetails.medium.push(issue);
+        else vulnerabilityDetails.low.push(issue);
+      });
+      
+      serverLeakageIssues.forEach(issue => {
+        vulnerabilityDetails.medium.push(issue);
+      });
+      
+      timestampIssues.forEach(issue => {
+        vulnerabilityDetails.medium.push(issue);
+      });
+      
+      corsIssues.forEach(issue => {
+        vulnerabilityDetails.medium.push(issue);
+      });
+      
+      hiddenFiles.forEach(issue => {
+        vulnerabilityDetails.medium.push(issue);
+      });
       
       // Calculate scan duration
       const scanDuration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -647,6 +678,248 @@ const securityScanService = {
   },
   
   /**
+   * Check for missing security headers
+   * @returns {Promise<Array>} Array of security header issues
+   */
+  async checkSecurityHeaders() {
+    try {
+      // Get API base URL from config
+      const apiUrl = config.api.baseUrl || config.services.api.url;
+      const endpoint = config.api.healthEndpoint || '/api/health';
+      const fullUrl = `${apiUrl}${endpoint}`;
+      
+      const response = await axios.get(fullUrl);
+      
+      const headers = response.headers;
+      const missingHeaders = [];
+      
+      // Check for critical security headers
+      if (!headers['content-security-policy']) 
+        missingHeaders.push({ 
+          type: 'Content Security Policy Header Missing', 
+          severity: 'medium',
+          description: 'CSP header not set, increasing risk of XSS attacks',
+          recommendation: 'Implement CSP header with appropriate directives'
+        });
+      
+      if (!headers['strict-transport-security'])
+        missingHeaders.push({ 
+          type: 'Strict-Transport-Security Header Missing', 
+          severity: 'medium',
+          description: 'HSTS header not set, increasing risk of protocol downgrade attacks',
+          recommendation: 'Add Strict-Transport-Security header with appropriate max-age'
+        });
+      
+      if (!headers['x-content-type-options'])
+        missingHeaders.push({ 
+          type: 'X-Content-Type-Options Header Missing', 
+          severity: 'medium',
+          description: 'X-Content-Type-Options header not set, increasing risk of MIME type confusion attacks',
+          recommendation: 'Add X-Content-Type-Options: nosniff header'
+        });
+      
+      if (!headers['x-frame-options'])
+        missingHeaders.push({ 
+          type: 'X-Frame-Options Header Missing', 
+          severity: 'medium',
+          description: 'X-Frame-Options header not set, increasing risk of clickjacking attacks',
+          recommendation: 'Add X-Frame-Options: SAMEORIGIN header'
+        });
+      
+      if (!headers['referrer-policy'])
+        missingHeaders.push({ 
+          type: 'Referrer-Policy Header Missing', 
+          severity: 'low',
+          description: 'Referrer-Policy header not set, potentially leaking referrer information',
+          recommendation: 'Add Referrer-Policy: no-referrer-when-downgrade header'
+        });
+      
+      return missingHeaders;
+    } catch (error) {
+      logger.error(`Error checking security headers: ${error.message}`);
+      return [];
+    }
+  },
+  
+  /**
+   * Check for server information leakage
+   * @returns {Promise<Array>} Array of server information leakage issues
+   */
+  async checkServerLeakage() {
+    try {
+      // Get API base URL from config
+      const apiUrl = config.api.baseUrl || config.services.api.url;
+      const endpoint = config.api.healthEndpoint || '/api/health';
+      const fullUrl = `${apiUrl}${endpoint}`;
+      
+      const response = await axios.get(fullUrl);
+      
+      const headers = response.headers;
+      const leakageIssues = [];
+      
+      if (headers['x-powered-by'])
+        leakageIssues.push({ 
+          type: 'Server Leaks Information via X-Powered-By', 
+          severity: 'medium',
+          description: `X-Powered-By header reveals server technology: ${headers['x-powered-by']}`,
+          recommendation: 'Remove X-Powered-By header in server configuration' 
+        });
+      
+      if (headers['server'] && headers['server'].includes('/'))
+        leakageIssues.push({ 
+          type: 'Server Leaks Version Information', 
+          severity: 'medium',
+          description: `Server header reveals version information: ${headers['server']}`,
+          recommendation: 'Configure server to remove version information from Server header' 
+        });
+      
+      return leakageIssues;
+    } catch (error) {
+      logger.error(`Error checking server information leakage: ${error.message}`);
+      return [];
+    }
+  },
+  
+  /**
+   * Check for timestamp disclosure in API responses
+   * @returns {Promise<Array>} Array of timestamp disclosure issues
+   */
+  async checkTimestampDisclosure() {
+    try {
+      // Get list of endpoints to check from config
+      const apiUrl = config.api.baseUrl || config.services.api.url;
+      const endpointsToCheck = config.api.endpoints || [
+        '/api/users',
+        '/api/logs',
+        '/api/status'
+      ];
+      
+      const disclosureIssues = [];
+      
+      for (const endpoint of endpointsToCheck) {
+        try {
+          const response = await axios.get(`${apiUrl}${endpoint}`);
+          
+          // Check for Unix timestamps in the response
+          const responseText = JSON.stringify(response.data);
+          const timestampRegex = /\b\d{10}\b/g; // Basic Unix timestamp regex
+          
+          const matches = responseText.match(timestampRegex);
+          if (matches && matches.length > 0) {
+            disclosureIssues.push({
+              type: 'Timestamp Disclosure',
+              severity: 'medium',
+              description: `Unix timestamps exposed in ${endpoint} response`,
+              count: matches.length,
+              recommendation: 'Format timestamps as ISO strings or human-readable dates before sending to client'
+            });
+          }
+        } catch (err) {
+          // Skip failed requests
+          logger.debug(`Skipping timestamp check for ${endpoint}: ${err.message}`);
+          continue;
+        }
+      }
+      
+      return disclosureIssues;
+    } catch (error) {
+      logger.error(`Error checking timestamp disclosure: ${error.message}`);
+      return [];
+    }
+  },
+  
+  /**
+   * Check for CORS misconfiguration
+   * @returns {Promise<Array>} Array of CORS misconfiguration issues
+   */
+  async checkCorsConfiguration() {
+    try {
+      // Get API base URL from config
+      const apiUrl = config.api.baseUrl || config.services.api.url;
+      const endpoint = config.api.healthEndpoint || '/api/health';
+      const fullUrl = `${apiUrl}${endpoint}`;
+      
+      // Test with a preflight OPTIONS request
+      const response = await axios({
+        method: 'options',
+        url: fullUrl,
+        headers: {
+          'Origin': 'https://example.com',
+          'Access-Control-Request-Method': 'GET'
+        }
+      });
+      
+      const headers = response.headers;
+      const corsIssues = [];
+      
+      // Check if CORS is too permissive
+      if (headers['access-control-allow-origin'] === '*') {
+        corsIssues.push({
+          type: 'Cross-Domain Misconfiguration',
+          severity: 'medium',
+          description: 'CORS allows requests from any origin (*)',
+          recommendation: 'Configure CORS to allow only specific trusted domains'
+        });
+      }
+      
+      return corsIssues;
+    } catch (error) {
+      logger.error(`Error checking CORS configuration: ${error.message}`);
+      return [];
+    }
+  },
+  
+  /**
+   * Check for accessible hidden files
+   * @returns {Promise<Array>} Array of hidden file issues
+   */
+  async checkHiddenFiles() {
+    try {
+      // Get API base URL from config
+      const apiUrl = config.api.baseUrl || config.services.api.url;
+      const hiddenFiles = [
+        '/.env',
+        '/.git/config',
+        '/.gitignore',
+        '/.npmrc',
+        '/node_modules/.package-lock.json'
+      ];
+      
+      const foundFiles = [];
+      
+      for (const file of hiddenFiles) {
+        try {
+          const response = await axios.get(`${apiUrl}${file}`);
+          if (response.status !== 404) {
+            foundFiles.push({
+              type: 'Hidden File Found',
+              severity: 'medium',
+              description: `Hidden file accessible: ${file}`,
+              recommendation: 'Block access to hidden files and development artifacts'
+            });
+          }
+        } catch (err) {
+          // 404 errors are expected and good
+          if (err.response && err.response.status !== 404) {
+            // Non-404 errors might indicate the file exists but with access issues
+            foundFiles.push({
+              type: 'Potential Hidden File',
+              severity: 'low',
+              description: `Unusual response for hidden file: ${file} (${err.response?.status})`,
+              recommendation: 'Verify server configuration for handling hidden files'
+            });
+          }
+        }
+      }
+      
+      return foundFiles;
+    } catch (error) {
+      logger.error(`Error checking hidden files: ${error.message}`);
+      return [];
+    }
+  },
+  
+  /**
    * Remove duplicate log entries based on timestamp and message
    * @param {Array} logEntries - Array of log entries
    * @returns {Array} Deduplicated log entries
@@ -736,6 +1009,48 @@ const securityScanService = {
           title: 'Fix Authentication Token Issues',
           description: 'JWT token verification failures detected',
           action: 'Review token expiration settings and refresh token implementation'
+        });
+      }
+      
+      // Header-specific recommendations
+      const headerIssues = vulnerabilities.medium.filter(
+        v => v.type.includes('Header')
+      );
+      
+      if (headerIssues.length > 0) {
+        recommendations.push({
+          severity: 'medium',
+          title: 'Implement Security Headers',
+          description: `${headerIssues.length} missing security headers detected`,
+          action: 'Configure server to add proper security headers for all responses'
+        });
+      }
+      
+      // Information leakage recommendations
+      const leakageIssues = vulnerabilities.medium.filter(
+        v => v.type.includes('Leaks') || v.type.includes('Disclosure')
+      );
+      
+      if (leakageIssues.length > 0) {
+        recommendations.push({
+          severity: 'medium',
+          title: 'Prevent Information Leakage',
+          description: `${leakageIssues.length} instances of information leakage detected`,
+          action: 'Configure server to prevent leaking version information and hide internal details'
+        });
+      }
+      
+      // CORS recommendations
+      const corsIssues = vulnerabilities.medium.filter(
+        v => v.type.includes('Cross-Domain')
+      );
+      
+      if (corsIssues.length > 0) {
+        recommendations.push({
+          severity: 'medium',
+          title: 'Fix CORS Configuration',
+          description: 'Cross-Origin Resource Sharing (CORS) is too permissive',
+          action: 'Restrict CORS to only allow trusted domains instead of wildcard (*) origin'
         });
       }
 

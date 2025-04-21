@@ -164,7 +164,7 @@ export default {
     // Niveaux de journaux
     logLevels: {
       error: 'ERREUR',
-      warning: 'AVERTISSEMENT',
+      warn: 'AVERTISSEMENT',
       info: 'INFO',
       debug: 'DEBUG'
     },

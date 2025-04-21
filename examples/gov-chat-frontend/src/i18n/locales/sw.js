@@ -285,7 +285,7 @@ export default {
     // Viwango vya kumbukumbu
     logLevels: {
       error: 'HITILAFU',
-      warning: 'ONYO',
+      warn: 'ONYO',
       info: 'TAARIFA',
       debug: 'UTATUZI'
     },

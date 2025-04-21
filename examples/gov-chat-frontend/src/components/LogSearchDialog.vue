@@ -28,8 +28,9 @@
                             <select id="logLevel" v-model="searchParams.level">
                                 <option value="">{{ translate('admin.logSearch.allLevels', 'All Levels') }}</option>
                                 <option value="ERROR">{{ translate('admin.logLevels.error', 'ERROR') }}</option>
-                                <option value="WARNING">{{ translate('admin.logLevels.warning', 'WARNING') }}</option>
+                                <option value="WARN">{{ translate('admin.logLevels.warn', 'WARN') }}</option>
                                 <option value="INFO">{{ translate('admin.logLevels.info', 'INFO') }}</option>
+                                <option value="DEBUG">{{ translate('admin.logLevels.debug', 'DEBUG') }}</option>
                             </select>
                         </div>
 
@@ -130,7 +131,7 @@
                                     <td>{{ log.time }}</td>
                                     <td>
                                         <span :class="['log-level', `log-${log.level.toLowerCase()}`]">
-                                            {{ translate(`admin.logLevels.${log.level.toLowerCase()}`, log.level) }}
+                                            {{ log.level }}
                                         </span>
                                     </td>
                                     <td>{{ log.service }}</td>
@@ -277,7 +278,12 @@ export default {
 
                     // Apply client-side filtering for log level if API doesn't handle it
                     if (this.searchParams.level && logs.length > 0) {
-                        logs = logs.filter(log => log.level.toUpperCase() === this.searchParams.level.toUpperCase());
+                        // Handle both WARN and WARNING cases for compatibility
+                        if (this.searchParams.level === 'WARN') {
+                            logs = logs.filter(log => log.level.toUpperCase() === 'WARN' || log.level.toUpperCase() === 'WARNING');
+                        } else {
+                            logs = logs.filter(log => log.level.toUpperCase() === this.searchParams.level.toUpperCase());
+                        }
                         console.log('Logs after filtering:', logs); // Debug: Log the filtered logs
                     }
 
@@ -287,8 +293,6 @@ export default {
                         ...log,
                         date: log.date || today // Use the actual date if provided, otherwise assume today
                     }));
-
-                    this.searchResults = logs;
 
                     this.searchResults = logs;
                 } else {
@@ -387,13 +391,13 @@ export default {
                 },
                 {
                     time: '10:38:22',
-                    level: 'WARNING',
+                    level: 'WARN',
                     service: 'Storage',
                     message: 'Disk space below 10% threshold'
                 },
                 {
                     time: '11:15:33',
-                    level: 'WARNING',
+                    level: 'WARN',
                     service: 'Database',
                     message: 'Slow query detected (2.5s): SELECT * FROM large_table WHERE...'
                 },
@@ -411,7 +415,7 @@ export default {
                 },
                 {
                     time: '11:30:12',
-                    level: 'WARNING',
+                    level: 'WARN',
                     service: 'External API',
                     message: 'Rate limit approaching (80% of quota used)'
                 },
@@ -705,7 +709,7 @@ export default {
     color: var(--danger, #ef4444);
 }
 
-.log-warning {
+.log-warn, .log-warning {
     background-color: rgba(245, 158, 11, 0.1);
     color: var(--warning, #f59e0b);
 }

@@ -32,6 +32,9 @@ app.disable('x-powered-by');
 // Apply our comprehensive security headers middleware early
 app.use(securityHeaders);
 
+// Enable trust proxy
+app.set('trust proxy', true);
+
 // CORS middleware with explicit origin instead of wildcard - added for ZAP compliance
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', 'https://e2e-82-109.ssdcloudindia.net');

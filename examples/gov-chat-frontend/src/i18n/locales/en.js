@@ -166,7 +166,7 @@ export default {
     // Log levels
     logLevels: {
       error: 'ERROR',
-      warning: 'WARNING',
+      warn: 'WARN',
       info: 'INFO',
       debug: 'DEBUG'
     },

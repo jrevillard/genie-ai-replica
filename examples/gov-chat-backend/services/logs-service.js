@@ -136,9 +136,9 @@ const logsService = {
         
         // Extract error and warning logs
         errorLogs = this.extractLogs(logLines, 'ERROR');
-        warningLogs = this.extractLogs(logLines, 'WARNING');
+        warningLogs = this.extractLogs(logLines, 'WARN');
         
-        logger.debug(`Found ${errorLogs.length} ERROR logs and ${warningLogs.length} WARNING logs`);
+        logger.debug(`Found ${errorLogs.length} ERROR logs and ${warningLogs.length} WARN logs`);
         
         // Group logs by type and service
         const errorLogsSummary = this.groupLogs(errorLogs);
@@ -345,8 +345,18 @@ const logsService = {
 
         levelFilteredLogs = levelFilteredLogs.filter(log => {
           const logLevel = log.level ? log.level.toUpperCase() : '';
-          const matches = logLevel === targetLevel;
-          return matches;
+          
+          // Special handling for WARN/WARNING consistency
+          if (targetLevel === 'WARN' && (logLevel === 'WARN' || logLevel === 'WARNING')) {
+            return true;
+          }
+          
+          // Special handling for DEBUG logs
+          if (targetLevel === 'DEBUG' && logLevel === 'DEBUG') {
+            return true;
+          }
+          
+          return logLevel === targetLevel;
         });
 
         logger.debug(`After level filter (${targetLevel}): ${levelFilteredLogs.length} logs (from ${beforeCount})`);
@@ -428,13 +438,25 @@ const logsService = {
     logger.debug(`Extracting logs with level: ${level}`);
     
     const logs = logLines
-      .filter(line => line.includes(`[${level}]`))
+      .filter(line => {
+        // Check for different formats of log level
+        return line.includes(`[${level}]`) || 
+               line.includes(`[${level}]:`) || 
+               (level === 'WARN' && (line.includes('[WARNING]') || line.includes('[WARNING]:'))) ||
+               (level === 'DEBUG' && (line.includes('[DEBUG]') || line.includes('[DEBUG]:')));
+      })
       .map(line => {
         // Parse log line
         const match = line.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
         if (!match) return null;
         
         const [, date, time, logLevel, message] = match;
+        
+        // Normalize level to match UI expectations (WARNING -> WARN)
+        let normalizedLevel = logLevel;
+        if (normalizedLevel === 'WARNING') {
+          normalizedLevel = 'WARN';
+        }
         
         // Extract service information from the message - use a safer approach
         let service = 'System';
@@ -464,7 +486,7 @@ const logsService = {
         return {
           date,
           time,
-          level: logLevel,
+          level: normalizedLevel,
           message,
           service
         };
@@ -547,10 +569,17 @@ const logsService = {
             const standardMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
             if (standardMatch) {
               const [, date, time, level, message] = standardMatch;
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              let normalizedLevel = defaultLevel || level;
+              if (normalizedLevel === 'WARNING') {
+                normalizedLevel = 'WARN';
+              }
+              
               return {
                 date,  // This is YYYY-MM-DD format
                 time,
-                level: defaultLevel || level,
+                level: normalizedLevel,
                 message,
                 service: this.detectService(message)
               };
@@ -560,10 +589,17 @@ const logsService = {
             const altMatch1 = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
             if (altMatch1) {
               const [, date, time, level, message] = altMatch1;
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              let normalizedLevel = defaultLevel || level;
+              if (normalizedLevel === 'WARNING') {
+                normalizedLevel = 'WARN';
+              }
+              
               return {
                 date,  // This is YYYY-MM-DD format
                 time,
-                level: defaultLevel || level,
+                level: normalizedLevel,
                 message,
                 service: this.detectService(message)
               };
@@ -574,7 +610,13 @@ const logsService = {
             if (dateTimeOnlyMatch) {
               const [, date, time, message] = dateTimeOnlyMatch;
               // Determine log level from message content or use default
-              const detectedLevel = defaultLevel || this.detectLogLevel(message);
+              let detectedLevel = defaultLevel || this.detectLogLevel(message);
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              if (detectedLevel === 'WARNING') {
+                detectedLevel = 'WARN';
+              }
+              
               return {
                 date,  // This is YYYY-MM-DD format
                 time,
@@ -588,13 +630,24 @@ const logsService = {
             if (truncatedLine.trim()) {
               const dateMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})/);
               const timeMatch = truncatedLine.match(/(\d{2}:\d{2}:\d{2})/);
-              const levelMatch = truncatedLine.match(/\[(ERROR|WARNING|INFO)\]/i);
+              const levelMatch = truncatedLine.match(/\[(ERROR|WARNING|WARN|INFO|DEBUG)\]/i);
 
               if (dateMatch || timeMatch) {
+                let level = 'INFO';
+                if (levelMatch) {
+                  level = levelMatch[1].toUpperCase();
+                  // Normalize level to match UI expectations (WARNING -> WARN)
+                  if (level === 'WARNING') {
+                    level = 'WARN';
+                  }
+                } else {
+                  level = defaultLevel || 'INFO';
+                }
+                
                 return {
                   date: dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0],
                   time: timeMatch ? timeMatch[1] : '00:00:00',
-                  level: levelMatch ? levelMatch[1] : (defaultLevel || 'INFO'),
+                  level: level,
                   message: truncatedLine,
                   service: this.detectService(truncatedLine)
                 };
@@ -644,7 +697,9 @@ const logsService = {
       if (lowerMessage.includes('error') || lowerMessage.includes('exception') || lowerMessage.includes('fail')) {
         return 'ERROR';
       } else if (lowerMessage.includes('warn')) {
-        return 'WARNING';
+        return 'WARN';  // Changed from 'WARNING' to 'WARN' to match the UI
+      } else if (lowerMessage.includes('debug')) {
+        return 'DEBUG';  // Added detection for DEBUG logs
       } else {
         return 'INFO';
       }

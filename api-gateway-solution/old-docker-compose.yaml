@@ -10,6 +10,7 @@ volumes:
   mongo_data:
   nginx_certs:
   nginx_conf:
+  zap_data:
 
 services:
   kong-database:
@@ -20,11 +21,16 @@ services:
     environment:
       POSTGRES_USER: kong
       POSTGRES_DB: kong
-      POSTGRES_PASSWORD: kong
+      POSTGRES_PASSWORD: k1ngk0ng
     ports:
       - "5432:5432"
     volumes:
       - kong_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   kong:
     image: kong:latest
@@ -32,12 +38,13 @@ services:
     networks:
       - kong-net
     depends_on:
-      - kong-database
+      kong-database:
+        condition: service_healthy
     environment:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-database
       KONG_PG_USER: kong
-      KONG_PG_PASSWORD: kong
+      KONG_PG_PASSWORD: k1ngk0ng
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
@@ -131,3 +138,16 @@ services:
       - kong-net
     depends_on:
       - kong
+
+  # OWASP ZAP service with alternative ports
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: zap
+    restart: unless-stopped
+    ports:
+      - "8095:8080"
+    volumes:
+      - zap_data:/zap/wrk
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true
+    networks:
+      - kong-net

@@ -1,4 +1,4 @@
-// src/services/logs-service.js
+// src/services/logs-service.js - with fixes for date handling and 7-day search
 const fs = require('fs').promises;
 const path = require('path');
 const { logger } = require('../logger');
@@ -256,7 +256,7 @@ const logsService = {
         }
       }
 
-      // Determine date range
+      // FIX: Determine date range with a modified default to include a full week
       const { startDate, endDate } = this.getDateRange(searchParams);
       logger.debug(`Using date range: ${startDate} to ${endDate}`);
 
@@ -772,36 +772,47 @@ const logsService = {
       const now = new Date();
       let startDate, endDate;
       
-      switch (options.dateRange) {
-        case 'yesterday':
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - 1);
-          endDate = new Date(startDate);
-          break;
-          
-        case 'week':
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - 7);
-          endDate = new Date(now);
-          break;
-          
-        case 'month':
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - 30);
-          endDate = new Date(now);
-          break;
-          
-        case 'custom':
-          if (options.startDate && options.endDate) {
-            startDate = new Date(options.startDate);
-            endDate = new Date(options.endDate);
+      // Explicitly handle custom date ranges first
+      if (options.dateRange === 'custom' && options.startDate && options.endDate) {
+        // Custom date range explicitly provided
+        startDate = new Date(options.startDate);
+        endDate = new Date(options.endDate);
+      } else {
+        // Handle other date range options
+        switch (options.dateRange) {
+          case 'yesterday':
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - 1);
+            endDate = new Date(startDate);
             break;
-          }
-          // Fall through to default if dates not provided
-          
-        default: // today
-          startDate = new Date(now);
-          endDate = new Date(now);
+            
+          case 'week':
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - 7);
+            endDate = new Date(now);
+            break;
+            
+          case 'month':
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - 30);
+            endDate = new Date(now);
+            break;
+            
+          default: // today or any unrecognized value
+            // For security scanning, default to week if not specified
+            if (options.term && 
+                (options.term.includes('security') || 
+                 options.term.includes('probe') || 
+                 options.term.includes('.env') || 
+                 options.term.includes('.git'))) {
+              startDate = new Date(now);
+              startDate.setDate(now.getDate() - 7);
+              endDate = new Date(now);
+            } else {
+              startDate = new Date(now);
+              endDate = new Date(now);
+            }
+        }
       }
       
       // Format dates as YYYY-MM-DD
@@ -811,10 +822,14 @@ const logsService = {
       };
     } catch (error) {
       logger.error(`Error getting date range: ${error.message}`);
+      
+      // For error recovery, default to week-long search period
       const now = new Date();
-      // Return today as fallback
+      const startDate = new Date(now);
+      startDate.setDate(now.getDate() - 7);
+      
       return {
-        startDate: now.toISOString().split('T')[0],
+        startDate: startDate.toISOString().split('T')[0],
         endDate: now.toISOString().split('T')[0]
       };
     }

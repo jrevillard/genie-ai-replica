@@ -202,6 +202,29 @@ const adminController = {
   },
   
   /**
+   * Debug yesterday's logs
+   */
+  async debugYesterdayLogs(req, res) {
+    try {
+      logger.info('Controller: Debugging yesterday logs');
+      
+      const result = await logsService.debugYesterdayLogs();
+      
+      res.json({ 
+        success: true, 
+        data: result
+      });
+    } catch (error) {
+      logger.error(`Error debugging yesterday logs: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to debug yesterday logs',
+        error: error.message
+      });
+    }
+  },
+  
+  /**
    * Rollover logs
    */
   async rolloverLogs(req, res) {

@@ -602,45 +602,112 @@ async getSystemHealth() {
    * @param {string} options.service - Service name filter
    * @returns {Promise<Object>} Log data
    */
+  /**
+ * Get system logs
+ * @param {Object} options - Log options
+ * @param {number} options.limit - Maximum number of logs to return
+ * @param {string} options.level - Log level filter
+ * @param {string} options.service - Service name filter
+ * @param {string} options.dateRange - Date range filter (e.g., 'today', 'yesterday', 'lastWeek')
+ * @returns {Promise<Object>} Log data
+ */
+  /**
+ * Get system logs
+ * @param {Object} options - Log options
+ * @param {number} options.limit - Maximum number of logs to return
+ * @param {string} options.level - Log level filter
+ * @param {string} options.service - Service name filter
+ * @param {string} options.dateRange - Date range (today, yesterday, week, month, custom)
+ * @param {string} options.startDate - Start date for custom range
+ * @param {string} options.endDate - End date for custom range
+ * @returns {Promise<Object>} Log data
+ */
   async getLogs(options = {}) {
-    const { limit = 100, level, service } = options;
+    const { limit = 100, level, service, dateRange = 'today', startDate, endDate } = options;
     logger.info(`Getting system logs with options: ${JSON.stringify(options)}`);
 
     try {
-      // Read logs from the current day's combined log file
+      // Determine which log files to read based on dateRange
       const today = new Date().toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
+      const logFiles = [];
+
+      if (dateRange === 'today' || dateRange === '') {
+        // Read today's log file
+        logFiles.push(path.join(__dirname, `../logs/combined-${today}.log`));
+      } else if (dateRange === 'yesterday') {
+        // Read yesterday's log file
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        logFiles.push(path.join(__dirname, `../logs/combined-${yesterdayStr}.log`));
+      } else if (dateRange === 'week') {
+        // Read logs from the last 7 days
+        for (let i = 0; i < 7; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
+        }
+      } else if (dateRange === 'month') {
+        // Read logs from the last 30 days
+        for (let i = 0; i < 30; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
+        }
+      } else if (dateRange === 'custom' && startDate && endDate) {
+        // Read logs for custom date range
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+
+        for (let i = 0; i <= dayDiff; i++) {
+          const date = new Date(start);
+          date.setDate(date.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
+        }
+      }
+
       let logs = [];
       let totalLogs = 0;
 
-      logger.debug(`Reading log file: ${logFile}`);
-      try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter(line => line.trim() !== '');
-        totalLogs = logLines.length;
-        logger.debug(`Total log lines: ${totalLogs}`);
+      // Read and parse all selected log files
+      for (const logFile of logFiles) {
+        logger.debug(`Reading log file: ${logFile}`);
+        try {
+          const logContent = await fs.readFile(logFile, 'utf8');
+          const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+          totalLogs += logLines.length;
+          logger.debug(`Total log lines in ${logFile}: ${logLines.length}`);
 
-        logs = logLines.map(line => {
-          const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-          if (!match) {
-            logger.debug(`Skipping unparseable log line: ${line}`);
-            return null;
-          }
-          const [, timestamp, level, service, message] = match;
-          const date = new Date(timestamp);
-          const parsedLog = {
-            date: date.toISOString().split('T')[0], 
-            time: date.toLocaleTimeString(),
-            level: level.toUpperCase(),
-            service,
-            message,
-            messageKey: message.toLowerCase().replace(/\s+/g, '')
-          };
-          logger.debug(`Parsed log: ${JSON.stringify(parsedLog)}`);
-          return parsedLog;
-        }).filter(log => log !== null);
-      } catch (error) {
-        logger.error(`Error reading log file: ${error.message}`);
+          const parsedLogs = logLines.map(line => {
+            const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
+            if (!match) {
+              logger.debug(`Skipping unparseable log line: ${line}`);
+              return null;
+            }
+            const [, timestamp, level, service, message] = match;
+            const logDate = new Date(timestamp);
+
+            // Use the actual date from the log entry
+            const parsedLog = {
+              date: logDate.toISOString().split('T')[0], // Ensure date is in YYYY-MM-DD format
+              time: logDate.toLocaleTimeString(),
+              level: level.toUpperCase(),
+              service,
+              message,
+              messageKey: message.toLowerCase().replace(/\s+/g, '')
+            };
+            return parsedLog;
+          }).filter(log => log !== null);
+
+          logs = logs.concat(parsedLogs);
+        } catch (error) {
+          logger.error(`Error reading log file ${logFile}: ${error.message}`);
+          // Continue with other files if one fails
+        }
       }
 
       // Filter logs based on query parameters
@@ -655,9 +722,13 @@ async getSystemHealth() {
         filteredLogs = filteredLogs.filter(log => log.service.toLowerCase().includes(service.toLowerCase()));
       }
 
-      // Sort by time (most recent first)
-      logger.debug('Sorting logs by time (most recent first)');
-      filteredLogs.sort((a, b) => new Date(b.time) - new Date(a.time));
+      // Sort by actual datetime (most recent first)
+      logger.debug('Sorting logs by date and time (most recent first)');
+      filteredLogs.sort((a, b) => {
+        const dateA = new Date(`${a.date}T${a.time}`);
+        const dateB = new Date(`${b.date}T${b.time}`);
+        return dateB - dateA;
+      });
 
       // Limit the number of logs
       logger.debug(`Limiting logs to ${limit}`);
@@ -1188,7 +1259,168 @@ async getSystemHealth() {
       logger.error(`Error in searchUsers: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  },
+  /**
+ * Search logs with filtering
+ * @param {Object} options - Search options
+ * @param {string} options.term - Search term
+ * @param {string} options.level - Log level filter
+ * @param {string} options.service - Service name filter
+ * @param {string} options.dateRange - Date range (today, yesterday, week, month, custom)
+ * @param {string} options.startDate - Start date for custom range
+ * @param {string} options.endDate - End date for custom range
+ * @returns {Promise<Object>} Search results
+ */
+  async searchLogs(options = {}) {
+    const { term = '', level, service, dateRange = 'today', startDate, endDate, limit = 100 } = options;
+    logger.info(`Searching logs with options: ${JSON.stringify(options)}`);
+
+    try {
+      // Determine which log files to read based on dateRange
+      const today = new Date().toISOString().split('T')[0];
+      const logFiles = [];
+
+      if (dateRange === 'today' || dateRange === '') {
+        // Read today's log file
+        logFiles.push(path.join(__dirname, `../logs/combined-${today}.log`));
+      } else if (dateRange === 'yesterday') {
+        // Read yesterday's log file
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        logFiles.push(path.join(__dirname, `../logs/combined-${yesterdayStr}.log`));
+        logger.debug(`Adding yesterday's log file: combined-${yesterdayStr}.log`);
+      } else if (dateRange === 'week') {
+        // Read logs from the last 7 days
+        for (let i = 0; i < 7; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
+        }
+      } else if (dateRange === 'month') {
+        // Read logs from the last 30 days
+        for (let i = 0; i < 30; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
+        }
+      } else if (dateRange === 'custom' && startDate && endDate) {
+        // Read logs for custom date range
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+
+        for (let i = 0; i <= dayDiff; i++) {
+          const date = new Date(start);
+          date.setDate(date.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0];
+          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
+        }
+      }
+
+      logger.debug(`Will search through ${logFiles.length} log files: ${logFiles.join(', ')}`);
+
+      let logs = [];
+      let totalLogs = 0;
+
+      // Read and parse all selected log files
+      for (const logFile of logFiles) {
+        logger.debug(`Reading log file: ${logFile}`);
+        try {
+          const logContent = await fs.readFile(logFile, 'utf8');
+          const logLines = logContent.split('\n').filter(line => line.trim() !== '');
+          totalLogs += logLines.length;
+          logger.debug(`Total log lines in ${logFile}: ${logLines.length}`);
+
+          const parsedLogs = logLines.map(line => {
+            const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
+            if (!match) {
+              logger.debug(`Skipping unparseable log line: ${line}`);
+              return null;
+            }
+            const [, timestamp, logLevel, logService, message] = match;
+            const logDate = new Date(timestamp);
+
+            // Use the actual date from the log entry
+            const parsedLog = {
+              date: logDate.toISOString().split('T')[0], // Ensure date is in YYYY-MM-DD format
+              time: logDate.toLocaleTimeString(),
+              level: logLevel.toUpperCase(),
+              service: logService,
+              message,
+              messageKey: message.toLowerCase().replace(/\s+/g, '')
+            };
+            return parsedLog;
+          }).filter(log => log !== null);
+
+          logs = logs.concat(parsedLogs);
+        } catch (error) {
+          logger.error(`Error reading log file ${logFile}: ${error.message}`);
+          // Continue with other files if one fails
+        }
+      }
+
+      logger.debug(`Parsed ${logs.length} total log entries before filtering`);
+
+      // Apply search filters
+      let filteredLogs = logs;
+
+      // Filter by search term
+      if (term) {
+        logger.debug(`Filtering logs by term: ${term}`);
+        filteredLogs = filteredLogs.filter(log =>
+          log.message.toLowerCase().includes(term.toLowerCase()) ||
+          log.service.toLowerCase().includes(term.toLowerCase())
+        );
+      }
+
+      // Filter by log level
+      if (level) {
+        logger.debug(`Filtering logs by level: ${level}`);
+        filteredLogs = filteredLogs.filter(log => log.level.toLowerCase() === level.toLowerCase());
+      }
+
+      // Filter by service
+      if (service) {
+        logger.debug(`Filtering logs by service: ${service}`);
+        filteredLogs = filteredLogs.filter(log => log.service.toLowerCase().includes(service.toLowerCase()));
+      }
+
+      logger.debug(`${filteredLogs.length} logs remain after applying all filters`);
+
+      // Sort by actual datetime (most recent first)
+      logger.debug('Sorting logs by date and time (most recent first)');
+      filteredLogs.sort((a, b) => {
+        const dateA = new Date(`${a.date}T${a.time}`);
+        const dateB = new Date(`${b.date}T${b.time}`);
+        return dateB - dateA;
+      });
+
+      // Limit the number of logs
+      logger.debug(`Limiting logs to ${limit}`);
+      filteredLogs = filteredLogs.slice(0, parseInt(limit));
+
+      const response = {
+        logs: filteredLogs,
+        total: totalLogs,
+        filtered: filteredLogs.length,
+        limit: parseInt(limit),
+        offset: 0
+      };
+      logger.debug(`Log search response: ${filteredLogs.length} logs returned out of ${totalLogs} total`);
+
+      return response;
+    } catch (error) {
+      logger.error(`Error in searchLogs: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
+
+  
 };
+
+
 
 module.exports = adminDashboardService;

@@ -115,7 +115,7 @@
                     </div>
 
                     <div class="table-container">
-                        <table class="results-table" v-if="searchResults.length > 0">
+                        <table class="results-table" v-if="searchResults.length > 0" :key="tableKey">
                             <thead>
                                 <tr>
                                     <th>{{ translate('admin.logDate', 'Date') }}</th>
@@ -135,7 +135,7 @@
                                         </span>
                                     </td>
                                     <td>{{ log.service }}</td>
-                                    <td>{{ log.message }}</td>
+                                    <td>{{ log.message || '' }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -196,6 +196,7 @@ export default {
             hasSearched: false,
             isSearching: false,
             searchResults: [],
+            tableKey: 0, // Add this to force table re-render
 
             // Error handling
             searchError: null
@@ -244,6 +245,34 @@ export default {
             return date.toISOString().split('T')[0];
         },
 
+        // Ensure message column exists
+        ensureMessageColumnExists() {
+            // Wait for DOM to update
+            this.$nextTick(() => {
+                const table = document.querySelector('.results-table');
+                if (table) {
+                    // Check if we need to add the message column
+                    const headerRow = table.querySelector('thead tr');
+                    if (headerRow && headerRow.children.length < 5) {
+                        // Add the missing message column header
+                        const messageHeader = document.createElement('th');
+                        messageHeader.textContent = this.translate('admin.logMessage', 'Message');
+                        headerRow.appendChild(messageHeader);
+                        
+                        // Add message cells to each data row
+                        const dataRows = table.querySelectorAll('tbody tr');
+                        dataRows.forEach((row, index) => {
+                            if (row.children.length < 5) {
+                                const messageCell = document.createElement('td');
+                                messageCell.textContent = this.searchResults[index].message || '';
+                                row.appendChild(messageCell);
+                            }
+                        });
+                    }
+                }
+            });
+        },
+
         // Perform search operation
         async performSearch() {
             try {
@@ -267,47 +296,50 @@ export default {
 
                 // Call the adminDashboardService to search logs
                 const response = await adminDashboardService.searchLogs(searchParams);
-                console.log('Raw response:', response); // Debug: Log the raw response
+                console.log('Raw response:', response);
 
                 // Process response data
                 let logs = [];
                 if (response && response.data) {
-                    // Use response.data.logs instead of response.data.data.logs
                     logs = response.data.logs || response.data.data?.logs || [];
-                    console.log('Logs before filtering:', logs); // Debug: Log the extracted logs
+                    console.log('Logs before filtering:', logs);
 
                     // Apply client-side filtering for log level if API doesn't handle it
                     if (this.searchParams.level && logs.length > 0) {
-                        // Handle both WARN and WARNING cases for compatibility
                         if (this.searchParams.level === 'WARN') {
                             logs = logs.filter(log => log.level.toUpperCase() === 'WARN' || log.level.toUpperCase() === 'WARNING');
                         } else {
                             logs = logs.filter(log => log.level.toUpperCase() === this.searchParams.level.toUpperCase());
                         }
-                        console.log('Logs after filtering:', logs); // Debug: Log the filtered logs
+                        console.log('Logs after filtering:', logs);
                     }
 
-                    // Infer the date for each log (fallback if backend doesn't provide it)
-                    const today = new Date().toISOString().split('T')[0]; // e.g., "2025-04-02"
+                    // Ensure all required fields are present
+                    const today = new Date().toISOString().split('T')[0];
                     logs = logs.map(log => ({
-                        ...log,
-                        date: log.date || today // Use the actual date if provided, otherwise assume today
+                        date: log.date || today,
+                        time: log.time || '00:00:00',
+                        level: log.level || 'INFO',
+                        service: log.service || 'System',
+                        message: log.message || '(No message)' // Ensure message property exists
                     }));
 
                     this.searchResults = logs;
+                    this.tableKey++; // Force table re-render
+                    console.log('Final processed logs:', this.searchResults);
+                    
+                    // Additional safeguard to ensure message column is displayed
+                    this.ensureMessageColumnExists();
                 } else {
-                    console.log('No valid response data'); // Debug: Log if response is invalid
+                    console.log('No valid response data');
                     this.searchResults = [];
                 }
 
-                // Emit the results to the parent component
                 this.$emit('search-completed', this.searchResults);
             } catch (error) {
                 console.error('Error searching logs:', error);
                 this.searchError = error.message || 'An error occurred while searching logs';
                 this.searchResults = [];
-
-                // Still emit empty results with error status
                 this.$emit('search-completed', []);
             } finally {
                 this.isSearching = false;
@@ -345,8 +377,8 @@ export default {
                         log.date || 'N/A',
                         log.time,
                         log.level,
-                        `"${log.service.replace(/"/g, '""')}"`,
-                        `"${log.message.replace(/"/g, '""')}"`
+                        `"${(log.service || '').replace(/"/g, '""')}"`,
+                        `"${(log.message || '').replace(/"/g, '""')}"`
                     ].join(','))
                 ].join('\n');
 
@@ -876,5 +908,24 @@ export default {
         width: 100%;
         padding-top: 0.5rem;
     }
+}
+
+/* Fix for missing message column in search results */
+.results-table {
+    table-layout: fixed;
+}
+
+.results-table th:last-child, 
+.results-table td:last-child {
+    width: 40%;
+}
+
+/* Force display of message column */
+.results-table th:nth-child(5), .results-table td:nth-child(5) {
+    display: table-cell !important;
+    max-width: 50% !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 </style>

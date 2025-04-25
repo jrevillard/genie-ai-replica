@@ -276,6 +276,26 @@ router.get('/logs/summary', adminController.getLogsSummary);
  */
 router.get('/logs/search', adminController.searchLogs);
 
+/**
+ * @swagger
+ * /admin/logs/debug-yesterday:
+ *   get:
+ *     summary: Debug logs for yesterday to diagnose issues
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Debug information retrieved successfully
+ *       401:
+ *         description: Unauthorized - authentication required
+ *       403:
+ *         description: Forbidden - admin access required
+ *       500:
+ *         description: Server error
+ */
+router.get('/logs/debug-yesterday', adminController.debugYesterdayLogs);
+
 // Database operations - utilize the existing database routes
 router.post('/database-operations/reindex', adminController.reindexDatabase);
 router.post('/database-operations/backup', adminController.backupDatabase);

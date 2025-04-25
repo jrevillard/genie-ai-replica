@@ -20,16 +20,23 @@ let loggerConfig = {
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       level: 'error',
-      maxSize: '10m',
+      maxSize: '5m',
       maxFiles: '30d',
       zippedArchive: true,
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
-      maxSize: '10m',
+      maxSize: '5m',
       maxFiles: '30d',
       zippedArchive: true,
+    }),
+    // Add a size-limited transport for the combined.log file
+    new transports.File({
+      filename: 'logs/combined.log',
+      maxsize: 5242880, // 5MB
+      maxFiles: 1,
+      tailable: true,   // Ensures that the log file gets recreated once maxsize is reached
     }),
   ],
 };
@@ -56,16 +63,23 @@ const reconfigureLogger = (newConfig) => {
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       level: 'error',
-      maxSize: newConfig.errorMaxSize || '10m', // Allow changing maxSize
+      maxSize: newConfig.errorMaxSize || '5m', // Changed default from 10m to 5m
       maxFiles: newConfig.errorMaxFiles || '30d', // Allow changing retention
       zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
-      maxSize: newConfig.combinedMaxSize || '10m', // Allow changing maxSize
+      maxSize: newConfig.combinedMaxSize || '5m', // Changed default from 10m to 5m
       maxFiles: newConfig.combinedMaxFiles || '30d', // Allow changing retention
       zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
+    }),
+    // Make sure to include the combined.log file transport in reconfiguration
+    new transports.File({
+      filename: 'logs/combined.log',
+      maxsize: newConfig.combinedLogMaxSize || 5242880, // 5MB
+      maxFiles: newConfig.combinedLogMaxFiles || 1,
+      tailable: true,
     }),
   ];
 
@@ -123,9 +137,34 @@ const triggerLogRollover = () => {
   }
 };
 
-// Export the logger and the reconfiguration functions
+// Add a function to clean up the large combined.log file
+const cleanupCombinedLog = () => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const combinedLogPath = path.join(process.cwd(), 'logs/combined.log');
+    
+    // Check if the file exists
+    if (fs.existsSync(combinedLogPath)) {
+      // Remove the file
+      fs.unlinkSync(combinedLogPath);
+      logger.info('Large combined.log file has been removed');
+      
+      // The transport will automatically create a new empty file
+    } else {
+      logger.info('combined.log file not found, no cleanup needed');
+    }
+  } catch (error) {
+    logger.error(`Error cleaning up combined.log: ${error.message}`);
+    throw error;
+  }
+};
+
+// Export the logger and the functions
 module.exports = {
   logger,
   reconfigureLogger,
   triggerLogRollover,
+  cleanupCombinedLog,
 };

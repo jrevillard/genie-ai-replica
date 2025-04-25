@@ -64,7 +64,7 @@ We utilize the DeepSeek-V3 official API in Google Colab to generate questions an
 
 ### System Prompt for QA Generation
 
-Below is the system prompt used for QA generation. For the detailed implementation, refer to the [Test Data Generation.ipydb](https://colab.research.google.com/drive/1jzSk92P44ymhu3aAqGn5Ns7o0g-xsXD5?usp=sharing) document.
+Below is the system prompt used for QA generation. For the detailed implementation, refer to the [Test Data Generation.ipydb](https://colab.research.google.com/drive/1prE_tVuyPmGAsJbgxRQGDZe7whn_fjHb?usp=sharing) document.
 
 ```python
 system_prompt = """

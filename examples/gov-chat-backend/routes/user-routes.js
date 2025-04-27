@@ -464,7 +464,20 @@ router.get('/check-email', async (req, res) => {
  *         description: Server error
  */
 // Get user profile
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', (req, res, next) => {
+  // Force authentication - don't continue without a valid token
+  if (!req.headers.authorization) {
+    return res.status(401).json({ 
+      error: 'Authentication required', 
+      message: 'Not authorized' 
+    });
+  }
+  
+  // Proceed to authentication middleware
+  authMiddleware.authenticate(req, res, next);
+  
+}, async (req, res) => {
+  // Original function with original logging
   try {
     logger.info(`Getting user profile for ID: ${req.params.userId}`);
     const user = await userService.getUserProfile(req.params.userId);
@@ -627,12 +640,25 @@ router.delete('/:userId', async (req, res) => {
  *         description: Server error
  */
 // Search users
-router.get('/', async (req, res) => {
+router.get('/', (req, res, next) => {
+  // Force authentication - don't continue without a valid token
+  if (!req.headers.authorization) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      message: 'Not authorized'
+    });
+  }
+
+  // Proceed to authentication middleware
+  authMiddleware.authenticate(req, res, next);
+
+}, async (req, res) => {
+  // Original function with original logging
   try {
     const { limit = 20, offset = 0, ...criteria } = req.query;
     logger.info("Search criteria:", criteria);
     logger.info("Limit:", limit, "Offset:", offset);
-    
+
     const results = await userService.searchUsers(criteria, parseInt(limit), parseInt(offset));
     res.json(results);
   } catch (error) {

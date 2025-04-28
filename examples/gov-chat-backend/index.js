@@ -37,12 +37,12 @@ app.set('trust proxy', true);
 
 // CORS middleware with explicit origin instead of wildcard - added for ZAP compliance
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', 'https://e2e-82-109.ssdcloudindia.net');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    next();
+  res.setHeader('Access-Control-Allow-Origin', 'https://e2e-82-109.ssdcloudindia.net');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  next();
 });
 
 // Custom morgan format that doesn't expose raw timestamps
@@ -58,17 +58,17 @@ app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-t
 // Special middleware to block access to hidden files and suspicious requests
 app.use((req, res, next) => {
   // Block access to hidden files, BitKeeper, or other sensitive paths
-  if (req.path.match(/\/\.[^\/]+/) || 
-      req.path.includes('/BitKeeper') || 
-      req.path.includes('/.git') || 
-      req.path.includes('/.env')) {
-    
+  if (req.path.match(/\/\.[^\/]+/) ||
+    req.path.includes('/BitKeeper') ||
+    req.path.includes('/.git') ||
+    req.path.includes('/.env')) {
+
     logger.warn(`SECURITY: Blocked access to sensitive path: ${req.path}`, {
       ip: req.ip,
       method: req.method,
       userAgent: req.get('User-Agent') || 'none'
     });
-    
+
     return res.status(404).json({ message: 'Not Found' });
   }
   next();
@@ -95,6 +95,64 @@ const swaggerOptions = {
     ],
     components: {
       schemas: {
+        Event: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            userId: { type: 'string', description: 'ID of the user' },
+            eventType: { type: 'string', description: 'Type of event' },
+            eventData: { type: 'object', description: 'Additional event data' },
+            timestamp: { type: 'string', format: 'date-time', description: 'Event timestamp' }
+          }
+        },
+        Analytics: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            queryCount: { type: 'integer', description: 'Number of queries' },
+            feedbackCount: { type: 'integer', description: 'Number of feedback submissions' },
+            avgRating: { type: 'number', description: 'Average rating' },
+            timestamp: { type: 'string', format: 'date-time', description: 'Analytics timestamp' }
+          }
+        },
+        Query: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            userId: { type: 'string', description: 'ID of the user' },
+            sessionId: { type: 'string', description: 'ID of the session' },
+            text: { type: 'string', description: 'Query text' },
+            isAnswered: { type: 'boolean', description: 'Whether the query has been answered' },
+            timestamp: { type: 'string', format: 'date-time', description: 'Query timestamp' },
+            categoryId: { type: 'string', description: 'Category ID' },
+            feedback: {
+              type: 'object',
+              properties: {
+                rating: { type: 'number' },
+                comment: { type: 'string' }
+              }
+            }
+          }
+        },
+        Session: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            userId: { type: 'string', description: 'ID of the user' },
+            startTime: { type: 'string', format: 'date-time', description: 'Session start time' },
+            endTime: { type: 'string', format: 'date-time', description: 'Session end time' },
+            isActive: { type: 'boolean', description: 'Whether the session is active' },
+            deviceInfo: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                browser: { type: 'string' },
+                os: { type: 'string' }
+              }
+            },
+            ipAddress: { type: 'string', description: 'Client IP address' }
+          }
+        },
         User: {
           type: 'object',
           properties: {
@@ -187,15 +245,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Format timestamps in response data to avoid timestamp disclosure
 app.use((req, res, next) => {
   const originalJson = res.json;
-  
-  res.json = function(body) {
+
+  res.json = function (body) {
     // Only process if body is an object
     if (body && typeof body === 'object') {
       body = formatTimestamps(body);
     }
     return originalJson.call(this, body);
   };
-  
+
   next();
 });
 
@@ -205,12 +263,12 @@ function formatTimestamps(obj) {
   if (Array.isArray(obj)) {
     return obj.map(item => formatTimestamps(item));
   }
-  
+
   // If not an object or null, return as is
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
-  
+
   // Process object properties
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -218,14 +276,14 @@ function formatTimestamps(obj) {
       if (typeof obj[key] === 'number' && /^\d{10}$/.test(obj[key].toString())) {
         // Convert to ISO string format 
         obj[key] = new Date(obj[key] * 1000).toISOString();
-      } 
+      }
       // Process nested objects
       else if (typeof obj[key] === 'object') {
         obj[key] = formatTimestamps(obj[key]);
       }
     }
   }
-  
+
   return obj;
 }
 
@@ -267,7 +325,7 @@ app.get('/api/health', (req, res) => {
   // Use a formatted date string instead of Unix timestamp
   const now = new Date();
   const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
-  
+
   res.json({
     status: 'ok',
     serverTime: formattedDate,
@@ -321,7 +379,7 @@ if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-rout
 if (routes['session-routes']) app.use('/api/sessions', routes['session-routes']);
 if (routes['service-category-routes']) app.use('/api/service-categories', routes['service-category-routes']);
 if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']);
-if (routes['logger-routes']) app.use('/api/logger', routes['logger-routes']); 
+if (routes['logger-routes']) app.use('/api/logger', routes['logger-routes']);
 if (routes['database-operations-routes']) app.use('/api/database', routes['database-operations-routes']);
 if (routes['admin-routes']) {
   logger.info('Mounting admin routes at /api/admin');
@@ -362,7 +420,7 @@ app.use((err, req, res, next) => {
     ip: req.ip,
     userAgent: req.get('User-Agent') || 'none'
   });
-  
+
   res.status(500).json({
     message: 'An unexpected error occurred',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined

@@ -179,6 +179,41 @@ const swaggerOptions = {
             updatedAt: { type: 'string', format: 'date-time' }
           }
         },
+        Conversation: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            title: { type: 'string', description: 'Conversation title' },
+            lastMessage: { type: 'string', description: 'Preview of the last message' },
+            created: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+            updated: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
+            messageCount: { type: 'integer', description: 'Number of messages in the conversation' },
+            isStarred: { type: 'boolean', description: 'Whether the conversation is starred' },
+            isArchived: { type: 'boolean', description: 'Whether the conversation is archived' },
+            category: { type: 'string', description: 'Conversation category' },
+            tags: { 
+              type: 'array', 
+              items: { type: 'string' },
+              description: 'Tags associated with the conversation' 
+            }
+          }
+        },
+        Message: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            conversationId: { type: 'string', description: 'ID of the parent conversation' },
+            content: { type: 'string', description: 'Message content' },
+            timestamp: { type: 'string', format: 'date-time', description: 'Message timestamp' },
+            sender: { type: 'string', description: 'Sender type (user or assistant)' },
+            sequence: { type: 'integer', description: 'Message sequence number' },
+            readStatus: { type: 'boolean', description: 'Whether the message has been read' },
+            metadata: { 
+              type: 'object', 
+              description: 'Additional message metadata' 
+            }
+          }
+        }
       },
       securitySchemes: {
         bearerAuth: {
@@ -357,7 +392,8 @@ const routeFiles = [
   'logger-routes',
   'database-operations-routes',
   'admin-routes',
-  'security-routes'
+  'security-routes',
+  'chat-history-routes' // Add the new chat history routes file
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -389,6 +425,12 @@ if (routes['admin-routes']) {
 if (routes['security-routes']) {
   logger.info('Mounting security routes at /api/security');
   app.use('/api/security', routes['security-routes']);
+}
+
+// Add chat history routes
+if (routes['chat-history-routes']) {
+  logger.info('Mounting chat history routes at /api/chat');
+  app.use('/api/chat', routes['chat-history-routes']);
 }
 
 // Email verification redirect

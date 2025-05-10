@@ -2,15 +2,20 @@ const express = require('express');
 const router = express.Router();
 const QueryService = require('../services/query-service');
 const AnalyticsService = require('../services/analytics-service');
+const ChatHistoryService = require('../services/chat-history-service');
 const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
 const { createLogger, format, transports } = require('winston'); // Import Winston
 
 // Initialize services
 const queryService = new QueryService();
 const analyticsService = new AnalyticsService();
+const chatHistoryService = new ChatHistoryService();
 
 // Inject analytics service into query service
 queryService.setAnalyticsService(analyticsService);
+
+// Inject chat history service into query service
+queryService.setChatHistoryService(chatHistoryService);
 
 // Set up Winston logger (consistent with index.js)
 const logFormat = format.printf(({ level, message, timestamp }) => {
@@ -39,6 +44,10 @@ router.use((req, res, next) => {
   if (!queryService.analyticsService) {
     logger.warn('Analytics service was not set, setting it now...');
     queryService.setAnalyticsService(analyticsService);
+  }
+  if (!queryService.chatHistoryService) {
+    logger.warn('Chat history service was not set, setting it now...');
+    queryService.setChatHistoryService(chatHistoryService);
   }
   next();
 });
@@ -395,6 +404,165 @@ router.get('/', async (req, res) => {
     res.json(results);
   } catch (error) {
     logger.error(`Error searching queries: ${error.message}`, error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /queries/{queryId}/conversations:
+ *   get:
+ *     summary: Get conversations for a query
+ *     description: Retrieves all conversations associated with a specific query
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *     responses:
+ *       200:
+ *         description: Conversations associated with the query
+ *       404:
+ *         description: Query not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/:queryId/conversations', async (req, res) => {
+  try {
+    logger.info(`Getting conversations for query ${req.params.queryId}`);
+    const conversations = await queryService.getConversationsForQuery(req.params.queryId);
+    res.json(conversations);
+  } catch (error) {
+    logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Query not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /queries/{queryId}/conversation:
+ *   post:
+ *     summary: Create conversation from query
+ *     description: Creates a new conversation based on an existing query
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: Optional title for the conversation
+ *               responseText:
+ *                 type: string
+ *                 description: Optional response text to include
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Optional tags for the conversation
+ *     responses:
+ *       201:
+ *         description: Conversation created successfully
+ *       404:
+ *         description: Query not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/:queryId/conversation', async (req, res) => {
+  try {
+    const { queryId } = req.params;
+    const options = req.body;
+    
+    logger.info(`Creating conversation from query ${queryId} with options:`, options);
+    
+    const result = await queryService.createConversationFromQuery(queryId, options);
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Query not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /queries/{queryId}/link/{messageId}:
+ *   post:
+ *     summary: Link query to message
+ *     description: Creates a link between a query and an existing message
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Query ID
+ *       - in: path
+ *         name: messageId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Message ID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               responseType:
+ *                 type: string
+ *                 default: primary
+ *                 description: Type of response (primary, followup, etc.)
+ *               confidenceScore:
+ *                 type: number
+ *                 default: 1.0
+ *                 description: Confidence score for the relationship
+ *     responses:
+ *       200:
+ *         description: Link created successfully
+ *       404:
+ *         description: Query or message not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/:queryId/link/:messageId', async (req, res) => {
+  try {
+    const { queryId, messageId } = req.params;
+    const options = req.body;
+    
+    logger.info(`Linking query ${queryId} to message ${messageId} with options:`, options);
+    
+    const result = await queryService.linkQueryToMessage(queryId, messageId, options);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    
     res.status(500).json({ message: error.message });
   }
 });

@@ -183,14 +183,15 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             _key: { type: 'string', description: 'Unique identifier' },
+            userId: { type: 'string', description: 'ID of the user who owns the conversation' },
             title: { type: 'string', description: 'Conversation title' },
+            categoryId: { type: 'string', description: 'ID of the service category' },
             lastMessage: { type: 'string', description: 'Preview of the last message' },
             created: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
             updated: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
             messageCount: { type: 'integer', description: 'Number of messages in the conversation' },
             isStarred: { type: 'boolean', description: 'Whether the conversation is starred' },
             isArchived: { type: 'boolean', description: 'Whether the conversation is archived' },
-            category: { type: 'string', description: 'Conversation category' },
             tags: { 
               type: 'array', 
               items: { type: 'string' },
@@ -203,14 +204,111 @@ const swaggerOptions = {
           properties: {
             _key: { type: 'string', description: 'Unique identifier' },
             conversationId: { type: 'string', description: 'ID of the parent conversation' },
+            userId: { type: 'string', description: 'ID of the user who sent or received the message' },
             content: { type: 'string', description: 'Message content' },
             timestamp: { type: 'string', format: 'date-time', description: 'Message timestamp' },
-            sender: { type: 'string', description: 'Sender type (user or assistant)' },
-            sequence: { type: 'integer', description: 'Message sequence number' },
+            sender: { 
+              type: 'string', 
+              enum: ['user', 'assistant'],
+              description: 'Sender type (user or assistant)' 
+            },
+            queryId: { type: 'string', description: 'Optional ID of a related query (for assistant messages)' },
             readStatus: { type: 'boolean', description: 'Whether the message has been read' },
             metadata: { 
               type: 'object', 
               description: 'Additional message metadata' 
+            }
+          }
+        },
+        ConversationListResponse: {
+          type: 'object',
+          properties: {
+            conversations: {
+              type: 'array',
+              items: { 
+                $ref: '#/components/schemas/Conversation'
+              }
+            },
+            total: { 
+              type: 'integer', 
+              description: 'Total number of conversations matching the filter criteria' 
+            },
+            offset: { 
+              type: 'integer', 
+              description: 'Current offset for pagination' 
+            },
+            limit: { 
+              type: 'integer', 
+              description: 'Current limit for pagination' 
+            }
+          }
+        },
+        MessageListResponse: {
+          type: 'object',
+          properties: {
+            messages: {
+              type: 'array',
+              items: { 
+                $ref: '#/components/schemas/Message'
+              }
+            },
+            total: { 
+              type: 'integer', 
+              description: 'Total number of messages in the conversation' 
+            },
+            offset: { 
+              type: 'integer', 
+              description: 'Current offset for pagination' 
+            },
+            limit: { 
+              type: 'integer', 
+              description: 'Current limit for pagination' 
+            }
+          }
+        },
+        SearchResponse: {
+          type: 'object',
+          properties: {
+            results: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  conversation: { $ref: '#/components/schemas/Conversation' },
+                  snippet: { type: 'string', description: 'Text snippet containing the search match' },
+                  matchType: { type: 'string', description: 'Type of match (title, message, etc.)' }
+                }
+              }
+            },
+            total: { type: 'integer', description: 'Total number of matching results' },
+            offset: { type: 'integer', description: 'Current offset for pagination' },
+            limit: { type: 'integer', description: 'Current limit for pagination' }
+          }
+        },
+        ConversationStats: {
+          type: 'object',
+          properties: {
+            totalConversations: { type: 'integer', description: 'Total number of conversations' },
+            totalMessages: { type: 'integer', description: 'Total number of messages' },
+            avgMessagesPerConversation: { type: 'number', description: 'Average number of messages per conversation' },
+            starredCount: { type: 'integer', description: 'Number of starred conversations' },
+            archivedCount: { type: 'integer', description: 'Number of archived conversations' },
+            conversationsByCategory: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  categoryId: { type: 'string', description: 'Category ID' },
+                  count: { type: 'integer', description: 'Number of conversations in this category' }
+                }
+              }
+            },
+            messagesByType: {
+              type: 'object',
+              properties: {
+                user: { type: 'integer', description: 'Number of user messages' },
+                assistant: { type: 'integer', description: 'Number of assistant messages' }
+              }
             }
           }
         }
@@ -222,7 +320,16 @@ const swaggerOptions = {
           bearerFormat: 'JWT'
         }
       }
-    }
+    },
+    security: [
+      { bearerAuth: [] }
+    ],
+    tags: [
+      {
+        name: 'Chat History',
+        description: 'Endpoints for managing chat history and conversations'
+      }
+    ]
   },
   apis: ['./routes/*.js']
 };

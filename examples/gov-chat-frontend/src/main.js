@@ -15,6 +15,7 @@ import router from './router'
 import i18n from './i18n'
 import store from './store' // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe' // Import our custom directive
+import '@fortawesome/fontawesome-free/css/all.min.css';
 
 import VueApexCharts from 'vue3-apexcharts'
 import './text-fix.css'

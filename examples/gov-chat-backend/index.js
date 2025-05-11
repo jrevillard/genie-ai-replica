@@ -385,6 +385,7 @@ const routeFiles = [
   'user-routes',
   'query-routes',
   'service-routes',
+  'chat-history-routes',
   'analytics-routes',
   'session-routes',
   'service-category-routes',
@@ -411,6 +412,7 @@ if (routes['user-routes']) {
 
 if (routes['query-routes']) app.use('/api/queries', routes['query-routes']);
 if (routes['service-routes']) app.use('/api/services', routes['service-routes']);
+if (routes['chat-history-routes']) app.use('/api/chat', routes['chat-history-routes']);
 if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
 if (routes['session-routes']) app.use('/api/sessions', routes['session-routes']);
 if (routes['service-category-routes']) app.use('/api/service-categories', routes['service-category-routes']);

@@ -731,7 +731,15 @@ export default {
     noChats: 'No recent chats',
     relatedDocs: 'Related Documents',
     noDocuments: 'No related documents',
-    faq: 'Frequently Asked Questions'
+    faq: 'Frequently Asked Questions',
+    tab: {
+      all: 'All',
+      folders: 'Folders',
+      starred: 'Starred',
+      archived: 'Archived'
+    },
+    // Keep existing entries
+    savedChats: 'Saved Chats'
   },
   leftPanel: {
     cat1: {

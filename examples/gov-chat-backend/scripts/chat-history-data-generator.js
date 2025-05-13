@@ -2328,6 +2328,12 @@ async function main() {
             process.exit(0);
         }
 
+        if (process.argv.includes('--restore-schema')) {
+            await restoreSchemaValidation();
+            console.log('Schema validation has been restored. Exiting...');
+            process.exit(0);
+        }
+
         if (process.argv.includes('--verify')) {
             // Only verify existing data
             await verifyGeneratedData();

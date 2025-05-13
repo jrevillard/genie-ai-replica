@@ -27,7 +27,7 @@
                 :class="{ 'tab-button-active': activeTab === 'history' }"
                 @click="activeTab = 'history'">
           <i class="fas fa-history"></i>
-          {{ $t('sidebar.chatHistory', 'Chat History') }}
+          {{ $t('sidebar.savedChats', 'Saved Chats') }}
         </button>
       </div>
 
@@ -47,7 +47,79 @@
 
           <!-- Chat History Tab -->
           <div v-else-if="activeTab === 'history'" class="chat-history">
-            <chat-folders @open-chat="openChat" />
+            <!-- Second level tabs for chat organization -->
+            <div class="chat-sub-tabs">
+              <button 
+                class="chat-sub-tab" 
+                :class="{ 'active': activeSubTab === 'all' }"
+                @click="activeSubTab = 'all'"
+              >{{ getTabLabel('all') }}</button>
+              <button 
+                class="chat-sub-tab" 
+                :class="{ 'active': activeSubTab === 'folders' }"
+                @click="activeSubTab = 'folders'"
+              >{{ getTabLabel('folders') }}</button>
+              <button 
+                class="chat-sub-tab" 
+                :class="{ 'active': activeSubTab === 'starred' }"
+                @click="activeSubTab = 'starred'"
+              >{{ getTabLabel('starred') }}</button>
+              <button 
+                class="chat-sub-tab" 
+                :class="{ 'active': activeSubTab === 'archived' }"
+                @click="activeSubTab = 'archived'"
+              >{{ getTabLabel('archived') }}</button>
+            </div>
+
+            <!-- All Chats Tab -->
+            <div v-if="activeSubTab === 'all'" class="all-chats-content">
+              <!-- Search box -->
+              <div class="search-container">
+                <input 
+                  type="text" 
+                  class="search-box" 
+                  placeholder="Search conversations..." 
+                  v-model="searchQuery"
+                />
+                <button class="search-btn">
+                  <i class="fas fa-search"></i>
+                </button>
+              </div>
+              
+              <!-- All Chats Folder (directly without the FOLDERS label) -->
+              <div class="all-chats-folder">
+                <chat-folders 
+                  @open-chat="openChat" 
+                  :showDefaultOnly="true" 
+                  :hideFolderLabel="true"
+                />
+              </div>
+            </div>
+
+            <!-- Folders Tab -->
+            <div v-else-if="activeSubTab === 'folders'" class="folders-content">
+              <chat-folders 
+                @open-chat="openChat"
+                :showDefaultOnly="false"
+                :hideAllChats="true"
+              />
+            </div>
+
+            <!-- Starred Tab -->
+            <div v-else-if="activeSubTab === 'starred'" class="starred-content">
+              <div class="empty-state">
+                <i class="fas fa-star empty-icon"></i>
+                <p>No starred chats</p>
+              </div>
+            </div>
+
+            <!-- Archived Tab -->
+            <div v-else-if="activeSubTab === 'archived'" class="archived-content">
+              <div class="empty-state">
+                <i class="fas fa-archive empty-icon"></i>
+                <p>No archived chats</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -83,11 +155,40 @@ export default {
   data() {
     return {
       activeTab: 'services',
+      activeSubTab: 'all',
+      searchQuery: '',
       isKeyboardActive: false,
       initialHeight: 0,
       isMobileDevice: false,
       isAndroid: false,
-      sidebarHeight: 0
+      sidebarHeight: 0,
+      // Add translations for tab labels that can be used in various languages
+      tabLabels: {
+        all: {
+          en: 'All',
+          fr: 'Tous',
+          sw: 'Zote',
+          es: 'Todos'
+        },
+        folders: {
+          en: 'Folders',
+          fr: 'Dossiers',
+          sw: 'Folda',
+          es: 'Carpetas'
+        },
+        starred: {
+          en: 'Starred',
+          fr: 'Favoris',
+          sw: 'Vipendwa',
+          es: 'Destacados'
+        },
+        archived: {
+          en: 'Archived',
+          fr: 'Archivés',
+          sw: 'Zilizohifadhiwa',
+          es: 'Archivados'
+        }
+      }
     }
   },
   mounted() {
@@ -109,6 +210,11 @@ export default {
     // Add a class to document body for global styling
     if (this.isAndroid) {
       document.body.classList.add('android-device');
+    }
+    
+    // Get current locale
+    if (this.$root.$i18n) {
+      this.currentLocale = this.$root.$i18n.locale;
     }
   },
   beforeUnmount() {
@@ -230,6 +336,32 @@ export default {
       }, 300);
     },
     
+    // Get the appropriate tab label based on current locale
+    getTabLabel(tabKey) {
+      // First try using i18n if it exists
+      if (this.$t && typeof this.$t === 'function') {
+        try {
+          const i18nKey = `sidebar.tab.${tabKey}`;
+          const translation = this.$t(i18nKey);
+          // If translation exists and is not the key itself
+          if (translation && translation !== i18nKey) {
+            return translation;
+          }
+        } catch (error) {
+          console.warn(`Translation error for tab: ${tabKey}`, error);
+        }
+      }
+      
+      // If i18n fails or returns the key, use our local translations
+      const locale = this.currentLocale || 'en';
+      if (this.tabLabels[tabKey] && this.tabLabels[tabKey][locale]) {
+        return this.tabLabels[tabKey][locale];
+      }
+      
+      // Fallback to English or just capitalize the key as last resort
+      return this.tabLabels[tabKey]?.en || tabKey.charAt(0).toUpperCase() + tabKey.slice(1);
+    },
+    
     openChat(chatId) {
       // Emit the event to parent component
       this.$emit('open-chat', chatId);
@@ -246,7 +378,7 @@ export default {
 <style scoped>
 /* Base styles - applied to all themes */
 .side-bar {
-  width: 300px;
+  width: 320px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
   height: 100%;
@@ -405,6 +537,108 @@ export default {
   bottom: auto !important;
 }
 
+/* Chat sub-tabs styling */
+.chat-sub-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 10px;
+  background-color: var(--bg-secondary, #f5f7fa);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.chat-sub-tabs::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
+.chat-sub-tab {
+  flex: 1;
+  min-width: 75px;
+  padding: 10px 15px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  white-space: nowrap;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.chat-sub-tab.active {
+  color: var(--accent-color, #4E97D1);
+  border-bottom: 2px solid var(--accent-color, #4E97D1);
+  font-weight: 500;
+}
+
+.chat-sub-tab:hover:not(.active) {
+  background-color: var(--bg-tertiary, #f0f0f0);
+  color: var(--text-secondary);
+}
+
+/* Search box styling */
+.search-container {
+  display: flex;
+  margin-bottom: 15px;
+  padding: 5px;
+}
+
+.search-box {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-input, #ddd);
+  border-radius: 4px 0 0 4px;
+  font-size: 0.9rem;
+  background-color: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+}
+
+.search-btn {
+  background: var(--accent-color, #4E97D1);
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  padding: 0 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-btn:hover {
+  background: var(--accent-hover, #3a7da0);
+}
+
+/* Empty state styling */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-tertiary, #888);
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 5px 0;
+  font-size: 0.9rem;
+}
+
+/* All chats and folders content styling */
+.all-chats-content,
+.folders-content {
+  padding: 0;
+}
+
 /* Mobile: offscreen unless side-bar-open is set */
 @media screen and (max-width: 768px) {
   .side-bar {
@@ -412,8 +646,8 @@ export default {
     top: 60px;
     left: 0;
     height: calc(100vh - 60px);
-    width: 85%;
-    max-width: 320px;
+    width: 90%;
+    max-width: 350px;
     transform: translateX(-100%);
     z-index: 15;
     box-shadow: none;
@@ -453,6 +687,12 @@ export default {
     min-height: 200px;
     max-height: 70vh;
   }
+  
+  /* Adjust subtabs for mobile */
+  .chat-sub-tab {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
 }
 
 /* Desktop: if not open, set width=0 or transform */
@@ -460,7 +700,7 @@ export default {
   .side-bar {
     position: relative;
     transform: translateX(0);
-    width: 250px;
+    width: 320px;
     z-index: 5;
   }
   
@@ -499,6 +739,25 @@ export default {
   color: white;
 }
 
+/* Dark mode styling for sub-tabs */
+[data-theme="dark"] .chat-sub-tabs {
+  background-color: #2a2a2a;
+  border-bottom-color: #444;
+}
+
+[data-theme="dark"] .chat-sub-tab {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .chat-sub-tab.active {
+  color: #4E97D1;
+  border-bottom-color: #4E97D1;
+}
+
+[data-theme="dark"] .chat-sub-tab:hover:not(.active) {
+  background-color: #333;
+}
+
 /* Ensure tab bottom border is visible in both modes */
 [data-theme="dark"] .sidebar-tabs {
   border-bottom-color: rgba(255, 255, 255, 0.1);
@@ -535,20 +794,15 @@ export default {
   scrollbar-width: thin;
 }
 
-/* Dark mode search input and add button */
-[data-theme="dark"] .search-box,
-[data-theme="dark"] .search-container input {
+/* Dark mode search input */
+[data-theme="dark"] .search-box {
   background-color: #333;
   color: var(--text-primary);
   border-color: #444;
 }
 
-[data-theme="dark"] .search-container .add-btn,
-[data-theme="dark"] .search-container .plus-btn,
-[data-theme="dark"] .search-container button.add-btn {
-  background-color: #444;
-  color: var(--text-primary);
-  border: none;
-  border-radius: 4px;
+/* Dark mode empty state */
+[data-theme="dark"] .empty-state {
+  color: rgba(255, 255, 255, 0.5);
 }
 </style>

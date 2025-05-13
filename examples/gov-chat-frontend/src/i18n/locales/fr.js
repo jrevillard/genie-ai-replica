@@ -732,7 +732,15 @@ export default {
     noChats: 'Aucune conversation récente',
     relatedDocs: 'Documents connexes',
     noDocuments: 'Aucun document connexe',
-    faq: 'Questions fréquemment posées'
+    faq: 'Questions fréquemment posées',
+    tab: {
+      all: 'Tous',
+      folders: 'Dossiers',
+      starred: 'Favoris',
+      archived: 'Archivés'
+    },
+    // Update this entry
+    savedChats: 'Conversations Enregistrées'
   },
   leftPanel: {
     cat1: {

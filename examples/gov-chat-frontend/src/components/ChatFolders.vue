@@ -1,36 +1,39 @@
+<!-- Simple version with proper behavior based on console logs -->
 <template>
   <div class="chat-folders" :data-theme="$route.meta.theme || 'light'">
-    <!-- Folders Section -->
-    <div class="folders-header">
-      <h3>{{ $t('sidebar.folders') }}</h3>
-      <button @click="showCreateFolderDialog = true" class="add-folder-btn" title="Create New Folder">
-        <i class="fas fa-folder-plus"></i>
-      </button>
-    </div>
+    <!-- Folders Section - Only show in second-level folders tab, hide in history tab when viewing All tab -->
+    <template v-if="shouldShowFoldersSection">
+      <div class="folders-header">
+        <h3>{{ $t('sidebar.folders') }}</h3>
+        <button @click="showCreateFolderDialog = true" class="add-folder-btn" title="Create New Folder">
+          <i class="fas fa-folder-plus"></i>
+        </button>
+      </div>
 
-    <!-- Folder List -->
-    <div class="folders-list">
-      <div v-for="folder in folders" :key="folder.id"
-        :class="['folder-item', { 'folder-item-active': selectedFolderId === folder.id }]"
-        @click="selectFolder(folder.id)">
-        <div class="folder-icon">
-          <i class="fas fa-folder"></i>
-        </div>
-        <div class="folder-details">
-          <div class="folder-name">{{ folder.name }}</div>
-          <div class="folder-count">{{ getChatCount(folder.id) }} {{ getChatCount(folder.id) === 1 ? 'chat' : 'chats' }}
+      <!-- Folder List -->
+      <div class="folders-list">
+        <div v-for="folder in nonDefaultFolders" :key="folder.id"
+          :class="['folder-item', { 'folder-item-active': selectedFolderId === folder.id }]"
+          @click="selectFolder(folder.id)">
+          <div class="folder-icon">
+            <i class="fas fa-folder"></i>
+          </div>
+          <div class="folder-details">
+            <div class="folder-name">{{ folder.name }}</div>
+            <div class="folder-count">{{ getChatCount(folder.id) }} {{ getChatCount(folder.id) === 1 ? 'chat' : 'chats' }}
+            </div>
+          </div>
+          <div class="folder-actions">
+            <button @click.stop="openEditFolderDialog(folder)" class="edit-btn" title="Edit Folder">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button @click.stop="openDeleteFolderDialog(folder)" class="delete-btn" title="Delete Folder">
+              <i class="fas fa-trash-alt"></i>
+            </button>
           </div>
         </div>
-        <div class="folder-actions" v-if="!folder.isDefault">
-          <button @click.stop="openEditFolderDialog(folder)" class="edit-btn" title="Edit Folder">
-            <i class="fas fa-edit"></i>
-          </button>
-          <button @click.stop="openDeleteFolderDialog(folder)" class="delete-btn" title="Delete Folder">
-            <i class="fas fa-trash-alt"></i>
-          </button>
-        </div>
       </div>
-    </div>
+    </template>
 
     <!-- Chats in Selected Folder -->
     <div class="folder-chats" v-if="selectedFolder">
@@ -220,6 +223,7 @@ export default {
   data() {
     return {
       selectedFolderId: 'default',
+      currentSecondLevelTab: 'all', // Default to 'all' since that seems to be the default
 
       // For creating folders
       showCreateFolderDialog: false,
@@ -255,6 +259,31 @@ export default {
       return this.getAllFolders;
     },
 
+    nonDefaultFolders() {
+      return this.folders.filter(folder => !folder.isDefault);
+    },
+
+    // Logic to determine if we should show the folders section
+    shouldShowFoldersSection() {
+      // From the logs, we see parent.activeTab is 'history'
+      // We need to determine if we're in the 'folders' second-level tab
+      // Check for URL or active second-level tab
+      const url = window.location.href;
+      
+      // If URL contains 'folders' as a path segment or hash
+      if (url.includes('/folders') || url.includes('#folders')) {
+        return true;
+      }
+      
+      // If the current second-level tab is 'folders'
+      if (this.currentSecondLevelTab === 'folders') {
+        return true;
+      }
+      
+      // Otherwise, don't show folders section
+      return false;
+    },
+
     selectedFolder() {
       return this.getFolderById(this.selectedFolderId);
     },
@@ -268,7 +297,93 @@ export default {
     }
   },
 
+  mounted() {
+    console.log('ChatFolders component mounted');
+    
+    // Check parent's activeTab (which appears to be 'history' from logs)
+    if (this.$parent && this.$parent.activeTab) {
+      console.log('Parent activeTab:', this.$parent.activeTab);
+    }
+    
+    // Set up event listener for hash/URL changes
+    this.checkCurrentTab();
+    window.addEventListener('hashchange', this.checkCurrentTab);
+    
+    // Check for active tab elements in the DOM
+    this.checkActiveTabElements();
+    
+    // Add a small delay to ensure all folders are loaded
+    setTimeout(() => {
+      // If we're already in the Folders tab, select the first custom folder
+      if (this.currentSecondLevelTab === 'folders' && this.selectedFolderId === 'default') {
+        this.selectFirstCustomFolder();
+      }
+    }, 500);
+  },
+  
+  beforeDestroy() {
+    window.removeEventListener('hashchange', this.checkCurrentTab);
+  },
+  
   methods: {
+    // Check the current URL to determine which second-level tab we're in
+    checkCurrentTab() {
+      const url = window.location.href;
+      const oldTab = this.currentSecondLevelTab;
+      
+      if (url.includes('/folders') || url.includes('#folders')) {
+        this.currentSecondLevelTab = 'folders';
+      } else if (url.includes('/all') || url.includes('#all') || !url.includes('#')) {
+        this.currentSecondLevelTab = 'all';
+      } else if (url.includes('/starred') || url.includes('#starred')) {
+        this.currentSecondLevelTab = 'starred';
+      } else if (url.includes('/archived') || url.includes('#archived')) {
+        this.currentSecondLevelTab = 'archived';
+      }
+      
+      console.log('Current second-level tab:', this.currentSecondLevelTab);
+      
+      // If we just switched to the Folders tab, auto-select the first custom folder
+      if (oldTab !== 'folders' && this.currentSecondLevelTab === 'folders') {
+        this.selectFirstCustomFolder();
+      }
+    },
+    
+    // Check active tab elements in the DOM
+    checkActiveTabElements() {
+      // Look for active elements among all tabs
+      const activeElements = document.querySelectorAll('.active, .selected, .router-link-active, .router-link-exact-active');
+      const oldTab = this.currentSecondLevelTab;
+      
+      activeElements.forEach(el => {
+        const text = el.textContent.trim().toLowerCase();
+        console.log('Found active element:', text, el.tagName, el.className);
+        
+        // Update current tab based on text content
+        if (text === 'folders') {
+          this.currentSecondLevelTab = 'folders';
+        } else if (text === 'all') {
+          this.currentSecondLevelTab = 'all';
+        }
+      });
+      
+      // If we just switched to the Folders tab, auto-select the first custom folder
+      if (oldTab !== 'folders' && this.currentSecondLevelTab === 'folders') {
+        this.selectFirstCustomFolder();
+      }
+    },
+    
+    // Select the first custom folder in the list
+    selectFirstCustomFolder() {
+      console.log('Attempting to select first custom folder');
+      const customFolders = this.nonDefaultFolders;
+      
+      if (customFolders.length > 0) {
+        const firstFolder = customFolders[0];
+        console.log('Auto-selecting folder:', firstFolder.name, firstFolder.id);
+        this.selectFolder(firstFolder.id);
+      }
+    },
     ...mapActions('chatHistory', [
       'createFolder',
       'updateFolder',
@@ -358,7 +473,9 @@ export default {
         this.showRenameChatDialog = true;
         this.showChatMenu = false;
       }
-    }, handleRenameChat() {
+    }, 
+    
+    handleRenameChat() {
       if (this.activeChat && this.newChatTitle.trim()) {
         this.updateChat({
           chatId: this.activeChat.id,

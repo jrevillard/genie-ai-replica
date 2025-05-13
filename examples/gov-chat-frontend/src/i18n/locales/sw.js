@@ -855,7 +855,15 @@ export default {
     noChats: 'Hakuna mazungumzo ya hivi karibuni',
     relatedDocs: 'Nyaraka Zinazohusiana',
     noDocuments: 'Hakuna nyaraka zinazohusiana',
-    faq: 'Maswali Yanayoulizwa Mara kwa Mara'
+    faq: 'Maswali Yanayoulizwa Mara kwa Mara',
+    tab: {
+      all: 'Zote',
+      folders: 'Folda',
+      starred: 'Vipendwa',
+      archived: 'Zilizohifadhiwa'
+    },
+    // Update this entry
+    savedChats: 'Mazungumzo Yaliyohifadhiwa'
   },
   leftPanel: {
     cat1: {

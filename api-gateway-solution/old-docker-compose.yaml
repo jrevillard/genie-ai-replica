@@ -18,6 +18,7 @@ services:
     restart: unless-stopped
     networks:
       - kong-net
+    command: postgres -c hba_file=/etc/postgresql/pg_hba.conf
     environment:
       POSTGRES_USER: kong
       POSTGRES_DB: kong
@@ -26,6 +27,7 @@ services:
       - "5432:5432"
     volumes:
       - kong_data:/var/lib/postgresql/data
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "kong"]
       interval: 5s

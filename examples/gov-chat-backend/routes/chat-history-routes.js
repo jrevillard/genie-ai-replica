@@ -81,7 +81,47 @@ router.use(authMiddleware.authenticate);
  */
 router.get('/conversations', async (req, res) => {
   try {
-    const userId = req.user.id; // Assuming auth middleware sets req.user
+    // Extract the userId from req.user
+    let userId = '';
+    
+    if (req.user) {
+      // The userId must be in the format "users/2133"
+      if (req.user.userId) {
+        userId = req.user.userId;
+        // Ensure it has the correct prefix
+        if (!userId.startsWith('users/')) {
+          userId = `users/${userId}`;
+        }
+      } 
+      // If not in userId, try _key and other fields
+      else if (req.user._key) {
+        userId = `users/${req.user._key}`;
+      } 
+      else if (req.user.id) {
+        userId = `users/${req.user.id}`;
+      }
+      
+      logger.info(`Using user identifier: ${userId}`);
+    }
+    
+    // If we don't have a user ID from req.user, check query params
+    if (!userId && req.query.userId) {
+      userId = req.query.userId;
+      // Ensure it has the correct prefix
+      if (!userId.startsWith('users/')) {
+        userId = `users/${userId}`;
+      }
+      logger.info(`Using userId from query parameter: ${userId}`);
+    }
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
     const includeArchived = req.query.includeArchived === 'true';
@@ -98,11 +138,15 @@ router.get('/conversations', async (req, res) => {
       searchTerm
     };
     
+    // Call service with the proper userId format
     const result = await chatHistoryService.getUserConversations(userId, options);
     res.json(result);
   } catch (error) {
     logger.error(`Error getting user conversations: ${error.message}`, error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: `Error getting user conversations: ${error.message}` 
+    });
   }
 });
 

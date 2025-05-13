@@ -69,10 +69,14 @@ services:
       NODE_ENV: production
       TOKEN_SECRET: ef7a351c6f1c7f673af0cf3755498884b5e8b13656767a08120e2b2c524fc6f8 
       DB_ADAPTER: mongo
+      DB_HOST: mongo
+      DB_PORT: 27017
       DB_DATABASE: konga
-      DB_URI: mongodb://mongo:27017/konga
+      DB_USER: # leave blank if no auth
+      DB_PASSWORD: # leave blank if no auth
       KONGA_HOOK_TIMEOUT: 120000
       KONG_ADMIN_URL: http://kong:8001
+      KONGA_LOG_LEVEL: debug
     ports:
       - "1337:1337"
 

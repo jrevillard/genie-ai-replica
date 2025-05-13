@@ -7,6 +7,7 @@ import httpService from './httpService';
 class ChatHistoryService {
   /**
    * Get all conversations for the authenticated user
+   * @param {String} userId - User ID (required)
    * @param {Object} options - Filter and pagination options
    * @param {Number} options.limit - Maximum conversations to return (default: 20)
    * @param {Number} options.offset - Number of records to skip (default: 0)
@@ -15,8 +16,15 @@ class ChatHistoryService {
    * @param {String} options.searchTerm - Text to search in conversation titles or messages
    * @returns {Promise} Conversations list with pagination details
    */
-  async getUserConversations(options = {}) {
+  async getUserConversations(userId, options = {}) {
     try {
+      if (!userId) {
+        console.error('Error: userId is required for getUserConversations');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Fetching conversations for user ${userId} with options:`, options);
+      
       const params = {
         limit: options.limit || 20,
         offset: options.offset || 0,
@@ -25,7 +33,10 @@ class ChatHistoryService {
         searchTerm: options.searchTerm || ''
       };
 
-      const response = await httpService.get('chat/conversations', params);
+      const response = await httpService.get('/chat/conversations', { 
+        params: { ...params, userId }
+      });
+      
       return response.data;
     } catch (error) {
       console.error('Error fetching user conversations:', error);
@@ -40,7 +51,7 @@ class ChatHistoryService {
    */
   async getConversation(conversationId) {
     try {
-      const response = await httpService.get(`chat/conversations/${conversationId}`);
+      const response = await httpService.get(`/chat/conversations/${conversationId}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching conversation ${conversationId}:`, error);
@@ -59,7 +70,13 @@ class ChatHistoryService {
    */
   async createConversation(conversationData) {
     try {
-      const response = await httpService.post('chat/conversations', conversationData);
+      // Ensure userId is provided
+      if (!conversationData.userId) {
+        console.error('Error: userId is required for createConversation');
+        throw new Error('User ID is required');
+      }
+
+      const response = await httpService.post('/chat/conversations', conversationData);
       return response.data;
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -75,12 +92,13 @@ class ChatHistoryService {
    * @param {Boolean} updateData.isStarred - Star status
    * @param {Boolean} updateData.isArchived - Archive status
    * @param {Array} updateData.tags - Tags for the conversation
-   * @param {String} updateData.categoryId - ID of the service category
+   * @param {String} updateData.userId - User ID for analytics tracking
    * @returns {Promise} Updated conversation data
    */
   async updateConversation(conversationId, updateData) {
     try {
-      const response = await httpService.patch(`chat/conversations/${conversationId}`, updateData);
+      console.log(`Updating conversation ${conversationId} with data:`, updateData);
+      const response = await httpService.patch(`/chat/conversations/${conversationId}`, updateData);
       return response.data;
     } catch (error) {
       console.error(`Error updating conversation ${conversationId}:`, error);
@@ -91,11 +109,20 @@ class ChatHistoryService {
   /**
    * Delete a conversation and all its messages
    * @param {String} conversationId - ID of the conversation to delete
+   * @param {String} userId - User ID requesting the deletion (required for validation)
    * @returns {Promise} Result of the deletion
    */
-  async deleteConversation(conversationId) {
+  async deleteConversation(conversationId, userId) {
     try {
-      const response = await httpService.delete(`chat/conversations/${conversationId}`);
+      if (!userId) {
+        console.error('Error: userId is required for deleteConversation');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Deleting conversation ${conversationId} for user ${userId}`);
+      const response = await httpService.delete(`/chat/conversations/${conversationId}`, {
+        params: { userId }
+      });
       return response.data;
     } catch (error) {
       console.error(`Error deleting conversation ${conversationId}:`, error);
@@ -121,8 +148,8 @@ class ChatHistoryService {
       };
 
       const response = await httpService.get(
-        `chat/conversations/${conversationId}/messages`, 
-        params
+        `/chat/conversations/${conversationId}/messages`, 
+        { params }
       );
       return response.data;
     } catch (error) {
@@ -144,7 +171,7 @@ class ChatHistoryService {
   async addMessage(conversationId, messageData) {
     try {
       const response = await httpService.post(
-        `chat/conversations/${conversationId}/messages`, 
+        `/chat/conversations/${conversationId}/messages`, 
         messageData
       );
       return response.data;
@@ -163,7 +190,7 @@ class ChatHistoryService {
   async markMessagesAsRead(conversationId, messageIds = []) {
     try {
       const response = await httpService.post(
-        `chat/conversations/${conversationId}/messages/read`,
+        `/chat/conversations/${conversationId}/messages/read`,
         { messageIds }
       );
       return response.data;
@@ -180,7 +207,7 @@ class ChatHistoryService {
    */
   async findMessagesForQuery(queryId) {
     try {
-      const response = await httpService.get(`chat/query/${queryId}/messages`);
+      const response = await httpService.get(`/chat/query/${queryId}/messages`);
       return response.data;
     } catch (error) {
       console.error(`Error finding messages for query ${queryId}:`, error);
@@ -195,7 +222,7 @@ class ChatHistoryService {
    */
   async findOriginatingQuery(messageId) {
     try {
-      const response = await httpService.get(`chat/messages/${messageId}/query`);
+      const response = await httpService.get(`/chat/messages/${messageId}/query`);
       return response.data;
     } catch (error) {
       console.error(`Error finding originating query for message ${messageId}:`, error);
@@ -206,17 +233,23 @@ class ChatHistoryService {
   /**
    * Create a new conversation from an existing query
    * @param {String} queryId - ID of the query
+   * @param {String} userId - User ID
    * @param {Object} options - Conversation options
    * @param {String} options.title - Optional title for the conversation
    * @param {String} options.responseText - Optional response text to include
    * @param {Array} options.tags - Optional tags for the conversation
    * @returns {Promise} Created conversation data
    */
-  async createConversationFromQuery(queryId, options = {}) {
+  async createConversationFromQuery(queryId, userId, options = {}) {
     try {
+      if (!userId) {
+        console.error('Error: userId is required for createConversationFromQuery');
+        throw new Error('User ID is required');
+      }
+
       const response = await httpService.post(
-        `chat/query/${queryId}/conversation`,
-        options
+        `/chat/query/${queryId}/conversation`,
+        { ...options, userId }
       );
       return response.data;
     } catch (error) {
@@ -227,6 +260,7 @@ class ChatHistoryService {
 
   /**
    * Search conversations containing specific text
+   * @param {String} userId - User ID
    * @param {String} searchTerm - Text to search for
    * @param {Object} options - Search options
    * @param {Number} options.limit - Maximum results to return (default: 20)
@@ -234,16 +268,22 @@ class ChatHistoryService {
    * @param {Boolean} options.includeArchived - Whether to include archived conversations
    * @returns {Promise} Search results with pagination
    */
-  async searchConversations(searchTerm, options = {}) {
+  async searchConversations(userId, searchTerm, options = {}) {
     try {
+      if (!userId) {
+        console.error('Error: userId is required for searchConversations');
+        throw new Error('User ID is required');
+      }
+
       const params = {
+        userId,
         q: searchTerm,
         limit: options.limit || 20,
         offset: options.offset || 0,
         includeArchived: options.includeArchived || false
       };
 
-      const response = await httpService.get('chat/search', params);
+      const response = await httpService.get('/chat/search', { params });
       return response.data;
     } catch (error) {
       console.error(`Error searching conversations with term "${searchTerm}":`, error);
@@ -253,12 +293,20 @@ class ChatHistoryService {
 
   /**
    * Get recent conversations for the user
+   * @param {String} userId - User ID
    * @param {Number} limit - Maximum number of conversations to return
    * @returns {Promise} Recent conversations
    */
-  async getRecentConversations(limit = 5) {
+  async getRecentConversations(userId, limit = 5) {
     try {
-      const response = await httpService.get('chat/recent', { limit });
+      if (!userId) {
+        console.error('Error: userId is required for getRecentConversations');
+        throw new Error('User ID is required');
+      }
+
+      const response = await httpService.get('/chat/recent', { 
+        params: { userId, limit } 
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching recent conversations:', error);
@@ -268,41 +316,22 @@ class ChatHistoryService {
 
   /**
    * Get conversation statistics for the user
+   * @param {String} userId - User ID
    * @returns {Promise} Conversation statistics
    */
-  async getUserConversationStats() {
+  async getUserConversationStats(userId) {
     try {
-      const response = await httpService.get('chat/stats');
+      if (!userId) {
+        console.error('Error: userId is required for getUserConversationStats');
+        throw new Error('User ID is required');
+      }
+
+      const response = await httpService.get('/chat/stats', { 
+        params: { userId } 
+      });
       return response.data;
     } catch (error) {
       console.error('Error fetching conversation statistics:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Link a query to a conversation (for when a response is generated)
-   * @param {String} queryId - ID of the query
-   * @param {String} conversationId - ID of the conversation
-   * @param {String} messageId - ID of the message
-   * @param {Object} metadata - Additional metadata
-   * @returns {Promise} Link result
-   */
-  async linkQueryToConversation(queryId, conversationId, messageId, metadata = {}) {
-    try {
-      // This is just to expose the internal function for components that might need it
-      // The primary linking is done via addMessage with queryId parameter
-      const response = await httpService.post(
-        `chat/query/${queryId}/link`,
-        {
-          conversationId,
-          messageId,
-          metadata
-        }
-      );
-      return response.data;
-    } catch (error) {
-      console.error(`Error linking query ${queryId} to conversation:`, error);
       throw error;
     }
   }
@@ -316,9 +345,11 @@ class ChatHistoryService {
   async exportConversation(conversationId, format = 'pdf') {
     try {
       const response = await httpService.get(
-        `chat/conversations/${conversationId}/export`,
-        { format },
-        { responseType: 'blob' }
+        `/chat/conversations/${conversationId}/export`,
+        { 
+          params: { format },
+          responseType: 'blob' 
+        }
       );
       return response.data;
     } catch (error) {
@@ -326,9 +357,6 @@ class ChatHistoryService {
       throw error;
     }
   }
-
-  // Note: Folder management will be handled by the existing frontend code
-  // and is not part of this service as it's managed in the application state
 }
 
 export default new ChatHistoryService();

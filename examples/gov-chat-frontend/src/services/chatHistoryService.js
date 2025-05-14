@@ -24,7 +24,7 @@ class ChatHistoryService {
       }
 
       console.log(`Fetching conversations for user ${userId} with options:`, options);
-      
+
       const params = {
         limit: options.limit || 20,
         offset: options.offset || 0,
@@ -33,10 +33,10 @@ class ChatHistoryService {
         searchTerm: options.searchTerm || ''
       };
 
-      const response = await httpService.get('/chat/conversations', { 
+      const response = await httpService.get('/chat/conversations', {
         params: { ...params, userId }
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Error fetching user conversations:', error);
@@ -120,9 +120,12 @@ class ChatHistoryService {
       }
 
       console.log(`Deleting conversation ${conversationId} for user ${userId}`);
+
+      // Pass userId as a query parameter as expected by the backend
       const response = await httpService.delete(`/chat/conversations/${conversationId}`, {
         params: { userId }
       });
+
       return response.data;
     } catch (error) {
       console.error(`Error deleting conversation ${conversationId}:`, error);
@@ -148,7 +151,7 @@ class ChatHistoryService {
       };
 
       const response = await httpService.get(
-        `/chat/conversations/${conversationId}/messages`, 
+        `/chat/conversations/${conversationId}/messages`,
         { params }
       );
       return response.data;
@@ -171,7 +174,7 @@ class ChatHistoryService {
   async addMessage(conversationId, messageData) {
     try {
       const response = await httpService.post(
-        `/chat/conversations/${conversationId}/messages`, 
+        `/chat/conversations/${conversationId}/messages`,
         messageData
       );
       return response.data;
@@ -304,8 +307,8 @@ class ChatHistoryService {
         throw new Error('User ID is required');
       }
 
-      const response = await httpService.get('/chat/recent', { 
-        params: { userId, limit } 
+      const response = await httpService.get('/chat/recent', {
+        params: { userId, limit }
       });
       return response.data;
     } catch (error) {
@@ -326,8 +329,8 @@ class ChatHistoryService {
         throw new Error('User ID is required');
       }
 
-      const response = await httpService.get('/chat/stats', { 
-        params: { userId } 
+      const response = await httpService.get('/chat/stats', {
+        params: { userId }
       });
       return response.data;
     } catch (error) {
@@ -346,9 +349,9 @@ class ChatHistoryService {
     try {
       const response = await httpService.get(
         `/chat/conversations/${conversationId}/export`,
-        { 
+        {
           params: { format },
-          responseType: 'blob' 
+          responseType: 'blob'
         }
       );
       return response.data;

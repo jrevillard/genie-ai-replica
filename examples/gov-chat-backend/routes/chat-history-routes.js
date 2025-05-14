@@ -31,6 +31,53 @@ const logger = createLogger({
   ],
 });
 
+// Helper function to extract user ID from the request
+const extractUserId = (req) => {
+  let userId = '';
+  
+  if (req.user) {
+    // The userId must be in the format "users/2133"
+    if (req.user.userId) {
+      userId = req.user.userId;
+      // Ensure it has the correct prefix
+      if (!userId.startsWith('users/')) {
+        userId = `users/${userId}`;
+      }
+    } 
+    // If not in userId, try _key and other fields
+    else if (req.user._key) {
+      userId = `users/${req.user._key}`;
+    } 
+    else if (req.user.id) {
+      userId = `users/${req.user.id}`;
+    }
+    
+    logger.info(`Using user identifier from req.user: ${userId}`);
+  }
+  
+  // If we don't have a user ID from req.user, check query params
+  if (!userId && req.query.userId) {
+    userId = req.query.userId;
+    // Ensure it has the correct prefix
+    if (!userId.startsWith('users/')) {
+      userId = `users/${userId}`;
+    }
+    logger.info(`Using userId from query parameter: ${userId}`);
+  }
+  
+  // Lastly, check if it's in the body (some routes use this)
+  if (!userId && req.body && req.body.userId) {
+    userId = req.body.userId;
+    // Ensure it has the correct prefix
+    if (!userId.startsWith('users/')) {
+      userId = `users/${userId}`;
+    }
+    logger.info(`Using userId from request body: ${userId}`);
+  }
+  
+  return userId;
+};
+
 // Apply authentication middleware to all routes
 router.use(authMiddleware.authenticate);
 
@@ -82,37 +129,7 @@ router.use(authMiddleware.authenticate);
 router.get('/conversations', async (req, res) => {
   try {
     // Extract the userId from req.user
-    let userId = '';
-    
-    if (req.user) {
-      // The userId must be in the format "users/2133"
-      if (req.user.userId) {
-        userId = req.user.userId;
-        // Ensure it has the correct prefix
-        if (!userId.startsWith('users/')) {
-          userId = `users/${userId}`;
-        }
-      } 
-      // If not in userId, try _key and other fields
-      else if (req.user._key) {
-        userId = `users/${req.user._key}`;
-      } 
-      else if (req.user.id) {
-        userId = `users/${req.user.id}`;
-      }
-      
-      logger.info(`Using user identifier: ${userId}`);
-    }
-    
-    // If we don't have a user ID from req.user, check query params
-    if (!userId && req.query.userId) {
-      userId = req.query.userId;
-      // Ensure it has the correct prefix
-      if (!userId.startsWith('users/')) {
-        userId = `users/${userId}`;
-      }
-      logger.info(`Using userId from query parameter: ${userId}`);
-    }
+    let userId = extractUserId(req);
     
     if (!userId) {
       logger.warn('No userId available in request');
@@ -238,13 +255,26 @@ router.get('/conversations/:conversationId', async (req, res) => {
  */
 router.post('/conversations', async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
     const { title, categoryId, initialMessage, tags } = req.body;
     
-    logger.info(`Creating new conversation for user ${userId} with title "${title}"`);
+    logger.info(`Creating new conversation for user ${numericUserId} with title "${title}"`);
     
     const conversationData = {
-      userId,
+      userId: numericUserId,
       title: title || 'New Conversation',
       categoryId,
       tags: tags || [],
@@ -263,7 +293,7 @@ router.post('/conversations', async (req, res) => {
         conversationId: conversation._key,
         content: initialMessage,
         sender: 'user',
-        userId
+        userId: numericUserId
       });
     }
     
@@ -325,8 +355,22 @@ router.post('/conversations', async (req, res) => {
 router.patch('/conversations/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const userId = req.user.id;
-    const updateData = { ...req.body, userId };
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    const updateData = { ...req.body, userId: numericUserId };
     
     logger.info(`Updating conversation ${conversationId} with data:`, updateData);
     
@@ -372,11 +416,24 @@ router.patch('/conversations/:conversationId', async (req, res) => {
 router.delete('/conversations/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const userId = req.user.id;
     
-    logger.info(`Deleting conversation ${conversationId} for user ${userId}`);
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
     
-    const result = await chatHistoryService.deleteConversation(conversationId, userId);
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Deleting conversation ${conversationId} for user ${numericUserId}`);
+    
+    const result = await chatHistoryService.deleteConversation(conversationId, numericUserId);
     res.json(result);
   } catch (error) {
     logger.error(`Error deleting conversation ${req.params.conversationId}: ${error.message}`, error);
@@ -509,7 +566,21 @@ router.get('/conversations/:conversationId/messages', async (req, res) => {
 router.post('/conversations/:conversationId/messages', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const userId = req.user.id;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
     const { content, sender, queryId, metadata } = req.body;
     
     logger.info(`Adding ${sender} message to conversation ${conversationId}`);
@@ -526,7 +597,7 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
       conversationId,
       content,
       sender,
-      userId,
+      userId: numericUserId,
       timestamp: new Date().toISOString(),
       queryId,
       metadata
@@ -741,14 +812,28 @@ router.get('/messages/:messageId/query', async (req, res) => {
 router.post('/query/:queryId/conversation', async (req, res) => {
   try {
     const { queryId } = req.params;
-    const userId = req.user.id;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
     const { title, responseText, tags } = req.body;
     
-    logger.info(`Creating conversation from query ${queryId} for user ${userId}`);
+    logger.info(`Creating conversation from query ${queryId} for user ${numericUserId}`);
     
     const result = await chatHistoryService.createConversationFromQuery(
       queryId,
-      userId,
+      numericUserId,
       { title, responseText, tags }
     );
     
@@ -806,7 +891,20 @@ router.post('/query/:queryId/conversation', async (req, res) => {
  */
 router.get('/search', async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
     const searchTerm = req.query.q || '';
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
@@ -816,10 +914,10 @@ router.get('/search', async (req, res) => {
       return res.status(400).json({ message: 'Search term is required' });
     }
     
-    logger.info(`Searching conversations for user ${userId} with term "${searchTerm}"`);
+    logger.info(`Searching conversations for user ${numericUserId} with term "${searchTerm}"`);
     
     const options = { limit, offset, includeArchived };
-    const results = await chatHistoryService.searchConversations(userId, searchTerm, options);
+    const results = await chatHistoryService.searchConversations(numericUserId, searchTerm, options);
     
     res.json(results);
   } catch (error) {
@@ -852,12 +950,25 @@ router.get('/search', async (req, res) => {
  */
 router.get('/recent', async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
     const limit = parseInt(req.query.limit) || 5;
     
-    logger.info(`Getting ${limit} recent conversations for user ${userId}`);
+    logger.info(`Getting ${limit} recent conversations for user ${numericUserId}`);
     
-    const conversations = await chatHistoryService.getRecentConversations(userId, limit);
+    const conversations = await chatHistoryService.getRecentConversations(numericUserId, limit);
     res.json(conversations);
   } catch (error) {
     logger.error(`Error getting recent conversations: ${error.message}`, error);
@@ -882,11 +993,23 @@ router.get('/recent', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
     
-    logger.info(`Getting conversation statistics for user ${userId}`);
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
     
-    const stats = await chatHistoryService.getUserConversationStats(userId);
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Getting conversation statistics for user ${numericUserId}`);
+    
+    const stats = await chatHistoryService.getUserConversationStats(numericUserId);
     res.json(stats);
   } catch (error) {
     logger.error(`Error getting conversation statistics: ${error.message}`, error);

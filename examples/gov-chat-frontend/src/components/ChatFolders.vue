@@ -1,11 +1,10 @@
 <!-- Modified version with chat history service integration -->
 <template>
-  <!-- Keep existing template code until .chat-item -->
   <div class="chat-folders" :data-theme="$route.meta.theme || 'light'">
     <!-- Folders Section - Only show in second-level folders tab, hide in history tab when viewing All tab -->
     <template v-if="shouldShowFoldersSection">
       <div class="folders-header">
-        <h3>{{ $t("sidebar.folders") }}</h3>
+        <h3>{{ safeT("sidebar.folders", "Folders") }}</h3>
         <button
           @click="showCreateFolderDialog = true"
           class="add-folder-btn"
@@ -58,28 +57,73 @@
 
     <!-- Chats in Selected Folder or Tab -->
     <div class="folder-chats">
-      <!-- Note: Using existing search field in the UI, not adding a new one -->
+      <!-- Search field (shown in all tabs except folders) -->
+      <div v-if="shouldShowSearch" class="search-container">
+        <input
+          type="text"
+          v-model="searchTerm"
+          placeholder="Search conversations..."
+          class="search-input"
+          @input="handleExistingSearchInput($event)"
+        />
+        <button @click="loadConversationsForCurrentTab" class="search-button">
+          <i class="fas fa-search"></i>
+        </button>
+      </div>
 
       <h3>{{ getTabTitle() }}</h3>
+
+      <!-- Debug information -->
+      <div v-if="debug" class="debug-info">
+        <p>Current tab: {{ currentSecondLevelTab }}</p>
+        <p>Conversations: {{ conversations.length }}</p>
+        <p>
+          First conversation:
+          {{ conversations.length > 0 ? conversations[0].title : "none" }}
+        </p>
+      </div>
+
+      <!-- Add direct dump for starred tab -->
+      <div
+        v-if="debug && currentSecondLevelTab === 'starred'"
+        class="debug-info"
+      >
+        <p>Direct dump of conversations:</p>
+        <div v-for="c in conversations" :key="c._key" class="debug-chat">
+          {{ c.title }} - Starred: {{ c.isStarred }}
+        </div>
+      </div>
+
+      <!-- Add direct dump for archived tab -->
+      <div
+        v-if="debug && currentSecondLevelTab === 'archived'"
+        class="debug-info"
+      >
+        <p>Direct dump of conversations:</p>
+        <div v-for="c in conversations" :key="c._key" class="debug-chat">
+          {{ c.title }} - Archived: {{ c.isArchived }}
+        </div>
+      </div>
 
       <!-- Loading state -->
       <div class="loading-state" v-if="isLoading">
         <i class="fas fa-spinner fa-spin"></i>
-        <p>{{ $t("sidebar.loadingChats") }}</p>
+        <p>{{ safeT("sidebar.loadingChats", "Loading conversations...") }}</p>
       </div>
 
       <!-- Error state -->
       <div class="error-state" v-else-if="errorMessage">
         <i class="fas fa-exclamation-circle"></i>
         <p>{{ errorMessage }}</p>
-        <button @click="loadConversations" class="retry-btn">
-          {{ $t("sidebar.retry") }}
+        <button @click="loadConversationsForCurrentTab" class="retry-btn">
+          {{ safeT("sidebar.retry", "Retry") }}
         </button>
       </div>
 
-      <div class="chats-list" v-else-if="filteredConversations.length > 0">
+      <!-- Conversations list - Using direct conversations array -->
+      <div class="chats-list" v-else-if="conversations.length > 0">
         <div
-          v-for="conversation in filteredConversations"
+          v-for="conversation in conversations"
           :key="conversation._key"
           class="chat-item"
           @click="openChat(conversation._key)"
@@ -88,19 +132,19 @@
           <div class="chat-icon">
             <i class="fas fa-comment"></i>
           </div>
-          
+
           <div class="chat-content">
             <div class="chat-header">
               <div class="chat-title">{{ conversation.title }}</div>
-              
+
               <div class="chat-actions-group">
                 <button
                   @click.stop="toggleStarred(conversation)"
                   class="star-btn"
                   :title="
                     conversation.isStarred
-                      ? $t('sidebar.unstar')
-                      : $t('sidebar.star')
+                      ? safeT('sidebar.unstar', 'Unstar')
+                      : safeT('sidebar.star', 'Star')
                   "
                 >
                   <i
@@ -110,7 +154,7 @@
                     ]"
                   ></i>
                 </button>
-                
+
                 <label class="archive-checkbox">
                   <input
                     type="checkbox"
@@ -118,9 +162,11 @@
                     @change="toggleArchived(conversation, $event)"
                     @click.stop
                   />
-                  <span class="archive-label">{{ $t("sidebar.archive") }}</span>
+                  <span class="archive-label">{{
+                    safeT("sidebar.archive", "Archive")
+                  }}</span>
                 </label>
-                
+
                 <button
                   @click.stop="showChatActionsMenu(conversation, $event)"
                   class="action-btn"
@@ -130,74 +176,105 @@
                 </button>
               </div>
             </div>
-            
+
             <div class="chat-message-count">
               {{ conversation.messageCount || 0 }}
               {{
                 conversation.messageCount === 1
-                  ? $t("sidebar.message")
-                  : $t("sidebar.messages")
+                  ? safeT("sidebar.message", "message")
+                  : safeT("sidebar.messages", "messages")
               }}
             </div>
-            
+
             <div class="chat-preview">{{ conversation.preview }}</div>
-            
+
             <div class="chat-footer">
               <span class="chat-category" v-if="conversation.category">
                 {{ conversation.category }}
               </span>
-              
+
               <div class="chat-dates">
                 <span class="chat-created">
-                  {{ $t("sidebar.created") }}:
+                  {{ safeT("sidebar.created", "Created") }}:
                   {{ formatDate(conversation.created) }}
                 </span>
                 <span class="chat-updated">
-                  {{ $t("sidebar.updated") }}:
+                  {{ safeT("sidebar.updated", "Updated") }}:
                   {{ formatDate(conversation.updated) }}
                 </span>
+              </div>
+            </div>
+
+            <!-- Add visible badges to make starred/archived status more obvious -->
+            <div class="status-badges">
+              <div v-if="conversation.isStarred" class="starred-badge">
+                ★ Starred
+              </div>
+              <div v-if="conversation.isArchived" class="archived-badge">
+                📦 Archived
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- Empty state -->
       <div class="empty-state" v-else>
         <p>{{ getEmptyStateMessage() }}</p>
+        <!-- Add appropriate icons for empty states based on tab -->
+        <i
+          v-if="currentSecondLevelTab === 'starred'"
+          class="fas fa-star empty-state-icon"
+        ></i>
+        <i
+          v-else-if="currentSecondLevelTab === 'archived'"
+          class="fas fa-archive empty-state-icon"
+        ></i>
+        <i
+          v-else-if="currentSecondLevelTab === 'all'"
+          class="fas fa-comments empty-state-icon"
+        ></i>
+        <i
+          v-else-if="currentSecondLevelTab === 'folders'"
+          class="fas fa-folder-open empty-state-icon"
+        ></i>
       </div>
     </div>
 
-    <!-- Keep all modal dialogs and other template elements the same -->
     <!-- Create Folder Dialog -->
     <modal-dialog
       v-if="showCreateFolderDialog"
       @close="showCreateFolderDialog = false"
     >
       <template v-slot:header>
-        <h3>{{ $t("sidebar.createFolder") }}</h3>
+        <h3>{{ safeT("sidebar.createFolder", "Create Folder") }}</h3>
       </template>
       <template v-slot:body>
         <div class="form-group">
-          <label for="folderName">{{ $t("sidebar.folderName") }}</label>
+          <label for="folderName">{{
+            safeT("sidebar.folderName", "Folder Name")
+          }}</label>
           <input
             type="text"
             id="folderName"
             v-model="newFolderName"
-            :placeholder="$t('sidebar.folderNamePlaceholder')"
+            :placeholder="
+              safeT('sidebar.folderNamePlaceholder', 'Enter folder name')
+            "
             @keyup.enter="handleCreateFolder"
           />
         </div>
       </template>
       <template v-slot:footer>
         <button @click="showCreateFolderDialog = false" class="cancel-btn">
-          {{ $t("common.cancel") }}
+          {{ safeT("common.cancel", "Cancel") }}
         </button>
         <button
           @click="handleCreateFolder"
           class="primary-btn"
           :disabled="!newFolderName.trim()"
         >
-          {{ $t("common.create") }}
+          {{ safeT("common.create", "Create") }}
         </button>
       </template>
     </modal-dialog>
@@ -211,16 +288,20 @@
       "
     >
       <template v-slot:header>
-        <h3>{{ $t("sidebar.editFolder") }}</h3>
+        <h3>{{ safeT("sidebar.editFolder", "Edit Folder") }}</h3>
       </template>
       <template v-slot:body>
         <div class="form-group">
-          <label for="editFolderName">{{ $t("sidebar.folderName") }}</label>
+          <label for="editFolderName">{{
+            safeT("sidebar.folderName", "Folder Name")
+          }}</label>
           <input
             type="text"
             id="editFolderName"
             v-model="editingFolderName"
-            :placeholder="$t('sidebar.folderNamePlaceholder')"
+            :placeholder="
+              safeT('sidebar.folderNamePlaceholder', 'Enter folder name')
+            "
             @keyup.enter="handleUpdateFolder"
           />
         </div>
@@ -233,14 +314,14 @@
           "
           class="cancel-btn"
         >
-          {{ $t("common.cancel") }}
+          {{ safeT("common.cancel", "Cancel") }}
         </button>
         <button
           @click="handleUpdateFolder"
           class="primary-btn"
           :disabled="!editingFolderName.trim()"
         >
-          {{ $t("common.save") }}
+          {{ safeT("common.save", "Save") }}
         </button>
       </template>
     </modal-dialog>
@@ -254,17 +335,25 @@
       "
     >
       <template v-slot:header>
-        <h3>{{ $t("sidebar.deleteFolder") }}</h3>
+        <h3>{{ safeT("sidebar.deleteFolder", "Delete Folder") }}</h3>
       </template>
       <template v-slot:body>
         <p>
           {{
-            $t("sidebar.deleteFolderConfirm", {
-              name: editingFolder ? editingFolder.name : "",
-            })
+            safeT(
+              "sidebar.deleteFolderConfirm",
+              "Are you sure you want to delete the folder"
+            )
+          }}: {{ editingFolder ? editingFolder.name : "" }}?
+        </p>
+        <p class="warning-text">
+          {{
+            safeT(
+              "sidebar.chatsMoveWarning",
+              "All chats in this folder will be moved to the default folder."
+            )
           }}
         </p>
-        <p class="warning-text">{{ $t("sidebar.chatsMoveWarning") }}</p>
       </template>
       <template v-slot:footer>
         <button
@@ -274,10 +363,10 @@
           "
           class="cancel-btn"
         >
-          {{ $t("common.cancel") }}
+          {{ safeT("common.cancel", "Cancel") }}
         </button>
         <button @click="handleDeleteFolder" class="danger-btn">
-          {{ $t("common.delete") }}
+          {{ safeT("common.delete", "Delete") }}
         </button>
       </template>
     </modal-dialog>
@@ -289,32 +378,32 @@
       @close="showChatMenu = false"
     >
       <button @click="promptRenameChat" class="menu-item">
-        <i class="fas fa-edit"></i> {{ $t("sidebar.renameChat") }}
+        <i class="fas fa-edit"></i>
+        {{ safeT("sidebar.renameChat", "Rename Chat") }}
       </button>
       <button @click="showMoveChatDialog = true" class="menu-item">
-        <i class="fas fa-exchange-alt"></i> {{ $t("sidebar.moveChat") }}
+        <i class="fas fa-exchange-alt"></i>
+        {{ safeT("sidebar.moveChat", "Move Chat") }}
       </button>
       <button @click="promptDeleteChat" class="menu-item text-danger">
-        <i class="fas fa-trash"></i> {{ $t("sidebar.deleteChat") }}
+        <i class="fas fa-trash"></i>
+        {{ safeT("sidebar.deleteChat", "Delete Chat") }}
       </button>
     </context-menu>
 
     <!-- Move Chat Dialog -->
     <modal-dialog v-if="showMoveChatDialog" @close="showMoveChatDialog = false">
       <template v-slot:header>
-        <h3>{{ $t("sidebar.moveChat") }}</h3>
+        <h3>{{ safeT("sidebar.moveChat", "Move Chat") }}</h3>
       </template>
       <template v-slot:body>
         <p>
-          {{
-            $t("sidebar.moveChatTo", {
-              title: activeChat ? activeChat.title : "",
-            })
-          }}
+          {{ safeT("sidebar.moveChatTo", "Move chat to") }}:
+          {{ activeChat ? activeChat.title : "" }}
         </p>
         <div class="form-group">
           <label for="destinationFolder">{{
-            $t("sidebar.selectFolder")
+            safeT("sidebar.selectFolder", "Select folder")
           }}</label>
           <select id="destinationFolder" v-model="destinationFolderId">
             <option
@@ -330,7 +419,7 @@
       </template>
       <template v-slot:footer>
         <button @click="showMoveChatDialog = false" class="cancel-btn">
-          {{ $t("common.cancel") }}
+          {{ safeT("common.cancel", "Cancel") }}
         </button>
         <button
           @click="handleMoveChat"
@@ -339,7 +428,7 @@
             !destinationFolderId || selectedFolderId === destinationFolderId
           "
         >
-          {{ $t("common.move") }}
+          {{ safeT("common.move", "Move") }}
         </button>
       </template>
     </modal-dialog>
@@ -350,30 +439,34 @@
       @close="showRenameChatDialog = false"
     >
       <template v-slot:header>
-        <h3>{{ $t("sidebar.renameChat") }}</h3>
+        <h3>{{ safeT("sidebar.renameChat", "Rename Chat") }}</h3>
       </template>
       <template v-slot:body>
         <div class="form-group">
-          <label for="chatTitle">{{ $t("sidebar.chatTitle") }}</label>
+          <label for="chatTitle">{{
+            safeT("sidebar.chatTitle", "Chat Title")
+          }}</label>
           <input
             type="text"
             id="chatTitle"
             v-model="newChatTitle"
-            :placeholder="$t('sidebar.chatTitlePlaceholder')"
+            :placeholder="
+              safeT('sidebar.chatTitlePlaceholder', 'Enter chat title')
+            "
             @keyup.enter="handleRenameChat"
           />
         </div>
       </template>
       <template v-slot:footer>
         <button @click="showRenameChatDialog = false" class="cancel-btn">
-          {{ $t("common.cancel") }}
+          {{ safeT("common.cancel", "Cancel") }}
         </button>
         <button
           @click="handleRenameChat"
           class="primary-btn"
           :disabled="!newChatTitle.trim()"
         >
-          {{ $t("common.save") }}
+          {{ safeT("common.save", "Save") }}
         </button>
       </template>
     </modal-dialog>
@@ -384,24 +477,29 @@
       @close="showDeleteChatDialog = false"
     >
       <template v-slot:header>
-        <h3>{{ $t("sidebar.deleteChat") }}</h3>
+        <h3>{{ safeT("sidebar.deleteChat", "Delete Chat") }}</h3>
       </template>
       <template v-slot:body>
         <p>
           {{
-            $t("sidebar.deleteChatConfirm", {
-              title: activeChat ? activeChat.title : "",
-            })
+            safeT(
+              "sidebar.deleteChatConfirm",
+              "Are you sure you want to delete the chat"
+            )
+          }}: {{ activeChat ? activeChat.title : "" }}?
+        </p>
+        <p class="warning-text">
+          {{
+            safeT("sidebar.deleteChatWarning", "This action cannot be undone.")
           }}
         </p>
-        <p class="warning-text">{{ $t("sidebar.deleteChatWarning") }}</p>
       </template>
       <template v-slot:footer>
         <button @click="showDeleteChatDialog = false" class="cancel-btn">
-          {{ $t("common.cancel") }}
+          {{ safeT("common.cancel", "Cancel") }}
         </button>
         <button @click="handleDeleteChat" class="danger-btn">
-          {{ $t("common.delete") }}
+          {{ safeT("common.delete", "Delete") }}
         </button>
       </template>
     </modal-dialog>
@@ -465,6 +563,9 @@ export default {
         // 'category-id-1': 'General',
         // 'category-id-2': 'Work',
       },
+
+      // Debug mode
+      debug: false, // Set to true to show debug info, false for production
     };
   },
 
@@ -517,6 +618,12 @@ export default {
       return this.folders.filter((folder) => !folder.isDefault);
     },
 
+    // Determine if search field should be visible
+    shouldShowSearch() {
+      // Show search field for all tabs except the folders tab
+      return this.currentSecondLevelTab !== "folders";
+    },
+
     // Filtered conversations - now simpler since we're doing most filtering on the backend
     filteredConversations() {
       console.log(
@@ -524,8 +631,50 @@ export default {
       );
 
       try {
+        let filteredChats = [...this.conversations];
+
+        // Apply additional filtering based on tab - this is a safety measure
+        // since the backend should already be filtering correctly
+        if (this.currentSecondLevelTab === "starred") {
+          // Ensure we only show starred conversations
+          filteredChats = filteredChats.filter(
+            (conv) => conv.isStarred === true
+          );
+          console.log(
+            `After starred filtering: ${filteredChats.length} conversations`
+          );
+        } else if (this.currentSecondLevelTab === "archived") {
+          // Ensure we only show archived conversations
+          filteredChats = filteredChats.filter(
+            (conv) => conv.isArchived === true
+          );
+          console.log(
+            `After archived filtering: ${filteredChats.length} conversations`
+          );
+        }
+
+        // Apply local search term filtering
+        if (
+          this.searchTerm &&
+          this.searchTerm.trim() !== "" &&
+          !this.isLoading
+        ) {
+          const searchTermLower = this.searchTerm.trim().toLowerCase();
+          filteredChats = filteredChats.filter((conv) => {
+            // Search in title, preview and category
+            return (
+              (conv.title &&
+                conv.title.toLowerCase().includes(searchTermLower)) ||
+              (conv.preview &&
+                conv.preview.toLowerCase().includes(searchTermLower)) ||
+              (conv.category &&
+                conv.category.toLowerCase().includes(searchTermLower))
+            );
+          });
+        }
+
         // Sort by most recent update
-        return [...this.conversations].sort((a, b) => {
+        return filteredChats.sort((a, b) => {
           // Safely handle date comparison
           const dateA = a.updated ? new Date(a.updated) : new Date(0);
           const dateB = b.updated ? new Date(b.updated) : new Date(0);
@@ -574,6 +723,9 @@ export default {
     // Connect to existing search field in UI
     this.connectExistingSearchField();
 
+    // Add click event listeners to tab buttons
+    this.addTabClickListeners();
+
     // Add a small delay to ensure all folders are loaded
     setTimeout(() => {
       // If we're already in the Folders tab, select the first custom folder
@@ -618,6 +770,301 @@ export default {
       "moveChat",
     ]),
 
+    // Helper to safely use $t with fallbacks
+    safeT(key, fallback) {
+      try {
+        if (typeof this.$t === "function") {
+          return this.$t(key);
+        }
+        return fallback;
+      } catch (error) {
+        console.warn(`Translation error for key ${key}:`, error);
+        return fallback;
+      }
+    },
+
+    // Add event listeners to tab buttons
+    addTabClickListeners() {
+      console.log("Adding tab click listeners");
+
+      // Wait for DOM to be fully loaded
+      setTimeout(() => {
+        // Clean up any existing handlers first
+        const allTabs = document.querySelectorAll(".chat-sub-tab");
+        allTabs.forEach((tab) => {
+          // Clone the element to remove all event listeners
+          const newTab = tab.cloneNode(true);
+          tab.parentNode.replaceChild(newTab, tab);
+
+          // Add our handler
+          const text = newTab.textContent.trim().toLowerCase();
+          newTab.addEventListener("click", (event) => {
+            console.log(`Tab clicked: ${text}`);
+            this.handleTabClick(text);
+          });
+        });
+
+        console.log(`Set up clean click handlers for ${allTabs.length} tabs`);
+      }, 500);
+    },
+
+    // Log all elements that might be tabs to understand the DOM structure
+    debugLogAllElements() {
+      console.log("DEBUG: Logging all potential tab elements");
+
+      // Look for elements with these classes which might be tab-related
+      const potentialTabContainers = document.querySelectorAll(
+        ".tabs, .tab-container, .nav-tabs, .nav"
+      );
+      console.log("Found potential tab containers:", potentialTabContainers);
+
+      // Look for all link or button elements that could be tabs
+      const allLinks = document.querySelectorAll("a");
+      console.log("All links in document:", allLinks);
+
+      // Look for elements that contain tab-related text
+      const allElements = document.querySelectorAll("*");
+      const possibleTabs = Array.from(allElements).filter((el) => {
+        const text = el.textContent.trim().toLowerCase();
+        return (
+          ["all", "starred", "archived", "folders"].includes(text) &&
+          !["script", "style"].includes(el.tagName.toLowerCase())
+        );
+      });
+
+      console.log("Elements containing tab text:", possibleTabs);
+    },
+
+    // Set up manual click handlers for tabs based on what we observed in the DOM
+    setUpManualTabClickHandlers() {
+      console.log("Setting up manual tab click handlers");
+
+      // Directly try to select the chat-sub-tab elements we saw in the logs
+      const allTabElements = document.querySelectorAll(
+        ".chat-sub-tab, [data-tab], li"
+      );
+
+      console.log(
+        `Found ${allTabElements.length} potential tab elements by class/attribute`
+      );
+
+      allTabElements.forEach((el) => {
+        const text = el.textContent.trim().toLowerCase();
+        console.log(
+          `Examining potential tab element: ${text}, classes: ${el.className}`
+        );
+
+        // Set up click handlers for any element that might be a tab
+        if (text === "all" || text.includes("all chats")) {
+          el.addEventListener("click", () => this.handleTabClick("all"));
+          console.log("Added click handler for All tab");
+        } else if (text === "starred") {
+          el.addEventListener("click", () => this.handleTabClick("starred"));
+          console.log("Added click handler for Starred tab");
+        } else if (text === "archived") {
+          el.addEventListener("click", () => this.handleTabClick("archived"));
+          console.log("Added click handler for Archived tab");
+        } else if (text === "folders") {
+          el.addEventListener("click", () => this.handleTabClick("folders"));
+          console.log("Added click handler for Folders tab");
+        }
+      });
+
+      // One more approach: get child elements of the first .tabs container
+      const tabsContainer = document.querySelector(
+        ".tabs, .nav-tabs, .tab-container, .nav"
+      );
+      if (tabsContainer) {
+        console.log("Found tabs container:", tabsContainer);
+
+        const childTabs = Array.from(tabsContainer.children);
+        console.log(
+          `Found ${childTabs.length} child elements in tabs container`
+        );
+
+        // Add click handlers to each child, which might be tabs
+        childTabs.forEach((tab, index) => {
+          const text = tab.textContent.trim().toLowerCase();
+          console.log(`Tab container child ${index}: ${text}`);
+
+          tab.addEventListener("click", (event) => {
+            console.log(`Tab container child clicked: ${text}`);
+
+            // Try to figure out which tab was clicked based on position or text
+            if (index === 0 || text.includes("all")) {
+              this.handleTabClick("all");
+            } else if (index === 1 || text.includes("folder")) {
+              this.handleTabClick("folders");
+            } else if (index === 2 || text.includes("star")) {
+              this.handleTabClick("starred");
+            } else if (index === 3 || text.includes("archiv")) {
+              this.handleTabClick("archived");
+            }
+          });
+        });
+      }
+    },
+
+    // Handle tab click events - now with improved implementation
+    handleTabClick(tabName) {
+      console.log(`Tab clicked handler triggered for: ${tabName}`);
+
+      if (this.currentSecondLevelTab !== tabName) {
+        console.log(
+          `Tab changed from ${this.currentSecondLevelTab} to ${tabName}`
+        );
+
+        // First clear any existing data and set loading state
+        this.conversations = [];
+        this.isLoading = true;
+
+        // Update tab
+        this.currentSecondLevelTab = tabName;
+
+        // Reset search term
+        this.searchTerm = "";
+
+        // Clear any duplicate search fields
+        this.cleanupDuplicateSearchFields();
+
+        // Make sure the search field is visible for appropriate tabs
+        this.ensureSearchFieldVisible();
+
+        // Find and activate the clicked tab
+        document
+          .querySelectorAll(".chat-sub-tab")
+          .forEach((tab) => tab.classList.remove("active"));
+
+        // Find and activate the clicked tab
+        const clickedTab = Array.from(
+          document.querySelectorAll(".chat-sub-tab")
+        ).find((tab) => tab.textContent.trim().toLowerCase() === tabName);
+        if (clickedTab) {
+          clickedTab.classList.add("active");
+        }
+
+        // Load conversations explicitly by tab type
+        if (tabName === "starred") {
+          this.loadSpecificTabConversations("starred");
+        } else if (tabName === "archived") {
+          this.loadSpecificTabConversations("archived");
+        } else if (tabName === "all") {
+          this.loadConversations();
+        } else if (tabName === "folders") {
+          // For folders tab, select the first custom folder
+          this.selectFirstCustomFolder();
+        }
+      }
+    },
+
+    // A new direct approach to loading conversations for specific tabs
+    async loadSpecificTabConversations(tabType) {
+      console.log(`Direct loading for ${tabType} tab with proper parameters`);
+      this.isLoading = true;
+      this.errorMessage = null;
+      this.conversations = []; // Clear conversations immediately to avoid showing stale data
+
+      try {
+        if (!this.currentUser || !this.currentUser._key) {
+          this.errorMessage = "User data is missing";
+          this.isLoading = false;
+          return;
+        }
+
+        // Set up parameters specifically for this tab type
+        let options = { limit: 100, offset: 0 };
+
+        if (tabType === "starred") {
+          // For Starred tab, send filterStarred=true
+          options.filterStarred = true;
+          options.includeArchived = false;
+          console.log("Using STARRED filter params:", options);
+        } else if (tabType === "archived") {
+          // For Archived tab, send includeArchived=true
+          options.includeArchived = true;
+          options.filterArchived = true; // If supported by API
+          console.log("Using ARCHIVED filter params:", options);
+        }
+
+        // Add search term if present
+        if (this.searchTerm && this.searchTerm.trim() !== "") {
+          options.searchTerm = this.searchTerm.trim();
+        }
+
+        // Make the API call with the proper parameters
+        const response = await chatHistoryService.getUserConversations(
+          this.currentUser._key,
+          options
+        );
+
+        console.log(
+          `Got ${
+            response.conversations?.length || 0
+          } total conversations from API`
+        );
+
+        // Process and store the results
+        const processedConversations = (response.conversations || []).map(
+          (conv) => ({
+            ...conv,
+            isStarred: conv.isStarred === true,
+            isArchived: conv.isArchived === true,
+            preview: this.generatePreview(conv),
+            messageCount: conv.messageCount || 0,
+          })
+        );
+
+        // Additional client-side filtering as a fallback
+        if (tabType === "starred") {
+          this.conversations = processedConversations.filter(
+            (conv) => conv.isStarred === true
+          );
+        } else if (tabType === "archived") {
+          this.conversations = processedConversations.filter(
+            (conv) => conv.isArchived === true
+          );
+        } else {
+          this.conversations = processedConversations;
+        }
+
+        console.log(
+          `Processed ${this.conversations.length} ${tabType} conversations`
+        );
+
+        // Force UI update in the next cycle
+        this.$nextTick(() => {
+          this.forceDisplayConversations();
+        });
+      } catch (error) {
+        console.error(`Error loading ${tabType} conversations:`, error);
+        this.errorMessage = `Failed to load conversations: ${
+          error.message || "Unknown error"
+        }`;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // Cleanup duplicate search fields
+    cleanupDuplicateSearchFields() {
+      // Find all search fields
+      const searchFields = document.querySelectorAll(
+        'input[placeholder="Search conversations..."]'
+      );
+      if (searchFields.length > 1) {
+        console.log(
+          `Found ${searchFields.length} search fields, removing duplicates`
+        );
+        // Keep only the first one
+        for (let i = 1; i < searchFields.length; i++) {
+          const field = searchFields[i];
+          if (field.parentNode) {
+            field.parentNode.remove();
+          }
+        }
+      }
+    },
+
     // Load the current user
     async loadCurrentUser() {
       try {
@@ -639,7 +1086,7 @@ export default {
             "User data loaded but no valid ID found:",
             this.currentUser
           );
-          this.errorMessage = this.$t(
+          this.errorMessage = this.safeT(
             "sidebar.errorLoadingUser",
             "User data is incomplete. Please reload the page."
           );
@@ -657,11 +1104,27 @@ export default {
         this.loadConversations();
       } catch (error) {
         console.error("Error loading current user:", error);
-        this.errorMessage = this.$t(
+        this.errorMessage = this.safeT(
           "sidebar.errorLoadingUser",
           "Error loading user data"
         );
       }
+    },
+
+    // Force display conversations
+    forceDisplayConversations() {
+      console.log("Force displaying conversations:", this.conversations.length);
+
+      // Create a clone of the conversations array to force reactivity
+      this.conversations = [...this.conversations];
+
+      // Force component update
+      this.$forceUpdate();
+
+      // Schedule another update after a short delay to ensure rendering
+      setTimeout(() => {
+        this.$forceUpdate();
+      }, 100);
     },
 
     // Load conversations from the backend
@@ -676,7 +1139,7 @@ export default {
           console.error(
             "Cannot load conversations: No current user or missing user ID"
           );
-          this.errorMessage = this.$t(
+          this.errorMessage = this.safeT(
             "sidebar.errorLoadingUser",
             "User data is missing. Please reload the page."
           );
@@ -702,10 +1165,12 @@ export default {
           // For Starred tab, only get starred conversations
           options.includeArchived = false; // Don't include archived starred chats
           options.filterStarred = true;
+          console.log("Loading STARRED conversations with options:", options);
         } else if (this.currentSecondLevelTab === "archived") {
           // For Archived tab, only get archived conversations
           options.includeArchived = true;
-          // We'll filter to show only archived in the frontend
+          options.filterArchived = true; // Use explicit archived filter
+          console.log("Loading ARCHIVED conversations with options:", options);
         }
 
         // Add search term if it exists
@@ -720,24 +1185,83 @@ export default {
           userId,
           options
         );
-        console.log("Conversations loaded:", response);
+        console.log(
+          `Received ${
+            response.conversations?.length || 0
+          } conversations from server:`,
+          response
+        );
+
+        // If we didn't get conversations array or it's empty but should have data,
+        // try alternate approach
+        if (!response.conversations || response.conversations.length === 0) {
+          if (this.currentSecondLevelTab === "starred") {
+            console.log(
+              "No starred conversations returned, trying alternate approach"
+            );
+            // Try getting all conversations and filtering for starred
+            const allResponse = await chatHistoryService.getUserConversations(
+              userId,
+              { limit: 100, offset: 0 }
+            );
+
+            if (
+              allResponse.conversations &&
+              allResponse.conversations.length > 0
+            ) {
+              // Filter for starred conversations
+              response.conversations = allResponse.conversations.filter(
+                (conv) => conv.isStarred === true
+              );
+              console.log(
+                `Found ${response.conversations.length} starred conversations using alternate approach`
+              );
+            }
+          } else if (this.currentSecondLevelTab === "archived") {
+            console.log(
+              "No archived conversations returned, trying alternate approach"
+            );
+            // Try getting all conversations with includeArchived flag
+            const allResponse = await chatHistoryService.getUserConversations(
+              userId,
+              { limit: 100, offset: 0, includeArchived: true }
+            );
+
+            if (
+              allResponse.conversations &&
+              allResponse.conversations.length > 0
+            ) {
+              // Filter for archived conversations
+              response.conversations = allResponse.conversations.filter(
+                (conv) => conv.isArchived === true
+              );
+              console.log(
+                `Found ${response.conversations.length} archived conversations using alternate approach`
+              );
+            }
+          }
+        }
 
         // Process each conversation to add UI-specific properties
-        this.conversations = response.conversations.map((conv) => {
+        this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
-            // Make sure these properties exist
-            isStarred: !!conv.isStarred,
-            isArchived: !!conv.isArchived,
+            // Make sure these properties exist and are boolean
+            isStarred: conv.isStarred === true,
+            isArchived: conv.isArchived === true,
             preview: this.generatePreview(conv),
             messageCount: conv.messageCount || 0,
           };
         });
 
-        // For archived tab, we need additional filtering since the backend might return non-archived
+        // Additional client-side filtering for safety
         if (this.currentSecondLevelTab === "archived") {
           this.conversations = this.conversations.filter(
-            (conv) => conv.isArchived
+            (conv) => conv.isArchived === true
+          );
+        } else if (this.currentSecondLevelTab === "starred") {
+          this.conversations = this.conversations.filter(
+            (conv) => conv.isStarred === true
           );
         }
 
@@ -745,18 +1269,36 @@ export default {
           `Loaded ${this.conversations.length} conversations for ${this.currentSecondLevelTab} tab`
         );
 
+        // Force UI update
+        this.forceDisplayConversations();
+
         // Load categories if they're not loaded yet
         if (Object.keys(this.categories).length === 0) {
           this.loadCategories();
         }
       } catch (error) {
         console.error("Error loading conversations:", error);
-        this.errorMessage = this.$t(
+        this.errorMessage = this.safeT(
           "sidebar.errorLoadingConversations",
           "Failed to load conversations. Please try again."
         );
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    // Load conversations helper
+    loadConversationsForCurrentTab() {
+      console.log(
+        `Loading conversations for current tab: ${this.currentSecondLevelTab}`
+      );
+
+      if (this.currentSecondLevelTab === "starred") {
+        this.loadSpecificTabConversations("starred");
+      } else if (this.currentSecondLevelTab === "archived") {
+        this.loadSpecificTabConversations("archived");
+      } else {
+        this.loadConversations();
       }
     },
 
@@ -780,7 +1322,7 @@ export default {
       }
 
       // Otherwise use a placeholder
-      return this.$t("sidebar.noPreview", "No preview available");
+      return this.safeT("sidebar.noPreview", "No preview available");
     },
 
     // Load categories from backend (service method would need to be implemented)
@@ -818,7 +1360,7 @@ export default {
             "Cannot update conversation: No current user or missing user ID"
           );
           notificationService.error(
-            this.$t(
+            this.safeT(
               "sidebar.errorNoUser",
               "User data is missing. Please reload the page."
             )
@@ -835,14 +1377,25 @@ export default {
           userId: this.currentUser._key, // Pass userId for analytics tracking
         });
 
+        // If we're in the starred tab and unstarring a conversation, remove it from the list
+        if (this.currentSecondLevelTab === "starred" && !newStatus) {
+          this.conversations = this.conversations.filter(
+            (conv) => conv._key !== conversation._key
+          );
+          this.forceDisplayConversations();
+        }
+
         // Show confirmation
         if (newStatus) {
           notificationService.success(
-            this.$t("sidebar.chatStarred", "Conversation has been starred")
+            this.safeT("sidebar.chatStarred", "Conversation has been starred")
           );
         } else {
           notificationService.info(
-            this.$t("sidebar.chatUnstarred", "Conversation has been unstarred")
+            this.safeT(
+              "sidebar.chatUnstarred",
+              "Conversation has been unstarred"
+            )
           );
         }
       } catch (error) {
@@ -851,7 +1404,10 @@ export default {
 
         console.error("Error toggling starred status:", error);
         notificationService.error(
-          this.$t("sidebar.errorUpdatingChat", "Failed to update conversation")
+          this.safeT(
+            "sidebar.errorUpdatingChat",
+            "Failed to update conversation"
+          )
         );
       }
     },
@@ -869,7 +1425,7 @@ export default {
             "Cannot update conversation: No current user or missing user ID"
           );
           notificationService.error(
-            this.$t(
+            this.safeT(
               "sidebar.errorNoUser",
               "User data is missing. Please reload the page."
             )
@@ -886,14 +1442,31 @@ export default {
           userId: this.currentUser._key, // Pass userId for analytics tracking
         });
 
+        // If we're in any tab other than the archived tab and archiving a conversation,
+        // remove it from the current list
+        if (this.currentSecondLevelTab !== "archived" && newStatus) {
+          this.conversations = this.conversations.filter(
+            (conv) => conv._key !== conversation._key
+          );
+          this.forceDisplayConversations();
+        }
+
+        // If we're in the archived tab and unarchiving a conversation, remove it from the list
+        if (this.currentSecondLevelTab === "archived" && !newStatus) {
+          this.conversations = this.conversations.filter(
+            (conv) => conv._key !== conversation._key
+          );
+          this.forceDisplayConversations();
+        }
+
         // Show confirmation
         if (newStatus) {
           notificationService.success(
-            this.$t("sidebar.chatArchived", "Conversation has been archived")
+            this.safeT("sidebar.chatArchived", "Conversation has been archived")
           );
         } else {
           notificationService.info(
-            this.$t(
+            this.safeT(
               "sidebar.chatUnarchived",
               "Conversation has been unarchived"
             )
@@ -905,7 +1478,10 @@ export default {
 
         console.error("Error toggling archived status:", error);
         notificationService.error(
-          this.$t("sidebar.errorUpdatingChat", "Failed to update conversation")
+          this.safeT(
+            "sidebar.errorUpdatingChat",
+            "Failed to update conversation"
+          )
         );
       }
     },
@@ -936,8 +1512,32 @@ export default {
         console.log(
           `Tab changed from ${oldTab} to ${this.currentSecondLevelTab}, reloading conversations`
         );
-        this.loadConversations(); // Reload with appropriate filters for the current tab
+        // Clear search term when changing tabs
+        this.searchTerm = "";
+
+        // Update search input field if it exists
+        const searchInput = document.querySelector(
+          'input[placeholder="Search conversations..."]'
+        );
+        if (searchInput) {
+          searchInput.value = "";
+        }
       }
+
+      // Always reload conversations when tab is checked - this ensures starred/archived tabs work
+      console.log(
+        `Always reloading conversations for tab: ${this.currentSecondLevelTab}`
+      );
+
+      // Use tab-specific loading
+      this.loadConversationsForCurrentTab();
+
+      // Ensure search field is visible in the new tab
+      this.$nextTick(() => {
+        if (this.currentSecondLevelTab !== "folders") {
+          this.ensureSearchFieldVisible();
+        }
+      });
 
       // If we just switched to the Folders tab, auto-select the first custom folder
       if (oldTab !== "folders" && this.currentSecondLevelTab === "folders") {
@@ -974,7 +1574,19 @@ export default {
         console.log(
           `Tab changed from ${oldTab} to ${this.currentSecondLevelTab} (detected from DOM), reloading conversations`
         );
-        this.loadConversations(); // Reload with appropriate filters for the current tab
+        // Clear search term when changing tabs
+        this.searchTerm = "";
+
+        // Update search input field if it exists
+        const searchInput = document.querySelector(
+          'input[placeholder="Search conversations..."]'
+        );
+        if (searchInput) {
+          searchInput.value = "";
+        }
+
+        // Use tab-specific loading based on tab type
+        this.loadConversationsForCurrentTab();
       }
 
       // If we just switched to the Folders tab, auto-select the first custom folder
@@ -1012,6 +1624,118 @@ export default {
         }
       } else {
         console.warn("Could not find existing search input in DOM");
+
+        // Try to create search field if it doesn't exist
+        this.createSearchFieldIfNeeded();
+      }
+    },
+
+    // Ensure search field is visible in non-folders tabs
+    ensureSearchFieldVisible() {
+      // Skip for folders tab
+      if (this.currentSecondLevelTab === "folders") {
+        return;
+      }
+
+      // Check if search field exists
+      const searchInput = document.querySelector(
+        'input[placeholder="Search conversations..."]'
+      );
+
+      if (!searchInput) {
+        console.log("Search field not found, creating it");
+        this.createSearchFieldIfNeeded();
+      } else {
+        // Make sure it's visible and connected to our search handler
+        searchInput.addEventListener("input", this.handleExistingSearchInput);
+
+        const searchContainer =
+          searchInput.closest(".search-container") || searchInput.parentElement;
+
+        if (searchContainer) {
+          searchContainer.style.display = "flex";
+        }
+      }
+    },
+
+    // Create search field if it doesn't exist
+    createSearchFieldIfNeeded() {
+      // Skip for folders tab
+      if (this.currentSecondLevelTab === "folders") {
+        return;
+      }
+
+      // Check for existing search fields first
+      const existingSearchFields = document.querySelectorAll(
+        ".search-container, .search-box"
+      );
+      if (existingSearchFields.length > 0) {
+        console.log(
+          `Found ${existingSearchFields.length} existing search containers, not creating another one`
+        );
+        return;
+      }
+
+      console.log("Creating search field");
+
+      // Find the folder-chats div (which should already exist)
+      const folderChats = document.querySelector(".folder-chats");
+
+      if (!folderChats) {
+        console.warn("Could not find folder-chats container");
+        return;
+      }
+
+      // Check if search container already exists
+      let searchContainer = folderChats.querySelector(".search-container");
+
+      if (!searchContainer) {
+        // Create search container
+        searchContainer = document.createElement("div");
+        searchContainer.className = "search-container";
+        searchContainer.style.display = "flex";
+        searchContainer.style.margin = "0 0 15px 0";
+
+        // Create search input
+        const searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search conversations...";
+        searchInput.className = "search-input";
+        searchInput.style.flex = "1";
+        searchInput.style.padding = "8px 12px";
+        searchInput.style.border = "1px solid var(--border-input)";
+        searchInput.style.borderRadius = "4px 0 0 4px";
+        searchInput.style.fontSize = "1rem";
+        searchInput.style.backgroundColor = "var(--bg-input)";
+        searchInput.style.color = "var(--text-primary)";
+
+        // Create search button
+        const searchButton = document.createElement("button");
+        searchButton.className = "search-button";
+        searchButton.innerHTML = '<i class="fas fa-search"></i>';
+        searchButton.style.padding = "8px 12px";
+        searchButton.style.backgroundColor = "var(--bg-button-primary)";
+        searchButton.style.color = "var(--text-button-primary)";
+        searchButton.style.border = "none";
+        searchButton.style.borderRadius = "0 4px 4px 0";
+        searchButton.style.cursor = "pointer";
+
+        // Add elements to DOM
+        searchContainer.appendChild(searchInput);
+        searchContainer.appendChild(searchButton);
+
+        // Insert search container before the first child
+        if (folderChats.firstChild) {
+          folderChats.insertBefore(searchContainer, folderChats.firstChild);
+        } else {
+          folderChats.appendChild(searchContainer);
+        }
+
+        // Add event listeners
+        searchInput.addEventListener("input", this.handleExistingSearchInput);
+        searchButton.addEventListener("click", () =>
+          this.handleExistingSearchInput({ target: searchInput })
+        );
       }
     },
 
@@ -1031,60 +1755,66 @@ export default {
       }
 
       this.searchDebounceTimeout = setTimeout(() => {
-        this.loadConversations();
+        // If search term is very short, perform local filtering only
+        if (this.searchTerm && this.searchTerm.length < 3) {
+          // Just trigger a re-computation of filteredConversations
+          this.$forceUpdate();
+        } else {
+          // For longer search terms, query the backend
+          this.loadConversationsForCurrentTab();
+        }
       }, 300); // Wait 300ms after typing stops
     },
 
     // Get appropriate title for current tab
     getTabTitle() {
       if (this.currentSecondLevelTab === "all") {
-        return this.$t("sidebar.allChats", "All Chats");
+        return this.safeT("sidebar.allChats", "All Chats");
       } else if (this.currentSecondLevelTab === "starred") {
-        return this.$t("sidebar.starredChats", "Starred");
+        return this.safeT("sidebar.starredChats", "Starred");
       } else if (this.currentSecondLevelTab === "archived") {
-        return this.$t("sidebar.archivedChats", "Archived");
+        return this.safeT("sidebar.archivedChats", "Archived");
       } else if (this.currentSecondLevelTab === "folders") {
         return this.selectedFolder
           ? this.selectedFolder.name
-          : this.$t("sidebar.folders", "Folders");
+          : this.safeT("sidebar.folders", "Folders");
       }
 
-      return this.$t("sidebar.chats", "Chats");
+      return this.safeT("sidebar.chats", "Chats");
     },
 
     // Get empty state message based on current tab
     getEmptyStateMessage() {
       if (this.searchTerm) {
-        return this.$t(
+        return this.safeT(
           "sidebar.noSearchResults",
-          'No conversations found for "{term}"',
-          { term: this.searchTerm }
+          `No conversations found for "${this.searchTerm}"`
         );
       }
 
       if (this.currentSecondLevelTab === "all") {
-        return this.$t(
+        return this.safeT(
           "sidebar.noChats",
           "No conversations found. Start a new conversation!"
         );
       } else if (this.currentSecondLevelTab === "starred") {
-        return this.$t(
+        return this.safeT(
           "sidebar.noStarredChats",
           "No starred conversations yet. Star a conversation to add it here."
         );
       } else if (this.currentSecondLevelTab === "archived") {
-        return this.$t(
+        return this.safeT(
           "sidebar.noArchivedChats",
           "No archived conversations yet."
         );
       } else if (this.currentSecondLevelTab === "folders") {
-        return this.$t(
+        return this.safeT(
           "sidebar.emptyFolder",
           "This folder is empty. Move conversations here from the chat menu."
         );
       }
 
-      return this.$t("sidebar.noChats", "No conversations found.");
+      return this.safeT("sidebar.noChats", "No conversations found.");
     },
 
     // Select the first custom folder in the list
@@ -1243,7 +1973,7 @@ export default {
 
         // Show success notification
         notificationService.success(
-          this.$t("sidebar.chatRenamed", "Conversation renamed successfully")
+          this.safeT("sidebar.chatRenamed", "Conversation renamed successfully")
         );
       } catch (error) {
         // Revert title on error
@@ -1251,7 +1981,10 @@ export default {
 
         console.error("Error renaming chat:", error);
         notificationService.error(
-          this.$t("sidebar.errorRenamingChat", "Failed to rename conversation")
+          this.safeT(
+            "sidebar.errorRenamingChat",
+            "Failed to rename conversation"
+          )
         );
       }
     },
@@ -1272,7 +2005,7 @@ export default {
       if (!this.currentUser || !this.currentUser._key) {
         console.error("Cannot delete chat: No current user or missing user ID");
         notificationService.error(
-          this.$t(
+          this.safeT(
             "sidebar.errorNoUser",
             "User data is missing. Please reload the page."
           )
@@ -1297,13 +2030,18 @@ export default {
         this.showDeleteChatDialog = false;
         this.activeChat = null;
         notificationService.success(
-          this.$t("sidebar.chatDeleted", "Conversation deleted successfully")
+          this.safeT("sidebar.chatDeleted", "Conversation deleted successfully")
         );
-        this.loadConversations();
+
+        // Reload conversations based on current tab
+        this.loadConversationsForCurrentTab();
       } catch (error) {
         console.error("Error deleting chat:", error);
         notificationService.error(
-          this.$t("sidebar.errorDeletingChat", "Failed to delete conversation")
+          this.safeT(
+            "sidebar.errorDeletingChat",
+            "Failed to delete conversation"
+          )
         );
       }
     },
@@ -1316,7 +2054,7 @@ export default {
       if (!this.currentUser || !this.currentUser._key) {
         console.error("Cannot move chat: No current user or missing user ID");
         notificationService.error(
-          this.$t(
+          this.safeT(
             "sidebar.errorNoUser",
             "User data is missing. Please reload the page."
           )
@@ -1350,17 +2088,15 @@ export default {
 
         // Show success notification
         notificationService.success(
-          this.$t("sidebar.chatMoved", "Conversation moved successfully")
+          this.safeT("sidebar.chatMoved", "Conversation moved successfully")
         );
 
-        // Refresh conversation list if we're in the folders view
-        if (this.currentSecondLevelTab === "folders") {
-          this.loadConversations();
-        }
+        // Refresh conversation list based on current tab
+        this.loadConversationsForCurrentTab();
       } catch (error) {
         console.error("Error moving chat:", error);
         notificationService.error(
-          this.$t("sidebar.errorMovingChat", "Failed to move conversation")
+          this.safeT("sidebar.errorMovingChat", "Failed to move conversation")
         );
       }
     },
@@ -1859,5 +2595,95 @@ html[data-theme="dark"] .folders-header h3 {
 
 .text-danger {
   color: #e53935;
+}
+
+/* Debug information styling */
+.debug-info {
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 8px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #333;
+}
+
+[data-theme="dark"] .debug-info {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ddd;
+}
+
+.debug-info p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.debug-chat {
+  padding: 5px;
+  margin: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+[data-theme="dark"] .debug-chat {
+  border-color: #444;
+}
+
+/* Search container styling */
+.search-container {
+  display: flex;
+  margin-bottom: 15px;
+  width: 100%;
+}
+
+.search-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px 0 0 4px;
+  font-size: 1rem;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.search-button {
+  padding: 8px 12px;
+  background-color: var(--bg-button-primary);
+  color: var(--text-button-primary);
+  border: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+
+.search-button:hover {
+  background-color: var(--accent-hover);
+}
+
+/* Star and archive badges */
+.starred-badge,
+.archived-badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.starred-badge {
+  background-color: rgba(245, 166, 35, 0.1);
+  color: #f5a623;
+}
+
+.archived-badge {
+  background-color: rgba(96, 125, 139, 0.1);
+  color: #607d8b;
+}
+
+/* Empty state icons */
+.empty-state-icon {
+  font-size: 3rem;
+  margin-top: 16px;
+  color: var(--text-tertiary);
+  opacity: 0.5;
 }
 </style>

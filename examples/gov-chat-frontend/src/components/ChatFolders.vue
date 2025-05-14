@@ -1,5 +1,6 @@
 <!-- Modified version with chat history service integration -->
 <template>
+  <!-- Keep existing template code until .chat-item -->
   <div class="chat-folders" :data-theme="$route.meta.theme || 'light'">
     <!-- Folders Section - Only show in second-level folders tab, hide in history tab when viewing All tab -->
     <template v-if="shouldShowFoldersSection">
@@ -83,71 +84,80 @@
           class="chat-item"
           @click="openChat(conversation._key)"
         >
+          <!-- Updated chat item structure -->
           <div class="chat-icon">
             <i class="fas fa-comment"></i>
           </div>
-          <div class="chat-details">
-            <div class="chat-title">{{ conversation.title }}</div>
-            <div class="chat-meta">
-              <span class="chat-category" v-if="conversation.category">{{
-                conversation.category
-              }}</span>
-              <span class="chat-message-count"
-                >{{ conversation.messageCount || 0 }}
-                {{
-                  conversation.messageCount === 1
-                    ? $t("sidebar.message")
-                    : $t("sidebar.messages")
-                }}</span
-              >
+          
+          <div class="chat-content">
+            <div class="chat-header">
+              <div class="chat-title">{{ conversation.title }}</div>
+              
+              <div class="chat-actions-group">
+                <button
+                  @click.stop="toggleStarred(conversation)"
+                  class="star-btn"
+                  :title="
+                    conversation.isStarred
+                      ? $t('sidebar.unstar')
+                      : $t('sidebar.star')
+                  "
+                >
+                  <i
+                    :class="[
+                      'fas',
+                      conversation.isStarred ? 'fa-star' : 'fa-star-o',
+                    ]"
+                  ></i>
+                </button>
+                
+                <label class="archive-checkbox">
+                  <input
+                    type="checkbox"
+                    :checked="conversation.isArchived"
+                    @change="toggleArchived(conversation, $event)"
+                    @click.stop
+                  />
+                  <span class="archive-label">{{ $t("sidebar.archive") }}</span>
+                </label>
+                
+                <button
+                  @click.stop="showChatActionsMenu(conversation, $event)"
+                  class="action-btn"
+                  title="Chat Actions"
+                >
+                  <i class="fas fa-ellipsis-v"></i>
+                </button>
+              </div>
             </div>
+            
+            <div class="chat-message-count">
+              {{ conversation.messageCount || 0 }}
+              {{
+                conversation.messageCount === 1
+                  ? $t("sidebar.message")
+                  : $t("sidebar.messages")
+              }}
+            </div>
+            
             <div class="chat-preview">{{ conversation.preview }}</div>
-            <div class="chat-dates">
-              <span class="chat-created"
-                >{{ $t("sidebar.created") }}:
-                {{ formatDate(conversation.created) }}</span
-              >
-              <span class="chat-updated"
-                >{{ $t("sidebar.updated") }}:
-                {{ formatDate(conversation.updated) }}</span
-              >
+            
+            <div class="chat-footer">
+              <span class="chat-category" v-if="conversation.category">
+                {{ conversation.category }}
+              </span>
+              
+              <div class="chat-dates">
+                <span class="chat-created">
+                  {{ $t("sidebar.created") }}:
+                  {{ formatDate(conversation.created) }}
+                </span>
+                <span class="chat-updated">
+                  {{ $t("sidebar.updated") }}:
+                  {{ formatDate(conversation.updated) }}
+                </span>
+              </div>
             </div>
-          </div>
-          <div class="chat-status">
-            <button
-              @click.stop="toggleStarred(conversation)"
-              class="star-btn"
-              :title="
-                conversation.isStarred
-                  ? $t('sidebar.unstar')
-                  : $t('sidebar.star')
-              "
-            >
-              <i
-                :class="[
-                  'fas',
-                  conversation.isStarred ? 'fa-star' : 'fa-star-o',
-                ]"
-              ></i>
-            </button>
-            <label class="archive-checkbox">
-              <input
-                type="checkbox"
-                :checked="conversation.isArchived"
-                @change="toggleArchived(conversation, $event)"
-                @click.stop
-              />
-              <span class="archive-label">{{ $t("sidebar.archive") }}</span>
-            </label>
-          </div>
-          <div class="chat-actions">
-            <button
-              @click.stop="showChatActionsMenu(conversation, $event)"
-              class="action-btn"
-              title="Chat Actions"
-            >
-              <i class="fas fa-ellipsis-v"></i>
-            </button>
           </div>
         </div>
       </div>
@@ -157,6 +167,7 @@
       </div>
     </div>
 
+    <!-- Keep all modal dialogs and other template elements the same -->
     <!-- Create Folder Dialog -->
     <modal-dialog
       v-if="showCreateFolderDialog"
@@ -1541,9 +1552,9 @@ html[data-theme="dark"] .folders-header h3 {
   gap: 8px;
 }
 
+/* Adjusted chat-item width (15% wider) and updated layout */
 .chat-item {
   display: flex;
-  align-items: flex-start;
   padding: 12px;
   border-radius: 8px;
   background-color: var(--bg-card);
@@ -1552,7 +1563,8 @@ html[data-theme="dark"] .folders-header h3 {
   transition: transform 0.2s, box-shadow 0.2s;
   color: var(--text-primary);
   position: relative;
-  width: calc(100% - 10px);
+  width: calc(100% - 10px); /* Adjust to fit sidebar width */
+  max-width: 412px; /* 450px sidebar - 2*16px padding - 6px margins */
   margin-bottom: 8px;
 }
 
@@ -1568,49 +1580,74 @@ html[data-theme="dark"] .folders-header h3 {
   flex-shrink: 0;
 }
 
-.chat-details {
+/* New structure for chat content */
+.chat-content {
   flex: 1;
   min-width: 0;
-  max-width: calc(100% - 100px);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header with title and action buttons */
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 8px;
 }
 
 .chat-title {
   font-weight: 500;
-  margin-bottom: 4px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: calc(100% - 100px); /* Reduced from 110px to 100px */
+  font-size: 1.05rem;
 }
 
-.chat-meta {
+/* Grouped action buttons */
+.chat-actions-group {
   display: flex;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.chat-category {
-  padding: 2px 6px;
-  background-color: rgba(78, 151, 209, 0.1);
-  border-radius: 4px;
-  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .chat-message-count {
+  font-size: 0.8rem;
   color: var(--text-tertiary);
+  margin-bottom: 4px;
 }
 
 .chat-preview {
   font-size: 0.9rem;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Footer with category and dates */
+.chat-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.chat-category {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: rgba(78, 151, 209, 0.1);
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 0.8rem;
+  max-width: fit-content;
+  margin-bottom: 4px;
 }
 
 .chat-dates {
@@ -1620,16 +1657,7 @@ html[data-theme="dark"] .folders-header h3 {
   color: var(--text-tertiary);
 }
 
-.chat-status {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-right: 4px;
-  gap: 4px;
-  min-width: 60px;
-  flex-shrink: 0;
-}
-
+/* Star button with outline when not starred */
 .star-btn {
   background: none;
   border: none;
@@ -1648,6 +1676,10 @@ html[data-theme="dark"] .folders-header h3 {
   color: #f5a623;
 }
 
+.star-btn .fa-star-o {
+  color: var(--text-secondary);
+}
+
 .archive-checkbox {
   display: flex;
   flex-direction: column;
@@ -1664,14 +1696,6 @@ html[data-theme="dark"] .folders-header h3 {
 .archive-label {
   font-size: 0.7rem;
   text-align: center;
-}
-
-.chat-actions {
-  opacity: 1;
-  margin-left: auto;
-  align-self: center;
-  min-width: 24px;
-  flex-shrink: 0;
 }
 
 .action-btn {

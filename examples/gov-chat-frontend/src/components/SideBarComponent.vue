@@ -1,6 +1,7 @@
 <!-- SideBarComponent.vue with improved theme compatibility -->
 <!-- SideBarComponent.vue with improved mobile keyboard handling (corrected styles) -->
 <!-- SideBarComponent.vue with Android keyboard fix -->
+<!-- SideBarComponent.vue with sidebar width set to 450px -->
 <template>
   <aside class="side-bar" 
          :class="{ 
@@ -378,7 +379,7 @@ export default {
 <style scoped>
 /* Base styles - applied to all themes */
 .side-bar {
-  width: 320px;
+  width: 450px; /* Set to exactly 450px */
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
   height: 100%;
@@ -396,6 +397,7 @@ export default {
   background: var(--bg-sidebar);
   color: var(--text-primary);
   overflow: hidden !important;
+  width: 100%; /* Ensure inner container spans full width */
 }
 
 .sidebar-section-title,
@@ -437,6 +439,7 @@ export default {
   background-color: var(--bg-tertiary);
   padding: 0;
   flex-shrink: 0;
+  width: 100%; /* Ensure tabs span full width */
 }
 
 .tab-button {
@@ -480,6 +483,7 @@ export default {
   flex-grow: 1;
   height: 0;
   overflow: hidden;
+  width: 100%; /* Ensure content wrapper spans full width */
 }
 
 /* Scrollable container */
@@ -493,6 +497,7 @@ export default {
   margin-bottom: 0;
   background: var(--bg-sidebar);
   color: var(--text-primary);
+  width: 100%; /* Ensure content area spans full width */
 }
 
 .services-list,
@@ -501,6 +506,7 @@ export default {
   overflow: visible !important;
   display: flex;
   flex-direction: column;
+  width: 100%; /* Ensure list areas span full width */
 }
 
 /* Container for weather panel */
@@ -510,6 +516,7 @@ export default {
   border-top: 1px solid var(--border-light);
   padding: 10px;
   margin-top: 5px;
+  width: 100%; /* Ensure weather container spans full width */
 }
 
 /* Hide weather panel when keyboard is active on mobile */
@@ -518,7 +525,7 @@ export default {
 }
 
 .weather-panel-fixed {
-  width: 100%;
+  width: 100%; /* Ensure weather panel spans full width */
 }
 
 /* Special styles for when keyboard is active */
@@ -546,6 +553,7 @@ export default {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none; /* Firefox */
+  width: 100%; /* Ensure sub-tabs span full width */
 }
 
 .chat-sub-tabs::-webkit-scrollbar {
@@ -583,6 +591,7 @@ export default {
   display: flex;
   margin-bottom: 15px;
   padding: 5px;
+  width: 100%; /* Ensure search container spans full width */
 }
 
 .search-box {
@@ -620,6 +629,7 @@ export default {
   padding: 40px 20px;
   color: var(--text-tertiary, #888);
   text-align: center;
+  width: 100%; /* Ensure empty state spans full width */
 }
 
 .empty-icon {
@@ -637,6 +647,7 @@ export default {
 .all-chats-content,
 .folders-content {
   padding: 0;
+  width: 100%; /* Ensure content areas span full width */
 }
 
 /* Mobile: offscreen unless side-bar-open is set */
@@ -647,7 +658,7 @@ export default {
     left: 0;
     height: calc(100vh - 60px);
     width: 90%;
-    max-width: 350px;
+    max-width: 480px; /* Increased to accommodate the 450px sidebar with some margin */
     transform: translateX(-100%);
     z-index: 15;
     box-shadow: none;
@@ -700,7 +711,7 @@ export default {
   .side-bar {
     position: relative;
     transform: translateX(0);
-    width: 320px;
+    width: 450px; /* Set to exactly 450px */
     z-index: 5;
   }
   

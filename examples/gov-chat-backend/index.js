@@ -220,6 +220,33 @@ const swaggerOptions = {
             }
           }
         },
+        // New schemas for folder functionality
+        Folder: {
+          type: 'object',
+          properties: {
+            _key: { type: 'string', description: 'Unique identifier' },
+            name: { type: 'string', description: 'Folder name' },
+            description: { type: 'string', description: 'Folder description' },
+            created: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+            updated: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
+            isArchived: { type: 'boolean', description: 'Whether the folder is archived' },
+            color: { type: 'string', description: 'Color code for the folder' },
+            icon: { type: 'string', description: 'Icon identifier for the folder' },
+            parentFolderId: { type: 'string', description: 'Parent folder ID (null for root folders)' },
+            order: { type: 'integer', description: 'Display order within parent' }
+          }
+        },
+        FolderListResponse: {
+          type: 'object',
+          properties: {
+            folders: {
+              type: 'array',
+              items: { 
+                $ref: '#/components/schemas/Folder'
+              }
+            }
+          }
+        },
         ConversationListResponse: {
           type: 'object',
           properties: {

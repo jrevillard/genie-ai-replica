@@ -26,8 +26,11 @@
 // # disable schema validation for the new queryMessages schema
 // node consolidated-db-schema.js disable-querymessages-schema
 
-// consolidated-db-schema.js
-// A comprehensive script to initialize and manage database schema for Huduma AI
+// # Create folder structure
+// node consolidated-db-schema.js create-folder-structure
+
+// # Add sample folder data
+// node consolidated-db-schema.js add-folder-samples
 
 // just to link the query collection to the messages collection
 // node consolidated-db-schema.js link-query-messages
@@ -467,9 +470,28 @@ const messagesCollection = {
   }
 };
 
+// 11. Folders Collection (NEW)
+const foldersCollection = {
+  name: "folders",
+  schema: {
+    rule: {
+      type: "object",
+      properties: {
+        _key: { type: "string" },
+        userId: { type: "string" }, // Reference to users collection
+        name: { type: "string" },   // Name of the folder
+        order: { type: "number", optional: true } // For sorting folders
+      },
+      required: ["_key", "userId", "name"]
+    },
+    level: "moderate",
+    message: "Folder document does not match schema"
+  }
+};
+
 // Edge Collections
 
-// 11. User Sessions Edge Collection
+// 12. User Sessions Edge Collection
 const userSessionsEdgeCollection = {
   name: "userSessions",
   type: "edge",
@@ -488,7 +510,7 @@ const userSessionsEdgeCollection = {
   }
 };
 
-// 12. Session Queries Edge Collection
+// 13. Session Queries Edge Collection
 const sessionQueriesEdgeCollection = {
   name: "sessionQueries",
   type: "edge",
@@ -507,7 +529,7 @@ const sessionQueriesEdgeCollection = {
   }
 };
 
-// 13. Category Services Edge Collection
+// 14. Category Services Edge Collection
 const categoryServicesEdgeCollection = {
   name: "categoryServices",
   type: "edge",
@@ -526,7 +548,7 @@ const categoryServicesEdgeCollection = {
   }
 };
 
-// 14. Query Categories Edge Collection
+// 15. Query Categories Edge Collection
 const queryCategoriesEdgeCollection = {
   name: "queryCategories",
   type: "edge",
@@ -545,7 +567,7 @@ const queryCategoriesEdgeCollection = {
   }
 };
 
-// 15. User Conversations Edge Collection (for Chat History)
+// 16. User Conversations Edge Collection (for Chat History)
 const userConversationsEdgeCollection = {
   name: "userConversations",
   type: "edge",
@@ -565,7 +587,7 @@ const userConversationsEdgeCollection = {
   }
 };
 
-// 16. Conversation Categories Edge Collection (for Chat History)
+// 17. Conversation Categories Edge Collection (for Chat History)
 const conversationCategoriesEdgeCollection = {
   name: "conversationCategories",
   type: "edge",
@@ -584,7 +606,7 @@ const conversationCategoriesEdgeCollection = {
   }
 };
 
-// 17. Query Messages Edge Collection (links queries to messages)
+// 18. Query Messages Edge Collection (links queries to messages)
 const queryMessagesEdgeCollection = {
   name: "queryMessages",
   type: "edge",
@@ -605,6 +627,24 @@ const queryMessagesEdgeCollection = {
   }
 };
 
+// 19. Folder Conversations Edge Collection (NEW)
+const folderConversationsEdgeCollection = {
+  name: "folderConversations",
+  type: "edge",
+  schema: {
+    rule: {
+      type: "object",
+      properties: {
+        _from: { type: "string" }, // folders/folder123
+        _to: { type: "string" }    // conversations/conv456
+      },
+      required: ["_from", "_to"]
+    },
+    level: "moderate",
+    message: "Folder-Conversation edge does not match schema"
+  }
+};
+
 // Group all schema definitions
 const schemaDefinitions = {
   // Document Collections
@@ -618,6 +658,7 @@ const schemaDefinitions = {
   passwordResetTokens: passwordResetTokensCollection,
   conversations: conversationsCollection,
   messages: messagesCollection,
+  folders: foldersCollection,
 
   // Edge Collections
   userSessions: userSessionsEdgeCollection,
@@ -626,7 +667,8 @@ const schemaDefinitions = {
   queryCategories: queryCategoriesEdgeCollection,
   userConversations: userConversationsEdgeCollection,
   conversationCategories: conversationCategoriesEdgeCollection,
-  queryMessages: queryMessagesEdgeCollection
+  queryMessages: queryMessagesEdgeCollection,
+  folderConversations: folderConversationsEdgeCollection
 };
 
 // ================================================
@@ -672,15 +714,30 @@ const chatHistoryCollections = {
   ]
 };
 
+// Folder collections (NEW)
+const folderCollections = {
+  // Document Collections
+  documentCollections: [
+    'folders'          // Stores folder information
+  ],
+
+  // Edge Collections
+  edgeCollections: [
+    'folderConversations'      // Links folders to conversations
+  ]
+};
+
 // Combine all collections
 const allCollections = {
   documentCollections: [
     ...baseCollections.documentCollections,
-    ...chatHistoryCollections.documentCollections
+    ...chatHistoryCollections.documentCollections,
+    ...folderCollections.documentCollections
   ],
   edgeCollections: [
     ...baseCollections.edgeCollections,
-    ...chatHistoryCollections.edgeCollections
+    ...chatHistoryCollections.edgeCollections,
+    ...folderCollections.edgeCollections
   ]
 };
 
@@ -766,6 +823,18 @@ const collectionIndexes = {
     { fields: ['_from'], name: 'from_idx' },   // For finding messages for a specific query
     { fields: ['_to'], name: 'to_idx' },       // For finding queries related to a message
     { fields: ['responseType'], name: 'responseType_idx' }  // For filtering by response type
+  ],
+
+  // Folder indexes (NEW)
+  folders: [
+    { fields: ['userId'], name: 'userId_idx' },
+    { fields: ['name'], name: 'name_idx' },
+    { fields: ['order'], name: 'order_idx' }
+  ],
+
+  folderConversations: [
+    { fields: ['_from'], name: 'from_idx' },  // For finding conversations in a folder
+    { fields: ['_to'], name: 'to_idx' }       // For finding folders containing a conversation
   ]
 };
 
@@ -1262,77 +1331,170 @@ async function addChatHistorySampleData() {
 }
 
 /**
- * Clean test collections by truncating them
+ * Create folder structure and related collections
  */
-async function cleanTestCollections() {
+async function createFolderStructure() {
   const db = initDB();
 
-  // Collections that should be cleaned before tests
-  const collectionsToClean = [
-    'users',
-    'queries',
-    'sessions',
-    'events',
-    'analytics',
-    'userSessions',
-    'sessionQueries',
-    'queryCategories',
-    'conversations',
-    'messages',
-    'userConversations',
-    'conversationCategories',
-    'queryMessages'
-  ];
-
-  console.log('Cleaning test collections...');
-
-  for (const collectionName of collectionsToClean) {
-    try {
-      const collection = db.collection(collectionName);
-      if (await collection.exists()) {
-        console.log(`Truncating collection: ${collectionName}`);
-        await collection.truncate();
-      } else {
-        console.log(`Collection doesn't exist, skipping: ${collectionName}`);
-      }
-    } catch (error) {
-      console.error(`Error cleaning collection ${collectionName}:`, error);
-    }
-  }
-
-  console.log('Database cleanup completed');
-  return true;
-}
-
-/**
- * Main function to initialize and update the entire database schema
- */
-async function initializeAndUpdateSchema(options = {}) {
   try {
-    console.log('Starting database schema initialization and update...');
+    console.log('Creating folder structure...');
 
-    // Create database structure (collections and indexes)
-    await createSchemaStructure();
+    // 1. Create folders collection
+    await ensureCollection(db, 'folders', false);
+    console.log('Created folders collection');
 
-    // Update user schema if needed
-    if (options.updateUsers !== false) {
-      await updateUserSchema();
+    // 2. Create folderConversations edge collection
+    await ensureCollection(db, 'folderConversations', true);
+    console.log('Created folderConversations edge collection');
+
+    // 3. Create indexes for folder collections
+    console.log('Creating indexes for folder collections...');
+
+    // Indexes for folders collection
+    const foldersCollection = db.collection('folders');
+    if (await foldersCollection.exists()) {
+      for (const indexDef of collectionIndexes.folders) {
+        await ensureIndex(foldersCollection, indexDef.fields, {
+          unique: indexDef.unique || false,
+          name: indexDef.name
+        });
+      }
     }
 
-    // Add sample data if requested
-    if (options.addSampleData === true) {
-      await addChatHistorySampleData();
+    // Indexes for folderConversations collection
+    const folderConversationsCollection = db.collection('folderConversations');
+    if (await folderConversationsCollection.exists()) {
+      for (const indexDef of collectionIndexes.folderConversations) {
+        await ensureIndex(folderConversationsCollection, indexDef.fields, {
+          unique: indexDef.unique || false,
+          name: indexDef.name
+        });
+      }
     }
 
-    console.log('Database schema initialization and update completed successfully.');
+    // 4. Apply schema validation
+    await applyCollectionSchema(db, 'folders');
+    await applyCollectionSchema(db, 'folderConversations');
+
+    console.log('Folder structure created successfully');
     return true;
   } catch (error) {
-    console.error('Error initializing and updating schema:', error);
+    console.error('Error creating folder structure:', error);
     throw error;
   }
 }
 
-// Add this function to your script
+/**
+ * Add sample folder data for testing
+ */
+async function addFolderSampleData() {
+  const db = initDB();
+
+  try {
+    console.log('Adding folder sample data...');
+
+    const foldersCollection = db.collection('folders');
+    const folderConversationsCollection = db.collection('folderConversations');
+
+    // Check if we already have folders
+    const folderCountCursor = await db.query(`
+      RETURN LENGTH(FOR f IN folders RETURN f)
+    `);
+    const [folderCount] = await folderCountCursor.all();
+
+    if (folderCount > 0) {
+      console.log(`Found ${folderCount} existing folders. Skipping sample data creation.`);
+      return false;
+    }
+
+    // Check if a user exists
+    const userCursor = await db.query(`
+      FOR u IN users
+      LIMIT 1
+      RETURN u
+    `);
+
+    const users = await userCursor.all();
+    if (users.length === 0) {
+      console.log('No users found. Please create users first.');
+      return false;
+    }
+
+    const userId = users[0]._id;
+    const userKey = users[0]._key;
+    console.log(`Using user: ${userId}`);
+
+    // Check if conversations exist
+    const conversationsCursor = await db.query(`
+      FOR c IN conversations
+      LIMIT 5
+      RETURN c
+    `);
+
+    const conversations = await conversationsCursor.all();
+    if (conversations.length === 0) {
+      console.log('No conversations found. Please create conversations first.');
+      return false;
+    }
+
+    // Create sample folders
+    const sampleFolders = [
+      { name: "Important", order: 1 },
+      { name: "Work", order: 2 },
+      { name: "Personal", order: 3 }
+    ];
+
+    console.log('Creating sample folders...');
+    
+    const createdFolders = [];
+    for (const folderData of sampleFolders) {
+      const folder = {
+        _key: `folder_${userKey}_${folderData.name.toLowerCase().replace(/\s+/g, '_')}`,
+        userId: userKey,
+        name: folderData.name,
+        order: folderData.order
+      };
+
+      const folderMeta = await foldersCollection.save(folder);
+      createdFolders.push(folderMeta);
+      console.log(`Created folder: ${folderMeta._id}`);
+    }
+
+    // Add conversations to folders
+    console.log('Adding conversations to folders...');
+    
+    // Add the first conversation to "Important" folder
+    if (conversations.length > 0 && createdFolders.length > 0) {
+      const edge = {
+        _from: createdFolders[0]._id,  // Important folder
+        _to: `conversations/${conversations[0]._key}`
+      };
+      
+      await folderConversationsCollection.save(edge);
+      console.log(`Added conversation ${conversations[0]._key} to folder ${createdFolders[0].name}`);
+    }
+
+    // Add some conversations to "Work" folder if available
+    if (conversations.length > 1 && createdFolders.length > 1) {
+      for (let i = 1; i < Math.min(3, conversations.length); i++) {
+        const edge = {
+          _from: createdFolders[1]._id,  // Work folder
+          _to: `conversations/${conversations[i]._key}`
+        };
+        
+        await folderConversationsCollection.save(edge);
+        console.log(`Added conversation ${conversations[i]._key} to folder ${createdFolders[1].name}`);
+      }
+    }
+
+    console.log('Folder sample data added successfully');
+    return true;
+  } catch (error) {
+    console.error('Error adding folder sample data:', error);
+    return false;
+  }
+}
+
 /**
  * Create sample query-message relationships
  */
@@ -1425,6 +1587,9 @@ async function createSampleQueryMessagesEdge() {
   }
 }
 
+/**
+ * Disable schema validation for queryMessages collection
+ */
 async function disableQueryMessagesSchemaValidation() {
   try {
     const db = initDB();
@@ -1442,6 +1607,79 @@ async function disableQueryMessagesSchemaValidation() {
   } catch (error) {
     console.error('Error disabling schema validation for queryMessages:', error);
     return false;
+  }
+}
+
+/**
+ * Clean test collections by truncating them
+ */
+async function cleanTestCollections() {
+  const db = initDB();
+
+  // Collections that should be cleaned before tests
+  const collectionsToClean = [
+    'users',
+    'queries',
+    'sessions',
+    'events',
+    'analytics',
+    'userSessions',
+    'sessionQueries',
+    'queryCategories',
+    'conversations',
+    'messages',
+    'userConversations',
+    'conversationCategories',
+    'queryMessages',
+    'folders',              // Added for folder cleanup
+    'folderConversations'   // Added for folder cleanup
+  ];
+
+  console.log('Cleaning test collections...');
+
+  for (const collectionName of collectionsToClean) {
+    try {
+      const collection = db.collection(collectionName);
+      if (await collection.exists()) {
+        console.log(`Truncating collection: ${collectionName}`);
+        await collection.truncate();
+      } else {
+        console.log(`Collection doesn't exist, skipping: ${collectionName}`);
+      }
+    } catch (error) {
+      console.error(`Error cleaning collection ${collectionName}:`, error);
+    }
+  }
+
+  console.log('Database cleanup completed');
+  return true;
+}
+
+/**
+ * Main function to initialize and update the entire database schema
+ */
+async function initializeAndUpdateSchema(options = {}) {
+  try {
+    console.log('Starting database schema initialization and update...');
+
+    // Create database structure (collections and indexes)
+    await createSchemaStructure();
+
+    // Update user schema if needed
+    if (options.updateUsers !== false) {
+      await updateUserSchema();
+    }
+
+    // Add sample data if requested
+    if (options.addSampleData === true) {
+      await addChatHistorySampleData();
+    }
+
+    console.log('Database schema initialization and update completed successfully.');
+    return true;
+  } catch (error) {
+    console.error('Error initializing and updating schema:', error);
+    throw error;
   }
 }
 
@@ -1503,21 +1741,33 @@ async function main() {
         break;
 
       case 'disable-querymessages-schema':
-          disableQueryMessagesSchemaValidation().then(() => {
-            process.exit(0)});
+        await disableQueryMessagesSchemaValidation();
+        break;
+      
+      case 'create-folder-structure':
+        // Create folder structure
+        await createFolderStructure();
+        break;
+        
+      case 'add-folder-samples':
+        // Add sample folder data
+        await addFolderSampleData();
         break;
         
       default:
         console.log(`Unknown command: ${command}`);
         console.log('Available commands:');
-        console.log('  init           - Initialize and update schema');
-        console.log('  create-schema  - Only create schema structure');
-        console.log('  update-users   - Only update user schema');
-        console.log('  apply-schemas  - Only apply schema validation rules');
-        console.log('  add-samples    - Add sample data');
-        console.log('  link-query-messages - Create sample query-message relationships');
-        console.log('  clean          - Clean test collections');
-        console.log('  reset          - Clean and initialize with sample data');
+        console.log('  init                    - Initialize and update schema');
+        console.log('  create-schema           - Only create schema structure');
+        console.log('  update-users            - Only update user schema');
+        console.log('  apply-schemas           - Only apply schema validation rules');
+        console.log('  add-samples             - Add sample chat history data');
+        console.log('  link-query-messages     - Create sample query-message relationships');
+        console.log('  clean                   - Clean test collections');
+        console.log('  reset                   - Clean and initialize with sample data');
+        console.log('  create-folder-structure - Create folder collections and indexes');
+        console.log('  add-folder-samples      - Add sample folder data');
+        console.log('  disable-querymessages-schema - Disable schema validation for queryMessages');
     }
     
     console.log('Operation completed successfully.');
@@ -1541,8 +1791,11 @@ module.exports = {
   addChatHistorySampleData,
   cleanTestCollections,
   applyCollectionSchema,
+  createFolderStructure,
+  addFolderSampleData,
   config,
   allCollections,
   chatHistoryCollections,
+  folderCollections,
   schemaDefinitions
 };

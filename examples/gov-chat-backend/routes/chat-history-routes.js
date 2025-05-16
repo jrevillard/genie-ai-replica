@@ -1017,4 +1017,1137 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+
+// FOLDER BASIC ROUTES - Add to chat-history-routes.js
+
+/**
+ * @swagger
+ * /chat/folders:
+ *   get:
+ *     summary: Get user folders
+ *     description: Retrieves all folders for the authenticated user
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: query
+ *         name: includeArchived
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Whether to include archived folders
+ *       - in: query
+ *         name: parentFolderId
+ *         schema:
+ *           type: string
+ *         description: ID of parent folder to get subfolders (omit for root folders)
+ *     responses:
+ *       200:
+ *         description: List of folders
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get('/folders', async (req, res) => {
+  try {
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    const includeArchived = req.query.includeArchived === 'true';
+    const parentFolderId = req.query.parentFolderId || null;
+    
+    logger.info(`Getting folders for user ${userId} with filters - includeArchived: ${includeArchived}, parentFolderId: ${parentFolderId || 'root'}`);
+    
+    const options = {
+      includeArchived,
+      parentFolderId
+    };
+    
+    const folders = await chatHistoryService.getUserFolders(userId, options);
+    res.json(folders);
+  } catch (error) {
+    logger.error(`Error getting user folders: ${error.message}`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Error getting user folders: ${error.message}` 
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders:
+ *   post:
+ *     summary: Create a new folder
+ *     description: Creates a new folder for organizing conversations
+ *     tags: [Chat History]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Name of the folder
+ *               description:
+ *                 type: string
+ *                 description: Optional description of the folder
+ *               parentFolderId:
+ *                 type: string
+ *                 description: Optional ID of parent folder
+ *               color:
+ *                 type: string
+ *                 description: Optional color for the folder
+ *               icon:
+ *                 type: string
+ *                 description: Optional icon for the folder
+ *     responses:
+ *       201:
+ *         description: Folder created successfully
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.post('/folders', async (req, res) => {
+  try {
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    const { name, description, parentFolderId, color, icon } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ message: 'Folder name is required' });
+    }
+    
+    logger.info(`Creating new folder for user ${numericUserId} with name "${name}"`);
+    
+    // If parent folder is specified, verify it exists and user has access
+    if (parentFolderId) {
+      try {
+        const parentFolder = await chatHistoryService.getFolder(parentFolderId);
+        
+        const ownerCheck = parentFolder.owners.some(owner => owner._key === numericUserId);
+        if (!ownerCheck) {
+          return res.status(403).json({ 
+            message: 'You do not have permission to create subfolders in this folder' 
+          });
+        }
+      } catch (error) {
+        return res.status(404).json({ message: 'Parent folder not found' });
+      }
+    }
+    
+    // Get count of existing folders at this level to determine order
+    const existingFolders = await chatHistoryService.getUserFolders(numericUserId, { 
+      parentFolderId: parentFolderId 
+    });
+    const order = existingFolders.length;
+    
+    const folderData = {
+      userId: numericUserId,
+      name,
+      description: description || '',
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      isArchived: false,
+      color: color || '#808080',
+      icon: icon || 'folder',
+      parentFolderId: parentFolderId || null,
+      order
+    };
+    
+    const folder = await chatHistoryService.createFolder(folderData);
+    res.status(201).json(folder);
+  } catch (error) {
+    logger.error(`Error creating folder: ${error.message}`, error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}:
+ *   get:
+ *     summary: Get folder details
+ *     description: Retrieves a specific folder including its conversations
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder to retrieve
+ *     responses:
+ *       200:
+ *         description: Folder details with conversations
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Folder not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/folders/:folderId', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    logger.info(`Getting folder ${folderId}`);
+    
+    const folder = await chatHistoryService.getFolder(folderId);
+    
+    if (!folder) {
+      logger.warn(`Folder ${folderId} not found`);
+      return res.status(404).json({ message: 'Folder not found' });
+    }
+    
+    res.json(folder);
+  } catch (error) {
+    logger.error(`Error getting folder ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}:
+ *   patch:
+ *     summary: Update folder
+ *     description: Updates folder properties
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: New name for the folder
+ *               description:
+ *                 type: string
+ *                 description: New description for the folder
+ *               isArchived:
+ *                 type: boolean
+ *                 description: Archive status
+ *               color:
+ *                 type: string
+ *                 description: Color for the folder
+ *               icon:
+ *                 type: string
+ *                 description: Icon for the folder
+ *               parentFolderId:
+ *                 type: string
+ *                 description: ID of parent folder (null for root)
+ *     responses:
+ *       200:
+ *         description: Folder updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Folder not found
+ *       500:
+ *         description: Server error
+ */
+router.patch('/folders/:folderId', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    const updateData = { ...req.body, userId: numericUserId };
+    
+    logger.info(`Updating folder ${folderId} with data:`, updateData);
+    
+    // If parentFolderId is being updated, verify it's valid and doesn't create a cycle
+    if (updateData.parentFolderId !== undefined) {
+      if (updateData.parentFolderId === folderId) {
+        return res.status(400).json({ 
+          message: 'A folder cannot be its own parent' 
+        });
+      }
+      
+      if (updateData.parentFolderId) {
+        // Check if target parent exists and user has access
+        try {
+          const parentFolder = await chatHistoryService.getFolder(updateData.parentFolderId);
+          
+          // Check for hierarchy cycles - ensure target parent is not a child of this folder
+          const folderPath = await chatHistoryService.getFolderPath(updateData.parentFolderId);
+          if (folderPath.some(f => f._key === folderId)) {
+            return res.status(400).json({ 
+              message: 'Cannot move a folder to its own subfolder' 
+            });
+          }
+        } catch (error) {
+          return res.status(404).json({ message: 'Target parent folder not found' });
+        }
+      }
+    }
+    
+    const updatedFolder = await chatHistoryService.updateFolder(folderId, updateData);
+    res.json(updatedFolder);
+  } catch (error) {
+    logger.error(`Error updating folder ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}:
+ *   delete:
+ *     summary: Delete folder
+ *     description: Deletes a folder and optionally its contents
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder to delete
+ *       - in: query
+ *         name: deleteContents
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Whether to delete contained conversations and subfolders
+ *     responses:
+ *       200:
+ *         description: Folder deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission to delete this folder
+ *       404:
+ *         description: Folder not found
+ *       500:
+ *         description: Server error
+ */
+router.delete('/folders/:folderId', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const deleteContents = req.query.deleteContents === 'true';
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Deleting folder ${folderId} for user ${numericUserId}, deleteContents: ${deleteContents}`);
+    
+    const result = await chatHistoryService.deleteFolder(folderId, numericUserId, deleteContents);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error deleting folder ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('permission')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// FOLDER ORGANIZATION ROUTES - Add to chat-history-routes.js
+
+/**
+ * @swagger
+ * /chat/folders/shared:
+ *   get:
+ *     summary: Get shared folders
+ *     description: Retrieves folders that have been shared with the authenticated user
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: query
+ *         name: includeArchived
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Whether to include archived folders
+ *     responses:
+ *       200:
+ *         description: List of shared folders
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get('/folders/shared', async (req, res) => {
+  try {
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    const includeArchived = req.query.includeArchived === 'true';
+    
+    logger.info(`Getting shared folders for user ${userId} with includeArchived: ${includeArchived}`);
+    
+    const options = {
+      includeArchived
+    };
+    
+    const folders = await chatHistoryService.getSharedFolders(userId, options);
+    res.json(folders);
+  } catch (error) {
+    logger.error(`Error getting shared folders: ${error.message}`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Error getting shared folders: ${error.message}` 
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/search:
+ *   get:
+ *     summary: Search folders
+ *     description: Searches for folders by name or description
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Search term
+ *       - in: query
+ *         name: includeArchived
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Whether to include archived folders
+ *     responses:
+ *       200:
+ *         description: Search results
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get('/folders/search', async (req, res) => {
+  try {
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    const searchTerm = req.query.q || '';
+    const includeArchived = req.query.includeArchived === 'true';
+    
+    if (!searchTerm) {
+      return res.status(400).json({ message: 'Search term is required' });
+    }
+    
+    logger.info(`Searching folders for user ${numericUserId} with term "${searchTerm}"`);
+    
+    const options = { includeArchived };
+    const results = await chatHistoryService.searchFolders(numericUserId, searchTerm, options);
+    
+    res.json(results);
+  } catch (error) {
+    logger.error(`Error searching folders: ${error.message}`, error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/reorder:
+ *   post:
+ *     summary: Reorder folders
+ *     description: Updates the order of folders at the same level
+ *     tags: [Chat History]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - folderOrders
+ *             properties:
+ *               folderOrders:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     folderId:
+ *                       type: string
+ *                     order:
+ *                       type: integer
+ *               parentFolderId:
+ *                 type: string
+ *                 description: Parent folder ID (null for root folders)
+ *     responses:
+ *       200:
+ *         description: Folders reordered successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Server error
+ */
+router.post('/folders/reorder', async (req, res) => {
+  try {
+    const { folderOrders, parentFolderId } = req.body;
+    
+    if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
+      return res.status(400).json({ message: 'Invalid folder orders data' });
+    }
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Reordering ${folderOrders.length} folders for user ${numericUserId} under parent ${parentFolderId || 'root'}`);
+    
+    const result = await chatHistoryService.reorderFolders(numericUserId, folderOrders, parentFolderId);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error reordering folders: ${error.message}`, error);
+    
+    if (error.message.includes('permission')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}/path:
+ *   get:
+ *     summary: Get folder path
+ *     description: Retrieves the folder path (breadcrumbs)
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder
+ *     responses:
+ *       200:
+ *         description: Folder path
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Folder not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/folders/:folderId/path', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    logger.info(`Getting path for folder ${folderId}`);
+    
+    const path = await chatHistoryService.getFolderPath(folderId);
+    res.json(path);
+  } catch (error) {
+    logger.error(`Error getting path for folder ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// FOLDER-CONVERSATION RELATIONSHIP ROUTES - Add to chat-history-routes.js
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}/conversations/{conversationId}:
+ *   post:
+ *     summary: Add conversation to folder
+ *     description: Adds a conversation to a folder
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the conversation to add
+ *     responses:
+ *       200:
+ *         description: Conversation added to folder
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       404:
+ *         description: Folder or conversation not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/folders/:folderId/conversations/:conversationId', async (req, res) => {
+  try {
+    const { folderId, conversationId } = req.params;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Adding conversation ${conversationId} to folder ${folderId} by user ${numericUserId}`);
+    
+    const result = await chatHistoryService.addConversationToFolder(folderId, conversationId, numericUserId);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error adding conversation to folder: ${error.message}`, error);
+    
+    if (error.message.includes('permission')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder or conversation not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}/conversations/{conversationId}:
+ *   delete:
+ *     summary: Remove conversation from folder
+ *     description: Removes a conversation from a folder
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the conversation to remove
+ *     responses:
+ *       200:
+ *         description: Conversation removed from folder
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       404:
+ *         description: Folder, conversation, or relationship not found
+ *       500:
+ *         description: Server error
+ */
+router.delete('/folders/:folderId/conversations/:conversationId', async (req, res) => {
+  try {
+    const { folderId, conversationId } = req.params;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Removing conversation ${conversationId} from folder ${folderId} by user ${numericUserId}`);
+    
+    const result = await chatHistoryService.removeConversationFromFolder(folderId, conversationId, numericUserId);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error removing conversation from folder: ${error.message}`, error);
+    
+    if (error.message.includes('permission')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/conversations/{conversationId}/folder:
+ *   get:
+ *     summary: Get conversation's folder
+ *     description: Finds which folder a conversation belongs to
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the conversation
+ *     responses:
+ *       200:
+ *         description: Folder information
+ *       404:
+ *         description: Conversation not found or not in any folder
+ *       500:
+ *         description: Server error
+ */
+router.get('/conversations/:conversationId/folder', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    logger.info(`Finding folder for conversation ${conversationId}`);
+    
+    const folder = await chatHistoryService.findConversationFolder(conversationId);
+    
+    if (!folder) {
+      return res.status(404).json({ 
+        message: 'Conversation not found or not in any folder',
+        inFolder: false
+      });
+    }
+    
+    res.json({
+      folder,
+      inFolder: true
+    });
+  } catch (error) {
+    logger.error(`Error finding folder for conversation ${req.params.conversationId}: ${error.message}`, error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/conversations/{conversationId}/move:
+ *   post:
+ *     summary: Move conversation
+ *     description: Moves a conversation from one folder to another
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the conversation to move
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sourceFolderId:
+ *                 type: string
+ *                 description: Source folder ID (null for root)
+ *               targetFolderId:
+ *                 type: string
+ *                 description: Target folder ID (null for root)
+ *     responses:
+ *       200:
+ *         description: Conversation moved successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       404:
+ *         description: Conversation, source, or target folder not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/conversations/:conversationId/move', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { sourceFolderId, targetFolderId } = req.body;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'} by user ${numericUserId}`);
+    
+    const result = await chatHistoryService.moveConversation(conversationId, sourceFolderId, targetFolderId, numericUserId);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error moving conversation ${req.params.conversationId}: ${error.message}`, error);
+    
+    if (error.message.includes('permission')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// FOLDER SHARING ROUTES - Add to chat-history-routes.js
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}/share:
+ *   post:
+ *     summary: Share folder
+ *     description: Shares a folder with another user
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder to share
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - targetUserId
+ *             properties:
+ *               targetUserId:
+ *                 type: string
+ *                 description: ID of the user to share with
+ *               role:
+ *                 type: string
+ *                 enum: [viewer, editor, contributor]
+ *                 default: viewer
+ *                 description: Permission role for the shared user
+ *     responses:
+ *       200:
+ *         description: Folder shared successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       404:
+ *         description: Folder or target user not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/folders/:folderId/share', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const { targetUserId, role } = req.body;
+    
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'Target user ID is required' });
+    }
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    const numericTargetUserId = targetUserId.startsWith('users/') ? targetUserId.substring(6) : targetUserId;
+    
+    // Prevent sharing with self
+    if (numericUserId === numericTargetUserId) {
+      return res.status(400).json({ message: 'Cannot share a folder with yourself' });
+    }
+    
+    logger.info(`Sharing folder ${folderId} from user ${numericUserId} to user ${numericTargetUserId} with role ${role || 'viewer'}`);
+    
+    const result = await chatHistoryService.shareFolder(
+      folderId, 
+      numericUserId, 
+      numericTargetUserId, 
+      role || 'viewer'
+    );
+    
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error sharing folder ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('permission') || error.message.includes('owner')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder or target user not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}/share/{targetUserId}:
+ *   delete:
+ *     summary: Remove folder share
+ *     description: Removes a user's access to a shared folder
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the shared folder
+ *       - in: path
+ *         name: targetUserId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the user whose access to remove
+ *     responses:
+ *       200:
+ *         description: Share removed successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       404:
+ *         description: Folder or share not found
+ *       500:
+ *         description: Server error
+ */
+router.delete('/folders/:folderId/share/:targetUserId', async (req, res) => {
+  try {
+    const { folderId, targetUserId } = req.params;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    const numericTargetUserId = targetUserId.startsWith('users/') ? targetUserId.substring(6) : targetUserId;
+    
+    logger.info(`Removing share for folder ${folderId} from user ${numericTargetUserId} by owner ${numericUserId}`);
+    
+    const result = await chatHistoryService.removeFolderShare(folderId, numericUserId, numericTargetUserId);
+    res.json(result);
+  } catch (error) {
+    logger.error(`Error removing folder share ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('permission') || error.message.includes('owner')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: error.message });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /chat/folders/{folderId}/users:
+ *   get:
+ *     summary: Get folder users
+ *     description: Retrieves users who have access to a folder
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: folderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the folder
+ *     responses:
+ *       200:
+ *         description: List of users with access to the folder
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - user doesn't have permission
+ *       404:
+ *         description: Folder not found
+ *       500:
+ *         description: Server error
+ */
+router.get('/folders/:folderId/users', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    
+    // Extract the userId from req.user
+    let userId = extractUserId(req);
+    
+    if (!userId) {
+      logger.warn('No userId available in request');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required but not found in request' 
+      });
+    }
+    
+    // Extract the numeric ID without the 'users/' prefix for the service call
+    const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
+    
+    logger.info(`Getting users with access to folder ${folderId} for user ${numericUserId}`);
+    
+    const users = await chatHistoryService.getFolderUsers(folderId, numericUserId);
+    res.json(users);
+  } catch (error) {
+    logger.error(`Error getting users for folder ${req.params.folderId}: ${error.message}`, error);
+    
+    if (error.message.includes('permission')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Folder not found' });
+    }
+    
+    res.status(500).json({ message: error.message });
+  }
+});
+
+
+
 module.exports = router;

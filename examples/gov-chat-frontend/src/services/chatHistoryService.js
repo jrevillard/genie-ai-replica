@@ -360,6 +360,453 @@ class ChatHistoryService {
       throw error;
     }
   }
+
+  /**
+ * Get all folders for the authenticated user
+ * @param {String} userId - User ID (required)
+ * @param {Object} options - Filter options
+ * @param {Boolean} options.includeArchived - Whether to include archived folders
+ * @param {String} options.parentFolderId - ID of parent folder to get subfolders (null for root folders)
+ * @returns {Promise} Folders list
+ */
+  async getUserFolders(userId, options = {}) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for getUserFolders');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Fetching folders for user ${userId} with options:`, options);
+
+      const params = {
+        includeArchived: options.includeArchived || false,
+        parentFolderId: options.parentFolderId || null
+      };
+
+      const response = await httpService.get('/chat/folders', {
+        params: { ...params, userId }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user folders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get shared folders for the authenticated user
+   * @param {String} userId - User ID (required)
+   * @param {Object} options - Filter options
+   * @param {Boolean} options.includeArchived - Whether to include archived folders
+   * @returns {Promise} Shared folders list
+   */
+  async getSharedFolders(userId, options = {}) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for getSharedFolders');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Fetching shared folders for user ${userId} with options:`, options);
+
+      const params = {
+        includeArchived: options.includeArchived || false
+      };
+
+      const response = await httpService.get('/chat/folders/shared', {
+        params: { ...params, userId }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching shared folders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a specific folder with its details
+   * @param {String} folderId - ID of the folder to retrieve
+   * @returns {Promise} Folder details with conversations
+   */
+  async getFolder(folderId) {
+    try {
+      const response = await httpService.get(`/chat/folders/${folderId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new folder
+   * @param {Object} folderData - Data for the new folder
+   * @param {String} folderData.userId - User ID (required)
+   * @param {String} folderData.name - Name of the folder (required)
+   * @param {String} folderData.description - Optional description
+   * @param {String} folderData.parentFolderId - Optional parent folder ID
+   * @param {String} folderData.color - Optional color code
+   * @param {String} folderData.icon - Optional icon name
+   * @returns {Promise} Created folder data
+   */
+  async createFolder(folderData) {
+    try {
+      // Ensure userId and name are provided
+      if (!folderData.userId) {
+        console.error('Error: userId is required for createFolder');
+        throw new Error('User ID is required');
+      }
+
+      if (!folderData.name) {
+        console.error('Error: name is required for createFolder');
+        throw new Error('Folder name is required');
+      }
+
+      const response = await httpService.post('/chat/folders', folderData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update an existing folder
+   * @param {String} folderId - ID of the folder to update
+   * @param {Object} updateData - Data to update
+   * @param {String} updateData.name - New name for the folder
+   * @param {String} updateData.description - New description
+   * @param {Boolean} updateData.isArchived - Archive status
+   * @param {String} updateData.color - Color code
+   * @param {String} updateData.icon - Icon name
+   * @param {String} updateData.parentFolderId - Parent folder ID
+   * @param {String} updateData.userId - User ID for permission check
+   * @returns {Promise} Updated folder data
+   */
+  async updateFolder(folderId, updateData) {
+    try {
+      console.log(`Updating folder ${folderId} with data:`, updateData);
+      const response = await httpService.patch(`/chat/folders/${folderId}`, updateData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a folder
+   * @param {String} folderId - ID of the folder to delete
+   * @param {String} userId - User ID requesting the deletion (required for validation)
+   * @param {Boolean} deleteContents - Whether to delete contained conversations and subfolders
+   * @returns {Promise} Result of the deletion
+   */
+  async deleteFolder(folderId, userId, deleteContents = false) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for deleteFolder');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`);
+
+      const response = await httpService.delete(`/chat/folders/${folderId}`, {
+        params: { userId, deleteContents }
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error deleting folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the folder path (breadcrumbs)
+   * @param {String} folderId - ID of the folder
+   * @returns {Promise} Array of folders representing the path
+   */
+  async getFolderPath(folderId) {
+    try {
+      const response = await httpService.get(`/chat/folders/${folderId}/path`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error getting path for folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search folders by name or description
+   * @param {String} userId - User ID
+   * @param {String} searchTerm - Text to search for
+   * @param {Object} options - Search options
+   * @param {Boolean} options.includeArchived - Whether to include archived folders
+   * @returns {Promise} Search results
+   */
+  async searchFolders(userId, searchTerm, options = {}) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for searchFolders');
+        throw new Error('User ID is required');
+      }
+
+      if (!searchTerm) {
+        console.error('Error: searchTerm is required for searchFolders');
+        throw new Error('Search term is required');
+      }
+
+      const params = {
+        userId,
+        q: searchTerm,
+        includeArchived: options.includeArchived || false
+      };
+
+      const response = await httpService.get('/chat/folders/search', { params });
+      return response.data;
+    } catch (error) {
+      console.error(`Error searching folders with term "${searchTerm}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reorder folders
+   * @param {String} userId - User ID
+   * @param {Array} folderOrders - Array of {folderId, order} objects
+   * @param {String} parentFolderId - Parent folder ID (null for root folders)
+   * @returns {Promise} Result of the operation
+   */
+  async reorderFolders(userId, folderOrders, parentFolderId = null) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for reorderFolders');
+        throw new Error('User ID is required');
+      }
+
+      if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
+        console.error('Error: folderOrders must be a non-empty array');
+        throw new Error('Folder orders array is required');
+      }
+
+      const response = await httpService.post('/chat/folders/reorder', {
+        userId,
+        folderOrders,
+        parentFolderId
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error reordering folders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a conversation to a folder
+   * @param {String} folderId - Folder ID
+   * @param {String} conversationId - Conversation ID
+   * @param {String} userId - User ID for permission check
+   * @returns {Promise} Result of the operation
+   */
+  async addConversationToFolder(folderId, conversationId, userId) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for addConversationToFolder');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Adding conversation ${conversationId} to folder ${folderId}`);
+
+      const response = await httpService.post(
+        `/chat/folders/${folderId}/conversations/${conversationId}`,
+        { userId }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a conversation from a folder
+   * @param {String} folderId - Folder ID
+   * @param {String} conversationId - Conversation ID
+   * @param {String} userId - User ID for permission check
+   * @returns {Promise} Result of the operation
+   */
+  async removeConversationFromFolder(folderId, conversationId, userId) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for removeConversationFromFolder');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Removing conversation ${conversationId} from folder ${folderId}`);
+
+      const response = await httpService.delete(
+        `/chat/folders/${folderId}/conversations/${conversationId}`,
+        { params: { userId } }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error removing conversation ${conversationId} from folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the folder containing a conversation
+   * @param {String} conversationId - Conversation ID
+   * @returns {Promise} Folder information or null if not in a folder
+   */
+  async getConversationFolder(conversationId) {
+    try {
+      const response = await httpService.get(`/chat/conversations/${conversationId}/folder`);
+      return response.data;
+    } catch (error) {
+      // If 404, the conversation is not in any folder
+      if (error.response && error.response.status === 404) {
+        return { inFolder: false, folder: null };
+      }
+      console.error(`Error finding folder for conversation ${conversationId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Move a conversation between folders
+   * @param {String} conversationId - Conversation ID
+   * @param {String} sourceFolderId - Source folder ID (null for root)
+   * @param {String} targetFolderId - Target folder ID (null for root)
+   * @param {String} userId - User ID for permission check
+   * @returns {Promise} Result of the operation
+   */
+  async moveConversation(conversationId, sourceFolderId, targetFolderId, userId) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for moveConversation');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`);
+
+      const response = await httpService.post(
+        `/chat/conversations/${conversationId}/move`,
+        {
+          userId,
+          sourceFolderId,
+          targetFolderId
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error moving conversation ${conversationId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Share a folder with another user
+   * @param {String} folderId - Folder ID
+   * @param {String} userId - Owner user ID
+   * @param {String} targetUserId - Target user ID to share with
+   * @param {String} role - Role to assign (viewer, editor, contributor)
+   * @returns {Promise} Result of the operation
+   */
+  async shareFolder(folderId, userId, targetUserId, role = 'viewer') {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for shareFolder');
+        throw new Error('User ID is required');
+      }
+
+      if (!targetUserId) {
+        console.error('Error: targetUserId is required for shareFolder');
+        throw new Error('Target user ID is required');
+      }
+
+      console.log(`Sharing folder ${folderId} with user ${targetUserId} as ${role}`);
+
+      const response = await httpService.post(
+        `/chat/folders/${folderId}/share`,
+        {
+          userId,
+          targetUserId,
+          role
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error sharing folder ${folderId} with user ${targetUserId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove folder sharing with a user
+   * @param {String} folderId - Folder ID
+   * @param {String} userId - Owner user ID
+   * @param {String} targetUserId - Target user ID to remove access from
+   * @returns {Promise} Result of the operation
+   */
+  async removeFolderShare(folderId, userId, targetUserId) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for removeFolderShare');
+        throw new Error('User ID is required');
+      }
+
+      if (!targetUserId) {
+        console.error('Error: targetUserId is required for removeFolderShare');
+        throw new Error('Target user ID is required');
+      }
+
+      console.log(`Removing share for folder ${folderId} from user ${targetUserId}`);
+
+      const response = await httpService.delete(
+        `/chat/folders/${folderId}/share/${targetUserId}`,
+        { params: { userId } }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error removing share for folder ${folderId} from user ${targetUserId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get users with access to a folder
+   * @param {String} folderId - Folder ID
+   * @param {String} userId - User ID for permission check
+   * @returns {Promise} List of users with access
+   */
+  async getFolderUsers(folderId, userId) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for getFolderUsers');
+        throw new Error('User ID is required');
+      }
+
+      const response = await httpService.get(
+        `/chat/folders/${folderId}/users`,
+        { params: { userId } }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error getting users for folder ${folderId}:`, error);
+      throw error;
+    }
+  }
 }
 
 export default new ChatHistoryService();

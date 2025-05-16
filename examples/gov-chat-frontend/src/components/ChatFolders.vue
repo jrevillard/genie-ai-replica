@@ -148,10 +148,9 @@
                   "
                 >
                   <i
-                    :class="[
-                      'fas',
-                      conversation.isStarred ? 'fa-star' : 'fa-star-o',
-                    ]"
+                    :class="
+                      conversation.isStarred ? 'fas fa-star' : 'far fa-star'
+                    "
                   ></i>
                 </button>
 
@@ -704,6 +703,49 @@ export default {
 
   mounted() {
     console.log("ChatFolders component mounted");
+
+    // Add this code at the beginning of the mounted hook
+    // to remove any duplicate search fields as soon as the component loads
+    this.$nextTick(() => {
+      // Find all search containers
+      const searchContainers = document.querySelectorAll(".search-container");
+
+      if (searchContainers.length > 1) {
+        console.log(
+          `Found ${searchContainers.length} search containers on initial load, removing duplicates`
+        );
+
+        // Keep only the first search container (the one from the template)
+        const templateSearchContainer = searchContainers[0];
+
+        // Remove all other search containers
+        for (let i = 1; i < searchContainers.length; i++) {
+          if (searchContainers[i] !== templateSearchContainer) {
+            searchContainers[i].remove();
+          }
+        }
+      }
+
+      // Add MutationObserver to detect and remove any dynamically added search fields
+      const observer = new MutationObserver((mutations) => {
+        const searchContainers = document.querySelectorAll(".search-container");
+        if (searchContainers.length > 1) {
+          console.log(
+            `Detected ${searchContainers.length} search containers from mutation, cleaning up`
+          );
+          // Keep only the first search container
+          for (let i = 1; i < searchContainers.length; i++) {
+            searchContainers[i].remove();
+          }
+        }
+      });
+
+      // Observe the folder-chats container for any changes
+      const folderChats = document.querySelector(".folder-chats");
+      if (folderChats) {
+        observer.observe(folderChats, { childList: true, subtree: true });
+      }
+    });
 
     // Check parent's activeTab (which appears to be 'history' from logs)
     if (this.$parent && this.$parent.activeTab) {
@@ -1624,9 +1666,8 @@ export default {
         }
       } else {
         console.warn("Could not find existing search input in DOM");
-
         // Try to create search field if it doesn't exist
-        this.createSearchFieldIfNeeded();
+        //this.createSearchFieldIfNeeded();
       }
     },
 
@@ -1644,7 +1685,7 @@ export default {
 
       if (!searchInput) {
         console.log("Search field not found, creating it");
-        this.createSearchFieldIfNeeded();
+        //this.createSearchFieldIfNeeded();
       } else {
         // Make sure it's visible and connected to our search handler
         searchInput.addEventListener("input", this.handleExistingSearchInput);
@@ -1655,87 +1696,6 @@ export default {
         if (searchContainer) {
           searchContainer.style.display = "flex";
         }
-      }
-    },
-
-    // Create search field if it doesn't exist
-    createSearchFieldIfNeeded() {
-      // Skip for folders tab
-      if (this.currentSecondLevelTab === "folders") {
-        return;
-      }
-
-      // Check for existing search fields first
-      const existingSearchFields = document.querySelectorAll(
-        ".search-container, .search-box"
-      );
-      if (existingSearchFields.length > 0) {
-        console.log(
-          `Found ${existingSearchFields.length} existing search containers, not creating another one`
-        );
-        return;
-      }
-
-      console.log("Creating search field");
-
-      // Find the folder-chats div (which should already exist)
-      const folderChats = document.querySelector(".folder-chats");
-
-      if (!folderChats) {
-        console.warn("Could not find folder-chats container");
-        return;
-      }
-
-      // Check if search container already exists
-      let searchContainer = folderChats.querySelector(".search-container");
-
-      if (!searchContainer) {
-        // Create search container
-        searchContainer = document.createElement("div");
-        searchContainer.className = "search-container";
-        searchContainer.style.display = "flex";
-        searchContainer.style.margin = "0 0 15px 0";
-
-        // Create search input
-        const searchInput = document.createElement("input");
-        searchInput.type = "text";
-        searchInput.placeholder = "Search conversations...";
-        searchInput.className = "search-input";
-        searchInput.style.flex = "1";
-        searchInput.style.padding = "8px 12px";
-        searchInput.style.border = "1px solid var(--border-input)";
-        searchInput.style.borderRadius = "4px 0 0 4px";
-        searchInput.style.fontSize = "1rem";
-        searchInput.style.backgroundColor = "var(--bg-input)";
-        searchInput.style.color = "var(--text-primary)";
-
-        // Create search button
-        const searchButton = document.createElement("button");
-        searchButton.className = "search-button";
-        searchButton.innerHTML = '<i class="fas fa-search"></i>';
-        searchButton.style.padding = "8px 12px";
-        searchButton.style.backgroundColor = "var(--bg-button-primary)";
-        searchButton.style.color = "var(--text-button-primary)";
-        searchButton.style.border = "none";
-        searchButton.style.borderRadius = "0 4px 4px 0";
-        searchButton.style.cursor = "pointer";
-
-        // Add elements to DOM
-        searchContainer.appendChild(searchInput);
-        searchContainer.appendChild(searchButton);
-
-        // Insert search container before the first child
-        if (folderChats.firstChild) {
-          folderChats.insertBefore(searchContainer, folderChats.firstChild);
-        } else {
-          folderChats.appendChild(searchContainer);
-        }
-
-        // Add event listeners
-        searchInput.addEventListener("input", this.handleExistingSearchInput);
-        searchButton.addEventListener("click", () =>
-          this.handleExistingSearchInput({ target: searchInput })
-        );
       }
     },
 
@@ -2393,29 +2353,6 @@ html[data-theme="dark"] .folders-header h3 {
   color: var(--text-tertiary);
 }
 
-/* Star button with outline when not starred */
-.star-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px;
-  border-radius: 4px;
-  transition: color 0.2s;
-}
-
-.star-btn:hover {
-  color: var(--accent-color);
-}
-
-.star-btn .fa-star {
-  color: #f5a623;
-}
-
-.star-btn .fa-star-o {
-  color: var(--text-secondary);
-}
-
 .archive-checkbox {
   display: flex;
   flex-direction: column;
@@ -2685,5 +2622,28 @@ html[data-theme="dark"] .folders-header h3 {
   margin-top: 16px;
   color: var(--text-tertiary);
   opacity: 0.5;
+}
+
+/* Star button with outline when not starred */
+.star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.star-btn:hover {
+  color: var(--accent-color);
+}
+
+.star-btn .fa-star {
+  color: #f5a623;
+}
+
+.star-btn .fa-star-o {
+  color: #8e8e8e !important; /* Force this color with !important to override any other styles */
 }
 </style>

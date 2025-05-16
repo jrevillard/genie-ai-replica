@@ -2646,4 +2646,16 @@ html[data-theme="dark"] .folders-header h3 {
 .star-btn .fa-star-o {
   color: #8e8e8e !important; /* Force this color with !important to override any other styles */
 }
+
+/* Tab titles and section headings in dark mode */
+[data-theme="dark"] .folder-chats h3,
+html[data-theme="dark"] .folder-chats h3 {
+  color: #ffffff !important; /* Force white color in dark mode */
+}
+
+/* This targets the "All Chats", "Starred", and "Archived" headings specifically */
+[data-theme="dark"] .folder-chats > h3,
+html[data-theme="dark"] .folder-chats > h3 {
+  color: #ffffff !important;
+}
 </style>

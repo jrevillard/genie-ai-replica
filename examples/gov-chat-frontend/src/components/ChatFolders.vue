@@ -1787,83 +1787,120 @@ export default {
           console.error(
             "Cannot load folders: No current user or missing user ID"
           );
+          this.errorMessage = this.safeT(
+            "sidebar.errorNoUser",
+            "User data is missing"
+          );
           return [];
         }
-        // Call getUserFolders without options to avoid sending unnecessary filters
+
         const response = await chatHistoryService.getUserFolders(
           this.currentUser._key
         );
-        console.log("Folders loaded from backend:", response);
+        console.log(
+          "Raw getUserFolders response:",
+          JSON.stringify(response, null, 2)
+        );
 
-        let foldersArray;
-        if (Array.isArray(response)) {
-          foldersArray = response;
-          console.log("Response is an array, treating as folders list");
-        } else if (response && Array.isArray(response.folders)) {
-          foldersArray = response.folders;
-          console.log("Response has folders property, using it");
-        } else {
-          console.warn(
-            "Invalid response format from getUserFolders:",
-            response
-          );
-          foldersArray = [];
-        }
+        let foldersArray = Array.isArray(response)
+          ? response
+          : response?.folders || [];
+        console.log(`Received ${foldersArray.length} folders:`, foldersArray);
 
-        if (this.$store && this.$store.state.chatHistory) {
-          if (foldersArray.length === 0) {
-            console.log("No folders returned from backend");
-            this.$store.dispatch("chatHistory/setFolders", []);
-          } else {
-            console.log(
-              `Processing ${foldersArray.length} folders from backend`
-            );
+        const processedFolders = foldersArray
+          .filter((folder) => folder && (folder._key || folder.id))
+          .map((folder) => ({
+            id: folder._key || folder.id,
+            name: folder.name || "Unnamed Folder",
+            description: folder.description || "",
+            isDefault: folder.isDefault || false,
+          }));
 
-            const processedFolders = foldersArray
-              .filter((folder) => folder && (folder._key || folder.id))
-              .map((folder) => ({
-                id: folder._key || folder.id,
-                name: folder.name || "Unnamed Folder",
-                description: folder.description || "",
-                isDefault: folder.isDefault || false,
-              }));
+        // Add default folder explicitly
+        const defaultFolder = {
+          id: "default",
+          name: "All Chats",
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+        };
+        const allFolders = [defaultFolder, ...processedFolders];
 
-            console.log("Processed folders:", processedFolders);
+        console.log(
+          "All folders (with default) before dispatch:",
+          JSON.stringify(allFolders, null, 2)
+        );
 
-            if (processedFolders.length > 0) {
-              this.$store.dispatch("chatHistory/setFolders", processedFolders);
-            } else {
-              console.warn("No valid folders to process");
-              this.$store.dispatch("chatHistory/setFolders", []);
-            }
-          }
-        }
+        await this.$store.dispatch("chatHistory/setFolders", allFolders);
+
+        const stateFolders = [...this.$store.state.chatHistory.folders];
+        console.log(
+          "Vuex state.chatHistory.folders after dispatch:",
+          stateFolders
+        );
+        const getterFolders = [
+          ...this.$store.getters["chatHistory/getAllFolders"],
+        ];
+        console.log("Vuex getter getAllFolders after dispatch:", getterFolders);
+        const nonDefaultFoldersDebug = [...this.nonDefaultFolders];
+        console.log(
+          "Computed nonDefaultFolders after dispatch:",
+          nonDefaultFoldersDebug
+        );
 
         if (this.currentSecondLevelTab === "folders") {
           this.ensureFoldersSectionVisible();
+          this.selectFirstCustomFolder();
         }
 
-        return foldersArray;
+        return processedFolders;
       } catch (error) {
         console.error("Error loading folders from backend:", error);
+        this.errorMessage = this.safeT(
+          "sidebar.errorLoadingFolders",
+          "Failed to load folders"
+        );
+        notificationService.error(this.errorMessage);
         return [];
       }
     },
 
-    handleUpdateFolder() {
-      if (this.editingFolder && this.editingFolderName.trim()) {
-        this.updateFolder({
-          folderId: this.editingFolder.id,
+    async handleUpdateFolder() {
+      if (!this.editingFolder || !this.editingFolderName.trim()) {
+        console.log("No folder selected or empty name, not updating");
+        return;
+      }
+
+      try {
+        console.log(
+          `Updating folder ${this.editingFolder.id} with name: ${this.editingFolderName}`
+        );
+
+        await chatHistoryService.updateFolder(this.editingFolder.id, {
           name: this.editingFolderName.trim(),
+          userId: this.currentUser._key,
         });
+
+        // Update Vuex store by reloading folders
+        await this.loadFoldersFromBackend();
+
+        notificationService.success(
+          this.safeT("sidebar.folderUpdated", "Folder updated successfully")
+        );
+
         this.editingFolder = null;
         this.editingFolderName = "";
         this.showEditFolderDialog = false;
+      } catch (error) {
+        console.error(`Error updating folder ${this.editingFolder.id}:`, error);
+        notificationService.error(
+          this.safeT("sidebar.errorUpdatingFolder", "Failed to update folder")
+        );
       }
     },
 
     async handleDeleteFolder() {
       if (!this.editingFolder) {
+        console.log("No folder selected, not deleting");
         return;
       }
 
@@ -1887,18 +1924,13 @@ export default {
           false
         );
 
-        if (this.folders) {
-          const index = this.folders.findIndex(
-            (f) => f.id === this.editingFolder.id
-          );
-          if (index !== -1) {
-            this.folders.splice(index, 1);
-          }
-        }
+        // Update Vuex store by reloading folders
+        await this.loadFoldersFromBackend();
 
         if (this.selectedFolderId === this.editingFolder.id) {
           this.selectedFolderId = "default";
           this.folderSelected = false;
+          this.conversations = [];
         }
 
         notificationService.success(
@@ -1907,8 +1939,6 @@ export default {
 
         this.editingFolder = null;
         this.showDeleteFolderDialog = false;
-
-        this.$forceUpdate();
       } catch (error) {
         console.error(`Error deleting folder ${this.editingFolder.id}:`, error);
         notificationService.error(

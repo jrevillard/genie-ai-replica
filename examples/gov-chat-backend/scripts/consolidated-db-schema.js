@@ -645,6 +645,28 @@ const folderConversationsEdgeCollection = {
   }
 };
 
+// 20. User Folders Edge Collection (NEW)
+const userFoldersEdgeCollection = {
+  name: "userFolders",
+  type: "edge",
+  schema: {
+    rule: {
+      type: "object",
+      properties: {
+        _from: { type: "string" }, // users/user123
+        _to: { type: "string" },   // folders/folder456
+        role: { type: "string" },  // "owner", "viewer", "editor", etc.
+        sharedBy: { type: "string", optional: true }, // User who shared the folder (for non-owners)
+        sharedAt: { type: "string", optional: true }, // When it was shared (for non-owners)
+        lastAccessedAt: { type: "string", optional: true } // Last access timestamp
+      },
+      required: ["_from", "_to", "role"]
+    },
+    level: "moderate",
+    message: "User-Folder edge does not match schema"
+  }
+};
+
 // Group all schema definitions
 const schemaDefinitions = {
   // Document Collections
@@ -668,7 +690,8 @@ const schemaDefinitions = {
   userConversations: userConversationsEdgeCollection,
   conversationCategories: conversationCategoriesEdgeCollection,
   queryMessages: queryMessagesEdgeCollection,
-  folderConversations: folderConversationsEdgeCollection
+  folderConversations: folderConversationsEdgeCollection,
+  userFolders: userFoldersEdgeCollection,
 };
 
 // ================================================
@@ -723,7 +746,8 @@ const folderCollections = {
 
   // Edge Collections
   edgeCollections: [
-    'folderConversations'      // Links folders to conversations
+    'folderConversations',      // Links folders to conversations
+    'userFolders'           // Links users to folders
   ]
 };
 
@@ -835,7 +859,13 @@ const collectionIndexes = {
   folderConversations: [
     { fields: ['_from'], name: 'from_idx' },  // For finding conversations in a folder
     { fields: ['_to'], name: 'to_idx' }       // For finding folders containing a conversation
-  ]
+  ],
+
+  userFolders: [
+    { fields: ['_from'], name: 'from_idx' },  // For finding folders for a user
+    { fields: ['_to'], name: 'to_idx' },      // For finding users with access to a folder
+    { fields: ['role'], name: 'role_idx' }    // For filtering by role type
+  ],
 };
 
 // ================================================
@@ -1347,6 +1377,10 @@ async function createFolderStructure() {
     await ensureCollection(db, 'folderConversations', true);
     console.log('Created folderConversations edge collection');
 
+    //2.5 Creare the userFolders edge collection
+    await ensureCollection(db, 'userFolders', true);
+    console.log('Created userFolders edge collection');
+
     // 3. Create indexes for folder collections
     console.log('Creating indexes for folder collections...');
 
@@ -1372,9 +1406,21 @@ async function createFolderStructure() {
       }
     }
 
+    // Indexes for userFolders collection
+    const userFoldersCollection = db.collection('userFolders');
+    if (await userFoldersCollection.exists()) {
+      for (const indexDef of collectionIndexes.userFolders) {
+        await ensureIndex(userFoldersCollection, indexDef.fields, {
+          unique: indexDef.unique || false,
+          name: indexDef.name
+        });
+      }
+    }
+
     // 4. Apply schema validation
     await applyCollectionSchema(db, 'folders');
     await applyCollectionSchema(db, 'folderConversations');
+    await applyCollectionSchema(db, 'userFolders');
 
     console.log('Folder structure created successfully');
     return true;
@@ -1445,7 +1491,7 @@ async function addFolderSampleData() {
     ];
 
     console.log('Creating sample folders...');
-    
+
     const createdFolders = [];
     for (const folderData of sampleFolders) {
       const folder = {
@@ -1462,14 +1508,14 @@ async function addFolderSampleData() {
 
     // Add conversations to folders
     console.log('Adding conversations to folders...');
-    
+
     // Add the first conversation to "Important" folder
     if (conversations.length > 0 && createdFolders.length > 0) {
       const edge = {
         _from: createdFolders[0]._id,  // Important folder
         _to: `conversations/${conversations[0]._key}`
       };
-      
+
       await folderConversationsCollection.save(edge);
       console.log(`Added conversation ${conversations[0]._key} to folder ${createdFolders[0].name}`);
     }
@@ -1481,11 +1527,22 @@ async function addFolderSampleData() {
           _from: createdFolders[1]._id,  // Work folder
           _to: `conversations/${conversations[i]._key}`
         };
-        
+
         await folderConversationsCollection.save(edge);
         console.log(`Added conversation ${conversations[i]._key} to folder ${createdFolders[1].name}`);
       }
     }
+
+    // NEW: Link user to folder with userFolders edge
+    const userFolderEdge = {
+      _from: userId,
+      _to: folderMeta._id,
+      role: 'owner',
+      lastAccessedAt: new Date().toISOString()
+    };
+
+    await userFoldersCollection.save(userFolderEdge);
+    console.log(`Linked user ${userId} to folder ${folderMeta._id} as owner`);
 
     console.log('Folder sample data added successfully');
     return true;
@@ -1594,14 +1651,14 @@ async function disableQueryMessagesSchemaValidation() {
   try {
     const db = initDB();
     const queryMessagesCollection = db.collection('queryMessages');
-    
+
     console.log('Temporarily disabling schema validation for queryMessages collection...');
-    
+
     // Remove the schema validation
     await queryMessagesCollection.properties({
       schema: null
     });
-    
+
     console.log('Schema validation disabled successfully for queryMessages collection.');
     return true;
   } catch (error) {
@@ -1692,23 +1749,23 @@ async function main() {
   try {
     const args = process.argv.slice(2);
     const command = args[0] || 'init';
-    
+
     switch (command) {
       case 'init':
         // Initialize and update schema
         await initializeAndUpdateSchema();
         break;
-        
+
       case 'create-schema':
         // Only create schema structure without updating users
         await createSchemaStructure();
         break;
-        
+
       case 'update-users':
         // Only update user schema
         await updateUserSchema();
         break;
-        
+
       case 'apply-schemas':
         // Only apply schema validation rules
         console.log('Applying schema validation rules to all collections...');
@@ -1718,22 +1775,22 @@ async function main() {
         }
         console.log('Schema validation rules applied successfully.');
         break;
-        
+
       case 'add-samples':
         // Add sample data
         await addChatHistorySampleData();
         break;
-        
+
       case 'link-query-messages':
         // Create sample query-message relationships
         await createSampleQueryMessagesEdge();
         break;
-        
+
       case 'clean':
         // Clean test collections
         await cleanTestCollections();
         break;
-        
+
       case 'reset':
         // Clean and initialize
         await cleanTestCollections();
@@ -1743,17 +1800,17 @@ async function main() {
       case 'disable-querymessages-schema':
         await disableQueryMessagesSchemaValidation();
         break;
-      
+
       case 'create-folder-structure':
         // Create folder structure
         await createFolderStructure();
         break;
-        
+
       case 'add-folder-samples':
         // Add sample folder data
         await addFolderSampleData();
         break;
-        
+
       default:
         console.log(`Unknown command: ${command}`);
         console.log('Available commands:');
@@ -1769,7 +1826,7 @@ async function main() {
         console.log('  add-folder-samples      - Add sample folder data');
         console.log('  disable-querymessages-schema - Disable schema validation for queryMessages');
     }
-    
+
     console.log('Operation completed successfully.');
     process.exit(0);
   } catch (error) {

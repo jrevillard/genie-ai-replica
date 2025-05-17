@@ -1235,78 +1235,89 @@ class ChatHistoryService {
  * @param {Object} folderData - Folder data
  * @returns {Promise<Object>} The created folder
  */
-async createFolder(folderData) {
-  try {
-    logger.info('Creating new folder with data:', folderData);
-
-    // Ensure minimum required data
-    if (!folderData.userId) {
-      logger.warn('Missing required user ID');
-      throw new Error('User ID is required');
-    }
-
-    // Prepare folder document
-    const folderDoc = {
-      name: folderData.name || 'New Folder',
-      description: folderData.description || '',
-      created: folderData.created || new Date().toISOString(),
-      updated: folderData.updated || new Date().toISOString(),
-      isArchived: folderData.isArchived || false,
-      color: folderData.color || '#808080',
-      icon: folderData.icon || 'folder',
-      parentFolderId: folderData.parentFolderId || null,
-      order: folderData.order || 0
-    };
-
-
-    // Create folder
-    const folder = await this.db.collection('folders').save(folderDoc);
-    logger.info(`Folder created with key: ${folder._key}`);
-
-    // Link user to folder
-    await this.db.collection('userFolders').save({
-      _from: `users/${folderData.userId}`,
-      _to: `folders/${folder._key}`,
-      role: folderData.role || 'owner',
-      lastAccessedAt: new Date().toISOString()
-    });
-    logger.info(`User ${folderData.userId} linked to folder ${folder._key}`);
-
-    // Track folder creation in analytics if service is available
-    if (this.analyticsService) {
-      try {
-        await this.analyticsService.trackEvent(
-          folderData.userId,
-          'folderCreated',
-          { folderId: folder._key }
-        );
-      } catch (error) {
-        logger.error('Error tracking folder creation in analytics:', error);
-        // Continue even if analytics tracking fails
-      }
-    }
-
-    return { ...folder, ...folderDoc };
-  } catch (error) {
-    logger.error('Error creating folder:', error);
-    throw error;
-  }
-}
-
-/**
- * Get a folder by ID
- * @param {String} folderId - Folder ID
- * @returns {Promise<Object>} Folder details with conversations
+  /**
+ * Create a new folder
+ * @param {Object} folderData - Folder data
+ * @returns {Promise<Object>} The created folder
  */
-async getFolder(folderId) {
-  try {
-    logger.info(`Getting folder with ID: ${folderId}`);
+  async createFolder(folderData) {
+    try {
+      logger.info('Creating new folder with data:', folderData);
+  
+      // Ensure minimum required data
+      if (!folderData.userId) {
+        logger.warn('Missing required user ID');
+        throw new Error('User ID is required');
+      }
+      
+      // Extract the userId without the "users/" prefix if it exists
+      let userIdValue = folderData.userId;
+      if (userIdValue.startsWith('users/')) {
+        userIdValue = userIdValue.substring(6);
+      }
+  
+      // Create a folder document following the schema exactly
+      const folderDoc = {
+        _key: Date.now().toString(),
+        userId: userIdValue,  // Just the numeric ID without prefix
+        name: folderData.name || 'New Folder'
+      };
+      
+      // Add order if provided
+      if (folderData.order !== undefined) {
+        folderDoc.order = Number(folderData.order);
+      }
+      
+      // Create folder
+      const folder = await this.db.collection('folders').save(folderDoc);
+      logger.info(`Folder created with key: ${folder._key}`);
+  
+      // Link user to folder - use "users/" prefix for the edge
+      const userFolderEdge = {
+        _from: `users/${userIdValue}`,  // Edge must use full "users/ID" format
+        _to: `folders/${folder._key}`,
+        role: folderData.role || 'owner',
+        lastAccessedAt: new Date().toISOString()
+      };
+      
+      await this.db.collection('userFolders').save(userFolderEdge);
+      logger.info(`User ${userIdValue} linked to folder ${folder._key}`);
+  
+      // Track folder creation in analytics if service is available
+      if (this.analyticsService) {
+        try {
+          await this.analyticsService.trackEvent(
+            userIdValue,
+            'folderCreated',
+            { folderId: folder._key }
+          );
+        } catch (error) {
+          logger.error('Error tracking folder creation in analytics:', error);
+          // Continue even if analytics tracking fails
+        }
+      }
+  
+      return { ...folder, ...folderDoc };
+    } catch (error) {
+      logger.error('Error creating folder:', error);
+      throw error;
+    }
+  }
 
-    // Get folder
-    const folder = await this.db.collection('folders').document(folderId);
+  /**
+   * Get a folder by ID
+   * @param {String} folderId - Folder ID
+   * @returns {Promise<Object>} Folder details with conversations
+   */
+  async getFolder(folderId) {
+    try {
+      logger.info(`Getting folder with ID: ${folderId}`);
 
-    // Get conversations for this folder
-    const conversationsCursor = await this.db.query(aql`
+      // Get folder
+      const folder = await this.db.collection('folders').document(folderId);
+
+      // Get conversations for this folder
+      const conversationsCursor = await this.db.query(aql`
       FOR edge IN folderConversations
         FILTER edge._from == ${'folders/' + folderId}
         FOR conv IN conversations
@@ -1315,11 +1326,11 @@ async getFolder(folderId) {
           RETURN conv
     `);
 
-    const conversations = await conversationsCursor.all();
-    logger.info(`Found ${conversations.length} conversations for folder ${folderId}`);
+      const conversations = await conversationsCursor.all();
+      logger.info(`Found ${conversations.length} conversations for folder ${folderId}`);
 
-    // Get owner details
-    const ownerCursor = await this.db.query(aql`
+      // Get owner details
+      const ownerCursor = await this.db.query(aql`
       FOR edge IN userFolders
         FILTER edge._to == ${'folders/' + folderId}
         FOR user IN users
@@ -1332,56 +1343,119 @@ async getFolder(folderId) {
           }
     `);
 
-    const owners = await ownerCursor.all();
+      const owners = await ownerCursor.all();
 
-    // Get child folders
-    const childFoldersCursor = await this.db.query(aql`
+      // Get child folders
+      const childFoldersCursor = await this.db.query(aql`
       FOR folder IN folders
         FILTER folder.parentFolderId == ${folderId}
         SORT folder.order ASC, folder.created ASC
         RETURN folder
     `);
 
-    const childFolders = await childFoldersCursor.all();
+      const childFolders = await childFoldersCursor.all();
 
-    return {
-      ...folder,
-      conversations,
-      owners,
-      childFolders
-    };
-  } catch (error) {
-    logger.error(`Error getting folder ${folderId}:`, error);
-    throw error;
+      return {
+        ...folder,
+        conversations,
+        owners,
+        childFolders
+      };
+    } catch (error) {
+      logger.error(`Error getting folder ${folderId}:`, error);
+      throw error;
+    }
   }
-}
 
-/**
- * Get all folders for a user
- * @param {String} userId - User ID
- * @param {Object} options - Query options (includeArchived, etc.)
- * @returns {Promise<Array>} User's folders
- */
-async getUserFolders(userId, options = {}) {
-  try {
-    logger.info(`Getting folders for user ${userId}`);
-    
-    // Ensure userId is in the correct format with users/ prefix
-    const userIdWithPrefix = userId.startsWith('users/') ? userId : `users/${userId}`;
-    logger.info(`Using complete user path: ${userIdWithPrefix}`);
-    
-    // Parse options
-    const includeArchived = options.includeArchived || false;
-    const parentFolderId = options.parentFolderId || null;
-    
-    const query = `
+  /**
+   * Get all folders for a user
+   * @param {String} userId - User ID
+   * @param {Object} options - Query options (includeArchived, etc.)
+   * @returns {Promise<Array>} User's folders
+   */
+  async getUserFolders(userId, options = {}) {
+    try {
+      logger.info(`Getting folders for user ${userId}`);
+      
+      // Log collection name and the key format being used
+      logger.info(`DEBUG - Collection: userFolders | Searching with _from key: '${userId}'`);
+  
+      // Parse options
+      const includeArchived = options.includeArchived || false;
+      const parentFolderId = options.parentFolderId || null;
+      
+      // Create the base query to check what's available
+      const baseQuery = `
       FOR edge IN userFolders
-        FILTER edge._from == '${userIdWithPrefix}'
+        FILTER edge._from == '${userId}'
+        LET folder = DOCUMENT(edge._to)
+        RETURN { 
+          _id: folder._id, 
+          _key: folder._key, 
+          _from: edge._from, 
+          _to: edge._to,
+          collection: "folders" 
+        }
+      `;
+      
+      // Execute the base query to see what edge relationships exist
+      logger.info(`DEBUG - Executing base query to check edges: ${baseQuery}`);
+      const baseCursor = await this.db.query(baseQuery);
+      const edges = await baseCursor.all();
+      logger.info(`DEBUG - Found ${edges.length} edges in userFolders where _from='${userId}'`);
+      
+      // Log details about each edge relationship
+      if (edges.length > 0) {
+        edges.forEach((edge, index) => {
+          logger.info(`DEBUG - Edge ${index+1} details: _from='${edge._from}', _to='${edge._to}'`);
+        });
+        
+        // Now fetch the actual folder documents to check their properties
+        const folderIds = edges.map(edge => edge._to);
+        const folderKeysQuery = `
+        FOR folder IN folders
+          FILTER folder._id IN ${JSON.stringify(folderIds)}
+          RETURN {
+            _id: folder._id,
+            _key: folder._key,
+            name: folder.name,
+            isArchived: folder.isArchived,
+            parentFolderId: folder.parentFolderId,
+            properties: ATTRIBUTES(folder)
+          }
+        `;
+        
+        logger.info(`DEBUG - Checking folder properties with query: ${folderKeysQuery}`);
+        const folderCursor = await this.db.query(folderKeysQuery);
+        const folders = await folderCursor.all();
+        
+        folders.forEach((folder, index) => {
+          logger.info(`DEBUG - Folder ${index+1} document details:`);
+          logger.info(`  _id: ${folder._id}`);
+          logger.info(`  _key: ${folder._key}`);
+          logger.info(`  name: ${folder.name}`);
+          logger.info(`  isArchived: ${folder.isArchived} (${typeof folder.isArchived})`);
+          logger.info(`  parentFolderId: ${folder.parentFolderId} (${typeof folder.parentFolderId})`);
+          logger.info(`  All properties: ${JSON.stringify(folder.properties)}`);
+        });
+      }
+      
+      // Create the actual query with filters and verbose debug information
+      logger.info(`DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || 'null'}`);
+      
+      const query = `
+      FOR edge IN userFolders
+        FILTER edge._from == '${userId}'
         
         LET folder = DOCUMENT(edge._to)
         
-        FILTER ${!includeArchived ? 'folder.isArchived == false' : 'true'}
-        FILTER ${parentFolderId ? `folder.parentFolderId == "${parentFolderId}"` : 'folder.parentFolderId == null'}
+        // Debug information about each folder and filter conditions
+        LET archiveCondition = ${!includeArchived ? 'folder.isArchived == false || folder.isArchived == null' : 'true'}
+        LET parentCondition = ${parentFolderId ? `folder.parentFolderId == "${parentFolderId}"` : 'folder.parentFolderId == null || !HAS(folder, "parentFolderId")'}
+        
+        // Filter based on conditions
+        FILTER archiveCondition
+        FILTER parentCondition
         
         // Count conversations in each folder
         LET conversationCount = LENGTH(
@@ -1394,7 +1468,7 @@ async getUserFolders(userId, options = {}) {
         LET childFolderCount = LENGTH(
           FOR childFolder IN folders
             FILTER childFolder.parentFolderId == PARSE_IDENTIFIER(folder._id).key
-            FILTER ${!includeArchived ? 'childFolder.isArchived == false' : 'true'}
+            FILTER ${!includeArchived ? 'childFolder.isArchived == false || childFolder.isArchived == null' : 'true'}
             RETURN 1
         )
         
@@ -1404,421 +1478,432 @@ async getUserFolders(userId, options = {}) {
           _id: folder._id,
           _key: folder._key,
           name: folder.name,
-          description: folder.description,
-          created: folder.created,
-          updated: folder.updated,
-          isArchived: folder.isArchived,
-          color: folder.color,
-          icon: folder.icon,
-          parentFolderId: folder.parentFolderId,
-          order: folder.order,
+          description: folder.description || "",
+          created: folder.created || null,
+          updated: folder.updated || null,
+          isArchived: folder.isArchived || false,
+          color: folder.color || "#808080", 
+          icon: folder.icon || "folder",
+          parentFolderId: folder.parentFolderId || null,
+          order: folder.order || 0,
           conversationCount: conversationCount,
           childFolderCount: childFolderCount,
-          userRole: edge.role,
-          lastAccessedAt: edge.lastAccessedAt
+          userRole: edge.role || "owner",
+          lastAccessedAt: edge.lastAccessedAt || null
         }
-    `;
-    
-    logger.info(`Executing query for user path: ${userIdWithPrefix}`);
-    const cursor = await this.db.query(query);
-    const folders = await cursor.all();
-    logger.info(`Found ${folders.length} folders for user ${userId}`);
-    
-    return folders;
-  } catch (error) {
-    logger.error(`Error getting folders for user ${userId}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Update folder properties
- * @param {String} folderId - Folder ID
- * @param {Object} updateData - Properties to update
- * @returns {Promise<Object>} Updated folder
- */
-async updateFolder(folderId, updateData) {
-  try {
-    logger.info(`Updating folder ${folderId} with data:`, updateData);
-
-    const allowedFields = [
-      'name', 'description', 'isArchived', 'color', 'icon', 'parentFolderId', 'order'
-    ];
-
-    // Filter out non-allowed fields
-    const filteredData = {};
-    for (const field of allowedFields) {
-      if (updateData[field] !== undefined) {
-        filteredData[field] = updateData[field];
+      `;
+  
+      logger.info(`Executing query for user path: ${userId}`);
+      const cursor = await this.db.query(query);
+      const folders = await cursor.all();
+      logger.info(`Found ${folders.length} folders for user ${userId}`);
+  
+      // Log the final results
+      if (folders.length > 0) {
+        logger.info(`DEBUG - Final result folders:`);
+        folders.forEach((folder, index) => {
+          logger.info(`  Folder ${index+1}: ${folder._id} (${folder.name})`);
+        });
+      } else {
+        logger.info(`DEBUG - No folders passed the filter conditions`);
       }
+  
+      return folders;
+    } catch (error) {
+      logger.error(`Error getting folders for user ${userId}:`, error);
+      logger.error(`DEBUG - Stack trace: ${error.stack}`);
+      throw error;
     }
-
-    // Always update the 'updated' timestamp
-    filteredData.updated = new Date().toISOString();
-
-    if (Object.keys(filteredData).length === 0) {
-      logger.warn('No valid fields to update');
-      throw new Error('No valid fields to update');
-    }
-
-    // Update the folder
-    const updatedFolder = await this.db.collection('folders').update(folderId, filteredData, { returnNew: true });
-    logger.info(`Folder ${folderId} updated successfully`);
-
-    // Track folder update in analytics if service is available
-    if (this.analyticsService && updateData.userId) {
-      try {
-        await this.analyticsService.trackEvent(
-          updateData.userId,
-          'folderUpdated',
-          {
-            folderId,
-            updatedFields: Object.keys(filteredData)
-          }
-        );
-      } catch (error) {
-        logger.error('Error tracking folder update in analytics:', error);
-        // Continue even if analytics tracking fails
-      }
-    }
-
-    return updatedFolder.new;
-  } catch (error) {
-    logger.error(`Error updating folder ${folderId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Delete a folder and all related links
- * @param {String} folderId - Folder ID
- * @param {String} userId - User ID requesting the deletion (for validation)
- * @param {Boolean} deleteContents - Whether to delete conversations in the folder
- * @returns {Promise<Object>} Result with deleted counts
- */
-async deleteFolder(folderId, userId, deleteContents = false) {
-  try {
-    logger.info(`Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`);
+  /**
+   * Update folder properties
+   * @param {String} folderId - Folder ID
+   * @param {Object} updateData - Properties to update
+   * @returns {Promise<Object>} Updated folder
+   */
+  async updateFolder(folderId, updateData) {
+    try {
+      logger.info(`Updating folder ${folderId} with data:`, updateData);
 
-    // Verify the user has permission to delete this folder
-    const permissionQuery = `
+      const allowedFields = [
+        'name', 'description', 'isArchived', 'color', 'icon', 'parentFolderId', 'order'
+      ];
+
+      // Filter out non-allowed fields
+      const filteredData = {};
+      for (const field of allowedFields) {
+        if (updateData[field] !== undefined) {
+          filteredData[field] = updateData[field];
+        }
+      }
+
+      // Always update the 'updated' timestamp
+      filteredData.updated = new Date().toISOString();
+
+      if (Object.keys(filteredData).length === 0) {
+        logger.warn('No valid fields to update');
+        throw new Error('No valid fields to update');
+      }
+
+      // Update the folder
+      const updatedFolder = await this.db.collection('folders').update(folderId, filteredData, { returnNew: true });
+      logger.info(`Folder ${folderId} updated successfully`);
+
+      // Track folder update in analytics if service is available
+      if (this.analyticsService && updateData.userId) {
+        try {
+          await this.analyticsService.trackEvent(
+            updateData.userId,
+            'folderUpdated',
+            {
+              folderId,
+              updatedFields: Object.keys(filteredData)
+            }
+          );
+        } catch (error) {
+          logger.error('Error tracking folder update in analytics:', error);
+          // Continue even if analytics tracking fails
+        }
+      }
+
+      return updatedFolder.new;
+    } catch (error) {
+      logger.error(`Error updating folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a folder and all related links
+   * @param {String} folderId - Folder ID
+   * @param {String} userId - User ID requesting the deletion (for validation)
+   * @param {Boolean} deleteContents - Whether to delete conversations in the folder
+   * @returns {Promise<Object>} Result with deleted counts
+   */
+  async deleteFolder(folderId, userId, deleteContents = false) {
+    try {
+      logger.info(`Deleting folder ${folderId} for user ${userId}, deleteContents: ${deleteContents}`);
+
+      // Verify the user has permission to delete this folder
+      const permissionQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
         RETURN edge
     `;
 
-    const permissionCursor = await this.db.query(permissionQuery);
-    const permission = await permissionCursor.next();
+      const permissionCursor = await this.db.query(permissionQuery);
+      const permission = await permissionCursor.next();
 
-    if (!permission) {
-      logger.warn(`User ${userId} does not have permission to delete folder ${folderId}`);
-      throw new Error('You do not have permission to delete this folder');
-    }
+      if (!permission) {
+        logger.warn(`User ${userId} does not have permission to delete folder ${folderId}`);
+        throw new Error('You do not have permission to delete this folder');
+      }
 
-    // Get all conversation links for this folder
-    const conversationLinkQuery = `
+      // Get all conversation links for this folder
+      const conversationLinkQuery = `
       FOR edge IN folderConversations
         FILTER edge._from == 'folders/${folderId}'
         RETURN edge
     `;
 
-    const conversationLinkCursor = await this.db.query(conversationLinkQuery);
-    const conversationLinks = await conversationLinkCursor.all();
+      const conversationLinkCursor = await this.db.query(conversationLinkQuery);
+      const conversationLinks = await conversationLinkCursor.all();
 
-    // Start a transaction to ensure atomicity
-    const trx = await this.db.beginTransaction({
-      write: ['folders', 'userFolders', 'folderConversations']
-    });
+      // Start a transaction to ensure atomicity
+      const trx = await this.db.beginTransaction({
+        write: ['folders', 'userFolders', 'folderConversations']
+      });
 
-    try {
-      // Delete conversation links
-      for (const link of conversationLinks) {
-        await trx.step(() => {
-          return this.db.collection('folderConversations').remove(link._key);
-        });
-      }
-
-      // If deleteContents is true and we're not at the root folder, delete conversations too
-      if (deleteContents) {
+      try {
+        // Delete conversation links
         for (const link of conversationLinks) {
-          const conversationId = link._to.split('/')[1];
-          try {
-            // Only try to delete if the conversation exists
-            await this.getConversation(conversationId);
-            await this.deleteConversation(conversationId, userId);
-          } catch (error) {
-            // If conversation not found or deletion fails, continue with other deletions
-            logger.warn(`Error deleting conversation ${conversationId}: ${error.message}`);
+          await trx.step(() => {
+            return this.db.collection('folderConversations').remove(link._key);
+          });
+        }
+
+        // If deleteContents is true and we're not at the root folder, delete conversations too
+        if (deleteContents) {
+          for (const link of conversationLinks) {
+            const conversationId = link._to.split('/')[1];
+            try {
+              // Only try to delete if the conversation exists
+              await this.getConversation(conversationId);
+              await this.deleteConversation(conversationId, userId);
+            } catch (error) {
+              // If conversation not found or deletion fails, continue with other deletions
+              logger.warn(`Error deleting conversation ${conversationId}: ${error.message}`);
+            }
           }
         }
-      }
 
-      // Delete user-folder edges
-      const deleteUserEdgeQuery = `
+        // Delete user-folder edges
+        const deleteUserEdgeQuery = `
         FOR edge IN userFolders
           FILTER edge._to == 'folders/${folderId}'
           REMOVE edge IN userFolders
       `;
 
-      await trx.step(() => this.db.query(deleteUserEdgeQuery));
-      
-      // Check if there are child folders
-      const childFoldersQuery = `
+        await trx.step(() => this.db.query(deleteUserEdgeQuery));
+
+        // Check if there are child folders
+        const childFoldersQuery = `
         FOR folder IN folders
           FILTER folder.parentFolderId == '${folderId}'
           RETURN folder._key
       `;
-      
-      const childFoldersCursor = await this.db.query(childFoldersQuery);
-      const childFolders = await childFoldersCursor.all();
-      
-      // Delete or reassign child folders
-      for (const childKey of childFolders) {
-        if (deleteContents) {
-          // Recursively delete child folders
-          try {
-            await this.deleteFolder(childKey, userId, deleteContents);
-          } catch (error) {
-            logger.warn(`Error deleting child folder ${childKey}: ${error.message}`);
+
+        const childFoldersCursor = await this.db.query(childFoldersQuery);
+        const childFolders = await childFoldersCursor.all();
+
+        // Delete or reassign child folders
+        for (const childKey of childFolders) {
+          if (deleteContents) {
+            // Recursively delete child folders
+            try {
+              await this.deleteFolder(childKey, userId, deleteContents);
+            } catch (error) {
+              logger.warn(`Error deleting child folder ${childKey}: ${error.message}`);
+            }
+          } else {
+            // Move child folders to root (null parentFolderId)
+            await trx.step(() => {
+              return this.db.collection('folders').update(childKey, { parentFolderId: null });
+            });
           }
-        } else {
-          // Move child folders to root (null parentFolderId)
-          await trx.step(() => {
-            return this.db.collection('folders').update(childKey, { parentFolderId: null });
-          });
         }
+
+        // Delete the folder
+        await trx.step(() => this.db.collection('folders').remove(folderId));
+
+        // Commit the transaction
+        await trx.commit();
+
+        logger.info(`Folder ${folderId} deleted with ${conversationLinks.length} conversation links`);
+
+        // Track folder deletion in analytics if service is available
+        if (this.analyticsService) {
+          try {
+            await this.analyticsService.trackEvent(
+              userId,
+              'folderDeleted',
+              {
+                folderId,
+                conversationLinkCount: conversationLinks.length,
+                childFolderCount: childFolders.length,
+                contentsDeleted: deleteContents
+              }
+            );
+          } catch (error) {
+            logger.error('Error tracking folder deletion in analytics:', error);
+            // Continue even if analytics tracking fails
+          }
+        }
+
+        return {
+          folderId,
+          conversationLinksDeleted: conversationLinks.length,
+          childFoldersAffected: childFolders.length,
+          success: true
+        };
+      } catch (error) {
+        // Abort the transaction on error
+        await trx.abort();
+        throw error;
+      }
+    } catch (error) {
+      logger.error(`Error deleting folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a conversation to a folder
+   * @param {String} folderId - Folder ID
+   * @param {String} conversationId - Conversation ID
+   * @param {String} userId - User ID making the request (for validation)
+   * @returns {Promise<Object>} Created relationship
+   */
+  async addConversationToFolder(folderId, conversationId, userId) {
+    try {
+      logger.info(`Adding conversation ${conversationId} to folder ${folderId}`);
+
+      // Verify the user has permission to access both folder and conversation
+      const folderPermissionQuery = `
+      FOR edge IN userFolders
+        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
+        RETURN edge
+    `;
+
+      const convPermissionQuery = `
+      FOR edge IN userConversations
+        FILTER edge._to == 'conversations/${conversationId}' AND edge._from == 'users/${userId}'
+        RETURN edge
+    `;
+
+      const folderPermissionCursor = await this.db.query(folderPermissionQuery);
+      const conversationPermissionCursor = await this.db.query(convPermissionQuery);
+
+      const folderPermission = await folderPermissionCursor.next();
+      const conversationPermission = await conversationPermissionCursor.next();
+
+      if (!folderPermission) {
+        logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
+        throw new Error('You do not have permission to access this folder');
       }
 
-      // Delete the folder
-      await trx.step(() => this.db.collection('folders').remove(folderId));
+      if (!conversationPermission) {
+        logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
+        throw new Error('You do not have permission to access this conversation');
+      }
 
-      // Commit the transaction
-      await trx.commit();
+      // Check if the conversation already exists in any folder
+      const existingLinkQuery = `
+      FOR edge IN folderConversations
+        FILTER edge._to == 'conversations/${conversationId}'
+        RETURN edge
+    `;
 
-      logger.info(`Folder ${folderId} deleted with ${conversationLinks.length} conversation links`);
+      const existingLinkCursor = await this.db.query(existingLinkQuery);
+      const existingLink = await existingLinkCursor.next();
 
-      // Track folder deletion in analytics if service is available
+      // If the conversation is already in a folder, move it
+      if (existingLink) {
+        // If it's already in the same folder, just return the existing link
+        if (existingLink._from === `folders/${folderId}`) {
+          logger.info(`Conversation ${conversationId} is already in folder ${folderId}`);
+          return existingLink;
+        }
+
+        // Otherwise, remove from the old folder
+        await this.db.collection('folderConversations').remove(existingLink._key);
+        logger.info(`Conversation ${conversationId} removed from folder ${existingLink._from.split('/')[1]}`);
+      }
+
+      // Create the new folder-conversation edge
+      const edge = await this.db.collection('folderConversations').save({
+        _from: `folders/${folderId}`,
+        _to: `conversations/${conversationId}`,
+        addedAt: new Date().toISOString(),
+        addedBy: userId
+      });
+
+      logger.info(`Conversation ${conversationId} added to folder ${folderId}`);
+
+      // Track in analytics if service is available
       if (this.analyticsService) {
         try {
           await this.analyticsService.trackEvent(
             userId,
-            'folderDeleted',
+            'conversationAddedToFolder',
             {
               folderId,
-              conversationLinkCount: conversationLinks.length,
-              childFolderCount: childFolders.length,
-              contentsDeleted: deleteContents
+              conversationId,
+              movedFromFolder: existingLink ? existingLink._from.split('/')[1] : null
             }
           );
         } catch (error) {
-          logger.error('Error tracking folder deletion in analytics:', error);
+          logger.error('Error tracking folder activity in analytics:', error);
+          // Continue even if analytics tracking fails
+        }
+      }
+
+      return edge;
+    } catch (error) {
+      logger.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a conversation from a folder
+   * @param {String} folderId - Folder ID
+   * @param {String} conversationId - Conversation ID
+   * @param {String} userId - User ID making the request (for validation)
+   * @returns {Promise<Object>} Result of the operation
+   */
+  async removeConversationFromFolder(folderId, conversationId, userId) {
+    try {
+      logger.info(`Removing conversation ${conversationId} from folder ${folderId}`);
+
+      // Verify the user has permission to access the folder
+      const permissionQuery = `
+      FOR edge IN userFolders
+        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
+        RETURN edge
+    `;
+
+      const permissionCursor = await this.db.query(permissionQuery);
+      const permission = await permissionCursor.next();
+
+      if (!permission) {
+        logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
+        throw new Error('You do not have permission to access this folder');
+      }
+
+      // Find the folder-conversation edge
+      const linkQuery = `
+      FOR edge IN folderConversations
+        FILTER edge._from == 'folders/${folderId}' AND edge._to == 'conversations/${conversationId}'
+        RETURN edge
+    `;
+
+      const linkCursor = await this.db.query(linkQuery);
+      const link = await linkCursor.next();
+
+      if (!link) {
+        logger.warn(`Conversation ${conversationId} not found in folder ${folderId}`);
+        throw new Error('Conversation not found in this folder');
+      }
+
+      // Delete the edge
+      await this.db.collection('folderConversations').remove(link._key);
+      logger.info(`Conversation ${conversationId} removed from folder ${folderId}`);
+
+      // Track in analytics if service is available
+      if (this.analyticsService) {
+        try {
+          await this.analyticsService.trackEvent(
+            userId,
+            'conversationRemovedFromFolder',
+            {
+              folderId,
+              conversationId
+            }
+          );
+        } catch (error) {
+          logger.error('Error tracking folder activity in analytics:', error);
           // Continue even if analytics tracking fails
         }
       }
 
       return {
         folderId,
-        conversationLinksDeleted: conversationLinks.length,
-        childFoldersAffected: childFolders.length,
+        conversationId,
         success: true
       };
     } catch (error) {
-      // Abort the transaction on error
-      await trx.abort();
+      logger.error(`Error removing conversation ${conversationId} from folder ${folderId}:`, error);
       throw error;
     }
-  } catch (error) {
-    logger.error(`Error deleting folder ${folderId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Add a conversation to a folder
- * @param {String} folderId - Folder ID
- * @param {String} conversationId - Conversation ID
- * @param {String} userId - User ID making the request (for validation)
- * @returns {Promise<Object>} Created relationship
- */
-async addConversationToFolder(folderId, conversationId, userId) {
-  try {
-    logger.info(`Adding conversation ${conversationId} to folder ${folderId}`);
+  /**
+   * Search for folders by name
+   * @param {String} userId - User ID
+   * @param {String} searchTerm - Text to search for
+   * @param {Object} options - Search options
+   * @returns {Promise<Array>} Matching folders
+   */
+  async searchFolders(userId, searchTerm, options = {}) {
+    try {
+      logger.info(`Searching folders for user ${userId} with term: "${searchTerm}"`);
 
-    // Verify the user has permission to access both folder and conversation
-    const folderPermissionQuery = `
-      FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
-        RETURN edge
-    `;
+      const includeArchived = options.includeArchived || false;
+      const searchTermEscaped = searchTerm.replace(/"/g, '\\"'); // Escape quotes
 
-    const convPermissionQuery = `
-      FOR edge IN userConversations
-        FILTER edge._to == 'conversations/${conversationId}' AND edge._from == 'users/${userId}'
-        RETURN edge
-    `;
-
-    const folderPermissionCursor = await this.db.query(folderPermissionQuery);
-    const conversationPermissionCursor = await this.db.query(convPermissionQuery);
-    
-    const folderPermission = await folderPermissionCursor.next();
-    const conversationPermission = await conversationPermissionCursor.next();
-
-    if (!folderPermission) {
-      logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-      throw new Error('You do not have permission to access this folder');
-    }
-
-    if (!conversationPermission) {
-      logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-      throw new Error('You do not have permission to access this conversation');
-    }
-
-    // Check if the conversation already exists in any folder
-    const existingLinkQuery = `
-      FOR edge IN folderConversations
-        FILTER edge._to == 'conversations/${conversationId}'
-        RETURN edge
-    `;
-
-    const existingLinkCursor = await this.db.query(existingLinkQuery);
-    const existingLink = await existingLinkCursor.next();
-
-    // If the conversation is already in a folder, move it
-    if (existingLink) {
-      // If it's already in the same folder, just return the existing link
-      if (existingLink._from === `folders/${folderId}`) {
-        logger.info(`Conversation ${conversationId} is already in folder ${folderId}`);
-        return existingLink;
-      }
-
-      // Otherwise, remove from the old folder
-      await this.db.collection('folderConversations').remove(existingLink._key);
-      logger.info(`Conversation ${conversationId} removed from folder ${existingLink._from.split('/')[1]}`);
-    }
-
-    // Create the new folder-conversation edge
-    const edge = await this.db.collection('folderConversations').save({
-      _from: `folders/${folderId}`,
-      _to: `conversations/${conversationId}`,
-      addedAt: new Date().toISOString(),
-      addedBy: userId
-    });
-
-    logger.info(`Conversation ${conversationId} added to folder ${folderId}`);
-
-    // Track in analytics if service is available
-    if (this.analyticsService) {
-      try {
-        await this.analyticsService.trackEvent(
-          userId,
-          'conversationAddedToFolder',
-          {
-            folderId,
-            conversationId,
-            movedFromFolder: existingLink ? existingLink._from.split('/')[1] : null
-          }
-        );
-      } catch (error) {
-        logger.error('Error tracking folder activity in analytics:', error);
-        // Continue even if analytics tracking fails
-      }
-    }
-
-    return edge;
-  } catch (error) {
-    logger.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Remove a conversation from a folder
- * @param {String} folderId - Folder ID
- * @param {String} conversationId - Conversation ID
- * @param {String} userId - User ID making the request (for validation)
- * @returns {Promise<Object>} Result of the operation
- */
-async removeConversationFromFolder(folderId, conversationId, userId) {
-  try {
-    logger.info(`Removing conversation ${conversationId} from folder ${folderId}`);
-
-    // Verify the user has permission to access the folder
-    const permissionQuery = `
-      FOR edge IN userFolders
-        FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
-        RETURN edge
-    `;
-
-    const permissionCursor = await this.db.query(permissionQuery);
-    const permission = await permissionCursor.next();
-
-    if (!permission) {
-      logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-      throw new Error('You do not have permission to access this folder');
-    }
-
-    // Find the folder-conversation edge
-    const linkQuery = `
-      FOR edge IN folderConversations
-        FILTER edge._from == 'folders/${folderId}' AND edge._to == 'conversations/${conversationId}'
-        RETURN edge
-    `;
-
-    const linkCursor = await this.db.query(linkQuery);
-    const link = await linkCursor.next();
-
-    if (!link) {
-      logger.warn(`Conversation ${conversationId} not found in folder ${folderId}`);
-      throw new Error('Conversation not found in this folder');
-    }
-
-    // Delete the edge
-    await this.db.collection('folderConversations').remove(link._key);
-    logger.info(`Conversation ${conversationId} removed from folder ${folderId}`);
-
-    // Track in analytics if service is available
-    if (this.analyticsService) {
-      try {
-        await this.analyticsService.trackEvent(
-          userId,
-          'conversationRemovedFromFolder',
-          {
-            folderId,
-            conversationId
-          }
-        );
-      } catch (error) {
-        logger.error('Error tracking folder activity in analytics:', error);
-        // Continue even if analytics tracking fails
-      }
-    }
-
-    return {
-      folderId,
-      conversationId,
-      success: true
-    };
-  } catch (error) {
-    logger.error(`Error removing conversation ${conversationId} from folder ${folderId}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Search for folders by name
- * @param {String} userId - User ID
- * @param {String} searchTerm - Text to search for
- * @param {Object} options - Search options
- * @returns {Promise<Array>} Matching folders
- */
-async searchFolders(userId, searchTerm, options = {}) {
-  try {
-    logger.info(`Searching folders for user ${userId} with term: "${searchTerm}"`);
-
-    const includeArchived = options.includeArchived || false;
-    const searchTermEscaped = searchTerm.replace(/"/g, '\\"'); // Escape quotes
-
-    const query = `
+      const query = `
       FOR edge IN userFolders
         FILTER edge._from == 'users/${userId}'
         
@@ -1853,82 +1938,115 @@ async searchFolders(userId, searchTerm, options = {}) {
           }
     `;
 
-    const cursor = await this.db.query(query);
-    const results = await cursor.all();
+      const cursor = await this.db.query(query);
+      const results = await cursor.all();
 
-    logger.info(`Found ${results.length} folders matching term "${searchTerm}" for user ${userId}`);
+      logger.info(`Found ${results.length} folders matching term "${searchTerm}" for user ${userId}`);
 
-    return results;
-  } catch (error) {
-    logger.error(`Error searching folders for user ${userId}:`, error);
-    throw error;
+      return results;
+    } catch (error) {
+      logger.error(`Error searching folders for user ${userId}:`, error);
+      throw error;
+    }
   }
-}
 
-/**
- * Move a conversation between folders
- * @param {String} conversationId - Conversation ID
- * @param {String} sourceFolderId - Source folder ID (null for root)
- * @param {String} targetFolderId - Target folder ID (null for root)
- * @param {String} userId - User ID making the request
- * @returns {Promise<Object>} Result of the operation
- */
-async moveConversation(conversationId, sourceFolderId, targetFolderId, userId) {
-  try {
-    logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`);
+  /**
+   * Move a conversation between folders
+   * @param {String} conversationId - Conversation ID
+   * @param {String} sourceFolderId - Source folder ID (null for root)
+   * @param {String} targetFolderId - Target folder ID (null for root)
+   * @param {String} userId - User ID making the request
+   * @returns {Promise<Object>} Result of the operation
+   */
+  async moveConversation(conversationId, sourceFolderId, targetFolderId, userId) {
+    try {
+      logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`);
 
-    // Verify user has permission for the conversation
-    const convPermissionQuery = `
+      // Verify user has permission for the conversation
+      const convPermissionQuery = `
       FOR edge IN userConversations
         FILTER edge._to == 'conversations/${conversationId}' AND edge._from == 'users/${userId}'
         RETURN edge
     `;
 
-    const convPermissionCursor = await this.db.query(convPermissionQuery);
-    const convPermission = await convPermissionCursor.next();
+      const convPermissionCursor = await this.db.query(convPermissionQuery);
+      const convPermission = await convPermissionCursor.next();
 
-    if (!convPermission) {
-      logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
-      throw new Error('You do not have permission to access this conversation');
-    }
+      if (!convPermission) {
+        logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
+        throw new Error('You do not have permission to access this conversation');
+      }
 
-    // If target folder is specified, verify user has permission for it
-    if (targetFolderId) {
-      const folderPermissionQuery = `
+      // If target folder is specified, verify user has permission for it
+      if (targetFolderId) {
+        const folderPermissionQuery = `
         FOR edge IN userFolders
           FILTER edge._to == 'folders/${targetFolderId}' AND edge._from == 'users/${userId}'
           RETURN edge
       `;
 
-      const folderPermissionCursor = await this.db.query(folderPermissionQuery);
-      const folderPermission = await folderPermissionCursor.next();
+        const folderPermissionCursor = await this.db.query(folderPermissionQuery);
+        const folderPermission = await folderPermissionCursor.next();
 
-      if (!folderPermission) {
-        logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
-        throw new Error('You do not have permission to access the target folder');
+        if (!folderPermission) {
+          logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
+          throw new Error('You do not have permission to access the target folder');
+        }
       }
-    }
 
-    // Find existing folder link (if any)
-    const existingLinkQuery = `
+      // Find existing folder link (if any)
+      const existingLinkQuery = `
       FOR edge IN folderConversations
         FILTER edge._to == 'conversations/${conversationId}'
         RETURN edge
     `;
 
-    const existingLinkCursor = await this.db.query(existingLinkQuery);
-    const existingLink = await existingLinkCursor.next();
+      const existingLinkCursor = await this.db.query(existingLinkQuery);
+      const existingLink = await existingLinkCursor.next();
 
-    // Handle according to source and target state
-    if (existingLink) {
-      // If moving to root (no folder), just remove the link
-      if (!targetFolderId) {
-        await this.db.collection('folderConversations').remove(existingLink._key);
-        logger.info(`Conversation ${conversationId} removed from folder and moved to root`);
-      } 
-      // If already in the correct folder, do nothing
-      else if (existingLink._from === `folders/${targetFolderId}`) {
-        logger.info(`Conversation ${conversationId} is already in folder ${targetFolderId}`);
+      // Handle according to source and target state
+      if (existingLink) {
+        // If moving to root (no folder), just remove the link
+        if (!targetFolderId) {
+          await this.db.collection('folderConversations').remove(existingLink._key);
+          logger.info(`Conversation ${conversationId} removed from folder and moved to root`);
+        }
+        // If already in the correct folder, do nothing
+        else if (existingLink._from === `folders/${targetFolderId}`) {
+          logger.info(`Conversation ${conversationId} is already in folder ${targetFolderId}`);
+          return {
+            conversationId,
+            sourceFolderId,
+            targetFolderId,
+            success: true,
+            noChangesNeeded: true
+          };
+        }
+        // Otherwise, update the link to the new folder
+        else {
+          await this.db.collection('folderConversations').remove(existingLink._key);
+          await this.db.collection('folderConversations').save({
+            _from: `folders/${targetFolderId}`,
+            _to: `conversations/${conversationId}`,
+            addedAt: new Date().toISOString(),
+            addedBy: userId
+          });
+          logger.info(`Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`);
+        }
+      }
+      // If not in any folder and target is not root, create new link
+      else if (targetFolderId) {
+        await this.db.collection('folderConversations').save({
+          _from: `folders/${targetFolderId}`,
+          _to: `conversations/${conversationId}`,
+          addedAt: new Date().toISOString(),
+          addedBy: userId
+        });
+        logger.info(`Conversation ${conversationId} moved from root to folder ${targetFolderId}`);
+      }
+      // If not in any folder and target is root, no change needed
+      else {
+        logger.info(`Conversation ${conversationId} is already in root, no change needed`);
         return {
           conversationId,
           sourceFolderId,
@@ -1936,81 +2054,48 @@ async moveConversation(conversationId, sourceFolderId, targetFolderId, userId) {
           success: true,
           noChangesNeeded: true
         };
-      } 
-      // Otherwise, update the link to the new folder
-      else {
-        await this.db.collection('folderConversations').remove(existingLink._key);
-        await this.db.collection('folderConversations').save({
-          _from: `folders/${targetFolderId}`,
-          _to: `conversations/${conversationId}`,
-          addedAt: new Date().toISOString(),
-          addedBy: userId
-        });
-        logger.info(`Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`);
       }
-    } 
-    // If not in any folder and target is not root, create new link
-    else if (targetFolderId) {
-      await this.db.collection('folderConversations').save({
-        _from: `folders/${targetFolderId}`,
-        _to: `conversations/${conversationId}`,
-        addedAt: new Date().toISOString(),
-        addedBy: userId
-      });
-      logger.info(`Conversation ${conversationId} moved from root to folder ${targetFolderId}`);
-    } 
-    // If not in any folder and target is root, no change needed
-    else {
-      logger.info(`Conversation ${conversationId} is already in root, no change needed`);
+
+      // Track in analytics if service is available
+      if (this.analyticsService) {
+        try {
+          await this.analyticsService.trackEvent(
+            userId,
+            'conversationMoved',
+            {
+              conversationId,
+              fromFolderId: sourceFolderId,
+              toFolderId: targetFolderId
+            }
+          );
+        } catch (error) {
+          logger.error('Error tracking conversation move in analytics:', error);
+          // Continue even if analytics tracking fails
+        }
+      }
+
       return {
         conversationId,
-        sourceFolderId,
+        sourceFolderId: existingLink ? existingLink._from.split('/')[1] : null,
         targetFolderId,
-        success: true,
-        noChangesNeeded: true
+        success: true
       };
+    } catch (error) {
+      logger.error(`Error moving conversation ${conversationId}:`, error);
+      throw error;
     }
-
-    // Track in analytics if service is available
-    if (this.analyticsService) {
-      try {
-        await this.analyticsService.trackEvent(
-          userId,
-          'conversationMoved',
-          {
-            conversationId,
-            fromFolderId: sourceFolderId,
-            toFolderId: targetFolderId
-          }
-        );
-      } catch (error) {
-        logger.error('Error tracking conversation move in analytics:', error);
-        // Continue even if analytics tracking fails
-      }
-    }
-
-    return {
-      conversationId,
-      sourceFolderId: existingLink ? existingLink._from.split('/')[1] : null,
-      targetFolderId,
-      success: true
-    };
-  } catch (error) {
-    logger.error(`Error moving conversation ${conversationId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Find the folder containing a conversation
- * @param {String} conversationId - Conversation ID
- * @returns {Promise<Object|null>} Folder information or null if not in a folder
- */
-async findConversationFolder(conversationId) {
-  try {
-    logger.info(`Finding folder for conversation ${conversationId}`);
+  /**
+   * Find the folder containing a conversation
+   * @param {String} conversationId - Conversation ID
+   * @returns {Promise<Object|null>} Folder information or null if not in a folder
+   */
+  async findConversationFolder(conversationId) {
+    try {
+      logger.info(`Finding folder for conversation ${conversationId}`);
 
-    const query = `
+      const query = `
       FOR edge IN folderConversations
         FILTER edge._to == 'conversations/${conversationId}'
         
@@ -2028,321 +2113,321 @@ async findConversationFolder(conversationId) {
         }
     `;
 
-    const cursor = await this.db.query(query);
-    const result = await cursor.next();
+      const cursor = await this.db.query(query);
+      const result = await cursor.next();
 
-    if (result) {
-      logger.info(`Found folder ${result._key} containing conversation ${conversationId}`);
-    } else {
-      logger.info(`Conversation ${conversationId} is not in any folder`);
+      if (result) {
+        logger.info(`Found folder ${result._key} containing conversation ${conversationId}`);
+      } else {
+        logger.info(`Conversation ${conversationId} is not in any folder`);
+      }
+
+      return result || null;
+    } catch (error) {
+      logger.error(`Error finding folder for conversation ${conversationId}:`, error);
+      return null;
     }
-
-    return result || null;
-  } catch (error) {
-    logger.error(`Error finding folder for conversation ${conversationId}:`, error);
-    return null;
   }
-}
 
-/**
- * Get folder path (breadcrumbs)
- * @param {String} folderId - Folder ID
- * @returns {Promise<Array>} Array of folders representing the path, starting from root
- */
-async getFolderPath(folderId) {
-  try {
-    logger.info(`Getting path for folder ${folderId}`);
+  /**
+   * Get folder path (breadcrumbs)
+   * @param {String} folderId - Folder ID
+   * @returns {Promise<Array>} Array of folders representing the path, starting from root
+   */
+  async getFolderPath(folderId) {
+    try {
+      logger.info(`Getting path for folder ${folderId}`);
 
-    const path = [];
-    let currentId = folderId;
-    
-    // Loop to find all ancestors
-    while (currentId) {
-      // Get current folder
-      const folder = await this.db.collection('folders').document(currentId);
-      path.unshift(folder); // Add to beginning of array
-      
-      // Move up to parent
-      currentId = folder.parentFolderId;
+      const path = [];
+      let currentId = folderId;
+
+      // Loop to find all ancestors
+      while (currentId) {
+        // Get current folder
+        const folder = await this.db.collection('folders').document(currentId);
+        path.unshift(folder); // Add to beginning of array
+
+        // Move up to parent
+        currentId = folder.parentFolderId;
+      }
+
+      logger.info(`Found path with ${path.length} folders for folder ${folderId}`);
+      return path;
+    } catch (error) {
+      logger.error(`Error getting path for folder ${folderId}:`, error);
+      throw error;
     }
-    
-    logger.info(`Found path with ${path.length} folders for folder ${folderId}`);
-    return path;
-  } catch (error) {
-    logger.error(`Error getting path for folder ${folderId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Reorder folders
- * @param {String} userId - User ID
- * @param {Array} folderOrders - Array of {folderId, order} objects
- * @param {String} parentFolderId - Parent folder ID (null for root folders)
- * @returns {Promise<Object>} Result of the operation
- */
-async reorderFolders(userId, folderOrders, parentFolderId = null) {
-  try {
-    logger.info(`Reordering folders for user ${userId} under parent ${parentFolderId || 'root'}`);
+  /**
+   * Reorder folders
+   * @param {String} userId - User ID
+   * @param {Array} folderOrders - Array of {folderId, order} objects
+   * @param {String} parentFolderId - Parent folder ID (null for root folders)
+   * @returns {Promise<Object>} Result of the operation
+   */
+  async reorderFolders(userId, folderOrders, parentFolderId = null) {
+    try {
+      logger.info(`Reordering folders for user ${userId} under parent ${parentFolderId || 'root'}`);
 
-    if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
-      throw new Error('Invalid folder orders array');
-    }
+      if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
+        throw new Error('Invalid folder orders array');
+      }
 
-    // Verify user has permission for each folder
-    for (const item of folderOrders) {
-      const permissionQuery = `
+      // Verify user has permission for each folder
+      for (const item of folderOrders) {
+        const permissionQuery = `
         FOR edge IN userFolders
           FILTER edge._to == 'folders/${item.folderId}' AND edge._from == 'users/${userId}'
           RETURN edge
       `;
 
-      const permissionCursor = await this.db.query(permissionQuery);
-      const permission = await permissionCursor.next();
+        const permissionCursor = await this.db.query(permissionQuery);
+        const permission = await permissionCursor.next();
 
-      if (!permission) {
-        logger.warn(`User ${userId} does not have permission to access folder ${item.folderId}`);
-        throw new Error(`You do not have permission to access folder ${item.folderId}`);
-      }
+        if (!permission) {
+          logger.warn(`User ${userId} does not have permission to access folder ${item.folderId}`);
+          throw new Error(`You do not have permission to access folder ${item.folderId}`);
+        }
 
-      // Verify folder belongs to correct parent
-      const folderQuery = `
+        // Verify folder belongs to correct parent
+        const folderQuery = `
         FOR folder IN folders
           FILTER folder._key == '${item.folderId}'
           RETURN folder.parentFolderId
       `;
 
-      const folderCursor = await this.db.query(folderQuery);
-      const folderParentId = await folderCursor.next();
-      
-      // Convert null/undefined to null string for comparison
-      const currentParentId = folderParentId || null;
-      const targetParentId = parentFolderId || null;
-      
-      if (currentParentId !== targetParentId) {
-        logger.warn(`Folder ${item.folderId} does not belong to parent ${parentFolderId || 'root'}`);
-        throw new Error(`Folder ${item.folderId} does not belong to the specified parent folder`);
-      }
-    }
+        const folderCursor = await this.db.query(folderQuery);
+        const folderParentId = await folderCursor.next();
 
-    // Update order for each folder
-    const trx = await this.db.beginTransaction({
-      write: ['folders']
-    });
+        // Convert null/undefined to null string for comparison
+        const currentParentId = folderParentId || null;
+        const targetParentId = parentFolderId || null;
 
-    try {
-      for (const item of folderOrders) {
-        await trx.step(() => {
-          return this.db.collection('folders').update(item.folderId, { order: item.order });
-        });
+        if (currentParentId !== targetParentId) {
+          logger.warn(`Folder ${item.folderId} does not belong to parent ${parentFolderId || 'root'}`);
+          throw new Error(`Folder ${item.folderId} does not belong to the specified parent folder`);
+        }
       }
 
-      await trx.commit();
-      logger.info(`Successfully reordered ${folderOrders.length} folders`);
+      // Update order for each folder
+      const trx = await this.db.beginTransaction({
+        write: ['folders']
+      });
 
-      return {
-        updatedFolders: folderOrders.length,
-        success: true
-      };
+      try {
+        for (const item of folderOrders) {
+          await trx.step(() => {
+            return this.db.collection('folders').update(item.folderId, { order: item.order });
+          });
+        }
+
+        await trx.commit();
+        logger.info(`Successfully reordered ${folderOrders.length} folders`);
+
+        return {
+          updatedFolders: folderOrders.length,
+          success: true
+        };
+      } catch (error) {
+        await trx.abort();
+        throw error;
+      }
     } catch (error) {
-      await trx.abort();
+      logger.error(`Error reordering folders for user ${userId}:`, error);
       throw error;
     }
-  } catch (error) {
-    logger.error(`Error reordering folders for user ${userId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Share a folder with another user
- * @param {String} folderId - Folder ID
- * @param {String} ownerUserId - Owner user ID
- * @param {String} targetUserId - Target user ID to share with
- * @param {String} role - Role to assign (viewer, editor, etc.)
- * @returns {Promise<Object>} Result of the operation
- */
-async shareFolder(folderId, ownerUserId, targetUserId, role = 'viewer') {
-  try {
-    logger.info(`Sharing folder ${folderId} from user ${ownerUserId} to user ${targetUserId} with role ${role}`);
+  /**
+   * Share a folder with another user
+   * @param {String} folderId - Folder ID
+   * @param {String} ownerUserId - Owner user ID
+   * @param {String} targetUserId - Target user ID to share with
+   * @param {String} role - Role to assign (viewer, editor, etc.)
+   * @returns {Promise<Object>} Result of the operation
+   */
+  async shareFolder(folderId, ownerUserId, targetUserId, role = 'viewer') {
+    try {
+      logger.info(`Sharing folder ${folderId} from user ${ownerUserId} to user ${targetUserId} with role ${role}`);
 
-    // Verify the owner has permission to share this folder
-    const ownerPermissionQuery = `
+      // Verify the owner has permission to share this folder
+      const ownerPermissionQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${ownerUserId}' AND edge.role == 'owner'
         RETURN edge
     `;
 
-    const ownerPermissionCursor = await this.db.query(ownerPermissionQuery);
-    const ownerPermission = await ownerPermissionCursor.next();
+      const ownerPermissionCursor = await this.db.query(ownerPermissionQuery);
+      const ownerPermission = await ownerPermissionCursor.next();
 
-    if (!ownerPermission) {
-      logger.warn(`User ${ownerUserId} does not have owner permission to share folder ${folderId}`);
-      throw new Error('You must be the owner to share this folder');
-    }
+      if (!ownerPermission) {
+        logger.warn(`User ${ownerUserId} does not have owner permission to share folder ${folderId}`);
+        throw new Error('You must be the owner to share this folder');
+      }
 
-    // Check if the target user already has access
-    const existingShareQuery = `
+      // Check if the target user already has access
+      const existingShareQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${targetUserId}'
         RETURN edge
     `;
 
-    const existingShareCursor = await this.db.query(existingShareQuery);
-    const existingShare = await existingShareCursor.next();
+      const existingShareCursor = await this.db.query(existingShareQuery);
+      const existingShare = await existingShareCursor.next();
 
-    if (existingShare) {
-      // Update the existing share with the new role
-      await this.db.collection('userFolders').update(existingShare._key, {
+      if (existingShare) {
+        // Update the existing share with the new role
+        await this.db.collection('userFolders').update(existingShare._key, {
+          role,
+          updatedAt: new Date().toISOString()
+        });
+
+        logger.info(`Updated existing share for folder ${folderId} to user ${targetUserId} with role ${role}`);
+
+        return {
+          folderId,
+          targetUserId,
+          role,
+          updated: true,
+          created: false
+        };
+      }
+
+      // Create new share
+      const share = await this.db.collection('userFolders').save({
+        _from: `users/${targetUserId}`,
+        _to: `folders/${folderId}`,
         role,
-        updatedAt: new Date().toISOString()
+        sharedBy: ownerUserId,
+        sharedAt: new Date().toISOString(),
+        lastAccessedAt: null
       });
-      
-      logger.info(`Updated existing share for folder ${folderId} to user ${targetUserId} with role ${role}`);
-      
+
+      logger.info(`Created new share for folder ${folderId} to user ${targetUserId} with role ${role}`);
+
+      // Track in analytics if service is available
+      if (this.analyticsService) {
+        try {
+          await this.analyticsService.trackEvent(
+            ownerUserId,
+            'folderShared',
+            {
+              folderId,
+              targetUserId,
+              role
+            }
+          );
+        } catch (error) {
+          logger.error('Error tracking folder share in analytics:', error);
+          // Continue even if analytics tracking fails
+        }
+      }
+
       return {
         folderId,
         targetUserId,
         role,
-        updated: true,
-        created: false
+        updated: false,
+        created: true,
+        shareId: share._key
       };
+    } catch (error) {
+      logger.error(`Error sharing folder ${folderId}:`, error);
+      throw error;
     }
-
-    // Create new share
-    const share = await this.db.collection('userFolders').save({
-      _from: `users/${targetUserId}`,
-      _to: `folders/${folderId}`,
-      role,
-      sharedBy: ownerUserId,
-      sharedAt: new Date().toISOString(),
-      lastAccessedAt: null
-    });
-
-    logger.info(`Created new share for folder ${folderId} to user ${targetUserId} with role ${role}`);
-
-    // Track in analytics if service is available
-    if (this.analyticsService) {
-      try {
-        await this.analyticsService.trackEvent(
-          ownerUserId,
-          'folderShared',
-          {
-            folderId,
-            targetUserId,
-            role
-          }
-        );
-      } catch (error) {
-        logger.error('Error tracking folder share in analytics:', error);
-        // Continue even if analytics tracking fails
-      }
-    }
-
-    return {
-      folderId,
-      targetUserId,
-      role,
-      updated: false,
-      created: true,
-      shareId: share._key
-    };
-  } catch (error) {
-    logger.error(`Error sharing folder ${folderId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Remove folder sharing with a user
- * @param {String} folderId - Folder ID
- * @param {String} ownerUserId - Owner user ID
- * @param {String} targetUserId - Target user ID to remove share from
- * @returns {Promise<Object>} Result of the operation
- */
-async removeFolderShare(folderId, ownerUserId, targetUserId) {
-  try {
-    logger.info(`Removing share for folder ${folderId} from user ${targetUserId}`);
+  /**
+   * Remove folder sharing with a user
+   * @param {String} folderId - Folder ID
+   * @param {String} ownerUserId - Owner user ID
+   * @param {String} targetUserId - Target user ID to remove share from
+   * @returns {Promise<Object>} Result of the operation
+   */
+  async removeFolderShare(folderId, ownerUserId, targetUserId) {
+    try {
+      logger.info(`Removing share for folder ${folderId} from user ${targetUserId}`);
 
-    // Verify the owner has permission to manage shares for this folder
-    const ownerPermissionQuery = `
+      // Verify the owner has permission to manage shares for this folder
+      const ownerPermissionQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${ownerUserId}' AND edge.role == 'owner'
         RETURN edge
     `;
 
-    const ownerPermissionCursor = await this.db.query(ownerPermissionQuery);
-    const ownerPermission = await ownerPermissionCursor.next();
+      const ownerPermissionCursor = await this.db.query(ownerPermissionQuery);
+      const ownerPermission = await ownerPermissionCursor.next();
 
-    if (!ownerPermission) {
-      logger.warn(`User ${ownerUserId} does not have owner permission for folder ${folderId}`);
-      throw new Error('You must be the owner to manage shares for this folder');
-    }
+      if (!ownerPermission) {
+        logger.warn(`User ${ownerUserId} does not have owner permission for folder ${folderId}`);
+        throw new Error('You must be the owner to manage shares for this folder');
+      }
 
-    // Find the share to remove
-    const shareQuery = `
+      // Find the share to remove
+      const shareQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${targetUserId}' AND edge.role != 'owner'
         RETURN edge
     `;
 
-    const shareCursor = await this.db.query(shareQuery);
-    const share = await shareCursor.next();
+      const shareCursor = await this.db.query(shareQuery);
+      const share = await shareCursor.next();
 
-    if (!share) {
-      logger.warn(`Share for folder ${folderId} to user ${targetUserId} not found or user is the owner`);
-      throw new Error('Share not found or the target user is the owner');
-    }
-
-    // Delete the share
-    await this.db.collection('userFolders').remove(share._key);
-    logger.info(`Removed share for folder ${folderId} from user ${targetUserId}`);
-
-    // Track in analytics if service is available
-    if (this.analyticsService) {
-      try {
-        await this.analyticsService.trackEvent(
-          ownerUserId,
-          'folderShareRemoved',
-          {
-            folderId,
-            targetUserId
-          }
-        );
-      } catch (error) {
-        logger.error('Error tracking folder share removal in analytics:', error);
-        // Continue even if analytics tracking fails
+      if (!share) {
+        logger.warn(`Share for folder ${folderId} to user ${targetUserId} not found or user is the owner`);
+        throw new Error('Share not found or the target user is the owner');
       }
+
+      // Delete the share
+      await this.db.collection('userFolders').remove(share._key);
+      logger.info(`Removed share for folder ${folderId} from user ${targetUserId}`);
+
+      // Track in analytics if service is available
+      if (this.analyticsService) {
+        try {
+          await this.analyticsService.trackEvent(
+            ownerUserId,
+            'folderShareRemoved',
+            {
+              folderId,
+              targetUserId
+            }
+          );
+        } catch (error) {
+          logger.error('Error tracking folder share removal in analytics:', error);
+          // Continue even if analytics tracking fails
+        }
+      }
+
+      return {
+        folderId,
+        targetUserId,
+        success: true
+      };
+    } catch (error) {
+      logger.error(`Error removing share for folder ${folderId}:`, error);
+      throw error;
     }
-
-    return {
-      folderId,
-      targetUserId,
-      success: true
-    };
-  } catch (error) {
-    logger.error(`Error removing share for folder ${folderId}:`, error);
-    throw error;
   }
-}
 
-/**
- * Get shared folders for a user
- * @param {String} userId - User ID
- * @param {Object} options - Query options
- * @returns {Promise<Array>} Shared folders
- */
-async getSharedFolders(userId, options = {}) {
-  try {
-    logger.info(`Getting shared folders for user ${userId}`);
-    
-    // Ensure userId is in the correct format with users/ prefix
-    const userIdWithPrefix = userId.startsWith('users/') ? userId : `users/${userId}`;
-    
-    // Parse options
-    const includeArchived = options.includeArchived || false;
-    
-    const query = `
+  /**
+   * Get shared folders for a user
+   * @param {String} userId - User ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Shared folders
+   */
+  async getSharedFolders(userId, options = {}) {
+    try {
+      logger.info(`Getting shared folders for user ${userId}`);
+
+      // Ensure userId is in the correct format with users/ prefix
+      const userIdWithPrefix = userId.startsWith('users/') ? userId : `users/${userId}`;
+
+      // Parse options
+      const includeArchived = options.includeArchived || false;
+
+      const query = `
       FOR edge IN userFolders
         FILTER edge._from == '${userIdWithPrefix}'
         FILTER edge.role != 'owner'
@@ -2387,45 +2472,45 @@ async getSharedFolders(userId, options = {}) {
           owner: owner
         }
     `;
-    
-    const cursor = await this.db.query(query);
-    const sharedFolders = await cursor.all();
-    logger.info(`Found ${sharedFolders.length} shared folders for user ${userId}`);
-    
-    return sharedFolders;
-  } catch (error) {
-    logger.error(`Error getting shared folders for user ${userId}:`, error);
-    throw error;
+
+      const cursor = await this.db.query(query);
+      const sharedFolders = await cursor.all();
+      logger.info(`Found ${sharedFolders.length} shared folders for user ${userId}`);
+
+      return sharedFolders;
+    } catch (error) {
+      logger.error(`Error getting shared folders for user ${userId}:`, error);
+      throw error;
+    }
   }
-}
 
-/**
- * Get folder users (people with access to a folder)
- * @param {String} folderId - Folder ID
- * @param {String} userId - Requesting user ID (for authorization)
- * @returns {Promise<Array>} Users with access to the folder
- */
-async getFolderUsers(folderId, userId) {
-  try {
-    logger.info(`Getting users with access to folder ${folderId}`);
+  /**
+   * Get folder users (people with access to a folder)
+   * @param {String} folderId - Folder ID
+   * @param {String} userId - Requesting user ID (for authorization)
+   * @returns {Promise<Array>} Users with access to the folder
+   */
+  async getFolderUsers(folderId, userId) {
+    try {
+      logger.info(`Getting users with access to folder ${folderId}`);
 
-    // Verify the user has permission to view this folder
-    const permissionQuery = `
+      // Verify the user has permission to view this folder
+      const permissionQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}' AND edge._from == 'users/${userId}'
         RETURN edge
     `;
 
-    const permissionCursor = await this.db.query(permissionQuery);
-    const permission = await permissionCursor.next();
+      const permissionCursor = await this.db.query(permissionQuery);
+      const permission = await permissionCursor.next();
 
-    if (!permission) {
-      logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
-      throw new Error('You do not have permission to access this folder');
-    }
+      if (!permission) {
+        logger.warn(`User ${userId} does not have permission to access folder ${folderId}`);
+        throw new Error('You do not have permission to access this folder');
+      }
 
-    // Get all users with access
-    const usersQuery = `
+      // Get all users with access
+      const usersQuery = `
       FOR edge IN userFolders
         FILTER edge._to == 'folders/${folderId}'
         
@@ -2443,16 +2528,16 @@ async getFolderUsers(folderId, userId) {
         }
     `;
 
-    const usersCursor = await this.db.query(usersQuery);
-    const users = await usersCursor.all();
-    logger.info(`Found ${users.length} users with access to folder ${folderId}`);
+      const usersCursor = await this.db.query(usersQuery);
+      const users = await usersCursor.all();
+      logger.info(`Found ${users.length} users with access to folder ${folderId}`);
 
-    return users;
-  } catch (error) {
-    logger.error(`Error getting users for folder ${folderId}:`, error);
-    throw error;
+      return users;
+    } catch (error) {
+      logger.error(`Error getting users for folder ${folderId}:`, error);
+      throw error;
+    }
   }
-}
 
 }
 module.exports = ChatHistoryService;

@@ -379,12 +379,19 @@ class ChatHistoryService {
       console.log(`Fetching folders for user ${userId} with options:`, options);
 
       const params = {
-        includeArchived: options.includeArchived || false,
-        parentFolderId: options.parentFolderId || null
+        userId // Always include userId
       };
 
+      // Only add options if explicitly provided
+      if ('includeArchived' in options) {
+        params.includeArchived = options.includeArchived;
+      }
+      if ('parentFolderId' in options && options.parentFolderId !== undefined) {
+        params.parentFolderId = options.parentFolderId;
+      }
+
       const response = await httpService.get('/chat/folders', {
-        params: { ...params, userId }
+        params
       });
 
       return response.data;

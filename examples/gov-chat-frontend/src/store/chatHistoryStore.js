@@ -1,5 +1,6 @@
 // src/store/chatHistoryStore.js
 import { v4 as uuidv4 } from 'uuid';
+import chatHistoryService from '@/services/chatHistoryService'; // Adjust path
 
 export default {
   namespaced: true,
@@ -20,33 +21,26 @@ export default {
   }),
 
   getters: {
-    getAllFolders: (state) => {
-      return state.folders;
-    },
-
+    getAllFolders: (state) => state.folders,
     getChatsByFolderId: (state) => (folderId) => {
       const chatIds = state.folderChats[folderId] || [];
       return chatIds
-        .map((chatId) => {
-          return state.chats.find((chat) => chat.id === chatId);
-        })
+        .map((chatId) => state.chats.find((chat) => chat.id === chatId))
         .filter((chat) => chat !== undefined);
     },
-
-    getFolderById: (state) => (folderId) => {
-      return state.folders.find((folder) => folder.id === folderId);
-    },
-
-    getChatById: (state) => (chatId) => {
-      return state.chats.find((chat) => chat.id === chatId);
-    },
+    getFolderById: (state) => (folderId) => state.folders.find((folder) => folder.id === folderId),
+    getChatById: (state) => (chatId) => state.chats.find((chat) => chat.id === chatId),
   },
 
   mutations: {
-    // Add setFolders mutation
     setFolders(state, folders) {
-      console.log("setFolders mutation received:", folders); // Debug
-      state.folders = [...folders]; // Replace state with dispatched folders
+      console.log("setFolders mutation received:", folders);
+      state.folders = [...folders];
+    },
+
+    SET_FOLDER_CHATS(state, { folderId, chats }) {
+      console.log(`Setting chats for folder ${folderId}:`, chats);
+      state.folderChats[folderId] = chats;
     },
 
     ADD_FOLDER(state, folderData) {
@@ -56,35 +50,27 @@ export default {
         isDefault: false,
         createdAt: new Date().toISOString(),
       };
-
       state.folders.push(newFolder);
       state.folderChats[newFolder.id] = [];
-
       return newFolder.id;
     },
 
     UPDATE_FOLDER(state, { folderId, name }) {
       const folderIndex = state.folders.findIndex((f) => f.id === folderId);
       if (folderIndex !== -1 && !state.folders[folderIndex].isDefault) {
-        state.folders[folderIndex] = {
-          ...state.folders[folderIndex],
-          name,
-        };
+        state.folders[folderIndex] = { ...state.folders[folderIndex], name };
       }
     },
 
     REMOVE_FOLDER(state, folderId) {
       const folderIndex = state.folders.findIndex((f) => f.id === folderId);
-
       if (folderIndex !== -1 && !state.folders[folderIndex].isDefault) {
         const chatIds = state.folderChats[folderId] || [];
-
         chatIds.forEach((chatId) => {
           if (!state.folderChats.default.includes(chatId)) {
             state.folderChats.default.push(chatId);
           }
         });
-
         state.folders.splice(folderIndex, 1);
         delete state.folderChats[folderId];
       }
@@ -99,19 +85,13 @@ export default {
         updatedAt: new Date().toISOString(),
         messageCount: chatData.messageCount || 0,
       };
-
       state.chats.push(newChat);
-
       const folderId = chatData.folderId || 'default';
-      if (!state.folderChats[folderId]) {
-        state.folderChats[folderId] = [];
-      }
+      if (!state.folderChats[folderId]) state.folderChats[folderId] = [];
       state.folderChats[folderId].push(newChat.id);
-
       if (folderId !== 'default' && !state.folderChats.default.includes(newChat.id)) {
         state.folderChats.default.push(newChat.id);
       }
-
       return newChat.id;
     },
 
@@ -132,58 +112,42 @@ export default {
       if (chatIndex !== -1) {
         Object.keys(state.folderChats).forEach((folderId) => {
           const index = state.folderChats[folderId].indexOf(chatId);
-          if (index !== -1) {
-            state.folderChats[folderId].splice(index, 1);
-          }
+          if (index !== -1) state.folderChats[folderId].splice(index, 1);
         });
-
         state.chats.splice(chatIndex, 1);
       }
     },
 
     ADD_CHAT_TO_FOLDER(state, { chatId, folderId }) {
-      if (!state.folderChats[folderId]) {
-        state.folderChats[folderId] = [];
-      }
-
-      if (!state.folderChats[folderId].includes(chatId)) {
-        state.folderChats[folderId].push(chatId);
-      }
+      if (!state.folderChats[folderId]) state.folderChats[folderId] = [];
+      if (!state.folderChats[folderId].includes(chatId)) state.folderChats[folderId].push(chatId);
     },
 
     REMOVE_CHAT_FROM_FOLDER(state, { chatId, folderId }) {
       if (state.folderChats[folderId]) {
         const index = state.folderChats[folderId].indexOf(chatId);
-        if (index !== -1) {
-          state.folderChats[folderId].splice(index, 1);
-        }
+        if (index !== -1) state.folderChats[folderId].splice(index, 1);
       }
     },
 
     MOVE_CHAT(state, { chatId, fromFolderId, toFolderId }) {
       if (fromFolderId === toFolderId) return;
-
       if (state.folderChats[fromFolderId]) {
         const index = state.folderChats[fromFolderId].indexOf(chatId);
-        if (index !== -1) {
-          state.folderChats[fromFolderId].splice(index, 1);
-        }
+        if (index !== -1) state.folderChats[fromFolderId].splice(index, 1);
       }
-
-      if (!state.folderChats[toFolderId]) {
-        state.folderChats[toFolderId] = [];
-      }
-
-      if (!state.folderChats[toFolderId].includes(chatId)) {
-        state.folderChats[toFolderId].push(chatId);
+      if (!state.folderChats[toFolderId]) state.folderChats[toFolderId] = [];
+      if (!state.folderChats[toFolderId].includes(chatId)) state.folderChats[toFolderId].push(chatId);
+      // Always keep in default folder
+      if (!state.folderChats.default.includes(chatId)) {
+        state.folderChats.default.push(chatId);
       }
     },
   },
 
   actions: {
-    // Add setFolders action
     setFolders({ commit }, folders) {
-      console.log("setFolders action dispatching:", folders); // Debug
+      console.log("setFolders action dispatching:", folders);
       commit('setFolders', folders);
     },
 
@@ -219,8 +183,23 @@ export default {
       commit('REMOVE_CHAT_FROM_FOLDER', { chatId, folderId });
     },
 
-    moveChat({ commit }, { chatId, fromFolderId, toFolderId }) {
-      commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
+    // Enhanced moveChat action to sync with backend
+    async moveChat({ commit, state }, { chatId, fromFolderId, toFolderId }) {
+      console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
+      try {
+        // Call backend service to move conversation
+        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, '2133'); // Hardcoded userId
+        // Refresh folder chats from backend
+        const folder = await chatHistoryService.getFolder(toFolderId);
+        const chatIds = folder.conversations.map(conv => conv._key);
+        commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
+        // Update local move (optional, for immediate feedback)
+        commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
+        console.log(`Chat ${chatId} moved successfully to ${toFolderId}`);
+      } catch (error) {
+        console.error(`Error moving chat ${chatId}:`, error);
+        throw error;
+      }
     },
   },
 };

@@ -1961,59 +1961,83 @@ class ChatHistoryService {
   async moveConversation(conversationId, sourceFolderId, targetFolderId, userId) {
     try {
       logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`);
-
-      // Verify user has permission for the conversation
-      const convPermissionQuery = `
-      FOR edge IN userConversations
-        FILTER edge._to == 'conversations/${conversationId}' AND edge._from == 'users/${userId}'
-        RETURN edge
-    `;
-
+  
+      const convPermissionQuery = aql`
+        FOR edge IN userConversations
+          FILTER edge._to == ${`conversations/${conversationId}`} AND edge._from == ${`users/${userId}`}
+          RETURN edge
+      `;
       const convPermissionCursor = await this.db.query(convPermissionQuery);
       const convPermission = await convPermissionCursor.next();
-
+  
       if (!convPermission) {
         logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
         throw new Error('You do not have permission to access this conversation');
       }
-
-      // If target folder is specified, verify user has permission for it
+  
       if (targetFolderId) {
-        const folderPermissionQuery = `
-        FOR edge IN userFolders
-          FILTER edge._to == 'folders/${targetFolderId}' AND edge._from == 'users/${userId}'
-          RETURN edge
-      `;
-
+        const folderPermissionQuery = aql`
+          FOR edge IN userFolders
+            FILTER edge._to == ${`folders/${targetFolderId}`} AND edge._from == ${`users/${userId}`}
+            RETURN edge
+        `;
         const folderPermissionCursor = await this.db.query(folderPermissionQuery);
         const folderPermission = await folderPermissionCursor.next();
-
+  
         if (!folderPermission) {
           logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
           throw new Error('You do not have permission to access the target folder');
         }
       }
-
-      // Find existing folder link (if any)
-      const existingLinkQuery = `
-      FOR edge IN folderConversations
-        FILTER edge._to == 'conversations/${conversationId}'
-        RETURN edge
-    `;
-
-      const existingLinkCursor = await this.db.query(existingLinkQuery);
-      const existingLink = await existingLinkCursor.next();
-
-      // Handle according to source and target state
-      if (existingLink) {
-        // If moving to root (no folder), just remove the link
-        if (!targetFolderId) {
-          await this.db.collection('folderConversations').remove(existingLink._key);
-          logger.info(`Conversation ${conversationId} removed from folder and moved to root`);
-        }
-        // If already in the correct folder, do nothing
-        else if (existingLink._from === `folders/${targetFolderId}`) {
-          logger.info(`Conversation ${conversationId} is already in folder ${targetFolderId}`);
+  
+      const trx = await this.db.beginTransaction({
+        write: ['folderConversations']
+      });
+  
+      try {
+        const existingLinkQuery = aql`
+          FOR edge IN folderConversations
+            FILTER edge._to == ${`conversations/${conversationId}`}
+            RETURN edge
+        `;
+        const existingLinkCursor = await this.db.query(existingLinkQuery);
+        const existingLink = await existingLinkCursor.next();
+  
+        if (existingLink) {
+          if (!targetFolderId) {
+            await trx.step(() => this.db.collection('folderConversations').remove(existingLink._key));
+            logger.info(`Conversation ${conversationId} removed from folder and moved to root`);
+          } else if (existingLink._from === `folders/${targetFolderId}`) {
+            logger.info(`Conversation ${conversationId} is already in folder ${targetFolderId}`);
+            await trx.commit();
+            return {
+              conversationId,
+              sourceFolderId,
+              targetFolderId,
+              success: true,
+              noChangesNeeded: true
+            };
+          } else {
+            await trx.step(() => this.db.collection('folderConversations').remove(existingLink._key));
+            await trx.step(() => this.db.collection('folderConversations').save({
+              _from: `folders/${targetFolderId}`,
+              _to: `conversations/${conversationId}`,
+              addedAt: new Date().toISOString(),
+              addedBy: userId
+            }));
+            logger.info(`Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`);
+          }
+        } else if (targetFolderId) {
+          await trx.step(() => this.db.collection('folderConversations').save({
+            _from: `folders/${targetFolderId}`,
+            _to: `conversations/${conversationId}`,
+            addedAt: new Date().toISOString(),
+            addedBy: userId
+          }));
+          logger.info(`Conversation ${conversationId} moved from root to folder ${targetFolderId}`);
+        } else {
+          logger.info(`Conversation ${conversationId} is already in root, no change needed`);
+          await trx.commit();
           return {
             conversationId,
             sourceFolderId,
@@ -2022,66 +2046,25 @@ class ChatHistoryService {
             noChangesNeeded: true
           };
         }
-        // Otherwise, update the link to the new folder
-        else {
-          await this.db.collection('folderConversations').remove(existingLink._key);
-          await this.db.collection('folderConversations').save({
-            _from: `folders/${targetFolderId}`,
-            _to: `conversations/${conversationId}`,
-            addedAt: new Date().toISOString(),
-            addedBy: userId
-          });
-          logger.info(`Conversation ${conversationId} moved from folder ${existingLink._from.split('/')[1]} to ${targetFolderId}`);
-        }
-      }
-      // If not in any folder and target is not root, create new link
-      else if (targetFolderId) {
-        await this.db.collection('folderConversations').save({
-          _from: `folders/${targetFolderId}`,
-          _to: `conversations/${conversationId}`,
-          addedAt: new Date().toISOString(),
-          addedBy: userId
-        });
-        logger.info(`Conversation ${conversationId} moved from root to folder ${targetFolderId}`);
-      }
-      // If not in any folder and target is root, no change needed
-      else {
-        logger.info(`Conversation ${conversationId} is already in root, no change needed`);
+  
+        await trx.commit();
+  
+        // Temporarily skip analytics tracking to focus on the core issue
+        logger.info(`Skipping analytics tracking for conversation move`);
+  
         return {
           conversationId,
-          sourceFolderId,
+          sourceFolderId: existingLink ? existingLink._from.split('/')[1] : null,
           targetFolderId,
-          success: true,
-          noChangesNeeded: true
+          success: true
         };
+      } catch (error) {
+        await trx.abort();
+        logger.error(`Transaction error moving conversation ${conversationId}:`, error);
+        throw error;
       }
-
-      // Track in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            userId,
-            'conversationMoved',
-            {
-              conversationId,
-              fromFolderId: sourceFolderId,
-              toFolderId: targetFolderId
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking conversation move in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
-
-      return {
-        conversationId,
-        sourceFolderId: existingLink ? existingLink._from.split('/')[1] : null,
-        targetFolderId,
-        success: true
-      };
     } catch (error) {
-      logger.error(`Error moving conversation ${conversationId}:`, error);
+      logger.error(`Error moving conversation ${conversationId}:`, error.stack || error);
       throw error;
     }
   }

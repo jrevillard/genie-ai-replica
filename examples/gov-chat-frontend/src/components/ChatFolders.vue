@@ -608,7 +608,35 @@ export default {
     },
 
     folderChats() {
-      return this.getChatsByFolderId(this.selectedFolderId);
+      // Fetch the latest conversations from the backend for the selected folder
+      const fetchAndMapChats = async () => {
+        try {
+          if (this.selectedFolderId) {
+            const folder = await this.$store.$chatHistoryService.getFolder(
+              this.selectedFolderId
+            );
+            const chatIds = folder.conversations.map((conv) => conv._key);
+            console.log(
+              `Fetched ${chatIds.length} chats for folder ${this.selectedFolderId}:`,
+              chatIds
+            );
+            return chatIds.map((id) => ({
+              id,
+              ...folder.conversations.find((conv) => conv._key === id),
+            }));
+          }
+          return [];
+        } catch (error) {
+          console.error(
+            `Error fetching chats for folder ${this.selectedFolderId}:`,
+            error
+          );
+          return [];
+        }
+      };
+
+      // Use a reactive reference to handle async data
+      return this.selectedFolderId ? fetchAndMapChats() : [];
     },
 
     availableFolders() {
@@ -1707,15 +1735,44 @@ export default {
       }
     },
 
-    selectFolder(folderId) {
-      console.log(`Selecting folder with ID: ${folderId}`);
+    async selectFolder(folderId) {
+      try {
+        console.log(`Selecting folder: ${folderId}`);
+        this.selectedFolderId = folderId;
+        this.conversations = [];
+        this.isLoading = true;
 
-      this.selectedFolderId = folderId;
-      this.folderSelected = true;
+        const folder = await this.$store.dispatch(
+          "chatHistory/getChatsByFolderId",
+          folderId
+        );
+        console.log(`Fetched folder data:`, folder);
 
-      this.$forceUpdate();
+        this.conversations = folder.map((conv) => conv._key) || [];
+        console.log(`Conversations in folder ${folderId}:`, this.conversations);
+      } catch (error) {
+        console.error("Error selecting folder:", error.stack || error);
+        notificationService.error(
+          this.safeT("sidebar.errorLoadingFolder", "Failed to load folder: ") +
+            (error.message || "Unknown error")
+        );
+      } finally {
+        this.isLoading = false;
+      }
+    },
 
-      console.log(`Folder selected: ${this.folderSelected}`);
+    async getChatsByFolderId({ commit }, folderId) {
+      try {
+        console.log(`Fetching chats for folder ${folderId}`);
+        const folder = await chatHistoryService.getFolder(folderId);
+        const chatIds = folder.conversations.map((conv) => conv._key);
+        commit("SET_FOLDER_CHATS", { folderId, chats: chatIds });
+        console.log(`Chat IDs for folder ${folderId}:`, chatIds);
+        return folder.conversations;
+      } catch (error) {
+        console.error(`Error fetching chats for folder ${folderId}:`, error);
+        throw error;
+      }
     },
 
     getChatCount(folderId) {
@@ -2112,16 +2169,37 @@ export default {
       );
 
       try {
-        await chatHistoryService.updateConversation(this.activeChat._key, {
-          folderId: this.destinationFolderId,
-          userId: this.currentUser._key,
-        });
+        // Call the moveConversation service to update the backend
+        await chatHistoryService.moveConversation(
+          this.activeChat._key,
+          this.selectedFolderId,
+          this.destinationFolderId,
+          this.currentUser._key
+        );
 
-        this.moveChat({
+        // Dispatch Vuex action to update the store
+        await this.moveChat({
           chatId: this.activeChat._key,
           fromFolderId: this.selectedFolderId,
           toFolderId: this.destinationFolderId,
         });
+
+        // Ensure the conversation remains in "All Chats" (default folder)
+        if (
+          !this.$store.state.chatHistory.folderChats.default.includes(
+            this.activeChat._key
+          )
+        ) {
+          await this.$store.dispatch("chatHistory/addChatToFolder", {
+            chatId: this.activeChat._key,
+            folderId: "default",
+          });
+        }
+
+        // If starred, ensure it remains in the "Starred" view (handled by filtering in computed properties)
+        if (this.activeChat.isStarred) {
+          // No explicit action needed; filteredConversations handles this
+        }
 
         this.showMoveChatDialog = false;
         this.destinationFolderId = null;
@@ -2130,7 +2208,14 @@ export default {
           this.safeT("sidebar.chatMoved", "Conversation moved successfully")
         );
 
+        // Reload conversations for the current tab and target folder
         this.loadConversationsForCurrentTab();
+        if (
+          this.currentSecondLevelTab === "folders" &&
+          this.selectedFolderId !== this.destinationFolderId
+        ) {
+          this.selectFolder(this.destinationFolderId); // Switch to the target folder to verify
+        }
       } catch (error) {
         console.error("Error moving chat:", error);
         notificationService.error(

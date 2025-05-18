@@ -56,25 +56,8 @@
     </template>
 
     <!-- Chats in Selected Folder or Tab -->
+    <!-- Chats in Selected Folder or Tab -->
     <div class="folder-chats">
-      <!-- Search field (shown in all tabs except folders) -->
-      <div
-        v-if="shouldShowSearch"
-        class="search-container"
-        :key="currentSecondLevelTab"
-      >
-        <input
-          type="text"
-          v-model="searchTerm"
-          placeholder="Search conversations..."
-          class="search-input"
-          @input="handleExistingSearchInput($event)"
-        />
-        <button @click="loadConversationsForCurrentTab" class="search-button">
-          <i class="fas fa-search"></i>
-        </button>
-      </div>
-
       <h3>{{ getTabTitle() }}</h3>
 
       <!-- Debug information -->
@@ -410,7 +393,11 @@
     </context-menu>
 
     <!-- Move Chat Dialog -->
-    <modal-dialog v-if="showMoveChatDialog" @close="showMoveChatDialog = false">
+    <modal-dialog
+      v-if="showMoveChatDialog"
+      @close="showMoveChatDialog = false"
+      class="move-chat-dialog"
+    >
       <template v-slot:header>
         <h3>{{ safeT("sidebar.moveChat", "Move Chat") }}</h3>
       </template>
@@ -611,10 +598,6 @@ export default {
 
     availableFolders() {
       return this.folders.filter((folder) => !folder.isDefault);
-    },
-
-    shouldShowSearch() {
-      return this.currentSecondLevelTab !== "folders";
     },
 
     filteredConversations() {
@@ -1570,10 +1553,6 @@ export default {
     },
 
     ensureSearchFieldVisible() {
-      if (this.currentSecondLevelTab === "folders") {
-        return;
-      }
-
       const searchInput = document.querySelector(
         'input[placeholder="Search conversations..."]'
       );
@@ -2062,6 +2041,7 @@ export default {
         });
 
         this.showRenameChatDialog = false;
+        this.showChatMenu = false; // Ensure context menu stays closed
 
         notificationService.success(
           this.safeT("sidebar.chatRenamed", "Conversation renamed successfully")
@@ -2117,6 +2097,8 @@ export default {
         this.deleteChat(this.activeChat._key);
         this.showDeleteChatDialog = false;
         this.activeChat = null;
+        this.showChatMenu = false; // Ensure context menu stays closed
+
         notificationService.success(
           this.safeT("sidebar.chatDeleted", "Conversation deleted successfully")
         );
@@ -2178,7 +2160,6 @@ export default {
             });
           }
 
-          // Reset selectedFolderId since the conversation is no longer in a custom folder
           this.selectedFolderId = "default";
           this.folderSelected = false;
         } else {
@@ -2195,7 +2176,6 @@ export default {
             toFolderId: this.destinationFolderId,
           });
 
-          // Update selectedFolderId to the new folder
           this.selectedFolderId = this.destinationFolderId;
           this.folderSelected = true;
         }
@@ -2213,6 +2193,7 @@ export default {
 
         this.showMoveChatDialog = false;
         this.destinationFolderId = null;
+        this.showChatMenu = false; // Ensure context menu stays closed
 
         notificationService.success(
           isRemovingFromFolder
@@ -2227,7 +2208,6 @@ export default {
 
         if (this.currentSecondLevelTab === "folders") {
           if (isRemovingFromFolder) {
-            // Skip fetching for "default" folder; clear conversations instead
             if (this.selectedFolderId !== "default") {
               this.fetchFolderChats(this.selectedFolderId);
             } else {
@@ -2811,36 +2791,6 @@ html[data-theme="dark"] .folders-header h3 {
   border-color: #444;
 }
 
-/* Search container styling */
-.search-container {
-  display: flex;
-  margin-bottom: 15px;
-  width: 100%;
-}
-
-.search-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border-input);
-  border-radius: 4px 0 0 4px;
-  font-size: 1rem;
-  background-color: var(--bg-input);
-  color: var(--text-primary);
-}
-
-.search-button {
-  padding: 8px 12px;
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary);
-  border: none;
-  border-radius: 0 4px 4px 0;
-  cursor: pointer;
-}
-
-.search-button:hover {
-  background-color: var(--accent-hover);
-}
-
 /* Star and archive badges */
 .starred-badge,
 .archived-badge {
@@ -2903,5 +2853,9 @@ html[data-theme="dark"] .folder-chats h3 {
 [data-theme="dark"] .folder-chats > h3,
 html[data-theme="dark"] .folder-chats > h3 {
   color: #ffffff !important;
+}
+
+.move-chat-dialog {
+  z-index: 10000 !important;
 }
 </style>

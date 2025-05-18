@@ -201,5 +201,24 @@ export default {
         throw error;
       }
     },
+
+    async removeChatFromFolder({ commit, state }, { chatId, folderId }) {
+      try {
+        console.log(`Removing chat ${chatId} from folder ${folderId}`);
+        
+        // Call the mutation to remove the chat from the folder
+        commit('REMOVE_CHAT_FROM_FOLDER', { chatId, folderId });
+        
+        // Ensure the chat remains in the default folder
+        if (!state.folderChats.default.includes(chatId)) {
+          commit('ADD_CHAT_TO_FOLDER', { chatId, folderId: 'default' });
+        }
+        
+        console.log(`Chat ${chatId} removed from folder ${folderId}`);
+      } catch (error) {
+        console.error(`Error removing chat ${chatId} from folder ${folderId}:`, error);
+        throw error;
+      }
+    }
   },
 };

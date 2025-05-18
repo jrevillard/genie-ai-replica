@@ -424,6 +424,9 @@
             safeT("sidebar.selectFolder", "Select folder")
           }}</label>
           <select id="destinationFolder" v-model="destinationFolderId">
+            <option value="no_folder">
+              {{ safeT("sidebar.noFolder", "No Folder") }}
+            </option>
             <option
               v-for="folder in availableFolders"
               :key="folder.id"
@@ -443,7 +446,9 @@
           @click="handleMoveChat"
           class="primary-btn"
           :disabled="
-            !destinationFolderId || selectedFolderId === destinationFolderId
+            !destinationFolderId ||
+            (destinationFolderId !== 'no_folder' &&
+              selectedFolderId === destinationFolderId)
           "
         >
           {{ safeT("common.move", "Move") }}
@@ -1970,6 +1975,31 @@ export default {
       console.log(`Showing actions menu for chat ${chat._key}`);
       this.activeChat = chat;
 
+      // Determine the conversation's current folder from Vuex store
+      const folderChats = this.$store.state.chatHistory.folderChats;
+      let foundFolderId = null;
+
+      // Check all folders to find where this chat resides (excluding "default")
+      for (const folderId in folderChats) {
+        if (
+          folderId !== "default" &&
+          folderChats[folderId] &&
+          folderChats[folderId].includes(chat._key)
+        ) {
+          foundFolderId = folderId;
+          break;
+        }
+      }
+
+      // Update selectedFolderId based on the current folder
+      if (foundFolderId) {
+        this.selectedFolderId = foundFolderId;
+        this.folderSelected = true;
+      } else {
+        this.selectedFolderId = "default";
+        this.folderSelected = false;
+      }
+
       const rect = event.target.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
 
@@ -2104,7 +2134,7 @@ export default {
     },
 
     async handleMoveChat() {
-      if (!this.activeChat || !this.destinationFolderId) {
+      if (!this.activeChat) {
         return;
       }
 
@@ -2119,23 +2149,56 @@ export default {
         return;
       }
 
+      const isRemovingFromFolder = this.destinationFolderId === "no_folder";
+
       console.log(
-        `Moving chat ${this.activeChat._key} to folder ${this.destinationFolderId}`
+        `${isRemovingFromFolder ? "Removing" : "Moving"} chat ${
+          this.activeChat._key
+        } ${
+          isRemovingFromFolder
+            ? "from all custom folders"
+            : `to folder ${this.destinationFolderId}`
+        }`
       );
 
       try {
-        await chatHistoryService.moveConversation(
-          this.activeChat._key,
-          this.selectedFolderId,
-          this.destinationFolderId,
-          this.currentUser._key
-        );
+        if (isRemovingFromFolder) {
+          await chatHistoryService.removeConversationFromFolder(
+            this.activeChat._key,
+            this.selectedFolderId,
+            this.currentUser._key
+          );
 
-        await this.moveChat({
-          chatId: this.activeChat._key,
-          fromFolderId: this.selectedFolderId,
-          toFolderId: this.destinationFolderId,
-        });
+          if (
+            this.$store.state.chatHistory.folderChats[this.selectedFolderId]
+          ) {
+            await this.$store.dispatch("chatHistory/removeChatFromFolder", {
+              chatId: this.activeChat._key,
+              folderId: this.selectedFolderId,
+            });
+          }
+
+          // Reset selectedFolderId since the conversation is no longer in a custom folder
+          this.selectedFolderId = "default";
+          this.folderSelected = false;
+        } else {
+          await chatHistoryService.moveConversation(
+            this.activeChat._key,
+            this.selectedFolderId,
+            this.destinationFolderId,
+            this.currentUser._key
+          );
+
+          await this.moveChat({
+            chatId: this.activeChat._key,
+            fromFolderId: this.selectedFolderId,
+            toFolderId: this.destinationFolderId,
+          });
+
+          // Update selectedFolderId to the new folder
+          this.selectedFolderId = this.destinationFolderId;
+          this.folderSelected = true;
+        }
 
         if (
           !this.$store.state.chatHistory.folderChats.default.includes(
@@ -2152,20 +2215,46 @@ export default {
         this.destinationFolderId = null;
 
         notificationService.success(
-          this.safeT("sidebar.chatMoved", "Conversation moved successfully")
+          isRemovingFromFolder
+            ? this.safeT(
+                "sidebar.chatRemovedFromFolders",
+                "Conversation removed from folder"
+              )
+            : this.safeT("sidebar.chatMoved", "Conversation moved successfully")
         );
 
-        // Reload conversations for the current tab
         this.loadConversationsForCurrentTab();
 
-        // If in folders tab, ensure the target folder is selected to refresh the view
         if (this.currentSecondLevelTab === "folders") {
-          this.selectFolder(this.destinationFolderId); // This will trigger the watch
+          if (isRemovingFromFolder) {
+            // Skip fetching for "default" folder; clear conversations instead
+            if (this.selectedFolderId !== "default") {
+              this.fetchFolderChats(this.selectedFolderId);
+            } else {
+              this.conversations = [];
+              this.forceDisplayConversations();
+            }
+          } else {
+            this.selectFolder(this.destinationFolderId);
+          }
         }
       } catch (error) {
-        console.error("Error moving chat:", error);
+        console.error(
+          `Error ${
+            isRemovingFromFolder ? "removing chat from folder" : "moving chat"
+          }:`,
+          error
+        );
         notificationService.error(
-          this.safeT("sidebar.errorMovingChat", "Failed to move conversation")
+          isRemovingFromFolder
+            ? this.safeT(
+                "sidebar.errorRemovingChat",
+                "Failed to remove conversation from folder"
+              )
+            : this.safeT(
+                "sidebar.errorMovingChat",
+                "Failed to move conversation"
+              )
         );
       }
     },
@@ -2254,7 +2343,11 @@ export default {
   },
   watch: {
     selectedFolderId(newFolderId) {
-      if (newFolderId && this.currentSecondLevelTab === "folders") {
+      if (
+        newFolderId &&
+        this.currentSecondLevelTab === "folders" &&
+        newFolderId !== "default"
+      ) {
         this.fetchFolderChats(newFolderId);
       }
     },

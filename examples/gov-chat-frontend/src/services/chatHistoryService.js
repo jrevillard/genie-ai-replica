@@ -640,34 +640,6 @@ class ChatHistoryService {
   }
 
   /**
-   * Remove a conversation from a folder
-   * @param {String} folderId - Folder ID
-   * @param {String} conversationId - Conversation ID
-   * @param {String} userId - User ID for permission check
-   * @returns {Promise} Result of the operation
-   */
-  async removeConversationFromFolder(folderId, conversationId, userId) {
-    try {
-      if (!userId) {
-        console.error('Error: userId is required for removeConversationFromFolder');
-        throw new Error('User ID is required');
-      }
-
-      console.log(`Removing conversation ${conversationId} from folder ${folderId}`);
-
-      const response = await httpService.delete(
-        `/chat/folders/${folderId}/conversations/${conversationId}`,
-        { params: { userId } }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error(`Error removing conversation ${conversationId} from folder ${folderId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Get the folder containing a conversation
    * @param {String} conversationId - Conversation ID
    * @returns {Promise} Folder information or null if not in a folder
@@ -811,6 +783,37 @@ class ChatHistoryService {
       return response.data;
     } catch (error) {
       console.error(`Error getting users for folder ${folderId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+ * Remove a conversation from a folder
+ * @param {String} conversationId - Conversation ID
+ * @param {String} currentFolderId - Current folder ID
+ * @param {String} userId - User ID for permission check
+ * @returns {Promise} Result of the operation
+ */
+  async removeConversationFromFolder(conversationId, currentFolderId, userId) {
+    try {
+      if (!userId) {
+        console.error('Error: userId is required for removeConversationFromFolder');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`Removing conversation ${conversationId} from folder ${currentFolderId}`);
+
+      const response = await httpService.delete(
+        `/chat/folders/${currentFolderId}/conversations/${conversationId}`, // Use /chat/ prefix
+        { params: { userId } } // Fix params syntax
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error(
+        `Error removing conversation ${conversationId} from folder ${currentFolderId}:`,
+        error
+      );
       throw error;
     }
   }

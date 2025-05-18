@@ -140,10 +140,13 @@
         </p>
       </div>
 
-      <!-- Conversations list - Only show when not in folders tab or when a folder is selected -->
+      <!-- Conversations list - Show when a folder is selected in folders tab or when not in folders tab -->
       <div
         class="chats-list"
-        v-if="currentSecondLevelTab !== 'folders' && conversations.length > 0"
+        v-if="
+          (currentSecondLevelTab !== 'folders' || folderSelected) &&
+          conversations.length > 0
+        "
       >
         <div
           v-for="conversation in conversations"
@@ -151,15 +154,13 @@
           class="chat-item"
           @click="openChat(conversation._key)"
         >
-          <!-- Updated chat item structure -->
+          <!-- Existing chat item structure -->
           <div class="chat-icon">
             <i class="fas fa-comment"></i>
           </div>
-
           <div class="chat-content">
             <div class="chat-header">
               <div class="chat-title">{{ conversation.title }}</div>
-
               <div class="chat-actions-group">
                 <button
                   @click.stop="toggleStarred(conversation)"
@@ -176,7 +177,6 @@
                     "
                   ></i>
                 </button>
-
                 <label class="archive-checkbox">
                   <input
                     type="checkbox"
@@ -188,7 +188,6 @@
                     safeT("sidebar.archive", "Archive")
                   }}</span>
                 </label>
-
                 <button
                   @click.stop="showChatActionsMenu(conversation, $event)"
                   class="action-btn"
@@ -198,7 +197,6 @@
                 </button>
               </div>
             </div>
-
             <div class="chat-message-count">
               {{ conversation.messageCount || 0 }}
               {{
@@ -207,14 +205,11 @@
                   : safeT("sidebar.messages", "messages")
               }}
             </div>
-
             <div class="chat-preview">{{ conversation.preview }}</div>
-
             <div class="chat-footer">
               <span class="chat-category" v-if="conversation.category">
                 {{ conversation.category }}
               </span>
-
               <div class="chat-dates">
                 <span class="chat-created">
                   {{ safeT("sidebar.created", "Created") }}:
@@ -226,8 +221,6 @@
                 </span>
               </div>
             </div>
-
-            <!-- Add visible badges to make starred/archived status more obvious -->
             <div class="status-badges">
               <div v-if="conversation.isStarred" class="starred-badge">
                 ★ Starred
@@ -608,35 +601,7 @@ export default {
     },
 
     folderChats() {
-      // Fetch the latest conversations from the backend for the selected folder
-      const fetchAndMapChats = async () => {
-        try {
-          if (this.selectedFolderId) {
-            const folder = await this.$store.$chatHistoryService.getFolder(
-              this.selectedFolderId
-            );
-            const chatIds = folder.conversations.map((conv) => conv._key);
-            console.log(
-              `Fetched ${chatIds.length} chats for folder ${this.selectedFolderId}:`,
-              chatIds
-            );
-            return chatIds.map((id) => ({
-              id,
-              ...folder.conversations.find((conv) => conv._key === id),
-            }));
-          }
-          return [];
-        } catch (error) {
-          console.error(
-            `Error fetching chats for folder ${this.selectedFolderId}:`,
-            error
-          );
-          return [];
-        }
-      };
-
-      // Use a reactive reference to handle async data
-      return this.selectedFolderId ? fetchAndMapChats() : [];
+      return this.conversations;
     },
 
     availableFolders() {
@@ -1736,29 +1701,12 @@ export default {
     },
 
     async selectFolder(folderId) {
-      try {
-        console.log(`Selecting folder: ${folderId}`);
-        this.selectedFolderId = folderId;
-        this.conversations = [];
-        this.isLoading = true;
+      console.log(`Selecting folder: ${folderId}`);
+      this.selectedFolderId = folderId;
+      this.folderSelected = true;
 
-        const folder = await this.$store.dispatch(
-          "chatHistory/getChatsByFolderId",
-          folderId
-        );
-        console.log(`Fetched folder data:`, folder);
-
-        this.conversations = folder.map((conv) => conv._key) || [];
-        console.log(`Conversations in folder ${folderId}:`, this.conversations);
-      } catch (error) {
-        console.error("Error selecting folder:", error.stack || error);
-        notificationService.error(
-          this.safeT("sidebar.errorLoadingFolder", "Failed to load folder: ") +
-            (error.message || "Unknown error")
-        );
-      } finally {
-        this.isLoading = false;
-      }
+      // Directly fetch conversations for this folder
+      await this.fetchFolderChats(folderId);
     },
 
     async getChatsByFolderId({ commit }, folderId) {
@@ -1776,7 +1724,14 @@ export default {
     },
 
     getChatCount(folderId) {
-      return this.getChatsByFolderId(folderId).length;
+      // Get the count from the folder object if available
+      const folder = this.folders.find((f) => f.id === folderId);
+      if (folder && typeof folder.conversationCount === "number") {
+        return folder.conversationCount;
+      }
+
+      // Fallback to 0 if no count is available
+      return 0;
     },
 
     openEditFolderDialog(folder) {
@@ -2169,7 +2124,6 @@ export default {
       );
 
       try {
-        // Call the moveConversation service to update the backend
         await chatHistoryService.moveConversation(
           this.activeChat._key,
           this.selectedFolderId,
@@ -2177,14 +2131,12 @@ export default {
           this.currentUser._key
         );
 
-        // Dispatch Vuex action to update the store
         await this.moveChat({
           chatId: this.activeChat._key,
           fromFolderId: this.selectedFolderId,
           toFolderId: this.destinationFolderId,
         });
 
-        // Ensure the conversation remains in "All Chats" (default folder)
         if (
           !this.$store.state.chatHistory.folderChats.default.includes(
             this.activeChat._key
@@ -2196,11 +2148,6 @@ export default {
           });
         }
 
-        // If starred, ensure it remains in the "Starred" view (handled by filtering in computed properties)
-        if (this.activeChat.isStarred) {
-          // No explicit action needed; filteredConversations handles this
-        }
-
         this.showMoveChatDialog = false;
         this.destinationFolderId = null;
 
@@ -2208,13 +2155,12 @@ export default {
           this.safeT("sidebar.chatMoved", "Conversation moved successfully")
         );
 
-        // Reload conversations for the current tab and target folder
+        // Reload conversations for the current tab
         this.loadConversationsForCurrentTab();
-        if (
-          this.currentSecondLevelTab === "folders" &&
-          this.selectedFolderId !== this.destinationFolderId
-        ) {
-          this.selectFolder(this.destinationFolderId); // Switch to the target folder to verify
+
+        // If in folders tab, ensure the target folder is selected to refresh the view
+        if (this.currentSecondLevelTab === "folders") {
+          this.selectFolder(this.destinationFolderId); // This will trigger the watch
         }
       } catch (error) {
         console.error("Error moving chat:", error);
@@ -2260,6 +2206,57 @@ export default {
         month: "short",
         day: "numeric",
       });
+    },
+
+    async fetchFolderChats(folderId) {
+      try {
+        this.isLoading = true;
+        this.errorMessage = null;
+        this.conversations = [];
+
+        console.log(`Fetching conversations for folder ${folderId}`);
+
+        if (!this.currentUser || !this.currentUser._key) {
+          this.errorMessage = "User data is missing";
+          return;
+        }
+
+        // Use chatHistoryService directly (not through $store)
+        const folderData = await chatHistoryService.getFolder(folderId);
+        console.log(`Fetched folder data:`, folderData);
+
+        if (folderData && folderData.conversations) {
+          this.conversations = folderData.conversations.map((conv) => ({
+            ...conv,
+            isStarred: conv.isStarred === true,
+            isArchived: conv.isArchived === true,
+            preview: this.generatePreview(conv),
+            messageCount: conv.messageCount || 0,
+          }));
+
+          console.log(
+            `Loaded ${this.conversations.length} conversations for folder ${folderId}`
+          );
+          this.forceDisplayConversations();
+        } else {
+          console.log(`No conversations found for folder ${folderId}`);
+        }
+      } catch (error) {
+        console.error(`Error fetching chats for folder ${folderId}:`, error);
+        this.errorMessage =
+          this.safeT("sidebar.errorLoadingFolder", "Failed to load folder: ") +
+          (error.message || "Unknown error");
+        notificationService.error(this.errorMessage);
+      } finally {
+        this.isLoading = false;
+      }
+    },
+  },
+  watch: {
+    selectedFolderId(newFolderId) {
+      if (newFolderId && this.currentSecondLevelTab === "folders") {
+        this.fetchFolderChats(newFolderId);
+      }
     },
   },
 };

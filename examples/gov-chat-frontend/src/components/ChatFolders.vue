@@ -128,11 +128,11 @@
         class="chats-list"
         v-if="
           (currentSecondLevelTab !== 'folders' || folderSelected) &&
-          conversations.length > 0
+          filteredConversations.length > 0
         "
       >
         <div
-          v-for="conversation in conversations"
+          v-for="conversation in filteredConversations"
           :key="conversation._key"
           class="chat-item"
           @click="openChat(conversation._key)"
@@ -624,22 +624,25 @@ export default {
           );
         }
 
-        if (
-          this.searchTerm &&
-          this.searchTerm.trim() !== "" &&
-          !this.isLoading
-        ) {
+        if (this.searchTerm && this.searchTerm.trim() !== "") {
           const searchTermLower = this.searchTerm.trim().toLowerCase();
+          console.log(`Applying search term: ${searchTermLower}`);
           filteredChats = filteredChats.filter((conv) => {
-            return (
+            const matches =
               (conv.title &&
                 conv.title.toLowerCase().includes(searchTermLower)) ||
               (conv.preview &&
                 conv.preview.toLowerCase().includes(searchTermLower)) ||
               (conv.category &&
-                conv.category.toLowerCase().includes(searchTermLower))
+                conv.category.toLowerCase().includes(searchTermLower));
+            console.log(
+              `Conversation ${conv._key} (${conv.title}): matches=${matches}`
             );
+            return matches;
           });
+          console.log(
+            `After search filtering: ${filteredChats.length} conversations`
+          );
         }
 
         return filteredChats.sort((a, b) => {
@@ -743,8 +746,6 @@ export default {
       if (searchInput) {
         searchInput.value = "";
       }
-
-      this.$forceUpdate();
     },
 
     safeT(key, fallback) {
@@ -932,20 +933,9 @@ export default {
           return;
         }
 
-        let options = { limit: 100, offset: 0 };
-
-        if (tabType === "starred") {
-          options.includeArchived = false;
-          options.filterStarred = true;
-          console.log("Using STARRED filter params:", options);
-        } else if (tabType === "archived") {
+        const options = { limit: 100, offset: 0 };
+        if (tabType === "archived") {
           options.includeArchived = true;
-          options.filterArchived = true;
-          console.log("Using ARCHIVED filter params:", options);
-        }
-
-        if (this.searchTerm && this.searchTerm.trim() !== "") {
-          options.searchTerm = this.searchTerm.trim();
         }
 
         console.log("Fetching conversations with options:", options);
@@ -961,50 +951,6 @@ export default {
           response
         );
 
-        if (!response.conversations || response.conversations.length === 0) {
-          if (tabType === "starred") {
-            console.log(
-              "No starred conversations returned, trying alternate approach"
-            );
-            const allResponse = await chatHistoryService.getUserConversations(
-              this.currentUser._key,
-              { limit: 100, offset: 0 }
-            );
-
-            if (
-              allResponse.conversations &&
-              allResponse.conversations.length > 0
-            ) {
-              response.conversations = allResponse.conversations.filter(
-                (conv) => conv.isStarred === true
-              );
-              console.log(
-                `Found ${response.conversations.length} starred conversations using alternate approach`
-              );
-            }
-          } else if (tabType === "archived") {
-            console.log(
-              "No archived conversations returned, trying alternate approach"
-            );
-            const allResponse = await chatHistoryService.getUserConversations(
-              this.currentUser._key,
-              { limit: 100, offset: 0, includeArchived: true }
-            );
-
-            if (
-              allResponse.conversations &&
-              allResponse.conversations.length > 0
-            ) {
-              response.conversations = allResponse.conversations.filter(
-                (conv) => conv.isArchived === true
-              );
-              console.log(
-                `Found ${response.conversations.length} archived conversations using alternate approach`
-              );
-            }
-          }
-        }
-
         this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
@@ -1014,16 +960,6 @@ export default {
             messageCount: conv.messageCount || 0,
           };
         });
-
-        if (tabType === "archived") {
-          this.conversations = this.conversations.filter(
-            (conv) => conv.isArchived === true
-          );
-        } else if (tabType === "starred") {
-          this.conversations = this.conversations.filter(
-            (conv) => conv.isStarred === true
-          );
-        }
 
         console.log(
           `Loaded ${this.conversations.length} conversations for ${tabType} tab`
@@ -1097,11 +1033,10 @@ export default {
       console.log("Force displaying conversations:", this.conversations.length);
 
       this.conversations = [...this.conversations];
-      this.$forceUpdate();
 
-      setTimeout(() => {
-        this.$forceUpdate();
-      }, 100);
+      this.$nextTick(() => {
+        console.log("UI update scheduled after conversations change");
+      });
     },
 
     async loadConversations() {
@@ -1133,26 +1068,11 @@ export default {
         const userId = this.currentUser._key;
         console.log(`Loading conversations for user ID: ${userId}`);
 
-        const options = {
-          limit: 100,
-          offset: 0,
-        };
-
+        const options = { limit: 100, offset: 0 };
         if (this.currentSecondLevelTab === "all") {
           options.includeArchived = false;
-          options.filterStarred = false;
-        } else if (this.currentSecondLevelTab === "starred") {
-          options.includeArchived = false;
-          options.filterStarred = true;
-          console.log("Loading STARRED conversations with options:", options);
         } else if (this.currentSecondLevelTab === "archived") {
           options.includeArchived = true;
-          options.filterArchived = true;
-          console.log("Loading ARCHIVED conversations with options:", options);
-        }
-
-        if (this.searchTerm && this.searchTerm.trim() !== "") {
-          options.searchTerm = this.searchTerm.trim();
         }
 
         console.log("Fetching conversations with options:", options);
@@ -1168,50 +1088,6 @@ export default {
           response
         );
 
-        if (!response.conversations || response.conversations.length === 0) {
-          if (this.currentSecondLevelTab === "starred") {
-            console.log(
-              "No starred conversations returned, trying alternate approach"
-            );
-            const allResponse = await chatHistoryService.getUserConversations(
-              userId,
-              { limit: 100, offset: 0 }
-            );
-
-            if (
-              allResponse.conversations &&
-              allResponse.conversations.length > 0
-            ) {
-              response.conversations = allResponse.conversations.filter(
-                (conv) => conv.isStarred === true
-              );
-              console.log(
-                `Found ${response.conversations.length} starred conversations using alternate approach`
-              );
-            }
-          } else if (this.currentSecondLevelTab === "archived") {
-            console.log(
-              "No archived conversations returned, trying alternate approach"
-            );
-            const allResponse = await chatHistoryService.getUserConversations(
-              userId,
-              { limit: 100, offset: 0, includeArchived: true }
-            );
-
-            if (
-              allResponse.conversations &&
-              allResponse.conversations.length > 0
-            ) {
-              response.conversations = allResponse.conversations.filter(
-                (conv) => conv.isArchived === true
-              );
-              console.log(
-                `Found ${response.conversations.length} archived conversations using alternate approach`
-              );
-            }
-          }
-        }
-
         this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
@@ -1221,16 +1097,6 @@ export default {
             messageCount: conv.messageCount || 0,
           };
         });
-
-        if (this.currentSecondLevelTab === "archived") {
-          this.conversations = this.conversations.filter(
-            (conv) => conv.isArchived === true
-          );
-        } else if (this.currentSecondLevelTab === "starred") {
-          this.conversations = this.conversations.filter(
-            (conv) => conv.isStarred === true
-          );
-        }
 
         console.log(
           `Loaded ${this.conversations.length} conversations for ${this.currentSecondLevelTab} tab`
@@ -1258,9 +1124,18 @@ export default {
       );
 
       if (this.currentSecondLevelTab === "folders") {
-        console.log("In folders tab - skipping conversation loading");
-        this.conversations = [];
-        this.isLoading = false;
+        if (this.folderSelected && this.selectedFolderId) {
+          console.log(
+            `Loading conversations for selected folder: ${this.selectedFolderId}`
+          );
+          this.fetchFolderChats(this.selectedFolderId);
+        } else {
+          console.log(
+            "No folder selected in Folders tab - clearing conversations"
+          );
+          this.conversations = [];
+          this.isLoading = false;
+        }
         return;
       }
 
@@ -1579,17 +1454,11 @@ export default {
         `Search term changed to: ${this.searchTerm}, reloading conversations`
       );
 
-      if (this.searchDebounceTimeout) {
-        clearTimeout(this.searchDebounceTimeout);
-      }
+      this.loadConversationsForCurrentTab();
 
-      this.searchDebounceTimeout = setTimeout(() => {
-        if (this.searchTerm && this.searchTerm.length < 3) {
-          this.$forceUpdate();
-        } else {
-          this.loadConversationsForCurrentTab();
-        }
-      }, 300);
+      this.$nextTick(() => {
+        console.log("UI update scheduled after search term change");
+      });
     },
 
     getTabTitle() {
@@ -1689,7 +1558,6 @@ export default {
       this.selectedFolderId = folderId;
       this.folderSelected = true;
 
-      // Directly fetch conversations for this folder
       await this.fetchFolderChats(folderId);
     },
 
@@ -2290,7 +2158,6 @@ export default {
           return;
         }
 
-        // Use chatHistoryService directly (not through $store)
         const folderData = await chatHistoryService.getFolder(folderId);
         console.log(`Fetched folder data:`, folderData);
 

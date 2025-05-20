@@ -56,7 +56,6 @@
     </template>
 
     <!-- Chats in Selected Folder or Tab -->
-    <!-- Chats in Selected Folder or Tab -->
     <div class="folder-chats">
       <h3>{{ getTabTitle() }}</h3>
 
@@ -137,7 +136,6 @@
           class="chat-item"
           @click="openChat(conversation._key)"
         >
-          <!-- Existing chat item structure -->
           <div class="chat-icon">
             <i class="fas fa-comment"></i>
           </div>
@@ -193,6 +191,18 @@
               <span class="chat-category" v-if="conversation.category">
                 {{ conversation.category }}
               </span>
+              <div
+                class="chat-tags"
+                v-if="conversation.tags && conversation.tags.length > 0"
+              >
+                <span
+                  v-for="tag in conversation.tags"
+                  :key="tag"
+                  class="chat-tag"
+                >
+                  {{ tag }}
+                </span>
+              </div>
               <div class="chat-dates">
                 <span class="chat-created">
                   {{ safeT("sidebar.created", "Created") }}:
@@ -523,6 +533,7 @@ import ContextMenu from "./ContextMenu.vue";
 import chatHistoryService from "@/services/chatHistoryService";
 import userService from "@/services/userService";
 import notificationService from "@/services/notificationService";
+import { eventBus } from "../eventBus.js";
 
 export default {
   name: "ChatFolders",
@@ -536,21 +547,17 @@ export default {
       selectedFolderId: "default",
       currentSecondLevelTab: "all",
       folderSelected: false,
-
       conversations: [],
       isLoading: false,
       errorMessage: null,
       searchTerm: "",
       searchDebounceTimeout: null,
-
       showCreateFolderDialog: false,
       newFolderName: "",
-
       editingFolder: null,
       editingFolderName: "",
       showEditFolderDialog: false,
       showDeleteFolderDialog: false,
-
       activeChat: null,
       showChatMenu: false,
       menuPosition: { x: 0, y: 0 },
@@ -559,11 +566,9 @@ export default {
       showRenameChatDialog: false,
       newChatTitle: "",
       showDeleteChatDialog: false,
-
       currentUser: null,
-
       categories: {},
-
+      folderCounts: {}, // Added for conversation counts
       debug: false,
     };
   },
@@ -1191,34 +1196,31 @@ export default {
           `Toggling starred status for conversation ${conversation._key}`
         );
         const newStatus = !conversation.isStarred;
-
         if (!this.currentUser || !this.currentUser._key) {
           console.error(
             "Cannot update conversation: No current user or missing user ID"
           );
           notificationService.error(
-            this.safeT(
-              "sidebar.errorNoUser",
-              "User data is missing. Please reload the page."
-            )
+            this.safeT("sidebar.errorNoUser", "User data is missing")
           );
           return;
         }
-
         conversation.isStarred = newStatus;
-
         await chatHistoryService.updateConversation(conversation._key, {
           isStarred: newStatus,
           userId: this.currentUser._key,
         });
-
         if (this.currentSecondLevelTab === "starred" && !newStatus) {
           this.conversations = this.conversations.filter(
             (conv) => conv._key !== conversation._key
           );
           this.forceDisplayConversations();
+          // Update folderCounts for the current folder
+          if (this.selectedFolderId) {
+            this.folderCounts[this.selectedFolderId] =
+              this.conversations.length;
+          }
         }
-
         if (newStatus) {
           notificationService.success(
             this.safeT("sidebar.chatStarred", "Conversation has been starred")
@@ -1233,7 +1235,6 @@ export default {
         }
       } catch (error) {
         conversation.isStarred = !conversation.isStarred;
-
         console.error("Error toggling starred status:", error);
         notificationService.error(
           this.safeT(
@@ -1250,41 +1251,42 @@ export default {
           `Toggling archived status for conversation ${conversation._key}`
         );
         const newStatus = event.target.checked;
-
         if (!this.currentUser || !this.currentUser._key) {
           console.error(
             "Cannot update conversation: No current user or missing user ID"
           );
           notificationService.error(
-            this.safeT(
-              "sidebar.errorNoUser",
-              "User data is missing. Please reload the page."
-            )
+            this.safeT("sidebar.errorNoUser", "User data is missing")
           );
           return;
         }
-
         conversation.isArchived = newStatus;
-
         await chatHistoryService.updateConversation(conversation._key, {
           isArchived: newStatus,
           userId: this.currentUser._key,
         });
-
         if (this.currentSecondLevelTab !== "archived" && newStatus) {
           this.conversations = this.conversations.filter(
             (conv) => conv._key !== conversation._key
           );
           this.forceDisplayConversations();
+          // Update folderCounts for the current folder
+          if (this.selectedFolderId) {
+            this.folderCounts[this.selectedFolderId] =
+              this.conversations.length;
+          }
         }
-
         if (this.currentSecondLevelTab === "archived" && !newStatus) {
           this.conversations = this.conversations.filter(
             (conv) => conv._key !== conversation._key
           );
           this.forceDisplayConversations();
+          // Update folderCounts for the current folder
+          if (this.selectedFolderId) {
+            this.folderCounts[this.selectedFolderId] =
+              this.conversations.length;
+          }
         }
-
         if (newStatus) {
           notificationService.success(
             this.safeT("sidebar.chatArchived", "Conversation has been archived")
@@ -1299,7 +1301,6 @@ export default {
         }
       } catch (error) {
         conversation.isArchived = !conversation.isArchived;
-
         console.error("Error toggling archived status:", error);
         notificationService.error(
           this.safeT(
@@ -1576,14 +1577,8 @@ export default {
     },
 
     getChatCount(folderId) {
-      // Get the count from the folder object if available
-      const folder = this.folders.find((f) => f.id === folderId);
-      if (folder && typeof folder.conversationCount === "number") {
-        return folder.conversationCount;
-      }
-
-      // Fallback to 0 if no count is available
-      return 0;
+      // Use folderCounts for the count, fallback to 0
+      return this.folderCounts[folderId] || 0;
     },
 
     openEditFolderDialog(folder) {
@@ -1599,40 +1594,32 @@ export default {
 
     async handleCreateFolder() {
       console.log("handleCreateFolder called with name:", this.newFolderName);
-
       if (!this.newFolderName.trim()) {
         console.log("Folder name is empty, not creating");
         return;
       }
-
       try {
         if (!this.currentUser || !this.currentUser._key) {
           console.error(
             "Cannot create folder: No current user or missing user ID"
           );
           notificationService.error(
-            this.safeT(
-              "sidebar.errorNoUser",
-              "User data is missing. Please reload the page."
-            )
+            this.safeT("sidebar.errorNoUser", "User data is missing")
           );
           return;
         }
-
         const folderData = {
           userId: this.currentUser._key,
           name: this.newFolderName.trim(),
         };
-
         console.log("Creating folder with data:", folderData);
-
         const result = await chatHistoryService.createFolder(folderData);
         console.log("Folder created successfully:", result);
-
+        // Initialize folderCounts for new folder
+        this.folderCounts[result._key] = 0;
         notificationService.success(
           this.safeT("sidebar.folderCreated", "Folder created successfully")
         );
-
         this.showCreateFolderDialog = false;
         this.loadFoldersFromBackend();
       } catch (error) {
@@ -1646,7 +1633,6 @@ export default {
     async loadFoldersFromBackend() {
       try {
         console.log("Loading folders from backend");
-
         if (!this.currentUser || !this.currentUser._key) {
           console.error(
             "Cannot load folders: No current user or missing user ID"
@@ -1657,7 +1643,6 @@ export default {
           );
           return [];
         }
-
         const response = await chatHistoryService.getUserFolders(
           this.currentUser._key
         );
@@ -1665,12 +1650,10 @@ export default {
           "Raw getUserFolders response:",
           JSON.stringify(response, null, 2)
         );
-
         let foldersArray = Array.isArray(response)
           ? response
           : response?.folders || [];
         console.log(`Received ${foldersArray.length} folders:`, foldersArray);
-
         const processedFolders = foldersArray
           .filter((folder) => folder && (folder._key || folder.id))
           .map((folder) => ({
@@ -1679,7 +1662,10 @@ export default {
             description: folder.description || "",
             isDefault: folder.isDefault || false,
           }));
-
+        // Initialize folderCounts with 0 for all folders
+        foldersArray.forEach((folder) => {
+          this.folderCounts[folder._key] = 0;
+        });
         // Add default folder explicitly
         const defaultFolder = {
           id: "default",
@@ -1687,15 +1673,13 @@ export default {
           isDefault: true,
           createdAt: new Date().toISOString(),
         };
+        this.folderCounts[defaultFolder.id] = 0; // Initialize default folder count
         const allFolders = [defaultFolder, ...processedFolders];
-
         console.log(
           "All folders (with default) before dispatch:",
           JSON.stringify(allFolders, null, 2)
         );
-
         await this.$store.dispatch("chatHistory/setFolders", allFolders);
-
         const stateFolders = [...this.$store.state.chatHistory.folders];
         console.log(
           "Vuex state.chatHistory.folders after dispatch:",
@@ -1710,12 +1694,14 @@ export default {
           "Computed nonDefaultFolders after dispatch:",
           nonDefaultFoldersDebug
         );
-
+        // Preload conversations for all non-default folders to get accurate counts
+        for (const folder of processedFolders) {
+          await this.fetchFolderChats(folder.id);
+        }
         if (this.currentSecondLevelTab === "folders") {
           this.ensureFoldersSectionVisible();
           this.selectFirstCustomFolder();
         }
-
         return processedFolders;
       } catch (error) {
         console.error("Error loading folders from backend:", error);
@@ -1939,38 +1925,37 @@ export default {
       if (!this.activeChat) {
         return;
       }
-
       if (!this.currentUser || !this.currentUser._key) {
         console.error("Cannot delete chat: No current user or missing user ID");
         notificationService.error(
-          this.safeT(
-            "sidebar.errorNoUser",
-            "User data is missing. Please reload the page."
-          )
+          this.safeT("sidebar.errorNoUser", "User data is missing")
         );
         return;
       }
-
       console.log(`Deleting chat ${this.activeChat._key}`);
-
       try {
         await chatHistoryService.deleteConversation(
           this.activeChat._key,
           this.currentUser._key
         );
-
         this.conversations = this.conversations.filter(
           (c) => c._key !== this.activeChat._key
         );
         this.deleteChat(this.activeChat._key);
+        // Update folderCounts for the current folder
+        if (
+          this.selectedFolderId &&
+          this.folderCounts[this.selectedFolderId] !== undefined
+        ) {
+          this.folderCounts[this.selectedFolderId] = this.conversations.length;
+        }
         this.showDeleteChatDialog = false;
+        eventBus.$emit("chat-deleted", this.activeChat._key);
         this.activeChat = null;
-        this.showChatMenu = false; // Ensure context menu stays closed
-
+        this.showChatMenu = false;
         notificationService.success(
           this.safeT("sidebar.chatDeleted", "Conversation deleted successfully")
         );
-
         this.loadConversationsForCurrentTab();
       } catch (error) {
         console.error("Error deleting chat:", error);
@@ -1987,20 +1972,14 @@ export default {
       if (!this.activeChat) {
         return;
       }
-
       if (!this.currentUser || !this.currentUser._key) {
         console.error("Cannot move chat: No current user or missing user ID");
         notificationService.error(
-          this.safeT(
-            "sidebar.errorNoUser",
-            "User data is missing. Please reload the page."
-          )
+          this.safeT("sidebar.errorNoUser", "User data is missing")
         );
         return;
       }
-
       const isRemovingFromFolder = this.destinationFolderId === "no_folder";
-
       console.log(
         `${isRemovingFromFolder ? "Removing" : "Moving"} chat ${
           this.activeChat._key
@@ -2010,7 +1989,6 @@ export default {
             : `to folder ${this.destinationFolderId}`
         }`
       );
-
       try {
         if (isRemovingFromFolder) {
           await chatHistoryService.removeConversationFromFolder(
@@ -2018,7 +1996,6 @@ export default {
             this.selectedFolderId,
             this.currentUser._key
           );
-
           if (
             this.$store.state.chatHistory.folderChats[this.selectedFolderId]
           ) {
@@ -2027,7 +2004,10 @@ export default {
               folderId: this.selectedFolderId,
             });
           }
-
+          // Update folderCounts for source folder
+          const sourceCount =
+            (this.folderCounts[this.selectedFolderId] || 1) - 1;
+          this.folderCounts[this.selectedFolderId] = Math.max(0, sourceCount);
           this.selectedFolderId = "default";
           this.folderSelected = false;
         } else {
@@ -2037,17 +2017,21 @@ export default {
             this.destinationFolderId,
             this.currentUser._key
           );
-
           await this.moveChat({
             chatId: this.activeChat._key,
             fromFolderId: this.selectedFolderId,
             toFolderId: this.destinationFolderId,
           });
-
+          // Update folderCounts
+          const sourceCount =
+            (this.folderCounts[this.selectedFolderId] || 1) - 1;
+          const destCount =
+            (this.folderCounts[this.destinationFolderId] || 0) + 1;
+          this.folderCounts[this.selectedFolderId] = Math.max(0, sourceCount);
+          this.folderCounts[this.destinationFolderId] = destCount;
           this.selectedFolderId = this.destinationFolderId;
           this.folderSelected = true;
         }
-
         if (
           !this.$store.state.chatHistory.folderChats.default.includes(
             this.activeChat._key
@@ -2058,11 +2042,9 @@ export default {
             folderId: "default",
           });
         }
-
         this.showMoveChatDialog = false;
         this.destinationFolderId = null;
-        this.showChatMenu = false; // Ensure context menu stays closed
-
+        this.showChatMenu = false;
         notificationService.success(
           isRemovingFromFolder
             ? this.safeT(
@@ -2071,9 +2053,7 @@ export default {
               )
             : this.safeT("sidebar.chatMoved", "Conversation moved successfully")
         );
-
         this.loadConversationsForCurrentTab();
-
         if (this.currentSecondLevelTab === "folders") {
           if (isRemovingFromFolder) {
             if (this.selectedFolderId !== "default") {
@@ -2150,17 +2130,15 @@ export default {
         this.isLoading = true;
         this.errorMessage = null;
         this.conversations = [];
-
         console.log(`Fetching conversations for folder ${folderId}`);
-
         if (!this.currentUser || !this.currentUser._key) {
           this.errorMessage = "User data is missing";
           return;
         }
-
-        const folderData = await chatHistoryService.getFolder(folderId);
+        const folderData = await chatHistoryService.getFolder(folderId, {
+          params: { limit: 100, offset: 0 },
+        });
         console.log(`Fetched folder data:`, folderData);
-
         if (folderData && folderData.conversations) {
           this.conversations = folderData.conversations.map((conv) => ({
             ...conv,
@@ -2169,13 +2147,20 @@ export default {
             preview: this.generatePreview(conv),
             messageCount: conv.messageCount || 0,
           }));
-
+          // Update folderCounts with the actual number of conversations
+          this.folderCounts[folderId] = this.conversations.length;
           console.log(
-            `Loaded ${this.conversations.length} conversations for folder ${folderId}`
+            `Loaded ${this.conversations.length} conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${this.conversations.length}`
           );
+          // Update Vuex folderChats
+          await this.$store.dispatch("chatHistory/setFolderChats", {
+            folderId,
+            chats: this.conversations.map((conv) => conv._key),
+          });
           this.forceDisplayConversations();
         } else {
           console.log(`No conversations found for folder ${folderId}`);
+          this.folderCounts[folderId] = 0;
         }
       } catch (error) {
         console.error(`Error fetching chats for folder ${folderId}:`, error);
@@ -2188,6 +2173,7 @@ export default {
       }
     },
   },
+
   watch: {
     selectedFolderId(newFolderId) {
       if (
@@ -2437,6 +2423,23 @@ html[data-theme="dark"] .folders-header h3 {
   font-size: 0.8rem;
   max-width: fit-content;
   margin-bottom: 4px;
+}
+
+.chat-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.chat-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: rgba(78, 151, 209, 0.1);
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--text-primary);
 }
 
 .chat-dates {

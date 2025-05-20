@@ -64,18 +64,48 @@ class ChatHistoryService {
         throw new Error('User ID is required');
       }
 
+      // Fetch category name if categoryId is provided
+      let categoryName = '';
+      if (conversationData.categoryId) {
+        const categoryQuery = await this.db.query(aql`
+          FOR cat IN serviceCategories
+            FILTER cat._key == ${conversationData.categoryId}
+            RETURN cat.nameEN
+        `);
+        categoryName = await categoryQuery.next() || '';
+        logger.info(`Resolved categoryId ${conversationData.categoryId} to name: ${categoryName}`);
+      }
+
+      // Generate _key in a format similar to existing documents (numeric string)
+      const timestamp = Date.now().toString();
+      const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      const generatedKey = `${timestamp}${randomSuffix}`; // e.g., "1747653190597"
+
+      // Compute messageCount by counting existing messages for this conversation
+      const messageCountQuery = await this.db.query(aql`
+        FOR msg IN messages
+          FILTER msg.conversationId == ${generatedKey}
+          RETURN msg
+      `);
+      const messages = await messageCountQuery.all();
+      const messageCount = messages.length;
+      logger.info(`Computed messageCount for conversation ${generatedKey}: ${messageCount}`);
+
       // Prepare conversation document
       const conversationDoc = {
+        _key: generatedKey,
         title: conversationData.title || 'New Conversation',
-        lastMessage: conversationData.lastMessage || '',
+        lastMessage: conversationData.initialMessage || '',
         created: conversationData.created || new Date().toISOString(),
         updated: conversationData.updated || new Date().toISOString(),
-        messageCount: conversationData.messageCount || 0,
-        isStarred: conversationData.isStarred || false,
-        isArchived: conversationData.isArchived || false,
-        category: conversationData.category || '',
+        messageCount: messageCount, // Use computed value
+        isStarred: Boolean(conversationData.isStarred) || false,
+        isArchived: Boolean(conversationData.isArchived) || false,
+        category: categoryName || '',
         tags: Array.isArray(conversationData.tags) ? conversationData.tags : []
       };
+
+      logger.info('Document to save:', JSON.stringify(conversationDoc, null, 2));
 
       // Create conversation
       const conversation = await this.conversations.save(conversationDoc);
@@ -100,20 +130,6 @@ class ChatHistoryService {
         logger.info(`Conversation ${conversation._key} linked to category ${conversationData.categoryId}`);
       }
 
-      // Track conversation creation in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            conversationData.userId,
-            'conversationCreated',
-            { conversationId: conversation._key }
-          );
-        } catch (error) {
-          logger.error('Error tracking conversation creation in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
-
       return { ...conversation, ...conversationDoc };
     } catch (error) {
       logger.error('Error creating conversation:', error);
@@ -126,6 +142,11 @@ class ChatHistoryService {
    * @param {Object} messageData - Message data
    * @returns {Promise<Object>} The created message
    */
+  /**
+ * Add a message to a conversation
+ * @param {Object} messageData - Message data
+ * @returns {Promise<Object>} The created message
+ */
   async addMessage(messageData) {
     try {
       logger.info(`Adding message to conversation ${messageData.conversationId}`);
@@ -141,12 +162,12 @@ class ChatHistoryService {
 
       // Get the latest sequence number for this conversation
       const sequenceCursor = await this.db.query(aql`
-        FOR msg IN messages
-          FILTER msg.conversationId == ${messageData.conversationId}
-          SORT msg.sequence DESC
-          LIMIT 1
-          RETURN msg.sequence
-      `);
+      FOR msg IN messages
+        FILTER msg.conversationId == ${messageData.conversationId}
+        SORT msg.sequence DESC
+        LIMIT 1
+        RETURN msg.sequence
+    `);
 
       const latestSequence = await sequenceCursor.next() || 0;
       const newSequence = latestSequence + 1;
@@ -168,14 +189,29 @@ class ChatHistoryService {
 
       // Link to originating query if provided
       if (messageData.queryId) {
-        await this.queryMessages.save({
+        const edgeDoc = {
           _from: `queries/${messageData.queryId}`,
           _to: `messages/${message._key}`,
           responseType: messageData.responseType || 'primary',
-          confidenceScore: messageData.confidenceScore || 1.0,
-          createdAt: new Date().toISOString()
-        });
-        logger.info(`Message ${message._key} linked to query ${messageData.queryId}`);
+          createdAt: new Date().toISOString().split('.')[0] + 'Z' // Simplified format: "2025-05-19T12:32:09Z"
+        };
+
+        // Add optional fields only if schema permits
+        if (messageData.confidenceScore !== undefined) {
+          edgeDoc.confidenceScore = Number(messageData.confidenceScore);
+        }
+        if (messageData.userId) {
+          edgeDoc.userId = messageData.userId;
+        }
+
+        logger.info(`Creating queryMessages edge with document:`, JSON.stringify(edgeDoc, null, 2));
+        try {
+          await this.queryMessages.save(edgeDoc);
+          logger.info(`Message ${message._key} linked to query ${messageData.queryId}`);
+        } catch (error) {
+          logger.error(`Failed to create queryMessages edge:`, error);
+          throw error;
+        }
       }
 
       // Update conversation stats
@@ -187,24 +223,6 @@ class ChatHistoryService {
         updated: new Date().toISOString()
       });
       logger.info(`Conversation ${messageData.conversationId} stats updated`);
-
-      // Track message creation in analytics if service is available
-      if (this.analyticsService && messageData.userId) {
-        try {
-          await this.analyticsService.trackEvent(
-            messageData.userId,
-            'messageSent',
-            {
-              conversationId: messageData.conversationId,
-              messageId: message._key,
-              sender: messageData.sender
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking message creation in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
 
       return { ...message, ...messageDoc };
     } catch (error) {
@@ -393,6 +411,33 @@ class ChatHistoryService {
   }
 
   /**
+ * Update the response time of a query
+ * @param {String} queryId - The ID of the query to update
+ * @param {Number} responseTime - The response time in milliseconds
+ * @returns {Promise<Object>} The updated query document
+ */
+  async updateQueryResponseTime(queryId, responseTime) {
+    try {
+      logger.info(`Updating response time for query ${queryId} to ${responseTime}ms`);
+
+      if (!queryId || (!responseTime && responseTime !== 0)) {
+        throw new Error('queryId and responseTime are required');
+      }
+
+      const updatedQuery = await this.db.collection('queries').update(queryId, {
+        responseTime: Number(responseTime),
+        updatedAt: new Date().toISOString()
+      }, { returnNew: true });
+
+      logger.info(`Successfully updated response time for query ${queryId}`);
+      return updatedQuery.new;
+    } catch (error) {
+      logger.error(`Error updating response time for query ${queryId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get conversation messages
    * @param {String} conversationId - Conversation ID
    * @param {Object} options - Query options (limit, offset)
@@ -513,23 +558,6 @@ class ChatHistoryService {
         });
 
         logger.info(`Conversation ${conversationId} category updated to ${updateData.categoryId}`);
-      }
-
-      // Track conversation update in analytics if service is available
-      if (this.analyticsService && updateData.userId) {
-        try {
-          await this.analyticsService.trackEvent(
-            updateData.userId,
-            'conversationUpdated',
-            {
-              conversationId,
-              updatedFields: Object.keys(filteredData)
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking conversation update in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
       }
 
       return updatedConv.new;
@@ -720,23 +748,6 @@ class ChatHistoryService {
         await trx.commit();
 
         logger.info(`Conversation ${conversationId} deleted with ${messagesDeleted.length} messages`);
-
-        // Track conversation deletion in analytics if service is available
-        if (this.analyticsService) {
-          try {
-            await this.analyticsService.trackEvent(
-              userId,
-              'conversationDeleted',
-              {
-                conversationId,
-                messageCount: messagesDeleted.length
-              }
-            );
-          } catch (error) {
-            logger.error('Error tracking conversation deletion in analytics:', error);
-            // Continue even if analytics tracking fails
-          }
-        }
 
         return {
           conversationId,
@@ -1243,35 +1254,35 @@ class ChatHistoryService {
   async createFolder(folderData) {
     try {
       logger.info('Creating new folder with data:', folderData);
-  
+
       // Ensure minimum required data
       if (!folderData.userId) {
         logger.warn('Missing required user ID');
         throw new Error('User ID is required');
       }
-      
+
       // Extract the userId without the "users/" prefix if it exists
       let userIdValue = folderData.userId;
       if (userIdValue.startsWith('users/')) {
         userIdValue = userIdValue.substring(6);
       }
-  
+
       // Create a folder document following the schema exactly
       const folderDoc = {
         _key: Date.now().toString(),
         userId: userIdValue,  // Just the numeric ID without prefix
         name: folderData.name || 'New Folder'
       };
-      
+
       // Add order if provided
       if (folderData.order !== undefined) {
         folderDoc.order = Number(folderData.order);
       }
-      
+
       // Create folder
       const folder = await this.db.collection('folders').save(folderDoc);
       logger.info(`Folder created with key: ${folder._key}`);
-  
+
       // Link user to folder - use "users/" prefix for the edge
       const userFolderEdge = {
         _from: `users/${userIdValue}`,  // Edge must use full "users/ID" format
@@ -1279,24 +1290,10 @@ class ChatHistoryService {
         role: folderData.role || 'owner',
         lastAccessedAt: new Date().toISOString()
       };
-      
+
       await this.db.collection('userFolders').save(userFolderEdge);
       logger.info(`User ${userIdValue} linked to folder ${folder._key}`);
-  
-      // Track folder creation in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            userIdValue,
-            'folderCreated',
-            { folderId: folder._key }
-          );
-        } catch (error) {
-          logger.error('Error tracking folder creation in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
-  
+
       return { ...folder, ...folderDoc };
     } catch (error) {
       logger.error('Error creating folder:', error);
@@ -1376,14 +1373,14 @@ class ChatHistoryService {
   async getUserFolders(userId, options = {}) {
     try {
       logger.info(`Getting folders for user ${userId}`);
-      
+
       // Log collection name and the key format being used
       logger.info(`DEBUG - Collection: userFolders | Searching with _from key: '${userId}'`);
-  
+
       // Parse options
       const includeArchived = options.includeArchived || false;
       const parentFolderId = options.parentFolderId || null;
-      
+
       // Create the base query to check what's available
       const baseQuery = `
       FOR edge IN userFolders
@@ -1397,19 +1394,19 @@ class ChatHistoryService {
           collection: "folders" 
         }
       `;
-      
+
       // Execute the base query to see what edge relationships exist
       logger.info(`DEBUG - Executing base query to check edges: ${baseQuery}`);
       const baseCursor = await this.db.query(baseQuery);
       const edges = await baseCursor.all();
       logger.info(`DEBUG - Found ${edges.length} edges in userFolders where _from='${userId}'`);
-      
+
       // Log details about each edge relationship
       if (edges.length > 0) {
         edges.forEach((edge, index) => {
-          logger.info(`DEBUG - Edge ${index+1} details: _from='${edge._from}', _to='${edge._to}'`);
+          logger.info(`DEBUG - Edge ${index + 1} details: _from='${edge._from}', _to='${edge._to}'`);
         });
-        
+
         // Now fetch the actual folder documents to check their properties
         const folderIds = edges.map(edge => edge._to);
         const folderKeysQuery = `
@@ -1424,13 +1421,13 @@ class ChatHistoryService {
             properties: ATTRIBUTES(folder)
           }
         `;
-        
+
         logger.info(`DEBUG - Checking folder properties with query: ${folderKeysQuery}`);
         const folderCursor = await this.db.query(folderKeysQuery);
         const folders = await folderCursor.all();
-        
+
         folders.forEach((folder, index) => {
-          logger.info(`DEBUG - Folder ${index+1} document details:`);
+          logger.info(`DEBUG - Folder ${index + 1} document details:`);
           logger.info(`  _id: ${folder._id}`);
           logger.info(`  _key: ${folder._key}`);
           logger.info(`  name: ${folder.name}`);
@@ -1439,10 +1436,10 @@ class ChatHistoryService {
           logger.info(`  All properties: ${JSON.stringify(folder.properties)}`);
         });
       }
-      
+
       // Create the actual query with filters and verbose debug information
       logger.info(`DEBUG - Using filters: includeArchived=${includeArchived}, parentFolderId=${parentFolderId || 'null'}`);
-      
+
       const query = `
       FOR edge IN userFolders
         FILTER edge._from == '${userId}'
@@ -1492,22 +1489,22 @@ class ChatHistoryService {
           lastAccessedAt: edge.lastAccessedAt || null
         }
       `;
-  
+
       logger.info(`Executing query for user path: ${userId}`);
       const cursor = await this.db.query(query);
       const folders = await cursor.all();
       logger.info(`Found ${folders.length} folders for user ${userId}`);
-  
+
       // Log the final results
       if (folders.length > 0) {
         logger.info(`DEBUG - Final result folders:`);
         folders.forEach((folder, index) => {
-          logger.info(`  Folder ${index+1}: ${folder._id} (${folder.name})`);
+          logger.info(`  Folder ${index + 1}: ${folder._id} (${folder.name})`);
         });
       } else {
         logger.info(`DEBUG - No folders passed the filter conditions`);
       }
-  
+
       return folders;
     } catch (error) {
       logger.error(`Error getting folders for user ${userId}:`, error);
@@ -1549,23 +1546,6 @@ class ChatHistoryService {
       // Update the folder
       const updatedFolder = await this.db.collection('folders').update(folderId, filteredData, { returnNew: true });
       logger.info(`Folder ${folderId} updated successfully`);
-
-      // Track folder update in analytics if service is available
-      if (this.analyticsService && updateData.userId) {
-        try {
-          await this.analyticsService.trackEvent(
-            updateData.userId,
-            'folderUpdated',
-            {
-              folderId,
-              updatedFields: Object.keys(filteredData)
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking folder update in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
 
       return updatedFolder.new;
     } catch (error) {
@@ -1682,25 +1662,6 @@ class ChatHistoryService {
 
         logger.info(`Folder ${folderId} deleted with ${conversationLinks.length} conversation links`);
 
-        // Track folder deletion in analytics if service is available
-        if (this.analyticsService) {
-          try {
-            await this.analyticsService.trackEvent(
-              userId,
-              'folderDeleted',
-              {
-                folderId,
-                conversationLinkCount: conversationLinks.length,
-                childFolderCount: childFolders.length,
-                contentsDeleted: deleteContents
-              }
-            );
-          } catch (error) {
-            logger.error('Error tracking folder deletion in analytics:', error);
-            // Continue even if analytics tracking fails
-          }
-        }
-
         return {
           folderId,
           conversationLinksDeleted: conversationLinks.length,
@@ -1791,24 +1752,6 @@ class ChatHistoryService {
 
       logger.info(`Conversation ${conversationId} added to folder ${folderId}`);
 
-      // Track in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            userId,
-            'conversationAddedToFolder',
-            {
-              folderId,
-              conversationId,
-              movedFromFolder: existingLink ? existingLink._from.split('/')[1] : null
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking folder activity in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
-
       return edge;
     } catch (error) {
       logger.error(`Error adding conversation ${conversationId} to folder ${folderId}:`, error);
@@ -1860,23 +1803,6 @@ class ChatHistoryService {
       // Delete the edge
       await this.db.collection('folderConversations').remove(link._key);
       logger.info(`Conversation ${conversationId} removed from folder ${folderId}`);
-
-      // Track in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            userId,
-            'conversationRemovedFromFolder',
-            {
-              folderId,
-              conversationId
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking folder activity in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
 
       return {
         folderId,
@@ -1961,7 +1887,7 @@ class ChatHistoryService {
   async moveConversation(conversationId, sourceFolderId, targetFolderId, userId) {
     try {
       logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'}`);
-  
+
       const convPermissionQuery = aql`
         FOR edge IN userConversations
           FILTER edge._to == ${`conversations/${conversationId}`} AND edge._from == ${`users/${userId}`}
@@ -1969,12 +1895,12 @@ class ChatHistoryService {
       `;
       const convPermissionCursor = await this.db.query(convPermissionQuery);
       const convPermission = await convPermissionCursor.next();
-  
+
       if (!convPermission) {
         logger.warn(`User ${userId} does not have permission to access conversation ${conversationId}`);
         throw new Error('You do not have permission to access this conversation');
       }
-  
+
       if (targetFolderId) {
         const folderPermissionQuery = aql`
           FOR edge IN userFolders
@@ -1983,17 +1909,17 @@ class ChatHistoryService {
         `;
         const folderPermissionCursor = await this.db.query(folderPermissionQuery);
         const folderPermission = await folderPermissionCursor.next();
-  
+
         if (!folderPermission) {
           logger.warn(`User ${userId} does not have permission to access folder ${targetFolderId}`);
           throw new Error('You do not have permission to access the target folder');
         }
       }
-  
+
       const trx = await this.db.beginTransaction({
         write: ['folderConversations']
       });
-  
+
       try {
         const existingLinkQuery = aql`
           FOR edge IN folderConversations
@@ -2002,7 +1928,7 @@ class ChatHistoryService {
         `;
         const existingLinkCursor = await this.db.query(existingLinkQuery);
         const existingLink = await existingLinkCursor.next();
-  
+
         if (existingLink) {
           if (!targetFolderId) {
             await trx.step(() => this.db.collection('folderConversations').remove(existingLink._key));
@@ -2046,12 +1972,12 @@ class ChatHistoryService {
             noChangesNeeded: true
           };
         }
-  
+
         await trx.commit();
-  
+
         // Temporarily skip analytics tracking to focus on the core issue
         logger.info(`Skipping analytics tracking for conversation move`);
-  
+
         return {
           conversationId,
           sourceFolderId: existingLink ? existingLink._from.split('/')[1] : null,
@@ -2289,24 +2215,6 @@ class ChatHistoryService {
 
       logger.info(`Created new share for folder ${folderId} to user ${targetUserId} with role ${role}`);
 
-      // Track in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            ownerUserId,
-            'folderShared',
-            {
-              folderId,
-              targetUserId,
-              role
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking folder share in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
-
       return {
         folderId,
         targetUserId,
@@ -2365,23 +2273,6 @@ class ChatHistoryService {
       // Delete the share
       await this.db.collection('userFolders').remove(share._key);
       logger.info(`Removed share for folder ${folderId} from user ${targetUserId}`);
-
-      // Track in analytics if service is available
-      if (this.analyticsService) {
-        try {
-          await this.analyticsService.trackEvent(
-            ownerUserId,
-            'folderShareRemoved',
-            {
-              folderId,
-              targetUserId
-            }
-          );
-        } catch (error) {
-          logger.error('Error tracking folder share removal in analytics:', error);
-          // Continue even if analytics tracking fails
-        }
-      }
 
       return {
         folderId,

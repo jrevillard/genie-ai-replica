@@ -566,33 +566,42 @@ router.get('/conversations/:conversationId/messages', async (req, res) => {
 router.post('/conversations/:conversationId/messages', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    
-    // Extract the userId from req.user
+
     let userId = extractUserId(req);
-    
+
     if (!userId) {
       logger.warn('No userId available in request');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User ID is required but not found in request' 
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required but not found in request'
       });
     }
-    
-    // Extract the numeric ID without the 'users/' prefix for the service call
+
     const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-    
-    const { content, sender, queryId, metadata } = req.body;
-    
-    logger.info(`Adding ${sender} message to conversation ${conversationId}`);
-    
+
+    // Log the raw request body
+    logger.info(`Raw request body for conversation ${conversationId}:`, req.body ? JSON.stringify(req.body, null, 2) : 'No body');
+
+    const { content, sender, queryId, metadata } = req.body || {};
+
+    logger.info(`Adding ${sender || 'unknown'} message to conversation ${conversationId}`);
+    logger.info('Parsed request body:', { content, sender, queryId, metadata });
+
+    if (!req.body) {
+      logger.warn('Request body is missing');
+      return res.status(400).json({ message: 'Request body is required' });
+    }
+
     if (!content) {
+      logger.warn('Message content is missing');
       return res.status(400).json({ message: 'Message content is required' });
     }
-    
-    if (!['user', 'assistant'].includes(sender)) {
+
+    if (!sender || !['user', 'assistant'].includes(sender)) {
+      logger.warn(`Invalid sender: ${sender}`);
       return res.status(400).json({ message: 'Sender must be either "user" or "assistant"' });
     }
-    
+
     const messageData = {
       conversationId,
       content,
@@ -600,29 +609,34 @@ router.post('/conversations/:conversationId/messages', async (req, res) => {
       userId: numericUserId,
       timestamp: new Date().toISOString(),
       queryId,
-      metadata
+      metadata: metadata || {}
     };
-    
+
     const message = await chatHistoryService.addMessage(messageData);
-    
+
     // If it's an assistant message with a query ID, link them
     if (sender === 'assistant' && queryId) {
-      await chatHistoryService.linkQueryToConversation(
-        queryId,
-        conversationId,
-        message._key,
-        { responseType: 'primary' }
-      );
+      try {
+        const chatHistoryService = new ChatHistoryService();
+        await chatHistoryService.db.collection('queries').document(queryId);
+        await chatHistoryService.linkQueryToConversation(
+          queryId,
+          conversationId,
+          message._key,
+          { responseType: 'primary' }
+        );
+      } catch (queryError) {
+        logger.warn(`Skipping query linking due to invalid queryId ${queryId}: ${queryError.message}`, queryError);
+        // Continue without linking the query
+      }
     }
-    
+
     res.status(201).json(message);
   } catch (error) {
-    logger.error(`Error adding message to conversation ${req.params.conversationId}: ${error.message}`, error);
-    
+    logger.error(`Error adding message to conversation ${req.params.conversationId}: ${error.message}`, { error, stack: error.stack });
     if (error.message.includes('not found')) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
-    
     res.status(500).json({ message: error.message });
   }
 });

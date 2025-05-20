@@ -3,41 +3,85 @@
     <!-- Main chatbot container -->
     <div class="chatbot-container">
       <!-- New Chat Confirmation Dialog -->
-      <ConfirmDialog :visible="showNewChatConfirm" :title="newChatDialog.title" :message="newChatDialog.message"
-        :confirm-text="newChatDialog.confirmText" :cancel-text="newChatDialog.cancelText" :theme="getCurrentTheme()"
-        :parent-styles="{ maxWidth: '450px' }" @confirm="startNewChatConfirmed" @cancel="cancelNewChat" />
+      <ConfirmDialog
+        :visible="showNewChatConfirm"
+        :title="newChatDialog.title"
+        :message="newChatDialog.message"
+        :confirm-text="newChatDialog.confirmText"
+        :cancel-text="newChatDialog.cancelText"
+        :theme="getCurrentTheme()"
+        :parent-styles="{ maxWidth: '450px' }"
+        @confirm="startNewChatConfirmed"
+        @cancel="cancelNewChat"
+      />
+
+      <!-- Save Confirmation Dialog -->
+      <ConfirmDialog
+        :visible="showSaveConfirm"
+        :title="saveConfirmDialog.title"
+        :message="saveConfirmDialog.message"
+        :confirm-text="saveConfirmDialog.confirmText"
+        :cancel-text="saveConfirmDialog.cancelText"
+        :theme="getCurrentTheme()"
+        :parent-styles="{ maxWidth: '450px' }"
+        @confirm="confirmSaveExistingChat"
+        @cancel="cancelSaveExistingChat"
+      />
+
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-indicator" :class="{ online: systemStatus.online }">
           <div class="status-dot"></div>
-          <span>{{ systemStatus.online ? translate('status.online', 'System Online') : translate('status.offline',
-            'System Offline') }}</span>
+          <span>{{
+            systemStatus.online
+              ? translate("status.online", "System Online")
+              : translate("status.offline", "System Offline")
+          }}</span>
         </div>
         <div class="status-metrics">
           <div class="metric">
-            <span class="metric-label">{{ translate('status.responseTime', 'Avg. Response Time') }}</span>
-            <span class="metric-value">{{ systemStatus.avgResponseTime }}ms</span>
+            <span class="metric-label">{{
+              translate("status.responseTime", "Avg. Response Time")
+            }}</span>
+            <span class="metric-value"
+              >{{ systemStatus.avgResponseTime }}ms</span
+            >
           </div>
           <div class="metric">
-            <span class="metric-label">{{ translate('status.queueLength', 'Queue') }}</span>
+            <span class="metric-label">{{
+              translate("status.queueLength", "Queue")
+            }}</span>
             <span class="metric-value">{{ systemStatus.requestQueue }}</span>
           </div>
           <div class="metric">
-            <span class="metric-label">{{ translate('status.uptime', 'Uptime') }}</span>
-            <span class="metric-value">{{ formatUptime(systemStatus.uptime) }}</span>
+            <span class="metric-label">{{
+              translate("status.uptime", "Uptime")
+            }}</span>
+            <span class="metric-value">{{
+              formatUptime(systemStatus.uptime)
+            }}</span>
           </div>
         </div>
       </div>
       <!-- Context Panel for selected tree nodes -->
       <div class="context-panel" v-if="selectedContextItems.length > 0">
         <div class="context-header">
-          <span class="context-title">{{ translate('chatbot.queryContext', 'Query Context:') }}</span>
+          <span class="context-title">{{
+            translate("chatbot.queryContext", "Query Context:")
+          }}</span>
         </div>
         <div class="context-items">
-          <div v-for="(item, index) in selectedContextItems" :key="index" class="context-item">
+          <div
+            v-for="(item, index) in selectedContextItems"
+            :key="index"
+            class="context-item"
+          >
             <span class="context-text">{{ item.service }}</span>
-            <button class="context-remove-btn" @click="removeContextItem(index)"
-              :aria-label="translate('chatbot.removeItem', 'Remove item')">
+            <button
+              class="context-remove-btn"
+              @click="removeContextItem(index)"
+              :aria-label="translate('chatbot.removeItem', 'Remove item')"
+            >
               ✕
             </button>
           </div>
@@ -45,13 +89,20 @@
       </div>
       <!-- The scrollable chat window -->
       <div class="chat-window" ref="chatWindow">
-        <div v-for="(msg, index) in chatMessages" :key="index" class="chat-message" :class="msg.sender">
+        <div
+          v-for="(msg, index) in chatMessages"
+          :key="index"
+          class="chat-message"
+          :class="msg.sender"
+        >
           <div class="message-bubble">
             <span>{{ msg.content }}</span>
           </div>
           <!-- Feedback for bot messages -->
           <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-            <button @click="openFeedbackDialog(index)">{{ translate('feedback.button', 'Feedback') }}</button>
+            <button @click="openFeedbackDialog(index)">
+              {{ translate("feedback.button", "Feedback") }}
+            </button>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
@@ -59,62 +110,118 @@
       </div>
       <!-- Updated Quick Help Overlay with proper internationalization -->
       <!-- Quick Help Overlay -->
-      <div class="quick-help-overlay" v-if="showQuickHelp && chatMessages.length <= 1">
+      <div
+        class="quick-help-overlay"
+        v-if="showQuickHelp && chatMessages.length <= 1"
+      >
         <div class="quick-help-content">
-          <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp', 'How can I help you today?') }}</h2>
+          <h2 class="quick-help-heading">
+            {{ translate("chatbot.whatCanIHelp", "How can I help you today?") }}
+          </h2>
 
           <div class="quick-help-grid">
             <!-- Just Chat option with different styling -->
-            <div class="quick-help-item just-chat" @click="selectQuickHelpOption(justChatOption)">
+            <div
+              class="quick-help-item just-chat"
+              @click="selectQuickHelpOption(justChatOption)"
+            >
               <div class="quick-help-icon" v-html="justChatOption.icon"></div>
-              <div class="quick-help-text">{{ translate(justChatOption.textKey, 'Just Chat') }}</div>
+              <div class="quick-help-text">
+                {{ translate(justChatOption.textKey, "Just Chat") }}
+              </div>
             </div>
 
             <!-- Other service options with proper i18n -->
-            <div v-for="(option, index) in quickHelpOptions" :key="index" class="quick-help-item"
-              @click="selectQuickHelpOption(option)">
+            <div
+              v-for="(option, index) in quickHelpOptions"
+              :key="index"
+              class="quick-help-item"
+              @click="selectQuickHelpOption(option)"
+            >
               <div class="quick-help-icon" v-html="option.icon"></div>
-              <div class="quick-help-text">{{ translate(option.textKey, option.textKey.split('.')[1]) }}</div>
+              <div class="quick-help-text">
+                {{ translate(option.textKey, option.textKey.split(".")[1]) }}
+              </div>
             </div>
           </div>
         </div>
       </div>
       <!-- Input Area -->
       <div class="chat-input">
-        <textarea v-model="newMessage" class="prompt-textarea" rows="4"
-          :placeholder="translate('chatbot.placeholder', 'Type your message here...')"
-          @keyup.enter.exact.prevent="sendMessage" @focus="handleTextareaFocus"></textarea>
+        <textarea
+          v-model="newMessage"
+          class="prompt-textarea"
+          rows="4"
+          :placeholder="
+            translate('chatbot.placeholder', 'Type your message here...')
+          "
+          @keyup.enter.exact.prevent="sendMessage"
+          @focus="handleTextareaFocus"
+        ></textarea>
         <div class="input-actions">
-          <button class="new-chat-btn" @click="startNewChat" :title="translate('chatbot.newChat', 'Start New Chat')">
+          <button
+            class="new-chat-btn"
+            @click="startNewChat"
+            :title="translate('chatbot.newChat', 'Start New Chat')"
+          >
             <i class="fas fa-plus"></i>
           </button>
-          <button v-if="chatMessages.length > 0" class="save-chat-btn" @click="saveChatToHistory"
-            :title="translate('chatbot.saveChat', 'Save Chat')">
+          <button
+            v-if="chatMessages.length > 0"
+            class="save-chat-btn"
+            @click="saveChatToHistory"
+            :title="translate('chatbot.saveChat', 'Save Chat')"
+          >
             <i class="fas fa-save"></i>
           </button>
           <button class="send-btn" @click="sendMessage">
-            {{ translate('chatbot.sendButton', 'Send') }}
+            {{ translate("chatbot.sendButton", "Send") }}
           </button>
         </div>
       </div>
       <!-- Feedback Dialog -->
-      <chat-response-feedback-dialog v-if="feedbackDialog.visible" :visible="feedbackDialog.visible"
-        :message="feedbackDialog.message" @close="closeFeedbackDialog" @submit="handleFeedbackSubmit" />
+      <chat-response-feedback-dialog
+        v-if="feedbackDialog.visible"
+        :visible="feedbackDialog.visible"
+        :message="feedbackDialog.message"
+        @close="closeFeedbackDialog"
+        @submit="handleFeedbackSubmit"
+      />
       <!-- Save Chat Dialog -->
-      <modal-dialog v-if="saveChatDialog.visible" @close="saveChatDialog.visible = false">
+      <modal-dialog
+        v-if="saveChatDialog.visible"
+        @close="saveChatDialog.visible = false"
+      >
         <template v-slot:header>
-          <h3>{{ translate('chatbot.saveChat', 'Save Chat') }}</h3>
+          <h3>{{ translate("chatbot.saveChat", "Save Chat") }}</h3>
         </template>
         <template v-slot:body>
           <div class="form-group">
-            <label for="chatTitle">{{ translate('chatbot.chatTitle', 'Chat Title') }}</label>
-            <input type="text" id="chatTitle" v-model="saveChatDialog.title"
-              :placeholder="translate('chatbot.chatTitlePlaceholder', 'Enter a title for this chat')">
+            <label for="chatTitle">{{
+              translate("chatbot.chatTitle", "Chat Title")
+            }}</label>
+            <input
+              type="text"
+              id="chatTitle"
+              v-model="saveChatDialog.title"
+              :placeholder="
+                translate(
+                  'chatbot.chatTitlePlaceholder',
+                  'Enter a title for this chat'
+                )
+              "
+            />
           </div>
           <div class="form-group">
-            <label for="chatFolder">{{ translate('chatbot.selectFolder', 'Select Folder') }}</label>
+            <label for="chatFolder">{{
+              translate("chatbot.selectFolder", "Select Folder")
+            }}</label>
             <select id="chatFolder" v-model="saveChatDialog.folderId">
-              <option v-for="folder in folders" :key="folder.id" :value="folder.id">
+              <option
+                v-for="folder in folders"
+                :key="folder.id"
+                :value="folder.id"
+              >
                 {{ folder.name }}
               </option>
             </select>
@@ -122,247 +229,381 @@
         </template>
         <template v-slot:footer>
           <button @click="saveChatDialog.visible = false" class="cancel-btn">
-            {{ translate('common.cancel', 'Cancel') }}
+            {{ translate("common.cancel", "Cancel") }}
           </button>
-          <button @click="handleSaveChat" class="primary-btn" :disabled="!saveChatDialog.title.trim()">
-            {{ translate('common.save', 'Save') }}
+          <button
+            @click="handleSaveChat"
+            class="primary-btn"
+            :disabled="!saveChatDialog.title.trim()"
+          >
+            {{ translate("common.save", "Save") }}
           </button>
         </template>
       </modal-dialog>
     </div>
     <!-- Right Sidebar - Now using the dedicated component -->
-    <right-side-bar-component :current-chat-id="currentChatId" :current-locale="currentLocale"
-      :translations="translations" @load-chat="loadChatFromHistory" @open-document="handleOpenDocument"
-      @sidebar-toggle="handleSidebarToggle" />
+    <right-side-bar-component
+      :current-chat-id="currentChatId"
+      :current-locale="currentLocale"
+      :translations="translations"
+      @load-chat="loadChatFromHistory"
+      @open-document="handleOpenDocument"
+      @sidebar-toggle="handleSidebarToggle"
+    />
   </div>
 </template>
 
 <script>
-import { eventBus } from '../eventBus.js';
-import notificationService from '../services/notificationService';
-import { mapGetters, mapActions } from 'vuex';
-import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
-import ModalDialog from './ModalDialog.vue';
-import RightSideBarComponent from './RightSideBarComponent.vue';
-import chatbotService from '../services/chatbotService';
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import { eventBus } from "../eventBus.js";
+import notificationService from "../services/notificationService";
+import { mapGetters, mapActions } from "vuex";
+import ChatResponseFeedbackDialog from "./ChatResponseFeedbackDialog.vue";
+import ModalDialog from "./ModalDialog.vue";
+import RightSideBarComponent from "./RightSideBarComponent.vue";
+import chatbotService from "../services/chatbotService";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import chatHistoryService from "../services/chatHistoryService";
 
 export default {
-  name: 'ChatBotComponent',
+  name: "ChatBotComponent",
   components: {
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
-    ConfirmDialog 
+    ConfirmDialog,
   },
 
   data() {
     return {
+      conversationId: null,
+      messages: [],
       chatMessages: [],
-      newMessage: '',
+      newMessage: "",
       selectedContextItems: [],
       feedbackDialog: {
         visible: false,
-        message: null
+        message: null,
       },
       saveChatDialog: {
         visible: false,
-        title: '',
-        folderId: 'default'
+        title: "",
+        folderId: "default",
       },
       currentChatId: null,
-      currentLocale: 'en',
+      currentChatTitle: "",
+      currentLocale: "en",
       showQuickHelp: true,
-
-      // System status information
+      conversationCategory: null,
+      chatHistoryService: chatHistoryService,
       systemStatus: {
         online: true,
         avgResponseTime: 283,
         requestQueue: 0,
-        uptime: 3659, // in seconds
-        lastUpdated: new Date()
+        uptime: 3659,
+        lastUpdated: new Date(),
       },
-
-      // Just Chat option defined separately so it can be referenced directly in the template
-      // Just Chat option with updated prompt reference
       justChatOption: {
         textKey: "quickhelp.justChat",
         promptKey: "quickhelp.justChatPrompt",
-        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'
+        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
       },
-
-      // Other quick help options with updated prompt key references
       quickHelpOptions: [
         {
           textKey: "quickhelp.applyForID",
           promptKey: "quickhelp.applyForIDPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>',
+          categoryId: "1",
         },
         {
           textKey: "quickhelp.payTaxes",
           promptKey: "quickhelp.payTaxesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>',
+          categoryId: "5",
         },
         {
           textKey: "quickhelp.startBusiness",
           promptKey: "quickhelp.startBusinessPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>',
+          categoryId: "8",
         },
         {
           textKey: "quickhelp.findHealthcare",
           promptKey: "quickhelp.findHealthcarePrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>',
+          categoryId: "2",
         },
         {
           textKey: "quickhelp.educationServices",
           promptKey: "quickhelp.educationServicesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>',
+          categoryId: "3",
         },
         {
           textKey: "quickhelp.transportLicenses",
           promptKey: "quickhelp.transportLicensesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>',
+          categoryId: "7",
         },
         {
           textKey: "quickhelp.housingPrograms",
           promptKey: "quickhelp.housingProgramsPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+          categoryId: "9",
         },
         {
           textKey: "quickhelp.findJobs",
           promptKey: "quickhelp.findJobsPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>'
-        }
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>',
+          categoryId: "4",
+        },
       ],
 
-      // Keep the translations as a fallback mechanism
       translations: {
         en: {
-          'chatbot.welcomeMessage': 'Welcome! How can I help you today?',
-          'chatbot.queryContext': 'Query Context:',
-          'chatbot.removeItem': 'Remove item',
-          'chatbot.placeholder': 'Type your message here...',
-          'chatbot.sendButton': 'Send',
-          'feedback.button': 'Feedback',
-          'chatbot.responsePrefix': 'I received your message',
-          'chatbot.withContext': 'with context',
-          'chatbot.processingError': 'Sorry, there was an error processing your request.',
-          'chatbot.saveChat': 'Save Chat',
-          'chatbot.chatTitle': 'Chat Title',
-          'chatbot.chatTitlePlaceholder': 'Enter a title for this chat',
-          'chatbot.selectFolder': 'Select Folder',
-          'chatbot.chatSaved': 'Chat saved successfully!',
-          'chatbot.chatUpdated': 'Chat updated successfully!',
-          'chatbot.newChat': 'Start New Chat',
-          'chatbot.clearContext': 'Clear context and start a new conversation',
-          'chatbot.unsavedChanges': 'You have unsaved changes. Are you sure you want to start a new chat?',
-          'chatbot.whatCanIHelp': 'How can I help you today?',
-          'chatbot.justChat': 'Just Chat',
-          'quickhelp.applyForID': 'Apply for ID',
-          'quickhelp.payTaxes': 'Pay taxes',
-          'quickhelp.startBusiness': 'Start a business',
-          'quickhelp.findHealthcare': 'Find healthcare',
-          'quickhelp.educationServices': 'Education services',
-          'quickhelp.transportLicenses': 'Transport & licenses',
-          'quickhelp.housingPrograms': 'Housing programs',
-          'quickhelp.findJobs': 'Find jobs',
-          'common.cancel': 'Cancel',
-          'common.save': 'Save',
-          'status.online': 'System Online',
-          'status.offline': 'System Offline',
-          'status.responseTime': 'Avg. Response Time',
-          'status.queueLength': 'Queue',
-          'status.uptime': 'Uptime',
-          'sidebar.title': 'Info & Resources',
-          'sidebar.chatHistory': 'Recent Chats',
-          'sidebar.relatedDocs': 'Related Documents',
-          'sidebar.faq': 'Frequently Asked Questions',
-          'sidebar.noChats': 'No recent chats',
-          'sidebar.noDocuments': 'No related documents'
+          "chatbot.welcomeMessage": "Welcome! How can I help you today?",
+          "chatbot.queryContext": "Query Context:",
+          "chatbot.removeItem": "Remove item",
+          "chatbot.placeholder": "Type your message here...",
+          "chatbot.sendButton": "Send",
+          "feedback.button": "Feedback",
+          "chatbot.responsePrefix": "I received your message",
+          "chatbot.withContext": "with context",
+          "chatbot.processingError":
+            "Sorry, there was an error processing your request.",
+          "chatbot.saveChat": "Save Chat",
+          "chatbot.chatTitle": "Chat Title",
+          "chatbot.chatTitlePlaceholder": "Enter a title for this chat",
+          "chatbot.selectFolder": "Select Folder",
+          "chatbot.chatSaved": "Chat saved successfully!",
+          "chatbot.chatUpdated": "Chat updated successfully!",
+          "chatbot.newChat": "Start New Chat",
+          "chatbot.clearContext": "Clear context and start a new conversation",
+          "chatbot.unsavedChanges":
+            "You have unsaved changes. Are you sure you want to start a new chat?",
+          "chatbot.whatCanIHelp": "How can I help you today?",
+          "chatbot.justChat": "Just Chat",
+          "quickhelp.applyForID": "Apply for ID",
+          "quickhelp.payTaxes": "Pay taxes",
+          "quickhelp.startBusiness": "Start a business",
+          "quickhelp.findHealthcare": "Find healthcare",
+          "quickhelp.educationServices": "Education services",
+          "quickhelp.transportLicenses": "Transport & licenses",
+          "quickhelp.housingPrograms": "Housing programs",
+          "quickhelp.findJobs": "Find jobs",
+          "common.cancel": "Cancel",
+          "common.save": "Save",
+          "status.online": "System Online",
+          "status.offline": "System Offline",
+          "status.responseTime": "Avg. Response Time",
+          "status.queueLength": "Queue",
+          "status.uptime": "Uptime",
+          "sidebar.title": "Info & Resources",
+          "sidebar.chatHistory": "Recent Chats",
+          "sidebar.relatedDocs": "Related Documents",
+          "sidebar.faq": "Frequently Asked Questions",
+          "sidebar.noChats": "No recent chats",
+          "sidebar.noDocuments": "No related documents",
+          "chatbot.saveConfirmTitle": "Save Existing Conversation",
+          "chatbot.saveConfirmMessage": "Save existing conversation?",
         },
         fr: {
-          // French translations as fallback
+          "chatbot.welcomeMessage":
+            "Bienvenue ! Comment puis-je vous aider aujourd'hui ?",
+          "chatbot.queryContext": "Contexte de la requête :",
+          "chatbot.removeItem": "Supprimer l'élément",
+          "chatbot.placeholder": "Tapez votre message ici...",
+          "chatbot.sendButton": "Envoyer",
+          "feedback.button": "Commentaires",
+          "chatbot.responsePrefix": "J'ai reçu votre message",
+          "chatbot.withContext": "avec le contexte",
+          "chatbot.processingError":
+            "Désolé, une erreur s'est produite lors du traitement de votre demande.",
+          "chatbot.saveChat": "Enregistrer la discussion",
+          "chatbot.chatTitle": "Titre de la discussion",
+          "chatbot.chatTitlePlaceholder":
+            "Entrez un titre pour cette discussion",
+          "chatbot.selectFolder": "Sélectionner un dossier",
+          "chatbot.chatSaved": "Discussion enregistrée avec succès !",
+          "chatbot.chatUpdated": "Discussion mise à jour avec succès !",
+          "chatbot.newChat": "Démarrer une nouvelle discussion",
+          "chatbot.clearContext":
+            "Effacer le contexte et démarrer une nouvelle conversation",
+          "chatbot.unsavedChanges":
+            "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir démarrer une nouvelle discussion ?",
+          "chatbot.whatCanIHelp": "Comment puis-je vous aider aujourd'hui ?",
+          "chatbot.justChat": "Juste discuter",
+          "quickhelp.applyForID": "Demander une carte d'identité",
+          "quickhelp.payTaxes": "Payer les impôts",
+          "quickhelp.startBusiness": "Démarrer une entreprise",
+          "quickhelp.findHealthcare": "Trouver des soins de santé",
+          "quickhelp.educationServices": "Services éducatifs",
+          "quickhelp.transportLicenses": "Transport et licences",
+          "quickhelp.housingPrograms": "Programmes de logement",
+          "quickhelp.findJobs": "Trouver des emplois",
+          "common.cancel": "Annuler",
+          "common.save": "Enregistrer",
+          "status.online": "Système en ligne",
+          "status.offline": "Système hors ligne",
+          "status.responseTime": "Temps de réponse moyen",
+          "status.queueLength": "File d'attente",
+          "status.uptime": "Temps de fonctionnement",
+          "sidebar.title": "Infos et ressources",
+          "sidebar.chatHistory": "Discussions récentes",
+          "sidebar.relatedDocs": "Documents associés",
+          "sidebar.faq": "Questions fréquentes",
+          "sidebar.noChats": "Aucune discussion récente",
+          "sidebar.noDocuments": "Aucun document associé",
+          "chatbot.saveConfirmTitle": "Enregistrer la conversation existante",
+          "chatbot.saveConfirmMessage":
+            "Enregistrer la conversation existante ?",
         },
         sw: {
-          // Swahili translations as fallback
-        }
+          "chatbot.welcomeMessage": "Karibu! Nawezaje kukusaidia leo?",
+          "chatbot.queryContext": "Muktadha wa Swali:",
+          "chatbot.removeItem": "Ondoa kipengee",
+          "chatbot.placeholder": "Andika ujumbe wako hapa...",
+          "chatbot.sendButton": "Tuma",
+          "feedback.button": "Maoni",
+          "chatbot.responsePrefix": "Nimepokea ujumbe wako",
+          "chatbot.withContext": "na muktadha",
+          "chatbot.processingError":
+            "Samahani, kulikuwa na hitilafu katika kushughulikia ombi lako.",
+          "chatbot.saveChat": "Hifadhi Mazungumzo",
+          "chatbot.chatTitle": "Kichwa cha Mazungumzo",
+          "chatbot.chatTitlePlaceholder": "Ingiza kichwa cha mazungumzo haya",
+          "chatbot.selectFolder": "Chagua Folda",
+          "chatbot.chatSaved": "Mazungumzo yamehifadhiwa kwa mafanikio!",
+          "chatbot.chatUpdated": "Mazungumzo yamesasishwa kwa mafanikio!",
+          "chatbot.newChat": "Anza Mazungumzo Mapya",
+          "chatbot.clearContext": "Futa muktadha na uanze mazungumzo mapya",
+          "chatbot.unsavedChanges":
+            "Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?",
+          "chatbot.whatCanIHelp": "Nawezaje kukusaidia leo?",
+          "chatbot.justChat": "Zungumza tu",
+          "quickhelp.applyForID": "Omba Kitambulisho",
+          "quickhelp.payTaxes": "Lipa kodi",
+          "quickhelp.startBusiness": "Anza Biashara",
+          "quickhelp.findHealthcare": "Pata Huduma za Afya",
+          "quickhelp.educationServices": "Huduma za Elimu",
+          "quickhelp.transportLicenses": "Usafiri na Leseni",
+          "quickhelp.housingPrograms": "Programu za Nyumba",
+          "quickhelp.findJobs": "Tafuta Kazi",
+          "common.cancel": "Ghairi",
+          "common.save": "Hifadhi",
+          "status.online": "Mfumo Uko Mtandaoni",
+          "status.offline": "Mfumo Hauko Mtandaoni",
+          "status.responseTime": "Wastani wa Muda wa Kumudu",
+          "status.queueLength": "Foleni",
+          "status.uptime": "Muda wa Kuendelea",
+          "sidebar.title": "Taarifa na Rasilimali",
+          "sidebar.chatHistory": "Mazungumzo ya Hivi Karibuni",
+          "sidebar.relatedDocs": "Hati Zilizohusiana",
+          "sidebar.faq": "Maswali Yanayoulizwa Mara kwa Mara",
+          "sidebar.noChats": "Hakuna mazungumzo ya hivi karibuni",
+          "sidebar.noDocuments": "Hakuna hati zinazohusiana",
+          "chatbot.saveConfirmTitle": "Hifadhi Mazungumzo Yaliyopo",
+          "chatbot.saveConfirmMessage": "Hifadhi mazungumzo yaliyopo?",
+        },
       },
+
       showNewChatConfirm: false,
       newChatDialog: {
-        title: '',
-        message: '',
-        confirmText: '',
-        cancelText: ''
+        title: "",
+        message: "",
+        confirmText: "",
+        cancelText: "",
+      },
+      showSaveConfirm: false,
+      saveConfirmDialog: {
+        title: "",
+        message: "",
+        confirmText: "",
+        cancelText: "",
+      },
+      lastSavedState: {
+        messages: [], // Messages at the time of the last save
+        contextItems: [], // selectedContextItems at the time of the last save
       },
     };
   },
 
+  created() {
+    eventBus.$on("chat-deleted", (deletedChatId) => {
+      if (this.conversationId === deletedChatId) {
+        this.conversationId = null;
+        this.chatMessages = [];
+        this.newMessage = "";
+        this.selectedContextItems = [];
+        console.log(
+          `Reset conversationId after deletion of chat ${deletedChatId}`
+        );
+      }
+    });
+  },
+
   computed: {
-    ...mapGetters('chatHistory', [
-      'getAllFolders',
-      'getChatById'
-    ]),
+    ...mapGetters("chatHistory", ["getAllFolders", "getChatById"]),
 
     folders() {
       return this.getAllFolders;
     },
 
-    // Get the first message from the user as a preview
     chatPreview() {
-      const userMessage = this.chatMessages.find(msg => msg.sender === 'user');
+      const userMessage = this.chatMessages.find(
+        (msg) => msg.sender === "user"
+      );
       if (userMessage) {
-        // Truncate to reasonable length (50 chars)
         return userMessage.content.length > 50
-          ? userMessage.content.substring(0, 47) + '...'
+          ? userMessage.content.substring(0, 47) + "..."
           : userMessage.content;
       }
-      return 'New conversation';
-    }
+      return "New conversation";
+    },
   },
 
   mounted() {
-    // Add welcome message
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
-        sender: 'bot',
-        content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
+        sender: "bot",
+        content: this.translate(
+          "chatbot.welcomeMessage",
+          "Welcome! How can I help you today?"
+        ),
       });
     }
 
-    // Set up event listeners
     if (this.$root.$i18n) {
       this.currentLocale = this.$root.$i18n.locale;
-      this.$watch('$root.$i18n.locale', (newLocale) => {
+      this.$watch("$root.$i18n.locale", (newLocale) => {
         this.currentLocale = newLocale;
       });
     }
 
-    // Listen for tree node selection events
-    eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
-
-    // Listen for open-chat events from the folder system
-    eventBus.$on('open-chat', this.loadChatFromHistory);
-
-    // Scroll to bottom of chat
+    eventBus.$on("treeNodeSelected", this.handleTreeNodeSelected);
+    eventBus.$on("open-chat", this.loadChatFromHistory);
     this.scrollToBottom();
 
-    // Start system status update interval
     this.statusUpdateInterval = setInterval(() => {
-      // Simulate status updates (in a real app, this would come from an API)
       this.systemStatus.uptime += 30;
-      this.systemStatus.avgResponseTime = Math.max(200, Math.floor(this.systemStatus.avgResponseTime + (Math.random() * 20 - 10)));
-      this.systemStatus.requestQueue = Math.max(0, Math.floor(Math.random() * 3));
+      this.systemStatus.avgResponseTime = Math.max(
+        200,
+        Math.floor(
+          this.systemStatus.avgResponseTime + (Math.random() * 20 - 10)
+        )
+      );
+      this.systemStatus.requestQueue = Math.max(
+        0,
+        Math.floor(Math.random() * 3)
+      );
       this.systemStatus.lastUpdated = new Date();
-    }, 30000); // Update every 30 seconds
+    }, 30000);
     this.updateDialogTexts();
   },
 
   beforeUnmount() {
-    // Clean up event listeners
-    eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
-    eventBus.$off('open-chat', this.loadChatFromHistory);
-
-    // Clear intervals
+    eventBus.$off("treeNodeSelected", this.handleTreeNodeSelected);
+    eventBus.$off("open-chat", this.loadChatFromHistory);
+    eventBus.$off("chat-deleted"); // Clean up the chat-deleted listener
     if (this.statusUpdateInterval) {
       clearInterval(this.statusUpdateInterval);
     }
@@ -370,31 +611,23 @@ export default {
 
   watch: {
     currentLocale: function () {
-      // Update dialog texts when locale changes
       this.updateDialogTexts();
-    }
+    },
   },
 
   methods: {
-    ...mapActions('chatHistory', [
-      'createChat',
-      'updateChat'
-    ]),
+    ...mapActions("chatHistory", ["createChat", "updateChat"]),
 
-    // Get the current theme
     getCurrentTheme() {
-      // Check for theme in DOM
-      const documentTheme = document.documentElement.getAttribute('data-theme');
-      const bodyTheme = document.body.getAttribute('data-theme');
-
-      return documentTheme || bodyTheme || 'light';
+      const documentTheme = document.documentElement.getAttribute("data-theme");
+      const bodyTheme = document.body.getAttribute("data-theme");
+      return documentTheme || bodyTheme || "light";
     },
 
     formatUptime(seconds) {
       const days = Math.floor(seconds / 86400);
       const hours = Math.floor((seconds % 86400) / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
-
       if (days > 0) {
         return `${days}d ${hours}h`;
       } else if (hours > 0) {
@@ -404,21 +637,16 @@ export default {
       }
     },
 
-    // Handle sidebar related events
     handleSidebarToggle(collapsed) {
-      // This method can be used to update parent component state if needed
-      console.log('Sidebar collapsed state:', collapsed);
+      console.log("Sidebar collapsed state:", collapsed);
     },
 
     handleOpenDocument(doc) {
-      // Handle document opening event from sidebar
-      console.log('Document opened:', doc);
+      console.log("Document opened:", doc);
     },
 
-    // Safe translation method with fallback
     translate(key, fallback) {
-      // Try translation from i18n plugin first
-      if (this.$t && typeof this.$t === 'function') {
+      if (this.$t && typeof this.$t === "function") {
         try {
           const i18nTranslation = this.$t(key);
           if (i18nTranslation && i18nTranslation !== key) {
@@ -428,30 +656,20 @@ export default {
           console.warn(`Translation error for key: ${key}`, error);
         }
       }
-
-      // Then try from local translations
       const localTranslation = this.translations[this.currentLocale]?.[key];
       if (localTranslation) {
         return localTranslation;
       }
-
-      // Finally, use English translation or fallback
-      return this.translations['en']?.[key] || fallback;
+      return this.translations["en"]?.[key] || fallback;
     },
 
     selectQuickHelpOption(option) {
-      // Get the translated prompt text based on current locale
-      const translatedPrompt = this.translate(option.promptKey, '');
-
-      // Set the prompt text in the input field
+      const translatedPrompt = this.translate(option.promptKey, "");
       this.newMessage = translatedPrompt;
-
-      // Hide the quick help overlay
       this.showQuickHelp = false;
-
-      // Focus on the textarea
+      this.conversationCategory = option.categoryId || null;
       this.$nextTick(() => {
-        const textarea = document.querySelector('.prompt-textarea');
+        const textarea = document.querySelector(".prompt-textarea");
         if (textarea) {
           textarea.focus();
         }
@@ -459,134 +677,159 @@ export default {
     },
 
     handleTextareaFocus() {
-      // Hide quick help when user focuses on the textarea
       this.showQuickHelp = false;
     },
 
     handleTreeNodeSelected(item) {
-      if (!item || typeof item !== 'object') return;
-
-      // Check if item is selected or deselected
+      if (!item || typeof item !== "object") return;
       if (item.selected) {
-        // Add to context if not already present
-        const exists = this.selectedContextItems.some(existing =>
-          existing.category === item.category &&
-          existing.service === item.service);
-
+        const exists = this.selectedContextItems.some(
+          (existing) =>
+            existing.category === item.category &&
+            existing.service === item.service
+        );
         if (!exists) {
           this.selectedContextItems.push(item);
-          notificationService.info(this.translate('chatbot.contextAdded', 'Context added to your query.'), 1500);
+          notificationService.info(
+            this.translate(
+              "chatbot.contextAdded",
+              "Context added to your query."
+            ),
+            1500
+          );
+          if (
+            !this.conversationCategory &&
+            this.selectedContextItems.length === 1
+          ) {
+            this.conversationCategory = item.category;
+          }
         }
       } else {
-        // Remove from context if deselected
-        this.selectedContextItems = this.selectedContextItems.filter(existing =>
-          !(existing.category === item.category && existing.service === item.service)
+        this.selectedContextItems = this.selectedContextItems.filter(
+          (existing) =>
+            !(
+              existing.category === item.category &&
+              existing.service === item.service
+            )
         );
+        eventBus.$emit("contextItemRemoved", item);
+        notificationService.info(
+          this.translate(
+            "chatbot.contextRemoved",
+            "Context removed from your query."
+          ),
+          1500
+        );
+        if (this.selectedContextItems.length === 0 && !this.newMessage) {
+          this.conversationCategory = null;
+        }
       }
     },
 
     removeContextItem(index) {
       if (index < 0 || index >= this.selectedContextItems.length) return;
-
       const removed = this.selectedContextItems[index];
       this.selectedContextItems.splice(index, 1);
-
-      // Emit event to notify tree component to update its selection
-      eventBus.$emit('contextItemRemoved', removed);
-      notificationService.info(this.translate('chatbot.contextRemoved', 'Context removed from your query.'), 1500);
+      eventBus.$emit("contextItemRemoved", removed);
+      notificationService.info(
+        this.translate(
+          "chatbot.contextRemoved",
+          "Context removed from your query."
+        ),
+        1500
+      );
     },
 
-    // In the methods section:
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
-
-      // Add user message to chat immediately for responsive UI
       this.chatMessages.push({
-        sender: 'user',
+        sender: "user",
         content,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        isSaved: false,
       });
-      this.newMessage = '';
-
-      // Get context string
-      const contextInfo = this.selectedContextItems.length > 0
-        ? this.selectedContextItems.map(item => item.service).join(', ')
-        : null;
-
-      // Hide quick help
+      this.newMessage = "";
+      const contextInfo =
+        this.selectedContextItems.length > 0
+          ? this.selectedContextItems.map((item) => item.service).join(", ")
+          : null;
       this.showQuickHelp = false;
-
-      // Prepare loading state (optional)
       const tempId = Date.now().toString();
       let botMessageIndex = null;
-
       try {
-        // Call the existing service method
         const queryData = {
-          userId: this.$store.getters.currentUser?._key || 'anonymous',
-          sessionId: this.currentSessionId || 'new-session',
+          userId: this.$store.getters.currentUser?._key || "anonymous",
+          sessionId: this.currentSessionId || "new-session",
           text: content,
-          categoryId: contextInfo ? this.selectedContextItems[0].category : null,
+          categoryId: contextInfo
+            ? this.selectedContextItems[0].category
+            : null,
           serviceId: contextInfo ? this.selectedContextItems[0].service : null,
-          isAnswered: false // Will be updated when response is received
+          isAnswered: false,
         };
-
-        // Submit query through service
         const result = await chatbotService.submitQuery(queryData);
-
-        // Add bot response with queryId from database
         this.chatMessages.push({
-          sender: 'bot',
-          content: result.response || `${this.translate('chatbot.responsePrefix', 'I received your message')}: "${content}"${contextInfo ? ` ${this.translate('chatbot.withContext', 'with context')}: ${contextInfo}` : ''
+          sender: "bot",
+          content:
+            result.response ||
+            `${this.translate(
+              "chatbot.responsePrefix",
+              "I received your message"
+            )}: "${content}"${
+              contextInfo
+                ? ` ${this.translate(
+                    "chatbot.withContext",
+                    "with context"
+                  )}: ${contextInfo}`
+                : ""
             }`,
-          queryId: result._key, // Store the database ID for feedback
-          timestamp: new Date().toISOString()
+          queryId: result._key,
+          timestamp: new Date().toISOString(),
+          isSaved: false,
         });
-
-        // After submitting the query
-        console.log('Query result:', result);
-
-        // Update session ID if needed
+        console.log("Query result:", result);
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
-          notificationService.info(this.translate('chatbot.sessionUpdated', 'Session updated.'), 1500);
+          notificationService.info(
+            this.translate("chatbot.sessionUpdated", "Session updated."),
+            1500
+          );
         }
-
-        // Before marking as answered
-        console.log('About to mark query as answered:', result._key);
-
-        // Mark query as answered
-        await chatbotService.markQueryAsAnswered(result._key, result.responseTime);
-
-        // After the mark as answered call
-        console.log('Query marked as answered successfully');
-
-      } catch (error) {
-        console.error('Error sending query:', error);
-        this.chatMessages.push({
-          sender: 'bot',
-          content: this.translate('chatbot.processingError', 'Sorry, there was an error processing your request.'),
-          timestamp: new Date().toISOString(),
-        }
+        console.log("About to mark query as answered:", result._key);
+        await chatbotService.markQueryAsAnswered(
+          result._key,
+          result.responseTime
         );
-        notificationService.error(this.translate('chatbot.processingError', 'Sorry, there was an error processing your request.'))
+        console.log("Query marked as answered successfully");
+      } catch (error) {
+        console.error("Error sending query:", error);
+        this.chatMessages.push({
+          sender: "bot",
+          content: this.translate(
+            "chatbot.processingError",
+            "Sorry, there was an error processing your request."
+          ),
+          timestamp: new Date().toISOString(),
+          isSaved: false,
+        });
+        notificationService.error(
+          this.translate(
+            "chatbot.processingError",
+            "Sorry, there was an error processing your request."
+          )
+        );
       }
-
-      // Scroll to bottom after adding message
       this.scrollToBottom();
-
-      // If this is an existing chat, update it
       if (this.currentChatId) {
         this.updateChatInHistory();
       }
     },
 
     openFeedbackDialog(index) {
-      // Set the selected message and make dialog visible
       this.feedbackDialog = {
         visible: true,
-        message: this.chatMessages[index]
+        message: this.chatMessages[index],
       };
     },
 
@@ -594,35 +837,26 @@ export default {
       this.feedbackDialog.visible = false;
     },
 
-    // Update the feedback handler
     async handleFeedbackSubmit(feedback) {
       const queryId = feedback.message.queryId;
-
       if (!queryId) {
-        console.error('Cannot submit feedback: No queryId found');
+        console.error("Cannot submit feedback: No queryId found");
         return;
       }
-
       try {
-        // Use the existing service method
         await chatbotService.submitFeedback(queryId, {
           rating: feedback.rating,
           comment: feedback.text,
-          providedAt: new Date().toISOString()
+          providedAt: new Date().toISOString(),
         });
-
-        console.log('Feedback submitted successfully');
-
-        // Show success notification
-        notificationService.success('Thank you for your feedback!');
+        console.log("Feedback submitted successfully");
+        notificationService.success("Thank you for your feedback!");
       } catch (error) {
-        console.error('Error submitting feedback:', error);
-
-        // Show error notification
-        notificationService.error('Unable to submit feedback. Please try again.');
+        console.error("Error submitting feedback:", error);
+        notificationService.error(
+          "Unable to submit feedback. Please try again."
+        );
       }
-
-      // Close the dialog
       this.closeFeedbackDialog();
     },
 
@@ -635,196 +869,330 @@ export default {
       });
     },
 
-    // Chat History Integration
     saveChatToHistory() {
-      // Open the save dialog
-      this.saveChatDialog = {
-        visible: true,
-        title: this.currentChatId ?
-          (this.getChatById(this.currentChatId)?.title || '') :
-          this.generateChatTitle(),
-        folderId: 'default'
-      };
+      if (this.conversationId || this.currentChatId) {
+        // Show confirmation for existing conversation
+        this.saveConfirmDialog = {
+          title: this.translate(
+            "chatbot.saveConfirmTitle",
+            "Save Existing Conversation"
+          ),
+          message: this.translate(
+            "chatbot.saveConfirmMessage",
+            "Save existing conversation?"
+          ),
+          confirmText: this.translate("common.save", "Save"),
+          cancelText: this.translate("common.cancel", "Cancel"),
+        };
+        this.showSaveConfirm = true;
+      } else {
+        // Open the save dialog for new conversations
+        this.saveChatDialog = {
+          visible: true,
+          title: this.generateChatTitle(),
+          folderId: "default",
+        };
+      }
     },
 
-    handleSaveChat() {
-      if (!this.saveChatDialog.title.trim()) return;
+    // Convert selectedContextItems to tags array for storing the conversation
+    getContextTags() {
+      return this.selectedContextItems
+        .map((item) => item.service)
+        .filter((tag) => tag);
+    },
 
-      if (this.currentChatId) {
-        // Update existing chat
-        this.updateChat({
-          chatId: this.currentChatId,
-          title: this.saveChatDialog.title.trim(),
-          preview: this.chatPreview
-        });
-
-        // Show success message or notification
-        // alert(this.translate('chatbot.chatUpdated', 'Chat updated successfully!'));
-        notificationService.success(this.translate('chatbot.chatUpdated', 'Chat updated successfully!'));
-      } else {
-        // Create new chat
-        const chatId = this.createChat({
-          title: this.saveChatDialog.title.trim(),
-          preview: this.chatPreview,
+    // Saves a new conversation to the backend... note that existing conversstions are handled differently
+    async handleSaveChat() {
+      console.log("handleSaveChat called");
+      try {
+        console.log("Saving chat with data:", {
+          title: this.saveChatDialog.title,
           folderId: this.saveChatDialog.folderId,
-          // Store full chat data in localStorage or somewhere else
-          fullChatData: JSON.stringify(this.chatMessages)
+          messages: this.chatMessages,
         });
 
-        // Update current chat ID
-        this.currentChatId = chatId;
+        const currentUser = this.$store.getters.currentUser;
+        if (!currentUser || !currentUser._key) {
+          throw new Error("User not authenticated");
+        }
 
-        // Show success message or notification
-        //alert(this.translate('chatbot.chatSaved', 'Chat saved successfully!'));
-        notificationService.success(this.translate('chatbot.chatSaved', 'Chat saved successfully!'));
+        const conversationData = {
+          userId: currentUser._key,
+          title: this.saveChatDialog.title || this.generateChatTitle(),
+          initialMessage:
+            this.chatMessages.find((msg) => msg.sender === "user")?.content ||
+            "",
+          categoryId: this.conversationCategory || null,
+          tags: this.getContextTags(), // Populate tags from context items
+        };
+
+        // This method should only be called for new conversations
+        if (this.conversationId) {
+          throw new Error(
+            "handleSaveChat should not be called for existing conversations"
+          );
+        }
+
+        console.log(
+          "chatHistoryService.createConversation called with:",
+          conversationData
+        );
+        const conversation = await this.chatHistoryService.createConversation(
+          conversationData
+        );
+        console.log("Conversation created:", conversation);
+        this.conversationId = conversation._key;
+
+        // Add all messages
+        for (const message of this.chatMessages) {
+          if (
+            message.sender === "user" ||
+            (message.sender === "bot" && message.queryId)
+          ) {
+            const messageData = {
+              conversationId: conversation._key,
+              content: message.content,
+              sender: message.sender === "user" ? "user" : "assistant",
+              queryId: message.queryId || null,
+              metadata: message.metadata || {},
+              userId: currentUser._key,
+            };
+            console.log("Adding message with data:", messageData);
+            console.log(
+              "chatHistoryService.addMessage called with:",
+              messageData
+            );
+            await this.chatHistoryService.addMessage(messageData);
+            message.isSaved = true;
+          }
+        }
+
+        // Add conversation to folder if folderId is not 'default'
+        if (
+          this.saveChatDialog.folderId &&
+          this.saveChatDialog.folderId !== "default"
+        ) {
+          console.log(
+            "chatHistoryService.addConversationToFolder called with:",
+            {
+              folderId: this.saveChatDialog.folderId,
+              conversationId: conversation._key,
+              userId: currentUser._key,
+            }
+          );
+          await this.chatHistoryService.addConversationToFolder(
+            this.saveChatDialog.folderId,
+            conversation._key,
+            currentUser._key
+          );
+          console.log(
+            `Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`
+          );
+        }
+
+        // Update Vuex store
+        this.currentChatId = conversation._key;
+        this.currentChatTitle = conversationData.title;
+        this.lastSavedState.messages = [...this.chatMessages];
+        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.updateChatInHistory();
+
+        // Notify success and close dialog
+        notificationService.success(
+          this.translate("chatbot.chatSaved", "Chat saved successfully!")
+        );
+        this.saveChatDialog.visible = false;
+      } catch (error) {
+        console.error("Error saving chat:", error);
+        notificationService.error("Failed to save chat. Please try again.");
+        throw error;
+      }
+    },
+
+    // Updates an existing conversation on the backend... note that saving new conversstions is handled differently
+    async updateExistingChat() {
+    console.log("updateExistingChat called");
+    try {
+      const currentUser = this.$store.getters.currentUser;
+      if (!currentUser || !currentUser._key) {
+        throw new Error("User not authenticated");
       }
 
-      // Close dialog
-      this.saveChatDialog.visible = false;
-    },
+      if (!this.conversationId) {
+        throw new Error("Conversation ID is required for updating an existing chat");
+      }
+
+      // Structure updateData to match backend expectations
+      const updateData = {
+        userId: currentUser._key,
+        title: this.currentChatTitle || this.generateChatTitle(),
+        categoryId: this.conversationCategory || null,
+        tags: this.getContextTags(), // Populate tags from context items
+        isStarred: false,
+        isArchived: false,
+      };
+      console.log("chatHistoryService.updateConversation called with:", {
+        conversationId: this.conversationId,
+        updateData,
+      });
+      const conversation = await this.chatHistoryService.updateConversation(
+        this.conversationId,
+        updateData
+      );
+      console.log("Conversation updated:", conversation);
+
+      // Save only new messages
+      for (const message of this.chatMessages) {
+        if (message.isSaved) {
+          console.log(`Skipping already saved message: ${message.content}`);
+          continue;
+        }
+        if (message.sender === "user" || (message.sender === "bot" && message.queryId)) {
+          const messageData = {
+            conversationId: this.conversationId,
+            content: message.content,
+            sender: message.sender === "user" ? "user" : "assistant",
+            queryId: message.queryId || null,
+            metadata: message.metadata || {},
+            userId: currentUser._key,
+          };
+          console.log("Adding message with data:", messageData);
+          console.log("chatHistoryService.addMessage called with:", messageData);
+          await this.chatHistoryService.addMessage(messageData);
+          message.isSaved = true;
+        }
+      }
+
+      // Update Vuex store
+      this.currentChatId = this.conversationId;
+      this.lastSavedState.messages = [...this.chatMessages];
+      this.lastSavedState.contextItems = [...this.selectedContextItems];
+      this.updateChatInHistory();
+
+      // Notify success
+      notificationService.success(
+        this.translate("chatbot.chatUpdated", "Chat updated successfully!")
+      );
+    } catch (error) {
+      console.error("Error updating chat:", error);
+      notificationService.error("Failed to update chat. Please try again.");
+      throw error;
+    }
+  },
 
     updateChatInHistory() {
-      // Only update if we have a current chat ID
       if (this.currentChatId) {
         this.updateChat({
           chatId: this.currentChatId,
           preview: this.chatPreview,
-          // Store full chat data in localStorage or somewhere else
-          fullChatData: JSON.stringify(this.chatMessages)
+          fullChatData: JSON.stringify(this.chatMessages),
         });
       }
     },
 
     loadChatFromHistory(chatId) {
-      // Get chat from store
       const chat = this.getChatById(chatId);
       if (!chat) return;
-
       try {
-        // Retrieve full chat data from storage
-        // This is a simplified example - in a real app, you'd store this in your backend
         const storedChatData = localStorage.getItem(`chat_data_${chatId}`);
         if (storedChatData) {
-          // Load chat messages
           this.chatMessages = JSON.parse(storedChatData);
         } else {
-          // If no stored data, create a new chat with just the title
           this.chatMessages = [
             {
-              sender: 'bot',
-              content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
-            }
+              sender: "bot",
+              content: this.translate(
+                "chatbot.welcomeMessage",
+                "Welcome! How can I help you today?"
+              ),
+            },
           ];
         }
-
-        // Set current chat ID
         this.currentChatId = chatId;
-
-        // Hide quick help when loading a chat
         this.showQuickHelp = false;
-
-        // Scroll to bottom after loading
         this.scrollToBottom();
       } catch (error) {
-        console.error('Error loading chat:', error);
-        // Show error message
-        notificationService.error(this.translate('chatbot.loadError', 'Unable to load chat history.'));
+        console.error("Error loading chat:", error);
+        notificationService.error(
+          this.translate("chatbot.loadError", "Unable to load chat history.")
+        );
       }
     },
 
     generateChatTitle() {
-      // Generate a title based on the first user message or current date
-      const userMessage = this.chatMessages.find(msg => msg.sender === 'user');
+      const userMessage = this.chatMessages.find(
+        (msg) => msg.sender === "user"
+      );
       if (userMessage) {
-        // Use first 20 chars of user message
         return userMessage.content.length > 20
-          ? userMessage.content.substring(0, 17) + '...'
+          ? userMessage.content.substring(0, 17) + "..."
           : userMessage.content;
       }
-
-      // Default to date-based title
       const now = new Date();
       return `Chat - ${now.toLocaleDateString()}`;
     },
 
-    startNewChat() {
-      // Confirm with user if there are unsaved changes
-      if (this.chatMessages.length > 1 && !this.currentChatId) {
-        if (!confirm(this.translate('chatbot.unsavedChanges', 'You have unsaved changes. Are you sure you want to start a new chat?'))) {
-          return;
-        }
-      }
-
-      // Clear current chat
-      this.chatMessages = [
-        {
-          sender: 'bot',
-          content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
-        }
-      ];
-      this.currentChatId = null;
-      this.selectedContextItems = [];
-      this.newMessage = '';
-
-      // Show quick help when starting a new chat
-      this.showQuickHelp = true;
-
-      // Scroll to bottom after resetting
-      this.scrollToBottom();
-      notificationService.info(this.translate('chatbot.newChatStarted', 'Started a new conversation.'), 1500);
+    confirmSaveExistingChat() {
+      this.showSaveConfirm = false;
+      this.updateExistingChat();
     },
-    // Update new chat dialog texts
-    updateDialogTexts() {
-      this.newChatDialog = {
-        title: this.translate('chatbot.newChatTitle', 'Start New Chat'),
-        message: this.translate('chatbot.unsavedChanges', 'You have unsaved changes. Are you sure you want to start a new chat?'),
-        confirmText: this.translate('chatbot.startNew', 'Start New'),
-        cancelText: this.translate('common.cancel', 'Cancel')
-      };
+
+    cancelSaveExistingChat() {
+      this.showSaveConfirm = false;
     },
-    // Modified startNewChat to use custom dialog
+
     startNewChat() {
-      // Check if confirmation is needed
       if (this.chatMessages.length > 1 && !this.currentChatId) {
-        // Show confirmation dialog instead of browser confirm
         this.showNewChatConfirm = true;
         return;
       }
-
-      // If no confirmation needed, proceed with new chat
       this.startNewChatConfirmed();
     },
 
-    // This is executed when user confirms new chat
     startNewChatConfirmed() {
-      // Hide the confirmation dialog
       this.showNewChatConfirm = false;
-
-      // Clear current chat
       this.chatMessages = [
         {
-          sender: 'bot',
-          content: this.translate('chatbot.welcomeMessage', 'Welcome! How can I help you today?')
-        }
+          sender: "bot",
+          content: this.translate(
+            "chatbot.welcomeMessage",
+            "Welcome! How can I help you today?"
+          ),
+        },
       ];
       this.currentChatId = null;
+      this.conversationId = null; // Explicitly reset conversationId
       this.selectedContextItems = [];
-      this.newMessage = '';
-
-      // Show quick help when starting a new chat
+      this.newMessage = "";
+      this.conversationCategory = null;
+      this.currentChatTitle = ""; // Reset title to avoid reusing old title
       this.showQuickHelp = true;
-
-      // Scroll to bottom after resetting
       this.scrollToBottom();
-      notificationService.info(this.translate('chatbot.newChatStarted', 'Started a new conversation.'), 1500);
+      notificationService.info(
+        this.translate("chatbot.newChatStarted", "Started a new conversation."),
+        1500
+      );
     },
 
-    // This is called when user cancels new chat
     cancelNewChat() {
       this.showNewChatConfirm = false;
-    }
-  }
-}</script>
+    },
+
+    updateDialogTexts() {
+      this.newChatDialog = {
+        title: this.translate("chatbot.newChatTitle", "Start New Chat"),
+        message: this.translate(
+          "chatbot.unsavedChanges",
+          "You have unsaved changes. Are you sure you want to start a new chat?"
+        ),
+        confirmText: this.translate("chatbot.startNew", "Start New"),
+        cancelText: this.translate("common.cancel", "Cancel"),
+      };
+    },
+  },
+};
+</script>
 
 <style scoped>
 .app-container {

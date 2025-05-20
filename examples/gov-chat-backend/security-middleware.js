@@ -4,33 +4,24 @@ const validator = require('validator');
 const geoip = require('geoip-lite');
 
 class SecurityMiddleware {
-  // Comprehensive regex patterns for threat detection
   static threatPatterns = {
-    // SQL Injection Patterns
     sqlInjection: [
-      // Classic SQL injection attempts
       /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,
       /((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;))/i,
       /exec(\s|\+)+(s|x)p\w+/i,
       /UNION(\s|\+)+(ALL|SELECT)/i,
-      
-      // Advanced SQL injection patterns
       /(\bSELECT\b.*\bFROM\b)/i,
       /\b(UPDATE|DELETE|DROP|TRUNCATE)\b/i,
       /(\%3C)|(%)|(\\)|(=)/i,
       /\b(OR|AND)\s+1\s*=\s*1/i
     ],
-
-    // Command Injection Patterns
     commandInjection: [
       /(cmd|command)=|(\bls\b|\bcat\b)/i,
       /\b(start-sleep|sleep)\b/i,
-      /(\%3B|\;)(.*)/i,  // Semicolon-based command chaining
-      /`|\$\(/,  // Shell command substitution
-      /(\bwget\b|\bcurl\b|\bnc\b)/i  // Common download/network tools
+      /(\%3B|\;)(.*)/i,
+      /`|\$\(/,
+      /(\bwget\b|\bcurl\b|\bnc\b)/i
     ],
-
-    // XSS Patterns
     crossSiteScripting: [
       /(\%3Cscript)|(script)/i,
       /<\s*script\b[^>]*>(.*?)<\s*\/\s*script\s*>/i,
@@ -39,28 +30,22 @@ class SecurityMiddleware {
       /onload\s*=/i,
       /\beval\b/i
     ],
-
-    // Server-Side Include (SSI) Injection
     serverSideInclusion: [
       /<!--#(exec|include)/i,
-      /\%3E\%3C\%21--%23/i  // Encoded SSI trigger
+      /\%3E\%3C\%21--%23/i
     ],
-
-    // Path Traversal
     pathTraversal: [
-      /(\.\.[\/\\])+/i,  // ../../../ with case-insensitive flag
-      /(%2e%2e[\/\\])+/i,  // Encoded ../
-      /\b(etc\/passwd|\/root\/)\b/i  // Sensitive file/directory checks
+      /(\.\.[\/\\])+/i,
+      /(%2e%2e[\/\\])+/i,
+      /\b(etc\/passwd|\/root\/)\b/i
     ]
   };
 
-  // IP Reputation Tracking
   static ipReputation = new Map();
 
-  // Rate Limiting Configuration
   static apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 30 * 60 * 1000, // 30 minutes
+    max: 1000, // Allow 1000 requests per IP
     standardHeaders: true,
     message: 'Too many requests, please try again later.',
     handler: (req, res, next, options) => {
@@ -75,16 +60,30 @@ class SecurityMiddleware {
     }
   });
 
-  // Comprehensive Threat Detection Middleware
+  static chatApiLimiter = rateLimit({
+    windowMs: 30 * 60 * 1000, // 30 minutes
+    max: 2000, // Allow 2000 requests per IP
+    standardHeaders: true,
+    message: 'Too many requests to chat endpoints, please try again later.',
+    handler: (req, res, next, options) => {
+      SecurityMiddleware.logSecurityEvent('Chat Rate Limit Exceeded', {
+        type: 'chat_rate_limit',
+        ip: req.ip,
+        path: req.path,
+        headers: req.headers,
+        userAgent: req.headers['user-agent']
+      });
+      res.status(options.statusCode).send(options.message);
+    }
+  });
+
   static threatDetectionMiddleware(req, res, next) {
-    // Combine all inputs for comprehensive checking
     const allInputs = {
       ...req.query,
       ...req.body,
       path: req.path
     };
 
-    // Check for various injection attempts
     const threatChecks = [
       { type: 'sqlInjection', patterns: SecurityMiddleware.threatPatterns.sqlInjection },
       { type: 'commandInjection', patterns: SecurityMiddleware.threatPatterns.commandInjection },
@@ -93,7 +92,6 @@ class SecurityMiddleware {
       { type: 'pathTraversal', patterns: SecurityMiddleware.threatPatterns.pathTraversal }
     ];
 
-    // Perform threat detection
     const detectedThreats = SecurityMiddleware.detectThreats(allInputs, threatChecks);
 
     if (detectedThreats.length > 0) {
@@ -104,13 +102,11 @@ class SecurityMiddleware {
       });
     }
 
-    // IP Reputation and Geoblocking
     SecurityMiddleware.updateIPReputation(req);
     
     next();
   }
 
-  // Detect Threats in Inputs
   static detectThreats(inputs, threatChecks) {
     const detectedThreats = [];
 
@@ -134,7 +130,6 @@ class SecurityMiddleware {
     return detectedThreats;
   }
 
-  // Handle Detected Threats
   static handleThreatDetection(req, detectedThreats) {
     const geoInfo = geoip.lookup(req.ip);
 
@@ -153,11 +148,9 @@ class SecurityMiddleware {
       userAgent: req.headers['user-agent']
     });
 
-    // Optional: Block IP temporarily
     SecurityMiddleware.blockIP(req.ip);
   }
 
-  // Update IP Reputation
   static updateIPReputation(req) {
     const ip = req.ip;
     const reputation = SecurityMiddleware.ipReputation.get(ip) || { 
@@ -165,7 +158,6 @@ class SecurityMiddleware {
       lastSeen: Date.now() 
     };
 
-    // Decay reputation over time
     const timeSinceLastSeen = Date.now() - reputation.lastSeen;
     reputation.score = Math.max(0, reputation.score - Math.floor(timeSinceLastSeen / (1000 * 60 * 60)));
 
@@ -174,28 +166,22 @@ class SecurityMiddleware {
       lastSeen: Date.now()
     });
 
-    // Block IPs with high threat score
     if (reputation.score > 10) {
       SecurityMiddleware.blockIP(ip);
     }
   }
 
-  // Block IP Temporarily
   static blockIP(ip) {
     logger.warn('IP Blocked', { 
       ip, 
       reason: 'High threat score' 
     });
-    // Implement actual IP blocking mechanism here
-    // Could integrate with firewall, iptables, etc.
   }
 
-  // Logging Security Events
   static logSecurityEvent(eventName, eventDetails) {
     logger.warn(eventName, eventDetails);
   }
 
-  // Authentication Failure Logging
   static authFailureLogger(req, res, next) {
     const originalEnd = res.end;
     
@@ -214,30 +200,20 @@ class SecurityMiddleware {
     next();
   }
 
-  // Apply Security Middleware
   static applySecurityMiddleware(app) {
-    // Rate Limiting
+    app.use('/api/chat', SecurityMiddleware.chatApiLimiter);
     app.use('/api/', SecurityMiddleware.apiLimiter);
-
-    // Threat Detection
     app.use(SecurityMiddleware.threatDetectionMiddleware.bind(SecurityMiddleware));
-
-    // Authentication Failure Logging
     app.use(SecurityMiddleware.authFailureLogger);
-
-    // Input Sanitization
     app.use((req, res, next) => {
-      // Sanitize inputs
       Object.keys(req.query).forEach(key => {
         req.query[key] = validator.escape(req.query[key]);
       });
-
       if (req.body) {
         Object.keys(req.body).forEach(key => {
           req.body[key] = validator.escape(req.body[key]);
         });
       }
-
       next();
     });
   }

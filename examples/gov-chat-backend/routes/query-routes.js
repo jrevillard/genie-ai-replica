@@ -54,6 +54,81 @@ router.use((req, res, next) => {
 
 /**
  * @swagger
+ * /queries/{queryId}/responsetime:
+ *   patch:
+ *     summary: Update query response time
+ *     description: Updates the response time of a specific query.
+ *     tags: [Queries]
+ *     parameters:
+ *       - in: path
+ *         name: queryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the query to update.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - responseTime
+ *             properties:
+ *               responseTime:
+ *                 type: integer
+ *                 description: Response time in milliseconds.
+ *           example:
+ *             responseTime: 250
+ *     responses:
+ *       200:
+ *         description: Query response time updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 _key:
+ *                   type: string
+ *                 responseTime:
+ *                   type: integer
+ *                 updatedAt:
+ *                   type: string
+ *       400:
+ *         description: Response time is required.
+ *       401:
+ *         description: Unauthorized - Invalid or missing authentication token.
+ *       404:
+ *         description: Query not found.
+ *       500:
+ *         description: Server error.
+ */
+router.patch('/:queryId/responsetime', async (req, res) => {
+  try {
+    const { queryId } = req.params;
+    const { responseTime } = req.body;
+
+    if (!responseTime && responseTime !== 0) {
+      return res.status(400).json({ message: 'Response time is required' });
+    }
+
+    const chatHistoryService = new ChatHistoryService();
+    const updatedQuery = await chatHistoryService.updateQueryResponseTime(queryId, responseTime);
+
+    res.json(updatedQuery);
+  } catch (error) {
+    logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, error);
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Query not found' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
  * /queries:
  *   post:
  *     summary: Create a new query

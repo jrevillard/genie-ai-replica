@@ -1,4 +1,3 @@
-// src/services/chatHistoryService.js - Connect Chat History components to backend
 import httpService from './httpService';
 
 /**
@@ -62,6 +61,7 @@ class ChatHistoryService {
   /**
    * Create a new conversation
    * @param {Object} conversationData - Data for the new conversation
+   * @param {String} conversationData.userId - User ID (required)
    * @param {String} conversationData.title - Title of the conversation
    * @param {String} conversationData.categoryId - Optional category ID
    * @param {String} conversationData.initialMessage - Optional initial message
@@ -76,6 +76,7 @@ class ChatHistoryService {
         throw new Error('User ID is required');
       }
 
+      console.log("chatHistoryService.createConversation called with:", conversationData);
       const response = await httpService.post('/chat/conversations', conversationData);
       return response.data;
     } catch (error) {
@@ -89,15 +90,27 @@ class ChatHistoryService {
    * @param {String} conversationId - ID of the conversation to update
    * @param {Object} updateData - Data to update
    * @param {String} updateData.title - New title for the conversation
-   * @param {Boolean} updateData.isStarred - Star status
-   * @param {Boolean} updateData.isArchived - Archive status
-   * @param {Array} updateData.tags - Tags for the conversation
-   * @param {String} updateData.userId - User ID for analytics tracking
+   * @param {String} updateData.categoryId - Optional category ID
+   * @param {String} updateData.category - Optional category name
+   * @param {Array} updateData.tags - Optional tags for the conversation
+   * @param {Boolean} updateData.isStarred - Starred status
+   * @param {Boolean} updateData.isArchived - Archived status
+   * @param {String} updateData.userId - User ID (required)
    * @returns {Promise} Updated conversation data
    */
   async updateConversation(conversationId, updateData) {
     try {
-      console.log(`Updating conversation ${conversationId} with data:`, updateData);
+      if (!conversationId) {
+        console.error('Error: conversationId is required for updateConversation');
+        throw new Error('Conversation ID is required');
+      }
+
+      if (!updateData.userId) {
+        console.error('Error: userId is required for updateConversation');
+        throw new Error('User ID is required');
+      }
+
+      console.log(`chatHistoryService.updateConversation called with:`, { conversationId, updateData });
       const response = await httpService.patch(`/chat/conversations/${conversationId}`, updateData);
       return response.data;
     } catch (error) {
@@ -163,23 +176,29 @@ class ChatHistoryService {
 
   /**
    * Add a new message to a conversation
-   * @param {String} conversationId - ID of the conversation
    * @param {Object} messageData - Message data
+   * @param {String} messageData.conversationId - ID of the conversation
    * @param {String} messageData.content - Message content
    * @param {String} messageData.sender - Sender ('user' or 'assistant')
    * @param {String} messageData.queryId - Optional query ID for assistant messages
    * @param {Object} messageData.metadata - Optional additional metadata
    * @returns {Promise} Created message data
    */
-  async addMessage(conversationId, messageData) {
+  async addMessage(messageData) {
     try {
+      if (!messageData.conversationId) {
+        console.error('Error: conversationId is required for addMessage');
+        throw new Error('Conversation ID is required');
+      }
+
+      console.log("chatHistoryService.addMessage called with:", messageData);
       const response = await httpService.post(
-        `/chat/conversations/${conversationId}/messages`,
+        `/chat/conversations/${messageData.conversationId}/messages`,
         messageData
       );
       return response.data;
     } catch (error) {
-      console.error(`Error adding message to conversation ${conversationId}:`, error);
+      console.error(`Error adding message to conversation ${messageData.conversationId}:`, error);
       throw error;
     }
   }
@@ -362,13 +381,13 @@ class ChatHistoryService {
   }
 
   /**
- * Get all folders for the authenticated user
- * @param {String} userId - User ID (required)
- * @param {Object} options - Filter options
- * @param {Boolean} options.includeArchived - Whether to include archived folders
- * @param {String} options.parentFolderId - ID of parent folder to get subfolders (null for root folders)
- * @returns {Promise} Folders list
- */
+   * Get all folders for the authenticated user
+   * @param {String} userId - User ID (required)
+   * @param {Object} options - Filter options
+   * @param {Boolean} options.includeArchived - Whether to include archived folders
+   * @param {String} options.parentFolderId - ID of parent folder to get subfolders (null for root folders)
+   * @returns {Promise} Folders list
+   */
   async getUserFolders(userId, options = {}) {
     try {
       if (!userId) {
@@ -625,7 +644,7 @@ class ChatHistoryService {
         throw new Error('User ID is required');
       }
 
-      console.log(`Adding conversation ${conversationId} to folder ${folderId}`);
+      console.log(`chatHistoryService.addConversationToFolder called with:`, { folderId, conversationId, userId });
 
       const response = await httpService.post(
         `/chat/folders/${folderId}/conversations/${conversationId}`,
@@ -788,12 +807,12 @@ class ChatHistoryService {
   }
 
   /**
- * Remove a conversation from a folder
- * @param {String} conversationId - Conversation ID
- * @param {String} currentFolderId - Current folder ID
- * @param {String} userId - User ID for permission check
- * @returns {Promise} Result of the operation
- */
+   * Remove a conversation from a folder
+   * @param {String} conversationId - Conversation ID
+   * @param {String} currentFolderId - Current folder ID
+   * @param {String} userId - User ID for permission check
+   * @returns {Promise} Result of the operation
+   */
   async removeConversationFromFolder(conversationId, currentFolderId, userId) {
     try {
       if (!userId) {
@@ -804,8 +823,8 @@ class ChatHistoryService {
       console.log(`Removing conversation ${conversationId} from folder ${currentFolderId}`);
 
       const response = await httpService.delete(
-        `/chat/folders/${currentFolderId}/conversations/${conversationId}`, // Use /chat/ prefix
-        { params: { userId } } // Fix params syntax
+        `/chat/folders/${currentFolderId}/conversations/${conversationId}`,
+        { params: { userId } }
       );
 
       return response.data;

@@ -8,10 +8,10 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const { logger } = require('./logger'); // Import the centralized logger
-const loggerRoutes = require('./routes/logger-routes'); // Import the logger routes
-const { applySecurityMiddleware } = require('./security-middleware'); // Import security middleware
-const securityHeaders = require('./security-headers'); // Import our new security headers middleware
+const { logger } = require('./logger');
+const loggerRoutes = require('./routes/logger-routes');
+const { applySecurityMiddleware } = require('./security-middleware');
+const securityHeaders = require('./security-headers');
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -49,7 +49,6 @@ app.use((req, res, next) => {
 app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-type] :req[user-agent]', {
   stream: {
     write: (message) => {
-      // Log this message in a format the security scanner can parse
       logger.info(`HTTP_REQUEST: ${message.trim()}`);
     }
   }
@@ -57,18 +56,15 @@ app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-t
 
 // Special middleware to block access to hidden files and suspicious requests
 app.use((req, res, next) => {
-  // Block access to hidden files, BitKeeper, or other sensitive paths
   if (req.path.match(/\/\.[^\/]+/) ||
     req.path.includes('/BitKeeper') ||
     req.path.includes('/.git') ||
     req.path.includes('/.env')) {
-
     logger.warn(`SECURITY: Blocked access to sensitive path: ${req.path}`, {
       ip: req.ip,
       method: req.method,
       userAgent: req.get('User-Agent') || 'none'
     });
-
     return res.status(404).json({ message: 'Not Found' });
   }
   next();
@@ -220,7 +216,6 @@ const swaggerOptions = {
             }
           }
         },
-        // New schemas for folder functionality
         Folder: {
           type: 'object',
           properties: {
@@ -367,8 +362,8 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 const cspOptions = {
   directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "cdn.jsdelivr.net"], // Removed unsafe-inline and unsafe-eval
-    styleSrc: ["'self'"],  // Removed unsafe-inline
+    scriptSrc: ["'self'", "cdn.jsdelivr.net"],
+    styleSrc: ["'self'"],
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'"],
     connectSrc: ["'self'"],
@@ -414,51 +409,38 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Format timestamps in response data to avoid timestamp disclosure
 app.use((req, res, next) => {
   const originalJson = res.json;
-
   res.json = function (body) {
-    // Only process if body is an object
     if (body && typeof body === 'object') {
       body = formatTimestamps(body);
     }
     return originalJson.call(this, body);
   };
-
   next();
 });
 
 // Recursive function to format timestamps
 function formatTimestamps(obj) {
-  // If array, process each element
   if (Array.isArray(obj)) {
     return obj.map(item => formatTimestamps(item));
   }
-
-  // If not an object or null, return as is
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
-
-  // Process object properties
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      // If property is timestamp-like (10-digit number representing seconds since epoch)
       if (typeof obj[key] === 'number' && /^\d{10}$/.test(obj[key].toString())) {
-        // Convert to ISO string format 
         obj[key] = new Date(obj[key] * 1000).toISOString();
       }
-      // Process nested objects
       else if (typeof obj[key] === 'object') {
         obj[key] = formatTimestamps(obj[key]);
       }
     }
   }
-
   return obj;
 }
 
 // Configure static file serving with security headers
 app.use('/uploads', (req, res, next) => {
-  // Prevent directory listing
   if (req.path === '/' || req.path === '') {
     return res.status(403).json({ message: 'Forbidden' });
   }
@@ -468,11 +450,10 @@ app.use('/uploads', (req, res, next) => {
 // Secure static serving for frontend files with security headers
 app.use(express.static('dist', {
   setHeaders: (res, path) => {
-    // Set appropriate caching for static assets
     if (path.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache');
     } else if (path.endsWith('.js') || path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 day
+      res.setHeader('Cache-Control', 'public, max-age=86400');
     }
   }
 }));
@@ -491,10 +472,8 @@ app.get('/api-docs.json', (req, res) => {
 
 // Add a health check endpoint
 app.get('/api/health', (req, res) => {
-  // Use a formatted date string instead of Unix timestamp
   const now = new Date();
   const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
-
   res.json({
     status: 'ok',
     serverTime: formattedDate,
@@ -528,7 +507,7 @@ const routeFiles = [
   'database-operations-routes',
   'admin-routes',
   'security-routes',
-  'chat-history-routes' // Add the new chat history routes file
+  'chat-history-routes'
 ];
 const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
 
@@ -543,7 +522,6 @@ if (routes['user-routes']) {
   logger.info('Mounting user routes at /api/users');
   app.use('/api/users', routes['user-routes']);
 }
-
 if (routes['query-routes']) app.use('/api/queries', routes['query-routes']);
 if (routes['service-routes']) app.use('/api/services', routes['service-routes']);
 if (routes['chat-history-routes']) app.use('/api/chat', routes['chat-history-routes']);
@@ -557,13 +535,10 @@ if (routes['admin-routes']) {
   logger.info('Mounting admin routes at /api/admin');
   app.use('/api/admin', routes['admin-routes']);
 }
-
 if (routes['security-routes']) {
   logger.info('Mounting security routes at /api/security');
   app.use('/api/security', routes['security-routes']);
 }
-
-// Add chat history routes
 if (routes['chat-history-routes']) {
   logger.info('Mounting chat history routes at /api/chat');
   app.use('/api/chat', routes['chat-history-routes']);
@@ -598,7 +573,6 @@ app.use((err, req, res, next) => {
     ip: req.ip,
     userAgent: req.get('User-Agent') || 'none'
   });
-
   res.status(500).json({
     message: 'An unexpected error occurred',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -620,4 +594,4 @@ app.listen(PORT, () => {
   logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
 });
 
-module.exports = app; // For testing
+module.exports = app;

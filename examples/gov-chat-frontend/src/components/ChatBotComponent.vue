@@ -9,23 +9,27 @@
         :message="newChatDialog.message"
         :confirm-text="newChatDialog.confirmText"
         :cancel-text="newChatDialog.cancelText"
+        :secondary-text="newChatDialog.secondaryText"
         :theme="getCurrentTheme()"
         :parent-styles="{ maxWidth: '450px' }"
-        @confirm="startNewChatConfirmed"
-        @cancel="cancelNewChat"
+        @confirm="saveAndStartNewChat"
+        @cancel="startNewChatConfirmed"
+        @secondary="cancelNewChat"
       />
 
-      <!-- Save Confirmation Dialog -->
+      <!-- Unsaved Changes Load Confirmation Dialog -->
       <ConfirmDialog
-        :visible="showSaveConfirm"
-        :title="saveConfirmDialog.title"
-        :message="saveConfirmDialog.message"
-        :confirm-text="saveConfirmDialog.confirmText"
-        :cancel-text="saveConfirmDialog.cancelText"
+        :visible="showLoadConfirm"
+        :title="loadConfirmDialog.title"
+        :message="loadConfirmDialog.message"
+        :confirm-text="loadConfirmDialog.confirmText"
+        :cancel-text="loadConfirmDialog.cancelText"
+        :secondary-text="loadConfirmDialog.secondaryText"
         :theme="getCurrentTheme()"
         :parent-styles="{ maxWidth: '450px' }"
-        @confirm="confirmSaveExistingChat"
-        @cancel="cancelSaveExistingChat"
+        @confirm="loadConversationConfirmed"
+        @cancel="cancelLoadConversation"
+        @secondary="saveAndLoadConversation"
       />
 
       <!-- System Status Panel -->
@@ -108,7 +112,6 @@
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
       </div>
-      <!-- Updated Quick Help Overlay with proper internationalization -->
       <!-- Quick Help Overlay -->
       <div
         class="quick-help-overlay"
@@ -305,59 +308,58 @@ export default {
       justChatOption: {
         textKey: "quickhelp.justChat",
         promptKey: "quickhelp.justChatPrompt",
-        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
+        icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
       },
       quickHelpOptions: [
         {
           textKey: "quickhelp.applyForID",
           promptKey: "quickhelp.applyForIDPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>',
           categoryId: "1",
         },
         {
           textKey: "quickhelp.payTaxes",
           promptKey: "quickhelp.payTaxesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>',
           categoryId: "5",
         },
         {
           textKey: "quickhelp.startBusiness",
           promptKey: "quickhelp.startBusinessPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>',
           categoryId: "8",
         },
         {
           textKey: "quickhelp.findHealthcare",
           promptKey: "quickhelp.findHealthcarePrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>',
           categoryId: "2",
         },
         {
           textKey: "quickhelp.educationServices",
           promptKey: "quickhelp.educationServicesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>',
           categoryId: "3",
         },
         {
           textKey: "quickhelp.transportLicenses",
           promptKey: "quickhelp.transportLicensesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>',
           categoryId: "7",
         },
         {
           textKey: "quickhelp.housingPrograms",
           promptKey: "quickhelp.housingProgramsPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
           categoryId: "9",
         },
         {
           textKey: "quickhelp.findJobs",
           promptKey: "quickhelp.findJobsPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>',
+          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>',
           categoryId: "4",
         },
       ],
-
       translations: {
         en: {
           "chatbot.welcomeMessage": "Welcome! How can I help you today?",
@@ -405,6 +407,13 @@ export default {
           "sidebar.noDocuments": "No related documents",
           "chatbot.saveConfirmTitle": "Save Existing Conversation",
           "chatbot.saveConfirmMessage": "Save existing conversation?",
+          "chatbot.loadConfirmTitle": "Load Existing Conversation",
+          "chatbot.loadConfirmMessage":
+            "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?",
+          "chatbot.loadAndDiscard": "Load and Discard",
+          "chatbot.saveAndLoad": "Save and Load",
+          "chatbot.saveAndStartNew": "Save and Start New",
+          "chatbot.discardAndStartNew": "Discard and Start New",
         },
         fr: {
           "chatbot.welcomeMessage":
@@ -456,6 +465,15 @@ export default {
           "chatbot.saveConfirmTitle": "Enregistrer la conversation existante",
           "chatbot.saveConfirmMessage":
             "Enregistrer la conversation existante ?",
+          "chatbot.loadConfirmTitle": "Charger une conversation existante",
+          "chatbot.loadConfirmMessage":
+            "Vous avez des modifications non enregistrées. Voulez-vous les abandonner et charger la conversation sélectionnée, ou enregistrer la conversation actuelle d'abord ?",
+          "chatbot.loadAndDiscard": "Charger et abandonner",
+          "chatbot.saveAndLoad": "Enregistrer et charger",
+          "chatbot.saveAndStartNew":
+            "Enregistrer et démarrer une nouvelle discussion",
+          "chatbot.discardAndStartNew":
+            "Abandonner et démarrer une nouvelle discussion",
         },
         sw: {
           "chatbot.welcomeMessage": "Karibu! Nawezaje kukusaidia leo?",
@@ -503,9 +521,15 @@ export default {
           "sidebar.noDocuments": "Hakuna hati zinazohusiana",
           "chatbot.saveConfirmTitle": "Hifadhi Mazungumzo Yaliyopo",
           "chatbot.saveConfirmMessage": "Hifadhi mazungumzo yaliyopo?",
+          "chatbot.loadConfirmTitle": "Pakia Mazungumzo Yaliyopo",
+          "chatbot.loadConfirmMessage":
+            "Una mabadiliko ambayo hayajahifadhiwa. Je, unataka kuyatupa na kupakia mazungumzo yaliyochaguliwa, au kuhifadhi mazungumzo ya sasa kwanza?",
+          "chatbot.loadAndDiscard": "Pakia na Tupa",
+          "chatbot.saveAndLoad": "Hifadhi na Pakia",
+          "chatbot.saveAndStartNew": "Hifadhi na Anza Mazungumzo Mapya",
+          "chatbot.discardAndStartNew": "Tupa na Anza Mazungumzo Mapya",
         },
       },
-
       showNewChatConfirm: false,
       newChatDialog: {
         title: "",
@@ -513,17 +537,19 @@ export default {
         confirmText: "",
         cancelText: "",
       },
-      showSaveConfirm: false,
-      saveConfirmDialog: {
+      lastSavedState: {
+        messages: [],
+        contextItems: [],
+      },
+      showLoadConfirm: false,
+      loadConfirmDialog: {
         title: "",
         message: "",
         confirmText: "",
         cancelText: "",
+        secondaryText: "",
       },
-      lastSavedState: {
-        messages: [], // Messages at the time of the last save
-        contextItems: [], // selectedContextItems at the time of the last save
-      },
+      pendingConversationId: null,
     };
   },
 
@@ -531,12 +557,43 @@ export default {
     eventBus.$on("chat-deleted", (deletedChatId) => {
       if (this.conversationId === deletedChatId) {
         this.conversationId = null;
-        this.chatMessages = [];
+        this.currentChatId = null;
+        this.chatMessages = [
+          {
+            sender: "bot",
+            content: this.translate(
+              "chatbot.welcomeMessage",
+              "Welcome! How can I help you today?"
+            ),
+            timestamp: new Date().toISOString(),
+            isSaved: true,
+          },
+        ];
         this.newMessage = "";
         this.selectedContextItems = [];
+        this.lastSavedState = {
+          messages: JSON.parse(JSON.stringify(this.chatMessages)),
+          contextItems: [],
+        };
         console.log(
           `Reset conversationId after deletion of chat ${deletedChatId}`
         );
+      }
+    });
+
+    eventBus.$on("load-conversation", (conversationId) => {
+      if (conversationId === this.conversationId) {
+        // Same conversation, no need to load
+        return;
+      }
+      if (this.hasUnsavedChanges()) {
+        this.pendingConversationId = conversationId;
+        this.showLoadConfirm = true;
+      } else {
+        this.chatMessages = []; // Clear messages to avoid carryover
+        this.selectedContextItems = [];
+        this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
+        this.loadExistingConversation(conversationId);
       }
     });
   },
@@ -607,6 +664,7 @@ export default {
     if (this.statusUpdateInterval) {
       clearInterval(this.statusUpdateInterval);
     }
+    eventBus.$off("load-conversation");
   },
 
   watch: {
@@ -869,24 +927,175 @@ export default {
       });
     },
 
+    async loadExistingConversation(conversationId) {
+      try {
+        console.log(`Loading conversation ${conversationId}`);
+        const conversation = await this.chatHistoryService.getConversation(
+          conversationId
+        );
+        if (!conversation) {
+          throw new Error("Conversation not found");
+        }
+
+        // Set conversation metadata
+        this.conversationId = conversation._key;
+        this.currentChatId = conversation._key;
+        this.currentChatTitle = conversation.title || this.generateChatTitle();
+        this.conversationCategory = conversation.categoryId || null;
+
+        // Load messages
+        this.chatMessages = [];
+        const messages = conversation.messages || [];
+        messages.forEach((msg) => {
+          this.chatMessages.push({
+            sender: msg.sender === "user" ? "user" : "bot",
+            content: msg.content,
+            timestamp: msg.createdAt || new Date().toISOString(),
+            queryId: msg.queryId || null,
+            isSaved: true, // Mark all loaded messages as saved
+          });
+        });
+
+        // If no messages, add welcome message
+        if (this.chatMessages.length === 0) {
+          this.chatMessages.push({
+            sender: "bot",
+            content: this.translate(
+              "chatbot.welcomeMessage",
+              "Welcome! How can I help you today?"
+            ),
+            timestamp: new Date().toISOString(),
+            isSaved: true,
+          });
+        }
+
+        // Load context items from tags
+        this.selectedContextItems = [];
+        if (conversation.tags && Array.isArray(conversation.tags)) {
+          conversation.tags.forEach((tag) => {
+            this.selectedContextItems.push({
+              service: tag,
+              category: this.conversationCategory || "general",
+              selected: true,
+            });
+          });
+        }
+
+        // Reset lastSavedState to match loaded state
+        this.lastSavedState = {
+          messages: JSON.parse(JSON.stringify(this.chatMessages)), // Deep copy
+          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems)), // Deep copy
+        };
+
+        // Reset UI state
+        this.newMessage = "";
+        this.showQuickHelp = false;
+        this.scrollToBottom();
+
+        // Update Vuex store
+        this.updateChatInHistory();
+
+        notificationService.success(
+          this.translate(
+            "chatbot.conversationLoaded",
+            "Conversation loaded successfully!"
+          )
+        );
+      } catch (error) {
+        console.error("Error loading conversation:", error);
+        notificationService.error(
+          this.translate("chatbot.loadError", "Unable to load conversation.")
+        );
+      }
+    },
+
+    hasUnsavedChanges() {
+      // Case 3: New conversation not yet saved
+      if (!this.conversationId && !this.currentChatId) {
+        // Check if there are user messages or context items
+        const hasUserMessages = this.chatMessages.some(
+          (msg) => msg.sender === "user"
+        );
+        const hasContextItems = this.selectedContextItems.length > 0;
+        return hasUserMessages || hasContextItems;
+      }
+
+      // Case 1: Check for new messages in existing conversation
+      const hasNewMessages = this.chatMessages.some(
+        (msg) =>
+          !msg.isSaved &&
+          (msg.sender === "user" || (msg.sender === "bot" && msg.queryId))
+      );
+      if (hasNewMessages) {
+        return true;
+      }
+
+      // Case 2: Check for context item differences
+      if (
+        this.selectedContextItems.length !==
+        this.lastSavedState.contextItems.length
+      ) {
+        return true;
+      }
+      for (let i = 0; i < this.selectedContextItems.length; i++) {
+        if (
+          this.selectedContextItems[i].service !==
+            this.lastSavedState.contextItems[i]?.service ||
+          this.selectedContextItems[i].category !==
+            this.lastSavedState.contextItems[i]?.category
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    },
+
+    async loadConversationConfirmed() {
+      this.showLoadConfirm = false;
+      if (this.pendingConversationId) {
+        await this.loadExistingConversation(this.pendingConversationId);
+        this.pendingConversationId = null;
+      }
+    },
+
+    cancelLoadConversation() {
+      this.showLoadConfirm = false;
+      this.pendingConversationId = null;
+    },
+
+    async saveAndLoadConversation() {
+      this.showLoadConfirm = false;
+      if (this.conversationId || this.currentChatId) {
+        await this.updateExistingChat();
+      } else {
+        this.saveChatDialog = {
+          visible: true,
+          title: this.generateChatTitle(),
+          folderId: "default",
+        };
+        // Wait for save to complete (handled in handleSaveChat)
+        await new Promise((resolve) => {
+          const unwatch = this.$watch("saveChatDialog.visible", (newVal) => {
+            if (!newVal) {
+              unwatch();
+              resolve();
+            }
+          });
+        });
+      }
+      if (this.pendingConversationId) {
+        await this.loadExistingConversation(this.pendingConversationId);
+        this.pendingConversationId = null;
+      }
+    },
+
     saveChatToHistory() {
       if (this.conversationId || this.currentChatId) {
-        // Show confirmation for existing conversation
-        this.saveConfirmDialog = {
-          title: this.translate(
-            "chatbot.saveConfirmTitle",
-            "Save Existing Conversation"
-          ),
-          message: this.translate(
-            "chatbot.saveConfirmMessage",
-            "Save existing conversation?"
-          ),
-          confirmText: this.translate("common.save", "Save"),
-          cancelText: this.translate("common.cancel", "Cancel"),
-        };
-        this.showSaveConfirm = true;
+        // Existing conversation: update directly
+        this.updateExistingChat();
       } else {
-        // Open the save dialog for new conversations
+        // New conversation: open save dialog
         this.saveChatDialog = {
           visible: true,
           title: this.generateChatTitle(),
@@ -917,17 +1126,17 @@ export default {
           throw new Error("User not authenticated");
         }
 
+        const firstUserMessage =
+          this.chatMessages.find((msg) => msg.sender === "user")?.content || "";
+
         const conversationData = {
           userId: currentUser._key,
           title: this.saveChatDialog.title || this.generateChatTitle(),
-          initialMessage:
-            this.chatMessages.find((msg) => msg.sender === "user")?.content ||
-            "",
+          initialMessage: firstUserMessage,
           categoryId: this.conversationCategory || null,
-          tags: this.getContextTags(), // Populate tags from context items
+          tags: this.getContextTags(),
         };
 
-        // This method should only be called for new conversations
         if (this.conversationId) {
           throw new Error(
             "handleSaveChat should not be called for existing conversations"
@@ -944,8 +1153,20 @@ export default {
         console.log("Conversation created:", conversation);
         this.conversationId = conversation._key;
 
-        // Add all messages
+        // Add all messages, skipping the first user message if it matches initialMessage
         for (const message of this.chatMessages) {
+          // Skip the welcome message (bot's initial message) and the first user message if it matches initialMessage
+          if (
+            (message.sender === "bot" && !message.queryId) || // Skip bot welcome message
+            (message.sender === "user" &&
+              message.content === firstUserMessage &&
+              !message.isSaved) // Skip first user message
+          ) {
+            console.log(`Skipping message: ${message.content}`);
+            message.isSaved = true; // Mark as saved to avoid reprocessing
+            continue;
+          }
+
           if (
             message.sender === "user" ||
             (message.sender === "bot" && message.queryId)
@@ -1012,74 +1233,82 @@ export default {
 
     // Updates an existing conversation on the backend... note that saving new conversstions is handled differently
     async updateExistingChat() {
-    console.log("updateExistingChat called");
-    try {
-      const currentUser = this.$store.getters.currentUser;
-      if (!currentUser || !currentUser._key) {
-        throw new Error("User not authenticated");
-      }
-
-      if (!this.conversationId) {
-        throw new Error("Conversation ID is required for updating an existing chat");
-      }
-
-      // Structure updateData to match backend expectations
-      const updateData = {
-        userId: currentUser._key,
-        title: this.currentChatTitle || this.generateChatTitle(),
-        categoryId: this.conversationCategory || null,
-        tags: this.getContextTags(), // Populate tags from context items
-        isStarred: false,
-        isArchived: false,
-      };
-      console.log("chatHistoryService.updateConversation called with:", {
-        conversationId: this.conversationId,
-        updateData,
-      });
-      const conversation = await this.chatHistoryService.updateConversation(
-        this.conversationId,
-        updateData
-      );
-      console.log("Conversation updated:", conversation);
-
-      // Save only new messages
-      for (const message of this.chatMessages) {
-        if (message.isSaved) {
-          console.log(`Skipping already saved message: ${message.content}`);
-          continue;
+      console.log("updateExistingChat called");
+      try {
+        const currentUser = this.$store.getters.currentUser;
+        if (!currentUser || !currentUser._key) {
+          throw new Error("User not authenticated");
         }
-        if (message.sender === "user" || (message.sender === "bot" && message.queryId)) {
-          const messageData = {
-            conversationId: this.conversationId,
-            content: message.content,
-            sender: message.sender === "user" ? "user" : "assistant",
-            queryId: message.queryId || null,
-            metadata: message.metadata || {},
-            userId: currentUser._key,
-          };
-          console.log("Adding message with data:", messageData);
-          console.log("chatHistoryService.addMessage called with:", messageData);
-          await this.chatHistoryService.addMessage(messageData);
-          message.isSaved = true;
+
+        if (!this.conversationId) {
+          throw new Error(
+            "Conversation ID is required for updating an existing chat"
+          );
         }
+
+        // Structure updateData to match backend expectations
+        const updateData = {
+          userId: currentUser._key,
+          title: this.currentChatTitle || this.generateChatTitle(),
+          categoryId: this.conversationCategory || null,
+          tags: this.getContextTags(), // Populate tags from context items
+          isStarred: false,
+          isArchived: false,
+        };
+        console.log("chatHistoryService.updateConversation called with:", {
+          conversationId: this.conversationId,
+          updateData,
+        });
+        const conversation = await this.chatHistoryService.updateConversation(
+          this.conversationId,
+          updateData
+        );
+        console.log("Conversation updated:", conversation);
+
+        // Save only new messages
+        for (const message of this.chatMessages) {
+          if (message.isSaved) {
+            console.log(`Skipping already saved message: ${message.content}`);
+            continue;
+          }
+          if (
+            message.sender === "user" ||
+            (message.sender === "bot" && message.queryId)
+          ) {
+            const messageData = {
+              conversationId: this.conversationId,
+              content: message.content,
+              sender: message.sender === "user" ? "user" : "assistant",
+              queryId: message.queryId || null,
+              metadata: message.metadata || {},
+              userId: currentUser._key,
+            };
+            console.log("Adding message with data:", messageData);
+            console.log(
+              "chatHistoryService.addMessage called with:",
+              messageData
+            );
+            await this.chatHistoryService.addMessage(messageData);
+            message.isSaved = true;
+          }
+        }
+
+        // Update Vuex store
+        this.currentChatId = this.conversationId;
+        this.lastSavedState.messages = [...this.chatMessages];
+        this.lastSavedState.contextItems = [...this.selectedContextItems];
+        this.updateChatInHistory();
+
+        // Notify success
+        notificationService.success(
+          this.translate("chatbot.chatUpdated", "Chat updated successfully!")
+        );
+      } catch (error) {
+        console.error("Error updating chat:", error);
+        notificationService.error("Failed to update chat. Please try again.");
+        throw error;
       }
-
-      // Update Vuex store
-      this.currentChatId = this.conversationId;
-      this.lastSavedState.messages = [...this.chatMessages];
-      this.lastSavedState.contextItems = [...this.selectedContextItems];
-      this.updateChatInHistory();
-
-      // Notify success
-      notificationService.success(
-        this.translate("chatbot.chatUpdated", "Chat updated successfully!")
-      );
-    } catch (error) {
-      console.error("Error updating chat:", error);
-      notificationService.error("Failed to update chat. Please try again.");
-      throw error;
-    }
-  },
+    },
 
     updateChatInHistory() {
       if (this.currentChatId) {
@@ -1133,21 +1362,60 @@ export default {
       return `Chat - ${now.toLocaleDateString()}`;
     },
 
-    confirmSaveExistingChat() {
-      this.showSaveConfirm = false;
-      this.updateExistingChat();
-    },
-
-    cancelSaveExistingChat() {
-      this.showSaveConfirm = false;
-    },
-
     startNewChat() {
-      if (this.chatMessages.length > 1 && !this.currentChatId) {
+      if (this.hasUnsavedChanges()) {
         this.showNewChatConfirm = true;
-        return;
+        // Update dialog text based on whether it's an existing or new conversation
+        this.newChatDialog = {
+          title: this.translate("chatbot.newChatTitle", "Start New Chat"),
+          message: this.translate(
+            "chatbot.unsavedChanges",
+            "You have unsaved changes. Would you like to save them before starting a new chat?"
+          ),
+          confirmText: this.translate(
+            "chatbot.saveAndStartNew",
+            "Save and Start New"
+          ),
+          cancelText: this.translate(
+            "chatbot.discardAndStartNew",
+            "Discard and Start New"
+          ),
+          secondaryText: this.translate("common.cancel", "Cancel"),
+        };
+      } else {
+        this.startNewChatConfirmed();
       }
-      this.startNewChatConfirmed();
+    },
+
+    async saveAndStartNewChat() {
+      this.showNewChatConfirm = false;
+      try {
+        if (this.conversationId || this.currentChatId) {
+          // Existing conversation: update it
+          await this.updateExistingChat();
+        } else {
+          // New conversation: save it
+          this.saveChatDialog = {
+            visible: true,
+            title: this.generateChatTitle(),
+            folderId: "default",
+          };
+          // Wait for save to complete
+          await new Promise((resolve) => {
+            const unwatch = this.$watch("saveChatDialog.visible", (newVal) => {
+              if (!newVal) {
+                unwatch();
+                resolve();
+              }
+            });
+          });
+        }
+        // After saving, start new chat
+        this.startNewChatConfirmed();
+      } catch (error) {
+        console.error("Error saving before starting new chat:", error);
+        notificationService.error("Failed to save changes. Please try again.");
+      }
     },
 
     startNewChatConfirmed() {
@@ -1159,15 +1427,21 @@ export default {
             "chatbot.welcomeMessage",
             "Welcome! How can I help you today?"
           ),
+          timestamp: new Date().toISOString(),
+          isSaved: true,
         },
       ];
       this.currentChatId = null;
-      this.conversationId = null; // Explicitly reset conversationId
+      this.conversationId = null;
       this.selectedContextItems = [];
       this.newMessage = "";
       this.conversationCategory = null;
-      this.currentChatTitle = ""; // Reset title to avoid reusing old title
+      this.currentChatTitle = "";
       this.showQuickHelp = true;
+      this.lastSavedState = {
+        messages: JSON.parse(JSON.stringify(this.chatMessages)),
+        contextItems: [],
+      };
       this.scrollToBottom();
       notificationService.info(
         this.translate("chatbot.newChatStarted", "Started a new conversation."),
@@ -1184,10 +1458,33 @@ export default {
         title: this.translate("chatbot.newChatTitle", "Start New Chat"),
         message: this.translate(
           "chatbot.unsavedChanges",
-          "You have unsaved changes. Are you sure you want to start a new chat?"
+          "You have unsaved changes. Would you like to save them before starting a new chat?"
         ),
-        confirmText: this.translate("chatbot.startNew", "Start New"),
+        confirmText: this.translate(
+          "chatbot.saveAndStartNew",
+          "Save and Start New"
+        ),
+        cancelText: this.translate(
+          "chatbot.discardAndStartNew",
+          "Discard and Start New"
+        ),
+        secondaryText: this.translate("common.cancel", "Cancel"),
+      };
+      this.loadConfirmDialog = {
+        title: this.translate(
+          "chatbot.loadConfirmTitle",
+          "Load Existing Conversation"
+        ),
+        message: this.translate(
+          "chatbot.loadConfirmMessage",
+          "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?"
+        ),
+        confirmText: this.translate(
+          "chatbot.loadAndDiscard",
+          "Load and Discard"
+        ),
         cancelText: this.translate("common.cancel", "Cancel"),
+        secondaryText: this.translate("chatbot.saveAndLoad", "Save and Load"),
       };
     },
   },

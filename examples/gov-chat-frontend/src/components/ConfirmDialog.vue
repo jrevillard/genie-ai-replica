@@ -13,6 +13,7 @@
         <p>{{ message }}</p>
       </div>
       <div class="confirm-dialog-footer">
+        <button v-if="secondaryText" class="btn-secondary" @click="secondary">{{ secondaryText }}</button>
         <button class="btn-cancel" @click="cancel">{{ cancelText }}</button>
         <button class="btn-confirm" @click="confirm">{{ confirmText }}</button>
       </div>
@@ -51,6 +52,10 @@ export default {
     parentStyles: {
       type: Object,
       default: () => ({})
+    },
+    secondaryText: {
+      type: String,
+      default: ''
     }
   },
   methods: {
@@ -59,6 +64,9 @@ export default {
     },
     cancel() {
       this.$emit('cancel');
+    },
+    secondary() {
+      this.$emit('secondary');
     }
   }
 }
@@ -114,7 +122,7 @@ export default {
   border-top: 1px solid var(--dialog-border-color, #eaeaea);
 }
 
-.btn-cancel, .btn-confirm {
+.btn-cancel, .btn-confirm, .btn-secondary {
   padding: 8px 16px;
   border-radius: 4px;
   font-weight: 500;
@@ -141,15 +149,13 @@ export default {
   background-color: var(--dialog-primary-button-hover-bg, #3a7da0);
 }
 
-@keyframes dialog-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.btn-secondary {
+  background-color: var(--dialog-secondary-button-bg, #10b981);
+  color: var(--dialog-secondary-button-text, #ffffff);
+}
+
+.btn-secondary:hover {
+  background-color: var(--dialog-secondary-button-hover-bg, #059669);
 }
 
 /* Base dark theme styles - these will apply ONLY when no parentStyles are provided */
@@ -176,6 +182,15 @@ export default {
   background-color: #555555;
 }
 
+.confirm-dialog[data-theme="dark"]:not([style*="--dialog-secondary-button-bg"]) .btn-secondary {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+.confirm-dialog[data-theme="dark"]:not([style*="--dialog-secondary-button-hover-bg"]) .btn-secondary:hover {
+  background-color: #047857;
+}
+
 /* Ensure data-themed="true" works regardless of other settings */
 .confirm-dialog-header h3[data-themed="true"] {
   color: var(--dialog-title-color, #333333) !important;
@@ -184,5 +199,4 @@ export default {
 .confirm-dialog[data-theme="dark"] .confirm-dialog-header h3[data-themed="true"] {
   color: var(--dialog-title-color-dark, #ffffff) !important;
 }
-
 </style>

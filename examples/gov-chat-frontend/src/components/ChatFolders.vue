@@ -607,12 +607,11 @@ export default {
 
     filteredConversations() {
       console.log(
-        `Displaying ${this.conversations.length} conversations for tab: ${this.currentSecondLevelTab}`
+        `Computing filteredConversations for tab: ${this.currentSecondLevelTab}, searchTerm: "${this.searchTerm}"`
       );
-
       try {
         let filteredChats = [...this.conversations];
-
+        console.log(`Initial filteredChats length: ${filteredChats.length}`);
         if (this.currentSecondLevelTab === "starred") {
           filteredChats = filteredChats.filter(
             (conv) => conv.isStarred === true
@@ -628,7 +627,6 @@ export default {
             `After archived filtering: ${filteredChats.length} conversations`
           );
         }
-
         if (this.searchTerm && this.searchTerm.trim() !== "") {
           const searchTermLower = this.searchTerm.trim().toLowerCase();
           console.log(`Applying search term: ${searchTermLower}`);
@@ -640,20 +638,15 @@ export default {
                 conv.preview.toLowerCase().includes(searchTermLower)) ||
               (conv.category &&
                 conv.category.toLowerCase().includes(searchTermLower));
-            console.log(
-              `Conversation ${conv._key} (${conv.title}): matches=${matches}`
-            );
             return matches;
           });
           console.log(
             `After search filtering: ${filteredChats.length} conversations`
           );
         }
-
-        return filteredChats.sort((a, b) => {
+        const sortedChats = filteredChats.sort((a, b) => {
           const dateA = a.updated ? new Date(a.updated) : new Date(0);
           const dateB = b.updated ? new Date(b.updated) : new Date(0);
-
           if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
             console.warn("Invalid date in conversation sorting:", {
               dateA,
@@ -661,11 +654,14 @@ export default {
             });
             return 0;
           }
-
           return dateB - dateA;
         });
+        console.log(
+          `Final filtered and sorted conversations length: ${sortedChats.length}`
+        );
+        return sortedChats;
       } catch (error) {
-        console.error("Error filtering/sorting conversations:", error);
+        console.error("Error in filteredConversations:", error);
         return this.conversations;
       }
     },
@@ -1045,18 +1041,18 @@ export default {
     },
 
     async loadConversations() {
-      console.log("Loading conversations for tab:", this.currentSecondLevelTab);
-
+      console.log(
+        "Starting loadConversations for tab:",
+        this.currentSecondLevelTab
+      );
       if (this.currentSecondLevelTab === "folders") {
         console.log("⛔ BLOCKING conversation loading for Folders tab");
         this.conversations = [];
         this.isLoading = false;
         return;
       }
-
       this.isLoading = true;
       this.errorMessage = null;
-
       try {
         if (!this.currentUser || !this.currentUser._key) {
           console.error(
@@ -1069,19 +1065,15 @@ export default {
           this.isLoading = false;
           return;
         }
-
         const userId = this.currentUser._key;
         console.log(`Loading conversations for user ID: ${userId}`);
-
         const options = { limit: 100, offset: 0 };
         if (this.currentSecondLevelTab === "all") {
           options.includeArchived = false;
         } else if (this.currentSecondLevelTab === "archived") {
           options.includeArchived = true;
         }
-
         console.log("Fetching conversations with options:", options);
-
         const response = await chatHistoryService.getUserConversations(
           userId,
           options
@@ -1092,7 +1084,6 @@ export default {
           } conversations from server:`,
           response
         );
-
         this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
@@ -1102,13 +1093,12 @@ export default {
             messageCount: conv.messageCount || 0,
           };
         });
-
         console.log(
-          `Loaded ${this.conversations.length} conversations for ${this.currentSecondLevelTab} tab`
+          `Set this.conversations to length: ${this.conversations.length}`
         );
-
-        this.forceDisplayConversations();
-
+        this.$nextTick(() => {
+          console.log("UI should now be updated with conversations");
+        });
         if (Object.keys(this.categories).length === 0) {
           this.loadCategories();
         }
@@ -1558,8 +1548,7 @@ export default {
       console.log(`Selecting folder: ${folderId}`);
       this.selectedFolderId = folderId;
       this.folderSelected = true;
-
-      await this.fetchFolderChats(folderId);
+      await this.fetchFolderChats(folderId, true); // Set this.conversations for the selected folder
     },
 
     async getChatsByFolderId({ commit }, folderId) {
@@ -1694,9 +1683,9 @@ export default {
           "Computed nonDefaultFolders after dispatch:",
           nonDefaultFoldersDebug
         );
-        // Preload conversations for all non-default folders to get accurate counts
+        // Preload conversations for all non-default folders without setting this.conversations
         for (const folder of processedFolders) {
-          await this.fetchFolderChats(folder.id);
+          await this.fetchFolderChats(folder.id, false);
         }
         if (this.currentSecondLevelTab === "folders") {
           this.ensureFoldersSectionVisible();
@@ -1801,7 +1790,7 @@ export default {
 
     openChat(chatId) {
       console.log(`Opening chat ${chatId}`);
-      this.$emit("open-chat", chatId);
+      eventBus.$emit("load-conversation", chatId);
     },
 
     showChatActionsMenu(chat, event) {
@@ -2125,11 +2114,13 @@ export default {
       });
     },
 
-    async fetchFolderChats(folderId) {
+    async fetchFolderChats(folderId, isSelected = false) {
       try {
         this.isLoading = true;
         this.errorMessage = null;
-        this.conversations = [];
+        if (isSelected) {
+          this.conversations = []; // Reset only when selecting a folder
+        }
         console.log(`Fetching conversations for folder ${folderId}`);
         if (!this.currentUser || !this.currentUser._key) {
           this.errorMessage = "User data is missing";
@@ -2140,24 +2131,25 @@ export default {
         });
         console.log(`Fetched folder data:`, folderData);
         if (folderData && folderData.conversations) {
-          this.conversations = folderData.conversations.map((conv) => ({
+          const convs = folderData.conversations.map((conv) => ({
             ...conv,
             isStarred: conv.isStarred === true,
             isArchived: conv.isArchived === true,
             preview: this.generatePreview(conv),
             messageCount: conv.messageCount || 0,
           }));
-          // Update folderCounts with the actual number of conversations
-          this.folderCounts[folderId] = this.conversations.length;
+          if (isSelected) {
+            this.conversations = convs; // Set only when folder is selected
+            this.forceDisplayConversations();
+          }
+          this.folderCounts[folderId] = convs.length;
           console.log(
-            `Loaded ${this.conversations.length} conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${this.conversations.length}`
+            `Loaded ${convs.length} conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${convs.length}`
           );
-          // Update Vuex folderChats
           await this.$store.dispatch("chatHistory/setFolderChats", {
             folderId,
-            chats: this.conversations.map((conv) => conv._key),
+            chats: convs.map((conv) => conv._key),
           });
-          this.forceDisplayConversations();
         } else {
           console.log(`No conversations found for folder ${folderId}`);
           this.folderCounts[folderId] = 0;
@@ -2378,8 +2370,14 @@ html[data-theme="dark"] .folders-header h3 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: calc(100% - 100px); /* Reduced from 110px to 100px */
+  max-width: calc(100% - 100px);
   font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.chat-title:hover {
+  text-decoration: underline;
+  color: var(--accent-color);
 }
 
 /* Grouped action buttons */

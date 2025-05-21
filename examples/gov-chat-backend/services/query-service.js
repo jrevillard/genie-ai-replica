@@ -52,198 +52,79 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
+  /**
+ * Create a new query
+ * @param {Object} queryData - Query data
+ * @returns {Promise<Object>} The created query
+ */
   async createQuery(queryData) {
     try {
-      logger.info(`================ DEBUG START ================`);
       logger.info(`Creating query with body: ${JSON.stringify(queryData)}`);
-      
-      // Check collection properties and schema
-      try {
-        const collProperties = await this.queries.properties();
-        logger.info(`Collection schema enabled: ${!!collProperties.schema}`);
-        if (collProperties.schema) {
-          logger.info(`Schema level: ${collProperties.schema.level}`);
-          logger.info(`Required fields: ${JSON.stringify(collProperties.schema.rule.required || [])}`);
-          logger.info(`Schema rule: ${JSON.stringify(collProperties.schema.rule)}`);
-        }
-      } catch (propsError) {
-        logger.error(`Failed to get collection properties: ${propsError.message}`);
-      }
-  
+
       // Ensure minimum required data
       let missingFields = [];
       if (!queryData.userId) missingFields.push('userId');
       if (!queryData.sessionId) missingFields.push('sessionId');
       if (!queryData.text) missingFields.push('text');
-      
+
       if (missingFields.length > 0) {
         logger.error(`Missing required data: ${missingFields.join(', ')}`);
         throw new Error('Missing required query data');
       }
-  
-      // Try a direct approach - temporarily modify the schema validation level
-      try {
-        // Temporarily modify the schema to remove _key from required fields
-        const originalSchema = await this.queries.properties();
-        
-        // Check if we can modify the schema
-        if (originalSchema.schema && originalSchema.schema.rule) {
-          logger.info('Attempting to temporarily adjust schema validation...');
-          
-          // Create a modified schema that doesn't require _key
-          const modifiedRule = JSON.parse(JSON.stringify(originalSchema.schema.rule));
-          
-          // Remove _key from required fields if it exists
-          if (modifiedRule.required && modifiedRule.required.includes('_key')) {
-            modifiedRule.required = modifiedRule.required.filter(field => field !== '_key');
-            logger.info(`Modified required fields: ${JSON.stringify(modifiedRule.required)}`);
-            
-            // Apply the modified schema
-            await this.queries.properties({ 
-              schema: { 
-                rule: modifiedRule,
-                level: originalSchema.schema.level,
-                message: originalSchema.schema.message
-              } 
-            });
-            logger.info('Schema temporarily modified');
-          }
-        }
-      } catch (schemaModError) {
-        logger.error(`Error modifying schema: ${schemaModError.message}`);
-        // Continue even if schema modification fails
-      }
-      
-      // Create basic query document - let ArangoDB generate the key
+
+      // Create query document
       const basicQueryDoc = {
         userId: queryData.userId,
         sessionId: queryData.sessionId,
         text: queryData.text,
         timestamp: queryData.timestamp || new Date().toISOString(),
-        isAnswered: queryData.isAnswered !== undefined ? queryData.isAnswered : false
+        isAnswered: queryData.isAnswered !== undefined ? queryData.isAnswered : false,
+        categoryId: queryData.categoryId || null,
+        serviceId: queryData.serviceId || null,
+        responseTime: queryData.responseTime || 0
       };
-      
+
+      // Save query document
       logger.info(`Document to save: ${JSON.stringify(basicQueryDoc)}`);
-      
-      try {
-        // Try a direct save with auto-generated key
-        const query = await this.queries.save(basicQueryDoc);
-        
-        const queryId = query._key;
-        logger.info(`SUCCESS: Query created with auto-generated key: ${queryId}`);
-        
-        // Handle the rest of the process as before
-        
-        // Rest of your existing code for adding additional data, creating edges, etc.
-        
-        // Restore original schema if we modified it
+      const query = await this.queries.save(basicQueryDoc);
+      const queryId = query._key;
+      logger.info(`Query created with auto-generated key: ${queryId}`);
+
+      // Record query in analytics if service is set
+      if (this.analyticsService) {
         try {
-          if (originalSchema && originalSchema.schema) {
-            logger.info('Restoring original schema...');
-            await this.queries.properties({ schema: originalSchema.schema });
-            logger.info('Original schema restored');
-          }
-        } catch (restoreError) {
-          logger.error(`Error restoring schema: ${restoreError.message}`);
-        }
-        
-        // Return the document
-        const finalQuery = await this.queries.document(queryId);
-        logger.info(`Query ${queryId} created successfully`);
-        logger.info(`================ DEBUG END ================`);
-        return finalQuery;
-      } catch (saveError) {
-        logger.error(`Error with direct save: ${saveError.message}`);
-        
-        // Try using standard AQL insert
-        try {
-          logger.info('Trying standard AQL INSERT');
-          
-          // Create a simple timestamp-based key
-          const timestamp = Math.floor(Date.now() / 1000);
-          const randomPart = Math.floor(Math.random() * 10000);
-          const simpleKey = `q${timestamp}${randomPart}`;
-          
-          // Use standard AQL with bind parameters
-          const aqlQuery = `
-            INSERT {
-              _key: @key,
-              userId: @userId,
-              sessionId: @sessionId,
-              text: @text,
-              timestamp: @timestamp,
-              isAnswered: @isAnswered
-            } INTO queries
-            RETURN NEW
-          `;
-          
-          const bindVars = {
-            key: simpleKey,
+          await this.analyticsService.recordQuery({
+            _key: queryId,
             userId: queryData.userId,
             sessionId: queryData.sessionId,
             text: queryData.text,
-            timestamp: queryData.timestamp || new Date().toISOString(),
-            isAnswered: queryData.isAnswered === true
-          };
-          
-          logger.info(`AQL query: ${aqlQuery}`);
-          logger.info(`Bind variables: ${JSON.stringify(bindVars)}`);
-          
-          const cursor = await this.db.query(aqlQuery, bindVars);
-          const result = await cursor.next();
-          
-          if (!result) {
-            throw new Error('No result returned from AQL query');
-          }
-          
-          const queryId = result._key;
-          logger.info(`SUCCESS with AQL: Query created with key: ${queryId}`);
-          
-          // Handle the rest of the process
-          
-          // Return the document
-          const finalQuery = await this.queries.document(queryId);
-          logger.info(`Query ${queryId} created successfully with AQL`);
-          logger.info(`================ DEBUG END ================`);
-          return finalQuery;
-        } catch (aqlError) {
-          logger.error(`Standard AQL approach failed: ${aqlError.message}`);
-          
-          // Check if the database can accept documents with a predefined _key property
-          try {
-            logger.info('Checking if we can get any information about the queries collection...');
-            
-            // Get full collection info
-            const collInfo = await this.queries.properties();
-            logger.info(`Collection info: ${JSON.stringify(collInfo)}`);
-            
-            // Check what happens when we try to create a document directly in another collection
-            // This is to diagnose if the issue is specific to the queries collection
-            try {
-              logger.info('Testing document creation in sessions collection...');
-              const testDoc = await this.db.collection('sessions').save({
-                userId: 'test',
-                startTime: new Date().toISOString(),
-                active: true
-              });
-              logger.info(`Test document created successfully: ${JSON.stringify(testDoc)}`);
-              
-              // Clean up
-              await this.db.collection('sessions').remove(testDoc._key);
-            } catch (testError) {
-              logger.error(`Test creation failed: ${testError.message}`);
-            }
-            
-            throw new Error('Cannot find a working document creation approach');
-          } catch (finalError) {
-            logger.error(`All approaches failed: ${finalError.message}`);
-            throw new Error('Failed to create query document after multiple attempts');
-          }
+            categoryId: queryData.categoryId || null,
+            serviceId: queryData.serviceId || null,
+            responseTime: queryData.responseTime || 0,
+            isAnswered: queryData.isAnswered || false
+          });
+          logger.info(`Analytics recorded for query ${queryId}`);
+        } catch (error) {
+          logger.error(`Error recording query analytics: ${error.message}`);
+          // Continue even if analytics recording fails
         }
       }
+
+      // Return the document
+      const finalQuery = await this.queries.document(queryId);
+      logger.info(`Query ${queryId} created successfully`);
+      return finalQuery;
     } catch (error) {
       logger.error(`Error creating query: ${error.message}`);
-      logger.info(`================ DEBUG END ================`);
+      // Log collection properties for debugging if save fails
+      if (error.message.includes('schema')) {
+        try {
+          const collProperties = await this.queries.properties();
+          logger.info(`Collection properties: ${JSON.stringify(collProperties)}`);
+        } catch (propsError) {
+          logger.error(`Failed to get collection properties: ${propsError.message}`);
+        }
+      }
       throw error;
     }
   }

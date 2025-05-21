@@ -755,6 +755,40 @@ class AnalyticsService {
   }
 
   /**
+ * Record a query in analytics
+ * @param {Object} queryDoc - Query document
+ * @returns {Promise<Object>} The created analytics record
+ */
+async recordQuery(queryDoc) {
+  try {
+    const response = await httpService.post(`${this.baseUrl}/analytics/query`, queryDoc);
+    return response.data;
+  } catch (error) {
+    console.error('Error recording query in analytics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Record feedback in analytics
+ * @param {String} queryId - Query ID
+ * @param {Object} feedback - Feedback data
+ * @returns {Promise<Object>} The created analytics record
+ */
+async recordFeedback(queryId, feedback) {
+  try {
+    const response = await httpService.post(`${this.baseUrl}/analytics/feedback`, {
+      queryId,
+      feedback
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error recording feedback in analytics:', error);
+    throw error;
+  }
+}
+
+  /**
    * Get fallback satisfaction gauge data
    * @param {string} locale - Locale for translations
    * @returns {Object} Sample satisfaction gauge data

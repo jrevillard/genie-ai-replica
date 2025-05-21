@@ -266,6 +266,7 @@ import RightSideBarComponent from "./RightSideBarComponent.vue";
 import chatbotService from "../services/chatbotService";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import chatHistoryService from "../services/chatHistoryService";
+import analyticsService from "../services/analyticsService";
 
 export default {
   name: "ChatBotComponent",
@@ -306,58 +307,67 @@ export default {
         lastUpdated: new Date(),
       },
       justChatOption: {
+        service: "Just Chat",
         textKey: "quickhelp.justChat",
         promptKey: "quickhelp.justChatPrompt",
-        icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
+        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
       },
       quickHelpOptions: [
         {
+          service: "Identity & Civil Registration",
+          category: "1",
           textKey: "quickhelp.applyForID",
           promptKey: "quickhelp.applyForIDPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>',
-          categoryId: "1",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>',
         },
         {
+          service: "Taxes & Revenue",
+          category: "5",
           textKey: "quickhelp.payTaxes",
           promptKey: "quickhelp.payTaxesPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>',
-          categoryId: "5",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>',
         },
         {
+          service: "Business & Trade",
+          category: "8",
           textKey: "quickhelp.startBusiness",
           promptKey: "quickhelp.startBusinessPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>',
-          categoryId: "8",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>',
         },
         {
+          service: "Healthcare & Social Services",
+          category: "2",
           textKey: "quickhelp.findHealthcare",
           promptKey: "quickhelp.findHealthcarePrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>',
-          categoryId: "2",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>',
         },
         {
+          service: "Education & Learning",
+          category: "3",
           textKey: "quickhelp.educationServices",
           promptKey: "quickhelp.educationServicesPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>',
-          categoryId: "3",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>',
         },
         {
+          service: "Transportation & Mobility",
+          category: "7",
           textKey: "quickhelp.transportLicenses",
           promptKey: "quickhelp.transportLicensesPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>',
-          categoryId: "7",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>',
         },
         {
+          service: "Housing & Urban Development",
+          category: "9",
           textKey: "quickhelp.housingPrograms",
           promptKey: "quickhelp.housingProgramsPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
-          categoryId: "9",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
         },
         {
+          service: "Employment & Labor Services",
+          category: "4",
           textKey: "quickhelp.findJobs",
           promptKey: "quickhelp.findJobsPrompt",
-          icon: '<svg xmlns="[invalid url, do not cite] width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>',
-          categoryId: "4",
+          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>',
         },
       ],
       translations: {
@@ -722,16 +732,52 @@ export default {
     },
 
     selectQuickHelpOption(option) {
-      const translatedPrompt = this.translate(option.promptKey, "");
-      this.newMessage = translatedPrompt;
+      // Handle Vue Proxy or null option
+      const rawOption =
+        option && option.__v_isReactive ? { ...option } : option || {};
+      if (!rawOption.service) {
+        console.error("Invalid quick help option, missing service:", rawOption);
+        return;
+      }
+      // Update context items
+      const category =
+        rawOption.category ||
+        (rawOption.service !== this.justChatOption.service ? "general" : null);
+      this.selectedContextItems = [
+        {
+          service: rawOption.service,
+          category: category,
+          selected: true,
+        },
+      ];
+
+      // Set conversation category for non-Just Chat options, overriding sidebar
+      if (rawOption.service !== this.justChatOption.service) {
+        this.conversationCategory = category;
+        console.log(
+          `Set conversation category to ${category} for quick help option ${rawOption.service}, overriding any sidebar context`
+        );
+      } else {
+        // Just Chat: retain existing sidebar category or set to null
+        this.conversationCategory = this.conversationCategory || null;
+        console.log(
+          "Just Chat selected, retaining sidebar category:",
+          this.conversationCategory
+        );
+      }
+
+      // Hide quick help
       this.showQuickHelp = false;
-      this.conversationCategory = option.categoryId || null;
-      this.$nextTick(() => {
-        const textarea = document.querySelector(".prompt-textarea");
-        if (textarea) {
-          textarea.focus();
-        }
-      });
+
+      // Send predefined message if available
+      if (rawOption.promptKey) {
+        const message = this.translate(
+          rawOption.promptKey,
+          rawOption.promptKey.split(".")[1]
+        );
+        this.newMessage = message;
+        this.sendMessage();
+      }
     },
 
     handleTextareaFocus() {
@@ -755,11 +801,15 @@ export default {
             ),
             1500
           );
+          // Set conversationCategory if not set by a non-Just Chat quick help button
           if (
-            !this.conversationCategory &&
-            this.selectedContextItems.length === 1
+            !this.conversationCategory ||
+            this.conversationCategory === "general"
           ) {
-            this.conversationCategory = item.category;
+            this.conversationCategory = item.category || "general";
+            console.log(
+              `Set conversation category to ${this.conversationCategory} from sidebar tree node ${item.service}`
+            );
           }
         }
       } else {
@@ -778,24 +828,53 @@ export default {
           ),
           1500
         );
+        // Clear conversationCategory if no context items remain and not set by quick help
         if (this.selectedContextItems.length === 0 && !this.newMessage) {
           this.conversationCategory = null;
+          console.log(
+            "Cleared conversation category after removing sidebar context"
+          );
         }
       }
     },
 
     removeContextItem(index) {
-      if (index < 0 || index >= this.selectedContextItems.length) return;
-      const removed = this.selectedContextItems[index];
-      this.selectedContextItems.splice(index, 1);
-      eventBus.$emit("contextItemRemoved", removed);
-      notificationService.info(
-        this.translate(
-          "chatbot.contextRemoved",
-          "Context removed from your query."
-        ),
-        1500
-      );
+      if (this.selectedContextItems.length > index) {
+        const removedItem = this.selectedContextItems.splice(index, 1)[0];
+        console.log(
+          `Removed context item: ${removedItem.service} at index ${index}`
+        );
+      }
+      // Restore context item only if conversationCategory exists and matches a valid quick help option or sidebar context
+      if (this.selectedContextItems.length === 0 && this.conversationCategory) {
+        const quickHelpOption = this.quickHelpOptions.find(
+          (option) => option.category === this.conversationCategory
+        );
+        if (quickHelpOption) {
+          this.selectedContextItems = [
+            {
+              service: quickHelpOption.service,
+              category: this.conversationCategory,
+              selected: true,
+            },
+          ];
+          console.log(
+            `Restored context item for category ${this.conversationCategory}: ${quickHelpOption.service}`
+          );
+        } else {
+          // Assume sidebar context; restore generic item
+          this.selectedContextItems = [
+            {
+              service: `Category ${this.conversationCategory}`,
+              category: this.conversationCategory,
+              selected: true,
+            },
+          ];
+          console.log(
+            `Restored sidebar context item for category ${this.conversationCategory}`
+          );
+        }
+      }
     },
 
     async sendMessage() {
@@ -813,21 +892,24 @@ export default {
           ? this.selectedContextItems.map((item) => item.service).join(", ")
           : null;
       this.showQuickHelp = false;
-      const tempId = Date.now().toString();
-      let botMessageIndex = null;
       try {
         const queryData = {
           userId: this.$store.getters.currentUser?._key || "anonymous",
           sessionId: this.currentSessionId || "new-session",
           text: content,
-          categoryId: contextInfo
-            ? this.selectedContextItems[0].category
-            : null,
+          categoryId:
+            this.conversationCategory ||
+            (contextInfo ? this.selectedContextItems[0].category : "general"),
           serviceId: contextInfo ? this.selectedContextItems[0].service : null,
           isAnswered: false,
         };
+        console.log("Query data sent:", queryData);
+        console.log("Before queryData:", {
+          conversationCategory: this.conversationCategory,
+          selectedContextItems: this.selectedContextItems,
+        });
         const result = await chatbotService.submitQuery(queryData);
-        this.chatMessages.push({
+        const botMessage = {
           sender: "bot",
           content:
             result.response ||
@@ -845,8 +927,10 @@ export default {
           queryId: result._key,
           timestamp: new Date().toISOString(),
           isSaved: false,
-        });
+        };
+        this.chatMessages.push(botMessage);
         console.log("Query result:", result);
+
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
           notificationService.info(

@@ -1,271 +1,229 @@
-UNICC-ITU Genie AI Repository Refactoring Plan
-Overview
-The Huduma AI framework serves as a general platform for developing Retrieval-Augmented Generation (RAG) based chatbots for public services and other applications. To support the addition of a new document repository component, enhance modularity, enable third-party collaboration (e.g., NOOR-AI-AL-TAFSIR), and ensure compatibility with the evolving Open Platform for Enterprise AI (OPEA) project, the GitLab repository structure needs refactoring. This plan proposes a modular, scalable, and maintainable structure within a single GitLab repository, accommodating existing components, shared libraries, and third-party workflows.
-Objectives
+# UNICC-ITU Genie AI Repository Refactoring Plan
 
-Modularity: Organize components (backend, frontend, document repository, etc.) into self-contained directories.
-Shared Libraries: Extract reusable code for Node.js apps and potentially the frontend into a shared module.
-Third-Party Collaboration: Support dedicated branches (e.g., noor-al-tafsir) with selective merging, as outlined in the provided collaboration process.
-OPEA Integration: Isolate OPEA configurations and extensions for easy upgrades.
-Scalability: Allow addition of new components without restructuring.
-Documentation: Centralize technical and collaboration documentation.
+## Overview
 
-Current Components
+The **Huduma AI framework** is a platform for developing Retrieval-Augmented Generation (RAG) based chatbots for public services. To support a new document repository component, improve modularity, enable third-party collaboration (e.g., NOOR-AI-AL-TAFSIR), and integrate with the Open Platform for Enterprise AI (OPEA), the GitLab repository structure requires refactoring. This plan proposes a **modular, scalable, and maintainable structure** within a single GitLab repository.
 
-OPEA: Open Platform for Enterprise AI (3rd-party project, opea.dev, GitHub).
-OPEA Extensions: Custom microservices in /Microservices and configurations in /opea-config.
-API Gateway Solution: Nginx, Kong, and Keycloak configurations in /api-gateway-solution, running on a bastion host.
-Huduma AI Backend: Node.js Express server in /examples/gov-chat-backend.
-Huduma AI Frontend: Vue 3 application in /examples/gov-chat-frontend.
+## Objectives
 
-New Component
+- **Modularity**: Organize components into self-contained directories.
+- **Shared Libraries**: Extract reusable code for Node.js apps and frontend.
+- **Third-Party Collaboration**: Support dedicated branches with selective merging.
+- **OPEA Integration**: Isolate OPEA configurations for easy upgrades.
+- **Scalability**: Allow new components without restructuring.
+- **Documentation**: Centralize technical and collaboration documentation.
 
-Document Repository: A new Node.js Express service to manage original documents, chunking, ingestion into vector/graph databases, and LLM fine-tuning. It will expose APIs for OPEA and frontend consumption, reusing libraries from the existing backend.
+## Current Components
 
-Proposed Repository Structure
-The refactored structure organizes the repository into clear, modular directories at the root level, separating core components, shared libraries, configurations, and documentation.
-Root Directory Structure
+1. **OPEA**: Open Platform for Enterprise AI ([opea.dev](https://opea.dev/), [GitHub](https://github.com/opea-project)).
+2. **OPEA Extensions**: Custom microservices in `/Microservices` and configurations in `/opea-config`.
+3. **API Gateway Solution**: Nginx, Kong, and Keycloak in `/api-gateway-solution`.
+4. **Huduma AI Backend**: Node.js Express server in `/examples/gov-chat-backend`.
+5. **Huduma AI Frontend**: Vue 3 application in `/examples/gov-chat-frontend`.
+
+## New Component
+
+- **Document Repository**: A Node.js Express service for managing documents, chunking, ingestion into vector/graph databases, and LLM fine-tuning. It exposes APIs for OPEA and frontend, reusing backend libraries.
+
+## Proposed Repository Structure
+
+The structure organizes components, shared libraries, configurations, and documentation into clear directories.
+
+### Root Directory Structure
+
+```plaintext
 /unicc-itu-genie-ai
-├── /api-gateway-solution            # API gateway configurations (nginx, Kong, Keycloak)
-├── /components                      # Core application components
-│   ├── /gov-chat-backend           # Huduma AI Node.js backend
-│   ├── /gov-chat-frontend          # Huduma AI Vue 3 frontend
-│   ├── /document-repository        # New document repository Node.js service
-├── /configs                        # Configuration files for OPEA and other services
-│   ├── /opea-config                # OPEA and vLLM configurations
-├── /docs                           # Documentation (technical, collaboration, APIs)
-├── /microservices                  # Custom OPEA microservices/extensions
-├── /opea                           # OPEA source or submodule (for reference or local mods)
-├── /shared                         # Shared libraries for Node.js apps and frontend
-├── /tests                          # End-to-end and integration tests
-├── .gitignore                      # Git ignore file
-├── docker-compose.yaml             # Top-level Docker Compose for local dev
-├── README.md                       # Repository overview and setup instructions
-├── package.json                    # Monorepo package management (optional)
+├── api-gateway-solution/        # API gateway configs (nginx, Kong, Keycloak)
+├── components/                  # Core application components
+│   ├── gov-chat-backend/       # Huduma AI Node.js backend
+│   ├── gov-chat-frontend/      # Huduma AI Vue 3 frontend
+│   ├── document-repository/    # Document repository Node.js service
+├── configs/                    # Configuration files
+│   ├── opea-config/            # OPEA and vLLM configs
+├── docs/                       # Technical and collaboration docs
+├── microservices/              # Custom OPEA extensions
+├── opea/                       # OPEA source or submodule
+├── shared/                     # Shared libraries for Node.js and frontend
+├── tests/                      # End-to-end and integration tests
+├── .gitignore                  # Git ignore file
+├── docker-compose.yaml         # Docker Compose for local dev
+├── README.md                   # Repository overview
+├── package.json                # Optional monorepo management
+```
 
-Key Features
+### Key Features
 
-Components Directory:
+- **Components**: Self-contained apps (`gov-chat-backend`, `gov-chat-frontend`, `document-repository`) with `package.json`, `Dockerfile`, and `/src`, `/tests`, `/config` subdirectories.
+- **Shared**: Reusable Node.js code in `/shared/lib`, `/shared/models`, `/shared/middleware`. Potential `/shared/frontend` for API clients.
+- **API Gateway**: Retains `/api-gateway-solution` with configs and scripts.
+- **OPEA**: `/opea` for source reference, `/microservices` for extensions, `/configs/opea-config` for versioned configs.
+- **Configs**: Centralizes OPEA and vLLM configurations.
+- **Docs**: Stores collaboration guidelines, API docs, and setup guides.
+- **Tests**: End-to-end and integration tests for the framework.
+- **Collaboration**: Supports `noor-al-tafsir` branch with cherry-picking.
+- **Monorepo**: Optional root `package.json` for dependency management.
+- **Docker**: Top-level `docker-compose.yaml` for local development.
 
-Contains self-contained applications: gov-chat-backend, gov-chat-frontend, and document-repository.
-Each component includes its own package.json, Dockerfile, and structure (/src, /tests, /config).
-document-repository mirrors gov-chat-backend structure, reusing shared libraries.
+### Detailed Directory Structure
 
-
-Shared Directory:
-
-Houses reusable code for Node.js apps (e.g., database connectors, vector store utilities, LLM helpers).
-Subdirectories: /shared/lib (utilities), /shared/models (schemas), /shared/middleware (Express middleware).
-Potential /shared/frontend for frontend code (e.g., API clients).
-Managed as an internal npm package or via relative imports.
-
-
-API Gateway Solution:
-
-Retains /api-gateway-solution with docker-compose.yaml, nginx, Kong, and Keycloak configs.
-Includes testing and deployment scripts for the bastion host.
-
-
-OPEA Integration:
-
-/opea: Optionally includes OPEA source as a Git submodule or reference for local modifications.
-/microservices: Custom OPEA extensions, isolated for maintainability.
-/configs/opea-config: Versioned OPEA and vLLM configurations.
-Upgrades managed by updating /opea and testing configs.
-
-
-Configs Directory:
-
-Centralizes OPEA, vLLM, and other service configurations.
-Supports versioning for OPEA release compatibility.
-
-
-Docs Directory:
-
-Stores collaboration guidelines, API documentation, and setup guides.
-Facilitates third-party onboarding and tracks API changes.
-
-
-Tests Directory:
-
-Contains end-to-end and integration tests for the framework.
-Includes suites for API gateway, backend, frontend, and document repository.
-
-
-Third-Party Collaboration:
-
-Supports noor-al-tafsir branch with selective cherry-picking from main.
-Components support feature branches (e.g., noor-al-tafsir/backend-feature-x).
-UNICC ITU reviews merge requests to main.
-
-
-Monorepo Management:
-
-Optional root package.json with npm workspaces or pnpm for dependency management.
-Alternatively, each component manages its own dependencies.
-
-
-Docker Compose:
-
-Top-level docker-compose.yaml orchestrates local development, linking all services.
-
-
-
-Detailed Directory Structure
+```plaintext
 /unicc-itu-genie-ai
-├── /api-gateway-solution
-│   ├── /config
+├── api-gateway-solution/
+│   ├── config/
 │   │   ├── nginx.conf
 │   │   ├── kong.yml
 │   │   ├── keycloak.json
 │   ├── docker-compose.yaml
 │   ├── README.md
-├── /components
-│   ├── /gov-chat-backend
-│   │   ├── /src
-│   │   │   ├── /controllers
-│   │   │   ├── /routes
-│   │   │   ├── /services
-│   │   ├── /config
-│   │   ├── /tests
+├── components/
+│   ├── gov-chat-backend/
+│   │   ├── src/
+│   │   │   ├── controllers/
+│   │   │   ├── routes/
+│   │   │   ├── services/
+│   │   ├── config/
+│   │   ├── tests/
 │   │   ├── package.json
 │   │   ├── Dockerfile
 │   │   ├── README.md
-│   ├── /gov-chat-frontend
-│   │   ├── /src
-│   │   │   ├── /components
-│   │   │   ├── /views
-│   │   │   ├── /assets
-│   │   ├── /public
+│   ├── gov-chat-frontend/
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   ├── views/
+│   │   │   ├── assets/
+│   │   ├── public/
 │   │   ├── package.json
 │   │   ├── Dockerfile
 │   │   ├── README.md
-│   ├── /document-repository
-│   │   ├── /src
-│   │   │   ├── /controllers
-│   │   │   ├── /routes
-│   │   │   ├── /services
-│   │   ├── /config
-│   │   ├── /tests
+│   ├── document-repository/
+│   │   ├── src/
+│   │   │   ├── controllers/
+│   │   │   ├── routes/
+│   │   │   ├── services/
+│   │   ├── config/
+│   │   ├── tests/
 │   │   ├── package.json
 │   │   ├── Dockerfile
 │   │   ├── README.md
-├── /configs
-│   ├── /opea-config
+├── configs/
+│   ├── opea-config/
 │   │   ├── vllm-config.yaml
 │   │   ├── opea-pipeline.yaml
 │   │   ├── README.md
-├── /docs
+├── docs/
 │   ├── collaboration-guidelines.md
 │   ├── api-docs.md
 │   ├── setup-guide.md
-├── /microservices
-│   ├── /opea-extension-1
-│   │   ├── /src
+├── microservices/
+│   ├── opea-extension-1/
+│   │   ├── src/
 │   │   ├── Dockerfile
 │   │   ├── README.md
-│   ├── /opea-extension-2
-│   │   ├── /src
+│   ├── opea-extension-2/
+│   │   ├── src/
 │   │   ├── Dockerfile
 │   │   ├── README.md
-├── /opea
-│   ├── README.md  # Instructions for OPEA submodule or external dependency
-├── /shared
-│   ├── /lib
+├── opea/
+│   ├── README.md
+├── shared/
+│   ├── lib/
 │   │   ├── database.js
 │   │   ├── vector-store.js
 │   │   ├── llm-utils.js
-│   ├── /models
+│   ├── models/
 │   │   ├── document-schema.js
-│   ├── /middleware
+│   ├── middleware/
 │   │   ├── auth.js
-│   ├── /frontend
+│   ├── frontend/
 │   │   ├── api-client.js
 │   ├── package.json
-├── /tests
+├── tests/
 │   ├── e2e-tests.js
 │   ├── integration-tests.js
-├── .gitignore
-├── docker-compose.yaml
-├── README.md
-├── package.json  # Optional for monorepo
+```
 
-Refactoring Existing Components
-gov-chat-backend
+## Refactoring Existing Components
 
-Extract common utilities (e.g., vector store access, LLM API calls) to /shared/lib.
-Restructure into /src (controllers, routes, services), /config, /tests.
-Update to consume document-repository APIs for document retrieval.
+### gov-chat-backend
+- Extract utilities (e.g., vector store, LLM APIs) to `/shared/lib`.
+- Restructure into `/src` (controllers, routes, services), `/config`, `/tests`.
+- Consume `document-repository` APIs.
 
-gov-chat-frontend
+### gov-chat-frontend
+- Add API client in `/shared/frontend`.
+- Maintain Vue 3 structure, document APIs in `/docs`.
 
-Add API client in /shared/frontend for consistent backend and document repository interactions.
-Maintain Vue 3 structure but document API dependencies in /docs.
+### document-repository
+- New Express app mirroring `gov-chat-backend`.
+- Uses `/shared/lib` for database and vector store utilities.
+- Exposes REST/GraphQL APIs for document management.
+- Integrates with OPEA for LLM fine-tuning.
 
-document-repository
+## Implementation Details
 
-New Node.js Express app mirroring gov-chat-backend structure.
-Uses /shared/lib for database and vector store utilities.
-Exposes REST or GraphQL APIs for document ingestion, chunking, and retrieval.
-Integrates with OPEA for LLM fine-tuning pipelines.
+### Shared Library Setup
+- `package.json` in `/shared` with dependencies (e.g., `pg`, `axios`).
+- Use `npm link` for local development: `npm link` in `/shared`, `npm link @unicc/shared` in components.
 
-Implementation Details
-Shared Library Setup
+### Document Repository APIs
+- REST endpoints (e.g., `POST /documents/ingest`, `GET /documents/:id`) in `/components/document-repository/src/routes`.
+- Documented in `/docs/api-docs.md`.
 
-Create package.json in /shared with dependencies (e.g., pg, axios).
-Example: Use npm link in /shared and npm link @unicc/shared in gov-chat-backend and document-repository for local development.
+### OPEA Upgrades
+- Track releases via [GitHub](https://github.com/opea-project).
+- Test in feature branches, update `/configs/opea-config` and `/microservices`.
 
-Document Repository APIs
+### Third-Party Workflow
+- NOOR-AI-AL-TAFSIR uses `noor-al-tafsir` branch, creating feature branches (e.g., `noor-al-tafsir/backend-feature-x`).
+- UNICC ITU reviews merge requests to `main`.
 
-Define REST endpoints (e.g., POST /documents/ingest, GET /documents/:id) in /components/document-repository/src/routes.
-Document APIs in /docs/api-docs.md for frontend and OPEA consumption.
+### Testing
+- Jest for unit tests per component.
+- Cypress/Playwright in `/tests` for end-to-end testing.
 
-OPEA Upgrades
+### Sample Files
 
-Track OPEA releases via GitHub.
-Test new releases in a feature branch, updating /configs/opea-config and /microservices.
+#### `.gitignore`
 
-Third-Party Workflow
-
-NOOR-AI-AL-TAFSIR works in noor-al-tafsir branch, creating feature branches per component (e.g., noor-al-tafsir/document-repository-feature).
-UNICC ITU reviews merge requests to main, ensuring compatibility with shared libraries and OPEA.
-
-Testing
-
-Use Jest for unit tests in each component.
-Use Cypress or Playwright in /tests for end-to-end testing of frontend-backend-document repository interactions.
-
-Sample Files
-.gitignore
+```plaintext
 node_modules/
 dist/
 .env
 *.log
 /build/
+```
 
-README.md
+#### `README.md`
+
+```markdown
 # UNICC-ITU Genie AI Repository
 
-This repository contains the Huduma AI framework for RAG-based chatbots, integrating OPEA, custom microservices, API gateway, backend, frontend, and a document repository service.
+The Huduma AI framework for RAG-based chatbots, integrating OPEA, microservices, API gateway, backend, frontend, and document repository.
 
 ## Setup
-1. Clone the repository: `git clone https://os.unicc.biz/un/itu/genie-ai`
-2. Install dependencies: `npm install` (or per component)
-3. Start services: `docker-compose up`
 
-## Directory Structure
-- `/components`: Core applications (backend, frontend, document repository)
-- `/shared`: Reusable libraries for Node.js and frontend
-- `/api-gateway-solution`: Nginx, Kong, Keycloak configs
-- `/configs`: OPEA and vLLM configurations
-- `/microservices`: Custom OPEA extensions
-- `/docs`: Documentation for collaboration and APIs
-- `/tests`: End-to-end and integration tests
+1. Clone: `git clone https://os.unicc.biz/un/itu/genie-ai`
+2. Install: `npm install` (or per component)
+3. Run: `docker-compose up`
+
+## Structure
+
+- `components/`: Backend, frontend, document repository
+- `shared/`: Reusable libraries
+- `api-gateway-solution/`: Nginx, Kong, Keycloak
+- `configs/`: OPEA and vLLM configs
+- `microservices/`: OPEA extensions
+- `docs/`: Collaboration and API docs
+- `tests/`: End-to-end and integration tests
 
 ## Collaboration
-See `/docs/collaboration-guidelines.md` for third-party workflows (e.g., NOOR-AI-AL-TAFSIR).
 
-docker-compose.yaml
+See `docs/collaboration-guidelines.md` for third-party workflows.
+```
+
+#### `docker-compose.yaml`
+
+```yaml
 version: '3.8'
 services:
   api-gateway:
@@ -294,42 +252,31 @@ services:
     build: ./microservices/opea-extension-1
     depends_on:
       - api-gateway
+```
 
-Next Steps
+## Next Steps
 
-Migrate Existing Code:
+1. **Migrate Code**:
+   - Move `/examples/gov-chat-backend` to `components/gov-chat-backend`.
+   - Move `/examples/gov-chat-frontend` to `components/gov-chat-frontend`.
+   - Move `/Microservices` to `microservices`.
+   - Move `/opea-config` to `configs/opea-config`.
 
-Move /examples/gov-chat-backend to /components/gov-chat-backend.
-Move /examples/gov-chat-frontend to /components/gov-chat-frontend.
-Move /Microservices to /microservices.
-Move /opea-config to /configs/opea-config.
+2. **Extract Shared Code**:
+   - Move utilities from `gov-chat-backend` to `shared/`.
 
+3. **Initialize Document Repository**:
+   - Create Express app in `components/document-repository`.
 
-Extract Shared Code:
+4. **Update Docker Compose**:
+   - Add `document-repository` service.
 
-Move common utilities from gov-chat-backend to /shared.
+5. **Document**:
+   - Update `docs/` with structure, APIs, and guidelines.
 
+6. **Test**:
+   - Validate locally and test collaboration workflows.
 
-Initialize Document Repository:
+## Conclusion
 
-Create boilerplate Express app in /components/document-repository, reusing /shared libraries.
-
-
-Update Docker Compose:
-
-Include document-repository and ensure service dependencies.
-
-
-Document:
-
-Update /docs with structure, APIs, and collaboration guidelines.
-
-
-Test:
-
-Validate setup locally and test third-party workflows.
-
-
-
-Conclusion
-This refactored structure balances modularity, reusability, and collaboration needs while supporting OPEA integration and future scalability. For specific code (e.g., document-repository routes) or further refinements, please provide additional requirements.
+This structure ensures **modularity**, **reusability**, and **collaboration** while supporting OPEA and scalability. For specific code or refinements, provide additional requirements.

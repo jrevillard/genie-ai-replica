@@ -1,32 +1,13 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('../logger'); // Import logger from logger.js
 const ServiceCategoryService = require('../services/service-category-service');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 class AnalyticsService {
   constructor() {
@@ -42,7 +23,7 @@ class AnalyticsService {
     logger.info('Initializing AnalyticsService...');
     this.initialize()
       .then(() => this.ensureServiceCategories())
-      .catch(err => logger.error('Error during initialization:', err));
+      .catch(err => logger.error('Error during initialization: ', { stack: err.stack }));
   }
 
   /**
@@ -67,6 +48,7 @@ class AnalyticsService {
             if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
               throw err;
             }
+            logger.warn(`Collection ${name} already exists, skipping creation`);
           }
         }
       };
@@ -81,7 +63,7 @@ class AnalyticsService {
 
       logger.info('Collections initialized successfully');
     } catch (error) {
-      logger.error('Error initializing collections:', error);
+      logger.error(`Error initializing collections: ${error.message}`, { stack: error.stack });
       // Don't throw here, log the error but allow service to continue
     }
   }
@@ -106,6 +88,7 @@ class AnalyticsService {
           if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
             throw err;
           }
+          logger.warn('serviceCategories collection already exists, skipping creation');
         }
       }
 
@@ -146,18 +129,21 @@ class AnalyticsService {
         for (const category of sampleCategories) {
           try {
             await serviceCategories.save(category);
+            logger.info(`Sample category ${category._key} saved successfully`);
           } catch (err) {
-            logger.error(`Error saving category ${category._key}:`, err);
+            logger.error(`Error saving category ${category._key}: ${err.message}`, { stack: err.stack });
             // Continue with the next category on error
           }
         }
 
         logger.info('Sample service categories added successfully');
+      } else {
+        logger.info('Service categories already exist, skipping sample data insertion');
       }
 
       return true;
     } catch (error) {
-      logger.error('Error ensuring service categories:', error);
+      logger.error(`Error ensuring service categories: ${error.message}`, { stack: error.stack });
       return false;
     }
   }
@@ -169,7 +155,6 @@ class AnalyticsService {
    */
   async recordQuery(queryDoc) {
     try {
-      // Create analytics document without specifying a key - let ArangoDB auto-generate it
       const analyticsDoc = {
         type: 'query',
         queryId: queryDoc._key,
@@ -191,20 +176,19 @@ class AnalyticsService {
 
       return record;
     } catch (error) {
-      logger.error('Error recording query analytics:', error);
+      logger.error(`Error recording query analytics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
 
   /**
- * Record feedback in analytics
- * @param {String} queryId - Query ID
- * @param {Object} feedback - Feedback data
- * @returns {Promise<Object>} The created analytics record
- */
+   * Record feedback in analytics
+   * @param {String} queryId - Query ID
+   * @param {Object} feedback - Feedback data
+   * @returns {Promise<Object>} The created analytics record
+   */
   async recordFeedback(queryId, feedback) {
     try {
-      // Create feedback document without specifying a key - let ArangoDB auto-generate it
       const analyticsDoc = {
         type: 'feedback',
         queryId: queryId,
@@ -218,7 +202,7 @@ class AnalyticsService {
 
       return record;
     } catch (error) {
-      logger.error('Error recording feedback analytics:', error);
+      logger.error(`Error recording feedback analytics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -232,10 +216,8 @@ class AnalyticsService {
    */
   async trackEvent(userId, eventType, eventData = {}) {
     try {
-      // Ensure the events collection exists
       await this.initialize();
 
-      // Create event document without specifying a key - let ArangoDB auto-generate it
       const eventDoc = {
         userId,
         eventType,
@@ -243,13 +225,13 @@ class AnalyticsService {
         data: eventData
       };
 
-      logger.info('Tracking event...');
+      logger.info(`Tracking event: ${eventType} for user ${userId}`);
       const event = await this.events.save(eventDoc);
       logger.info(`Event created with auto-generated key: ${event._key}`);
 
       return event;
     } catch (error) {
-      logger.error('Error tracking event:', error);
+      logger.error(`Error tracking event ${eventType} for user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -262,7 +244,6 @@ class AnalyticsService {
    */
   async getUniqueUsersCount(startDate, endDate) {
     try {
-      // Ensure dates are valid
       const validStartDate = startDate ? new Date(startDate).toISOString() :
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() :
@@ -270,7 +251,6 @@ class AnalyticsService {
 
       logger.info(`Getting unique users count from ${validStartDate} to ${validEndDate}`);
 
-      // Run a simpler query first to test
       try {
         const testCursor = await this.db.query(`
           FOR a IN analytics
@@ -281,10 +261,9 @@ class AnalyticsService {
         const testResult = await testCursor.all();
         logger.info("Sample user IDs:", testResult);
       } catch (testError) {
-        logger.error("Test query failed:", testError);
+        logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
       }
 
-      // Modified query to be more resilient
       const query = `
         LET usersList = (
           FOR a IN analytics
@@ -304,12 +283,11 @@ class AnalyticsService {
       });
 
       const result = await cursor.next();
-      logger.info("Unique users query result:", result);
+      logger.info(`Unique users count retrieved: ${result}`);
       return result || 0;
     } catch (error) {
-      logger.error('Error getting unique users count:', error);
+      logger.error(`Error getting unique users count: ${error.message}`, { stack: error.stack });
       logger.info("Returning fixed sample count of 60 instead");
-      // Return a sample count that matches what we see in the chart
       return 60;
     }
   }
@@ -323,169 +301,160 @@ class AnalyticsService {
    */
   async getDashboardAnalytics(startDate, endDate, locale = 'en') {
     try {
-      // Ensure valid date formats
       const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
       logger.info(`Getting dashboard analytics from ${validStartDate} to ${validEndDate} with locale ${locale}`);
 
-      // Execute a much simpler query first to check if we can reach the database
       try {
         const testCursor = await this.db.query(`
-        RETURN {
-          test: "Connection is working"
-        }
-      `);
+          RETURN {
+            test: "Connection is working"
+          }
+        `);
         const testResult = await testCursor.next();
         logger.info("Test query result:", testResult);
       } catch (testError) {
-        logger.error("Test query failed:", testError);
+        logger.error(`Test query failed: ${testError.message}`, { stack: testError.stack });
         return this.generateSampleDashboardData(locale);
       }
 
-      // Get analytics data
       const analyticsQuery = `
-      LET totalQueriesCount = (
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          COLLECT WITH COUNT INTO count
-          RETURN count
-      )[0]
-      
-      LET unansweredQueriesCount = (
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          FILTER a.data.isAnswered == false
-          COLLECT WITH COUNT INTO count
-          RETURN count
-      )[0]
-      
-      LET averageResponseTimeValue = (
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          FILTER a.data.responseTime > 0
-          COLLECT AGGREGATE avgTime = AVG(a.data.responseTime)
-          RETURN avgTime
-      )[0]
-      
-      LET categoryDistributionData = (
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          FILTER a.data.categoryId != null
-          COLLECT categoryId = a.data.categoryId WITH COUNT INTO catCount
-          
-          RETURN {
-            categoryId: categoryId,
-            count: catCount,
-            value: catCount  // Add value field for chart compatibility
-          }
-      )
-      
-      LET feedbackStatsData = (
-        LET feedbacksData = (
-          FOR a IN analytics
-            FILTER a.type == 'feedback'
-            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            RETURN a
-        )
-        
-        LET totalFeedbackCount = LENGTH(feedbacksData)
-        LET positiveFeedbackCount = (
-          FOR f IN feedbacksData
-            FILTER f.data.rating >= 4
-            COLLECT WITH COUNT INTO count
-            RETURN count
-        )[0] || 0
-        
-        LET negativeFeedbackCount = (
-          FOR f IN feedbacksData
-            FILTER f.data.rating <= 2
-            COLLECT WITH COUNT INTO count
-            RETURN count
-        )[0] || 0
-        
-        LET neutralFeedbackCount = totalFeedbackCount - positiveFeedbackCount - negativeFeedbackCount
-        
-        RETURN {
-          total: totalFeedbackCount,
-          positive: positiveFeedbackCount,
-          neutral: neutralFeedbackCount,
-          negative: negativeFeedbackCount,
-          positivePercentage: totalFeedbackCount > 0 ? (positiveFeedbackCount / totalFeedbackCount) * 100 : 0,
-          negativePercentage: totalFeedbackCount > 0 ? (negativeFeedbackCount / totalFeedbackCount) * 100 : 0
-        }
-      )
-      
-      LET userStatsData = (
-        LET activeUsersData = (
+        LET totalQueriesCount = (
           FOR a IN analytics
             FILTER a.type == 'query'
             FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            FILTER a.userId != null
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        )[0]
+        
+        LET unansweredQueriesCount = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+            FILTER a.data.isAnswered == false
+            COLLECT WITH COUNT INTO count
+            RETURN count
+        )[0]
+        
+        LET averageResponseTimeValue = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+            FILTER a.data.responseTime > 0
+            COLLECT AGGREGATE avgTime = AVG(a.data.responseTime)
+            RETURN avgTime
+        )[0]
+        
+        LET categoryDistributionData = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+            FILTER a.data.categoryId != null
+            COLLECT categoryId = a.data.categoryId WITH COUNT INTO catCount
             
-            // Collect unique userId values
-            COLLECT userId = a.userId
+            RETURN {
+              categoryId: categoryId,
+              count: catCount,
+              value: catCount
+            }
+        )
+        
+        LET feedbackStatsData = (
+          LET feedbacksData = (
+            FOR a IN analytics
+              FILTER a.type == 'feedback'
+              FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+              RETURN a
+          )
+          
+          LET totalFeedbackCount = LENGTH(feedbacksData)
+          LET positiveFeedbackCount = (
+            FOR f IN feedbacksData
+              FILTER f.data.rating >= 4
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          )[0] || 0
+          
+          LET negativeFeedbackCount = (
+            FOR f IN feedbacksData
+              FILTER f.data.rating <= 2
+              COLLECT WITH COUNT INTO count
+              RETURN count
+          )[0] || 0
+          
+          LET neutralFeedbackCount = totalFeedbackCount - positiveFeedbackCount - negativeFeedbackCount
+          
+          RETURN {
+            total: totalFeedbackCount,
+            positive: positiveFeedbackCount,
+            neutral: neutralFeedbackCount,
+            negative: negativeFeedbackCount,
+            positivePercentage: totalFeedbackCount > 0 ? (positiveFeedbackCount / totalFeedbackCount) * 100 : 0,
+            negativePercentage: totalFeedbackCount > 0 ? (negativeFeedbackCount / totalFeedbackCount) * 100 : 0
+          }
+        )
+        
+        LET userStatsData = (
+          LET activeUsersData = (
+            FOR a IN analytics
+              FILTER a.type == 'query'
+              FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+              FILTER a.userId != null
+              
+              COLLECT userId = a.userId
+              
+              RETURN userId
+          )
+          
+          RETURN {
+            activeCount: LENGTH(activeUsersData)
+          }
+        )
+        
+        LET topQueriesData = (
+          FOR a IN analytics
+            FILTER a.type == 'query'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
             
-            RETURN userId
+            COLLECT queryText = a.data.text WITH COUNT INTO queryTextCount
+            LET responseTimeData = (
+              FOR q IN analytics
+                FILTER q.type == 'query'
+                FILTER q.data.text == queryText
+                FILTER q.data.responseTime > 0
+                RETURN q.data.responseTime
+            )
+            
+            LET avgResponseTimeForQuery = LENGTH(responseTimeData) > 0 ? 
+              AVERAGE(responseTimeData) : 0
+              
+            SORT queryTextCount DESC
+            LIMIT 5
+            
+            RETURN {
+              text: queryText,
+              count: queryTextCount,
+              avgTime: ROUND(avgResponseTimeForQuery * 10) / 10
+            }
         )
         
         RETURN {
-          activeCount: LENGTH(activeUsersData)
+          queries: {
+            total: totalQueriesCount || 0,
+            unanswered: unansweredQueriesCount || 0,
+            answeredPercentage: totalQueriesCount > 0 ? ((totalQueriesCount - unansweredQueriesCount) / totalQueriesCount) * 100 : 0,
+            avgResponseTime: averageResponseTimeValue || 0
+          },
+          categories: categoryDistributionData,
+          feedback: feedbackStatsData,
+          users: userStatsData,
+          topQueries: topQueriesData
         }
-      )
-      
-      // Get top queries for the dashboard
-      LET topQueriesData = (
-        FOR a IN analytics
-          FILTER a.type == 'query'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          
-          // Group by query text
-          COLLECT queryText = a.data.text WITH COUNT INTO queryTextCount
-          LET responseTimeData = (
-            FOR q IN analytics
-              FILTER q.type == 'query'
-              FILTER q.data.text == queryText
-              FILTER q.data.responseTime > 0
-              RETURN q.data.responseTime
-          )
-          
-          // Calculate average response time for this query
-          LET avgResponseTimeForQuery = LENGTH(responseTimeData) > 0 ? 
-            AVERAGE(responseTimeData) : 0
-            
-          // Sort by count in descending order
-          SORT queryTextCount DESC
-          LIMIT 5
-          
-          RETURN {
-            text: queryText,
-            count: queryTextCount,
-            avgTime: ROUND(avgResponseTimeForQuery * 10) / 10  // Round to 1 decimal place
-          }
-      )
-      
-      RETURN {
-        queries: {
-          total: totalQueriesCount || 0,
-          unanswered: unansweredQueriesCount || 0,
-          answeredPercentage: totalQueriesCount > 0 ? ((totalQueriesCount - unansweredQueriesCount) / totalQueriesCount) * 100 : 0,
-          avgResponseTime: averageResponseTimeValue || 0
-        },
-        categories: categoryDistributionData,
-        feedback: feedbackStatsData,
-        users: userStatsData,
-        topQueries: topQueriesData
-      }
-    `;
+      `;
 
       logger.info("Executing dashboard analytics query...");
 
-      // Get analytics data
       const analyticsData = await this.db.query(analyticsQuery, {
         startDate: validStartDate,
         endDate: validEndDate
@@ -496,46 +465,38 @@ class AnalyticsService {
         return this.generateSampleDashboardData(locale);
       }
 
-      // ======= DEBUG START =======
       logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
       logger.info(`DEBUG: Processing locale "${locale}" for category name localization`);
-      // ======= DEBUG END =======
 
-      // Now get all service categories - MODIFIED TO FIX THE ISSUE
       logger.info("Getting service categories for name localization...");
-      // FIXED QUERY - Modified to return _key and _id directly
       const categoriesQuery = `
-      FOR cat IN serviceCategories
-      RETURN {
-        _id: cat._id,
-        _key: cat._key,
-        nameEN: cat.nameEN,
-        nameFR: cat.nameFR,
-        nameSW: cat.nameSW
-      }
-    `;
+        FOR cat IN serviceCategories
+        RETURN {
+          _id: cat._id,
+          _key: cat._key,
+          nameEN: cat.nameEN,
+          nameFR: cat.nameFR,
+          nameSW: cat.nameSW
+        }
+      `;
 
       const categories = await this.db.query(categoriesQuery).then(cursor => cursor.all());
       logger.info(`Found ${categories.length} service categories for localization`);
 
-      // Debug: log first few categories
       if (categories.length > 0) {
         logger.info("DEBUG: First few categories from database:", JSON.stringify(categories.slice(0, 3), null, 2));
       }
 
-      // Map the category IDs to the proper localized names
       if (analyticsData.categories && analyticsData.categories.length > 0) {
         logger.info(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
         logger.info("DEBUG: First category from analytics:", JSON.stringify(analyticsData.categories[0], null, 2));
 
         analyticsData.categories = analyticsData.categories.map(category => {
-          // Extract ID from path format
           const idParts = category.categoryId.split('/');
           const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
 
           logger.info(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
 
-          // FIXED MATCHING LOGIC - Use _key and _id from our custom query
           const matchingCategory = categories.find(cat =>
             cat._key === categoryKey || cat._id === category.categoryId
           );
@@ -543,7 +504,6 @@ class AnalyticsService {
           if (matchingCategory) {
             logger.info(`DEBUG: Found matching category: ${JSON.stringify(matchingCategory, null, 2)}`);
 
-            // Select name based on locale
             let name;
             if (locale === 'fr' && matchingCategory.nameFR) {
               name = matchingCategory.nameFR;
@@ -574,8 +534,7 @@ class AnalyticsService {
       logger.info("Dashboard analytics processing completed successfully");
       return analyticsData;
     } catch (error) {
-      logger.error('Error getting dashboard analytics:', error);
-      // Return sample data on error
+      logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
       return this.generateSampleDashboardData(locale);
     }
   }
@@ -589,7 +548,6 @@ class AnalyticsService {
   generateSampleDashboardData(locale = 'en') {
     logger.info(`Generating sample dashboard data for locale: ${locale}`);
 
-    // Sample top queries with realistic data
     const sampleTopQueries = [
       { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
       { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
@@ -598,7 +556,6 @@ class AnalyticsService {
       { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
     ];
 
-    // Define category names with translations
     const categoryNames = {
       "1": {
         en: "Identity & Civil Registration",
@@ -667,10 +624,8 @@ class AnalyticsService {
       }
     };
 
-    // Select the appropriate language based on locale
     const language = locale === 'fr' ? 'fr' : (locale === 'sw' ? 'sw' : 'en');
 
-    // Sample category distribution with localized names
     const sampleCategories = [
       { categoryId: "1", name: categoryNames["1"][language], count: 2347, value: 15 },
       { categoryId: "2", name: categoryNames["2"][language], count: 1782, value: 12 },
@@ -687,6 +642,8 @@ class AnalyticsService {
       { categoryId: "13", name: categoryNames["13"][language], count: 470, value: 9 }
     ];
 
+    logger.info('Sample dashboard data generated successfully');
+    
     return {
       queries: {
         total: 12452,
@@ -719,16 +676,13 @@ class AnalyticsService {
    */
   async getAnalytics(filters = {}, startDate, endDate) {
     try {
-      // Ensure we have valid dates
-      const validStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // Default to 30 days ago
-      const validEndDate = endDate || new Date().toISOString(); // Default to now
+      const validStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const validEndDate = endDate || new Date().toISOString();
 
-      logger.info(`Getting general analytics from ${validStartDate} to ${validEndDate} with filters:`, filters);
+      logger.info(`Getting general analytics from ${validStartDate} to ${validEndDate} with filters: ${JSON.stringify(filters)}`);
 
-      // First make sure the collections exist
       await this.initialize();
 
-      // Build a simple query that avoids complex filter building
       const query = `
         FOR a IN analytics
           FILTER a.timestamp >= @startDate
@@ -742,13 +696,11 @@ class AnalyticsService {
           RETURN a
       `;
 
-      // Prepare bind variables - always include dates
       const bindVars = {
         startDate: validStartDate,
         endDate: validEndDate
       };
 
-      // Add optional filter values only if they exist
       if (filters) {
         if (filters.type) bindVars.type = filters.type;
         if (filters.userId) bindVars.userId = filters.userId;
@@ -758,11 +710,9 @@ class AnalyticsService {
 
       logger.info('Executing analytics query with bind vars:', JSON.stringify(bindVars));
 
-      // Execute the query using string template with bind variables
       const cursor = await this.db.query(query, bindVars);
       const analyticsData = await cursor.all();
 
-      // Process the data for different analytics types
       const processedData = {
         queryCount: 0,
         feedbackCount: 0,
@@ -772,14 +722,12 @@ class AnalyticsService {
         raw: analyticsData
       };
 
-      // Count queries and feedback
       const queryData = analyticsData.filter(a => a && a.type === 'query');
       const feedbackData = analyticsData.filter(a => a && a.type === 'feedback');
 
       processedData.queryCount = queryData.length;
       processedData.feedbackCount = feedbackData.length;
 
-      // Calculate average rating if there is feedback
       if (feedbackData.length > 0) {
         let totalRating = 0;
         let ratingCount = 0;
@@ -794,7 +742,6 @@ class AnalyticsService {
         processedData.avgRating = ratingCount > 0 ? totalRating / ratingCount : 0;
       }
 
-      // Calculate time distribution (by hour)
       for (const item of analyticsData) {
         if (item && item.timestamp) {
           try {
@@ -803,13 +750,11 @@ class AnalyticsService {
               processedData.timeDistribution[hour] = (processedData.timeDistribution[hour] || 0) + 1;
             }
           } catch (err) {
-            // Skip invalid timestamps
-            logger.error('Invalid timestamp in analytics item:', item.timestamp);
+            logger.error(`Invalid timestamp in analytics item: ${item.timestamp}`, { stack: err.stack });
           }
         }
       }
 
-      // Calculate category distribution
       for (const item of queryData) {
         if (item && item.data && item.data.categoryId) {
           const catId = item.data.categoryId;
@@ -817,9 +762,11 @@ class AnalyticsService {
         }
       }
 
+      logger.info('General analytics retrieved successfully');
+      
       return processedData;
     } catch (error) {
-      logger.error('Error getting analytics:', error);
+      logger.error(`Error getting analytics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -834,26 +781,21 @@ class AnalyticsService {
    */
   async getTimeSeriesData(metricType, interval, startDate, endDate) {
     try {
-      // Ensure dates are valid and parse them
       const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const end = endDate ? new Date(endDate) : new Date();
 
-      // Convert dates to ISO strings
       const startDateISO = start.toISOString();
       const endDateISO = end.toISOString();
 
       logger.info(`Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`);
 
-      // Comprehensive query to get time series data
       const baseQuery = `
         LET dailyBreakdown = (
           FOR q IN queries
             FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
             
-            // Group by formatted date
             COLLECT dateGroup = DATE_FORMAT(q.timestamp, '%Y-%m-%d')
             
-            // Count queries and collect user IDs
             LET dayQueries = (
               FOR query IN queries
                 FILTER query.timestamp >= @startDate AND query.timestamp <= @endDate
@@ -871,6 +813,7 @@ class AnalyticsService {
         RETURN dailyBreakdown
       `;
 
+      logger.info('Executing time series data query...');
       const cursor = await this.db.query(baseQuery, {
         startDate: startDateISO,
         endDate: endDateISO
@@ -879,7 +822,6 @@ class AnalyticsService {
       const results = await cursor.all();
       const dailyBreakdown = results[0] || [];
 
-      // Transform data for chart
       const chartData = dailyBreakdown.map(day => ({
         timestamp: day.date,
         dateLabel: day.date,
@@ -887,15 +829,16 @@ class AnalyticsService {
         userCount: day.uniqueUsers
       }));
 
-      // If no results, generate sample data
       if (chartData.length === 0) {
         logger.info('No time series data found, generating sample data');
         return this.generateSampleTimeSeriesData(metricType, interval, start, end);
       }
 
+      logger.info(`Time series data retrieved successfully with ${chartData.length} data points`);
+      
       return chartData;
     } catch (error) {
-      logger.error('Error in getTimeSeriesData:', error);
+      logger.error(`Error in getTimeSeriesData: ${error.message}`, { stack: error.stack });
       return this.generateSampleTimeSeriesData(metricType, interval, start, end);
     }
   }
@@ -907,10 +850,16 @@ class AnalyticsService {
    * @returns {string} Formatted date label
    */
   formatDateLabel(timestamp, interval) {
-    if (!timestamp) return '';
+    if (!timestamp) {
+      logger.warn('Missing timestamp for date label formatting');
+      return '';
+    }
 
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-    if (isNaN(date.getTime())) return String(timestamp);
+    if (isNaN(date.getTime())) {
+      logger.warn(`Invalid timestamp for formatting: ${timestamp}`);
+      return String(timestamp);
+    }
 
     try {
       switch (interval) {
@@ -926,7 +875,7 @@ class AnalyticsService {
           return date.toLocaleDateString();
       }
     } catch (error) {
-      logger.warn('Error formatting date label:', error);
+      logger.error(`Error formatting date label: ${error.message}`, { stack: error.stack });
       return String(timestamp);
     }
   }
@@ -946,26 +895,24 @@ class AnalyticsService {
     const current = new Date(startDate);
     const end = new Date(endDate);
 
-    // Determine step size based on interval
     let step;
     switch (interval) {
       case 'hourly':
-        step = 60 * 60 * 1000; // 1 hour
+        step = 60 * 60 * 1000;
         break;
       case 'daily':
-        step = 24 * 60 * 60 * 1000; // 1 day
+        step = 24 * 60 * 60 * 1000;
         break;
       case 'weekly':
-        step = 7 * 24 * 60 * 60 * 1000; // 1 week
+        step = 7 * 24 * 60 * 60 * 1000;
         break;
       case 'monthly':
-        step = 30 * 24 * 60 * 60 * 1000; // ~30 days (approximate)
+        step = 30 * 24 * 60 * 60 * 1000;
         break;
       default:
-        step = 24 * 60 * 60 * 1000; // Default to daily
+        step = 24 * 60 * 60 * 1000;
     }
 
-    // Base value range depends on metric type
     let baseValue;
     switch (metricType) {
       case 'queries':
@@ -978,52 +925,42 @@ class AnalyticsService {
         baseValue = 50;
     }
 
-    // Generate data points
     while (current <= end) {
-      // Create time-based fluctuations
-      let fluctuation = 0.75 + (Math.random() * 0.5); // Random factor between 0.75 and 1.25
+      let fluctuation = 0.75 + (Math.random() * 0.5);
 
-      // Apply time patterns for more realistic data
       const hour = current.getHours();
       const day = current.getDay();
       const month = current.getMonth();
 
-      // Business hours have more activity
       if (interval === 'hourly' && hour >= 9 && hour <= 17) {
         fluctuation *= 1.5;
       } else if (interval === 'hourly' && hour >= 0 && hour <= 5) {
-        fluctuation *= 0.3; // Low activity overnight
+        fluctuation *= 0.3;
       }
 
-      // Lower activity on weekends
       if ((interval === 'daily' || interval === 'weekly') && (day === 0 || day === 6)) {
         fluctuation *= 0.6;
       }
 
-      // Seasonal variations
       if (interval === 'monthly') {
         if (month >= 5 && month <= 7) {
-          fluctuation *= 0.8; // Summer slowdown
+          fluctuation *= 0.8;
         } else if (month >= 9 && month <= 11) {
-          fluctuation *= 1.2; // Fall/winter increase
+          fluctuation *= 1.2;
         }
       }
 
-      // Add a slight upward trend over time
       const timeProgress = (current.getTime() - startDate.getTime()) / (endDate.getTime() - startDate.getTime());
-      const trendFactor = 1 + (timeProgress * 0.2); // Up to 20% increase over time
+      const trendFactor = 1 + (timeProgress * 0.2);
 
-      // Calculate the final value
       const value = Math.round(baseValue * fluctuation * trendFactor);
 
-      // Format timestamp based on interval
       let formattedTimestamp;
       if (interval === 'hourly') {
         formattedTimestamp = current.toISOString().slice(0, 13) + ':00:00Z';
       } else if (interval === 'daily') {
         formattedTimestamp = current.toISOString().slice(0, 10);
       } else if (interval === 'weekly') {
-        // ISO week format
         const weekNum = Math.ceil((((current - new Date(current.getFullYear(), 0, 1)) / 86400000) + 1) / 7);
         formattedTimestamp = `${current.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
       } else if (interval === 'monthly') {
@@ -1037,10 +974,11 @@ class AnalyticsService {
         value: value
       });
 
-      // Move to next interval
       current.setTime(current.getTime() + step);
     }
 
+    logger.info(`Sample time series data generated successfully with ${data.length} points`);
+    
     return data;
   }
 
@@ -1053,11 +991,9 @@ class AnalyticsService {
    */
   async getSatisfactionGaugeData(startDate, endDate, locale = 'en') {
     try {
-      // Ensure valid date formats
       const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
-      // Calculate previous period (same length of time, just before the current period)
       const periodLength = new Date(validEndDate).getTime() - new Date(validStartDate).getTime();
       const previousPeriodStart = new Date(new Date(validStartDate).getTime() - periodLength).toISOString();
       const previousPeriodEnd = new Date(new Date(validEndDate).getTime() - periodLength).toISOString();
@@ -1065,119 +1001,109 @@ class AnalyticsService {
       logger.info(`Getting satisfaction gauge data from ${validStartDate} to ${validEndDate} with locale ${locale}`);
       logger.info(`Previous period: ${previousPeriodStart} to ${previousPeriodEnd}`);
 
-      // Query to get satisfaction ratings for current and previous periods
       const query = `
-      // Current period satisfaction
-      LET currentPeriod = (
-        FOR a IN analytics
-          FILTER a.type == 'feedback'
-          FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-          FILTER a.data.rating != null
-          
-          COLLECT AGGREGATE 
-            totalRatings = COUNT(),
-            sumRatings = SUM(a.data.rating)
+        LET currentPeriod = (
+          FOR a IN analytics
+            FILTER a.type == 'feedback'
+            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
+            FILTER a.data.rating != null
             
-          RETURN {
-            count: totalRatings,
-            average: totalRatings > 0 ? (sumRatings / totalRatings) : null
-          }
-      )[0]
-      
-      // Previous period satisfaction
-      LET previousPeriod = (
-        FOR a IN analytics
-          FILTER a.type == 'feedback'
-          FILTER a.timestamp >= @prevStartDate AND a.timestamp <= @prevEndDate
-          FILTER a.data.rating != null
-          
-          COLLECT AGGREGATE 
-            totalRatings = COUNT(),
-            sumRatings = SUM(a.data.rating)
-            
-          RETURN {
-            count: totalRatings,
-            average: totalRatings > 0 ? (sumRatings / totalRatings) : null
-          }
-      )[0]
-      
-      // Convert rating scale (assuming 1-5 scale) to percentage (0-100)
-      LET currentValue = currentPeriod.average != null ? 
-        FLOOR((currentPeriod.average / 5) * 100) : null
-      
-      LET previousValue = previousPeriod.average != null ? 
-        FLOOR((previousPeriod.average / 5) * 100) : null
-      
-      // Calculate change percentage
-      LET changePercentage = (
-        previousValue != null && previousValue > 0 ? 
-          ROUND(((currentValue - previousValue) / previousValue) * 100 * 10) / 10 : null
-      )
-      
-      // Get historical data (last 5 periods of equal length)
-      LET historicalPeriods = 5
-      LET periodDuration = @endDate - @startDate
-      
-      LET historicalData = (
-        FOR i IN 0..4
-          LET periodEndDate = DATE_SUBTRACT(@endDate, i * periodDuration, "ms")
-          LET periodStartDate = DATE_SUBTRACT(periodEndDate, periodDuration, "ms")
-          
-          LET periodData = (
-            FOR a IN analytics
-              FILTER a.type == 'feedback'
-              FILTER a.timestamp >= periodStartDate AND a.timestamp <= periodEndDate
-              FILTER a.data.rating != null
+            COLLECT AGGREGATE 
+              totalRatings = COUNT(),
+              sumRatings = SUM(a.data.rating)
               
-              COLLECT AGGREGATE 
-                totalRatings = COUNT(),
-                sumRatings = SUM(a.data.rating)
+            RETURN {
+              count: totalRatings,
+              average: totalRatings > 0 ? (sumRatings / totalRatings) : null
+            }
+        )[0]
+        
+        LET previousPeriod = (
+          FOR a IN analytics
+            FILTER a.type == 'feedback'
+            FILTER a.timestamp >= @prevStartDate AND a.timestamp <= @prevEndDate
+            FILTER a.data.rating != null
+            
+            COLLECT AGGREGATE 
+              totalRatings = COUNT(),
+              sumRatings = SUM(a.data.rating)
+              
+            RETURN {
+              count: totalRatings,
+              average: totalRatings > 0 ? (sumRatings / totalRatings) : null
+            }
+        )[0]
+        
+        LET currentValue = currentPeriod.average != null ? 
+          FLOOR((currentPeriod.average / 5) * 100) : null
+          
+        LET previousValue = previousPeriod.average != null ? 
+          FLOOR((previousPeriod.average / 5) * 100) : null
+          
+        LET changePercentage = (
+          previousValue != null && previousValue > 0 ? 
+            ROUND(((currentValue - previousValue) / previousValue) * 100 * 10) / 10 : null
+        )
+        
+        LET historicalPeriods = 5
+        LET periodDuration = @endDate - @startDate
+        
+        LET historicalData = (
+          FOR i IN 0..4
+            LET periodEndDate = DATE_SUBTRACT(@endDate, i * periodDuration, "ms")
+            LET periodStartDate = DATE_SUBTRACT(periodEndDate, periodDuration, "ms")
+            
+            LET periodData = (
+              FOR a IN analytics
+                FILTER a.type == 'feedback'
+                FILTER a.timestamp >= periodStartDate AND a.timestamp <= periodEndDate
+                FILTER a.data.rating != null
                 
-              RETURN {
-                count: totalRatings,
-                average: totalRatings > 0 ? (sumRatings / totalRatings) : null
-              }
-          )[0]
-          
-          // Format period label based on locale
-          LET periodLabel = (
-            i == 0 ? 
-              (@locale == 'fr' ? 'Actuel' : (@locale == 'sw' ? 'Sasa' : 'Current')) :
-            i == 1 ? 
-              (@locale == 'fr' ? 'Semaine dernière' : (@locale == 'sw' ? 'Wiki iliyopita' : 'Last Week')) :
-            i == 2 ? 
-              (@locale == 'fr' ? 'Il y a 2 semaines' : (@locale == 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago')) :
-            i == 3 ? 
-              (@locale == 'fr' ? 'Il y a 3 semaines' : (@locale == 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago')) :
-            (@locale == 'fr' ? 'Il y a 4 semaines' : (@locale == 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'))
-          )
-          
-          RETURN {
-            label: periodLabel,
-            value: periodData.average != null ? 
-              FLOOR((periodData.average / 5) * 100) : null
-          }
-      )
-      
-      RETURN {
-        currentValue: currentValue || 72.5, // Default to 72.5 if null
-        previousValue: previousValue || 73.1, // Default to 73.1 if null
-        changePercentage: changePercentage || -0.6, // Default to -0.6 if null
-        target: 85, // Default target value
-        historicalData: historicalData
-      }
-    `;
+                COLLECT AGGREGATE 
+                  totalRatings = COUNT(),
+                  sumRatings = SUM(a.data.rating)
+                  
+                RETURN {
+                  count: totalRatings,
+                  average: totalRatings > 0 ? (sumRatings / totalRatings) : null
+                }
+            )[0]
+            
+            LET periodLabel = (
+              i == 0 ? 
+                (@locale == 'fr' ? 'Actuel' : (@locale == 'sw' ? 'Sasa' : 'Current')) :
+              i == 1 ? 
+                (@locale == 'fr' ? 'Semaine dernière' : (@locale == 'sw' ? 'Wiki iliyopita' : 'Last Week')) :
+              i == 2 ? 
+                (@locale == 'fr' ? 'Il y a 2 semaines' : (@locale == 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago')) :
+              i == 3 ? 
+                (@locale == 'fr' ? 'Il y a 3 semaines' : (@locale == 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago')) :
+                (@locale == 'fr' ? 'Il y a 4 semaines' : (@locale == 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'))
+            )
+            
+            RETURN {
+              label: periodLabel,
+              value: periodData.average != null ? 
+                FLOOR((periodData.average / 5) * 100) : null
+            }
+        )
+        
+        RETURN {
+          currentValue: currentValue || 72.5,
+          previousValue: previousValue || 73.1,
+          changePercentage: changePercentage || -0.6,
+          target: 85,
+          historicalData: historicalData
+        }
+      `;
 
-      // Execute the query with bind parameters
       logger.info("Executing satisfaction gauge query...");
 
       try {
-        // Test if database is accessible with a simpler query first
         const testCursor = await this.db.query(`RETURN { test: true }`);
         const testResult = await testCursor.next();
         logger.info(`Database test query result: ${JSON.stringify(testResult)}`);
 
-        // Now execute the main query
         const result = await this.db.query(query, {
           startDate: validStartDate,
           endDate: validEndDate,
@@ -1186,19 +1112,20 @@ class AnalyticsService {
           locale: locale
         }).then(cursor => cursor.next());
 
-        // If no data or error, return sample data
         if (!result || !result.currentValue) {
           logger.info("No satisfaction data found, returning sample data");
           return this.getSampleSatisfactionGaugeData(locale);
         }
 
+        logger.info('Satisfaction gauge data retrieved successfully');
+        
         return result;
       } catch (error) {
-        logger.error(`Database query error: ${error.message}`);
+        logger.error(`Database query error: ${error.message}`, { stack: error.stack });
         return this.getSampleSatisfactionGaugeData(locale);
       }
     } catch (error) {
-      logger.error('Error getting satisfaction gauge data:', error);
+      logger.error(`Error getting satisfaction gauge data: ${error.message}`, { stack: error.stack });
       return this.getSampleSatisfactionGaugeData(locale);
     }
   }
@@ -1209,7 +1136,6 @@ class AnalyticsService {
    * @returns {Object} Sample satisfaction gauge data
    */
   getSampleSatisfactionGaugeData(locale = 'en') {
-    // Define periods based on locale for historical data
     const getLocalizedPeriods = () => {
       if (locale === 'fr') {
         return [
@@ -1228,7 +1154,6 @@ class AnalyticsService {
           'Wiki 4 iliyopita'
         ];
       } else {
-        // Default to English
         return [
           'Current',
           'Last Week',
@@ -1241,12 +1166,10 @@ class AnalyticsService {
 
     const periods = getLocalizedPeriods();
 
-    // Define sample values
     const currentValue = 72.5;
     const previousValue = 73.1;
     const changePercentage = -0.6;
 
-    // Create sample historical data
     const historicalData = [
       { label: periods[0], value: 72.5 },
       { label: periods[1], value: 73.1 },
@@ -1255,6 +1178,8 @@ class AnalyticsService {
       { label: periods[4], value: 71.2 },
     ];
 
+    logger.info('Sample satisfaction gauge data generated successfully');
+    
     return {
       currentValue,
       previousValue,
@@ -1273,34 +1198,27 @@ class AnalyticsService {
    */
   async getSatisfactionHeatmapData(startDate, endDate, locale = 'en') {
     try {
-      // Ensure valid date formats
       const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
 
       logger.info(`Getting satisfaction heatmap data from ${validStartDate} to ${validEndDate} with locale ${locale}`);
 
-      // Create a new instance of ServiceCategoryService
       const serviceCategoryService = new ServiceCategoryService();
       logger.info("Getting all service categories from ServiceCategoryService");
 
-      // Get categories from the service
       const categoriesWithServices = await serviceCategoryService.getAllCategoriesWithServices(locale);
       logger.info(`Retrieved ${categoriesWithServices.length} categories from service`);
 
-      // Extract just the necessary category info
       const categories = categoriesWithServices.map(cat => ({
         _key: cat.catKey,
         name: cat.name
       }));
 
-      // Debug: Log retrieved categories
       logger.info(`Categories retrieved: ${categories.map(c => c.name).join(', ')}`);
 
-      // Calculate time periods (e.g., weeks)
       const now = new Date();
-      const periodLength = 7 * 86400000; // 1 week in milliseconds
+      const periodLength = 7 * 86400000;
 
-      // Define time periods (current and 4 previous weeks)
       const timePeriods = [];
       for (let i = 0; i < 5; i++) {
         const endDate = new Date(now.getTime() - (i * periodLength));
@@ -1328,13 +1246,10 @@ class AnalyticsService {
         });
       }
 
-      // Reverse the array so it displays from oldest to newest (left to right)
       timePeriods.reverse();
 
-      // Debug: Log time periods
       logger.info(`Time periods: ${timePeriods.map(p => p.label).join(', ')}`);
 
-      // Process each category to get its satisfaction data per time period
       const result = [];
 
       for (const category of categories) {
@@ -1342,7 +1257,6 @@ class AnalyticsService {
 
         for (const period of timePeriods) {
           try {
-            // Query for this specific category and time period
             const query = `
               FOR q IN queries
                 FILTER q.timestamp >= "${period.startDate}" AND q.timestamp <= "${period.endDate}"
@@ -1363,13 +1277,10 @@ class AnalyticsService {
             const cursor = await this.db.query(query);
             const feedbackData = await cursor.next();
 
-            // Debug: Log query results
             logger.info(`Query for category ${category.name}, period ${period.label}: count=${feedbackData?.count || 0}, average=${feedbackData?.average || 'null'}`);
 
-            // Check if we have any data for this combination
-            let value = 0; // Default to 0 for no data/gray boxes
+            let value = 0;
             if (feedbackData && feedbackData.average) {
-              // Convert to percentage (0-100) scale
               value = Math.floor((feedbackData.average / 5) * 100);
             }
 
@@ -1378,8 +1289,7 @@ class AnalyticsService {
               y: value
             });
           } catch (error) {
-            logger.error(`Error querying data for category ${category.name} in period ${period.label}: ${error.message}`);
-            // Add default value of 0 on error
+            logger.error(`Error querying data for category ${category.name} in period ${period.label}: ${error.message}`, { stack: error.stack });
             timeData.push({
               x: period.label,
               y: 0
@@ -1393,23 +1303,16 @@ class AnalyticsService {
         });
       }
 
-      // Debug: Log result summary
-      logger.info(`Result contains ${result.length} categories with data`);
-      if (result.length > 0) {
-        logger.info(`Sample category: ${result[0].name} with ${result[0].data.length} time periods`);
-      }
-
+      logger.info(`Satisfaction heatmap data retrieved successfully with ${result.length} categories`);
+      
       return result;
     } catch (error) {
-      logger.error('Error getting satisfaction heatmap data:', error);
+      logger.error(`Error getting satisfaction heatmap data: ${error.message}`, { stack: error.stack });
 
-      // If we encounter an error, still try to return a properly structured dataset
-      // with all 13 categories and zeros for all values
       try {
         const serviceCategoryService = new ServiceCategoryService();
         const categories = await serviceCategoryService.getAllCategoriesWithServices(locale);
 
-        // Determine time period labels
         const periods = [];
         for (let i = 4; i >= 0; i--) {
           if (locale === 'fr') {
@@ -1427,16 +1330,19 @@ class AnalyticsService {
           }
         }
 
-        // Create fallback data with zeros
-        return categories.map(cat => ({
+        const fallbackData = categories.map(cat => ({
           name: cat.name,
           data: periods.map(period => ({
             x: period,
             y: 0
           }))
         }));
+        
+        logger.info('Fallback satisfaction heatmap data generated successfully');
+        
+        return fallbackData;
       } catch (fallbackError) {
-        logger.error('Error creating fallback data:', fallbackError);
+        logger.error(`Error creating fallback data: ${fallbackError.message}`, { stack: fallbackError.stack });
         return this.getSampleSatisfactionHeatmapData(locale);
       }
     }
@@ -1450,9 +1356,7 @@ class AnalyticsService {
   getSampleSatisfactionHeatmapData(locale = 'en') {
     logger.info(`DEBUG: Generating sample heatmap data for locale: ${locale}`);
 
-    // Knowledge areas with translations
     const areas = [];
-
     if (locale === 'fr') {
       areas.push(
         'Immigration et Citoyenneté',
@@ -1474,7 +1378,6 @@ class AnalyticsService {
         'Afya na Huduma za Kijamii'
       );
     } else {
-      // Default to English
       areas.push(
         'Immigration & Citizenship',
         'Business & Trade',
@@ -1486,7 +1389,6 @@ class AnalyticsService {
       );
     }
 
-    // Time periods with translations
     const periods = [];
     if (locale === 'fr') {
       periods.push(
@@ -1505,7 +1407,6 @@ class AnalyticsService {
         'Sasa'
       );
     } else {
-      // Default to English
       periods.push(
         '4 Weeks Ago',
         '3 Weeks Ago',
@@ -1515,38 +1416,27 @@ class AnalyticsService {
       );
     }
 
-    // Generate sample data for each area and time period
     const sampleData = areas.map(area => {
-      const data = {};
-      data.name = area;
-      data.data = periods.map((period, index) => {
-        // Generate random satisfaction scores that trend slightly upward
-        let baseScore = 75 + Math.floor(Math.random() * 15);
-        // Add a small upward trend (with some randomness)
-        baseScore += index * (1 + Math.random());
-        // Ensure score doesn't exceed 100
-        const score = Math.min(Math.round(baseScore), 100);
+      const data = {
+        name: area,
+        data: periods.map((period, index) => {
+          let baseScore = 75 + Math.floor(Math.random() * 15);
+          baseScore += index * (1 + Math.random());
+          const score = Math.min(Math.round(baseScore), 100);
 
-        return {
-          x: period,
-          y: score
-        };
-      });
+          return {
+            x: period,
+            y: score
+          };
+        })
+      };
       return data;
     });
 
-    logger.info(`DEBUG: Sample data generated with ${sampleData.length} areas`);
-    if (sampleData.length > 0) {
-      logger.info(`DEBUG: First sample area: ${sampleData[0].name}`);
-      logger.info(`DEBUG: First sample data: ${JSON.stringify(sampleData[0].data[0])}`);
-    }
-
+    logger.info(`Sample satisfaction heatmap data generated successfully with ${sampleData.length} areas`);
+    
     return sampleData;
   }
-
 }
 
-
-
-// Export the class (not an instance)
 module.exports = AnalyticsService;

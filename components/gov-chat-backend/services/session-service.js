@@ -1,31 +1,12 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('../logger'); // Import logger from logger.js
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 class SessionService {
   constructor() {
@@ -33,7 +14,7 @@ class SessionService {
     this.sessions = this.db.collection('sessions');
     this.userSessions = this.db.collection('userSessions');
     this.sessionExpirationTime = process.env.SESSION_EXPIRATION_TIME || 30 * 60 * 1000; // 30 minutes in milliseconds
-    logger.info('SessionService initialized with expiration time:', this.sessionExpirationTime);
+    logger.info(`SessionService initialized successfully with expiration time: ${this.sessionExpirationTime}ms`);
   }
 
   /**
@@ -54,7 +35,7 @@ class SessionService {
         active: true
       };
       
-      logger.info(`Creating session for user ${userId}...`);
+      logger.info(`Creating session document for user ${userId}`);
       const session = await this.sessions.save(basicSessionDoc);
       const sessionId = session._key;
       logger.info(`Session created with auto-generated key: ${sessionId}`);
@@ -72,7 +53,7 @@ class SessionService {
       
       // Update with additional data if needed
       if (Object.keys(updateData).length > 0) {
-        logger.info(`Updating session ${sessionId} with additional data...`);
+        logger.info(`Updating session ${sessionId} with additional data: ${JSON.stringify(updateData)}`);
         await this.sessions.update(sessionId, updateData);
       }
 
@@ -84,17 +65,17 @@ class SessionService {
           _to: `sessions/${sessionId}`,
           createdAt: new Date().toISOString()
         });
+        logger.info(`Edge created successfully between user ${userId} and session ${sessionId}`);
       } catch (error) {
-        // If creating the edge fails, we'll log but continue
-        logger.error(`Error creating user-session edge for user ${userId}:`, error);
+        logger.error(`Error creating user-session edge for user ${userId}: ${error.message}`, { stack: error.stack });
       }
 
       // Return the full session document
       const fullSession = await this.sessions.document(sessionId);
-      logger.info(`Session ${sessionId} created successfully for user ${userId}`);
+      logger.info(`Session created successfully: ${sessionId} for user ${userId}`);
       return fullSession;
     } catch (error) {
-      logger.error(`Error creating session for user ${userId}:`, error);
+      logger.error(`Error creating session for user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -131,16 +112,15 @@ class SessionService {
       const currentTime = new Date().getTime();
       
       if (currentTime - sessionStartTime > this.sessionExpirationTime) {
-        // Session has expired, end it
         logger.info(`Session ${session._key} for user ${userId} has expired`);
         await this.endSession(session._key);
         return null;
       }
 
-      logger.info(`Active session ${session._key} found for user ${userId}`);
+      logger.info(`Active session retrieved successfully: ${session._key} for user ${userId}`);
       return session;
     } catch (error) {
-      logger.error(`Error getting active session for user ${userId}:`, error);
+      logger.error(`Error getting active session for user ${userId}: ${error.message}`, { stack: error.stack });
       return null;
     }
   }
@@ -159,15 +139,16 @@ class SessionService {
       const activeSession = await this.getActiveSession(userId);
       
       if (activeSession) {
-        logger.info(`Returning existing active session ${activeSession._key} for user ${userId}`);
+        logger.info(`Returning existing active session: ${activeSession._key} for user ${userId}`);
         return activeSession;
       }
       
-      // No active session, create a new one
       logger.info(`No active session found, creating new session for user ${userId}`);
-      return await this.createSession(userId, deviceInfo, ipAddress);
+      const newSession = await this.createSession(userId, deviceInfo, ipAddress);
+      logger.info(`Session retrieved or created successfully: ${newSession._key} for user ${userId}`);
+      return newSession;
     } catch (error) {
-      logger.error(`Error getting or creating session for user ${userId}:`, error);
+      logger.error(`Error getting or creating session for user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -177,11 +158,6 @@ class SessionService {
    * @param {String} sessionId - Session ID
    * @returns {Promise<Object>} The updated session
    */
-  /**
- * End a session
- * @param {String} sessionId - Session ID
- * @returns {Promise<Object>} The updated session
- */
   async endSession(sessionId) {
     try {
       logger.info(`Ending session ${sessionId}`);
@@ -196,7 +172,7 @@ class SessionService {
           return currentSession;
         }
       } catch (readError) {
-        logger.error(`Error reading session before update: ${readError.message}`);
+        logger.error(`Error reading session before update: ${readError.message}`, { stack: readError.stack });
       }
 
       // Perform update with debugging
@@ -223,18 +199,18 @@ class SessionService {
         logger.info(`Verified session state after update: ${JSON.stringify(verifiedSession)}`);
 
         if (verifiedSession.active) {
-          logger.warn(`❗ Session ${sessionId} is still active after update!`);
+          logger.warn(`Session ${sessionId} is still active after update`);
         } else {
-          logger.info(`✅ Session ${sessionId} is now inactive with endTime: ${verifiedSession.endTime}`);
+          logger.info(`Session ${sessionId} is now inactive with endTime: ${verifiedSession.endTime}`);
         }
       } catch (verifyError) {
-        logger.error(`Error verifying session after update: ${verifyError.message}`);
+        logger.error(`Error verifying session after update: ${verifyError.message}`, { stack: verifyError.stack });
       }
 
-      logger.info(`Session ${sessionId} ended successfully`);
+      logger.info(`Session ended successfully: ${sessionId}`);
       return updatedSession.new;
     } catch (error) {
-      logger.error(`Error ending session ${sessionId}: ${error.message}`, error);
+      logger.error(`Error ending session ${sessionId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -248,8 +224,6 @@ class SessionService {
     try {
       logger.info(`Keeping session ${sessionId} alive`);
 
-      // This is a simple update to ensure the session doesn't expire
-      // The logic is based on checking the startTime against current time
       const updatedSession = await this.sessions.update(
         sessionId,
         {
@@ -258,10 +232,10 @@ class SessionService {
         { returnNew: true }
       );
 
-      logger.info(`Session ${sessionId} kept alive successfully`);
+      logger.info(`Session kept alive successfully: ${sessionId}`);
       return updatedSession.new;
     } catch (error) {
-      logger.error(`Error keeping session ${sessionId} alive:`, error);
+      logger.error(`Error keeping session ${sessionId} alive: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -297,10 +271,10 @@ class SessionService {
 
       const cursor = await this.db.query(query);
       const sessions = await cursor.all();
-      logger.info(`Found ${sessions.length} sessions for user ${userId}`);
+      logger.info(`User sessions retrieved successfully: ${sessions.length} sessions for user ${userId}`);
       return sessions;
     } catch (error) {
-      logger.error(`Error getting sessions for user ${userId}:`, error);
+      logger.error(`Error getting sessions for user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -315,10 +289,10 @@ class SessionService {
       logger.info(`Fetching session ${sessionId}`);
 
       const session = await this.sessions.document(sessionId);
-      logger.info(`Session ${sessionId} retrieved successfully`);
+      logger.info(`Session retrieved successfully: ${sessionId}`);
       return session;
     } catch (error) {
-      logger.error(`Error getting session ${sessionId}:`, error);
+      logger.error(`Error getting session ${sessionId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -333,7 +307,6 @@ class SessionService {
 
       const expirationTime = new Date(Date.now() - this.sessionExpirationTime).toISOString();
       
-      // Find active sessions that have expired
       const query = aql`
         FOR session IN sessions
           FILTER session.active == true
@@ -345,20 +318,19 @@ class SessionService {
       const cursor = await this.db.query(query);
       const expiredSessions = await cursor.all();
       
-      // End each expired session
       let endedCount = 0;
       for (const session of expiredSessions) {
         await this.endSession(session._key);
         endedCount++;
       }
       
-      logger.info(`Cleanup completed: ${expiredSessions.length} expired sessions found, ${endedCount} sessions ended`);
+      logger.info(`Expired sessions cleanup completed successfully: ${expiredSessions.length} found, ${endedCount} ended`);
       return {
         expiredSessionsFound: expiredSessions.length,
         sessionsEnded: endedCount
       };
     } catch (error) {
-      logger.error('Error cleaning up expired sessions:', error);
+      logger.error(`Error cleaning up expired sessions: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -423,10 +395,10 @@ class SessionService {
       
       const cursor = await this.db.query(query);
       const stats = await cursor.next();
-      logger.info('Session statistics retrieved successfully:', stats);
+      logger.info(`Session statistics retrieved successfully: ${JSON.stringify(stats)}`);
       return stats;
     } catch (error) {
-      logger.error('Error getting session statistics:', error);
+      logger.error(`Error getting session statistics: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }

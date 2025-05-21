@@ -1,24 +1,5 @@
 const authService = require('../services/auth-service');
-const { createLogger, format, transports } = require('winston'); // Import Winston
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
+const { logger } = require('../logger'); // Import logger from logger.js
 
 // Utility function to safely stringify objects with circular references
 const safeStringify = (obj, indent = 2) => {
@@ -98,7 +79,7 @@ const authMiddleware = {
               logger.info(`[AUTH DEBUG] ❌ No user found with ID: ${req.body.userId}`);
             }
           } catch (userErr) {
-            logger.error(`[AUTH DEBUG] ❌ Error fetching user by ID: ${userErr.message}`);
+            logger.error(`[AUTH DEBUG] ❌ Error fetching user by ID: ${userErr.message}`, { stack: userErr.stack });
           }
         }
         
@@ -126,7 +107,7 @@ const authMiddleware = {
         decoded = await authService.verifyToken(token);
         logger.info(`[AUTH DEBUG] ✅ Token verification result:`, safeStringify(decoded));
       } catch (tokenErr) {
-        logger.error(`[AUTH DEBUG] ❌ Token verification error: ${tokenErr.message}`);
+        logger.error(`[AUTH DEBUG] ❌ Token verification error: ${tokenErr.message}`, { stack: tokenErr.stack });
         return res.status(401).json({ success: false, message: `Token verification failed: ${tokenErr.message}` });
       }
       
@@ -169,7 +150,7 @@ const authMiddleware = {
         
         logger.info(`[AUTH DEBUG] ✅ User attached to request with role: ${req.user.role}`);
       } catch (userError) {
-        logger.warn(`[AUTH DEBUG] ⚠️ Failed to fetch user details: ${userError.message}`);
+        logger.warn(`[AUTH DEBUG] ⚠️ Failed to fetch user details: ${userError.message}`, { stack: userError.stack });
         // Still set basic user data even if fetching details fails
         req.user = decoded;
         logger.info(`[AUTH DEBUG] ✅ User attached to request (without role)`);
@@ -187,7 +168,7 @@ const authMiddleware = {
             logger.warn(`[AUTH DEBUG] ⚠️ WARNING: Could not find additional user details for ID: ${tokenUserId}`);
           }
         } catch (userDetailErr) {
-          logger.error(`[AUTH DEBUG] ⚠️ Error fetching additional user details: ${userDetailErr.message}`);
+          logger.error(`[AUTH DEBUG] ⚠️ Error fetching additional user details: ${userDetailErr.message}`, { stack: userDetailErr.stack });
         }
       }
       
@@ -195,8 +176,7 @@ const authMiddleware = {
       next();
     } catch (error) {
       logger.info('=======================================================');
-      logger.error(`[AUTH DEBUG] ❌ AUTHENTICATION ERROR: ${error.message}`);
-      logger.error('[AUTH DEBUG] Error stack:', error.stack);
+      logger.error(`[AUTH DEBUG] ❌ AUTHENTICATION ERROR: ${error.message}`, { stack: error.stack });
       logger.info('=======================================================');
       res.status(401).json({ success: false, message: 'Authentication failed', error: error.message });
     }
@@ -249,8 +229,7 @@ const authMiddleware = {
       next();
     } catch (error) {
       logger.info('=======================================================');
-      logger.error(`[ADMIN DEBUG] ❌ ADMIN CHECK ERROR: ${error.message}`);
-      logger.error('[ADMIN DEBUG] Error stack:', error.stack);
+      logger.error(`[ADMIN DEBUG] ❌ ADMIN CHECK ERROR: ${error.message}`, { stack: error.stack });
       logger.info('=======================================================');
       res.status(500).json({ success: false, message: 'Error checking admin status', error: error.message });
     }

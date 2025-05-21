@@ -1,24 +1,5 @@
 const authService = require('../services/auth-service');
-const { createLogger, format, transports } = require('winston'); // Import Winston
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
+const { logger } = require('../logger'); // Import logger from logger.js
 
 /**
  * Get the frontend URL from environment variable, falling back to request headers
@@ -29,22 +10,22 @@ const logger = createLogger({
 function getFrontendUrl(req) {
   // First try to get the URL from environment variable (highest priority)
   const envFrontendUrl = process.env.FRONTEND_URL;
-  
+
   if (envFrontendUrl) {
     logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
     return envFrontendUrl;
   }
-  
+
   // If environment variable is not set, try to get from request headers
   const origin = req.headers.origin;
   const referer = req.headers.referer;
-  
+
   // If we have an origin header, use it
   if (origin) {
     logger.info(`Using Origin header for frontend URL: ${origin}`);
     return origin;
   }
-  
+
   // If we have a referer, extract the origin part
   if (referer) {
     try {
@@ -53,10 +34,10 @@ function getFrontendUrl(req) {
       logger.info(`Using Referer header for frontend URL: ${refererOrigin}`);
       return refererOrigin;
     } catch (error) {
-      logger.warn(`Could not parse referer URL: ${referer}`, error);
+      logger.warn(`Could not parse referer URL: ${referer}`, { stack: error.stack });
     }
   }
-  
+
   // Last resort fallback (should be the same as in email-service.js)
   const fallbackUrl = 'http://localhost:8090';
   logger.info(`Using fallback URL: ${fallbackUrl}`);
@@ -71,10 +52,10 @@ function getFrontendUrl(req) {
 function getBackendUrl(req) {
   // Extract protocol (http/https)
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  
+
   // Get host from headers (includes port if specified)
   const host = req.headers['x-forwarded-host'] || req.headers.host;
-  
+
   const backendUrl = `${protocol}://${host}`;
   logger.info(`Backend URL: ${backendUrl}`);
   return backendUrl;
@@ -93,11 +74,11 @@ class AuthController {
     try {
       logger.info('Processing user registration');
       const userData = req.body;
-      
+
       // Get both URLs
       const frontendUrl = getFrontendUrl(req);
       const backendUrl = getBackendUrl(req);
-      
+
       logger.info(`Frontend URL for registration: ${frontendUrl}`);
       logger.info(`Backend URL for registration: ${backendUrl}`);
 
@@ -113,7 +94,7 @@ class AuthController {
       // Add both URLs to the registration data
       userData.frontendUrl = frontendUrl;  // For redirects in emails
       userData.backendUrl = backendUrl;    // For API calls in emails
-      
+
       const result = await authService.register(userData);
 
       // Return success without accessToken for email verification flow
@@ -125,7 +106,7 @@ class AuthController {
         user: userWithoutToken
       });
     } catch (error) {
-      logger.error('Registration error:', error);
+      logger.error(`Registration error: ${error.message}`, { stack: error.stack });
 
       // Handle specific errors
       if (error.message && error.message.includes('already exists')) {
@@ -160,7 +141,7 @@ class AuthController {
       logger.info(`User login successful for loginName: ${loginName}`);
       res.json(result);
     } catch (error) {
-      logger.error('Login error:', error);
+      logger.error(`Login error: ${error.message}`, { stack: error.stack });
 
       // Handle specific errors
       if (error.message === 'User not found' || error.message === 'Invalid password') {
@@ -198,7 +179,7 @@ class AuthController {
       logger.info(`User logout successful for userId: ${userId}`);
       res.json(result);
     } catch (error) {
-      logger.error('Logout error:', error);
+      logger.error(`Logout error: ${error.message}`, { stack: error.stack });
       res.status(500).json({ success: false, message: 'Logout failed' });
     }
   }
@@ -212,34 +193,28 @@ class AuthController {
     try {
       logger.info('Processing email verification');
       const { token } = req.params;
-      
+
       // Get frontend URL for redirects
       const frontendUrl = getFrontendUrl(req);
       logger.info(`Frontend URL for verification redirect: ${frontendUrl}`);
-      
+
       if (!token) {
         logger.warn('Token is required for email verification');
         return res.status(400).send(`
-          <html>
-            <head><meta http-equiv="refresh" content="0; URL='${frontendUrl}/login?error=noToken'" /></head>
-            <body>Redirecting...</body>
-          </html>
+          Redirecting...
         `);
       }
-      
+
       const result = await authService.verifyEmail(token);
-      
+
       if (result.success) {
         logger.info('Email verified successfully');
         return res.status(200).send(`
-          <html>
-            <head><meta http-equiv="refresh" content="0; URL='${frontendUrl}/login?verified=true'" /></head>
-            <body>Email verified successfully! Redirecting...</body>
-          </html>
+          Email verified successfully! Redirecting...
         `);
       } else {
         let errorType = 'invalid';
-        
+
         if (result.expired) {
           errorType = 'expired';
           logger.warn('Email verification failed: Token expired');
@@ -249,25 +224,19 @@ class AuthController {
         } else {
           logger.warn('Email verification failed: Invalid token');
         }
-        
+
         return res.status(400).send(`
-          <html>
-            <head><meta http-equiv="refresh" content="0; URL='${frontendUrl}/login?verified=false&error=${errorType}'" /></head>
-            <body>Verification failed. Redirecting...</body>
-          </html>
+          Verification failed. Redirecting...
         `);
       }
     } catch (error) {
-      logger.error('Email verification error:', error);
-      
+      logger.error(`Email verification error: ${error.message}`, { stack: error.stack });
+
       // Get frontend URL for redirects
       const frontendUrl = getFrontendUrl(req);
-      
+
       return res.status(500).send(`
-        <html>
-          <head><meta http-equiv="refresh" content="0; URL='${frontendUrl}/login?verified=false&error=unknown'" /></head>
-          <body>An error occurred. Redirecting...</body>
-        </html>
+        An error occurred. Redirecting...
       `);
     }
   }
@@ -281,11 +250,11 @@ class AuthController {
     try {
       logger.info('Processing resend verification email');
       const { email } = req.body;
-      
+
       // Get both URLs
       const frontendUrl = getFrontendUrl(req);
       const backendUrl = getBackendUrl(req);
-      
+
       logger.info(`Frontend URL for verification email: ${frontendUrl}`);
       logger.info(`Backend URL for verification email: ${backendUrl}`);
 
@@ -299,7 +268,7 @@ class AuthController {
       logger.info(`Verification email resent successfully for email: ${email}`);
       res.json(result);
     } catch (error) {
-      logger.error('Resend verification email error:', error);
+      logger.error(`Resend verification email error: ${error.message}`, { stack: error.stack });
 
       // For security, don't reveal specific errors
       res.status(500).json({
@@ -318,11 +287,11 @@ class AuthController {
     try {
       logger.info('Initiating password reset');
       const { email } = req.body;
-      
+
       // Get both URLs
       const frontendUrl = getFrontendUrl(req);
       const backendUrl = getBackendUrl(req);
-      
+
       logger.info(`Frontend URL for password reset email: ${frontendUrl}`);
       logger.info(`Backend URL for password reset email: ${backendUrl}`);
 
@@ -336,7 +305,7 @@ class AuthController {
       logger.info(`Password reset initiated successfully for email: ${email}`);
       res.json(result);
     } catch (error) {
-      logger.error('Password reset initiation error:', error);
+      logger.error(`Password reset initiation error: ${error.message}`, { stack: error.stack });
 
       // For security, don't reveal specific errors
       res.status(500).json({
@@ -380,7 +349,7 @@ class AuthController {
       logger.info('Password reset token validated successfully');
       res.json({ success: true, ...result });
     } catch (error) {
-      logger.error('Token validation error:', error);
+      logger.error(`Token validation error: ${error.message}`, { stack: error.stack });
       res.status(500).json({ success: false, message: 'Token validation failed' });
     }
   }
@@ -419,7 +388,7 @@ class AuthController {
       logger.info('Password reset successful');
       res.json(result);
     } catch (error) {
-      logger.error('Password reset error:', error);
+      logger.error(`Password reset error: ${error.message}`, { stack: error.stack });
       res.status(500).json({ success: false, message: 'Password reset failed' });
     }
   }
@@ -447,7 +416,7 @@ class AuthController {
       logger.info(`Password changed successfully for userId: ${userId}`);
       res.json(result);
     } catch (error) {
-      logger.error('Password change error:', error);
+      logger.error(`Password change error: ${error.message}`, { stack: error.stack });
 
       // Handle specific errors
       if (error.message === 'Current password is incorrect') {
@@ -487,7 +456,7 @@ class AuthController {
       logger.info(`Current user info retrieved successfully for userId: ${userId}`);
       res.json({ success: true, user: userWithoutPassword });
     } catch (error) {
-      logger.error('Get current user error:', error);
+      logger.error(`Get current user error: ${error.message}`, { stack: error.stack });
       res.status(500).json({ success: false, message: 'Failed to retrieve user information' });
     }
   }
@@ -504,7 +473,7 @@ class AuthController {
       logger.info('Expired tokens cleanup completed successfully');
       res.json(result);
     } catch (error) {
-      logger.error('Cleanup expired tokens error:', error);
+      logger.error(`Cleanup expired tokens error: ${error.message}`, { stack: error.stack });
       res.status(500).json({ success: false, message: 'Failed to clean up expired tokens' });
     }
   }

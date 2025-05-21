@@ -1,31 +1,12 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('../logger'); // Import centralized logger
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 class QueryService {
   constructor() {
@@ -35,7 +16,7 @@ class QueryService {
     this.services = this.db.collection('services');
     this.analyticsService = null; // Will be set via dependency injection
     this.chatHistoryService = null; // Will be set via dependency injection
-    logger.info('QueryService initialized');
+    logger.info('QueryService.initialized');
   }
 
   /**
@@ -44,7 +25,7 @@ class QueryService {
    */
   setAnalyticsService(analyticsService) {
     this.analyticsService = analyticsService;
-    logger.info('Analytics service set for QueryService');
+    logger.info('QueryService.analytics_service_set');
   }
 
   /**
@@ -52,14 +33,10 @@ class QueryService {
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
-  /**
- * Create a new query
- * @param {Object} queryData - Query data
- * @returns {Promise<Object>} The created query
- */
   async createQuery(queryData) {
+    const startTime = Date.now();
     try {
-      logger.info(`Creating query with body: ${JSON.stringify(queryData)}`);
+      logger.info('QueryService.create_query_start', { dataLength: JSON.stringify(queryData).length });
 
       // Ensure minimum required data
       let missingFields = [];
@@ -68,7 +45,7 @@ class QueryService {
       if (!queryData.text) missingFields.push('text');
 
       if (missingFields.length > 0) {
-        logger.error(`Missing required data: ${missingFields.join(', ')}`);
+        logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
         throw new Error('Missing required query data');
       }
 
@@ -85,10 +62,10 @@ class QueryService {
       };
 
       // Save query document
-      logger.info(`Document to save: ${JSON.stringify(basicQueryDoc)}`);
+      logger.debug('QueryService.saving_query_document', { basicQueryDoc });
       const query = await this.queries.save(basicQueryDoc);
       const queryId = query._key;
-      logger.info(`Query created with auto-generated key: ${queryId}`);
+      logger.info('QueryService.query_created', { queryId });
 
       // Record query in analytics if service is set
       if (this.analyticsService) {
@@ -103,26 +80,34 @@ class QueryService {
             responseTime: queryData.responseTime || 0,
             isAnswered: queryData.isAnswered || false
           });
-          logger.info(`Analytics recorded for query ${queryId}`);
+          logger.info('QueryService.analytics_recorded', { queryId });
         } catch (error) {
-          logger.error(`Error recording query analytics: ${error.message}`);
+          logger.error('QueryService.record_analytics_failed', { queryId, error: error.message });
           // Continue even if analytics recording fails
         }
       }
 
       // Return the document
       const finalQuery = await this.queries.document(queryId);
-      logger.info(`Query ${queryId} created successfully`);
+      logger.info('QueryService.query_created_success', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
       return finalQuery;
     } catch (error) {
-      logger.error(`Error creating query: ${error.message}`);
+      logger.error('QueryService.create_query_failed', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+
       // Log collection properties for debugging if save fails
       if (error.message.includes('schema')) {
         try {
           const collProperties = await this.queries.properties();
-          logger.info(`Collection properties: ${JSON.stringify(collProperties)}`);
+          logger.debug('QueryService.collection_properties', { properties: collProperties });
         } catch (propsError) {
-          logger.error(`Failed to get collection properties: ${propsError.message}`);
+          logger.error('QueryService.get_collection_properties_failed', { error: propsError.message });
         }
       }
       throw error;
@@ -136,12 +121,13 @@ class QueryService {
    * @returns {Promise<Object>} The updated query
    */
   async addFeedback(queryId, feedback) {
+    const startTime = Date.now();
     try {
-      logger.info(`Adding feedback to query ${queryId}`);
+      logger.info('QueryService.add_feedback_start', { queryId });
 
       // Ensure feedback has required fields
       if (feedback.rating === undefined) {
-        logger.warn('Feedback rating is required');
+        logger.warn('QueryService.feedback_rating_required', { queryId });
         throw new Error('Feedback rating is required');
       }
 
@@ -161,17 +147,28 @@ class QueryService {
       if (this.analyticsService) {
         try {
           await this.analyticsService.recordFeedback(queryId, userFeedback);
-          logger.info(`Analytics updated with feedback for query ${queryId}`);
+          logger.info('QueryService.analytics_feedback_updated', { queryId });
         } catch (error) {
-          logger.error('Error updating analytics with feedback:', error);
+          logger.error('QueryService.update_analytics_feedback_failed', {
+            queryId,
+            error: error.message
+          });
           // Continue even if analytics update fails
         }
       }
 
-      logger.info(`Feedback added to query ${queryId}`);
+      logger.info('QueryService.feedback_added', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
       return updatedQuery.new;
     } catch (error) {
-      logger.error(`Error adding feedback to query ${queryId}:`, error);
+      logger.error('QueryService.add_feedback_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -182,13 +179,22 @@ class QueryService {
    * @returns {Promise<Object>} The query
    */
   async getQuery(queryId) {
+    const startTime = Date.now();
     try {
-      logger.info(`Fetching query with ID: ${queryId}`);
+      logger.info('QueryService.get_query_start', { queryId });
       const query = await this.queries.document(queryId);
-      logger.info(`Query ${queryId} retrieved successfully`);
+      logger.info('QueryService.query_retrieved', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
       return query;
     } catch (error) {
-      logger.error(`Error getting query ${queryId}:`, error);
+      logger.error('QueryService.get_query_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -200,17 +206,26 @@ class QueryService {
    * @returns {Promise<Object>} The updated query
    */
   async markAsAnswered(queryId, responseTime = 0) {
+    const startTime = Date.now();
     try {
-      logger.info(`Marking query ${queryId} as answered with response time: ${responseTime}ms`);
+      logger.info('QueryService.mark_as_answered_start', { queryId, responseTime });
       const updatedQuery = await this.queries.update(queryId, {
         isAnswered: true,
         responseTime
       }, { returnNew: true });
 
-      logger.info(`Query ${queryId} marked as answered`);
+      logger.info('QueryService.query_marked_answered', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
       return updatedQuery.new;
     } catch (error) {
-      logger.error(`Error marking query ${queryId} as answered:`, error);
+      logger.error('QueryService.mark_as_answered_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -223,8 +238,9 @@ class QueryService {
    * @returns {Promise<Object>} The updated query
    */
   async setQueryCategory(queryId, categoryId, serviceId = null) {
+    const startTime = Date.now();
     try {
-      logger.info(`Setting category ${categoryId} for query ${queryId}${serviceId ? ` with service ${serviceId}` : ''}`);
+      logger.info('QueryService.set_query_category_start', { queryId, categoryId, serviceId });
 
       // Update the query with category and service
       const updateData = { categoryId };
@@ -236,7 +252,6 @@ class QueryService {
 
       // Update or create edge between query and category
       try {
-        // First try to get any existing edge
         const edgeCursor = await this.db.query(aql`
           FOR edge IN queryCategories
             FILTER edge._from == ${'queries/' + queryId}
@@ -246,15 +261,13 @@ class QueryService {
         const existingEdge = await edgeCursor.next();
 
         if (existingEdge) {
-          // Update existing edge
-          logger.info(`Updating existing query-category edge for query ${queryId}`);
+          logger.debug('QueryService.updating_query_category_edge', { queryId });
           await this.db.collection('queryCategories').update(existingEdge._key, {
             _to: `serviceCategories/${categoryId}`,
             updatedAt: new Date().toISOString()
           });
         } else {
-          // Create new edge
-          logger.info(`Creating new query-category edge for query ${queryId}`);
+          logger.debug('QueryService.creating_query_category_edge', { queryId });
           await this.db.collection('queryCategories').save({
             _from: `queries/${queryId}`,
             _to: `serviceCategories/${categoryId}`,
@@ -262,14 +275,25 @@ class QueryService {
           });
         }
       } catch (error) {
-        logger.error(`Error updating query-category edge for query ${queryId}:`, error);
+        logger.error('QueryService.update_query_category_edge_failed', {
+          queryId,
+          error: error.message
+        });
         // Continue even if edge update fails
       }
 
-      logger.info(`Category set for query ${queryId}`);
+      logger.info('QueryService.category_set', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
       return updatedQuery.new;
     } catch (error) {
-      logger.error(`Error setting category for query ${queryId}:`, error);
+      logger.error('QueryService.set_query_category_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -282,12 +306,12 @@ class QueryService {
    * @returns {Promise<Object>} Search results
    */
   async searchQueries(criteria, limit = 20, offset = 0) {
+    const startTime = Date.now();
     try {
-      logger.info('Searching queries with criteria:', criteria);
+      logger.info('QueryService.search_queries_start', { criteria, limit, offset });
 
       let filterConditions = [];
 
-      // Build filter conditions based on criteria
       if (criteria.userId) {
         filterConditions.push(aql`q.userId == ${criteria.userId}`);
       }
@@ -346,10 +370,8 @@ class QueryService {
         `);
       }
 
-      // If no specific criteria provided, return all queries
       let filterQuery;
       if (filterConditions.length > 0) {
-        // Manually join the filter conditions with ' AND ' since aql.join is problematic
         filterQuery = aql`FILTER `;
         for (let i = 0; i < filterConditions.length; i++) {
           if (i > 0) {
@@ -361,7 +383,6 @@ class QueryService {
         filterQuery = aql``;
       }
 
-      // Build and execute the query
       const query = aql`
         FOR q IN queries
           ${filterQuery}
@@ -370,11 +391,9 @@ class QueryService {
           RETURN q
       `;
 
-      // Execute query and get results
       const cursor = await this.db.query(query);
       const queries = await cursor.all();
 
-      // Get total count for pagination
       const countQuery = aql`
         FOR q IN queries
           ${filterQuery}
@@ -384,7 +403,11 @@ class QueryService {
       const countCursor = await this.db.query(countQuery);
       const totalCount = await countCursor.next() || 0;
 
-      logger.info(`Found ${queries.length} queries matching criteria`);
+      logger.info('QueryService.search_queries_completed', {
+        resultCount: queries.length,
+        totalCount,
+        durationMs: Date.now() - startTime
+      });
       return {
         queries,
         pagination: {
@@ -396,7 +419,12 @@ class QueryService {
         }
       };
     } catch (error) {
-      logger.error('Error searching queries:', error);
+      logger.error('QueryService.search_queries_failed', {
+        criteria,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -407,36 +435,45 @@ class QueryService {
    * @returns {Promise<Object>} Deletion result
    */
   async deleteQuery(queryId) {
+    const startTime = Date.now();
     try {
-      logger.info(`Deleting query ${queryId}`);
+      logger.info('QueryService.delete_query_start', { queryId });
 
       // Delete edges connected to the query
       try {
-        // Delete session-query edges
         await this.db.query(aql`
           FOR edge IN sessionQueries
             FILTER edge._to == ${'queries/' + queryId}
             REMOVE edge IN sessionQueries
         `);
 
-        // Delete query-category edges
         await this.db.query(aql`
           FOR edge IN queryCategories
             FILTER edge._from == ${'queries/' + queryId}
             REMOVE edge IN queryCategories
         `);
-        logger.info(`Edges deleted for query ${queryId}`);
+        logger.info('QueryService.edges_deleted', { queryId });
       } catch (error) {
-        logger.error(`Error deleting edges for query ${queryId}:`, error);
+        logger.error('QueryService.delete_edges_failed', {
+          queryId,
+          error: error.message
+        });
         // Continue even if edge deletion fails
       }
 
-      // Delete the query document
       const result = await this.queries.remove(queryId);
-      logger.info(`Query ${queryId} deleted successfully`);
+      logger.info('QueryService.query_deleted', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
       return result;
     } catch (error) {
-      logger.error(`Error deleting query ${queryId}:`, error);
+      logger.error('QueryService.delete_query_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -448,27 +485,21 @@ class QueryService {
    * @returns {Promise<Array>} Similar queries
    */
   async getSimilarQueries(queryText, limit = 5) {
+    const startTime = Date.now();
     try {
-      logger.info(`Finding similar queries for text: "${queryText}"`);
+      logger.info('QueryService.get_similar_queries_start', { queryText });
 
-      // This is a simple implementation using text matching
-      // In a production system, you would use a more sophisticated approach like vector embeddings
-
-      // Convert query to lowercase for case-insensitive matching
       const lowerQueryText = queryText.toLowerCase();
-
-      // Extract important words (excluding common stop words)
       const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by'];
       const words = lowerQueryText.split(/\s+/).filter(word =>
         word.length > 2 && !stopWords.includes(word)
       );
 
       if (words.length === 0) {
-        logger.info('No significant words found in query text, returning empty result');
+        logger.info('QueryService.no_significant_words', { queryText });
         return [];
       }
 
-      // Build a query that finds documents containing any of these words
       const similarQueriesQuery = aql`
         FOR q IN queries
           LET score = (
@@ -484,10 +515,18 @@ class QueryService {
 
       const cursor = await this.db.query(similarQueriesQuery);
       const similarQueries = await cursor.all();
-      logger.info(`Found ${similarQueries.length} similar queries`);
+      logger.info('QueryService.similar_queries_found', {
+        count: similarQueries.length,
+        durationMs: Date.now() - startTime
+      });
       return similarQueries;
     } catch (error) {
-      logger.error(`Error finding similar queries for "${queryText}":`, error);
+      logger.error('QueryService.get_similar_queries_failed', {
+        queryText,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       return [];
     }
   }
@@ -498,27 +537,24 @@ class QueryService {
    * @returns {Promise<Object>} The saved query
    */
   async saveQueryWithCriteria(queryData) {
+    const startTime = Date.now();
     try {
-      logger.info('Saving query with criteria:', queryData);
+      logger.info('QueryService.save_query_with_criteria_start', { dataLength: JSON.stringify(queryData).length });
 
-      // Ensure minimum required data
       if (!queryData.userId || !queryData.text) {
-        logger.warn('Missing required query data');
+        logger.warn('QueryService.missing_required_data', { queryData });
         throw new Error('Missing required query data');
       }
 
-      // Create basic query document - let ArangoDB generate the key
       const basicQueryDoc = {
         userId: queryData.userId,
         text: queryData.text,
         timestamp: queryData.timestamp || new Date().toISOString()
       };
 
-      // Add category and service if provided
       if (queryData.categoryId) basicQueryDoc.categoryId = queryData.categoryId;
       if (queryData.serviceId) basicQueryDoc.serviceId = queryData.serviceId;
 
-      // Add metadata with isSaved flag
       basicQueryDoc.metadata = {
         criteria: queryData.criteria || '',
         tags: Array.isArray(queryData.tags) ? queryData.tags : [],
@@ -527,13 +563,20 @@ class QueryService {
         description: queryData.description || ''
       };
 
-      logger.info('Saving query with criteria...');
+      logger.debug('QueryService.saving_query_with_criteria', { basicQueryDoc });
       const query = await this.queries.save(basicQueryDoc);
-      logger.info(`Query saved with auto-generated key: ${query._key}`);
+      logger.info('QueryService.query_saved', {
+        queryId: query._key,
+        durationMs: Date.now() - startTime
+      });
 
       return query;
     } catch (error) {
-      logger.error('Error saving query with criteria:', error);
+      logger.error('QueryService.save_query_with_criteria_failed', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -546,10 +589,10 @@ class QueryService {
    * @returns {Promise<Object>} Saved queries with pagination
    */
   async getSavedQueries(userId, limit = 20, offset = 0) {
+    const startTime = Date.now();
     try {
-      logger.info(`Fetching saved queries for user ${userId}`);
+      logger.info('QueryService.get_saved_queries_start', { userId });
 
-      // Build and execute the query
       const query = aql`
         FOR q IN queries
           FILTER q.userId == ${userId}
@@ -559,11 +602,9 @@ class QueryService {
           RETURN q
       `;
 
-      // Execute query and get results
       const cursor = await this.db.query(query);
       const queries = await cursor.all();
 
-      // Get total count for pagination
       const countQuery = aql`
         FOR q IN queries
           FILTER q.userId == ${userId}
@@ -574,7 +615,12 @@ class QueryService {
       const countCursor = await this.db.query(countQuery);
       const totalCount = await countCursor.next() || 0;
 
-      logger.info(`Found ${queries.length} saved queries for user ${userId}`);
+      logger.info('QueryService.saved_queries_retrieved', {
+        userId,
+        count: queries.length,
+        totalCount,
+        durationMs: Date.now() - startTime
+      });
       return {
         queries,
         pagination: {
@@ -586,7 +632,12 @@ class QueryService {
         }
       };
     } catch (error) {
-      logger.error(`Error getting saved queries for user ${userId}:`, error);
+      logger.error('QueryService.get_saved_queries_failed', {
+        userId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
@@ -598,10 +649,10 @@ class QueryService {
    * @returns {Promise<Array>} Recommended queries
    */
   async getQueryRecommendations(userId, limit = 5) {
+    const startTime = Date.now();
     try {
-      logger.info(`Fetching query recommendations for user ${userId}`);
+      logger.info('QueryService.get_query_recommendations_start', { userId });
 
-      // First get the user's recent queries
       const recentQueriesQuery = aql`
         FOR q IN queries
           FILTER q.userId == ${userId}
@@ -614,11 +665,11 @@ class QueryService {
       const recentQueries = await recentQueriesCursor.all();
 
       if (recentQueries.length === 0) {
-        logger.info(`No recent queries found for user ${userId}, falling back to popular queries`);
-        return await this.getPopularQueries(limit);
+        logger.info('QueryService.no_recent_queries', { userId });
+        const popularQueries = await this.getPopularQueries(limit);
+        return popularQueries.map(q => q.text);
       }
 
-      // Extract categories and services from recent queries
       const categories = recentQueries
         .filter(q => q.categoryId)
         .map(q => q.categoryId);
@@ -628,11 +679,11 @@ class QueryService {
         .map(q => q.serviceId);
 
       if (categories.length === 0 && services.length === 0) {
-        logger.info(`No categories or services found in recent queries for user ${userId}, falling back to popular queries`);
-        return await this.getPopularQueries(limit);
+        logger.info('QueryService.no_categories_or_services', { userId });
+        const popularQueries = await this.getPopularQueries(limit);
+        return popularQueries.map(q => q.text);
       }
 
-      // Find recommendations based on categories and services
       const recommendationsQuery = aql`
         LET categorySimilar = (
           FOR q IN queries
@@ -663,18 +714,29 @@ class QueryService {
       const recommendationsCursor = await this.db.query(recommendationsQuery);
       const recommendations = await recommendationsCursor.all();
 
-      // If we don't have enough recommendations, add popular queries
       if (recommendations.length < limit) {
-        logger.info(`Not enough recommendations (${recommendations.length}/${limit}), supplementing with popular queries`);
+        logger.info('QueryService.insufficient_recommendations', {
+          count: recommendations.length,
+          limit
+        });
         const popularQueries = await this.getPopularQueries(limit - recommendations.length);
         return [...recommendations, ...popularQueries.map(q => q.text)];
       }
 
-      logger.info(`Found ${recommendations.length} query recommendations for user ${userId}`);
+      logger.info('QueryService.query_recommendations_found', {
+        userId,
+        count: recommendations.length,
+        durationMs: Date.now() - startTime
+      });
       return recommendations;
     } catch (error) {
-      logger.error(`Error getting query recommendations for user ${userId}:`, error);
-      return await this.getPopularQueries(limit);
+      logger.error('QueryService.get_query_recommendations_failed', {
+        userId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      return await this.getPopularQueries(limit).then(queries => queries.map(q => q.text));
     }
   }
 
@@ -684,8 +746,9 @@ class QueryService {
    * @returns {Promise<Array>} Popular queries
    */
   async getPopularQueries(limit = 5) {
+    const startTime = Date.now();
     try {
-      logger.info('Fetching popular queries');
+      logger.info('QueryService.get_popular_queries_start');
       const query = aql`
         FOR q IN queries
           COLLECT text = q.text WITH COUNT INTO count
@@ -696,25 +759,30 @@ class QueryService {
 
       const cursor = await this.db.query(query);
       const popularQueries = await cursor.all();
-      logger.info(`Found ${popularQueries.length} popular queries`);
+      logger.info('QueryService.popular_queries_found', {
+        count: popularQueries.length,
+        durationMs: Date.now() - startTime
+      });
       return popularQueries;
     } catch (error) {
-      logger.error(`Error getting popular queries:`, error);
+      logger.error('QueryService.get_popular_queries_failed', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       return [];
     }
   }
 
-  // Add this method to the QueryService class
   /**
    * Set the chat history service
    * @param {Object} chatHistoryService - Chat history service instance
    */
   async setChatHistoryService(chatHistoryService) {
     this.chatHistoryService = chatHistoryService;
-    logger.info('Chat history service set for QueryService');
+    logger.info('QueryService.chat_history_service_set');
   }
 
-  // Add this method to the QueryService class
   /**
    * Create a conversation from a query
    * @param {String} queryId - Query ID
@@ -722,24 +790,22 @@ class QueryService {
    * @returns {Promise<Object>} Created conversation data
    */
   async createConversationFromQuery(queryId, options = {}) {
+    const startTime = Date.now();
     try {
-      logger.info(`Creating conversation from query ${queryId}`);
+      logger.info('QueryService.create_conversation_from_query_start', { queryId });
 
-      // Ensure chat history service is set
       if (!this.chatHistoryService) {
-        logger.error('Chat history service is not set');
+        logger.error('QueryService.chat_history_service_not_set');
         throw new Error('Chat history service is not set');
       }
 
-      // Get the query details
       const query = await this.getQuery(queryId);
 
       if (!query) {
-        logger.warn(`Query ${queryId} not found`);
+        logger.warn('QueryService.query_not_found', { queryId });
         throw new Error('Query not found');
       }
 
-      // Create conversation using the chat history service
       const conversation = await this.chatHistoryService.createConversationFromQuery(
         queryId,
         query.userId,
@@ -750,35 +816,40 @@ class QueryService {
         }
       );
 
-      logger.info(`Conversation created from query ${queryId} with ID ${conversation.conversation._key}`);
-
+      logger.info('QueryService.conversation_created', {
+        queryId,
+        conversationId: conversation.conversation._key,
+        durationMs: Date.now() - startTime
+      });
       return conversation;
     } catch (error) {
-      logger.error(`Error creating conversation from query ${queryId}:`, error);
+      logger.error('QueryService.create_conversation_from_query_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
 
-  // Add this method to the QueryService class
   /**
    * Get conversations for a query
    * @param {String} queryId - Query ID
    * @returns {Promise<Array>} Conversations associated with the query
    */
   async getConversationsForQuery(queryId) {
+    const startTime = Date.now();
     try {
-      logger.info(`Getting conversations for query ${queryId}`);
+      logger.info('QueryService.get_conversations_for_query_start', { queryId });
 
-      // Ensure chat history service is set
       if (!this.chatHistoryService) {
-        logger.error('Chat history service is not set');
+        logger.error('QueryService.chat_history_service_not_set');
         throw new Error('Chat history service is not set');
       }
 
-      // Find messages related to this query
       const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId);
 
-      // Extract unique conversations
       const conversationMap = new Map();
       for (const item of relatedMessages) {
         if (item.conversation && !conversationMap.has(item.conversation._key)) {
@@ -797,16 +868,23 @@ class QueryService {
       }
 
       const conversations = Array.from(conversationMap.values());
-      logger.info(`Found ${conversations.length} conversations for query ${queryId}`);
-
+      logger.info('QueryService.conversations_found', {
+        queryId,
+        count: conversations.length,
+        durationMs: Date.now() - startTime
+      });
       return conversations;
     } catch (error) {
-      logger.error(`Error getting conversations for query ${queryId}:`, error);
+      logger.error('QueryService.get_conversations_for_query_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
 
-  // Add this method to the QueryService class
   /**
    * Link query to an existing conversation message
    * @param {String} queryId - Query ID
@@ -815,16 +893,15 @@ class QueryService {
    * @returns {Promise<Object>} Link details
    */
   async linkQueryToMessage(queryId, messageId, options = {}) {
+    const startTime = Date.now();
     try {
-      logger.info(`Linking query ${queryId} to message ${messageId}`);
+      logger.info('QueryService.link_query_to_message_start', { queryId, messageId });
 
-      // Ensure chat history service is set
       if (!this.chatHistoryService) {
-        logger.error('Chat history service is not set');
+        logger.error('QueryService.chat_history_service_not_set');
         throw new Error('Chat history service is not set');
       }
 
-      // Get message details to find the conversation
       const messageCursor = await this.db.query(`
       FOR msg IN messages
         FILTER msg._key == @messageId
@@ -837,11 +914,10 @@ class QueryService {
       const message = await messageCursor.next();
 
       if (!message) {
-        logger.warn(`Message ${messageId} not found`);
+        logger.warn('QueryService.message_not_found', { messageId });
         throw new Error('Message not found');
       }
 
-      // Link the query to the conversation
       const link = await this.chatHistoryService.linkQueryToConversation(
         queryId,
         message.conversationId,
@@ -852,15 +928,24 @@ class QueryService {
         }
       );
 
-      logger.info(`Query ${queryId} linked to message ${messageId} in conversation ${message.conversationId}`);
-
+      logger.info('QueryService.query_linked_to_message', {
+        queryId,
+        messageId,
+        conversationId: message.conversationId,
+        durationMs: Date.now() - startTime
+      });
       return link;
     } catch (error) {
-      logger.error(`Error linking query ${queryId} to message ${messageId}:`, error);
+      logger.error('QueryService.link_query_to_message_failed', {
+        queryId,
+        messageId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw error;
     }
   }
-
 }
 
 module.exports = QueryService;

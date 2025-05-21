@@ -1,30 +1,11 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('../logger'); // Import logger from logger.js
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 class ServiceCategoryService {
   constructor() {
@@ -32,7 +13,7 @@ class ServiceCategoryService {
     this.serviceCategories = this.db.collection('serviceCategories');
     this.services = this.db.collection('services');
     this.categoryServices = this.db.collection('categoryServices');
-    logger.info('ServiceCategoryService initialized');
+    logger.info('ServiceCategoryService initialized successfully');
   }
 
   /**
@@ -59,7 +40,7 @@ class ServiceCategoryService {
         
         // Prepare category document, omitting _key to let ArangoDB generate it
         const categoryDoc = {
-          catCode: category.catKey || `cat${i + 1}`, // Use catCode instead of setting _key
+          catCode: category.catKey || `cat${i + 1}`,
           order: i + 1
         };
         
@@ -68,7 +49,6 @@ class ServiceCategoryService {
         
         logger.info(`Creating category with name: ${categoryDoc[nameField]}`);
         try {
-          // Let ArangoDB generate the _key
           const newCategory = await this.serviceCategories.save(categoryDoc);
           results.push(newCategory);
           logger.info(`Category created successfully with key: ${newCategory._key}`);
@@ -79,22 +59,22 @@ class ServiceCategoryService {
             
             try {
               await this.upsertServices(newCategory._key, category.children, locale);
-              logger.info(`Services for ${newCategory._key} processed successfully`);
+              logger.info(`Services processed successfully for category ${newCategory._key}`);
             } catch (servicesError) {
-              logger.error(`Error processing services for ${newCategory._key}:`, servicesError);
+              logger.error(`Error processing services for category ${newCategory._key}: ${servicesError.message}`, { stack: servicesError.stack });
             }
           } else {
             logger.info(`No services to process for category ${newCategory._key}`);
           }
         } catch (categoryError) {
-          logger.error(`Error creating category ${category.name}:`, categoryError);
+          logger.error(`Error creating category ${category.name}: ${categoryError.message}`, { stack: categoryError.stack });
         }
       }
       
-      logger.info(`Upserted ${results.length}/${categories.length} categories successfully`);
+      logger.info(`Categories upserted successfully: ${results.length}/${categories.length} categories processed`);
       return results;
     } catch (error) {
-      logger.error('Error upserting categories:', error);
+      logger.error(`Error upserting categories: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -112,19 +92,16 @@ class ServiceCategoryService {
       const results = [];
       const nameField = `name${locale.toUpperCase()}`;
       
-      // Ensure we have a valid category key
       if (!categoryKey) {
         logger.error('Invalid category key provided');
         return [];
       }
       
-      // Ensure we have a valid services array
       if (!Array.isArray(services)) {
-        logger.error('Invalid services array:', services);
+        logger.error(`Invalid services array: ${JSON.stringify(services)}`);
         return [];
       }
       
-      // Process each service
       for (let i = 0; i < services.length; i++) {
         const serviceName = String(services[i] || '').trim();
         if (!serviceName) {
@@ -135,9 +112,8 @@ class ServiceCategoryService {
         logger.info(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
         
         try {
-          // Create service document without explicit _key
           const serviceDoc = {
-            serviceCode: `service_${i + 1}`, // Use serviceCode instead of setting _key
+            serviceCode: `service_${i + 1}`,
             categoryId: categoryKey,
             order: i + 1
           };
@@ -147,9 +123,8 @@ class ServiceCategoryService {
           logger.info(`Creating service: ${serviceName}`);
           const newService = await this.services.save(serviceDoc);
           results.push(newService);
-          logger.info(`Service "${serviceName}" created with key ${newService._key}`);
+          logger.info(`Service created successfully: "${serviceName}" with key ${newService._key}`);
           
-          // Create edge from category to service
           const edgeDoc = {
             _from: `serviceCategories/${categoryKey}`,
             _to: `services/${newService._key}`,
@@ -158,16 +133,16 @@ class ServiceCategoryService {
           
           logger.info(`Creating edge for service "${serviceName}"`);
           await this.categoryServices.save(edgeDoc);
-          logger.info(`Edge created for service "${serviceName}"`);
+          logger.info(`Edge created successfully for service "${serviceName}"`);
         } catch (createError) {
-          logger.error(`Error creating service "${serviceName}":`, createError);
+          logger.error(`Error creating service "${serviceName}": ${createError.message}`, { stack: createError.stack });
         }
       }
       
-      logger.info(`Processed ${results.length}/${services.length} services for category ${categoryKey}`);
+      logger.info(`Services processed successfully for category ${categoryKey}: ${results.length}/${services.length} services`);
       return results;
     } catch (error) {
-      logger.error(`Error upserting services for category ${categoryKey}:`, error);
+      logger.error(`Error upserting services for category ${categoryKey}: ${error.message}`, { stack: error.stack });
       return [];
     }
   }
@@ -186,14 +161,14 @@ class ServiceCategoryService {
       }
       
       await this.serviceCategories.document(categoryKey);
-      logger.info(`Category ${categoryKey} exists`);
+      logger.info(`Category existence check successful: ${categoryKey} exists`);
       return true;
     } catch (error) {
       if (error.code === 404) {
-        logger.info(`Category ${categoryKey} does not exist`);
+        logger.info(`Category existence check: ${categoryKey} does not exist`);
         return false;
       }
-      logger.error(`Error checking if category ${categoryKey} exists:`, error);
+      logger.error(`Error checking if category ${categoryKey} exists: ${error.message}`, { stack: error.stack });
       return false;
     }
   }
@@ -229,10 +204,10 @@ class ServiceCategoryService {
       
       const cursor = await this.db.query(query);
       const categories = await cursor.all();
-      logger.info(`Retrieved ${categories.length} categories with services`);
+      logger.info(`Categories with services retrieved successfully: ${categories.length} categories`);
       return categories;
     } catch (error) {
-      logger.error('Error getting all categories with services:', error);
+      logger.error(`Error getting all categories with services: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -279,10 +254,10 @@ class ServiceCategoryService {
         throw new Error(`Category ${categoryKey} not found`);
       }
       
-      logger.info(`Retrieved category ${categoryKey} with services`);
+      logger.info(`Category with services retrieved successfully: ${categoryKey}`);
       return result;
     } catch (error) {
-      logger.error(`Error getting category ${categoryKey} with services:`, error);
+      logger.error(`Error getting category ${categoryKey} with services: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -300,7 +275,6 @@ class ServiceCategoryService {
         throw new Error('Invalid category key');
       }
       
-      // Delete services associated with this category
       await this.db.query(aql`
         FOR edge IN categoryServices
           FILTER edge._from == ${`serviceCategories/${categoryKey}`}
@@ -308,14 +282,13 @@ class ServiceCategoryService {
           REMOVE edge IN categoryServices
           REMOVE service IN services
       `);
-      logger.info(`Services and edges deleted for category ${categoryKey}`);
+      logger.info(`Services and edges deleted successfully for category ${categoryKey}`);
       
-      // Delete the category
       const result = await this.serviceCategories.remove(categoryKey);
-      logger.info(`Category ${categoryKey} deleted successfully`);
+      logger.info(`Category deleted successfully: ${categoryKey}`);
       return result;
     } catch (error) {
-      logger.error(`Error deleting category ${categoryKey}:`, error);
+      logger.error(`Error deleting category ${categoryKey}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -371,10 +344,10 @@ class ServiceCategoryService {
       
       const cursor = await this.db.query(query);
       const result = await cursor.next();
-      logger.info(`Found ${result.categories.length} categories and ${result.services.length} services matching query`);
+      logger.info(`Search completed successfully: ${result.categories.length} categories, ${result.services.length} services matching query`);
       return result;
     } catch (error) {
-      logger.error(`Error searching categories and services for "${searchQuery}":`, error);
+      logger.error(`Error searching categories and services for "${searchQuery}": ${error.message}`, { stack: error.stack });
       return { categories: [], services: [] };
     }
   }
@@ -385,9 +358,8 @@ class ServiceCategoryService {
    */
   async initializeDefaultCategoriesAndServices() {
     try {
-      logger.info('=== Starting initialization of default categories and services ===');
+      logger.info('Starting initialization of default categories and services');
       
-      // Check if we already have categories
       let count = 0;
       try {
         const existingCategories = await this.db.query(aql`
@@ -404,14 +376,12 @@ class ServiceCategoryService {
           return { message: 'Categories already initialized', count };
         }
       } catch (countError) {
-        logger.error('Error counting existing categories:', countError);
-        // Continue with initialization even if count fails
+        logger.error(`Error counting existing categories: ${countError.message}`, { stack: countError.stack });
       }
       
-      // Define the categories with catCode instead of catKey
       const defaultCategories = [
         {
-          catKey: 'identity', // This will be stored as catCode, not _key
+          catKey: 'identity',
           name: 'Identity & Civil Registration',
           children: ['Birth Registration', 'National ID Cards', 'Passport Services', 'Vital Records']
         },
@@ -477,16 +447,16 @@ class ServiceCategoryService {
         }
       ];
       
-      logger.info(`Initializing ${defaultCategories.length} categories with auto-generated keys`);
+      logger.info(`Initializing ${defaultCategories.length} default categories`);
       const result = await this.upsertCategories(defaultCategories, 'en');
       
-      logger.info(`Initialized ${result.length} categories and their services`);
+      logger.info(`Default categories and services initialized successfully: ${result.length} categories created`);
       return { 
         message: 'Successfully initialized categories and services',
         categoriesCreated: result.length
       };
     } catch (error) {
-      logger.error('Error initializing default categories and services:', error);
+      logger.error(`Error initializing default categories and services: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }

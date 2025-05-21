@@ -1,8 +1,8 @@
-// routes/security-routes.js - FIXED to match working patterns
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth-middleware');
 const securityScanService = require('../services/security-scan-service');
+const { logger } = require('../logger'); // Import logger from logger.js
 
 /**
  * @swagger
@@ -23,13 +23,16 @@ const securityScanService = require('../services/security-scan-service');
  *       200:
  *         description: Security metrics retrieved successfully
  */
-// Get security metrics
 router.get('/metrics', authMiddleware.authenticate, authMiddleware.isAdmin, async (req, res) => {
   try {
+    logger.info(`Fetching security metrics for user: ${req.user?.loginName || 'unknown'}`);
+    
     // Extract security metrics from logs service
     const failedLogins = await securityScanService.checkFailedLogins();
     const suspiciousActivities = await securityScanService.checkSuspiciousActivities();
     const lastScanDetails = await securityScanService.getLastScanDetails();
+    
+    logger.info(`Security metrics retrieved successfully for user: ${req.user?.loginName || 'unknown'}`);
     
     res.json({
       success: true,
@@ -41,6 +44,7 @@ router.get('/metrics', authMiddleware.authenticate, authMiddleware.isAdmin, asyn
       }
     });
   } catch (error) {
+    logger.error(`Error fetching security metrics for user ${req.user?.loginName || 'unknown'}: ${error.message}`, { stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Failed to get security metrics',
@@ -61,18 +65,21 @@ router.get('/metrics', authMiddleware.authenticate, authMiddleware.isAdmin, asyn
  *       200:
  *         description: Security scan completed successfully
  */
-// Run a new security scan - Fixed to match working patterns
 router.post('/scan', authMiddleware.authenticate, authMiddleware.isAdmin, async (req, res) => {
   try {
+    logger.info(`Initiating security scan by user: ${req.user?.loginName || 'unknown'}`);
+    
     const result = await securityScanService.runSecurityScan();
     
     if (result.success) {
+      logger.info(`Security scan completed successfully by user: ${req.user?.loginName || 'unknown'}`);
       res.json({ 
         success: true, 
         message: 'Security scan completed successfully', 
         data: result.data 
       });
     } else {
+      logger.error(`Security scan failed for user ${req.user?.loginName || 'unknown'}: ${result.error}`, { stack: result.error?.stack });
       res.status(500).json({ 
         success: false, 
         message: 'Security scan failed', 
@@ -80,6 +87,7 @@ router.post('/scan', authMiddleware.authenticate, authMiddleware.isAdmin, async 
       });
     }
   } catch (error) {
+    logger.error(`Error running security scan for user ${req.user?.loginName || 'unknown'}: ${error.message}`, { stack: error.stack });
     res.status(500).json({ 
       success: false, 
       message: 'Failed to run security scan', 
@@ -100,12 +108,17 @@ router.post('/scan', authMiddleware.authenticate, authMiddleware.isAdmin, async 
  *       200:
  *         description: Last scan details retrieved successfully
  */
-// Get last scan details - Fixed to match working patterns
 router.get('/last-scan', authMiddleware.authenticate, authMiddleware.isAdmin, async (req, res) => {
   try {
+    logger.info(`Fetching last security scan details for user: ${req.user?.loginName || 'unknown'}`);
+    
     const result = await securityScanService.getLastScanDetails();
+    
+    logger.info(`Last security scan details retrieved successfully for user: ${req.user?.loginName || 'unknown'}`);
+    
     res.json({ success: true, data: result });
   } catch (error) {
+    logger.error(`Error fetching last security scan details for user ${req.user?.loginName || 'unknown'}: ${error.message}`, { stack: error.stack });
     res.status(500).json({ 
       success: false, 
       message: 'Failed to get last security scan details', 

@@ -2,29 +2,10 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsService = require('../services/analytics-service');
 const analyticsController = require('../controllers/analyticsController');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('../logger'); // Import logger from logger.js
 const authMiddleware = require('../middleware/auth-middleware');
 
 const analyticsService = new AnalyticsService();
-
-// Set up Winston logger (consistent with index.js)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 router.use(authMiddleware.authenticate);
 
@@ -130,7 +111,7 @@ router.get('/dashboard', async (req, res) => {
     
     res.json(analytics);
   } catch (error) {
-    logger.error(`Error getting dashboard analytics: ${error.message}`, error);
+    logger.error(`Error getting dashboard analytics: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -255,7 +236,7 @@ router.get('/', async (req, res) => {
     
     res.json(analytics);
   } catch (error) {
-    logger.error(`Error getting analytics: ${error.message}`, error);
+    logger.error(`Error getting analytics: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -370,7 +351,7 @@ router.post('/events', async (req, res) => {
     const result = await analyticsService.trackEvent(userId, eventType, eventData || {});
     res.status(201).json(result);
   } catch (error) {
-    logger.error(`Error recording event: ${error.message}`, error);
+    logger.error(`Error recording event: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -424,7 +405,7 @@ router.get('/records', async (req, res) => {
     const records = await cursor.all();
     res.json(records);
   } catch (error) {
-    logger.error(`Error retrieving analytics records: ${error.message}`, error);
+    logger.error(`Error retrieving analytics records: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -478,7 +459,7 @@ router.get('/events', async (req, res) => {
     const events = await cursor.all();
     res.json(events);
   } catch (error) {
-    logger.error(`Error retrieving events records: ${error.message}`, error);
+    logger.error(`Error retrieving events records: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });

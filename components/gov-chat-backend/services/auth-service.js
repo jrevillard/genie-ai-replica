@@ -4,31 +4,12 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('./email-service');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('../logger'); // Import logger from logger.js
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 /**
  * Service to handle user authentication and password management
@@ -50,7 +31,7 @@ class AuthService {
     // Ensure collections exist
     logger.info('Initializing AuthService...');
     this.initialize()
-      .catch(err => logger.error('Error during authentication service initialization:', err));
+      .catch(err => logger.error(`Error during authentication service initialization: ${err.message}`, { stack: err.stack }));
   }
 
   /**
@@ -90,6 +71,8 @@ class AuthService {
           type: 'persistent',
           fields: ['used']
         });
+      } else {
+        logger.info('passwordResetTokens collection already exists, skipping creation');
       }
 
       // Ensure verificationTokens collection exists
@@ -119,6 +102,8 @@ class AuthService {
           type: 'persistent',
           fields: ['used']
         });
+      } else {
+        logger.info('verificationTokens collection already exists, skipping creation');
       }
 
       // Ensure indexes for users collection
@@ -136,7 +121,7 @@ class AuthService {
 
       logger.info('Auth service initialized successfully');
     } catch (error) {
-      logger.error('Error initializing auth service:', error);
+      logger.error(`Error initializing auth service: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -150,9 +135,8 @@ class AuthService {
    */
   async register(userData) {
     try {
-      logger.info('Registering new user with loginName:', userData.loginName);
+      logger.info(`Registering new user with loginName: ${userData.loginName}`);
 
-      // Extract URLs from userData if they exist
       const frontendUrl = userData.frontendUrl;
       const backendUrl = userData.backendUrl;
 
@@ -164,36 +148,31 @@ class AuthService {
         logger.info(`Backend URL for registration: ${backendUrl}`);
       }
 
-      // Validate required fields
       if (!userData.loginName || !userData.email || !userData.encPassword) {
         logger.warn('Missing required fields: loginName, email, and encPassword are required');
         throw new Error('Missing required fields: loginName, email, and encPassword are required');
       }
 
-      // Check if user already exists
       const existing = await this.getUserByLoginNameOrEmail(userData.loginName, userData.email);
       if (existing) {
         if (existing.loginName === userData.loginName) {
-          logger.warn('Username already exists:', userData.loginName);
+          logger.warn(`Username already exists: ${userData.loginName}`);
           throw new Error('Username already exists');
         } else {
-          logger.warn('Email already exists:', userData.email);
+          logger.warn(`Email already exists: ${userData.email}`);
           throw new Error('Email already exists');
         }
       }
 
-      // Hash the password (SHA-256 from client) with bcrypt for storage
       const hashedPassword = await this.hashPassword(userData.encPassword);
 
-      // Create the user document
       const user = {
         loginName: userData.loginName,
-        email: userData.email,  // Ensure email is explicitly set
+        email: userData.email,
         encPassword: hashedPassword,
         emailVerified: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-
         personalIdentification: {
           fullName: userData.fullName || userData.loginName,
           dob: userData.dob || '',
@@ -206,39 +185,29 @@ class AuthService {
         }
       };
 
-      // Save user to database first
+      logger.info('Saving user to database...');
       const savedUser = await this.users.save(user);
+      logger.info(`Saved user before email verification: ${savedUser._key}`);
 
-      // Explicitly log saved user to verify
-      logger.info('Saved user before email verification:', savedUser);
-
-      // Send verification email AFTER user is saved
-      // Use setImmediate or process.nextTick to ensure it runs asynchronously
       setImmediate(async () => {
         try {
-          // Retrieve the user again to ensure we have the latest data
           const freshUser = await this.getUserById(savedUser._key);
-
           if (freshUser) {
-            // Pass URLs to the sendVerificationEmail method
             await this.sendVerificationEmail(freshUser, frontendUrl, backendUrl);
           } else {
-            logger.error('Could not retrieve fresh user for email verification');
+            logger.error(`Could not retrieve fresh user for email verification: ${savedUser._key}`);
           }
         } catch (emailError) {
-          logger.error('Email verification failed, but user was registered:', emailError.message);
+          logger.error(`Email verification failed, but user was registered: ${emailError.message}`, { stack: emailError.stack });
         }
       });
 
-      // Generate access token
       const accessToken = this.generateToken(savedUser);
 
-      // Update user with access token
       await this.users.update(savedUser._key, {
         accessToken: accessToken
       });
 
-      // Return user data with token (exclude password)
       const { encPassword, ...userWithoutPassword } = savedUser;
       logger.info(`User registered successfully with ID: ${savedUser._key}`);
       return {
@@ -246,7 +215,7 @@ class AuthService {
         accessToken
       };
     } catch (error) {
-      logger.error('Error registering user:', error);
+      logger.error(`Error registering user: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -261,42 +230,35 @@ class AuthService {
     try {
       logger.info(`Attempting login for user: ${loginName}`);
 
-      // Retrieve user by loginName or email
       const user = await this.getUserByLoginNameOrEmail(loginName, loginName);
       if (!user) {
         logger.warn(`User not found for loginName/email: ${loginName}`);
         throw new Error('User not found');
       }
 
-      // Determine password storage format and verify
       const isPasswordValid = await this.verifyPassword(encPassword, user.encPassword);
       if (!isPasswordValid) {
         logger.warn(`Invalid password for user: ${loginName}`);
         throw new Error('Invalid password');
       }
 
-      // Check if the account is disabled
       if (user.disabled === true) {
         logger.warn(`Disabled account login attempt for user: ${loginName}`);
         throw new Error('This account has been disabled');
       }
 
-      // Check if email is verified
       if (!user.emailVerified) {
         logger.warn(`Email not verified for user: ${loginName}`);
         throw new Error('Email not verified');
       }
 
-      // Generate access token
       const accessToken = this.generateToken(user);
 
-      // Update user with access token
       await this.users.update(user._key, {
         accessToken: accessToken,
         updatedAt: new Date().toISOString()
       });
 
-      // Create a session for the user - use basic info since we don't have device/IP
       const SessionService = require('./session-service');
       const sessionService = new SessionService();
 
@@ -304,11 +266,9 @@ class AuthService {
       try {
         await sessionService.createSession(user._key);
       } catch (sessionError) {
-        // Log but don't fail the login if session creation fails
-        logger.error(`Failed to create session, but continuing login: ${sessionError.message}`);
+        logger.error(`Failed to create session, but continuing login: ${sessionError.message}`, { stack: sessionError.stack });
       }
 
-      // Return user data with token (exclude password)
       const { encPassword: password, ...userWithoutPassword } = user;
       logger.info(`User logged in successfully: ${loginName}`);
       return {
@@ -316,7 +276,7 @@ class AuthService {
         accessToken
       };
     } catch (error) {
-      logger.error('Error during login:', error);
+      logger.error(`Error during login: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -330,32 +290,28 @@ class AuthService {
     try {
       logger.info(`Logging out user with ID: ${userId}`);
 
-      // Remove access token from user
       await this.users.update(userId, {
         accessToken: null,
         updatedAt: new Date().toISOString()
       });
 
-      // End any active sessions for this user
       try {
         const SessionService = require('./session-service');
         const sessionService = new SessionService();
 
-        // Get active session for the user
         const activeSession = await sessionService.getActiveSession(userId);
         if (activeSession) {
           logger.info(`Ending active session ${activeSession._key} for user ${userId} during logout`);
           await sessionService.endSession(activeSession._key);
         }
       } catch (sessionError) {
-        // Log but don't fail the logout if session ending fails
-        logger.error(`Failed to end session, but continuing logout: ${sessionError.message}`);
+        logger.error(`Failed to end session, but continuing logout: ${sessionError.message}`, { stack: sessionError.stack });
       }
 
       logger.info(`User logged out successfully: ${userId}`);
       return { success: true, message: 'Logged out successfully' };
     } catch (error) {
-      logger.error(`Error logging out user ${userId}:`, error);
+      logger.error(`Error logging out user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -367,20 +323,16 @@ class AuthService {
    * @param {string} backendUrl - Backend URL for API endpoints
    * @returns {Promise<Object>} Send result
    */
-
   async sendVerificationEmail(user, frontendUrl, backendUrl) {
     try {
-      // Add validation to ensure user and email exist
       if (!user || !user.email) {
-        logger.error('Missing user or email for verification email:', user);
+        logger.error('Missing user or email for verification email', { user });
         throw new Error('User or email is missing for verification');
       }
 
-      // Prioritize environment variable for frontend URL if available
       const envFrontendUrl = process.env.FRONTEND_URL;
       const finalFrontendUrl = envFrontendUrl || frontendUrl;
 
-      // Log user email and URLs for debugging
       logger.info(`Preparing to send verification email to ${user.email}`);
 
       if (envFrontendUrl) {
@@ -395,22 +347,19 @@ class AuthService {
         logger.info(`Using backend URL: ${backendUrl}`);
       }
 
-      // Remove any existing unused tokens for this user
       const cleanupQuery = aql`
-      FOR t IN verificationTokens
-        FILTER t.userId == ${'users/' + user._key} AND t.used == false
-        REMOVE t IN verificationTokens
-    `;
+        FOR t IN verificationTokens
+          FILTER t.userId == ${'users/' + user._key} AND t.used == false
+          REMOVE t IN verificationTokens
+      `;
       await this.db.query(cleanupQuery);
+      logger.info(`Cleaned up existing unused verification tokens for user ${user._key}`);
 
-      // Generate a unique token
       const token = crypto.randomBytes(32).toString('hex');
 
-      // Calculate expiration time (24 hours from now)
       const now = new Date();
       const expiresAt = new Date(now.getTime() + (24 * 60 * 60 * 1000));
 
-      // Save token to database with additional uniqueness constraints
       try {
         await this.verificationTokens.save({
           userId: `users/${user._key}`,
@@ -418,49 +367,46 @@ class AuthService {
           createdAt: now.toISOString(),
           expiresAt: expiresAt.toISOString(),
           used: false,
-          email: user.email  // Add email to token for extra verification
+          email: user.email
         });
+        logger.info(`Verification token saved for user ${user._key}`);
       } catch (saveError) {
-        logger.error('Error saving verification token:', saveError);
+        logger.error(`Error saving verification token: ${saveError.message}`, { stack: saveError.stack });
         throw new Error('Failed to create verification token');
       }
 
-      // Create the verification endpoint URL (backend)
       let verificationEndpointUrl;
       if (backendUrl) {
         verificationEndpointUrl = `${backendUrl}/api/auth/verify-email/${token}`;
         logger.info(`Using backend verification endpoint URL: ${verificationEndpointUrl}`);
       }
 
-      // Send email with verification token
       try {
         await emailService.sendVerificationEmail(
           user.email,
           token,
           user.personalIdentification?.fullName || user.loginName,
-          finalFrontendUrl, // For UI elements in the email
-          verificationEndpointUrl // The actual verification link
+          finalFrontendUrl,
+          verificationEndpointUrl
         );
 
-        // Log token in development environment for testing
         if (process.env.NODE_ENV === 'development') {
           logger.info(`Email verification token for ${user.email}: ${token}`);
         }
 
-        logger.info(`Verification email sent to ${user.email}`);
+        logger.info(`Verification email sent successfully to ${user.email}`);
         return { success: true, message: 'Verification email sent' };
       } catch (emailError) {
-        logger.error(`Error sending verification email for user ${user._key}:`, emailError);
+        logger.error(`Error sending verification email for user ${user._key}: ${emailError.message}`, { stack: emailError.stack });
 
-        // Remove the just-created token if email sending fails
         const removeTokenQuery = aql`
-        FOR t IN verificationTokens
-          FILTER t.token == ${token}
-          REMOVE t IN verificationTokens
-      `;
+          FOR t IN verificationTokens
+            FILTER t.token == ${token}
+            REMOVE t IN verificationTokens
+        `;
         await this.db.query(removeTokenQuery);
+        logger.info(`Removed verification token due to email sending failure for user ${user._key}`);
 
-        // Continue with registration despite email error in development
         if (process.env.NODE_ENV === 'development') {
           logger.info('DEV MODE: Continuing with registration despite email error');
           logger.info(`DEV MODE: Verification token for ${user.email}: ${token}`);
@@ -469,7 +415,7 @@ class AuthService {
         throw emailError;
       }
     } catch (error) {
-      logger.error(`Error in verification email process for user:`, error);
+      logger.error(`Error in verification email process for user: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -485,7 +431,6 @@ class AuthService {
     try {
       logger.info(`Resending verification email to: ${email}`);
 
-      // Prioritize environment variable for frontend URL if available
       const envFrontendUrl = process.env.FRONTEND_URL;
       const finalFrontendUrl = envFrontendUrl || frontendUrl;
 
@@ -501,10 +446,8 @@ class AuthService {
         logger.info(`Using backend URL: ${backendUrl}`);
       }
 
-      // Find user by email
       const user = await this.getUserByEmail(email);
       if (!user) {
-        // Don't reveal if user exists or not
         logger.info(`User not found for email: ${email}, returning generic response`);
         return {
           success: true,
@@ -512,7 +455,6 @@ class AuthService {
         };
       }
 
-      // Check if already verified
       if (user.emailVerified) {
         logger.info(`Email already verified for: ${email}, returning generic response`);
         return {
@@ -521,16 +463,15 @@ class AuthService {
         };
       }
 
-      // Send a new verification email with the provided URLs
       await this.sendVerificationEmail(user, finalFrontendUrl, backendUrl);
-
-      logger.info(`Verification email resent to: ${email}`);
+      logger.info(`Verification email resent successfully to: ${email}`);
+      
       return {
         success: true,
         message: 'If your email exists in our system, a verification email has been sent'
       };
     } catch (error) {
-      logger.error(`Error resending verification email for ${email}:`, error);
+      logger.error(`Error resending verification email for ${email}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -542,9 +483,8 @@ class AuthService {
    */
   async verifyEmail(token) {
     try {
-      logger.info('Verification Token Received:', token);
+      logger.info(`Verifying email with token: ${token}`);
 
-      // First, check verificationTokens collection
       const tokenQuery = aql`
         FOR t IN verificationTokens
           FILTER t.token == ${token}
@@ -555,7 +495,6 @@ class AuthService {
       let tokenDoc = await tokenCursor.next();
       let isEmailChangeToken = false;
 
-      // Check for email change token if not found in verificationTokens
       if (!tokenDoc) {
         logger.info('Token not found in verificationTokens, checking pendingEmailChange');
 
@@ -575,39 +514,34 @@ class AuthService {
         tokenDoc = await pendingCursor.next();
 
         if (tokenDoc) {
-          logger.info('Found token in pendingEmailChange:', tokenDoc);
+          logger.info('Found token in pendingEmailChange:', JSON.stringify(tokenDoc));
           isEmailChangeToken = true;
         } else {
-          logger.info('No token found in either location');
+          logger.warn('No token found in either location');
         }
       }
 
       if (!tokenDoc) {
-        logger.error('No token document found for token:', token);
+        logger.warn(`No token document found for token: ${token}`);
         return { success: false, message: 'Invalid token' };
       }
 
-      // Check if token is expired
       const expiresAt = new Date(tokenDoc.expiresAt);
       const now = new Date();
 
       if (now > expiresAt) {
-        logger.warn('Token has expired:', token);
+        logger.warn(`Token has expired: ${token}`);
         return { success: false, expired: true, message: 'Token has expired' };
       }
 
-      // Check if token has been used
       if (tokenDoc.used) {
-        logger.warn('Token has already been used:', token);
+        logger.warn(`Token has already been used: ${token}`);
         return { success: false, used: true, message: 'Token has already been used' };
       }
 
-      // For email change verification
       if (isEmailChangeToken) {
-        // Get user ID from token
         const userId = tokenDoc.userId.split('/')[1];
 
-        // Update user's email and clear pendingEmailChange
         await this.users.update(userId, {
           email: tokenDoc.email,
           emailVerified: true,
@@ -617,19 +551,14 @@ class AuthService {
 
         logger.info(`Email changed successfully for user ${userId} to ${tokenDoc.email}`);
         return { success: true, message: 'Email changed successfully' };
-      }
-      // For regular email verification
-      else {
-        // Get user ID from token
+      } else {
         const userId = tokenDoc.userId.split('/')[1];
 
-        // Update user's verification status
         await this.users.update(userId, {
           emailVerified: true,
           updatedAt: new Date().toISOString()
         });
 
-        // Mark token as used
         await this.verificationTokens.update(tokenDoc._key, {
           used: true
         });
@@ -638,7 +567,7 @@ class AuthService {
         return { success: true, message: 'Email verified successfully' };
       }
     } catch (error) {
-      logger.error('Error in verifyEmail:', error);
+      logger.error(`Error in verifyEmail: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -654,7 +583,6 @@ class AuthService {
     try {
       logger.info(`Initiating password reset for email: ${email}`);
 
-      // Prioritize environment variable for frontend URL if available
       const envFrontendUrl = process.env.FRONTEND_URL;
       const finalFrontendUrl = envFrontendUrl || frontendUrl;
 
@@ -670,10 +598,8 @@ class AuthService {
         logger.info(`Using backend URL: ${backendUrl}`);
       }
 
-      // Check if the email exists
       const user = await this.getUserByEmail(email);
       if (!user) {
-        // For security reasons, don't reveal if the email exists or not
         logger.info(`User not found for email: ${email}, returning generic response`);
         return {
           success: true,
@@ -681,14 +607,11 @@ class AuthService {
         };
       }
 
-      // Generate a unique token
       const token = crypto.randomBytes(32).toString('hex');
 
-      // Calculate expiration time (5 minutes from now)
       const now = new Date();
       const expiresAt = new Date(now.getTime() + (this.tokenExpiryMinutes * 60 * 1000));
 
-      // Save token to database
       await this.passwordResetTokens.save({
         userId: `users/${user._key}`,
         token: token,
@@ -696,29 +619,27 @@ class AuthService {
         expiresAt: expiresAt.toISOString(),
         used: false
       });
+      logger.info(`Password reset token saved for user ${user._key}`);
 
-      // Send email with reset token and frontend URL
       await emailService.sendPasswordResetEmail(
         email,
         token,
         user.personalIdentification?.fullName || user.loginName,
-        finalFrontendUrl // For the password reset form URL
+        finalFrontendUrl
       );
 
-      // Log token in development environment for testing
       if (process.env.NODE_ENV === 'development') {
         logger.info(`Password reset token for ${email}: ${token}`);
       }
 
-      logger.info(`Password reset email sent to: ${email}`);
+      logger.info(`Password reset email sent successfully to: ${email}`);
       return {
         success: true,
         message: 'If your email exists in our system, a password reset link has been sent to your email',
-        // Only include the token in development environment
         ...(process.env.NODE_ENV === 'development' && { token })
       };
     } catch (error) {
-      logger.error(`Error initiating password reset for email ${email}:`, error);
+      logger.error(`Error initiating password reset for email ${email}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -742,34 +663,31 @@ class AuthService {
       const tokenDoc = await cursor.next();
 
       if (!tokenDoc) {
-        logger.warn('Invalid reset token:', token);
+        logger.warn(`Invalid reset token: ${token}`);
         return { valid: false, message: 'Invalid token' };
       }
 
-      // Check if token is expired
       const expiresAt = new Date(tokenDoc.expiresAt);
       const now = new Date();
 
       if (now > expiresAt) {
-        logger.warn('Reset token has expired:', token);
+        logger.warn(`Reset token has expired: ${token}`);
         return { valid: false, expired: true, message: 'Token has expired' };
       }
 
-      // Check if token has been used
       if (tokenDoc.used) {
-        logger.warn('Reset token has already been used:', token);
+        logger.warn(`Reset token has already been used: ${token}`);
         return { valid: false, used: true, message: 'Token has already been used' };
       }
 
-      // Token is valid
-      logger.info('Reset token is valid:', token);
+      logger.info(`Reset token validated successfully: ${token}`);
       return {
         valid: true,
         message: 'Token is valid',
         userId: tokenDoc.userId
       };
     } catch (error) {
-      logger.error(`Error validating reset token ${token}:`, error);
+      logger.error(`Error validating reset token ${token}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -784,26 +702,21 @@ class AuthService {
     try {
       logger.info(`Completing password reset with token: ${token}`);
 
-      // Validate token first
       const validation = await this.validateResetToken(token);
       if (!validation.valid) {
-        logger.warn('Invalid or expired token during password reset:', token);
-        return validation; // Return validation error
+        logger.warn(`Invalid or expired token during password reset: ${token}`);
+        return validation;
       }
 
-      // Get user ID from token
-      const userId = validation.userId.split('/')[1]; // users/123 -> 123
+      const userId = validation.userId.split('/')[1];
 
-      // Hash the password (even if it's already hashed from client)
       const hashedPassword = await this.hashPassword(newPassword);
 
-      // Update user's password
       await this.users.update(userId, {
         encPassword: hashedPassword,
         updatedAt: new Date().toISOString()
       });
 
-      // Mark token as used
       const tokenQuery = aql`
         FOR t IN passwordResetTokens
           FILTER t.token == ${token}
@@ -812,11 +725,11 @@ class AuthService {
       `;
 
       await this.db.query(tokenQuery);
-
       logger.info(`Password reset successfully for user ${userId}`);
+      
       return { success: true, message: 'Password has been reset successfully' };
     } catch (error) {
-      logger.error(`Error resetting password with token ${token}:`, error);
+      logger.error(`Error resetting password with token ${token}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -832,24 +745,20 @@ class AuthService {
     try {
       logger.info(`Changing password for user ${userId}`);
 
-      // Get user
       const user = await this.users.document(userId);
       if (!user) {
         logger.warn(`User not found for ID: ${userId}`);
         throw new Error('User not found');
       }
 
-      // Verify current password
       const isPasswordValid = await this.verifyPassword(currentPassword, user.encPassword);
       if (!isPasswordValid) {
         logger.warn(`Current password incorrect for user ${userId}`);
         throw new Error('Current password is incorrect');
       }
 
-      // Hash the new password
       const hashedPassword = await this.hashPassword(newPassword);
 
-      // Update user's password
       await this.users.update(userId, {
         encPassword: hashedPassword,
         updatedAt: new Date().toISOString()
@@ -858,7 +767,7 @@ class AuthService {
       logger.info(`Password changed successfully for user ${userId}`);
       return { success: true, message: 'Password changed successfully' };
     } catch (error) {
-      logger.error(`Error changing password for user ${userId}:`, error);
+      logger.error(`Error changing password for user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -871,13 +780,15 @@ class AuthService {
   async getUserById(userId) {
     try {
       logger.info(`Fetching user by ID: ${userId}`);
-      return await this.users.document(userId);
+      const user = await this.users.document(userId);
+      logger.info(`User retrieved successfully by ID: ${userId}`);
+      return user;
     } catch (error) {
       if (error.code === 404) {
         logger.info(`User not found for ID: ${userId}`);
         return null;
       }
-      logger.error(`Error getting user ${userId}:`, error);
+      logger.error(`Error getting user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -901,10 +812,12 @@ class AuthService {
       const user = await cursor.next();
       if (!user) {
         logger.info(`No user found for loginName: ${loginName} or email: ${email}`);
+      } else {
+        logger.info(`User retrieved successfully for loginName: ${loginName} or email: ${email}`);
       }
       return user;
     } catch (error) {
-      logger.error(`Error getting user by login name or email:`, error);
+      logger.error(`Error getting user by login name or email: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -927,10 +840,12 @@ class AuthService {
       const user = await cursor.next();
       if (!user) {
         logger.info(`No user found for email: ${email}`);
+      } else {
+        logger.info(`User retrieved successfully for email: ${email}`);
       }
       return user;
     } catch (error) {
-      logger.error(`Error getting user by email:`, error);
+      logger.error(`Error getting user by email: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -944,20 +859,18 @@ class AuthService {
     try {
       logger.info('Verifying JWT token');
 
-      // Verify token signature
       const decoded = jwt.verify(token, this.jwtSecret);
 
-      // Check if token is still valid in database
       const user = await this.getUserById(decoded.userId);
       if (!user || user.accessToken !== token) {
-        logger.warn('Token invalid or not associated with user:', decoded.userId);
+        logger.warn(`Token invalid or not associated with user: ${decoded.userId}`);
         return null;
       }
 
-      logger.info('Token verified successfully for user:', decoded.userId);
+      logger.info(`Token verified successfully for user: ${decoded.userId}`);
       return decoded;
     } catch (error) {
-      logger.error('Token verification error:', error);
+      logger.error(`Token verification error: ${error.message}`, { stack: error.stack });
       return null;
     }
   }
@@ -969,7 +882,7 @@ class AuthService {
    */
   generateToken(user) {
     logger.info(`Generating JWT token for user: ${user._key}`);
-    return jwt.sign(
+    const token = jwt.sign(
       {
         userId: user._key,
         loginName: user.loginName,
@@ -978,6 +891,8 @@ class AuthService {
       this.jwtSecret,
       { expiresIn: this.jwtExpiresIn }
     );
+    logger.info(`JWT token generated successfully for user: ${user._key}`);
+    return token;
   }
 
   /**
@@ -988,7 +903,9 @@ class AuthService {
   async hashPassword(password) {
     logger.info('Hashing password with bcrypt');
     const saltRounds = 10;
-    return bcrypt.hash(password, saltRounds);
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    logger.info('Password hashed successfully');
+    return hashedPassword;
   }
 
   /**
@@ -999,18 +916,16 @@ class AuthService {
    */
   async verifyPassword(clientPassword, storedPassword) {
     logger.info('Verifying password');
-    // If the stored password is a bcrypt hash (starts with $2)
     if (storedPassword.startsWith('$2')) {
-      // Use bcrypt to compare SHA-256 hash with bcrypt hash
-      return await bcrypt.compare(clientPassword, storedPassword);
-    }
-    // If the stored password is a plain SHA-256 hash (64 hex chars)
-    else if (/^[a-f0-9]{64}$/i.test(storedPassword)) {
-      // Direct comparison of SHA-256 hashes
-      return clientPassword === storedPassword;
+      const isValid = await bcrypt.compare(clientPassword, storedPassword);
+      logger.info(`Password verification result: ${isValid}`);
+      return isValid;
+    } else if (/^[a-f0-9]{64}$/i.test(storedPassword)) {
+      const isValid = clientPassword === storedPassword;
+      logger.info(`Password verification result: ${isValid}`);
+      return isValid;
     }
 
-    // Unknown format, return false
     logger.warn('Unknown password format, verification failed');
     return false;
   }
@@ -1023,8 +938,9 @@ class AuthService {
    */
   async comparePasswords(password, hashedPassword) {
     logger.info('Comparing passwords (legacy method)');
-    // Use the more versatile verifyPassword method
-    return this.verifyPassword(password, hashedPassword);
+    const isValid = await this.verifyPassword(password, hashedPassword);
+    logger.info(`Legacy password comparison result: ${isValid}`);
+    return isValid;
   }
 
   /**
@@ -1036,7 +952,6 @@ class AuthService {
       logger.info('Cleaning up expired tokens');
       const now = new Date().toISOString();
 
-      // Clean up password reset tokens
       const resetQuery = aql`
         FOR t IN passwordResetTokens
           FILTER t.expiresAt < ${now} AND t.used == false
@@ -1047,7 +962,6 @@ class AuthService {
       const resetCursor = await this.db.query(resetQuery);
       const resetRemoved = await resetCursor.all();
 
-      // Clean up verification tokens
       const verifyQuery = aql`
         FOR t IN verificationTokens
           FILTER t.expiresAt < ${now} AND t.used == false
@@ -1058,18 +972,18 @@ class AuthService {
       const verifyCursor = await this.db.query(verifyQuery);
       const verifyRemoved = await verifyCursor.all();
 
-      logger.info(`Removed ${resetRemoved.length} expired reset tokens and ${verifyRemoved.length} verification tokens`);
+      logger.info(`Expired tokens cleaned up successfully: ${resetRemoved.length} reset tokens, ${verifyRemoved.length} verification tokens`);
+      
       return {
         success: true,
         removed: resetRemoved.length + verifyRemoved.length,
         message: `Removed ${resetRemoved.length} expired reset tokens and ${verifyRemoved.length} verification tokens`
       };
     } catch (error) {
-      logger.error('Error cleaning up expired tokens:', error);
+      logger.error(`Error cleaning up expired tokens: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
 }
 
-// Export a singleton instance
 module.exports = new AuthService();

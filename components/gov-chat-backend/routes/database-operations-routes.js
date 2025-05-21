@@ -1,29 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const DatabaseOperationsService = require('../services/database-operations-service');
-const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
-const { createLogger, format, transports } = require('winston');
+const authMiddleware = require('../middleware/auth-middleware');
+const { logger } = require('../logger'); // Import logger from logger.js
 
 const databaseService = new DatabaseOperationsService();
-
-// Set up Winston logger (consistent with index.js)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware.authenticate);
@@ -70,7 +51,7 @@ router.post('/reindex', async (req, res) => {
       res.status(500).json(result);
     }
   } catch (error) {
-    logger.error('Unexpected error during database reindexing:', error);
+    logger.error(`Unexpected error during database reindexing: ${error.message}`, { stack: error.stack });
     res.status(500).json({ 
       success: false,
       message: 'Unexpected error during database reindexing',
@@ -116,7 +97,7 @@ router.post('/backup', async (req, res) => {
       res.status(500).json(result);
     }
   } catch (error) {
-    logger.error('Unexpected error during database backup:', error);
+    logger.error(`Unexpected error during database backup: ${error.message}`, { stack: error.stack });
     res.status(500).json({ 
       success: false,
       message: 'Unexpected error during database backup',
@@ -169,7 +150,7 @@ router.post('/optimize', async (req, res) => {
       res.status(500).json(result);
     }
   } catch (error) {
-    logger.error('Unexpected error during database optimization:', error);
+    logger.error(`Unexpected error during database optimization: ${error.message}`, { stack: error.stack });
     res.status(500).json({ 
       success: false,
       message: 'Unexpected error during database optimization',

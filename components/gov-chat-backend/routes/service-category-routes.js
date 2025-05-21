@@ -1,29 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const ServiceCategoryService = require('../services/service-category-service');
-const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const authMiddleware = require('../middleware/auth-middleware');
+const { logger } = require('../logger'); // Import logger from logger.js
 
 const serviceCategoryService = new ServiceCategoryService();
-
-// Set up Winston logger (consistent with index.js)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware.authenticate);
@@ -70,7 +51,7 @@ router.get('/', async (req, res) => {
     const categories = await serviceCategoryService.getAllCategoriesWithServices(locale);
     res.json(categories);
   } catch (error) {
-    logger.error(`Error getting all categories with services: ${error.message}`, error);
+    logger.error(`Error getting all categories with services: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -124,9 +105,10 @@ router.get('/:categoryKey', async (req, res) => {
     res.json(category);
   } catch (error) {
     if (error.message.includes('not found')) {
+      logger.warn(`Category ${req.params.categoryKey} not found`);
       res.status(404).json({ message: error.message });
     } else {
-      logger.error(`Error getting category ${req.params.categoryKey}: ${error.message}`, error);
+      logger.error(`Error getting category ${req.params.categoryKey}: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }
   }
@@ -204,7 +186,7 @@ router.get('/search', async (req, res) => {
     const results = await serviceCategoryService.searchCategoriesAndServices(q, locale);
     res.json(results);
   } catch (error) {
-    logger.error(`Error searching categories and services: ${error.message}`, error);
+    logger.error(`Error searching categories and services: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -268,7 +250,7 @@ router.post('/', async (req, res) => {
     const result = await serviceCategoryService.upsertCategories(categories, locale);
     res.json(result);
   } catch (error) {
-    logger.error(`Error creating/updating categories: ${error.message}`, error);
+    logger.error(`Error creating/updating categories: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -307,9 +289,10 @@ router.delete('/:categoryKey', async (req, res) => {
     }
     
     await serviceCategoryService.deleteCategory(req.params.categoryKey);
+    logger.info(`Category ${req.params.categoryKey} deleted successfully`);
     res.json({ message: `Category ${req.params.categoryKey} deleted successfully` });
   } catch (error) {
-    logger.error(`Error deleting category ${req.params.categoryKey}: ${error.message}`, error);
+    logger.error(`Error deleting category ${req.params.categoryKey}: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -340,9 +323,10 @@ router.post('/init', async (req, res) => {
   try {
     logger.info('Initializing default categories and services');
     const result = await serviceCategoryService.initializeDefaultCategoriesAndServices();
+    logger.info('Default categories initialized successfully');
     res.json(result);
   } catch (error) {
-    logger.error(`Error initializing default categories: ${error.message}`, error);
+    logger.error(`Error initializing default categories: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });

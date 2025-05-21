@@ -3,8 +3,8 @@ const router = express.Router();
 const QueryService = require('../services/query-service');
 const AnalyticsService = require('../services/analytics-service');
 const ChatHistoryService = require('../services/chat-history-service');
-const authMiddleware = require('../middleware/auth-middleware'); // Import auth middleware
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const authMiddleware = require('../middleware/auth-middleware');
+const { logger } = require('../logger'); // Import logger from logger.js
 
 // Initialize services
 const queryService = new QueryService();
@@ -16,25 +16,6 @@ queryService.setAnalyticsService(analyticsService);
 
 // Inject chat history service into query service
 queryService.setChatHistoryService(chatHistoryService);
-
-// Set up Winston logger (consistent with index.js)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware.authenticate);
@@ -119,7 +100,7 @@ router.patch('/:queryId/responsetime', async (req, res) => {
 
     res.json(updatedQuery);
   } catch (error) {
-    logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, error);
+    logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
     if (error.message.includes('not found')) {
       return res.status(404).json({ message: 'Query not found' });
     }
@@ -176,14 +157,13 @@ router.patch('/:queryId/responsetime', async (req, res) => {
  *       500:
  *         description: Server error
  */
-// Submit a query
 router.post('/', async (req, res) => {
   try {
     logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
     const query = await queryService.createQuery(req.body);
     res.status(201).json(query);
   } catch (error) {
-    logger.error(`Error creating query: ${error.message}`, error);
+    logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -214,14 +194,13 @@ router.post('/', async (req, res) => {
  *       500:
  *         description: Server error
  */
-// Get query by ID
 router.get('/:queryId', async (req, res) => {
   try {
     logger.info(`Fetching query with ID: ${req.params.queryId}`);
     const query = await queryService.getQuery(req.params.queryId);
     res.json(query);
   } catch (error) {
-    logger.error(`Error getting query ${req.params.queryId}: ${error.message}`, error);
+    logger.error(`Error getting query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -271,14 +250,13 @@ router.get('/:queryId', async (req, res) => {
  *       500:
  *         description: Server error
  */
-// Add feedback to a query
 router.post('/:queryId/feedback', async (req, res) => {
   try {
     logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
     const query = await queryService.addFeedback(req.params.queryId, req.body);
     res.json(query);
   } catch (error) {
-    logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, error);
+    logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -318,14 +296,13 @@ router.post('/:queryId/feedback', async (req, res) => {
  *       500:
  *         description: Server error
  */
-// Mark a query as answered - support both PATCH and PUT
 router.patch('/:queryId/answered', async (req, res) => {
   try {
     logger.info(`Marking query ${req.params.queryId} as answered with body: ${JSON.stringify(req.body)}`);
     const query = await queryService.markAsAnswered(req.params.queryId, req.body.responseTime);
     res.json(query);
   } catch (error) {
-    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, error);
+    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -365,7 +342,6 @@ router.patch('/:queryId/answered', async (req, res) => {
  *       500:
  *         description: Server error
  */
-// Mark a query as answered (PUT method for test compatibility)
 router.put('/:queryId/answered', async (req, res) => {
   try {
     const responseTime = req.body.responseTime || 0;
@@ -375,7 +351,7 @@ router.put('/:queryId/answered', async (req, res) => {
     const query = await queryService.markAsAnswered(req.params.queryId, responseTime);
     res.json(query);
   } catch (error) {
-    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, error);
+    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -470,7 +446,6 @@ router.put('/:queryId/answered', async (req, res) => {
  *       500:
  *         description: Server error
  */
-// Search queries
 router.get('/', async (req, res) => {
   try {
     const { limit = 20, offset = 0, ...criteria } = req.query;
@@ -478,7 +453,7 @@ router.get('/', async (req, res) => {
     const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
     res.json(results);
   } catch (error) {
-    logger.error(`Error searching queries: ${error.message}`, error);
+    logger.error(`Error searching queries: ${error.message}`, { stack: error.stack });
     res.status(500).json({ message: error.message });
   }
 });
@@ -511,7 +486,7 @@ router.get('/:queryId/conversations', async (req, res) => {
     const conversations = await queryService.getConversationsForQuery(req.params.queryId);
     res.json(conversations);
   } catch (error) {
-    logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, error);
+    logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
     
     if (error.message.includes('not found')) {
       return res.status(404).json({ message: 'Query not found' });
@@ -565,12 +540,12 @@ router.post('/:queryId/conversation', async (req, res) => {
     const { queryId } = req.params;
     const options = req.body;
     
-    logger.info(`Creating conversation from query ${queryId} with options:`, options);
+    logger.info(`Creating conversation from query ${queryId} with options: ${JSON.stringify(options)}`);
     
     const result = await queryService.createConversationFromQuery(queryId, options);
     res.status(201).json(result);
   } catch (error) {
-    logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, error);
+    logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
     
     if (error.message.includes('not found')) {
       return res.status(404).json({ message: 'Query not found' });
@@ -627,12 +602,12 @@ router.post('/:queryId/link/:messageId', async (req, res) => {
     const { queryId, messageId } = req.params;
     const options = req.body;
     
-    logger.info(`Linking query ${queryId} to message ${messageId} with options:`, options);
+    logger.info(`Linking query ${queryId} to message ${messageId} with options: ${JSON.stringify(options)}`);
     
     const result = await queryService.linkQueryToMessage(queryId, messageId, options);
     res.json(result);
   } catch (error) {
-    logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, error);
+    logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
     
     if (error.message.includes('not found')) {
       return res.status(404).json({ message: error.message });

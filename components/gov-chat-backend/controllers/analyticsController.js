@@ -1,24 +1,5 @@
 const AnalyticsService = require('../services/analytics-service');
-const { createLogger, format, transports } = require('winston'); // Import Winston
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
+const { logger } = require('../logger'); // Import logger from logger.js
 
 // Initialize the analytics service
 const analyticsService = new AnalyticsService();
@@ -52,7 +33,7 @@ class AnalyticsController {
       logger.info('Dashboard analytics retrieved successfully');
       res.json(dashboardData);
     } catch (error) {
-      logger.error('Error in getDashboardAnalytics:', error);
+      logger.error(`Error in getDashboardAnalytics: ${error.message}`, { stack: error.stack });
       res.status(500).json({ error: 'Failed to retrieve dashboard analytics' });
     }
   }
@@ -163,7 +144,7 @@ class AnalyticsController {
       logger.info(`Metric ${metric} retrieved successfully with value: ${value}`);
       res.json({ metric, value });
     } catch (error) {
-      logger.error(`Error in getMetric for ${req.params.metric}:`, error);
+      logger.error(`Error in getMetric for ${req.params.metric}: ${error.message}`, { stack: error.stack });
       res.status(500).json({ error: 'Failed to retrieve metric data' });
     }
   }
@@ -212,7 +193,7 @@ class AnalyticsController {
       logger.info(`Time series data retrieved successfully with ${processedData.length} data points`);
       res.json(processedData);
     } catch (error) {
-      logger.error(`Error in getTimeSeriesData for ${req.params.metricType}:`, error);
+      logger.error(`Error in getTimeSeriesData for ${req.params.metricType}: ${error.message}`, { stack: error.stack });
       res.status(500).json({ error: 'Failed to retrieve time series data' });
     }
   }
@@ -241,7 +222,7 @@ class AnalyticsController {
       logger.info('Satisfaction gauge data retrieved successfully');
       res.json(gaugeData);
     } catch (error) {
-      logger.error('Error in getSatisfactionGauge:', error);
+      logger.error(`Error in getSatisfactionGauge: ${error.message}`, { stack: error.stack });
       res.status(500).json({ error: 'Failed to retrieve satisfaction gauge data' });
     }
   }
@@ -270,7 +251,7 @@ class AnalyticsController {
       logger.info('Satisfaction heatmap data retrieved successfully');
       res.json(heatmapData);
     } catch (error) {
-      logger.error('Error in getSatisfactionHeatmap:', error);
+      logger.error(`Error in getSatisfactionHeatmap: ${error.message}`, { stack: error.stack });
       res.status(500).json({ error: 'Failed to retrieve satisfaction heatmap data' });
     }
   }

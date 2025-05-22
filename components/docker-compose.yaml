@@ -14,7 +14,9 @@ services:
       - chatqna_default
 
   backend:
-    build: ./gov-chat-backend
+    build:
+      context: .  # Use ~/chat-ui-vue-app/ as build context
+      dockerfile: gov-chat-backend/Dockerfile
     restart: unless-stopped
     ports:
       - "3000:3000"

@@ -23,12 +23,12 @@ The repository is organized to support modularity, shared libraries, and third-p
 │   ├── gov-chat-backend/       # Node.js backend
 │   ├── gov-chat-frontend/      # Vue 3 frontend
 │   ├── document-repository/    # Document repository service
+│   ├── shared/                 # Shared libraries
 ├── configs/                    # Configurations
 │   ├── opea-config/            # OPEA and vLLM configs
 ├── docs/                       # Documentation
 ├── microservices/              # Custom OPEA extensions
 ├── opea/                       # OPEA source or submodule
-├── shared/                     # Shared libraries
 ├── tests/                      # End-to-end and integration tests
 ├── .gitignore
 ├── docker-compose.yaml

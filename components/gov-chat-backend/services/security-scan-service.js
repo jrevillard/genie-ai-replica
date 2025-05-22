@@ -1,7 +1,8 @@
 // src/services/securityScanService.js - with critical display and date fixes
 const fs = require('fs').promises;
 const path = require('path');
-const { logger } = require('../logger');
+//const { logger } = require('../logger');
+const { logger } = require('shared-lib');
 const logsService = require('./logs-service');
 const axios = require('axios');
 const config = require('../config'); // Assume config has API endpoints and base URLs

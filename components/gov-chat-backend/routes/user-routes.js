@@ -6,7 +6,8 @@ const crypto = require('crypto');
 const emailService = require('../services/email-service');
 const authMiddleware = require('../middleware/auth-middleware');
 const { aql } = require('arangojs');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 /**
  * @swagger

@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const DatabaseOperationsService = require('../services/database-operations-service');
 const authMiddleware = require('../middleware/auth-middleware');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 const databaseService = new DatabaseOperationsService();
 

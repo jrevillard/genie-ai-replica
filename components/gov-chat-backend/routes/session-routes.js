@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const SessionService = require('../services/session-service');
 const authMiddleware = require('../middleware/auth-middleware');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 const sessionService = new SessionService();
 

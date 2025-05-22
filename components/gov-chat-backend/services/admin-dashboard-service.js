@@ -1,6 +1,7 @@
 // src/services/admin-dashboard-service.js
 const dbService = require('../utils/db-connect-service'); // Import the database service singleton
-const { logger } = require('../logger');
+//const { logger } = require('../logger');
+const { logger } = require('shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');

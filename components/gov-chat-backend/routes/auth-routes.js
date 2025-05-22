@@ -3,7 +3,8 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth-middleware');
 const path = require('path');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 /**
  * @swagger

@@ -1,5 +1,6 @@
 const authService = require('../services/auth-service');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 /**
  * Get the frontend URL from environment variable, falling back to request headers

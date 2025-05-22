@@ -1,7 +1,8 @@
 // src/services/logs-service.js - with fixes for date handling and 7-day search
 const fs = require('fs').promises;
 const path = require('path');
-const { logger } = require('../logger');
+//const { logger } = require('../logger');
+const { logger } = require('shared-lib');
 const zlib = require('zlib');
 const util = require('util');
 

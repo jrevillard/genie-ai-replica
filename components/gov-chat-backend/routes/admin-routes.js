@@ -9,7 +9,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/auth-middleware');
-const { logger } = require('../logger'); // Import the centralized logger
+//const { logger } = require('../logger'); // Import the centralized logger
+const { logger } = require('shared-lib');
 
 // Apply authentication and admin role check middleware
 router.use(authMiddleware.authenticate);

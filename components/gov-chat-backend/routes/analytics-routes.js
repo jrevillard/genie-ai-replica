@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const AnalyticsService = require('../services/analytics-service');
 const analyticsController = require('../controllers/analyticsController');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 const authMiddleware = require('../middleware/auth-middleware');
 
 const analyticsService = new AnalyticsService();

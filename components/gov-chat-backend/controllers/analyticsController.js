@@ -1,5 +1,6 @@
 const AnalyticsService = require('../services/analytics-service');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 // Initialize the analytics service
 const analyticsService = new AnalyticsService();

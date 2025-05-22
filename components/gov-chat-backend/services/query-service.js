@@ -1,7 +1,8 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger } = require('../logger'); // Import centralized logger
+//const { logger } = require('../logger'); // Import centralized logger
+const { logger } = require('shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');

@@ -4,7 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
-const { logger } = require('../logger'); // Corrected import
+//const { logger } = require('../logger'); // Corrected import
+const { logger } = require('shared-lib');
 
 const dbService = require('../utils/db-connect-service');
 

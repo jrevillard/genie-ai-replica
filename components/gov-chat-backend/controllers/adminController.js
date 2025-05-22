@@ -1,7 +1,8 @@
 // src/controllers/adminController.js
 const adminDashboardService = require('../services/admin-dashboard-service');
 const logsService = require('../services/logs-service');
-const { logger, triggerLogRollover } = require('../logger');
+//const { logger, triggerLogRollover } = require('../logger');
+const { logger, triggerLogRollover } = require('shared-lib');
 
 // Admin controller methods
 const adminController = {

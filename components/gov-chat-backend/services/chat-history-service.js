@@ -1,31 +1,12 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { createLogger, format, transports } = require('winston'); // Import Winston
+const { logger } = require('shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
 const initDB = dbService.getConnection();
-
-// Set up Winston logger (consistent with other files)
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-});
-
-const logger = createLogger({
-  level: 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    logFormat
-  ),
-  transports: [
-    new transports.Console(),
-    new transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new transports.File({ filename: 'logs/combined.log' })
-  ],
-});
 
 class ChatHistoryService {
   constructor() {

@@ -34,7 +34,8 @@
     "uuid": "^9.0.0",
     "validator": "^13.15.0",
     "winston": "^3.17.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "shared-lib": "file:./shared-lib"
   },
   "devDependencies": {
     "jest": "^29.5.0",

@@ -4,7 +4,7 @@ const { Database } = require('arangojs');
 /**
  * Import the logger from the same shared logger module used by other services
  */
-const { logger } = require('../logger');
+const { logger } = require('shared-lib');
 
 /**
  * Singleton class to manage database connections across the application

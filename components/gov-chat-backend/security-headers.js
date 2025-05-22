@@ -1,5 +1,5 @@
 // security-headers.js - Dedicated middleware for security headers
-const { logger } = require('./logger');
+const { logger } = require('shared-lib');
 
 /**
  * Middleware that adds comprehensive security headers to all responses

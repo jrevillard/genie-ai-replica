@@ -2,7 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth-middleware');
-const { reconfigureLogger, triggerLogRollover } = require('../logger'); // Import the reconfiguration functions
+//const { reconfigureLogger, triggerLogRollover } = require('../logger'); // Import the reconfiguration functions
+const { reconfigureLogger, triggerLogRollover } = require('shared-lib');
 
 /**
  * @swagger

@@ -3,7 +3,8 @@ const router = express.Router();
 const ChatHistoryService = require('../services/chat-history-service');
 const AnalyticsService = require('../services/analytics-service');
 const authMiddleware = require('../middleware/auth-middleware');
-const { logger } = require('../logger'); // Import logger from logger.js
+//const { logger } = require('../logger'); // Import logger from logger.js
+const { logger } = require('shared-lib');
 
 // Initialize services
 const chatHistoryService = new ChatHistoryService();

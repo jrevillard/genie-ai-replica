@@ -13,7 +13,10 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copy package.json and package-lock.json first
-COPY package*.json ./
+COPY gov-chat-backend/package*.json ./
+
+# Copy the shared-lib directory into the container
+COPY shared/lib ./shared-lib
 
 # Use a robust NPM installation strategy
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -22,7 +25,7 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci
 
 # Copy the entire backend project
-COPY . .
+COPY gov-chat-backend/ ./
 
 # Expose the backend server port
 EXPOSE 3000

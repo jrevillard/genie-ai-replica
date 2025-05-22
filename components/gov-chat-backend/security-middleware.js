@@ -1,5 +1,5 @@
 const rateLimit = require('express-rate-limit');
-const { logger } = require('./logger');
+const { logger } = require('shared-lib');
 const validator = require('validator');
 const geoip = require('geoip-lite');
 

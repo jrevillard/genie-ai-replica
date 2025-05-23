@@ -1,11 +1,10 @@
-// Entry point for shared-lib
-// This file re-exports selected shared modules.
+const logger = require('./logger');
+const securityHeaders = require('./security-headers');
+const SecurityMiddleware = require('./security-middleware');
 
-import logger from './logger.js';
-
-export { logger };
-
-// To add a new module, import and export it like this:
-// import auth from './auth.js';
-// export { logger, auth };
-
+console.log('Exporting from shared-lib:', { logger: typeof logger, securityHeaders: typeof securityHeaders, SecurityMiddleware: typeof SecurityMiddleware });
+module.exports = {
+  logger,
+  securityHeaders,
+  SecurityMiddleware
+};

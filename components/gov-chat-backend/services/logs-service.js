@@ -1,8 +1,6 @@
-// src/services/logs-service.js - with fixes for date handling and 7-day search
 const fs = require('fs').promises;
 const path = require('path');
-//const { logger } = require('../logger');
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 const zlib = require('zlib');
 const util = require('util');
 
@@ -17,7 +15,48 @@ const MAX_LINES_TO_PROCESS = 50000;
 /**
  * Service for managing system logs
  */
-const logsService = {
+class LogsService {
+  constructor() {
+    if (LogsService.instance) {
+      return LogsService.instance;
+    }
+    this.initialized = false;
+    logger.info('LogsService constructor called');
+    LogsService.instance = this;
+    return this;
+  }
+
+  static getInstance() {
+    if (!LogsService.instance) {
+      LogsService.instance = new LogsService();
+    }
+    return LogsService.instance;
+  }
+
+  /**
+   * Initialize the LogsService
+   * @returns {Promise<void>}
+   */
+  async init() {
+    if (this.initialized) {
+      logger.debug('LogsService already initialized, skipping');
+      return;
+    }
+    try {
+      // No specific initialization required, but check logs directory
+      const logDir = path.join(__dirname, '../logs');
+      await fs.access(logDir).catch(async () => {
+        await fs.mkdir(logDir, { recursive: true });
+        logger.info(`Created logs directory: ${logDir}`);
+      });
+      this.initialized = true;
+      logger.info('LogsService initialized successfully');
+    } catch (error) {
+      logger.error(`Error initializing LogsService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
   /**
    * Get a summary of logs grouped by type and service
    * @param {Object} options - Options for filtering logs
@@ -162,7 +201,7 @@ const logsService = {
       logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
       throw error;
     }
-  },
+  }
 
   /**
    * Check if a file exists
@@ -180,7 +219,7 @@ const logsService = {
       }
       throw error;
     }
-  },
+  }
 
   /**
    * Read file content, handling both compressed and uncompressed files
@@ -228,20 +267,20 @@ const logsService = {
         throw err;
       }
     }
-  },
+  }
 
   /**
- * Search logs with filtering
- * @param {Object} options - Search options
- * @param {string} options.term - Search term
- * @param {string} options.level - Log level filter
- * @param {string} options.service - Service name filter
- * @param {string} options.dateRange - Date range (today, yesterday, week, month)
- * @param {string} options.startDate - Custom start date (YYYY-MM-DD)
- * @param {string} options.endDate - Custom end date (YYYY-MM-DD)
- * @param {boolean} options.includeArchived - Whether to include archived logs
- * @returns {Promise<Array>} Filtered log entries
- */
+   * Search logs with filtering
+   * @param {Object} options - Search options
+   * @param {string} options.term - Search term
+   * @param {string} options.level - Log level filter
+   * @param {string} options.service - Service name filter
+   * @param {string} options.dateRange - Date range (today, yesterday, week, month)
+   * @param {string} options.startDate - Custom start date (YYYY-MM-DD)
+   * @param {string} options.endDate - Custom end date (YYYY-MM-DD)
+   * @param {boolean} options.includeArchived - Whether to include archived logs
+   * @returns {Promise<Array>} Filtered log entries
+   */
   async searchLogs(options = {}) {
     try {
       logger.info('Searching logs with options:', options);
@@ -530,13 +569,13 @@ const logsService = {
       logger.error(`Error in searchLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
-  },
+  }
 
   /**
- * Extract date from a log filename
- * @param {string} filename - Log filename
- * @returns {string|null} Extracted date in YYYY-MM-DD format or null
- */
+   * Extract date from a log filename
+   * @param {string} filename - Log filename
+   * @returns {string|null} Extracted date in YYYY-MM-DD format or null
+   */
   extractDateFromFilename(filename) {
     if (!filename) return null;
 
@@ -546,7 +585,7 @@ const logsService = {
     }
 
     return null;
-  },
+  }
   
   /**
    * Extract logs of a specific level from log lines
@@ -615,7 +654,7 @@ const logsService = {
     
     logger.debug(`Extracted ${logs.length} logs with level ${level}`);
     return logs;
-  },
+  }
   
   /**
    * Group logs by type and service for summary
@@ -664,188 +703,182 @@ const logsService = {
     });
     
     return Object.values(groups);
-  },
+  }
   
   /**
- * Parse raw log lines into structured log objects
- * @param {Array} logLines - Raw log lines
- * @param {string} defaultLevel - Default log level if not detected
- * @returns {Array} Parsed log entries
- */
-  /**
- * Parse raw log lines into structured log objects
- * @param {Array} logLines - Raw log lines
- * @param {string} defaultLevel - Default log level if not detected
- * @returns {Array} Parsed log entries
- */
-parseLogs(logLines, defaultLevel = null) {
-  try {
-    // Get the current date as a fallback
-    const currentDate = new Date().toISOString().split('T')[0];
-    
-    const logs = logLines
-      .map((line, index) => {
-        try {
-          // Skip empty lines or non-string values
-          if (!line || typeof line !== 'string' || line.trim() === '') {
-            return null;
-          }
-          
-          // Prevent stack overflow by limiting line length
-          const truncatedLine = line.length > 2000 ? line.substring(0, 2000) + '...' : line;
-          
-          // Try standard log format first: 2025-04-02 16:00:29 [INFO]: Message
-          const standardMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
-          if (standardMatch) {
-            const [, date, time, level, message] = standardMatch;
-            
-            // Ensure message is not empty
-            if (!message || message.trim() === '') {
-              logger.debug(`Empty message found in log: ${truncatedLine}`);
-            }
-            
-            // Normalize level to match UI expectations (WARNING -> WARN)
-            let normalizedLevel = defaultLevel || level;
-            if (normalizedLevel === 'WARNING') {
-              normalizedLevel = 'WARN';
-            }
-            
-            return {
-              date,
-              time,
-              level: normalizedLevel,
-              message: message || truncatedLine, // Use the entire line if message extraction failed
-              service: this.detectService(message || truncatedLine)
-            };
-          }
-
-          // Try alternative format: 2025-04-02 16:00:29 [INFO] Message
-          const altMatch1 = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
-          if (altMatch1) {
-            const [, date, time, level, message] = altMatch1;
-            
-            // Ensure message is not empty
-            if (!message || message.trim() === '') {
-              logger.debug(`Empty message found in log: ${truncatedLine}`);
-            }
-            
-            // Normalize level to match UI expectations (WARNING -> WARN)
-            let normalizedLevel = defaultLevel || level;
-            if (normalizedLevel === 'WARNING') {
-              normalizedLevel = 'WARN';
-            }
-            
-            return {
-              date,
-              time,
-              level: normalizedLevel,
-              message: message || truncatedLine, // Use the entire line if message extraction failed
-              service: this.detectService(message || truncatedLine)
-            };
-          }
-
-          // Try format with tab separators: 2025-04-02\t16:00:29\tINFO\tSystem\tMessage
-          const tabSeparatedMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\t(\d{2}:\d{2}:\d{2})\t([^\t]+)\t([^\t]+)\t(.*)/);
-          if (tabSeparatedMatch) {
-            const [, date, time, level, service, message] = tabSeparatedMatch;
-            
-            // Normalize level to match UI expectations (WARNING -> WARN)
-            let normalizedLevel = level.toUpperCase();
-            if (normalizedLevel === 'WARNING') {
-              normalizedLevel = 'WARN';
-            }
-            
-            return {
-              date,
-              time,
-              level: normalizedLevel,
-              message: message || truncatedLine, // Use the entire line if message extraction failed
-              service: service || this.detectService(message || truncatedLine)
-            };
-          }
-
-          // Try format without level: 2025-04-02 16:00:29 Message
-          const dateTimeOnlyMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
-          if (dateTimeOnlyMatch) {
-            const [, date, time, message] = dateTimeOnlyMatch;
-            // Determine log level from message content or use default
-            let detectedLevel = defaultLevel || this.detectLogLevel(message);
-            
-            // Normalize level to match UI expectations (WARNING -> WARN)
-            if (detectedLevel === 'WARNING') {
-              detectedLevel = 'WARN';
-            }
-            
-            return {
-              date,
-              time,
-              level: detectedLevel,
-              message: message || truncatedLine, // Use the entire line if message extraction failed
-              service: this.detectService(message || truncatedLine)
-            };
-          }
-
-          // No recognized format, try to extract what we can
-          if (truncatedLine.trim()) {
-            const dateMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})/);
-            const timeMatch = truncatedLine.match(/(\d{2}:\d{2}:\d{2})/);
-            const levelMatch = truncatedLine.match(/\[(ERROR|WARNING|WARN|INFO|DEBUG)\]/i);
-
-            // Get the date from the log filename if we can't extract it from the content
-            let date;
-            if (dateMatch) {
-              date = dateMatch[1];
-            } else {
-              // Try to extract date from the filename if it was passed in the defaultLevel as a fallback
-              const fileMatch = defaultLevel && defaultLevel.match(/combined-(\d{4}-\d{2}-\d{2})/);
-              date = fileMatch ? fileMatch[1] : currentDate;
-            }
-
-            let level = 'INFO';
-            if (levelMatch) {
-              level = levelMatch[1].toUpperCase();
-              // Normalize level to match UI expectations (WARNING -> WARN)
-              if (level === 'WARNING') {
-                level = 'WARN';
-              }
-            } else {
-              level = defaultLevel || 'INFO';
-            }
-            
-            return {
-              date,
-              time: timeMatch ? timeMatch[1] : '00:00:00',
-              level: level,
-              message: truncatedLine, // Use the full line as the message since we couldn't parse it
-              service: this.detectService(truncatedLine)
-            };
-          }
-
-          return null;
-        } catch (lineError) {
-          logger.warn(`Error parsing log line ${index}: ${lineError.message}`);
-          // Even if parsing fails, try to return something
+   * Parse raw log lines into structured log objects
+   * @param {Array} logLines - Raw log lines
+   * @param {string} defaultLevel - Default log level if not detected
+   * @returns {Array} Parsed log entries
+   */
+  parseLogs(logLines, defaultLevel = null) {
+    try {
+      // Get the current date as a fallback
+      const currentDate = new Date().toISOString().split('T')[0];
+      
+      const logs = logLines
+        .map((line, index) => {
           try {
-            return {
-              date: currentDate,
-              time: '00:00:00',
-              level: 'INFO',
-              message: line.substring(0, 2000), // Use the original line as the message
-              service: 'System'
-            };
-          } catch (e) {
-            return null;
-          }
-        }
-      })
-      .filter(log => log !== null);
+            // Skip empty lines or non-string values
+            if (!line || typeof line !== 'string' || line.trim() === '') {
+              return null;
+            }
+            
+            // Prevent stack overflow by limiting line length
+            const truncatedLine = line.length > 2000 ? line.substring(0, 2000) + '...' : line;
+            
+            // Try standard log format first: 2025-04-02 16:00:29 [INFO]: Message
+            const standardMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s+(.*)/);
+            if (standardMatch) {
+              const [, date, time, level, message] = standardMatch;
+              
+              // Ensure message is not empty
+              if (!message || message.trim() === '') {
+                logger.debug(`Empty message found in log: ${truncatedLine}`);
+              }
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              let normalizedLevel = defaultLevel || level;
+              if (normalizedLevel === 'WARNING') {
+                normalizedLevel = 'WARN';
+              }
+              
+              return {
+                date,
+                time,
+                level: normalizedLevel,
+                message: message || truncatedLine, // Use the entire line if message extraction failed
+                service: this.detectService(message || truncatedLine)
+              };
+            }
 
-    return logs;
-  } catch (error) {
-    logger.error(`Error in parseLogs: ${error.message}`);
-    return []; // Return empty array on error
+            // Try alternative format: 2025-04-02 16:00:29 [INFO] Message
+            const altMatch1 = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
+            if (altMatch1) {
+              const [, date, time, level, message] = altMatch1;
+              
+              // Ensure message is not empty
+              if (!message || message.trim() === '') {
+                logger.debug(`Empty message found in log: ${truncatedLine}`);
+              }
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              let normalizedLevel = defaultLevel || level;
+              if (normalizedLevel === 'WARNING') {
+                normalizedLevel = 'WARN';
+              }
+              
+              return {
+                date,
+                time,
+                level: normalizedLevel,
+                message: message || truncatedLine, // Use the entire line if message extraction failed
+                service: this.detectService(message || truncatedLine)
+              };
+            }
+
+            // Try format with tab separators: 2025-04-02\t16:00:29\tINFO\tSystem\tMessage
+            const tabSeparatedMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\t(\d{2}:\d{2}:\d{2})\t([^\t]+)\t([^\t]+)\t(.*)/);
+            if (tabSeparatedMatch) {
+              const [, date, time, level, service, message] = tabSeparatedMatch;
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              let normalizedLevel = level.toUpperCase();
+              if (normalizedLevel === 'WARNING') {
+                normalizedLevel = 'WARN';
+              }
+              
+              return {
+                date,
+                time,
+                level: normalizedLevel,
+                message: message || truncatedLine, // Use the entire line if message extraction failed
+                service: service || this.detectService(message || truncatedLine)
+              };
+            }
+
+            // Try format without level: 2025-04-02 16:00:29 Message
+            const dateTimeOnlyMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
+            if (dateTimeOnlyMatch) {
+              const [, date, time, message] = dateTimeOnlyMatch;
+              // Determine log level from message content or use default
+              let detectedLevel = defaultLevel || this.detectLogLevel(message);
+              
+              // Normalize level to match UI expectations (WARNING -> WARN)
+              if (detectedLevel === 'WARNING') {
+                detectedLevel = 'WARN';
+              }
+              
+              return {
+                date,
+                time,
+                level: detectedLevel,
+                message: message || truncatedLine, // Use the entire line if message extraction failed
+                service: this.detectService(message || truncatedLine)
+              };
+            }
+
+            // No recognized format, try to extract what we can
+            if (truncatedLine.trim()) {
+              const dateMatch = truncatedLine.match(/(\d{4}-\d{2}-\d{2})/);
+              const timeMatch = truncatedLine.match(/(\d{2}:\d{2}:\d{2})/);
+              const levelMatch = truncatedLine.match(/\[(ERROR|WARNING|WARN|INFO|DEBUG)\]/i);
+
+              // Get the date from the log filename if we can't extract it from the content
+              let date;
+              if (dateMatch) {
+                date = dateMatch[1];
+              } else {
+                // Try to extract date from the filename if it was passed in the defaultLevel as a fallback
+                const fileMatch = defaultLevel && defaultLevel.match(/combined-(\d{4}-\d{2}-\d{2})/);
+                date = fileMatch ? fileMatch[1] : currentDate;
+              }
+
+              let level = 'INFO';
+              if (levelMatch) {
+                level = levelMatch[1].toUpperCase();
+                // Normalize level to match UI expectations (WARNING -> WARN)
+                if (level === 'WARNING') {
+                  level = 'WARN';
+                }
+              } else {
+                level = defaultLevel || 'INFO';
+              }
+              
+              return {
+                date,
+                time: timeMatch ? timeMatch[1] : '00:00:00',
+                level: level,
+                message: truncatedLine, // Use the full line as the message since we couldn't parse it
+                service: this.detectService(truncatedLine)
+              };
+            }
+
+            return null;
+          } catch (lineError) {
+            logger.warn(`Error parsing log line ${index}: ${lineError.message}`);
+            // Even if parsing fails, try to return something
+            try {
+              return {
+                date: currentDate,
+                time: '00:00:00',
+                level: 'INFO',
+                message: line.substring(0, 2000), // Use the original line as the message
+                service: 'System'
+              };
+            } catch (e) {
+              return null;
+            }
+          }
+        })
+        .filter(log => log !== null);
+
+      return logs;
+    } catch (error) {
+      logger.error(`Error in parseLogs: ${error.message}`);
+      return []; // Return empty array on error
+    }
   }
-},
   
   /**
    * Detect log level from message if not explicitly provided
@@ -870,7 +903,7 @@ parseLogs(logLines, defaultLevel = null) {
       logger.warn(`Error detecting log level: ${error.message}`);
       return 'INFO'; // Default to INFO on error
     }
-  },
+  }
   
   /**
    * Detect service from message
@@ -923,7 +956,7 @@ parseLogs(logLines, defaultLevel = null) {
       logger.warn(`Error detecting service: ${error.message}`);
       return 'System'; // Default to System on error
     }
-  },
+  }
   
   /**
    * Get date range based on options
@@ -991,7 +1024,7 @@ parseLogs(logLines, defaultLevel = null) {
         endDate: today
       };
     }
-  },
+  }
   
   /**
    * Get all log files in the specified date range
@@ -1092,7 +1125,12 @@ parseLogs(logLines, defaultLevel = null) {
       logger.error(`Error getting log files in range: ${error.message}`, { stack: error.stack });
       return [];
     }
-  },
+  }
+
+  /**
+   * Debug function to verify yesterday's logs can be read
+   * @returns {Promise<Object>} Debug results
+   */
   async debugYesterdayLogs() {
     try {
       const yesterday = new Date();
@@ -1153,72 +1191,8 @@ parseLogs(logLines, defaultLevel = null) {
         error: error.message
       };
     }
-  },
-  /**
- * Debug function to verify yesterday's logs can be read
- * @returns {Promise<Object>} Debug results
- */
-  async debugYesterdayLogs() {
-    try {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-      logger.info(`Debugging yesterday's logs for date: ${yesterdayStr}`);
-
-      const logDir = path.join(__dirname, '../logs');
-      const compressedFilePath = path.join(logDir, `combined-${yesterdayStr}.log.gz`);
-
-      // Check if the file exists
-      const fileExists = await fs.access(compressedFilePath).then(() => true).catch(() => false);
-      logger.info(`Yesterday's compressed log file exists: ${fileExists}`);
-
-      if (fileExists) {
-        // Try to read and decompress the file
-        try {
-          const compressedData = await fs.readFile(compressedFilePath);
-          logger.info(`Successfully read compressed file of size: ${compressedData.length} bytes`);
-
-          const decompressedData = await gunzip(compressedData);
-          logger.info(`Successfully decompressed to: ${decompressedData.length} bytes`);
-
-          // Display first few lines
-          const content = decompressedData.toString('utf8');
-          const lines = content.split('\n').slice(0, 5);
-          logger.info(`First 5 lines of content: ${JSON.stringify(lines)}`);
-
-          return {
-            success: true,
-            lines: lines.length,
-            sample: lines
-          };
-        } catch (error) {
-          logger.error(`Error reading/decompressing file: ${error.message}`);
-          return {
-            success: false,
-            error: error.message
-          };
-        }
-      } else {
-        logger.info('Looking for alternative files for yesterday');
-        const files = await fs.readdir(logDir);
-        const yesterdayFiles = files.filter(f => f.includes(yesterdayStr));
-        logger.info(`Files found for yesterday: ${yesterdayFiles.join(', ')}`);
-
-        return {
-          success: false,
-          error: 'Compressed log file not found',
-          alternativeFiles: yesterdayFiles
-        };
-      }
-    } catch (error) {
-      logger.error(`Debug error: ${error.message}`);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
   }
-};
+}
 
+const logsService = LogsService.getInstance();
 module.exports = logsService;

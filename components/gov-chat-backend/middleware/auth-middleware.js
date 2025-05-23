@@ -1,6 +1,5 @@
 const authService = require('../services/auth-service');
-//const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 // Utility function to safely stringify objects with circular references
 const safeStringify = (obj, indent = 2) => {

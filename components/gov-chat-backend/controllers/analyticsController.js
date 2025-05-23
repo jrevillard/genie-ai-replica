@@ -1,14 +1,22 @@
-const AnalyticsService = require('../services/analytics-service');
-//const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
-
-// Initialize the analytics service
-const analyticsService = new AnalyticsService();
+const { logger } = require('../shared-lib');
 
 /**
  * Controller for analytics-related API endpoints
  */
 class AnalyticsController {
+  /**
+   * @param {Object} analyticsService - Singleton AnalyticsService instance
+   */
+  constructor(analyticsService) {
+    if (!analyticsService || typeof analyticsService.getDashboardAnalytics !== 'function') {
+      throw new Error('Invalid analyticsService provided to AnalyticsController');
+    }
+    this.analyticsService = analyticsService;
+    logger.debug('AnalyticsController initialized with analyticsService', {
+      methods: Object.getOwnPropertyNames(Object.getPrototypeOf(analyticsService)).filter(m => m !== 'constructor')
+    });
+  }
+
   /**
    * Get dashboard analytics
    * @param {Object} req - Express request object
@@ -28,8 +36,7 @@ class AnalyticsController {
       }
       
       // Get dashboard analytics from service with locale
-      // Pass through the locale from the request (it will default to 'en' in the service if not provided)
-      const dashboardData = await analyticsService.getDashboardAnalytics(startDate, endDate, locale);
+      const dashboardData = await this.analyticsService.getDashboardAnalytics(startDate, endDate, locale);
       
       logger.info('Dashboard analytics retrieved successfully');
       res.json(dashboardData);
@@ -65,20 +72,20 @@ class AnalyticsController {
       switch (metric) {
         case 'totalQueries':
           // Get analytics with specific filters to extract just the needed metric
-          const analyticsData = await analyticsService.getAnalytics({type: 'query'}, startDate, endDate);
+          const analyticsData = await this.analyticsService.getAnalytics({type: 'query'}, startDate, endDate);
           value = analyticsData.queryCount;
           logger.info(`Total queries metric retrieved: ${value}`);
           break;
         
         case 'uniqueUsers':
           // Use the dedicated method for counting unique users
-          value = await analyticsService.getUniqueUsersCount(startDate, endDate);
+          value = await this.analyticsService.getUniqueUsersCount(startDate, endDate);
           logger.info(`Unique users metric retrieved: ${value}`);
           break;
           
         case 'averageResponseTime':
           // Get query data and calculate average response time
-          const queryAnalytics = await analyticsService.getAnalytics({type: 'query'}, startDate, endDate);
+          const queryAnalytics = await this.analyticsService.getAnalytics({type: 'query'}, startDate, endDate);
           
           if (queryAnalytics.raw && queryAnalytics.raw.length > 0) {
             const queries = queryAnalytics.raw.filter(item => 
@@ -103,7 +110,7 @@ class AnalyticsController {
           
         case 'satisfactionRate':
           // Calculate from feedback data
-          const feedbackAnalytics = await analyticsService.getAnalytics({type: 'feedback'}, startDate, endDate);
+          const feedbackAnalytics = await this.analyticsService.getAnalytics({type: 'feedback'}, startDate, endDate);
           
           if (feedbackAnalytics.feedbackCount > 0) {
             value = feedbackAnalytics.avgRating * 20; // Convert 1-5 scale to percentage
@@ -179,13 +186,13 @@ class AnalyticsController {
       }
       
       // Call the analytics service to get the time series data
-      const timeSeriesData = await analyticsService.getTimeSeriesData(metricType, interval, startDate, endDate);
+      const timeSeriesData = await this.analyticsService.getTimeSeriesData(metricType, interval, startDate, endDate);
       
       // If formatDateLabel is not available on the service, use a simple date formatting
       const processedData = timeSeriesData.map(item => ({
         timestamp: item.timestamp || '',
-        dateLabel: analyticsService.formatDateLabel 
-          ? analyticsService.formatDateLabel(item.timestamp, interval) 
+        dateLabel: this.analyticsService.formatDateLabel 
+          ? this.analyticsService.formatDateLabel(item.timestamp, interval) 
           : item.timestamp,
         value: item.value || 0,
         userCount: item.userCount || 0
@@ -200,10 +207,10 @@ class AnalyticsController {
   }
 
   /**
- * Get satisfaction gauge data
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
+   * Get satisfaction gauge data
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
   async getSatisfactionGauge(req, res) {
     try {
       logger.info('Fetching satisfaction gauge data');
@@ -218,7 +225,7 @@ class AnalyticsController {
       }
 
       // Get satisfaction gauge data from service
-      const gaugeData = await analyticsService.getSatisfactionGaugeData(startDate, endDate, locale);
+      const gaugeData = await this.analyticsService.getSatisfactionGaugeData(startDate, endDate, locale);
 
       logger.info('Satisfaction gauge data retrieved successfully');
       res.json(gaugeData);
@@ -229,10 +236,10 @@ class AnalyticsController {
   }
 
   /**
- * Get satisfaction heatmap data
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
+   * Get satisfaction heatmap data
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
   async getSatisfactionHeatmap(req, res) {
     try {
       logger.info('Fetching satisfaction heatmap data');
@@ -247,7 +254,7 @@ class AnalyticsController {
       }
 
       // Get satisfaction heatmap data from service
-      const heatmapData = await analyticsService.getSatisfactionHeatmapData(startDate, endDate, locale);
+      const heatmapData = await this.analyticsService.getSatisfactionHeatmapData(startDate, endDate, locale);
 
       logger.info('Satisfaction heatmap data retrieved successfully');
       res.json(heatmapData);
@@ -258,4 +265,4 @@ class AnalyticsController {
   }
 }
 
-module.exports = new AnalyticsController();
+module.exports = AnalyticsController;

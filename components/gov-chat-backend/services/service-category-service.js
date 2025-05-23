@@ -1,20 +1,36 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
-//const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
-const initDB = dbService.getConnection();
-
 class ServiceCategoryService {
   constructor() {
-    this.db = initDB;
-    this.serviceCategories = this.db.collection('serviceCategories');
-    this.services = this.db.collection('services');
-    this.categoryServices = this.db.collection('categoryServices');
-    logger.info('ServiceCategoryService initialized successfully');
+    logger.info('ServiceCategoryService constructor called');
+    this.db = null;
+    this.serviceCategories = null;
+    this.services = null;
+    this.categoryServices = null;
+    this.initialized = false;
+  }
+
+  async init() {
+    if (this.initialized) {
+      logger.debug('ServiceCategoryService already initialized, skipping');
+      return;
+    }
+    try {
+      this.db = await dbService.getConnection('default');
+      this.serviceCategories = this.db.collection('serviceCategories');
+      this.services = this.db.collection('services');
+      this.categoryServices = this.db.collection('categoryServices');
+      this.initialized = true;
+      logger.info('ServiceCategoryService initialized successfully');
+    } catch (error) {
+      logger.error(`Error initializing ServiceCategoryService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
 
   /**
@@ -463,4 +479,6 @@ class ServiceCategoryService {
   }
 }
 
-module.exports = ServiceCategoryService;
+// Singleton instance
+const instance = new ServiceCategoryService();
+module.exports = instance;

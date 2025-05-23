@@ -1,23 +1,44 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-//const { logger } = require('../logger'); // Import centralized logger
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
-const initDB = dbService.getConnection();
-
 class QueryService {
   constructor() {
-    this.db = initDB;
-    this.queries = this.db.collection('queries');
-    this.serviceCategories = this.db.collection('serviceCategories');
-    this.services = this.db.collection('services');
+    this.dbService = dbService; // Store the service reference instead of the promise
+    this.db = null;
+    this.queries = null;
+    this.serviceCategories = null;
+    this.services = null;
     this.analyticsService = null; // Will be set via dependency injection
     this.chatHistoryService = null; // Will be set via dependency injection
-    logger.info('QueryService.initialized');
+    this.initialized = false;
+    logger.info('QueryService constructor called');
+  }
+
+  /**
+   * Initialize the QueryService
+   * @returns {Promise<void>}
+   */
+  async init() {
+    if (this.initialized) {
+      logger.debug('QueryService already initialized, skipping');
+      return;
+    }
+    try {
+      this.db = await this.dbService.getConnection('default');
+      this.queries = this.db.collection('queries');
+      this.serviceCategories = this.db.collection('serviceCategories');
+      this.services = this.db.collection('services');
+      this.initialized = true;
+      logger.info('QueryService initialized successfully');
+    } catch (error) {
+      logger.error(`Error initializing QueryService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
 
   /**
@@ -27,6 +48,15 @@ class QueryService {
   setAnalyticsService(analyticsService) {
     this.analyticsService = analyticsService;
     logger.info('QueryService.analytics_service_set');
+  }
+
+  /**
+   * Set the chat history service
+   * @param {Object} chatHistoryService - Chat history service instance
+   */
+  async setChatHistoryService(chatHistoryService) {
+    this.chatHistoryService = chatHistoryService;
+    logger.info('QueryService.chat_history_service_set');
   }
 
   /**
@@ -776,15 +806,6 @@ class QueryService {
   }
 
   /**
-   * Set the chat history service
-   * @param {Object} chatHistoryService - Chat history service instance
-   */
-  async setChatHistoryService(chatHistoryService) {
-    this.chatHistoryService = chatHistoryService;
-    logger.info('QueryService.chat_history_service_set');
-  }
-
-  /**
    * Create a conversation from a query
    * @param {String} queryId - Query ID
    * @param {Object} options - Additional options
@@ -949,4 +970,6 @@ class QueryService {
   }
 }
 
-module.exports = QueryService;
+// Singleton instance
+const instance = new QueryService();
+module.exports = instance;

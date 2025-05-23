@@ -8,14 +8,23 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-//const { logger } = require('./logger');
-const { logger } = require('shared-lib');
-const loggerRoutes = require('./routes/logger-routes');
-const { applySecurityMiddleware } = require('./security-middleware');
-const securityHeaders = require('./security-headers');
+const { logger, securityHeaders, SecurityMiddleware } = require('./shared-lib');
+
+// Import services
+const authService = require('./services/auth-service');
+const UserProfileService = require('./services/user-profile-service');
+const AdminDashboardService = require('./services/admin-dashboard-service');
+const AnalyticsService = require('./services/analytics-service');
+const QueryService = require('./services/query-service');
+const chatHistoryService = require('./services/chat-history-service'); // Use singleton
+const ServiceCategoryService = require('./services/service-category-service');
+const SessionService = require('./services/session-service');
+const logsService = require('./services/logs-service');
+const DatabaseOperationsService = require('./services/database-operations-service');
+const dbService = require('./utils/db-connect-service');
 
 // Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -30,13 +39,21 @@ app.disable('etag');
 // Remove X-Powered-By header - prevent information leakage
 app.disable('x-powered-by');
 
-// Apply our comprehensive security headers middleware early
+// Apply comprehensive security headers middleware early
+console.log('Imported shared-lib:', { 
+  logger: typeof logger, 
+  securityHeaders: typeof securityHeaders, 
+  SecurityMiddleware: typeof SecurityMiddleware 
+});
+if (!securityHeaders) {
+  throw new Error('securityHeaders is undefined');
+}
 app.use(securityHeaders);
 
-// Enable trust proxy
-app.set('trust proxy', true);
+// Enable trust proxy with specific setting
+app.set('trust proxy', 1); // Trust the first proxy (Kong)
 
-// CORS middleware with explicit origin instead of wildcard - added for ZAP compliance
+// CORS middleware with explicit origin
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', 'https://e2e-82-109.ssdcloudindia.net');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -46,7 +63,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Custom morgan format that doesn't expose raw timestamps
+// Temporary middleware to debug IP blocking
+app.use((req, res, next) => {
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  logger.debug(`Request IP details:`, {
+    ip: ip,
+    xForwardedFor: req.headers['x-forwarded-for'],
+    realIp: req.headers['x-real-ip'],
+    path: req.path
+  });
+  next();
+});
+
+// Custom morgan format
 app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-type] :req[user-agent]', {
   stream: {
     write: (message) => {
@@ -55,7 +84,7 @@ app.use(morgan(':method :url :status :response-time ms - Headers: :req[content-t
   }
 }));
 
-// Special middleware to block access to hidden files and suspicious requests
+// Block access to sensitive paths
 app.use((req, res, next) => {
   if (req.path.match(/\/\.[^\/]+/) ||
     req.path.includes('/BitKeeper') ||
@@ -312,7 +341,7 @@ const swaggerOptions = {
           type: 'object',
           properties: {
             totalConversations: { type: 'integer', description: 'Total number of conversations' },
-            totalMessages: { type: 'integer', description: 'Total number of messages' },
+            totalMessages: { type: 'integer', description: 'Number of messages' },
             avgMessagesPerConversation: { type: 'number', description: 'Average number of messages per conversation' },
             starredCount: { type: 'integer', description: 'Number of starred conversations' },
             archivedCount: { type: 'integer', description: 'Number of archived conversations' },
@@ -359,15 +388,15 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-// Set up a strict CSP policy
+// Set up a strict CSP policy with relaxed rules
 const cspOptions = {
   directives: {
     defaultSrc: ["'self'"],
     scriptSrc: ["'self'", "cdn.jsdelivr.net"],
-    styleSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
-    fontSrc: ["'self'"],
-    connectSrc: ["'self'"],
+    fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
+    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net"],
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -377,7 +406,7 @@ const cspOptions = {
   reportOnly: false
 };
 
-// Apply helmet with strict CSP
+// Apply helmet with updated CSP
 app.use(helmet({
   contentSecurityPolicy: cspOptions,
   xssFilter: true,
@@ -387,7 +416,7 @@ app.use(helmet({
   }
 }));
 
-// Set up CORS with a specific origin, not a wildcard
+// Set up CORS with a specific origin
 const corsOptions = {
   origin: process.env.CORS_ORIGIN || 'https://e2e-82-109.ssdcloudindia.net',
   credentials: true,
@@ -401,13 +430,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Apply all security middleware here, after helmet and cors
-applySecurityMiddleware(app);
+// Apply security middleware
+SecurityMiddleware.applySecurityMiddleware(app);
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Format timestamps in response data to avoid timestamp disclosure
+// Format timestamps in response data
 app.use((req, res, next) => {
   const originalJson = res.json;
   res.json = function (body) {
@@ -440,15 +469,15 @@ function formatTimestamps(obj) {
   return obj;
 }
 
-// Configure static file serving with security headers
-app.use('/uploads', (req, res, next) => {
+// Configure static file serving
+app.use('/Uploads', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(404).json({ message: 'Not Found' });
   }
   next();
 }, express.static(uploadsDir));
 
-// Secure static serving for frontend files with security headers
+// Secure static serving for frontend files
 app.use(express.static('dist', {
   setHeaders: (res, path) => {
     if (path.endsWith('.html')) {
@@ -471,7 +500,159 @@ app.get('/api-docs.json', (req, res) => {
   res.send(swaggerSpec);
 });
 
-// Add a health check endpoint
+// Initialize services
+async function initializeServices() {
+  logger.debug('Starting service initialization');
+  logger.debug('Logger level:', logger.level || 'unknown');
+
+  // Validate environment variables
+  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USERNAME', 'ARANGO_PASSWORD'];
+  const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
+  if (missingEnvVars.length > 0) {
+    logger.error('Missing required environment variables:', { missing: missingEnvVars });
+    throw new Error(`Missing environment variables: ${missingEnvVars.join(', ')}`);
+  }
+
+  // Log ArangoDB configuration
+  logger.debug('ArangoDB configuration:', {
+    ARANGO_URL: process.env.ARANGO_URL,
+    ARANGO_DB: process.env.ARANGO_DB,
+    ARANGO_USERNAME: process.env.ARANGO_USERNAME,
+    ARANGO_PASSWORD: process.env.ARANGO_PASSWORD ? '***' : 'undefined'
+  });
+
+  // Pre-initialization connection test
+  logger.debug('Performing pre-initialization connection test');
+  try {
+    const testConnection = await Promise.race([
+      dbService.getConnection('test'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Pre-initialization connection test timed out')), 30000))
+    ]);
+    logger.debug('Pre-initialization connection test successful');
+
+    // Get ArangoDB version
+    try {
+      const version = await testConnection.version();
+      logger.debug('ArangoDB version:', { version: version.version, server: version.server });
+    } catch (versionError) {
+      logger.error('Failed to get ArangoDB version:', {
+        error: versionError.message,
+        stack: versionError.stack
+      });
+    }
+
+    await dbService.closeConnection('test');
+    logger.debug('Test connection closed');
+  } catch (error) {
+    logger.error('Pre-initialization connection test failed:', {
+      error: error.message || 'Unknown error',
+      stack: error.stack || 'No stack trace',
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+    throw error;
+  }
+
+  const services = {};
+
+  // Use singletons
+  services.authService = authService;
+  services.serviceCategoryService = ServiceCategoryService;
+  services.userProfileService = UserProfileService;
+  services.adminDashboardService = AdminDashboardService;
+  services.analyticsService = AnalyticsService;
+  services.databaseOperationsService = DatabaseOperationsService;
+  services.sessionService = SessionService;
+  services.queryService = QueryService;
+  services.chatHistoryService = chatHistoryService;
+  services.logsService = logsService; // Add logsService
+  logger.debug('Using AuthService, ServiceCategoryService, UserProfileService, AdminDashboardService, AnalyticsService, DatabaseOperationsService, SessionService, QueryService, ChatHistoryService, and LogsService singletons');
+  await services.sessionService.init();
+  await services.authService.setSessionService(services.sessionService);
+  await services.authService.init();
+  await services.serviceCategoryService.init();
+  await services.userProfileService.init();
+  await services.adminDashboardService.init();
+  await services.analyticsService.init();
+  await services.databaseOperationsService.init();
+  await services.queryService.init();
+  await services.chatHistoryService.init();
+  await services.logsService.init(); // Initialize logsService
+  logger.debug('AuthService singleton initialized', {
+    methods: Object.getOwnPropertyNames(authService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('ServiceCategoryService singleton initialized', {
+    methods: Object.getOwnPropertyNames(ServiceCategoryService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('UserProfileService singleton initialized', {
+    methods: Object.getOwnPropertyNames(UserProfileService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('AdminDashboardService singleton initialized', {
+    methods: Object.getOwnPropertyNames(AdminDashboardService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('AnalyticsService singleton initialized', {
+    methods: Object.getOwnPropertyNames(AnalyticsService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('DatabaseOperationsService singleton initialized', {
+    methods: Object.getOwnPropertyNames(DatabaseOperationsService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('SessionService singleton initialized', {
+    methods: Object.getOwnPropertyNames(SessionService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('QueryService singleton initialized', {
+    methods: Object.getOwnPropertyNames(QueryService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('ChatHistoryService singleton initialized', {
+    methods: Object.getOwnPropertyNames(chatHistoryService.__proto__).filter(m => m !== 'constructor')
+  });
+  logger.debug('LogsService singleton initialized', {
+    methods: Object.getOwnPropertyNames(logsService.__proto__).filter(m => m !== 'constructor')
+  });
+
+  // Set dependencies
+  logger.debug('Setting service dependencies');
+  try {
+    if (services.queryService && services.analyticsService) {
+      services.queryService.setAnalyticsService(services.analyticsService);
+      logger.debug('QueryService.setAnalyticsService completed');
+    }
+    if (services.queryService && services.chatHistoryService) {
+      services.queryService.setChatHistoryService(services.chatHistoryService);
+      logger.debug('QueryService.setChatHistoryService completed');
+    }
+    if (services.chatHistoryService && services.analyticsService) {
+      services.chatHistoryService.setAnalyticsService(services.analyticsService);
+      logger.debug('ChatHistoryService.setAnalyticsService completed');
+    }
+  } catch (error) {
+    logger.error('Failed to set service dependencies:', {
+      error: error.message || 'Unknown error',
+      stack: error.stack || 'No stack trace',
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+  }
+
+  logger.info('Service initialization completed', {
+    initialized: Object.keys(services).filter(key => services[key]).length,
+    failed: Object.keys(services).filter(key => !services[key]).length
+  });
+
+  return {
+    authService: services.authService,
+    userProfileService: services.userProfileService,
+    adminDashboardService: services.adminDashboardService,
+    analyticsService: services.analyticsService,
+    queryService: services.queryService,
+    chatHistoryService: services.chatHistoryService,
+    serviceCategoryService: services.serviceCategoryService,
+    sessionService: services.sessionService,
+    databaseOperationsService: services.databaseOperationsService,
+    logsService: services.logsService // Add logsService to return
+  };
+}
+
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   const now = new Date();
   const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
@@ -482,117 +663,159 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Robots.txt handler - prevent 404s and security probes
+// Robots.txt handler
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain');
-  res.send('User-agent: *\nDisallow: /api/\nDisallow: /uploads/');
+  res.send('User-agent: *\nDisallow: /api/\nDisallow: /Uploads/');
 });
 
-// Sitemap.xml handler - prevent 404s and security probes
+// Sitemap.xml handler
 app.get('/sitemap.xml', (req, res) => {
   res.type('application/xml');
   res.send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>');
 });
 
-// Check if route files exist
-const routeFiles = [
-  'user-routes',
-  'query-routes',
-  'service-routes',
-  'chat-history-routes',
-  'analytics-routes',
-  'session-routes',
-  'service-category-routes',
-  'auth-routes',
-  'logger-routes',
-  'database-operations-routes',
-  'admin-routes',
-  'security-routes',
-  'chat-history-routes'
-];
-const availableRoutes = routeFiles.filter(file => fs.existsSync(`./routes/${file}.js`));
-
-// Import available routes
-const routes = {};
-availableRoutes.forEach(file => {
-  routes[file] = require(`./routes/${file}`);
-});
-
-// Use available routes
-if (routes['user-routes']) {
-  logger.info('Mounting user routes at /api/users');
-  app.use('/api/users', routes['user-routes']);
-}
-if (routes['query-routes']) app.use('/api/queries', routes['query-routes']);
-if (routes['service-routes']) app.use('/api/services', routes['service-routes']);
-if (routes['chat-history-routes']) app.use('/api/chat', routes['chat-history-routes']);
-if (routes['analytics-routes']) app.use('/api/analytics', routes['analytics-routes']);
-if (routes['session-routes']) app.use('/api/sessions', routes['session-routes']);
-if (routes['service-category-routes']) app.use('/api/service-categories', routes['service-category-routes']);
-if (routes['auth-routes']) app.use('/api/auth', routes['auth-routes']);
-if (routes['logger-routes']) app.use('/api/logger', routes['logger-routes']);
-if (routes['database-operations-routes']) app.use('/api/database', routes['database-operations-routes']);
-if (routes['admin-routes']) {
-  logger.info('Mounting admin routes at /api/admin');
-  app.use('/api/admin', routes['admin-routes']);
-}
-if (routes['security-routes']) {
-  logger.info('Mounting security routes at /api/security');
-  app.use('/api/security', routes['security-routes']);
-}
-if (routes['chat-history-routes']) {
-  logger.info('Mounting chat history routes at /api/chat');
-  app.use('/api/chat', routes['chat-history-routes']);
-}
-
-// Email verification redirect
-app.get('/verify-email/:token', (req, res) => {
-  res.redirect(`/api/auth/verify-email/${req.params.token}`);
-});
-
-// Root route
-app.get('/', (req, res) => {
-  logger.info('Accessed root endpoint');
-  res.json({
-    message: 'Welcome to the Government Services API',
-    apiDocumentation: '/api-docs',
-    availableEndpoints: availableRoutes.map(route => `/api/${route.replace('-routes', '')}`)
-  });
-});
-
-// Verification success redirect
-app.get('/verify-email-success', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist/index.html'));
-});
-
-// Enhanced error handling middleware
-app.use((err, req, res, next) => {
-  logger.error(`Error processing ${req.method} ${req.url}: ${err.message}`, {
-    stack: err.stack,
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('User-Agent') || 'none'
-  });
-  res.status(500).json({
-    message: 'An unexpected error occurred',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
-
-// 404 handler - Must come after all other routes
-app.use((req, res) => {
-  logger.warn(`404 Not Found: ${req.method} ${req.url}`, {
-    ip: req.ip,
-    userAgent: req.get('User-Agent') || 'none'
-  });
-  res.status(404).json({ message: 'Resource not found' });
-});
-
 // Start the server
-app.listen(PORT, () => {
-  logger.info(`Server is running on port ${PORT}`);
-  logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+async function startApp() {
+  logger.debug('Starting application');
+  try {
+    // Initialize services
+    logger.debug('Calling initializeServices');
+    const services = await initializeServices();
+    logger.debug('Services initialized, proceeding with route setup');
+
+    // Define routes with paths and services
+    const routeConfigs = [
+      { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService },
+      { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService },
+      { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService },
+      { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService }, // Added /api/chat
+      { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService },
+      { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService },
+      { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService },
+      { file: 'auth-routes', paths: ['/api/auth'], service: services.authService },
+      { file: 'logger-routes', paths: ['/api/logger'], service: null },
+      { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
+      { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService },
+      { file: 'security-routes', paths: ['/api/security'], service: null }
+    ];
+
+    // Load and mount routes
+    for (const config of routeConfigs) {
+      logger.debug(`Checking route file ${config.file}.js`);
+      if (!fs.existsSync(`./routes/${config.file}.js`)) {
+        logger.warn(`Route file ${config.file}.js does not exist, skipping`);
+        continue;
+      }
+
+      logger.debug(`Loading route file: ${config.file}`);
+      try {
+        const routeModule = require(`./routes/${config.file}`);
+        logger.debug(`Route ${config.file} loaded successfully`);
+
+        // Special handling for analytics-routes
+        let routeInstance;
+        if (config.file === 'analytics-routes') {
+          const AnalyticsController = require('./controllers/analyticsController');
+          const analyticsController = new AnalyticsController(config.service);
+          routeInstance = routeModule(config.service, analyticsController);
+        } else {
+          routeInstance = routeModule(config.service);
+        }
+
+        // Mount routes at specified paths
+        for (const path of config.paths) {
+          logger.info(`Mounting ${config.file} at ${path}`);
+          app.use(path, routeInstance);
+          logger.debug(`${config.file} initialized with ${config.service ? config.service.constructor.name : 'no service'}`);
+          logger.info(`${config.file.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Module: LOADED`);
+          logger.info('Total routes in stack:', app._router.stack.length);
+        }
+      } catch (error) {
+        logger.error(`Failed to load or mount route ${config.file}:`, {
+          error: error.message,
+          stack: error.stack
+        });
+        logger.warn(`Skipping ${config.file}: route not loaded`);
+      }
+    }
+
+    // Email verification redirect
+    app.get('/verify-email/:token', (req, res) => {
+      logger.debug(`Redirecting to /api/auth/verify-email/${req.params.token}`);
+      res.redirect(`/api/auth/verify-email/${req.params.token}`);
+    });
+
+    // Root route
+    app.get('/', (req, res) => {
+      logger.info('Accessed root endpoint');
+      res.json({
+        message: 'Welcome to the Government Services API',
+        apiDocumentation: '/api-docs',
+        availableEndpoints: routeConfigs.map(config => config.paths).flat()
+      });
+    });
+
+    // Verification success redirect
+    app.get('/verify-email-success', (req, res) => {
+      logger.debug('Serving verify-email-success page');
+      res.sendFile(path.join(__dirname, 'dist/index.html'));
+    });
+
+    // Error handling middleware
+    app.use((err, req, res, next) => {
+      logger.error(`Error processing ${req.method} ${req.url}:`, {
+        error: err.message || 'Unknown error',
+        stack: err.stack || 'No stack trace',
+        rawError: JSON.stringify(err, Object.getOwnPropertyNames(err)),
+        errorType: err?.constructor?.name || 'Unknown',
+        method: req.method,
+        url: req.url,
+        ip: req.ip,
+        userAgent: req.get('User-Agent') || 'none'
+      });
+      res.status(500).json({
+        message: 'An unexpected error occurred',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    });
+
+    // 404 handler
+    app.use((req, res) => {
+      logger.warn(`404 Not Found: ${req.method} ${req.url}`, {
+        ip: req.ip,
+        userAgent: req.get('User-Agent') || 'none'
+      });
+      res.status(404).json({ message: 'Resource not found' });
+    });
+
+    // Start the server
+    app.listen(PORT, () => {
+      logger.info(`Server is running on port ${PORT}`);
+      logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+    });
+  } catch (error) {
+    logger.error('Startup failed:', {
+      error: error.message || 'Unknown error',
+      stack: error.stack || 'No stack trace',
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    });
+    process.exit(1);
+  }
+}
+
+// Catch unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', {
+    promise: promise.toString(),
+    reason: reason?.message || 'Unknown reason',
+    stack: reason?.stack || 'No stack trace',
+    rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
+    errorType: reason?.constructor?.name || 'Unknown'
+  });
 });
+
+startApp();
 
 module.exports = app;

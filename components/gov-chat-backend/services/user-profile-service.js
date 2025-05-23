@@ -4,24 +4,39 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
-//const { logger } = require('../logger'); // Corrected import
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 const dbService = require('../utils/db-connect-service');
 
-const initDB = dbService.getConnection();
-
 class UserProfileService {
   constructor() {
-    this.db = initDB;
-    this.users = this.db.collection('users');
-    this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+    this.dbService = dbService;
+    this.db = null;
+    this.users = null;
+    this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'Uploads');
+    this.initialized = false;
 
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
       logger.info('UserProfileService.created_upload_dir', { path: this.uploadDir });
     }
     logger.info('UserProfileService.initialized');
+  }
+
+  async init() {
+    if (this.initialized) {
+      logger.debug('UserProfileService already initialized, skipping');
+      return;
+    }
+    try {
+      this.db = await this.dbService.getConnection('default');
+      this.users = this.db.collection('users');
+      this.initialized = true;
+      logger.info('UserProfileService database initialized');
+    } catch (error) {
+      logger.error(`Error initializing UserProfileService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
 
   async createUserProfile(profileData, files = {}) {
@@ -350,7 +365,7 @@ class UserProfileService {
         throw new Error('Unsupported file object format');
       }
 
-      const fileUrl = `/uploads/${userId}/${fileName}`;
+      const fileUrl = `/Uploads/${userId}/${fileName}`;
       logger.info('UserProfileService.file_stored_success', {
         userId,
         fieldName,
@@ -635,4 +650,6 @@ class UserProfileService {
   }
 }
 
-module.exports = UserProfileService;
+// Singleton instance
+const instance = new UserProfileService();
+module.exports = instance;

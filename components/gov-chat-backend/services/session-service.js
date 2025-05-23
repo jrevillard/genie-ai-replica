@@ -1,35 +1,42 @@
 require('dotenv').config();
-const { Database, aql } = require('arangojs');
+const { aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-// const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
-const initDB = dbService.getConnection();
-
 class SessionService {
   constructor() {
-    this.db = initDB;
-    this.sessions = this.db.collection('sessions');
-    this.userSessions = this.db.collection('userSessions');
     this.sessionExpirationTime = process.env.SESSION_EXPIRATION_TIME || 30 * 60 * 1000; // 30 minutes in milliseconds
-    logger.info(`SessionService initialized successfully with expiration time: ${this.sessionExpirationTime}ms`);
+    this.db = null;
+    this.sessions = null;
+    this.userSessions = null;
+    this.initialized = false;
+    logger.info('SessionService constructor called');
   }
 
-  /**
-   * Create a new session for a user
-   * @param {String} userId - User ID
-   * @param {Object} deviceInfo - Information about the user's device
-   * @param {String} ipAddress - User's IP address
-   * @returns {Promise<Object>} The created session
-   */
+  async init() {
+    if (this.initialized) {
+      logger.debug('SessionService already initialized, skipping');
+      return;
+    }
+    try {
+      this.db = await dbService.getConnection('default');
+      this.sessions = this.db.collection('sessions');
+      this.userSessions = this.db.collection('userSessions');
+      this.initialized = true;
+      logger.info(`SessionService initialized successfully with expiration time: ${this.sessionExpirationTime}ms`);
+    } catch (error) {
+      logger.error(`Error initializing SessionService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
   async createSession(userId, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Creating session for user ${userId}`);
 
-      // Create basic session document - let ArangoDB generate the key
       const basicSessionDoc = {
         userId,
         startTime: new Date().toISOString(),
@@ -41,7 +48,6 @@ class SessionService {
       const sessionId = session._key;
       logger.info(`Session created with auto-generated key: ${sessionId}`);
       
-      // Add additional information if provided
       const updateData = {};
       
       if (deviceInfo && typeof deviceInfo === 'object' && Object.keys(deviceInfo).length > 0) {
@@ -52,13 +58,11 @@ class SessionService {
         updateData.ipAddress = ipAddress;
       }
       
-      // Update with additional data if needed
       if (Object.keys(updateData).length > 0) {
         logger.info(`Updating session ${sessionId} with additional data: ${JSON.stringify(updateData)}`);
         await this.sessions.update(sessionId, updateData);
       }
 
-      // Create edge between user and session
       try {
         logger.info(`Creating edge between user ${userId} and session ${sessionId}`);
         await this.userSessions.save({
@@ -71,7 +75,6 @@ class SessionService {
         logger.error(`Error creating user-session edge for user ${userId}: ${error.message}`, { stack: error.stack });
       }
 
-      // Return the full session document
       const fullSession = await this.sessions.document(sessionId);
       logger.info(`Session created successfully: ${sessionId} for user ${userId}`);
       return fullSession;
@@ -81,11 +84,6 @@ class SessionService {
     }
   }
 
-  /**
-   * Get active session for a user
-   * @param {String} userId - User ID
-   * @returns {Promise<Object|null>} The active session or null if none exists
-   */
   async getActiveSession(userId) {
     try {
       logger.info(`Fetching active session for user ${userId}`);
@@ -108,7 +106,6 @@ class SessionService {
         return null;
       }
 
-      // Check if session has expired
       const sessionStartTime = new Date(session.startTime).getTime();
       const currentTime = new Date().getTime();
       
@@ -126,13 +123,6 @@ class SessionService {
     }
   }
 
-  /**
-   * Get or create a session for a user
-   * @param {String} userId - User ID
-   * @param {Object} deviceInfo - Information about the user's device
-   * @param {String} ipAddress - User's IP address
-   * @returns {Promise<Object>} The active or newly created session
-   */
   async getOrCreateSession(userId, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Getting or creating session for user ${userId}`);
@@ -154,16 +144,10 @@ class SessionService {
     }
   }
 
-  /**
-   * End a session
-   * @param {String} sessionId - Session ID
-   * @returns {Promise<Object>} The updated session
-   */
   async endSession(sessionId) {
     try {
       logger.info(`Ending session ${sessionId}`);
 
-      // Verify session exists and get current state
       try {
         const currentSession = await this.sessions.document(sessionId);
         logger.info(`Current session state before update: ${JSON.stringify(currentSession)}`);
@@ -176,7 +160,6 @@ class SessionService {
         logger.error(`Error reading session before update: ${readError.message}`, { stack: readError.stack });
       }
 
-      // Perform update with debugging
       logger.info(`Attempting to update session ${sessionId}`);
 
       const updateData = {
@@ -194,7 +177,6 @@ class SessionService {
 
       logger.info(`Session update result: ${JSON.stringify(updatedSession.new)}`);
 
-      // Verify the update was successful
       try {
         const verifiedSession = await this.sessions.document(sessionId);
         logger.info(`Verified session state after update: ${JSON.stringify(verifiedSession)}`);
@@ -216,11 +198,6 @@ class SessionService {
     }
   }
 
-  /**
-   * Keep a session alive (refresh expiration)
-   * @param {String} sessionId - Session ID
-   * @returns {Promise<Object>} The updated session
-   */
   async keepSessionAlive(sessionId) {
     try {
       logger.info(`Keeping session ${sessionId} alive`);
@@ -241,12 +218,6 @@ class SessionService {
     }
   }
 
-  /**
-   * Get all sessions for a user
-   * @param {String} userId - User ID
-   * @param {Boolean} activeOnly - Whether to return only active sessions
-   * @returns {Promise<Array>} User sessions
-   */
   async getUserSessions(userId, activeOnly = false) {
     try {
       logger.info(`Fetching sessions for user ${userId}${activeOnly ? ' (active only)' : ''}`);
@@ -280,11 +251,6 @@ class SessionService {
     }
   }
 
-  /**
-   * Get session by ID
-   * @param {String} sessionId - Session ID
-   * @returns {Promise<Object>} The session
-   */
   async getSession(sessionId) {
     try {
       logger.info(`Fetching session ${sessionId}`);
@@ -298,10 +264,6 @@ class SessionService {
     }
   }
 
-  /**
-   * Clean up expired sessions
-   * @returns {Promise<Object>} Cleanup result
-   */
   async cleanupExpiredSessions() {
     try {
       logger.info('Starting cleanup of expired sessions');
@@ -335,13 +297,7 @@ class SessionService {
       throw error;
     }
   }
-  
-  /**
-   * Get session statistics
-   * @param {String} startDate - Start date (ISO string)
-   * @param {String} endDate - End date (ISO string)
-   * @returns {Promise<Object>} Session statistics
-   */
+
   async getSessionStats(startDate, endDate) {
     try {
       logger.info(`Fetching session statistics from ${startDate} to ${endDate}`);
@@ -405,4 +361,6 @@ class SessionService {
   }
 }
 
-module.exports = SessionService;
+// Singleton instance
+const instance = new SessionService();
+module.exports = instance;

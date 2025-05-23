@@ -1,30 +1,48 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-//const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
 
-// Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
-
-const initDB = dbService.getConnection();
 
 class AnalyticsService {
   constructor() {
-    this.db = initDB;
-    this.analytics = this.db.collection('analytics');
-    this.events = this.db.collection('events');
-    this.queriesCollection = this.db.collection('queries');
-    this.usersCollection = this.db.collection('users');
-    this.sessionsCollection = this.db.collection('sessions');
-    this.serviceCategoriesCollection = this.db.collection('serviceCategories');
+    this.dbService = dbService;
+    this.db = null;
+    this.analytics = null;
+    this.events = null;
+    this.queriesCollection = null;
+    this.usersCollection = null;
+    this.sessionsCollection = null;
+    this.serviceCategoriesCollection = null;
+    this.initialized = false;
+    logger.info('AnalyticsService constructor called');
+  }
 
-    // Initialize collections
-    logger.info('Initializing AnalyticsService...');
-    this.initialize()
-      .then(() => this.ensureServiceCategories())
-      .catch(err => logger.error('Error during initialization: ', { stack: err.stack }));
+  async init() {
+    if (this.initialized) {
+      logger.debug('AnalyticsService already initialized, skipping');
+      return;
+    }
+    try {
+      this.db = await this.dbService.getConnection('default');
+      this.analytics = this.db.collection('analytics');
+      this.events = this.db.collection('events');
+      this.queriesCollection = this.db.collection('queries');
+      this.usersCollection = this.db.collection('users');
+      this.sessionsCollection = this.db.collection('sessions');
+      this.serviceCategoriesCollection = this.db.collection('serviceCategories');
+
+      logger.info('Initializing AnalyticsService...');
+      await this.initialize();
+      await this.ensureServiceCategories();
+      this.initialized = true;
+      logger.info('AnalyticsService initialized successfully');
+    } catch (error) {
+      logger.error(`Error initializing AnalyticsService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
 
   /**
@@ -33,11 +51,9 @@ class AnalyticsService {
    */
   async initialize() {
     try {
-      // Check if collections exist and create them if they don't
       const collections = await this.db.listCollections();
       const collectionNames = collections.map(c => c.name);
 
-      // Function to create a collection if it doesn't exist
       const ensureCollection = async (name) => {
         if (!collectionNames.includes(name)) {
           logger.info(`Creating ${name} collection...`);
@@ -45,8 +61,7 @@ class AnalyticsService {
             await this.db.createCollection(name);
             logger.info(`Created ${name} collection successfully`);
           } catch (err) {
-            // If collection was created in the meantime, ignore the error
-            if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
+            if (err.errorNum !== 1207) {
               throw err;
             }
             logger.warn(`Collection ${name} already exists, skipping creation`);
@@ -54,18 +69,15 @@ class AnalyticsService {
         }
       };
 
-      // Ensure all required collections exist
       await ensureCollection('analytics');
       await ensureCollection('events');
 
-      // Update local references to ensure they're valid
       this.analytics = this.db.collection('analytics');
       this.events = this.db.collection('events');
 
       logger.info('Collections initialized successfully');
     } catch (error) {
       logger.error(`Error initializing collections: ${error.message}`, { stack: error.stack });
-      // Don't throw here, log the error but allow service to continue
     }
   }
 
@@ -75,28 +87,24 @@ class AnalyticsService {
    */
   async ensureServiceCategories() {
     try {
-      // Check if serviceCategories collection exists
       const collections = await this.db.listCollections();
       const collectionNames = collections.map(c => c.name);
 
-      // Create the collection if it doesn't exist
       if (!collectionNames.includes('serviceCategories')) {
         logger.info('Creating serviceCategories collection...');
         try {
           await this.db.createCollection('serviceCategories');
           logger.info('Created serviceCategories collection successfully');
         } catch (err) {
-          if (err.errorNum !== 1207) { // 1207 is "duplicate name" error
+          if (err.errorNum !== 1207) {
             throw err;
           }
           logger.warn('serviceCategories collection already exists, skipping creation');
         }
       }
 
-      // Reference to the serviceCategories collection
       const serviceCategories = this.db.collection('serviceCategories');
 
-      // Check if the collection is empty
       const cursor = await this.db.query(`
         FOR doc IN serviceCategories
         LIMIT 1
@@ -105,11 +113,9 @@ class AnalyticsService {
 
       const existingCategories = await cursor.all();
 
-      // If the collection is empty, add sample service categories
       if (existingCategories.length === 0) {
         logger.info('Adding sample service categories...');
 
-        // Sample categories with meaningful names
         const sampleCategories = [
           { _key: "1", nameEN: "Identity & Civil Registration", nameFR: "Identité et état civil", nameSW: "Utambulisho na Usajili wa Raia", order: 1 },
           { _key: "2", nameEN: "Transportation", nameFR: "Transport", nameSW: "Usafiri", order: 2 },
@@ -126,14 +132,12 @@ class AnalyticsService {
           { _key: "13", nameEN: "Legal Services", nameFR: "Services Juridiques", nameSW: "Huduma za Kisheria", order: 13 }
         ];
 
-        // Insert the sample categories
         for (const category of sampleCategories) {
           try {
             await serviceCategories.save(category);
             logger.info(`Sample category ${category._key} saved successfully`);
           } catch (err) {
             logger.error(`Error saving category ${category._key}: ${err.message}`, { stack: err.stack });
-            // Continue with the next category on error
           }
         }
 
@@ -666,110 +670,6 @@ class AnalyticsService {
       },
       topQueries: sampleTopQueries
     };
-  }
-
-  /**
-   * Get general analytics
-   * @param {Object} filters - Filters to apply
-   * @param {String} startDate - Start date (ISO string)
-   * @param {String} endDate - End date (ISO string)
-   * @returns {Promise<Object>} General analytics data
-   */
-  async getAnalytics(filters = {}, startDate, endDate) {
-    try {
-      const validStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const validEndDate = endDate || new Date().toISOString();
-
-      logger.info(`Getting general analytics from ${validStartDate} to ${validEndDate} with filters: ${JSON.stringify(filters)}`);
-
-      await this.initialize();
-
-      const query = `
-        FOR a IN analytics
-          FILTER a.timestamp >= @startDate
-          FILTER a.timestamp <= @endDate
-          ${filters && filters.type ? 'FILTER a.type == @type' : ''}
-          ${filters && filters.userId ? 'FILTER a.userId == @userId' : ''}
-          ${filters && filters.categoryId ? 'FILTER a.data.categoryId == @categoryId' : ''}
-          ${filters && filters.serviceId ? 'FILTER a.data.serviceId == @serviceId' : ''}
-          SORT a.timestamp DESC
-          LIMIT 1000
-          RETURN a
-      `;
-
-      const bindVars = {
-        startDate: validStartDate,
-        endDate: validEndDate
-      };
-
-      if (filters) {
-        if (filters.type) bindVars.type = filters.type;
-        if (filters.userId) bindVars.userId = filters.userId;
-        if (filters.categoryId) bindVars.categoryId = filters.categoryId;
-        if (filters.serviceId) bindVars.serviceId = filters.serviceId;
-      }
-
-      logger.info('Executing analytics query with bind vars:', JSON.stringify(bindVars));
-
-      const cursor = await this.db.query(query, bindVars);
-      const analyticsData = await cursor.all();
-
-      const processedData = {
-        queryCount: 0,
-        feedbackCount: 0,
-        avgRating: 0,
-        timeDistribution: {},
-        categoryDistribution: {},
-        raw: analyticsData
-      };
-
-      const queryData = analyticsData.filter(a => a && a.type === 'query');
-      const feedbackData = analyticsData.filter(a => a && a.type === 'feedback');
-
-      processedData.queryCount = queryData.length;
-      processedData.feedbackCount = feedbackData.length;
-
-      if (feedbackData.length > 0) {
-        let totalRating = 0;
-        let ratingCount = 0;
-
-        for (const item of feedbackData) {
-          if (item.data && typeof item.data.rating === 'number') {
-            totalRating += item.data.rating;
-            ratingCount++;
-          }
-        }
-
-        processedData.avgRating = ratingCount > 0 ? totalRating / ratingCount : 0;
-      }
-
-      for (const item of analyticsData) {
-        if (item && item.timestamp) {
-          try {
-            const hour = new Date(item.timestamp).getHours();
-            if (!isNaN(hour)) {
-              processedData.timeDistribution[hour] = (processedData.timeDistribution[hour] || 0) + 1;
-            }
-          } catch (err) {
-            logger.error(`Invalid timestamp in analytics item: ${item.timestamp}`, { stack: err.stack });
-          }
-        }
-      }
-
-      for (const item of queryData) {
-        if (item && item.data && item.data.categoryId) {
-          const catId = item.data.categoryId;
-          processedData.categoryDistribution[catId] = (processedData.categoryDistribution[catId] || 0) + 1;
-        }
-      }
-
-      logger.info('General analytics retrieved successfully');
-      
-      return processedData;
-    } catch (error) {
-      logger.error(`Error getting analytics: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
   }
 
   /**
@@ -1440,4 +1340,6 @@ class AnalyticsService {
   }
 }
 
-module.exports = AnalyticsService;
+// Singleton instance
+const instance = new AnalyticsService();
+module.exports = instance;

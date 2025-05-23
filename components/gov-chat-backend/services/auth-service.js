@@ -4,150 +4,112 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('./email-service');
-//const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
 
-const initDB = dbService.getConnection();
-
-/**
- * Service to handle user authentication and password management
- */
 class AuthService {
   constructor() {
-    this.db = initDB;
-    this.users = this.db.collection('users');
-    this.passwordResetTokens = this.db.collection('passwordResetTokens');
-    this.verificationTokens = this.db.collection('verificationTokens');
-
-    // JWT settings
+    this.dbService = dbService;
     this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key-here-change-in-production';
     this.jwtExpiresIn = process.env.JWT_EXPIRES_IN || '24h';
-
-    // Password reset settings
     this.tokenExpiryMinutes = 5; // Token expires in 5 minutes
-
-    // Ensure collections exist
-    logger.info('Initializing AuthService...');
-    this.initialize()
-      .catch(err => logger.error(`Error during authentication service initialization: ${err.message}`, { stack: err.stack }));
+    this.initialized = false;
+    this.sessionService = null; // Will be set via setSessionService
+    logger.info('AuthService constructor called');
   }
 
-  /**
-   * Initialize necessary collections and indexes
-   * @returns {Promise<void>}
-   */
+  // Setter for SessionService singleton
+  setSessionService(sessionService) {
+    if (!sessionService || typeof sessionService.createSession !== 'function') {
+      logger.error('Invalid sessionService provided to AuthService');
+      throw new Error('Invalid sessionService');
+    }
+    this.sessionService = sessionService;
+    logger.debug('SessionService set in AuthService');
+  }
+
+  async init() {
+    try {
+      logger.info('Starting AuthService initialization');
+      this.db = await this.dbService.getConnection();
+      if (!this.db) {
+        throw new Error('Failed to get database connection from dbService');
+      }
+      this.users = this.db.collection('users');
+      this.passwordResetTokens = this.db.collection('passwordResetTokens');
+      this.verificationTokens = this.db.collection('verificationTokens');
+      await this.initialize();
+      this.initialized = true;
+      logger.info('AuthService initialized successfully');
+    } catch (error) {
+      logger.error(`Error initializing AuthService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
   async initialize() {
     try {
-      // Check if collections exist and create them if they don't
+      logger.info('Initializing collections and indexes');
       const collections = await this.db.listCollections();
       const collectionNames = collections.map(c => c.name);
 
-      // Ensure passwordResetTokens collection exists
       if (!collectionNames.includes('passwordResetTokens')) {
         logger.info('Creating passwordResetTokens collection...');
         await this.db.createCollection('passwordResetTokens');
         logger.info('Created passwordResetTokens collection successfully');
 
-        // Create indexes for passwordResetTokens
-        await this.passwordResetTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['userId']
-        });
-
-        await this.passwordResetTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['token'],
-          unique: true
-        });
-
-        await this.passwordResetTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['expiresAt']
-        });
-
-        await this.passwordResetTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['used']
-        });
+        await Promise.all([
+          this.passwordResetTokens.ensureIndex({ type: 'persistent', fields: ['userId'] }),
+          this.passwordResetTokens.ensureIndex({ type: 'persistent', fields: ['token'], unique: true }),
+          this.passwordResetTokens.ensureIndex({ type: 'persistent', fields: ['expiresAt'] }),
+          this.passwordResetTokens.ensureIndex({ type: 'persistent', fields: ['used'] }),
+        ]);
+        logger.info('Indexes created for passwordResetTokens');
       } else {
         logger.info('passwordResetTokens collection already exists, skipping creation');
       }
 
-      // Ensure verificationTokens collection exists
       if (!collectionNames.includes('verificationTokens')) {
         logger.info('Creating verificationTokens collection...');
         await this.db.createCollection('verificationTokens');
         logger.info('Created verificationTokens collection successfully');
 
-        // Create indexes for verificationTokens
-        await this.verificationTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['userId']
-        });
-
-        await this.verificationTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['token'],
-          unique: true
-        });
-
-        await this.verificationTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['expiresAt']
-        });
-
-        await this.verificationTokens.ensureIndex({
-          type: 'persistent',
-          fields: ['used']
-        });
+        await Promise.all([
+          this.verificationTokens.ensureIndex({ type: 'persistent', fields: ['userId'] }),
+          this.verificationTokens.ensureIndex({ type: 'persistent', fields: ['token'], unique: true }),
+          this.verificationTokens.ensureIndex({ type: 'persistent', fields: ['expiresAt'] }),
+          this.verificationTokens.ensureIndex({ type: 'persistent', fields: ['used'] }),
+        ]);
+        logger.info('Indexes created for verificationTokens');
       } else {
         logger.info('verificationTokens collection already exists, skipping creation');
       }
 
-      // Ensure indexes for users collection
-      await this.users.ensureIndex({
-        type: 'persistent',
-        fields: ['loginName'],
-        unique: true
-      });
-
-      await this.users.ensureIndex({
-        type: 'persistent',
-        fields: ['email'],
-        unique: true
-      });
+      await Promise.all([
+        this.users.ensureIndex({ type: 'persistent', fields: ['loginName'], unique: true }),
+        this.users.ensureIndex({ type: 'persistent', fields: ['email'], unique: true }),
+      ]);
+      logger.info('Indexes ensured for users collection');
 
       logger.info('Auth service initialized successfully');
     } catch (error) {
-      logger.error(`Error initializing auth service: ${error.message}`, { stack: error.stack });
+      logger.error(`Error initializing auth service collections: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
 
-  /**
-   * Register a new user
-   * @param {Object} userData - User registration data
-   * @param {string} frontendUrl - Frontend URL for UI links
-   * @param {string} backendUrl - Backend URL for API endpoints
-   * @returns {Promise<Object>} The registered user with token
-   */
   async register(userData) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Registering new user with loginName: ${userData.loginName}`);
 
       const frontendUrl = userData.frontendUrl;
       const backendUrl = userData.backendUrl;
 
-      if (frontendUrl) {
-        logger.info(`Frontend URL for registration: ${frontendUrl}`);
-      }
-
-      if (backendUrl) {
-        logger.info(`Backend URL for registration: ${backendUrl}`);
-      }
+      if (frontendUrl) logger.info(`Frontend URL for registration: ${frontendUrl}`);
+      if (backendUrl) logger.info(`Backend URL for registration: ${backendUrl}`);
 
       if (!userData.loginName || !userData.email || !userData.encPassword) {
         logger.warn('Missing required fields: loginName, email, and encPassword are required');
@@ -221,13 +183,9 @@ class AuthService {
     }
   }
 
-  /**
-   * Authenticate a user
-   * @param {string} loginName - Username or email
-   * @param {string} encPassword - Encrypted/hashed password from client (SHA-256)
-   * @returns {Promise<Object>} Authenticated user with token
-   */
   async login(loginName, encPassword) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
+    if (!this.sessionService) throw new Error('SessionService not set in AuthService');
     try {
       logger.info(`Attempting login for user: ${loginName}`);
 
@@ -260,12 +218,9 @@ class AuthService {
         updatedAt: new Date().toISOString()
       });
 
-      const SessionService = require('./session-service');
-      const sessionService = new SessionService();
-
       logger.info(`Creating session for user ${user._key} during login`);
       try {
-        await sessionService.createSession(user._key);
+        await this.sessionService.createSession(user._key);
       } catch (sessionError) {
         logger.error(`Failed to create session, but continuing login: ${sessionError.message}`, { stack: sessionError.stack });
       }
@@ -282,12 +237,9 @@ class AuthService {
     }
   }
 
-  /**
-   * Log out a user (invalidate token)
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Logout result
-   */
   async logout(userId) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
+    if (!this.sessionService) throw new Error('SessionService not set in AuthService');
     try {
       logger.info(`Logging out user with ID: ${userId}`);
 
@@ -297,13 +249,10 @@ class AuthService {
       });
 
       try {
-        const SessionService = require('./session-service');
-        const sessionService = new SessionService();
-
-        const activeSession = await sessionService.getActiveSession(userId);
+        const activeSession = await this.sessionService.getActiveSession(userId);
         if (activeSession) {
           logger.info(`Ending active session ${activeSession._key} for user ${userId} during logout`);
-          await sessionService.endSession(activeSession._key);
+          await this.sessionService.endSession(activeSession._key);
         }
       } catch (sessionError) {
         logger.error(`Failed to end session, but continuing logout: ${sessionError.message}`, { stack: sessionError.stack });
@@ -317,14 +266,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Send verification email to user
-   * @param {Object} user - User object
-   * @param {string} frontendUrl - Frontend URL for UI links
-   * @param {string} backendUrl - Backend URL for API endpoints
-   * @returns {Promise<Object>} Send result
-   */
   async sendVerificationEmail(user, frontendUrl, backendUrl) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       if (!user || !user.email) {
         logger.error('Missing user or email for verification email', { user });
@@ -336,17 +279,11 @@ class AuthService {
 
       logger.info(`Preparing to send verification email to ${user.email}`);
 
-      if (envFrontendUrl) {
-        logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
-      } else if (frontendUrl) {
-        logger.info(`Using provided frontend URL: ${frontendUrl}`);
-      } else {
-        logger.info('No frontend URL provided, using email service default');
-      }
+      if (envFrontendUrl) logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+      else if (frontendUrl) logger.info(`Using provided frontend URL: ${frontendUrl}`);
+      else logger.info('No frontend URL provided, using email service default');
 
-      if (backendUrl) {
-        logger.info(`Using backend URL: ${backendUrl}`);
-      }
+      if (backendUrl) logger.info(`Using backend URL: ${backendUrl}`);
 
       const cleanupQuery = aql`
         FOR t IN verificationTokens
@@ -421,31 +358,19 @@ class AuthService {
     }
   }
 
-  /**
-   * Resend verification email
-   * @param {string} email - User's email
-   * @param {string} frontendUrl - Frontend URL for UI links
-   * @param {string} backendUrl - Backend URL for API endpoints
-   * @returns {Promise<Object>} Send result
-   */
   async resendVerificationEmail(email, frontendUrl, backendUrl) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Resending verification email to: ${email}`);
 
       const envFrontendUrl = process.env.FRONTEND_URL;
       const finalFrontendUrl = envFrontendUrl || frontendUrl;
 
-      if (envFrontendUrl) {
-        logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
-      } else if (frontendUrl) {
-        logger.info(`Using provided frontend URL: ${frontendUrl}`);
-      } else {
-        logger.info('No frontend URL provided, using email service default');
-      }
+      if (envFrontendUrl) logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+      else if (frontendUrl) logger.info(`Using provided frontend URL: ${frontendUrl}`);
+      else logger.info('No frontend URL provided, using email service default');
 
-      if (backendUrl) {
-        logger.info(`Using backend URL: ${backendUrl}`);
-      }
+      if (backendUrl) logger.info(`Using backend URL: ${backendUrl}`);
 
       const user = await this.getUserByEmail(email);
       if (!user) {
@@ -477,12 +402,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Verify user's email with token
-   * @param {string} token - Verification token
-   * @returns {Promise<Object>} Verification result
-   */
   async verifyEmail(token) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Verifying email with token: ${token}`);
 
@@ -573,31 +494,19 @@ class AuthService {
     }
   }
 
-  /**
-   * Generate a reset token and send it to the user's email
-   * @param {string} email - User's email
-   * @param {string} frontendUrl - Frontend URL for UI links
-   * @param {string} backendUrl - Backend URL for API endpoints
-   * @returns {Promise<Object>} Reset token result
-   */
   async initiatePasswordReset(email, frontendUrl, backendUrl) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Initiating password reset for email: ${email}`);
 
       const envFrontendUrl = process.env.FRONTEND_URL;
       const finalFrontendUrl = envFrontendUrl || frontendUrl;
 
-      if (envFrontendUrl) {
-        logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
-      } else if (frontendUrl) {
-        logger.info(`Using provided frontend URL: ${frontendUrl}`);
-      } else {
-        logger.info('No frontend URL provided, using email service default');
-      }
+      if (envFrontendUrl) logger.info(`Using environment FRONTEND_URL: ${envFrontendUrl}`);
+      else if (frontendUrl) logger.info(`Using provided frontend URL: ${frontendUrl}`);
+      else logger.info('No frontend URL provided, using email service default');
 
-      if (backendUrl) {
-        logger.info(`Using backend URL: ${backendUrl}`);
-      }
+      if (backendUrl) logger.info(`Using backend URL: ${backendUrl}`);
 
       const user = await this.getUserByEmail(email);
       if (!user) {
@@ -645,12 +554,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Validate a password reset token
-   * @param {string} token - Reset token
-   * @returns {Promise<Object>} Token validation result
-   */
   async validateResetToken(token) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Validating password reset token: ${token}`);
 
@@ -693,13 +598,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Complete password reset process
-   * @param {string} token - Reset token
-   * @param {string} newPassword - New password (already hashed from client)
-   * @returns {Promise<Object>} Password reset result
-   */
   async resetPassword(token, newPassword) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Completing password reset with token: ${token}`);
 
@@ -735,14 +635,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Change password for authenticated user
-   * @param {string} userId - User ID
-   * @param {string} currentPassword - Current password (hashed from client)
-   * @param {string} newPassword - New password (hashed from client) 
-   * @returns {Promise<Object>} Password change result
-   */
   async changePassword(userId, currentPassword, newPassword) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Changing password for user ${userId}`);
 
@@ -773,12 +667,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Get user by ID
-   * @param {string} userId - User ID 
-   * @returns {Promise<Object>} User or null
-   */
   async getUserById(userId) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Fetching user by ID: ${userId}`);
       const user = await this.users.document(userId);
@@ -794,13 +684,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Get user by login name or email
-   * @param {string} loginName - Login name to check
-   * @param {string} email - Email to check
-   * @returns {Promise<Object>} User or null
-   */
   async getUserByLoginNameOrEmail(loginName, email) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Fetching user by loginName: ${loginName} or email: ${email}`);
       const query = aql`
@@ -823,12 +708,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Get user by email
-   * @param {string} email - Email to check
-   * @returns {Promise<Object>} User or null
-   */
   async getUserByEmail(email) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Fetching user by email: ${email}`);
       const query = aql`
@@ -851,12 +732,8 @@ class AuthService {
     }
   }
 
-  /**
-   * Verify a JWT token
-   * @param {string} token - JWT token
-   * @returns {Promise<Object>} Decoded token payload or null
-   */
   async verifyToken(token) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info('Verifying JWT token');
 
@@ -876,11 +753,6 @@ class AuthService {
     }
   }
 
-  /**
-   * Generate a JWT token for a user
-   * @param {Object} user - User object
-   * @returns {string} JWT token
-   */
   generateToken(user) {
     logger.info(`Generating JWT token for user: ${user._key}`);
     const token = jwt.sign(
@@ -896,11 +768,6 @@ class AuthService {
     return token;
   }
 
-  /**
-   * Hash a password with bcrypt
-   * @param {string} password - Client-hashed password (SHA-256)
-   * @returns {Promise<string>} Server-hashed password (bcrypt)
-   */
   async hashPassword(password) {
     logger.info('Hashing password with bcrypt');
     const saltRounds = 10;
@@ -909,12 +776,6 @@ class AuthService {
     return hashedPassword;
   }
 
-  /**
-   * Verify a password against stored hash, supporting both formats
-   * @param {string} clientPassword - SHA-256 hash from client
-   * @param {string} storedPassword - Password hash from database
-   * @returns {Promise<boolean>} True if password matches
-   */
   async verifyPassword(clientPassword, storedPassword) {
     logger.info('Verifying password');
     if (storedPassword.startsWith('$2')) {
@@ -931,12 +792,6 @@ class AuthService {
     return false;
   }
 
-  /**
-   * Compare a password with a hashed password (legacy method)
-   * @param {string} password - Client-hashed password (SHA-256)
-   * @param {string} hashedPassword - Hashed password from database
-   * @returns {Promise<boolean>} True if password matches
-   */
   async comparePasswords(password, hashedPassword) {
     logger.info('Comparing passwords (legacy method)');
     const isValid = await this.verifyPassword(password, hashedPassword);
@@ -944,11 +799,8 @@ class AuthService {
     return isValid;
   }
 
-  /**
-   * Clean up expired tokens
-   * @returns {Promise<Object>} Cleanup result
-   */
   async cleanupExpiredTokens() {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info('Cleaning up expired tokens');
       const now = new Date().toISOString();
@@ -987,4 +839,7 @@ class AuthService {
   }
 }
 
-module.exports = new AuthService();
+// Create singleton instance
+const authServiceInstance = new AuthService();
+
+module.exports = authServiceInstance;

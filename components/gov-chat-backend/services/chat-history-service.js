@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
@@ -10,15 +10,42 @@ const initDB = dbService.getConnection();
 
 class ChatHistoryService {
   constructor() {
-    this.db = initDB;
-    this.conversations = this.db.collection('conversations');
-    this.messages = this.db.collection('messages');
-    this.userConversations = this.db.collection('userConversations');
-    this.conversationCategories = this.db.collection('conversationCategories');
-    this.queryMessages = this.db.collection('queryMessages');
+    if (ChatHistoryService.instance) {
+      return ChatHistoryService.instance;
+    }
+    this.dbService = dbService; // Store the service reference instead of the promise
     this.analyticsService = null; // Will be set via dependency injection
+    this.initialized = false;
+    logger.info('ChatHistoryService constructor called');
+    ChatHistoryService.instance = this;
+    return this;
+  }
 
-    logger.info('ChatHistoryService initialized');
+  static getInstance() {
+    if (!ChatHistoryService.instance) {
+      ChatHistoryService.instance = new ChatHistoryService();
+    }
+    return ChatHistoryService.instance;
+  }
+
+  async init() {
+    if (this.initialized) {
+      logger.debug('ChatHistoryService already initialized, skipping');
+      return;
+    }
+    try {
+      this.db = await this.dbService.getConnection();
+      this.conversations = this.db.collection('conversations');
+      this.messages = this.db.collection('messages');
+      this.userConversations = this.db.collection('userConversations');
+      this.conversationCategories = this.db.collection('conversationCategories');
+      this.queryMessages = this.db.collection('queryMessages');
+      this.initialized = true;
+      logger.info('ChatHistoryService initialized successfully');
+    } catch (error) {
+      logger.error(`Error initializing ChatHistoryService: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
   }
 
   /**
@@ -2395,4 +2422,5 @@ class ChatHistoryService {
   }
 
 }
-module.exports = ChatHistoryService;
+const chatHistoryService = ChatHistoryService.getInstance();
+module.exports = chatHistoryService;

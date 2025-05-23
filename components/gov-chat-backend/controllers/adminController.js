@@ -1,20 +1,14 @@
-// src/controllers/adminController.js
-const adminDashboardService = require('../services/admin-dashboard-service');
-const logsService = require('../services/logs-service');
-//const { logger, triggerLogRollover } = require('../logger');
-const { logger, triggerLogRollover } = require('shared-lib');
+const AdminDashboardService = require('../services/admin-dashboard-service');
+const LogsService = require('../services/logs-service');
+const { logger, triggerLogRollover } = require('../shared-lib');
 
-// Admin controller methods
 const adminController = {
-  /**
-   * Get system health overview data 
-   */
   async getSystemHealth(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Fetching system health metrics');
-      
       const healthData = await adminDashboardService.getSystemHealth();
-      
       res.json({ 
         success: true, 
         data: {
@@ -32,15 +26,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Get database statistics
-   */
   async getDatabaseStats(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Fetching database statistics');
-      
       const dbStats = await adminDashboardService.getDatabaseStats();
-      
       res.json({ 
         success: true, 
         data: {
@@ -58,17 +49,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Reindex database
-   */
   async reindexDatabase(req, res) {
     try {
+      const databaseOperationsService = new DatabaseOperationsService();
+      await databaseOperationsService.init();
       logger.info('Controller: Reindexing database');
-      
-      // Forward to the existing database operations service
-      // This assumes you have a reindexDatabase function in your database service
       const response = await databaseOperationsService.reindexDatabase();
-      
       res.json(response);
     } catch (error) {
       logger.error(`Error reindexing database: ${error.message}`, { stack: error.stack });
@@ -80,17 +66,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Backup database
-   */
   async backupDatabase(req, res) {
     try {
+      const databaseOperationsService = new DatabaseOperationsService();
+      await databaseOperationsService.init();
       logger.info('Controller: Backing up database');
-      
-      // Forward to the existing database operations service
-      // This assumes you have a backupDatabase function in your database service
       const response = await databaseOperationsService.backupDatabase();
-      
       res.json(response);
     } catch (error) {
       logger.error(`Error backing up database: ${error.message}`, { stack: error.stack });
@@ -102,17 +83,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Optimize database
-   */
   async optimizeDatabase(req, res) {
     try {
+      const databaseOperationsService = new DatabaseOperationsService();
+      await databaseOperationsService.init();
       logger.info('Controller: Optimizing database');
-      
-      // Forward to the existing database operations service
-      // This assumes you have an optimizeDatabase function in your database service
       const response = await databaseOperationsService.optimizeDatabase();
-      
       res.json(response);
     } catch (error) {
       logger.error(`Error optimizing database: ${error.message}`, { stack: error.stack });
@@ -124,21 +100,17 @@ const adminController = {
     }
   },
   
-  /**
-   * Get system logs
-   */
   async getLogs(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Fetching system logs');
-      
       const options = {
         limit: req.query.limit || 100,
         level: req.query.level,
         service: req.query.service
       };
-      
       const logsData = await adminDashboardService.getLogs(options);
-      
       res.json({ 
         success: true, 
         data: logsData
@@ -153,17 +125,13 @@ const adminController = {
     }
   },
   
-  /**
-   * Get logs summary grouped by type and service
-   */
   async getLogsSummary(req, res) {
     try {
+      const logsService = new LogsService();
+      await logsService.init();
       logger.info('Controller: Fetching logs summary');
-      
-      const options = req.query; // Pass all query parameters to the service
-      
+      const options = req.query;
       const logsSummary = await logsService.getLogsSummary(options);
-      
       res.json({ 
         success: true, 
         data: logsSummary
@@ -178,19 +146,12 @@ const adminController = {
     }
   },
 
-  /**
-   * Search logs with filtering
-   */
   async searchLogs(req, res) {
     try {
+      const logsService = new LogsService();
+      await logsService.init();
       logger.info('Controller: Searching logs');
-      
-      // Pass the complete query object to the service
-      // The logs service now handles parsing params if needed
       const result = await logsService.searchLogs(req.query);
-      
-      // Return the service result directly
-      // The logs service now returns the correct structure
       return res.json(result);
     } catch (error) {
       logger.error(`Error searching logs: ${error.message}`, { stack: error.stack });
@@ -202,15 +163,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Debug yesterday's logs
-   */
   async debugYesterdayLogs(req, res) {
     try {
+      const logsService = new LogsService();
+      await logsService.init();
       logger.info('Controller: Debugging yesterday logs');
-      
       const result = await logsService.debugYesterdayLogs();
-      
       res.json({ 
         success: true, 
         data: result
@@ -225,16 +183,10 @@ const adminController = {
     }
   },
   
-  /**
-   * Rollover logs
-   */
   async rolloverLogs(req, res) {
     try {
       logger.info('Controller: Triggering log rollover');
-      
-      // Use the imported function to trigger log rollover
       triggerLogRollover();
-      
       res.json({ 
         success: true, 
         message: 'Logs rolled over successfully',
@@ -250,15 +202,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Get user statistics
-   */
   async getUserStats(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Fetching user statistics');
-      
       const userStats = await adminDashboardService.getUserStats();
-      
       res.json({ 
         success: true, 
         data: userStats
@@ -273,15 +222,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Get security metrics
-   */
   async getSecurityMetrics(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Fetching security metrics');
-      
       const securityMetrics = await adminDashboardService.getSecurityMetrics();
-      
       res.json({ 
         success: true, 
         data: securityMetrics
@@ -296,15 +242,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Run security scan
-   */
   async runSecurityScan(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Running security scan');
-      
       const scanResults = await adminDashboardService.runSecurityScan();
-      
       res.json({ 
         success: true, 
         message: 'Security scan completed',
@@ -320,15 +263,12 @@ const adminController = {
     }
   },
   
-  /**
-   * Run system diagnostics
-   */
   async runDiagnostics(req, res) {
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
       logger.info('Controller: Running system diagnostics');
-      
       const diagnosticsResults = await adminDashboardService.runDiagnostics();
-      
       res.json({ 
         success: true, 
         message: 'Diagnostics completed successfully',
@@ -347,19 +287,18 @@ const adminController = {
     }
   },
 
-  /**
- * Search users with filtering
- */
   async searchUsers(req, res) {
-    logger.info('Controller: Searching users');
     try {
+      const adminDashboardService = new AdminDashboardService();
+      await adminDashboardService.init();
+      logger.info('Controller: Searching users');
       const rawLimit = parseInt(req.query.limit || 20);
       const rawOffset = parseInt(req.query.offset || 0);
       const options = {
         term: req.query.term || '',
         field: req.query.field || 'all',
-        limit: isNaN(rawLimit) ? 20 : rawLimit, // Fallback to 20 if NaN
-        offset: isNaN(rawOffset) ? 0 : rawOffset // Fallback to 0 if NaN
+        limit: isNaN(rawLimit) ? 20 : rawLimit,
+        offset: isNaN(rawOffset) ? 0 : rawOffset
       };
       logger.debug(`User search options: ${JSON.stringify(options)}`);
       const searchResults = await adminDashboardService.searchUsers(options);
@@ -379,18 +318,16 @@ const adminController = {
 };
 
 // Import database operations service for database-related functions
-let databaseOperationsService;
+let DatabaseOperationsService;
 try {
-  databaseOperationsService = require('../services/database-operations-service');
+  DatabaseOperationsService = require('../services/database-operations-service');
 } catch (error) {
   logger.warn('Database operations service not found. Database operations will not work.');
-  // Create a mock service with empty methods
-  databaseOperationsService = {
+  DatabaseOperationsService = {
     reindexDatabase: async () => ({ success: false, message: 'Database operations service not available' }),
     backupDatabase: async () => ({ success: false, message: 'Database operations service not available' }),
     optimizeDatabase: async () => ({ success: false, message: 'Database operations service not available' })
   };
 }
-
 
 module.exports = adminController;

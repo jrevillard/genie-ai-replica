@@ -1,621 +1,594 @@
 const express = require('express');
 const router = express.Router();
-const QueryService = require('../services/query-service');
-const AnalyticsService = require('../services/analytics-service');
-const ChatHistoryService = require('../services/chat-history-service');
 const authMiddleware = require('../middleware/auth-middleware');
-//const { logger } = require('../logger'); // Import logger from logger.js
-const { logger } = require('shared-lib');
+const { logger } = require('../shared-lib');
 
-// Initialize services
-const queryService = new QueryService();
-const analyticsService = new AnalyticsService();
-const chatHistoryService = new ChatHistoryService();
+module.exports = (queryService) => {
+  // Apply authentication middleware to all routes
+  router.use(authMiddleware.authenticate);
 
-// Inject analytics service into query service
-queryService.setAnalyticsService(analyticsService);
+  /**
+   * @swagger
+   * /queries/{queryId}/responsetime:
+   *   patch:
+   *     summary: Update query response time
+   *     description: Updates the response time of a specific query.
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: ID of the query to update.
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - responseTime
+   *             properties:
+   *               responseTime:
+   *                 type: integer
+   *                 description: Response time in milliseconds.
+   *           example:
+   *             responseTime: 250
+   *     responses:
+   *       200:
+   *         description: Query response time updated successfully.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 _id:
+   *                   type: string
+   *                 _key:
+   *                   type: string
+   *                 responseTime:
+   *                   type: integer
+   *                 updatedAt:
+   *                   type: string
+   *       400:
+   *         description: Response time is required.
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication token.
+   *       404:
+   *         description: Query not found.
+   *       500:
+   *         description: Server error.
+   */
+  router.patch('/:queryId/responsetime', async (req, res) => {
+    try {
+      const { queryId } = req.params;
+      const { responseTime } = req.body;
 
-// Inject chat history service into query service
-queryService.setChatHistoryService(chatHistoryService);
+      if (!responseTime && responseTime !== 0) {
+        return res.status(400).json({ message: 'Response time is required' });
+      }
 
-// Apply authentication middleware to all routes
-router.use(authMiddleware.authenticate);
+      const updatedQuery = await queryService.updateQueryResponseTime(queryId, responseTime);
 
-// Middleware to ensure analytics service is set
-router.use((req, res, next) => {
-  if (!queryService.analyticsService) {
-    logger.warn('Analytics service was not set, setting it now...');
-    queryService.setAnalyticsService(analyticsService);
-  }
-  if (!queryService.chatHistoryService) {
-    logger.warn('Chat history service was not set, setting it now...');
-    queryService.setChatHistoryService(chatHistoryService);
-  }
-  next();
-});
-
-/**
- * @swagger
- * /queries/{queryId}/responsetime:
- *   patch:
- *     summary: Update query response time
- *     description: Updates the response time of a specific query.
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID of the query to update.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - responseTime
- *             properties:
- *               responseTime:
- *                 type: integer
- *                 description: Response time in milliseconds.
- *           example:
- *             responseTime: 250
- *     responses:
- *       200:
- *         description: Query response time updated successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 _id:
- *                   type: string
- *                 _key:
- *                   type: string
- *                 responseTime:
- *                   type: integer
- *                 updatedAt:
- *                   type: string
- *       400:
- *         description: Response time is required.
- *       401:
- *         description: Unauthorized - Invalid or missing authentication token.
- *       404:
- *         description: Query not found.
- *       500:
- *         description: Server error.
- */
-router.patch('/:queryId/responsetime', async (req, res) => {
-  try {
-    const { queryId } = req.params;
-    const { responseTime } = req.body;
-
-    if (!responseTime && responseTime !== 0) {
-      return res.status(400).json({ message: 'Response time is required' });
+      res.json(updatedQuery);
+    } catch (error) {
+      logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: 'Query not found' });
+      }
+      res.status(500).json({ message: error.message });
     }
+  });
 
-    const chatHistoryService = new ChatHistoryService();
-    const updatedQuery = await chatHistoryService.updateQueryResponseTime(queryId, responseTime);
-
-    res.json(updatedQuery);
-  } catch (error) {
-    logger.error(`Error updating response time for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ message: 'Query not found' });
+  /**
+   * @swagger
+   * /queries:
+   *   post:
+   *     summary: Create a new query
+   *     description: Creates a new query and records it in analytics
+   *     tags: [Queries]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - userId
+   *               - sessionId
+   *               - text
+   *             properties:
+   *               userId:
+   *                 type: string
+   *                 description: ID of the user making the query
+   *               sessionId:
+   *                 type: string
+   *                 description: ID of the current session
+   *               text:
+   *                 type: string
+   *                 description: The query text
+   *               categoryId:
+   *                 type: string
+   *                 description: Category ID for the query
+   *               serviceId:
+   *                 type: string
+   *                 description: Service ID for the query
+   *               timestamp:
+   *                 type: string
+   *                 format: date-time
+   *                 description: Timestamp for the query (defaults to now)
+   *     responses:
+   *       201:
+   *         description: Query created successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Query'
+   *       400:
+   *         description: Missing required fields
+   *       500:
+   *         description: Server error
+   */
+  router.post('/', async (req, res) => {
+    try {
+      logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
+      const query = await queryService.createQuery(req.body);
+      res.status(201).json(query);
+    } catch (error) {
+      logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
     }
-    res.status(500).json({ message: error.message });
-  }
-});
+  });
 
-/**
- * @swagger
- * /queries:
- *   post:
- *     summary: Create a new query
- *     description: Creates a new query and records it in analytics
- *     tags: [Queries]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - userId
- *               - sessionId
- *               - text
- *             properties:
- *               userId:
- *                 type: string
- *                 description: ID of the user making the query
- *               sessionId:
- *                 type: string
- *                 description: ID of the current session
- *               text:
- *                 type: string
- *                 description: The query text
- *               categoryId:
- *                 type: string
- *                 description: Category ID for the query
- *               serviceId:
- *                 type: string
- *                 description: Service ID for the query
- *               timestamp:
- *                 type: string
- *                 format: date-time
- *                 description: Timestamp for the query (defaults to now)
- *     responses:
- *       201:
- *         description: Query created successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Query'
- *       400:
- *         description: Missing required fields
- *       500:
- *         description: Server error
- */
-router.post('/', async (req, res) => {
-  try {
-    logger.info(`Creating query with body: ${JSON.stringify(req.body)}`);
-    const query = await queryService.createQuery(req.body);
-    res.status(201).json(query);
-  } catch (error) {
-    logger.error(`Error creating query: ${error.message}`, { stack: error.stack });
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /queries/{queryId}:
- *   get:
- *     summary: Get query by ID
- *     description: Retrieves a query by its unique identifier
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *     responses:
- *       200:
- *         description: Query retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Query'
- *       404:
- *         description: Query not found
- *       500:
- *         description: Server error
- */
-router.get('/:queryId', async (req, res) => {
-  try {
-    logger.info(`Fetching query with ID: ${req.params.queryId}`);
-    const query = await queryService.getQuery(req.params.queryId);
-    res.json(query);
-  } catch (error) {
-    logger.error(`Error getting query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /queries/{queryId}/feedback:
- *   post:
- *     summary: Add feedback to a query
- *     description: Adds user feedback to a query and records it in analytics
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - rating
- *             properties:
- *               rating:
- *                 type: number
- *                 minimum: 1
- *                 maximum: 5
- *                 description: Rating from 1 to 5
- *               comment:
- *                 type: string
- *                 description: Optional feedback comment
- *     responses:
- *       200:
- *         description: Feedback added successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Query'
- *       400:
- *         description: Missing required fields
- *       404:
- *         description: Query not found
- *       500:
- *         description: Server error
- */
-router.post('/:queryId/feedback', async (req, res) => {
-  try {
-    logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
-    const query = await queryService.addFeedback(req.params.queryId, req.body);
-    res.json(query);
-  } catch (error) {
-    logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /queries/{queryId}/answered:
- *   patch:
- *     summary: Mark a query as answered (PATCH)
- *     description: Updates a query to mark it as answered with response time
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               responseTime:
- *                 type: number
- *                 description: Response time in milliseconds
- *     responses:
- *       200:
- *         description: Query marked as answered
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Query'
- *       404:
- *         description: Query not found
- *       500:
- *         description: Server error
- */
-router.patch('/:queryId/answered', async (req, res) => {
-  try {
-    logger.info(`Marking query ${req.params.queryId} as answered with body: ${JSON.stringify(req.body)}`);
-    const query = await queryService.markAsAnswered(req.params.queryId, req.body.responseTime);
-    res.json(query);
-  } catch (error) {
-    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /queries/{queryId}/answered:
- *   put:
- *     summary: Mark a query as answered (PUT)
- *     description: Updates a query to mark it as answered with response time
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               responseTime:
- *                 type: number
- *                 description: Response time in milliseconds
- *     responses:
- *       200:
- *         description: Query marked as answered
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Query'
- *       404:
- *         description: Query not found
- *       500:
- *         description: Server error
- */
-router.put('/:queryId/answered', async (req, res) => {
-  try {
-    const responseTime = req.body.responseTime || 0;
-    
-    logger.info(`Marking query ${req.params.queryId} as answered with response time: ${responseTime}ms and body: ${JSON.stringify(req.body)}`);
-    
-    const query = await queryService.markAsAnswered(req.params.queryId, responseTime);
-    res.json(query);
-  } catch (error) {
-    logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /queries:
- *   get:
- *     summary: Search queries
- *     description: Search for queries based on various criteria with pagination
- *     tags: [Queries]
- *     parameters:
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: Maximum number of results to return
- *       - in: query
- *         name: offset
- *         schema:
- *           type: integer
- *           default: 0
- *         description: Number of results to skip for pagination
- *       - in: query
- *         name: userId
- *         schema:
- *           type: string
- *         description: Filter by user ID
- *       - in: query
- *         name: sessionId
- *         schema:
- *           type: string
- *         description: Filter by session ID
- *       - in: query
- *         name: text
- *         schema:
- *           type: string
- *         description: Filter by query text (partial match)
- *       - in: query
- *         name: categoryId
- *         schema:
- *           type: string
- *         description: Filter by category ID
- *       - in: query
- *         name: serviceId
- *         schema:
- *           type: string
- *         description: Filter by service ID
- *       - in: query
- *         name: isAnswered
- *         schema:
- *           type: boolean
- *         description: Filter by answered status
- *       - in: query
- *         name: startDate
- *         schema:
- *           type: string
- *           format: date-time
- *         description: Filter by start date
- *       - in: query
- *         name: endDate
- *         schema:
- *           type: string
- *           format: date-time
- *         description: Filter by end date
- *     responses:
- *       200:
- *         description: Search results with pagination
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 queries:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Query'
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     total:
- *                       type: integer
- *                     limit:
- *                       type: integer
- *                     offset:
- *                       type: integer
- *                     pages:
- *                       type: integer
- *                     currentPage:
- *                       type: integer
- *       500:
- *         description: Server error
- */
-router.get('/', async (req, res) => {
-  try {
-    const { limit = 20, offset = 0, ...criteria } = req.query;
-    logger.info(`Searching queries with criteria: ${JSON.stringify(criteria)}, limit: ${limit}, offset: ${offset}`);
-    const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
-    res.json(results);
-  } catch (error) {
-    logger.error(`Error searching queries: ${error.message}`, { stack: error.stack });
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /queries/{queryId}/conversations:
- *   get:
- *     summary: Get conversations for a query
- *     description: Retrieves all conversations associated with a specific query
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *     responses:
- *       200:
- *         description: Conversations associated with the query
- *       404:
- *         description: Query not found
- *       500:
- *         description: Server error
- */
-router.get('/:queryId/conversations', async (req, res) => {
-  try {
-    logger.info(`Getting conversations for query ${req.params.queryId}`);
-    const conversations = await queryService.getConversationsForQuery(req.params.queryId);
-    res.json(conversations);
-  } catch (error) {
-    logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ message: 'Query not found' });
+  /**
+   * @swagger
+   * /queries/{queryId}:
+   *   get:
+   *     summary: Get query by ID
+   *     description: Retrieves a query by its unique identifier
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *     responses:
+   *       200:
+   *         description: Query retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Query'
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.get('/:queryId', async (req, res) => {
+    try {
+      logger.info(`Fetching query with ID: ${req.params.queryId}`);
+      const query = await queryService.getQuery(req.params.queryId);
+      res.json(query);
+    } catch (error) {
+      logger.error(`Error getting query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
     }
-    
-    res.status(500).json({ message: error.message });
-  }
-});
+  });
 
-/**
- * @swagger
- * /queries/{queryId}/conversation:
- *   post:
- *     summary: Create conversation from query
- *     description: Creates a new conversation based on an existing query
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *                 description: Optional title for the conversation
- *               responseText:
- *                 type: string
- *                 description: Optional response text to include
- *               tags:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Optional tags for the conversation
- *     responses:
- *       201:
- *         description: Conversation created successfully
- *       404:
- *         description: Query not found
- *       500:
- *         description: Server error
- */
-router.post('/:queryId/conversation', async (req, res) => {
-  try {
-    const { queryId } = req.params;
-    const options = req.body;
-    
-    logger.info(`Creating conversation from query ${queryId} with options: ${JSON.stringify(options)}`);
-    
-    const result = await queryService.createConversationFromQuery(queryId, options);
-    res.status(201).json(result);
-  } catch (error) {
-    logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ message: 'Query not found' });
+  /**
+   * @swagger
+   * /queries/{queryId}/feedback:
+   *   post:
+   *     summary: Add feedback to a query
+   *     description: Adds user feedback to a query and records it in analytics
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - rating
+   *             properties:
+   *               rating:
+   *                 type: number
+   *                 minimum: 1
+   *                 maximum: 5
+   *                 description: Rating from 1 to 5
+   *               comment:
+   *                 type: string
+   *                 description: Optional feedback comment
+   *     responses:
+   *       200:
+   *         description: Feedback added successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Query'
+   *       400:
+   *         description: Missing required fields
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.post('/:queryId/feedback', async (req, res) => {
+    try {
+      logger.info(`Adding feedback to query ${req.params.queryId} with body: ${JSON.stringify(req.body)}`);
+      const query = await queryService.addFeedback(req.params.queryId, req.body);
+      res.json(query);
+    } catch (error) {
+      logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
     }
-    
-    res.status(500).json({ message: error.message });
-  }
-});
+  });
 
-/**
- * @swagger
- * /queries/{queryId}/link/{messageId}:
- *   post:
- *     summary: Link query to message
- *     description: Creates a link between a query and an existing message
- *     tags: [Queries]
- *     parameters:
- *       - in: path
- *         name: queryId
- *         required: true
- *         schema:
- *           type: string
- *         description: Query ID
- *       - in: path
- *         name: messageId
- *         required: true
- *         schema:
- *           type: string
- *         description: Message ID
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               responseType:
- *                 type: string
- *                 default: primary
- *                 description: Type of response (primary, followup, etc.)
- *               confidenceScore:
- *                 type: number
- *                 default: 1.0
- *                 description: Confidence score for the relationship
- *     responses:
- *       200:
- *         description: Link created successfully
- *       404:
- *         description: Query or message not found
- *       500:
- *         description: Server error
- */
-router.post('/:queryId/link/:messageId', async (req, res) => {
-  try {
-    const { queryId, messageId } = req.params;
-    const options = req.body;
-    
-    logger.info(`Linking query ${queryId} to message ${messageId} with options: ${JSON.stringify(options)}`);
-    
-    const result = await queryService.linkQueryToMessage(queryId, messageId, options);
-    res.json(result);
-  } catch (error) {
-    logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ message: error.message });
+  /**
+   * @swagger
+   * /queries/{queryId}/answered:
+   *   patch:
+   *     summary: Mark a query as answered (PATCH)
+   *     description: Updates a query to mark it as answered with response time
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               responseTime:
+   *                 type: number
+   *                 description: Response time in milliseconds
+   *     responses:
+   *       200:
+   *         description: Query marked as answered
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Query'
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.patch('/:queryId/answered', async (req, res) => {
+    try {
+      logger.info(`Marking query ${req.params.queryId} as answered with body: ${JSON.stringify(req.body)}`);
+      const query = await queryService.markAsAnswered(req.params.queryId, req.body.responseTime);
+      res.json(query);
+    } catch (error) {
+      logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
     }
-    
-    res.status(500).json({ message: error.message });
-  }
-});
+  });
 
-module.exports = router;
+  /**
+   * @swagger
+   * /queries/{queryId}/answered:
+   *   put:
+   *     summary: Mark a query as answered (PUT)
+   *     description: Updates a query to mark it as answered with response time
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               responseTime:
+   *                 type: number
+   *                 description: Response time in milliseconds
+   *     responses:
+   *       200:
+   *         description: Query marked as answered
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Query'
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.put('/:queryId/answered', async (req, res) => {
+    try {
+      const responseTime = req.body.responseTime || 0;
+      
+      logger.info(`Marking query ${req.params.queryId} as answered with response time: ${responseTime}ms and body: ${JSON.stringify(req.body)}`);
+      
+      const query = await queryService.markAsAnswered(req.params.queryId, responseTime);
+      res.json(query);
+    } catch (error) {
+      logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /queries:
+   *   get:
+   *     summary: Search queries
+   *     description: Search for queries based on various criteria with pagination
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *         description: Maximum number of results to return
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *         description: Number of results to skip for pagination
+   *       - in: query
+   *         name: userId
+   *         schema:
+   *           type: string
+   *         description: Filter by user ID
+   *       - in: query
+   *         name: sessionId
+   *         schema:
+   *           type: string
+   *         description: Filter by session ID
+   *       - in: query
+   *         name: text
+   *         schema:
+   *           type: string
+   *         description: Filter by query text (partial match)
+   *       - in: query
+   *         name: categoryId
+   *         schema:
+   *           type: string
+   *         description: Filter by category ID
+   *       - in: query
+   *         name: serviceId
+   *         schema:
+   *           type: string
+   *         description: Filter by service ID
+   *       - in: query
+   *         name: isAnswered
+   *         schema:
+   *           type: boolean
+   *         description: Filter by answered status
+   *       - in: query
+   *         name: startDate
+   *         schema:
+   *           type: string
+   *           format: date-time
+   *         description: Filter by start date
+   *       - in: query
+   *         name: endDate
+   *         schema:
+   *           type: string
+   *           format: date-time
+   *         description: Filter by end date
+   *     responses:
+   *       200:
+   *         description: Search results with pagination
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 queries:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/Query'
+   *                 pagination:
+   *                   type: object
+   *                   properties:
+   *                     total:
+   *                       type: integer
+   *                     limit:
+   *                       type: integer
+   *                     offset:
+   *                       type: integer
+   *                     pages:
+   *                       type: integer
+   *                     currentPage:
+   *                       type: integer
+   *       500:
+   *         description: Server error
+   */
+  router.get('/', async (req, res) => {
+    try {
+      const { limit = 20, offset = 0, ...criteria } = req.query;
+      logger.info(`Searching queries with criteria: ${JSON.stringify(criteria)}, limit: ${limit}, offset: ${offset}`);
+      const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
+      res.json(results);
+    } catch (error) {
+      logger.error(`Error searching queries: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /queries/{queryId}/conversations:
+   *   get:
+   *     summary: Get conversations for a query
+   *     description: Retrieves all conversations associated with a specific query
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *     responses:
+   *       200:
+   *         description: Conversations associated with the query
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.get('/:queryId/conversations', async (req, res) => {
+    try {
+      logger.info(`Getting conversations for query ${req.params.queryId}`);
+      const conversations = await queryService.getConversationsForQuery(req.params.queryId);
+      res.json(conversations);
+    } catch (error) {
+      logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: 'Query not found' });
+      }
+      
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /queries/{queryId}/conversation:
+   *   post:
+   *     summary: Create conversation from query
+   *     description: Creates a new conversation based on an existing query
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               title:
+   *                 type: string
+   *                 description: Optional title for the conversation
+   *               responseText:
+   *                 type: string
+   *                 description: Optional response text to include
+   *               tags:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                 description: Optional tags for the conversation
+   *     responses:
+   *       201:
+   *         description: Conversation created successfully
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.post('/:queryId/conversation', async (req, res) => {
+    try {
+      const { queryId } = req.params;
+      const options = req.body;
+      
+      logger.info(`Creating conversation from query ${queryId} with options: ${JSON.stringify(options)}`);
+      
+      const result = await queryService.createConversationFromQuery(queryId, options);
+      res.status(201).json(result);
+    } catch (error) {
+      logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: 'Query not found' });
+      }
+      
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /queries/{queryId}/link/{messageId}:
+   *   post:
+   *     summary: Link query to message
+   *     description: Creates a link between a query and an existing message
+   *     tags: [Queries]
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Query ID
+   *       - in: path
+   *         name: messageId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Message ID
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               responseType:
+   *                 type: string
+   *                 default: primary
+   *                 description: Type of response (primary, followup, etc.)
+   *               confidenceScore:
+   *                 type: number
+   *                 default: 1.0
+   *                 description: Confidence score for the relationship
+   *     responses:
+   *       200:
+   *         description: Link created successfully
+   *       404:
+   *         description: Query or message not found
+   *       500:
+   *         description: Server error
+   */
+  router.post('/:queryId/link/:messageId', async (req, res) => {
+    try {
+      const { queryId, messageId } = req.params;
+      const options = req.body;
+      
+      logger.info(`Linking query ${queryId} to message ${messageId} with options: ${JSON.stringify(options)}`);
+      
+      const result = await queryService.linkQueryToMessage(queryId, messageId, options);
+      res.json(result);
+    } catch (error) {
+      logger.error(`Error linking query ${req.params.queryId} to message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
+      
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  return router;
+};

@@ -565,7 +565,7 @@ async function initializeServices() {
   services.sessionService = SessionService;
   services.queryService = QueryService;
   services.chatHistoryService = chatHistoryService;
-  services.logsService = logsService; // Add logsService
+  services.logsService = logsService;
   logger.debug('Using AuthService, ServiceCategoryService, UserProfileService, AdminDashboardService, AnalyticsService, DatabaseOperationsService, SessionService, QueryService, ChatHistoryService, and LogsService singletons');
   await services.sessionService.init();
   await services.authService.setSessionService(services.sessionService);
@@ -577,7 +577,7 @@ async function initializeServices() {
   await services.databaseOperationsService.init();
   await services.queryService.init();
   await services.chatHistoryService.init();
-  await services.logsService.init(); // Initialize logsService
+  await services.logsService.init();
   logger.debug('AuthService singleton initialized', {
     methods: Object.getOwnPropertyNames(authService.__proto__).filter(m => m !== 'constructor')
   });
@@ -624,6 +624,10 @@ async function initializeServices() {
       services.chatHistoryService.setAnalyticsService(services.analyticsService);
       logger.debug('ChatHistoryService.setAnalyticsService completed');
     }
+    if (services.adminDashboardService && services.logsService) {
+      services.adminDashboardService.setLogsService(services.logsService);
+      logger.debug('AdminDashboardService.setLogsService completed');
+    }
   } catch (error) {
     logger.error('Failed to set service dependencies:', {
       error: error.message || 'Unknown error',
@@ -648,7 +652,7 @@ async function initializeServices() {
     serviceCategoryService: services.serviceCategoryService,
     sessionService: services.sessionService,
     databaseOperationsService: services.databaseOperationsService,
-    logsService: services.logsService // Add logsService to return
+    logsService: services.logsService
   };
 }
 

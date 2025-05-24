@@ -172,6 +172,7 @@ module.exports = (adminService) => {
     try {
       const result = await adminService.getUserStats();
       res.json(result);
+      logger.debug('User stats response sent to client', { result });
     } catch (error) {
       logger.error(`Error getting user stats: ${error.message}`, { stack: error.stack });
       next(error);

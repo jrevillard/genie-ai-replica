@@ -43,9 +43,21 @@ const adminDashboardService = {
    */
   async getUserStats(options = {}) {
     try {
-      return await httpService.get('admin/user-stats', { params: options });
+      const response = await httpService.get('admin/user-stats', { params: options });
+      console.log('User stats response:', {
+        status: response.status,
+        headers: response.headers,
+        data: response.data
+      });
+      return response.data; // Explicitly return response.data
     } catch (error) {
-      console.error('Error fetching user stats:', error);
+      console.error('Error fetching user stats:', error, {
+        message: error.message,
+        response: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : null
+      });
       throw error;
     }
   },
@@ -132,7 +144,7 @@ const adminDashboardService = {
     try {
       // Convert date range to actual dates
       const dateParams = this.convertDateRangeToParams(options.dateRange, options.startDate, options.endDate);
-      
+
       // Add the date parameters to the options
       const searchParams = {
         ...options,

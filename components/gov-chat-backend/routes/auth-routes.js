@@ -50,20 +50,39 @@ module.exports = (authService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/refresh-token', async (req, res) => {
+  router.post('/refresh-token', async (req, res, next) => {
     try {
       const { refreshToken } = req.body;
       if (!refreshToken) {
         logger.warn('Refresh token missing');
         return res.status(400).json({ message: 'Refresh token required' });
       }
-      // Placeholder: Implement refresh token logic
-      logger.info('Refresh token endpoint called (placeholder)');
-      const newToken = await authService.generateToken({ _key: req.user?.userId || 'temp' });
-      res.json({ success: true, accessToken: newToken });
+      logger.info('Processing refresh token request');
+      const decoded = jwt.verify(refreshToken, authService.jwtSecret);
+      const user = await authService.getUserById(decoded.userId);
+      if (!user) {
+        logger.warn('User not found for refresh token');
+        return res.status(401).json({ message: 'Invalid refresh token' });
+      }
+      const newAccessToken = authService.generateToken(user);
+      const newRefreshToken = jwt.sign(
+        { userId: user._key },
+        authService.jwtSecret,
+        { expiresIn: '7d' }
+      );
+      await authService.users.update(user._key, {
+        accessToken: newAccessToken,
+        updatedAt: new Date().toISOString()
+      });
+      logger.info(`Refresh token processed successfully for user ${user._key}`);
+      res.json({
+        success: true,
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+      });
     } catch (error) {
       logger.error(`Error in refresh-token: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
+      res.status(401).json({ message: 'Invalid refresh token' });
     }
   });
 

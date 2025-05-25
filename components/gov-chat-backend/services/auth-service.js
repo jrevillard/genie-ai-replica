@@ -188,51 +188,56 @@ class AuthService {
     if (!this.sessionService) throw new Error('SessionService not set in AuthService');
     try {
       logger.info(`Attempting login for user: ${loginName}`);
-
       const user = await this.getUserByLoginNameOrEmail(loginName, loginName);
-      if (!user) {
-        logger.warn(`User not found for loginName/email: ${loginName}`);
-        throw new Error('User not found');
-      }
-
+      if (!user) throw new Error('User not found');
       const isPasswordValid = await this.verifyPassword(encPassword, user.encPassword);
-      if (!isPasswordValid) {
-        logger.warn(`Invalid password for user: ${loginName}`);
-        throw new Error('Invalid password');
-      }
-
-      if (user.disabled === true) {
-        logger.warn(`Disabled account login attempt for user: ${loginName}`);
-        throw new Error('This account has been disabled');
-      }
-
-      if (!user.emailVerified) {
-        logger.warn(`Email not verified for user: ${loginName}`);
-        throw new Error('Email not verified');
-      }
-
+      if (!isPasswordValid) throw new Error('Invalid password');
+      if (user.disabled === true) throw new Error('This account has been disabled');
+      if (!user.emailVerified) throw new Error('Email not verified');
       const accessToken = this.generateToken(user);
-
+      const refreshToken = jwt.sign(
+        { userId: user._key },
+        this.jwtSecret,
+        { expiresIn: '7d' }
+      );
       await this.users.update(user._key, {
         accessToken: accessToken,
         updatedAt: new Date().toISOString()
       });
-
-      logger.info(`Creating session for user ${user._key} during login`);
-      try {
-        await this.sessionService.createSession(user._key);
-      } catch (sessionError) {
-        logger.error(`Failed to create session, but continuing login: ${sessionError.message}`, { stack: sessionError.stack });
-      }
-
+      // Remove encPassword from user object
       const { encPassword: password, ...userWithoutPassword } = user;
       logger.info(`User logged in successfully: ${loginName}`);
       return {
         ...userWithoutPassword,
-        accessToken
+        accessToken,
+        refreshToken
       };
     } catch (error) {
       logger.error(`Error during login: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  async refreshToken(refreshToken) {
+    try {
+      logger.info('Validating refresh token');
+      const decoded = jwt.verify(refreshToken, this.jwtSecret);
+      const user = await this.getUserById(decoded.userId);
+      if (!user) throw new Error('User not found');
+      const accessToken = this.generateToken(user);
+      const newRefreshToken = jwt.sign(
+        { userId: user._key },
+        this.jwtSecret,
+        { expiresIn: '7d' }
+      );
+      await this.users.update(user._key, {
+        accessToken: accessToken,
+        updatedAt: new Date().toISOString()
+      });
+      logger.info(`Refresh token validated for user ${decoded.userId}`);
+      return { accessToken, refreshToken: newRefreshToken };
+    } catch (error) {
+      logger.error(`Refresh token error: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }

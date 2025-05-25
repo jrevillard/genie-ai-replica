@@ -24,21 +24,40 @@ class AuthService {
    */
   async login(loginName, password) {
     try {
-      // Hash the password client-side before sending
       const encPassword = this.hashPassword(password);
-
       const response = await httpService.post(`${this.authEndpoint}/login`, {
         loginName,
         encPassword
       });
-
       if (response.data && response.data.accessToken) {
         this.setUserData(response.data);
       }
-
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
+      throw error;
+    }
+  }
+
+  async refreshToken() {
+    try {
+      const userData = this.getCurrentUser();
+      if (!userData?.refreshToken) {
+        throw new Error('No refresh token available');
+      }
+      const response = await httpService.post(`${this.authEndpoint}/refresh-token`, {
+        refreshToken: userData.refreshToken
+      });
+      if (response.data && response.data.accessToken) {
+        this.setUserData({
+          ...userData,
+          accessToken: response.data.accessToken,
+          refreshToken: response.data.refreshToken || userData.refreshToken
+        });
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Refresh token error:', error);
       throw error;
     }
   }

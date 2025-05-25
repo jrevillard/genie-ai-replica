@@ -1,5 +1,6 @@
 // src/services/httpService.js
 import axios from 'axios';
+import AuthService from './authService';
 
 /**
  * Base service for handling HTTP requests
@@ -31,6 +32,16 @@ class HttpService {
       this.handleResponse.bind(this),
       this.handleResponseError.bind(this)
     );
+  }
+
+  async refreshToken() {
+    try {
+      const response = await AuthService.refreshToken();
+      return response;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      throw error;
+    }
   }
   
   /**
@@ -127,20 +138,6 @@ class HttpService {
     this.refreshSubscribers = [];
   }
   
-  /**
-   * Refresh authentication token
-   * @returns {Promise} Promise with refresh result
-   */
-  async refreshToken() {
-    try {
-      // Call your refresh token endpoint
-      const response = await this.axios.post(`${this.baseUrl}/auth/refresh-token`);
-      return response;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      throw error;
-    }
-  }
   
   /**
    * Handle response error interceptor with token refresh

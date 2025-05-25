@@ -4,6 +4,7 @@ const authMiddleware = require('../middleware/auth-middleware');
 const path = require('path');
 const { logger } = require('../shared-lib');
 const authController = require('../controllers/authController');
+const jwt = require('jsonwebtoken');
 
 module.exports = (authService) => {
   // Validate authService

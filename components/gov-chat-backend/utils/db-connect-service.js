@@ -1,10 +1,5 @@
-// db-connect-service.js
 const { Database } = require('arangojs');
-const retry = require('async-retry'); // Ensure this dependency is installed
-
-/**
- * Import the logger from the same shared logger module used by other services
- */
+const retry = require('async-retry');
 const { logger } = require('../shared-lib');
 
 /**
@@ -16,9 +11,8 @@ class DatabaseService {
     const databaseName = process.env.ARANGO_DB || 'node-services';
     //const username = process.env.ARANGO_USERNAME || 'root';
     //const password = process.env.ARANGO_PASSWORD || 'test'; // Replace with actual password if needed
-
     const username = 'root';
-    const password = 'test'; 
+    const password = 'test';
 
     // Log the configuration (masking the password)
     logger.info(`Initializing DatabaseService with config:`);
@@ -52,8 +46,15 @@ class DatabaseService {
     logger.info(`Getting database connection: ${name}`);
 
     if (this._connections.has(name)) {
-      logger.info(`Returning existing connection: ${name}`);
-      return this._connections.get(name);
+      const db = this._connections.get(name);
+      try {
+        await this._testConnection(db, name);
+        logger.info(`Returning existing connection: ${name}`);
+        return db;
+      } catch (error) {
+        logger.warn(`Stale or unauthorized connection detected for ${name}: ${error.message}`);
+        this._connections.delete(name);
+      }
     }
 
     const connectionConfig = {
@@ -63,7 +64,6 @@ class DatabaseService {
 
     logger.info(`Creating new database connection: ${name} to ${connectionConfig.url}/${connectionConfig.databaseName}`);
 
-    // Pre-check: Can we even reach the database?
     const db = new Database({
       url: connectionConfig.url,
       databaseName: connectionConfig.databaseName,
@@ -72,12 +72,52 @@ class DatabaseService {
         password: connectionConfig.auth.password
       }
     });
+
+    // Create a proxy to intercept query methods
+    const proxyDb = new Proxy(db, {
+      get: (target, prop) => {
+        if (['query', 'document'].includes(prop)) {
+          return async (...args) => {
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                return await target[prop](...args);
+              } catch (error) {
+                if (error.message.includes('not authorized') && attempt < 3) {
+                  logger.warn(`Authorization error in ${prop} on attempt ${attempt}, refreshing connection ${name}`);
+                  this._connections.delete(name);
+                  const newDb = await this._createConnection(name, connectionConfig);
+                  this._connections.set(name, newDb);
+                  target._connection = newDb._connection;
+                  continue;
+                }
+                throw error;
+              }
+            }
+          };
+        }
+        return target[prop];
+      }
+    });
+
     try {
       logger.info(`Attempting pre-connection login: ${name}`);
-      await db.login(connectionConfig.auth.username, connectionConfig.auth.password);
+      await proxyDb.login(connectionConfig.auth.username, connectionConfig.auth.password);
       logger.info(`Pre-connection login successful: ${name}`);
+      const connection = await retry(async () => {
+        await this._testConnection(proxyDb, name);
+        return proxyDb;
+      }, {
+        retries: 5,
+        minTimeout: 1000,
+        onRetry: (err, attempt) => {
+          logger.warn(`Connection attempt ${attempt} failed: ${err.message}`);
+        }
+      });
+      this._connections.set(name, connection);
+      logger.info(`New connection created and stored: ${name}`);
+      return connection;
     } catch (error) {
-      logger.error(`Pre-connection login failed: ${name}`);
+      logger.error(`Failed to create connection ${name}`);
       logger.error(`Error: ${error.message}`);
       if (error.response) {
         logger.error(`Status: ${error.response.status}`);
@@ -85,22 +125,49 @@ class DatabaseService {
       }
       throw error;
     }
+  }
 
-    // Now do the retry with the query test
-    const connection = await retry(async () => {
-      await this._testConnection(db, name);
-      return db;
-    }, {
-      retries: 5,
-      minTimeout: 1000,
-      onRetry: (err, attempt) => {
-        logger.warn(`Connection attempt ${attempt} failed: ${err.message}`);
+  /**
+   * Create a new database connection
+   * @private
+   * @param {string} name - Connection name
+   * @param {Object} connectionConfig - Connection configuration
+   * @returns {Database} The new database connection
+   */
+  async _createConnection(name, connectionConfig) {
+    const db = new Database({
+      url: connectionConfig.url,
+      databaseName: connectionConfig.databaseName,
+      auth: {
+        username: connectionConfig.auth.username,
+        password: connectionConfig.auth.password
       }
     });
-
-    this._connections.set(name, connection);
-    logger.info(`New connection created and stored: ${name}`);
-    return connection;
+    await db.login(connectionConfig.auth.username, connectionConfig.auth.password);
+    return new Proxy(db, {
+      get: (target, prop) => {
+        if (['query', 'document'].includes(prop)) {
+          return async (...args) => {
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              try {
+                return await target[prop](...args);
+              } catch (error) {
+                if (error.message.includes('not authorized') && attempt < 3) {
+                  logger.warn(`Authorization error in ${prop} on attempt ${attempt}, refreshing connection ${name}`);
+                  this._connections.delete(name);
+                  const newDb = await this._createConnection(name, connectionConfig);
+                  this._connections.set(name, newDb);
+                  target._connection = newDb._connection;
+                  continue;
+                }
+                throw error;
+              }
+            }
+          };
+        }
+        return target[prop];
+      }
+    });
   }
 
   /**
@@ -112,12 +179,15 @@ class DatabaseService {
   async _testConnection(db, name) {
     try {
       logger.info(`Testing database connection: ${name}`);
-      // Execute a simple query to test the connection
       const cursor = await db.query('RETURN 1');
       const result = await cursor.next();
       if (result !== 1) {
         throw new Error('Unexpected query result');
       }
+      // Test users collection access
+      const users = db.collection('users');
+      await users.documentExists('2133');
+      await users.document('2133');
       logger.info(`Database connection test successful: ${name}`);
     } catch (error) {
       logger.error(`Database connection test failed: ${name}`);
@@ -127,6 +197,10 @@ class DatabaseService {
         logger.error(`Response body: ${JSON.stringify(error.response.body, null, 2)}`);
       }
       logger.error(`Stack trace: ${error.stack}`);
+      if (error.message.includes('not authorized')) {
+        logger.warn(`Authorization error detected, forcing reconnect for ${name}`);
+        throw new Error('Authorization failure, requires reconnect');
+      }
       throw error;
     }
   }
@@ -140,7 +214,6 @@ class DatabaseService {
   closeConnection(name = 'default') {
     logger.debug(`Closing database connection: ${name}`);
     if (this._connections.has(name)) {
-      // ArangoDB doesn't have an explicit close method, but we can remove the reference
       this._connections.delete(name);
       logger.info(`Database connection closed: ${name}`);
       return true;
@@ -157,7 +230,7 @@ class DatabaseService {
     logger.info(`Closing all database connections. Total connections: ${count}`);
     const connectionNames = Array.from(this._connections.keys());
     this._connections.clear();
-    logger.debug(`All connections closed: ${connectionNames.join(', ')}`);
+    logger.debug(`All connections closed: ${connectionNames.join(', ') || 'none'}`);
   }
 
   /**
@@ -167,23 +240,16 @@ class DatabaseService {
    */
   setDefaultConfig(config) {
     logger.info('Updating default database configuration');
-
-    // Store old values for logging
     const oldUrl = this._defaultConfig.url;
     const oldDbName = this._defaultConfig.databaseName;
     const oldUsername = this._defaultConfig.auth.username;
-
-    // Update configuration
     this._defaultConfig = {
       ...this._defaultConfig,
       ...config
     };
-
-    // Log the new configuration
     const newUrl = this._defaultConfig.url;
     const newDbName = this._defaultConfig.databaseName;
     const newUsername = this._defaultConfig.auth.username;
-
     logger.debug(`Configuration updated: 
           url: ${oldUrl} → ${newUrl},
           database: ${oldDbName} → ${newDbName},
@@ -197,7 +263,6 @@ class DatabaseService {
   getConnectionStatus() {
     const connectionNames = Array.from(this._connections.keys());
     logger.debug(`Getting connection status. Active connections: ${connectionNames.join(', ') || 'none'}`);
-
     return {
       totalConnections: this._connections.size,
       connectionNames,
@@ -217,7 +282,6 @@ class DatabaseService {
     const connectionCount = this._connections.size;
     logger.info(`Pinging all database connections (${connectionCount} total)`);
     const results = {};
-
     for (const [name, db] of this._connections.entries()) {
       try {
         logger.debug(`Pinging connection: ${name}`);
@@ -226,7 +290,6 @@ class DatabaseService {
         await cursor.next();
         const endTime = Date.now();
         const responseTime = endTime - startTime;
-
         results[name] = {
           status: 'connected',
           responseTime,
@@ -244,7 +307,6 @@ class DatabaseService {
         };
       }
     }
-
     return results;
   }
 }

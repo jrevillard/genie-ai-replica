@@ -14,6 +14,52 @@ class AuthService {
     this.authEndpoint = 'auth';
     // Add a map to track in-flight requests
     this.pendingRequests = new Map();
+    this.refreshInterval = 15 * 60 * 1000; // Refresh every 15 minutes
+    this.maxRetries = 3; // Max retries for failed requests
+    this.retryDelay = 1000; // Delay between retries in ms
+    this.setupTokenRefresh(); // Start proactive refresh
+  }
+
+  /**
+   * Set up interval for proactive token refresh
+   * @private
+   */
+  setupTokenRefresh() {
+    setInterval(async () => {
+      if (this.isAuthenticated()) {
+        try {
+          console.log('Attempting proactive token refresh');
+          await this.refreshToken();
+          console.log('Token refreshed proactively');
+        } catch (error) {
+          console.error('Proactive token refresh failed:', error);
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            this.clearUserData();
+            console.log('Cleared user data due to refresh failure');
+          }
+        }
+      }
+    }, this.refreshInterval);
+  }
+
+  /**
+   * Retry a request with exponential backoff
+   * @private
+   * @param {Function} fn - Function to retry
+   * @param {number} attempt - Current attempt number
+   * @returns {Promise} Result of the function
+   */
+  async retryRequest(fn, attempt = 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt >= this.maxRetries || ![401, 403].includes(error.response?.status)) {
+        throw error;
+      }
+      console.log(`Retry attempt ${attempt} for failed request: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
+      return this.retryRequest(fn, attempt + 1);
+    }
   }
 
   /**
@@ -25,10 +71,12 @@ class AuthService {
   async login(loginName, password) {
     try {
       const encPassword = this.hashPassword(password);
-      const response = await httpService.post(`${this.authEndpoint}/login`, {
-        loginName,
-        encPassword
-      });
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/login`, {
+          loginName,
+          encPassword
+        })
+      );
       if (response.data && response.data.accessToken) {
         this.setUserData(response.data);
       }
@@ -39,30 +87,48 @@ class AuthService {
     }
   }
 
+  /**
+   * Refresh the access token using the refresh token
+   * @returns {Promise} Promise with new token data or error
+   */
   async refreshToken() {
-    try {
-      const userData = this.getCurrentUser();
-      if (!userData?.refreshToken) {
-        throw new Error('No refresh token available');
-      }
-      const response = await httpService.post(`${this.authEndpoint}/refresh-token`, {
-        refreshToken: userData.refreshToken
-      });
-      if (response.data && response.data.accessToken) {
-        this.setUserData({
-          ...userData,
-          accessToken: response.data.accessToken,
-          refreshToken: response.data.refreshToken || userData.refreshToken
-        });
-      }
-      return response.data;
-    } catch (error) {
-      console.error('Refresh token error:', error);
-      throw error;
+    // Prevent multiple simultaneous refresh attempts
+    if (this.pendingRequests.has('refresh')) {
+      console.log('Returning existing refresh request');
+      return this.pendingRequests.get('refresh');
     }
-  }
 
-  // Updated register method for authService.js
+    const requestPromise = (async () => {
+      try {
+        const userData = this.getCurrentUser();
+        if (!userData?.refreshToken) {
+          throw new Error('No refresh token available');
+        }
+        const response = await httpService.post(`${this.authEndpoint}/refresh-token`, {
+          refreshToken: userData.refreshToken
+        });
+        if (response.data && response.data.accessToken) {
+          this.setUserData({
+            ...userData,
+            accessToken: response.data.accessToken,
+            refreshToken: response.data.refreshToken || userData.refreshToken
+          });
+        }
+        return response.data;
+      } catch (error) {
+        console.error('Refresh token error:', error);
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          this.clearUserData();
+        }
+        throw error;
+      } finally {
+        this.pendingRequests.delete('refresh');
+      }
+    })();
+
+    this.pendingRequests.set('refresh', requestPromise);
+    return requestPromise;
+  }
 
   /**
    * Register a new user
@@ -75,28 +141,18 @@ class AuthService {
    */
   async register(userData) {
     try {
-      // Hash the password before sending (same as done in login method)
       const encPassword = this.hashPassword(userData.password);
-
-      // Create the request payload with the expected field names
       const payload = {
         loginName: userData.loginName,
         email: userData.email,
-        encPassword: encPassword // Use the hashed password with the field name server expects
+        encPassword
       };
-
-      // Add optional fields if they exist
       if (userData.fullName) {
         payload.fullName = userData.fullName;
       }
-
-      // Make the API request with the correctly formatted payload
-      const response = await httpService.post(`${this.authEndpoint}/register`, payload);
-
-      // Important: Do NOT set authentication tokens or user data here
-      // The user should not be considered logged in after registration
-      // until they verify their email
-
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/register`, payload)
+      );
       return response.data;
     } catch (error) {
       console.error('Registration error:', error);
@@ -110,20 +166,14 @@ class AuthService {
    */
   async logout() {
     try {
-      // Call the server to invalidate the token
-      const response = await httpService.post(`${this.authEndpoint}/logout`);
-
-      // Remove user data from local storage regardless of server response
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/logout`)
+      );
       this.clearUserData();
-
       return response.data;
     } catch (error) {
       console.error('Logout error:', error);
-
-      // Even if the server request fails, clear local user data
       this.clearUserData();
-
-      // Re-throw the error so the UI can handle it
       throw error;
     }
   }
@@ -134,9 +184,22 @@ class AuthService {
    */
   async fetchCurrentUser() {
     try {
-      const response = await httpService.get(`${this.authEndpoint}/me`);
+      const response = await this.retryRequest(() =>
+        httpService.get(`${this.authEndpoint}/me`)
+      );
       return response.data.user;
     } catch (error) {
+      if (error.response?.status === 401) {
+        try {
+          await this.refreshToken();
+          const retryResponse = await httpService.get(`${this.authEndpoint}/me`);
+          return retryResponse.data.user;
+        } catch (refreshError) {
+          console.error('Refresh failed, logging out:', refreshError);
+          this.clearUserData();
+          throw refreshError;
+        }
+      }
       console.error('Fetch current user error:', error);
       throw error;
     }
@@ -150,7 +213,6 @@ class AuthService {
     try {
       const userStr = localStorage.getItem(this.tokenKey);
       if (!userStr) return null;
-
       return JSON.parse(userStr);
     } catch (e) {
       console.error('Error parsing user data:', e);
@@ -205,7 +267,9 @@ class AuthService {
    */
   async initiatePasswordReset(email) {
     try {
-      const response = await httpService.post(`${this.authEndpoint}/reset-password`, { email });
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/reset-password`, { email })
+      );
       return response.data;
     } catch (error) {
       console.error('Password reset initiation error:', error);
@@ -220,7 +284,9 @@ class AuthService {
    */
   async validateResetToken(token) {
     try {
-      const response = await httpService.post(`${this.authEndpoint}/validate-token`, { token });
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/validate-token`, { token })
+      );
       return response.data;
     } catch (error) {
       console.error('Token validation error:', error);
@@ -236,14 +302,13 @@ class AuthService {
    */
   async resetPassword(token, newPassword) {
     try {
-      // Hash the new password before sending
       const encPassword = this.hashPassword(newPassword);
-
-      const response = await httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
-        token,
-        newPassword: encPassword
-      });
-
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/reset-password/confirm`, {
+          token,
+          newPassword: encPassword
+        })
+      );
       return response.data;
     } catch (error) {
       console.error('Password reset error:', error);
@@ -259,15 +324,14 @@ class AuthService {
    */
   async changePassword(currentPassword, newPassword) {
     try {
-      // Hash both passwords before sending
       const encCurrentPassword = this.hashPassword(currentPassword);
       const encNewPassword = this.hashPassword(newPassword);
-
-      const response = await httpService.post(`${this.authEndpoint}/change-password`, {
-        currentPassword: encCurrentPassword,
-        newPassword: encNewPassword
-      });
-
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/change-password`, {
+          currentPassword: encCurrentPassword,
+          newPassword: encNewPassword
+        })
+      );
       return response.data;
     } catch (error) {
       console.error('Password change error:', error);
@@ -281,30 +345,21 @@ class AuthService {
    * @returns {Promise} Promise with verification result
    */
   async verifyEmail(token) {
-    // If there's already a pending request for this token, return that promise
     if (this.pendingRequests.has(`verify_${token}`)) {
       console.log('Returning existing verification request');
       return this.pendingRequests.get(`verify_${token}`);
     }
     
     try {
-      // Create the verification request
-      const requestPromise = httpService.get(`${this.authEndpoint}/verify-email/${token}`);
-      
-      // Store it in pending requests
+      const requestPromise = this.retryRequest(() =>
+        httpService.get(`${this.authEndpoint}/verify-email/${token}`)
+      );
       this.pendingRequests.set(`verify_${token}`, requestPromise);
-      
-      // Wait for the response
       const response = await requestPromise;
-      
-      // Remove from pending requests once complete
       this.pendingRequests.delete(`verify_${token}`);
-      
       return response.data;
     } catch (error) {
-      // Remove from pending requests if there was an error
       this.pendingRequests.delete(`verify_${token}`);
-      
       console.error('Email verification error:', error);
       throw error;
     }
@@ -317,8 +372,9 @@ class AuthService {
    */
   async resendVerificationEmail(email) {
     try {
-      // Use httpService instead of api
-      const response = await httpService.post(`${this.authEndpoint}/resend-verification`, { email });
+      const response = await this.retryRequest(() =>
+        httpService.post(`${this.authEndpoint}/resend-verification`, { email })
+      );
       return response.data;
     } catch (error) {
       console.error('Resend verification error:', error);

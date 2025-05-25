@@ -1,10 +1,10 @@
-const logger = require('./logger');
+// shared-lib/index.js
+const loggerModule = require('./logger'); // Import the module object
 const securityHeaders = require('./security-headers');
 const SecurityMiddleware = require('./security-middleware');
 
-console.log('Exporting from shared-lib:', { logger: typeof logger, securityHeaders: typeof securityHeaders, SecurityMiddleware: typeof SecurityMiddleware });
 module.exports = {
-  logger,
+  logger: loggerModule.logger, // Export the Winston logger instance
   securityHeaders,
   SecurityMiddleware
 };

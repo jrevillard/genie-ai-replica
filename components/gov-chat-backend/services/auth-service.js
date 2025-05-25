@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('./email-service');
 const { logger } = require('../shared-lib');
+const retry = require('async-retry');
 
 // Initialize ArangoDB connection
 const dbService = require('../utils/db-connect-service');
@@ -222,8 +223,20 @@ class AuthService {
     try {
       logger.info('Validating refresh token');
       const decoded = jwt.verify(refreshToken, this.jwtSecret);
-      const user = await this.getUserById(decoded.userId);
-      if (!user) throw new Error('User not found');
+      const user = await retry(
+        async () => {
+          const user = await this.getUserById(decoded.userId);
+          if (!user) throw new Error('User not found');
+          return user;
+        },
+        {
+          retries: 3,
+          minTimeout: 1000,
+          onRetry: (err, attempt) => {
+            logger.warn(`Retry attempt ${attempt} for user fetch: ${err.message}`);
+          }
+        }
+      );
       const accessToken = this.generateToken(user);
       const newRefreshToken = jwt.sign(
         { userId: user._key },
@@ -676,14 +689,12 @@ class AuthService {
     if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info(`Fetching user by ID: ${userId}`);
+      const dbStatus = await this.dbService.getConnectionStatus();
+      logger.debug(`Database connection status: ${JSON.stringify(dbStatus)}`);
       const user = await this.users.document(userId);
       logger.info(`User retrieved successfully by ID: ${userId}`);
       return user;
     } catch (error) {
-      if (error.code === 404) {
-        logger.info(`User not found for ID: ${userId}`);
-        return null;
-      }
       logger.error(`Error getting user ${userId}: ${error.message}`, { stack: error.stack });
       throw error;
     }
@@ -741,15 +752,12 @@ class AuthService {
     if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info('Verifying JWT token');
-
       const decoded = jwt.verify(token, this.jwtSecret);
-
       const user = await this.getUserById(decoded.userId);
-      if (!user || user.accessToken !== token) {
-        logger.warn(`Token invalid or not associated with user: ${decoded.userId}`);
+      if (!user) {
+        logger.warn(`User not found: ${decoded.userId}`);
         return null;
       }
-
       logger.info(`Token verified successfully for user: ${decoded.userId}`);
       return decoded;
     } catch (error) {

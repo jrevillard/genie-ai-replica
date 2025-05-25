@@ -20,6 +20,8 @@ class HttpService {
     // Token refresh state
     this.isRefreshing = false;
     this.refreshSubscribers = [];
+    this.maxRetries = 2; // Limit interceptor retries to avoid overlap with authService
+    this.retryDelay = 2000; // Delay for 401/403 retries in ms
     
     // Add request interceptor
     this.axios.interceptors.request.use(
@@ -34,6 +36,10 @@ class HttpService {
     );
   }
 
+  /**
+   * Refresh token with retry handling delegated to AuthService
+   * @returns {Promise} Token refresh response
+   */
   async refreshToken() {
     try {
       const response = await AuthService.refreshToken();
@@ -58,15 +64,11 @@ class HttpService {
    * @returns {string} Full URL
    */
   getUrl(endpoint) {
-    // Remove leading slash from endpoint if present
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    
-    // Ensure base URL ends with slash if endpoint is provided
     let base = this.baseUrl;
     if (!base.endsWith('/') && cleanEndpoint) {
       base += '/';
     }
-    
     return `${base}${cleanEndpoint}`;
   }
   
@@ -76,7 +78,6 @@ class HttpService {
    * @returns {Object} Modified request configuration
    */
   handleRequest(config) {
-    // Get auth token from localStorage
     const user = localStorage.getItem('user');
     if (user) {
       try {
@@ -88,7 +89,6 @@ class HttpService {
         console.error('Error parsing user data:', e);
       }
     }
-    
     return config;
   }
   
@@ -99,23 +99,13 @@ class HttpService {
    */
   handleRequestError(error) {
     console.error('Request error:', error);
-    
-    // Handle expired tokens more gracefully
-    if (error.response && error.response.status === 401) {
-      // Clear token and redirect to login
-      localStorage.removeItem('user');
-      if (typeof window !== 'undefined' && window.location) {
-        window.location.href = '/login';
-      }
-    }
-    
     return Promise.reject(error);
   }
   
   /**
    * Handle response interceptor
    * @param {Object} response - Response object
-   * @returns {Object} Response object or modified response
+   * @returns {Object} Response object
    */
   handleResponse(response) {
     return response;
@@ -138,99 +128,78 @@ class HttpService {
     this.refreshSubscribers = [];
   }
   
-  
   /**
    * Handle response error interceptor with token refresh
    * @param {Error} error - Response error
-   * @returns {Promise} Rejected promise with error
+   * @returns {Promise} Rejected promise with error or retried request
    */
-  handleResponseError(error) {
-    // Handle different error scenarios
+  async handleResponseError(error) {
     if (error.response) {
-      // Server responded with an error status
       const status = error.response.status;
+      const originalRequest = error.config;
       
-      // Handle authentication errors with token refresh
-      if (status === 401 && !error.config._retry) {
+      if ([401, 403].includes(status) && !originalRequest._retryCount) {
+        originalRequest._retryCount = originalRequest._retryCount || 0;
+        
+        if (originalRequest._retryCount >= this.maxRetries) {
+          console.error(`Max retries (${this.maxRetries}) reached for ${originalRequest.url}`);
+          AuthService.clearUserData();
+          if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
+        }
+        
+        originalRequest._retryCount += 1;
+        
         if (this.isRefreshing) {
-          // Wait for token refresh
           return new Promise((resolve) => {
             this.subscribeTokenRefresh(token => {
-              error.config.headers.Authorization = `Bearer ${token}`;
-              resolve(this.axios(error.config));
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(this.axios(originalRequest));
             });
           });
         }
         
-        error.config._retry = true;
         this.isRefreshing = true;
         
-        // Try to refresh the token
-        return this.refreshToken()
-          .then(response => {
-            const newToken = response.data.accessToken;
-            
-            // Get current user data
-            const userStr = localStorage.getItem('user');
-            if (userStr) {
-              try {
-                const userData = JSON.parse(userStr);
-                
-                // Update with new token
-                userData.accessToken = newToken;
-                localStorage.setItem('user', JSON.stringify(userData));
-                
-                // Update axios headers
-                this.axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
-                error.config.headers.Authorization = `Bearer ${newToken}`;
-                
-                // Notify subscribers
-                this.onTokenRefreshed(newToken);
-                this.isRefreshing = false;
-                
-                // Retry the original request
-                return this.axios(error.config);
-              } catch (e) {
-                console.error('Error parsing user data during token refresh:', e);
-              }
+        try {
+          const response = await this.refreshToken();
+          const newToken = response.data.accessToken;
+          
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            try {
+              const userData = JSON.parse(userStr);
+              userData.accessToken = newToken;
+              localStorage.setItem('user', JSON.stringify(userData));
+              
+              this.axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              
+              this.onTokenRefreshed(newToken);
+              this.isRefreshing = false;
+              
+              // Delay retry to allow backend recovery
+              await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+              return this.axios(originalRequest);
+            } catch (e) {
+              console.error('Error parsing user data during token refresh:', e);
             }
-            
-            // If we couldn't refresh, redirect to login
-            this.isRefreshing = false;
-            localStorage.removeItem('user');
-            if (typeof window !== 'undefined' && window.location) {
-              window.location.href = '/login';
-            }
-            
-            return Promise.reject(error);
-          })
-          .catch(refreshError => {
-            this.isRefreshing = false;
-            localStorage.removeItem('user');
-            
-            // Redirect to login
-            if (typeof window !== 'undefined' && window.location) {
-              window.location.href = '/login';
-            }
-            
-            return Promise.reject(refreshError);
-          });
-      }
-      
-      // For other 401 errors (not eligible for refresh), clear tokens and redirect
-      if (status === 401) {
-        localStorage.removeItem('user');
-        
-        // If window object is available (browser environment)
-        if (typeof window !== 'undefined' && window.location) {
-          // Check if we're not already on the login page to avoid redirect loops
-          if (!window.location.pathname.includes('/login')) {
+          }
+          
+          throw new Error('No user data available');
+        } catch (refreshError) {
+          console.error('Token refresh error:', refreshError);
+          this.isRefreshing = false;
+          AuthService.clearUserData();
+          if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
             window.location.href = '/login';
           }
+          return Promise.reject(refreshError);
         }
       }
       
-      // Create a standardized error object
       const errorData = {
         status,
         statusText: error.response.statusText,
@@ -241,14 +210,12 @@ class HttpService {
       console.error('API response error:', errorData);
       return Promise.reject(errorData);
     } else if (error.request) {
-      // Request was made but no response received (network error)
       console.error('Network error - no response received:', error.request);
       return Promise.reject({
         status: 0,
         message: 'Network error. Please check your connection.'
       });
     } else {
-      // Error in setting up the request
       console.error('Request setup error:', error.message);
       return Promise.reject({
         message: 'Error preparing the request: ' + error.message
@@ -270,7 +237,6 @@ class HttpService {
         ...options,
         params: params.params || params
       };
-      
       return await this.axios.get(url, config);
     } catch (error) {
       return Promise.reject(error);
@@ -282,6 +248,7 @@ class HttpService {
    * @param {string} endpoint - API endpoint
    * @param {Object} data - Request payload
    * @param {Object} options - Additional axios options
+   * @param {boolean} appendBaseUrl - Whether to append base URL
    * @returns {Promise} Response promise
    */
   async post(endpoint, data = {}, options = {}, appendBaseUrl = true) {
@@ -347,17 +314,12 @@ class HttpService {
    * @returns {Promise} Promise with server response
    */
   async putNoCache(url, data) {
-    // Add a timestamp to both URL and data to ensure uniqueness
     const timestamp = Date.now();
     const noCacheUrl = `${this.getUrl(url)}?_nocache=${timestamp}`;
-
-    // Add timestamp to data as well
     const noCacheData = {
       ...data,
       _timestamp: timestamp
     };
-
-    // Make the request with cache-busting headers
     return this.axios.put(noCacheUrl, noCacheData, {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate, private',

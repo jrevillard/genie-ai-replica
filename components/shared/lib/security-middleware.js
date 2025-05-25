@@ -152,23 +152,56 @@ class SecurityMiddleware {
   }
 
   static updateIPReputation(req) {
+    // Skip reputation scoring for auth endpoints
+    if (req.path.startsWith('/api/auth')) {
+      return;
+    }
     const ip = req.ip;
-    const reputation = SecurityMiddleware.ipReputation.get(ip) || { 
+    // Use user ID for authenticated requests, else IP
+    const key = req.user ? req.user._key : ip;
+    const reputation = SecurityMiddleware.ipReputation.get(key) || { 
       score: 0, 
       lastSeen: Date.now() 
     };
-
+  
     const timeSinceLastSeen = Date.now() - reputation.lastSeen;
     reputation.score = Math.max(0, reputation.score - Math.floor(timeSinceLastSeen / (1000 * 60 * 60)));
-
-    SecurityMiddleware.ipReputation.set(ip, {
+  
+    SecurityMiddleware.ipReputation.set(key, {
       score: reputation.score + 1,
       lastSeen: Date.now()
     });
-
-    if (reputation.score > 10) {
+  
+    if (reputation.score > 50) { // Increase threshold
       SecurityMiddleware.blockIP(ip);
     }
+  }
+  
+  static applySecurityMiddleware(app) {
+    app.use('/api/chat', SecurityMiddleware.chatApiLimiter);
+    app.use('/api/', (req, res, next) => {
+      if (req.path.startsWith('/api/auth')) {
+        return next(); // Skip rate-limiting for auth endpoints
+      }
+      SecurityMiddleware.apiLimiter(req, res, next);
+    });
+    app.use(SecurityMiddleware.threatDetectionMiddleware.bind(SecurityMiddleware));
+    app.use(SecurityMiddleware.authFailureLogger);
+    app.use((req, res, next) => {
+      Object.keys(req.query).forEach(key => {
+        if (typeof req.query[key] === 'string') {
+          req.query[key] = validator.escape(req.query[key]);
+        }
+      });
+      if (req.body) {
+        Object.keys(req.body).forEach(key => {
+          if (typeof req.body[key] === 'string') {
+            req.body[key] = validator.escape(req.body[key]);
+          }
+        });
+      }
+      next();
+    });
   }
 
   static blockIP(ip) {
@@ -198,24 +231,6 @@ class SecurityMiddleware {
       return originalEnd.call(this, chunk, encoding);
     };
     next();
-  }
-
-  static applySecurityMiddleware(app) {
-    app.use('/api/chat', SecurityMiddleware.chatApiLimiter);
-    app.use('/api/', SecurityMiddleware.apiLimiter);
-    app.use(SecurityMiddleware.threatDetectionMiddleware.bind(SecurityMiddleware));
-    app.use(SecurityMiddleware.authFailureLogger);
-    app.use((req, res, next) => {
-      Object.keys(req.query).forEach(key => {
-        req.query[key] = validator.escape(req.query[key]);
-      });
-      if (req.body) {
-        Object.keys(req.body).forEach(key => {
-          req.body[key] = validator.escape(req.body[key]);
-        });
-      }
-      next();
-    });
   }
 }
 

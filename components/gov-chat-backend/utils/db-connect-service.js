@@ -134,6 +134,7 @@ class DatabaseService {
    * @param {Object} connectionConfig - Connection configuration
    * @returns {Database} The new database connection
    */
+  // db-connect-service.js
   async _createConnection(name, connectionConfig) {
     const db = new Database({
       url: connectionConfig.url,
@@ -143,7 +144,9 @@ class DatabaseService {
         password: connectionConfig.auth.password
       }
     });
+    logger.info(`Attempting to authenticate for connection: ${name}`);
     await db.login(connectionConfig.auth.username, connectionConfig.auth.password);
+    logger.info(`Authentication successful for connection: ${name}`);
     return new Proxy(db, {
       get: (target, prop) => {
         if (['query', 'document'].includes(prop)) {
@@ -158,8 +161,11 @@ class DatabaseService {
                   const newDb = await this._createConnection(name, connectionConfig);
                   this._connections.set(name, newDb);
                   target._connection = newDb._connection;
+                  await target.login(connectionConfig.auth.username, connectionConfig.auth.password);
+                  logger.info(`Re-authentication successful for connection: ${name}`);
                   continue;
                 }
+                logger.error(`Failed ${prop} after ${attempt} attempts: ${error.message}`);
                 throw error;
               }
             }

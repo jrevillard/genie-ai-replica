@@ -16,7 +16,7 @@ const UserProfileService = require('./services/user-profile-service');
 const AdminDashboardService = require('./services/admin-dashboard-service');
 const AnalyticsService = require('./services/analytics-service');
 const QueryService = require('./services/query-service');
-const chatHistoryService = require('./services/chat-history-service'); // Use singleton
+const chatHistoryService = require('./services/chat-history-service');
 const ServiceCategoryService = require('./services/service-category-service');
 const SessionService = require('./services/session-service');
 const logsService = require('./services/logs-service');
@@ -26,7 +26,7 @@ const dbService = require('./utils/db-connect-service');
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.mkdirSync(UploadsDir, { recursive: true });
 }
 
 // Initialize Express app
@@ -524,15 +524,15 @@ async function initializeServices() {
   // Pre-initialization connection test
   logger.debug('Performing pre-initialization connection test');
   try {
-    const testConnection = await Promise.race([
-      dbService.getConnection('test'),
+    const defaultConnection = await Promise.race([
+      dbService.getConnection('default'),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Pre-initialization connection test timed out')), 30000))
     ]);
     logger.debug('Pre-initialization connection test successful');
 
     // Get ArangoDB version
     try {
-      const version = await testConnection.version();
+      const version = await defaultConnection.version();
       logger.debug('ArangoDB version:', { version: version.version, server: version.server });
     } catch (versionError) {
       logger.error('Failed to get ArangoDB version:', {
@@ -540,9 +540,6 @@ async function initializeServices() {
         stack: versionError.stack
       });
     }
-
-    await dbService.closeConnection('test');
-    logger.debug('Test connection closed');
   } catch (error) {
     logger.error('Pre-initialization connection test failed:', {
       error: error.message || 'Unknown error',
@@ -693,7 +690,7 @@ async function startApp() {
       { file: 'user-routes', paths: ['/api/users', '/api/user'], service: services.userProfileService },
       { file: 'query-routes', paths: ['/api/queries', '/api/query'], service: services.queryService },
       { file: 'service-routes', paths: ['/api/services'], service: services.serviceCategoryService },
-      { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService }, // Added /api/chat
+      { file: 'chat-history-routes', paths: ['/api/chat-history', '/api/chat'], service: services.chatHistoryService },
       { file: 'analytics-routes', paths: ['/api/analytics'], service: services.analyticsService },
       { file: 'session-routes', paths: ['/api/sessions', '/api/session'], service: services.sessionService },
       { file: 'service-category-routes', paths: ['/api/service-categories'], service: services.serviceCategoryService },

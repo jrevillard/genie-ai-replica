@@ -1,0 +1,5 @@
+[2025-05-26 15:03:15] Backing up current Kong configuration to kong_backups/kong_backup_20250526_150315.yml
+[2025-05-26 15:03:15] ERROR: Kong container chat-ui-vue-app_kong_1 is not running
+[2025-05-26 15:19:27] Backing up current Kong configuration to kong_backups/kong_backup_20250526_151927.json
+[2025-05-26 15:19:27] Backup successful: kong_backups/kong_backup_20250526_151927.json
+[2025-05-26 15:19:27] Operation completed successfully

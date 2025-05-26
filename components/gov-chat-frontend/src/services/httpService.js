@@ -141,16 +141,18 @@ class HttpService {
       if ([401, 403].includes(status) && !originalRequest._retryCount) {
         originalRequest._retryCount = originalRequest._retryCount || 0;
         
-        if (originalRequest._retryCount >= this.maxRetries) {
-          console.error(`Max retries (${this.maxRetries}) reached for ${originalRequest.url}`);
+        if (originalRequest._retryCount >= 3) { // Increased to 3 retries
+          console.error(`Max retries (3) reached for ${originalRequest.url}`);
           AuthService.clearUserData();
           if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
+            console.log('Redirecting to login due to max retries');
+            window.location.href = '/login?error=session_expired';
           }
           return Promise.reject(error);
         }
         
         originalRequest._retryCount += 1;
+        console.log(`Retry attempt ${originalRequest._retryCount} for ${originalRequest.url} (status: ${status})`);
         
         if (this.isRefreshing) {
           return new Promise((resolve) => {
@@ -172,6 +174,7 @@ class HttpService {
             try {
               const userData = JSON.parse(userStr);
               userData.accessToken = newToken;
+              userData.refreshToken = response.data.refreshToken || userData.refreshToken;
               localStorage.setItem('user', JSON.stringify(userData));
               
               this.axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
@@ -180,7 +183,6 @@ class HttpService {
               this.onTokenRefreshed(newToken);
               this.isRefreshing = false;
               
-              // Delay retry to allow backend recovery
               await new Promise(resolve => setTimeout(resolve, this.retryDelay));
               return this.axios(originalRequest);
             } catch (e) {
@@ -194,7 +196,8 @@ class HttpService {
           this.isRefreshing = false;
           AuthService.clearUserData();
           if (typeof window !== 'undefined' && window.location && !window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
+            console.log('Redirecting to login due to refresh failure');
+            window.location.href = '/login?error=refresh_failed';
           }
           return Promise.reject(refreshError);
         }

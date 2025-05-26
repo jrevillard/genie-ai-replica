@@ -203,6 +203,7 @@ class AuthService {
       );
       await this.users.update(user._key, {
         accessToken: accessToken,
+        refreshToken: refreshToken,
         updatedAt: new Date().toISOString()
       });
       // Remove encPassword from user object
@@ -220,67 +221,92 @@ class AuthService {
   }
 
   async refreshToken(refreshToken) {
+    if (!this.initialized) throw new Error('AuthService not initialized');
     try {
       logger.info('Validating refresh token');
       const decoded = jwt.verify(refreshToken, this.jwtSecret);
-      const user = await retry(
-        async () => {
-          const user = await this.getUserById(decoded.userId);
-          if (!user) throw new Error('User not found');
-          return user;
-        },
-        {
-          retries: 3,
-          minTimeout: 1000,
-          onRetry: (err, attempt) => {
-            logger.warn(`Retry attempt ${attempt} for user fetch: ${err.message}`);
-          }
-        }
-      );
-      const accessToken = this.generateToken(user);
+      if (!decoded || !decoded.userId) {
+        logger.warn('Invalid refresh token');
+        throw new Error('Invalid refresh token');
+      }
+
+      logger.info(`Generating JWT token for user: ${decoded.userId}`);
+      const accessToken = this.generateToken({ _key: decoded.userId });
       const newRefreshToken = jwt.sign(
-        { userId: user._key },
+        { userId: decoded.userId },
         this.jwtSecret,
         { expiresIn: '7d' }
       );
-      await this.users.update(user._key, {
-        accessToken: accessToken,
-        updatedAt: new Date().toISOString()
-      });
+
+      // Update tokens in database (optional, but try to maintain consistency)
+      try {
+        await this.users.update(decoded.userId, {
+          accessToken: accessToken,
+          refreshToken: newRefreshToken,
+          updatedAt: new Date().toISOString()
+        });
+        logger.info(`Tokens updated for user: ${decoded.userId}`);
+      } catch (dbError) {
+        logger.warn(`Failed to update tokens for user ${decoded.userId}: ${dbError.message}`);
+        // Continue without failing the refresh
+      }
+
       logger.info(`Refresh token validated for user ${decoded.userId}`);
       return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
       logger.error(`Refresh token error: ${error.message}`, { stack: error.stack });
-      throw error;
+      throw new Error('Invalid refresh token');
     }
   }
 
-  async logout(userId) {
+  async logout(userId, token) {
     if (!this.initialized) throw new Error('AuthService not initialized');
     if (!this.sessionService) throw new Error('SessionService not set in AuthService');
     try {
       logger.info(`Logging out user with ID: ${userId}`);
 
-      await this.users.update(userId, {
-        accessToken: null,
-        updatedAt: new Date().toISOString()
-      });
-
+      // Validate token
+      let decoded;
       try {
-        const activeSession = await this.sessionService.getActiveSession(userId);
-        if (activeSession) {
-          logger.info(`Ending active session ${activeSession._key} for user ${userId} during logout`);
-          await this.sessionService.endSession(activeSession._key);
+        decoded = jwt.verify(token, this.jwtSecret);
+        if (!decoded || decoded.userId !== userId) {
+          logger.warn(`Invalid token for logout, user: ${userId}`);
+          return { success: true, message: 'Logged out successfully (invalid token)' };
         }
-      } catch (sessionError) {
-        logger.error(`Failed to end session, but continuing logout: ${sessionError.message}`, { stack: sessionError.stack });
+      } catch (tokenError) {
+        logger.warn(`Token verification failed for logout, user: ${userId}: ${tokenError.message}`);
+        return { success: true, message: 'Logged out successfully (token error)' };
       }
 
-      logger.info(`User logged out successfully: ${userId}`);
-      return { success: true, message: 'Logged out successfully' };
+      // Try to update session and clear tokens
+      let sessionUpdated = false;
+      try {
+        await this.users.update(userId, {
+          accessToken: null,
+          refreshToken: null,
+          updatedAt: new Date().toISOString()
+        });
+        logger.info(`Tokens cleared for user: ${userId}`);
+
+        try {
+          const activeSession = await this.sessionService.getActiveSession(userId);
+          if (activeSession) {
+            logger.info(`Ending active session ${activeSession._key} for user ${userId} during logout`);
+            await this.sessionService.endSession(activeSession._key);
+            sessionUpdated = true;
+          }
+        } catch (sessionError) {
+          logger.warn(`Failed to end session for user ${userId}: ${sessionError.message}`);
+        }
+      } catch (dbError) {
+        logger.warn(`Failed to update tokens or session for user ${userId}: ${dbError.message}`);
+      }
+
+      logger.info(`Logout successful for user: ${userId}`);
+      return { success: true, message: sessionUpdated ? 'Logged out successfully' : 'Logged out successfully (session update skipped)' };
     } catch (error) {
       logger.error(`Error logging out user ${userId}: ${error.message}`, { stack: error.stack });
-      throw error;
+      return { success: true, message: 'Logged out successfully (error occurred)' };
     }
   }
 

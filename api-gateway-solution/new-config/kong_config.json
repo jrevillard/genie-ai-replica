@@ -1,0 +1,187 @@
+{
+  "_format_version": "3.0",
+  "services": [
+    {
+      "name": "node-services",
+      "id": "453cb927-f3d0-4b68-8791-3165dc046e19",
+      "url": "http://e2e-82-109.ssdcloudindia.net:3000",
+      "routes": [
+        {
+          "name": "node-services-route",
+          "paths": ["/api"],
+          "strip_path": false,
+          "plugins": [
+            {
+              "name": "jwt",
+              "config": {
+                "key_claim_name": "iss",
+                "secret_is_base64": false
+              }
+            },
+            {
+              "name": "rate-limiting",
+              "id": "13e146bb-0d4f-4bfa-a9ca-b518b5ffb1b3",
+              "config": {
+                "minute": 1000,
+                "policy": "local",
+                "limit_by": "consumer",
+                "header_name": "Authorization",
+                "hide_client_headers": false,
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ip-restriction",
+              "config": {
+                "deny": [],
+                "allow": [],
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "auth-refresh-route",
+          "paths": ["/api/auth/refresh-token"],
+          "strip_path": false,
+          "methods": ["POST"],
+          "plugins": [
+            {
+              "name": "rate-limiting",
+              "config": {
+                "minute": 1000,
+                "policy": "local",
+                "limit_by": "consumer",
+                "header_name": "Authorization",
+                "hide_client_headers": false,
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ip-restriction",
+              "config": {
+                "deny": [],
+                "allow": [],
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "auth-login-route",
+          "paths": ["/api/auth/login"],
+          "strip_path": false,
+          "methods": ["POST"],
+          "plugins": [
+            {
+              "name": "rate-limiting",
+              "config": {
+                "minute": 1000,
+                "policy": "local",
+                "limit_by": "consumer",
+                "header_name": "Authorization",
+                "hide_client_headers": false,
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ip-restriction",
+              "config": {
+                "deny": [],
+                "allow": [],
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "services-categories-route",
+          "paths": ["/api/services/categories"],
+          "strip_path": false,
+          "methods": ["GET"],
+          "plugins": [
+            {
+              "name": "rate-limiting",
+              "config": {
+                "minute": 1000,
+                "policy": "local",
+                "limit_by": "consumer",
+                "header_name": "Authorization",
+                "hide_client_headers": false,
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ip-restriction",
+              "config": {
+                "deny": [],
+                "allow": [],
+                "condition": [
+                  {
+                    "name": "header",
+                    "header_name": "Authorization",
+                    "value_exists": false
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "plugins": [
+    {
+      "name": "cors",
+      "config": {
+        "origins": ["https://e2e-82-109.ssdcloudindia.net"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "headers": ["Content-Type", "Authorization"],
+        "credentials": true,
+        "max_age": 3600
+      }
+    }
+  ]
+}

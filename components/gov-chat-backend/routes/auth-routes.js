@@ -59,27 +59,11 @@ module.exports = (authService) => {
         return res.status(400).json({ message: 'Refresh token required' });
       }
       logger.info('Processing refresh token request');
-      const decoded = jwt.verify(refreshToken, authService.jwtSecret);
-      const user = await authService.getUserById(decoded.userId);
-      if (!user) {
-        logger.warn('User not found for refresh token');
-        return res.status(401).json({ message: 'Invalid refresh token' });
-      }
-      const newAccessToken = authService.generateToken(user);
-      const newRefreshToken = jwt.sign(
-        { userId: user._key },
-        authService.jwtSecret,
-        { expiresIn: '7d' }
-      );
-      await authService.users.update(user._key, {
-        accessToken: newAccessToken,
-        updatedAt: new Date().toISOString()
-      });
-      logger.info(`Refresh token processed successfully for user ${user._key}`);
+      const result = await authService.refreshToken(refreshToken);
       res.json({
         success: true,
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
       });
     } catch (error) {
       logger.error(`Error in refresh-token: ${error.message}`, { stack: error.stack });

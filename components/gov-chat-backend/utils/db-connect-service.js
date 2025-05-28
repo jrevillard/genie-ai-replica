@@ -222,8 +222,145 @@ class DatabaseService {
   }
 
   /**
-   * NEW: Create a self-healing proxy for ArangoDB collections
-   * This handles all collection methods like ensureIndex, save, update, etc.
+   * NEW: Get or create a self-healing proxy for a connection
+   * This proxy automatically updates its target when the connection is recovered
+   * COMPREHENSIVE coverage for ArangoDB JavaScript driver
+   */
+  _getOrCreateProxy(connectionName, targetDb) {
+    const self = this;
+    
+    // Create a new proxy that can be updated
+    const proxy = new Proxy({}, {
+      get(target, prop) {
+        // Always get the current connection info
+        const currentConnectionInfo = self._connections.get(connectionName);
+        const currentDb = currentConnectionInfo ? currentConnectionInfo.db : targetDb;
+        
+        // Pass through non-function properties
+        if (typeof currentDb[prop] !== 'function') {
+          return currentDb[prop];
+        }
+        
+        // Special handling for methods that return proxied objects
+        if (prop === 'collection') {
+          return function(collectionName) {
+            const realCollection = currentDb.collection(collectionName);
+            return self._createCollectionProxy(connectionName, collectionName, realCollection);
+          };
+        }
+        
+        if (prop === 'graph') {
+          return function(graphName) {
+            const realGraph = currentDb.graph(graphName);
+            return self._createGraphProxy(connectionName, graphName, realGraph);
+          };
+        }
+        
+        if (prop === 'view') {
+          return function(viewName) {
+            const realView = currentDb.view(viewName);
+            return self._createViewProxy(connectionName, viewName, realView);
+          };
+        }
+        
+        if (prop === 'analyzer') {
+          return function(analyzerName) {
+            const realAnalyzer = currentDb.analyzer(analyzerName);
+            return self._createAnalyzerProxy(connectionName, analyzerName, realAnalyzer);
+          };
+        }
+        
+        // Methods that return cursors need special handling
+        if (prop === 'query') {
+          return async function(query, bindVars, options) {
+            const result = await self._executeWithRetry(
+              connectionName, 
+              async (db) => db.query(query, bindVars, options),
+              'query'
+            );
+            
+            // If result is a cursor, proxy it
+            if (result && typeof result.next === 'function') {
+              return self._createCursorProxy(connectionName, result);
+            }
+            
+            return result;
+          };
+        }
+        
+        // Transaction methods need special handling
+        if (prop === 'beginTransaction') {
+          return async function(collections, options) {
+            const transaction = await self._executeWithRetry(
+              connectionName,
+              async (db) => db.beginTransaction(collections, options),
+              'beginTransaction'
+            );
+            
+            return self._createTransactionProxy(connectionName, transaction);
+          };
+        }
+        
+        if (prop === 'executeTransaction') {
+          return async function(collections, action, options) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db.executeTransaction(collections, action, options),
+              'executeTransaction'
+            );
+          };
+        }
+        
+        // Route methods
+        if (prop === 'route') {
+          return function(path, headers) {
+            const route = currentDb.route(path, headers);
+            return self._createRouteProxy(connectionName, route);
+          };
+        }
+        
+        // Standard database methods with retry logic
+        const databaseMethods = [
+          'listCollections', 'collections', 'createCollection', 'dropCollection', 'truncate', 'renameCollection',
+          'listGraphs', 'graphs', 'createGraph', 'dropGraph',
+          'listViews', 'views', 'createView', 'dropView', 
+          'listAnalyzers', 'analyzers', 'createAnalyzer', 'dropAnalyzer',
+          'listUsers', 'createUser', 'updateUser', 'replaceUser', 'dropUser',
+          'listDatabases', 'createDatabase', 'dropDatabase', 'useDatabase',
+          'version', 'engine', 'isArangoDatabase', 'name',
+          'exists', 'get', 'post', 'put', 'patch', 'delete', 'head', 'options',
+          'acquireHostList', 'close'
+        ];
+        
+        if (databaseMethods.includes(prop) || typeof currentDb[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db[prop](...args),
+              prop
+            );
+          };
+        }
+        
+        // For other methods, return bound function from current connection
+        return currentDb[prop].bind(currentDb);
+      }
+    });
+
+    // Track this proxy for future updates
+    if (!this._activeProxies.has(connectionName)) {
+      this._activeProxies.set(connectionName, new Set());
+    }
+    this._activeProxies.get(connectionName).add(proxy);
+    
+    logger.debug(`[DB_PROXY] Created self-healing proxy for ${connectionName}. Total proxies: ${this._activeProxies.get(connectionName).size}`);
+    
+    return proxy;
+  }
+
+  /**
+   * ENHANCED: Create a comprehensive self-healing proxy for ArangoDB collections
+   * Handles ALL collection methods and return types
    */
   _createCollectionProxy(connectionName, collectionName, targetCollection) {
     const self = this;
@@ -240,71 +377,61 @@ class DatabaseService {
           return currentCollection[prop];
         }
         
-        // Collection methods that need retry logic
-        const collectionMethods = [
-          'ensureIndex', 'dropIndex', 'indexes', 'save', 'replace', 'update', 'remove', 
-          'document', 'exists', 'firstExample', 'byExample', 'removeByExample', 
-          'replaceByExample', 'updateByExample', 'any', 'all', 'toArray', 'create', 
-          'drop', 'truncate', 'properties', 'count', 'figures', 'revision', 'checksum',
-          'fulltext', 'near', 'within', 'range', 'import', 'export', 'edges', 
-          'inEdges', 'outEdges', 'traversal', 'shortestPath'
-        ];
-        
-        if (collectionMethods.includes(prop) || typeof currentCollection[prop] === 'function') {
+        // Methods that return cursors
+        const cursorMethods = ['byExample', 'firstExample', 'any', 'all', 'fulltext', 'near', 'within', 'range'];
+        if (cursorMethods.includes(prop)) {
           return async function(...args) {
-            const maxRetries = 3;
-            let lastError;
+            const result = await self._executeCollectionMethodWithRetry(
+              connectionName, collectionName, prop, args
+            );
             
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-              try {
-                logger.debug(`[DB_COLLECTION] Executing ${prop} on ${connectionName}.${collectionName} (attempt ${attempt})`);
-                
-                // Get fresh collection reference
-                const freshConnectionInfo = self._connections.get(connectionName);
-                const freshDb = freshConnectionInfo ? freshConnectionInfo.db : null;
-                const freshCollection = freshDb ? freshDb.collection(collectionName) : currentCollection;
-                
-                // Update activity timestamp
-                if (freshConnectionInfo) {
-                  freshConnectionInfo.lastActivity = Date.now();
-                }
-                
-                const result = await freshCollection[prop](...args);
-                logger.debug(`[DB_COLLECTION] ${prop} completed successfully on ${connectionName}.${collectionName}`);
-                return result;
-                
-              } catch (error) {
-                lastError = error;
-                logger.warn(`[DB_COLLECTION] ${prop} failed on ${connectionName}.${collectionName} (attempt ${attempt}): ${error.message}`);
-                
-                if (self._isConnectionError(error) && attempt < maxRetries) {
-                  logger.warn(`[DB_COLLECTION] Connection error detected, triggering recovery for ${connectionName}`);
-                  
-                  try {
-                    // Force immediate recovery
-                    await self._performActiveRecovery(connectionName, error);
-                    
-                    // Small delay before retry
-                    await self._sleep(500 * attempt);
-                    
-                  } catch (recoveryError) {
-                    logger.error(`[DB_COLLECTION] Recovery failed for ${connectionName}: ${recoveryError.message}`);
-                    if (attempt >= maxRetries) {
-                      throw recoveryError;
-                    }
-                  }
-                } else if (attempt >= maxRetries) {
-                  logger.error(`[DB_COLLECTION] Max retries exceeded for ${prop} on ${connectionName}.${collectionName}`);
-                  break;
-                } else {
-                  // Non-connection error, don't retry
-                  logger.error(`[DB_COLLECTION] Non-connection error for ${prop} on ${connectionName}.${collectionName}: ${error.message}`);
-                  throw error;
-                }
-              }
+            // If result is a cursor, proxy it
+            if (result && typeof result.next === 'function') {
+              return self._createCursorProxy(connectionName, result);
             }
             
-            throw lastError;
+            return result;
+          };
+        }
+        
+        // Edge collection methods (for graph collections)
+        const edgeMethods = ['edges', 'inEdges', 'outEdges', 'traversal', 'shortestPath'];
+        if (edgeMethods.includes(prop)) {
+          return async function(...args) {
+            const result = await self._executeCollectionMethodWithRetry(
+              connectionName, collectionName, prop, args
+            );
+            
+            // Handle cursor results
+            if (result && typeof result.next === 'function') {
+              return self._createCursorProxy(connectionName, result);
+            }
+            
+            return result;
+          };
+        }
+        
+        // ALL other collection methods
+        const allCollectionMethods = [
+          // Index methods
+          'ensureIndex', 'dropIndex', 'indexes',
+          // Document CRUD
+          'save', 'replace', 'update', 'remove', 'document', 'exists',
+          // Bulk operations
+          'removeByExample', 'replaceByExample', 'updateByExample', 'import', 'export',
+          // Collection management
+          'create', 'drop', 'truncate', 'rename', 'rotate',
+          // Collection info
+          'get', 'properties', 'count', 'figures', 'revision', 'checksum', 'load', 'unload',
+          // Replication
+          'loadIndexes', 'waitForSync'
+        ];
+        
+        if (allCollectionMethods.includes(prop) || typeof currentCollection[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeCollectionMethodWithRetry(
+              connectionName, collectionName, prop, args
+            );
           };
         }
         
@@ -312,6 +439,357 @@ class DatabaseService {
         return currentCollection[prop].bind(currentCollection);
       }
     });
+  }
+
+  /**
+   * NEW: Create proxy for ArangoDB Graph objects
+   */
+  _createGraphProxy(connectionName, graphName, targetGraph) {
+    const self = this;
+    
+    return new Proxy({}, {
+      get(target, prop) {
+        const currentConnectionInfo = self._connections.get(connectionName);
+        const currentDb = currentConnectionInfo ? currentConnectionInfo.db : null;
+        const currentGraph = currentDb ? currentDb.graph(graphName) : targetGraph;
+        
+        if (typeof currentGraph[prop] !== 'function') {
+          return currentGraph[prop];
+        }
+        
+        // Methods that return collections (should be proxied)
+        if (prop === 'vertexCollection') {
+          return function(collectionName) {
+            const vertexCollection = currentGraph.vertexCollection(collectionName);
+            return self._createVertexCollectionProxy(connectionName, graphName, collectionName, vertexCollection);
+          };
+        }
+        
+        if (prop === 'edgeCollection') {
+          return function(collectionName) {
+            const edgeCollection = currentGraph.edgeCollection(collectionName);
+            return self._createEdgeCollectionProxy(connectionName, graphName, collectionName, edgeCollection);
+          };
+        }
+        
+        // Standard graph methods
+        const graphMethods = [
+          'create', 'drop', 'get', 'exists', 'addVertexCollection', 'removeVertexCollection',
+          'addEdgeDefinition', 'removeEdgeDefinition', 'replaceEdgeDefinition', 'traversal'
+        ];
+        
+        if (graphMethods.includes(prop) || typeof currentGraph[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db.graph(graphName)[prop](...args),
+              `graph.${prop}`
+            );
+          };
+        }
+        
+        return currentGraph[prop].bind(currentGraph);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for ArangoDB View objects
+   */
+  _createViewProxy(connectionName, viewName, targetView) {
+    const self = this;
+    
+    return new Proxy({}, {
+      get(target, prop) {
+        const currentConnectionInfo = self._connections.get(connectionName);
+        const currentDb = currentConnectionInfo ? currentConnectionInfo.db : null;
+        const currentView = currentDb ? currentDb.view(viewName) : targetView;
+        
+        if (typeof currentView[prop] !== 'function') {
+          return currentView[prop];
+        }
+        
+        const viewMethods = [
+          'create', 'drop', 'get', 'exists', 'properties', 'updateProperties', 'replaceProperties', 'rename'
+        ];
+        
+        if (viewMethods.includes(prop) || typeof currentView[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db.view(viewName)[prop](...args),
+              `view.${prop}`
+            );
+          };
+        }
+        
+        return currentView[prop].bind(currentView);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for ArangoDB Analyzer objects
+   */
+  _createAnalyzerProxy(connectionName, analyzerName, targetAnalyzer) {
+    const self = this;
+    
+    return new Proxy({}, {
+      get(target, prop) {
+        const currentConnectionInfo = self._connections.get(connectionName);
+        const currentDb = currentConnectionInfo ? currentConnectionInfo.db : null;
+        const currentAnalyzer = currentDb ? currentDb.analyzer(analyzerName) : targetAnalyzer;
+        
+        if (typeof currentAnalyzer[prop] !== 'function') {
+          return currentAnalyzer[prop];
+        }
+        
+        const analyzerMethods = ['create', 'drop', 'get', 'exists'];
+        
+        if (analyzerMethods.includes(prop) || typeof currentAnalyzer[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db.analyzer(analyzerName)[prop](...args),
+              `analyzer.${prop}`
+            );
+          };
+        }
+        
+        return currentAnalyzer[prop].bind(currentAnalyzer);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for ArangoDB Cursor objects
+   */
+  _createCursorProxy(connectionName, targetCursor) {
+    const self = this;
+    
+    return new Proxy(targetCursor, {
+      get(target, prop) {
+        if (typeof target[prop] !== 'function') {
+          return target[prop];
+        }
+        
+        // Cursor methods that might fail due to connection issues
+        const cursorMethods = ['next', 'hasNext', 'each', 'every', 'some', 'map', 'reduce', 'all', 'kill'];
+        
+        if (cursorMethods.includes(prop)) {
+          return async function(...args) {
+            try {
+              return await target[prop](...args);
+            } catch (error) {
+              if (self._isConnectionError(error)) {
+                logger.warn(`[DB_CURSOR] ${prop} failed due to connection error: ${error.message}`);
+                // For cursor errors, we can't easily retry as cursor state may be lost
+                // Log the issue but let the error propagate
+                throw error;
+              }
+              throw error;
+            }
+          };
+        }
+        
+        return target[prop].bind(target);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for ArangoDB Transaction objects
+   */
+  _createTransactionProxy(connectionName, targetTransaction) {
+    const self = this;
+    
+    return new Proxy(targetTransaction, {
+      get(target, prop) {
+        if (typeof target[prop] !== 'function') {
+          return target[prop];
+        }
+        
+        const transactionMethods = ['run', 'commit', 'abort', 'exists', 'get', 'step'];
+        
+        if (transactionMethods.includes(prop)) {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async () => target[prop](...args),
+              `transaction.${prop}`
+            );
+          };
+        }
+        
+        return target[prop].bind(target);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for ArangoDB Route objects
+   */
+  _createRouteProxy(connectionName, targetRoute) {
+    const self = this;
+    
+    return new Proxy(targetRoute, {
+      get(target, prop) {
+        if (typeof target[prop] !== 'function') {
+          return target[prop];
+        }
+        
+        const routeMethods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'request'];
+        
+        if (routeMethods.includes(prop)) {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async () => target[prop](...args),
+              `route.${prop}`
+            );
+          };
+        }
+        
+        return target[prop].bind(target);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for Graph Vertex Collections
+   */
+  _createVertexCollectionProxy(connectionName, graphName, collectionName, targetVertexCollection) {
+    const self = this;
+    
+    return new Proxy({}, {
+      get(target, prop) {
+        const currentConnectionInfo = self._connections.get(connectionName);
+        const currentDb = currentConnectionInfo ? currentConnectionInfo.db : null;
+        const currentVertexCollection = currentDb ? currentDb.graph(graphName).vertexCollection(collectionName) : targetVertexCollection;
+        
+        if (typeof currentVertexCollection[prop] !== 'function') {
+          return currentVertexCollection[prop];
+        }
+        
+        const vertexMethods = ['vertex', 'save', 'replace', 'update', 'remove'];
+        
+        if (vertexMethods.includes(prop) || typeof currentVertexCollection[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db.graph(graphName).vertexCollection(collectionName)[prop](...args),
+              `vertexCollection.${prop}`
+            );
+          };
+        }
+        
+        return currentVertexCollection[prop].bind(currentVertexCollection);
+      }
+    });
+  }
+
+  /**
+   * NEW: Create proxy for Graph Edge Collections
+   */
+  _createEdgeCollectionProxy(connectionName, graphName, collectionName, targetEdgeCollection) {
+    const self = this;
+    
+    return new Proxy({}, {
+      get(target, prop) {
+        const currentConnectionInfo = self._connections.get(connectionName);
+        const currentDb = currentConnectionInfo ? currentConnectionInfo.db : null;
+        const currentEdgeCollection = currentDb ? currentDb.graph(graphName).edgeCollection(collectionName) : targetEdgeCollection;
+        
+        if (typeof currentEdgeCollection[prop] !== 'function') {
+          return currentEdgeCollection[prop];
+        }
+        
+        const edgeMethods = ['edge', 'save', 'replace', 'update', 'remove', 'edges'];
+        
+        if (edgeMethods.includes(prop) || typeof currentEdgeCollection[prop] === 'function') {
+          return async function(...args) {
+            return await self._executeWithRetry(
+              connectionName,
+              async (db) => db.graph(graphName).edgeCollection(collectionName)[prop](...args),
+              `edgeCollection.${prop}`
+            );
+          };
+        }
+        
+        return currentEdgeCollection[prop].bind(currentEdgeCollection);
+      }
+    });
+  }
+
+  /**
+   * NEW: Centralized method execution with retry logic for collection operations
+   */
+  async _executeCollectionMethodWithRetry(connectionName, collectionName, methodName, args) {
+    return await this._executeWithRetry(
+      connectionName,
+      async (db) => db.collection(collectionName)[methodName](...args),
+      `collection.${methodName}`
+    );
+  }
+
+  /**
+   * NEW: Centralized retry execution method
+   */
+  async _executeWithRetry(connectionName, operation, operationName = 'operation') {
+    const maxRetries = 3;
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.debug(`[DB_EXECUTE] Executing ${operationName} on ${connectionName} (attempt ${attempt})`);
+        
+        // Get fresh connection
+        const connectionInfo = this._connections.get(connectionName);
+        if (!connectionInfo) {
+          throw new Error(`No connection found for ${connectionName}`);
+        }
+        
+        // Update activity timestamp
+        connectionInfo.lastActivity = Date.now();
+        
+        const result = await operation(connectionInfo.db);
+        logger.debug(`[DB_EXECUTE] ${operationName} completed successfully on ${connectionName}`);
+        return result;
+        
+      } catch (error) {
+        lastError = error;
+        logger.warn(`[DB_EXECUTE] ${operationName} failed on ${connectionName} (attempt ${attempt}): ${error.message}`);
+        logger.debug(`[DB_EXECUTE] Error details: ${JSON.stringify({ 
+          code: error.code, 
+          name: error.name, 
+          status: error.response?.status || error.status,
+          errorNum: error.errorNum,
+          message: error.message 
+        })}`);
+        
+        if (this._isConnectionError(error) && attempt < maxRetries) {
+          logger.warn(`[DB_EXECUTE] Connection error detected, triggering recovery for ${connectionName}`);
+          
+          try {
+            await this._performActiveRecovery(connectionName, error);
+            await this._sleep(500 * attempt);
+          } catch (recoveryError) {
+            logger.error(`[DB_EXECUTE] Recovery failed for ${connectionName}: ${recoveryError.message}`);
+            if (attempt >= maxRetries) {
+              throw recoveryError;
+            }
+          }
+        } else if (attempt >= maxRetries) {
+          logger.error(`[DB_EXECUTE] Max retries exceeded for ${operationName} on ${connectionName}`);
+          break;
+        } else {
+          logger.error(`[DB_EXECUTE] Non-connection error for ${operationName} on ${connectionName}: ${error.message}`);
+          throw error;
+        }
+      }
+    }
+    
+    throw lastError;
   }
 
   /**

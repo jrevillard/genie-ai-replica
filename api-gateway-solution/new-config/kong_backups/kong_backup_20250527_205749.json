@@ -1,0 +1,1219 @@
+{
+  "services": [
+    {
+      "client_certificate": null,
+      "tags": null,
+      "ca_certificates": null,
+      "connect_timeout": 60000,
+      "host": "e2e-109-51",
+      "read_timeout": 60000,
+      "path": null,
+      "updated_at": 1748353595,
+      "enabled": true,
+      "protocol": "http",
+      "id": "453cb927-f3d0-4b68-8791-3165dc046719",
+      "retries": 5,
+      "created_at": 1748353595,
+      "tls_verify": null,
+      "write_timeout": 60000,
+      "tls_verify_depth": null,
+      "name": "express-api",
+      "port": 3000
+    }
+  ],
+  "routes": [
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/folders/search"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "18bce79e-0626-4ece-86b7-77695f34adf6",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353595,
+      "name": "folder-search-route",
+      "updated_at": 1748353595,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/admin"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "35eb882b-1b68-4a30-872a-9f322d21a034",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353595,
+      "name": "admin-route",
+      "updated_at": 1748353595,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/security"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "4e807fb3-4f67-4151-86f8-63582cb51820",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353595,
+      "name": "security-route",
+      "updated_at": 1748353595,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/folders/reorder"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "4ea1f274-2400-4d03-9fae-fbf31972621d",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353595,
+      "name": "folder-reorder-route",
+      "updated_at": 1748353595,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/sessions"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "58777b89-a66d-438a-a399-b7d3bc67990e",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353595,
+      "name": "session-route",
+      "updated_at": 1748353595,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/database"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "5d65894d-43df-4846-8d0e-d311d1ff073d",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353595,
+      "name": "database-operations-route",
+      "updated_at": 1748353595,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/queries"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "66937bee-3067-400c-b0e8-d7a0b8d22e08",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353596,
+      "name": "query-route",
+      "updated_at": 1748353596,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/folders/shared"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "68f7a4f9-673e-45e6-858b-989f72539cc5",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353596,
+      "name": "folder-shared-route",
+      "updated_at": 1748353596,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/users"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "752ee750-73d9-4cbe-8a65-37fa07ea7531",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353596,
+      "name": "user-route",
+      "updated_at": 1748353596,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/auth"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "7602e7f1-e312-44ed-a38c-8e82679c2c50",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748359581,
+      "name": "auth-route",
+      "updated_at": 1748359581,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/conversations/.*/move"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "775bba9e-e8b4-4141-a532-462ed094410e",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353596,
+      "name": "conversation-move-route",
+      "updated_at": 1748353596,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/auth/refresh-token"
+      ],
+      "hosts": null,
+      "methods": [
+        "POST"
+      ],
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "898b5b34-0d52-4cae-b4f4-c42655a55952",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748359581,
+      "name": "auth-refresh-route",
+      "updated_at": 1748359581,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/folders/(?!shared$|search$|reorder$).*"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "8e30fbdb-0c65-41b9-942d-feb3f9396596",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353596,
+      "name": "folder-detail-route",
+      "updated_at": 1748353596,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/logger"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "9db8116a-c8ec-4fe0-82aa-043ec1f1b636",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353596,
+      "name": "logger-route",
+      "updated_at": 1748353596,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/auth/login"
+      ],
+      "hosts": null,
+      "methods": [
+        "POST"
+      ],
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "a19f9d61-ed62-4185-a826-9f3e07547498",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748359581,
+      "name": "auth-login-route",
+      "updated_at": 1748359581,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/folders"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "a3c0222c-150a-4cd5-98e8-6ee3f5f3a3b7",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "folder-main-route",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/analytics"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "c62e46b7-da5e-475b-83ce-a8b95df08325",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "analytics-route",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/services"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "d23b9c0d-f610-4935-a405-1f5af97c1a66",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "service-route",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "d32c41a5-5d79-4ec6-a033-68a8a3f61adf",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "chat-history-route",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/service-categories"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "dd49c426-668a-4b40-bf52-6a7cbb75741f",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "service-category-route",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "f2146b63-2c99-491d-b999-274cd629912f",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "api-fallback",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    },
+    {
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "regex_priority": 0,
+      "snis": null,
+      "sources": null,
+      "tags": null,
+      "destinations": null,
+      "paths": [
+        "/api/chat/conversations/.*/folder"
+      ],
+      "hosts": null,
+      "methods": null,
+      "preserve_host": true,
+      "path_handling": "v0",
+      "protocols": [
+        "http",
+        "https"
+      ],
+      "id": "f6bf67f8-f115-4dda-9da9-259d550ba309",
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "created_at": 1748353597,
+      "name": "conversation-folder-route",
+      "updated_at": 1748353597,
+      "headers": null,
+      "strip_path": false
+    }
+  ],
+  "plugins": [
+    {
+      "instance_name": null,
+      "config": {
+        "upstream_health_metrics": true,
+        "latency_metrics": true,
+        "ai_metrics": true,
+        "status_code_metrics": true,
+        "bandwidth_metrics": true,
+        "per_consumer": false
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": null,
+      "consumer": null,
+      "name": "prometheus",
+      "id": "05064aba-80ff-4512-8cde-c5297443bca3",
+      "updated_at": 1748352075,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "rename": {
+          "body": [],
+          "headers": [],
+          "querystring": []
+        },
+        "replace": {
+          "body": [],
+          "uri": null,
+          "headers": [],
+          "querystring": []
+        },
+        "add": {
+          "body": [],
+          "headers": [
+            "X-Kong-Proxy: true"
+          ],
+          "querystring": []
+        },
+        "http_method": null,
+        "remove": {
+          "body": [],
+          "headers": [],
+          "querystring": []
+        },
+        "append": {
+          "body": [],
+          "headers": [],
+          "querystring": []
+        }
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "consumer": null,
+      "name": "request-transformer",
+      "id": "0b261d22-dc08-4917-a055-1a766a35948a",
+      "updated_at": 1748352075,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "max_age": 3600,
+        "credentials": true,
+        "private_network": false,
+        "origins": [
+          "*"
+        ],
+        "exposed_headers": null,
+        "preflight_continue": false,
+        "methods": [
+          "GET",
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE",
+          "OPTIONS"
+        ],
+        "headers": [
+          "Accept",
+          "Accept-Version",
+          "Accept-Language",
+          "Content-Length",
+          "Content-MD5",
+          "Content-Type",
+          "Date",
+          "X-Auth-Token",
+          "Authorization",
+          "X-Requested-With"
+        ]
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": {
+        "id": "d32c41a5-5d79-4ec6-a033-68a8a3f61adf"
+      },
+      "created_at": 1748352402,
+      "service": null,
+      "consumer": null,
+      "name": "cors",
+      "id": "12578423-bed0-46e9-ac9b-6a0dc7d40c41",
+      "updated_at": 1748352402,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "error_code": 429,
+        "error_message": "API rate limit exceeded",
+        "sync_rate": -1,
+        "path": null,
+        "header_name": null,
+        "redis_port": 6379,
+        "redis": {
+          "ssl_verify": false,
+          "username": null,
+          "server_name": null,
+          "password": null,
+          "database": 0,
+          "host": null,
+          "timeout": 2000,
+          "ssl": false,
+          "port": 6379
+        },
+        "limit_by": "consumer",
+        "redis_username": null,
+        "redis_ssl": false,
+        "second": null,
+        "minute": 1000,
+        "hour": 10000,
+        "day": null,
+        "policy": "local",
+        "year": null,
+        "redis_database": 0,
+        "fault_tolerant": true,
+        "redis_timeout": 2000,
+        "hide_client_headers": false,
+        "redis_server_name": null,
+        "redis_ssl_verify": false,
+        "redis_password": null,
+        "redis_host": null,
+        "month": null
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "consumer": null,
+      "name": "rate-limiting",
+      "id": "13e146bb-0dff-4bfa-a9ca-95b8189ffb03",
+      "updated_at": 1748353599,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "max_age": 3600,
+        "credentials": true,
+        "private_network": false,
+        "origins": [
+          "*"
+        ],
+        "exposed_headers": null,
+        "preflight_continue": false,
+        "methods": [
+          "GET",
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE",
+          "OPTIONS"
+        ],
+        "headers": [
+          "Accept",
+          "Accept-Version",
+          "Accept-Language",
+          "Content-Length",
+          "Content-MD5",
+          "Content-Type",
+          "Date",
+          "X-Auth-Token",
+          "Authorization",
+          "X-Requested-With"
+        ]
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "consumer": null,
+      "name": "cors",
+      "id": "2ea9bc50-0b87-4c47-a834-d0e1576b61e9",
+      "updated_at": 1748352075,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "error_code": 429,
+        "error_message": "API rate limit exceeded",
+        "sync_rate": -1,
+        "path": null,
+        "header_name": null,
+        "redis_port": 6379,
+        "redis": {
+          "ssl_verify": false,
+          "username": null,
+          "server_name": null,
+          "password": null,
+          "database": 0,
+          "host": null,
+          "timeout": 2000,
+          "ssl": false,
+          "port": 6379
+        },
+        "limit_by": "consumer",
+        "redis_username": null,
+        "redis_ssl": false,
+        "second": null,
+        "minute": 1000,
+        "hour": 10000,
+        "day": null,
+        "policy": "local",
+        "year": null,
+        "redis_database": 0,
+        "fault_tolerant": true,
+        "redis_timeout": 2000,
+        "hide_client_headers": false,
+        "redis_server_name": null,
+        "redis_ssl_verify": false,
+        "redis_password": null,
+        "redis_host": null,
+        "month": null
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": {
+        "id": "d32c41a5-5d79-4ec6-a033-68a8a3f61adf"
+      },
+      "created_at": 1748352402,
+      "service": null,
+      "consumer": null,
+      "name": "rate-limiting",
+      "id": "35a56e4e-cb64-4cae-8c4d-bdf438b55a00",
+      "updated_at": 1748352402,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "reopen": true,
+        "custom_fields_by_lua": null,
+        "path": "/var/log/kong/api.log"
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "consumer": null,
+      "name": "file-log",
+      "id": "54117e7d-fb6e-49a8-bb93-472d76ed392e",
+      "updated_at": 1748352075,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "rename": {
+          "headers": [],
+          "json": []
+        },
+        "add": {
+          "headers": [
+            "X-Powered-By: Kong",
+            "X-Kong-Proxy-Latency: ${latency}"
+          ],
+          "json_types": [],
+          "json": []
+        },
+        "replace": {
+          "headers": [],
+          "json_types": [],
+          "json": []
+        },
+        "remove": {
+          "headers": [],
+          "json": []
+        },
+        "append": {
+          "headers": [],
+          "json_types": [],
+          "json": []
+        }
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "consumer": null,
+      "name": "response-transformer",
+      "id": "aa355c64-6061-452d-9cf7-ab8ae8a54600",
+      "updated_at": 1748352075,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "reopen": true,
+        "custom_fields_by_lua": null,
+        "path": "/var/log/kong/api.log"
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": {
+        "id": "d32c41a5-5d79-4ec6-a033-68a8a3f61adf"
+      },
+      "created_at": 1748352402,
+      "service": null,
+      "consumer": null,
+      "name": "file-log",
+      "id": "c2ac47f0-12d2-4d91-a12d-84538fe2344a",
+      "updated_at": 1748352402,
+      "enabled": true
+    },
+    {
+      "instance_name": null,
+      "config": {
+        "body": null,
+        "echo": false,
+        "status_code": 503,
+        "content_type": null,
+        "trigger": null,
+        "message": "API is currently under maintenance. Please try again later."
+      },
+      "protocols": [
+        "grpc",
+        "grpcs",
+        "http",
+        "https"
+      ],
+      "tags": null,
+      "route": null,
+      "created_at": 1748352075,
+      "service": {
+        "id": "453cb927-f3d0-4b68-8791-3165dc046719"
+      },
+      "consumer": null,
+      "name": "request-termination",
+      "id": "ee709c44-60aa-48aa-b091-ca7feaf7230c",
+      "updated_at": 1748352075,
+      "enabled": false
+    }
+  ],
+  "upstreams": [
+    {
+      "hash_on_cookie_path": "/",
+      "slots": 10000,
+      "client_certificate": null,
+      "hash_fallback": "none",
+      "hash_fallback_header": null,
+      "hash_fallback_query_arg": null,
+      "hash_fallback_uri_capture": null,
+      "host_header": null,
+      "algorithm": "round-robin",
+      "hash_on": "none",
+      "use_srv_name": false,
+      "tags": null,
+      "hash_on_header": null,
+      "id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc",
+      "hash_on_query_arg": null,
+      "created_at": 1748353599,
+      "hash_on_uri_capture": null,
+      "healthchecks": {
+        "active": {
+          "http_path": "/",
+          "https_sni": null,
+          "https_verify_certificate": true,
+          "type": "http",
+          "unhealthy": {
+            "tcp_failures": 0,
+            "timeouts": 0,
+            "http_failures": 0,
+            "http_statuses": [
+              429,
+              404,
+              500,
+              501,
+              502,
+              503,
+              504,
+              505
+            ],
+            "interval": 0
+          },
+          "timeout": 1,
+          "concurrency": 10,
+          "headers": null,
+          "healthy": {
+            "http_statuses": [
+              200,
+              302
+            ],
+            "interval": 0,
+            "successes": 0
+          }
+        },
+        "threshold": 0,
+        "passive": {
+          "type": "http",
+          "unhealthy": {
+            "http_statuses": [
+              429,
+              500,
+              503
+            ],
+            "timeouts": 0,
+            "http_failures": 0,
+            "tcp_failures": 0
+          },
+          "healthy": {
+            "successes": 0,
+            "http_statuses": [
+              200,
+              201,
+              202,
+              203,
+              204,
+              205,
+              206,
+              207,
+              208,
+              226,
+              300,
+              301,
+              302,
+              303,
+              304,
+              305,
+              306,
+              307,
+              308
+            ]
+          }
+        }
+      },
+      "updated_at": 1748353599,
+      "name": "express-api-servers",
+      "hash_on_cookie": null
+    }
+  ],
+  "targets": [
+    {
+      "weight": 100,
+      "target": "e2e-109-51:3000",
+      "tags": null,
+      "created_at": 1744642076.102,
+      "updated_at": 1744642076.102,
+      "upstream": {
+        "id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"
+      },
+      "id": "7feebc25-b694-408b-a60f-f93493549f71"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+[2025-05-27 19:16:34] Restoring Kong configuration from kong_backups/kong_backup_20250527_162608.json
+[2025-05-27 19:16:34] Processing service express-api
+[2025-05-27 19:16:35] Service express-api processed successfully
+[2025-05-27 19:16:35] Processing route folder-search-route
+[2025-05-27 19:16:35] Route folder-search-route processed successfully
+[2025-05-27 19:16:35] No plugins found for route folder-search-route
+[2025-05-27 19:16:35] Processing route admin-route
+[2025-05-27 19:16:35] Route admin-route processed successfully
+[2025-05-27 19:16:35] No plugins found for route admin-route
+[2025-05-27 19:16:35] Processing route security-route
+[2025-05-27 19:16:35] Route security-route processed successfully
+[2025-05-27 19:16:35] No plugins found for route security-route
+[2025-05-27 19:16:35] Processing route folder-reorder-route
+[2025-05-27 19:16:35] Route folder-reorder-route processed successfully
+[2025-05-27 19:16:35] No plugins found for route folder-reorder-route
+[2025-05-27 19:16:35] Processing route session-route
+[2025-05-27 19:16:35] Route session-route processed successfully
+[2025-05-27 19:16:35] No plugins found for route session-route
+[2025-05-27 19:16:35] Processing route database-operations-route
+[2025-05-27 19:16:35] Route database-operations-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route database-operations-route
+[2025-05-27 19:16:36] Processing route query-route
+[2025-05-27 19:16:36] Route query-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route query-route
+[2025-05-27 19:16:36] Processing route folder-shared-route
+[2025-05-27 19:16:36] Route folder-shared-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route folder-shared-route
+[2025-05-27 19:16:36] Processing route user-route
+[2025-05-27 19:16:36] Route user-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route user-route
+[2025-05-27 19:16:36] Processing route auth-route
+[2025-05-27 19:16:36] Route auth-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route auth-route
+[2025-05-27 19:16:36] Processing route conversation-move-route
+[2025-05-27 19:16:36] Route conversation-move-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route conversation-move-route
+[2025-05-27 19:16:36] Processing route folder-detail-route
+[2025-05-27 19:16:36] Route folder-detail-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route folder-detail-route
+[2025-05-27 19:16:36] Processing route logger-route
+[2025-05-27 19:16:36] Route logger-route processed successfully
+[2025-05-27 19:16:36] No plugins found for route logger-route
+[2025-05-27 19:16:37] Processing route folder-main-route
+[2025-05-27 19:16:37] Route folder-main-route processed successfully
+[2025-05-27 19:16:37] No plugins found for route folder-main-route
+[2025-05-27 19:16:37] Processing route analytics-route
+[2025-05-27 19:16:37] Route analytics-route processed successfully
+[2025-05-27 19:16:37] No plugins found for route analytics-route
+[2025-05-27 19:16:37] Processing route service-route
+[2025-05-27 19:16:37] Route service-route processed successfully
+[2025-05-27 19:16:37] No plugins found for route service-route
+[2025-05-27 19:16:37] Processing route chat-history-route
+[2025-05-27 19:16:37] Route chat-history-route processed successfully
+[2025-05-27 19:16:37] No plugins found for route chat-history-route
+[2025-05-27 19:16:37] Processing route service-category-route
+[2025-05-27 19:16:37] Route service-category-route processed successfully
+[2025-05-27 19:16:37] No plugins found for route service-category-route
+[2025-05-27 19:16:37] Processing route api-fallback
+[2025-05-27 19:16:37] Route api-fallback processed successfully
+[2025-05-27 19:16:37] No plugins found for route api-fallback
+[2025-05-27 19:16:37] Processing route conversation-folder-route
+[2025-05-27 19:16:37] Route conversation-folder-route processed successfully
+[2025-05-27 19:16:37] No plugins found for route conversation-folder-route
+[2025-05-27 19:16:38] Processing service plugin request-transformer
+[2025-05-27 19:16:38] Service plugin request-transformer already exists for service express-api, skipping
+[2025-05-27 19:16:38] Processing service plugin rate-limiting
+[2025-05-27 19:16:38] Service plugin rate-limiting already exists for service express-api, skipping
+[2025-05-27 19:16:38] Processing service plugin cors
+[2025-05-27 19:16:38] Service plugin cors already exists for service express-api, skipping
+[2025-05-27 19:16:38] Processing service plugin file-log
+[2025-05-27 19:16:38] Service plugin file-log already exists for service express-api, skipping
+[2025-05-27 19:16:38] Processing service plugin response-transformer
+[2025-05-27 19:16:38] Service plugin response-transformer already exists for service express-api, skipping
+[2025-05-27 19:16:38] Processing service plugin request-termination
+[2025-05-27 19:16:38] Service plugin request-termination already exists for service express-api, skipping
+[2025-05-27 19:16:38] Processing global plugin prometheus
+[2025-05-27 19:16:38] Global plugin prometheus already exists, skipping
+[2025-05-27 19:16:38] Processing global plugin cors
+[2025-05-27 19:16:38] ERROR: Failed to process global plugin cors with HTTP status 409
+[2025-05-27 19:16:38] Response: {"name":"unique constraint violation","message":"UNIQUE violation detected on '{consumer=null,name=\"cors\",route={id=\"d32c41a5-5d79-4ec6-a033-68a8a3f61adf\"},service=null}'","code":5,"fields":{"name":"cors","route":{"id":"d32c41a5-5d79-4ec6-a033-68a8a3f61adf"},"consumer":null,"service":null}}
+[2025-05-27 19:16:38] Processing global plugin rate-limiting
+[2025-05-27 19:16:38] ERROR: Failed to process global plugin rate-limiting with HTTP status 409
+[2025-05-27 19:16:38] Response: {"name":"unique constraint violation","message":"UNIQUE violation detected on '{consumer=null,name=\"rate-limiting\",route={id=\"d32c41a5-5d79-4ec6-a033-68a8a3f61adf\"},service=null}'","code":5,"fields":{"name":"rate-limiting","route":{"id":"d32c41a5-5d79-4ec6-a033-68a8a3f61adf"},"consumer":null,"service":null}}
+[2025-05-27 19:16:38] Processing global plugin file-log
+[2025-05-27 19:16:38] ERROR: Failed to process global plugin file-log with HTTP status 409
+[2025-05-27 19:16:38] Response: {"name":"unique constraint violation","message":"UNIQUE violation detected on '{consumer=null,name=\"file-log\",route={id=\"d32c41a5-5d79-4ec6-a033-68a8a3f61adf\"},service=null}'","code":5,"fields":{"name":"file-log","route":{"id":"d32c41a5-5d79-4ec6-a033-68a8a3f61adf"},"consumer":null,"service":null}}
+[2025-05-27 19:16:38] Processing upstream express-api-servers
+[2025-05-27 19:16:39] Upstream express-api-servers processed successfully
+[2025-05-27 19:16:39] Adding auth-refresh-route
+[2025-05-27 19:16:39] Route auth-refresh-route already exists, skipping
+[2025-05-27 19:16:39] Adding JWT plugin for auth-refresh-route
+[2025-05-27 19:16:39] JWT plugin for auth-refresh-route already exists, skipping
+[2025-05-27 19:16:39] Adding auth-login-route
+[2025-05-27 19:16:39] Route auth-login-route already exists, skipping
+[2025-05-27 19:16:39] Adding JWT plugin for auth-login-route
+[2025-05-27 19:16:39] JWT plugin for auth-login-route already exists, skipping
+[2025-05-27 19:16:39] Ensuring JWT plugin for auth-route
+[2025-05-27 19:16:39] JWT plugin for auth-route already exists, skipping
+[2025-05-27 19:16:39] Adding target e2e-109-51:3000 for upstream express-api-servers
+[2025-05-27 19:16:39] Target e2e-109-51:3000 already exists, skipping
+[2025-05-27 19:16:39] Patching global rate-limiting plugin
+[2025-05-27 19:16:39] Global rate-limiting plugin patched successfully
+[2025-05-27 19:16:39] Configuration restored with 3 errors

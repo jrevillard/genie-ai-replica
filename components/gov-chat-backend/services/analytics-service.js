@@ -1,10 +1,8 @@
 require('dotenv').config();
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
-const { logger } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const ServiceCategoryService = require('../services/service-category-service');
-
-const dbService = require('../utils/db-connect-service');
 
 class AnalyticsService {
   constructor() {

@@ -1,7 +1,6 @@
 const { Database } = require('arangojs');
 const retry = require('async-retry');
-const { logger } = require('../shared-lib');
-
+const { logger } = require('./logger');
 /**
  * Enhanced singleton class to manage long-lived database connections with COMPLETE RECOVERY
  * This service ensures that ALL consumer services automatically get fresh connections after recovery
@@ -939,7 +938,7 @@ class DatabaseService {
       
       // NEW: Notify all existing proxies that a fresh connection is available
       const proxyCount = this._activeProxies.get(name)?.size || 0;
-      logger.info(`[DB_RECOVERY] ðŸ”„ Updated ${proxyCount} existing proxies with fresh connection`);
+      logger.info(`[DB_RECOVERY] í ½í´„ Updated ${proxyCount} existing proxies with fresh connection`);
       
       // Reset recovery tracking on success
       this._recoveryAttempts.delete(name);

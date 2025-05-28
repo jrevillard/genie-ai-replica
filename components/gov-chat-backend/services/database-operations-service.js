@@ -2,8 +2,7 @@ require('dotenv').config();
 const fs = require('fs').promises;
 const path = require('path');
 const { aql } = require('arangojs');
-const { logger } = require('../shared-lib');
-const dbService = require('../utils/db-connect-service');
+const { logger, dbService } = require('../shared-lib');
 
 class DatabaseOperationsService {
   constructor() {

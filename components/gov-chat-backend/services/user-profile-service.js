@@ -4,9 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./email-service');
 const crypto = require('crypto');
-const { logger } = require('../shared-lib');
-
-const dbService = require('../utils/db-connect-service');
+const { logger, dbService } = require('../shared-lib');
 
 class UserProfileService {
   constructor() {

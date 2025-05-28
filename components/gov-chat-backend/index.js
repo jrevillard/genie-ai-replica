@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const { logger, securityHeaders, SecurityMiddleware } = require('./shared-lib');
+const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 
 // Import services
 const authService = require('./services/auth-service');
@@ -21,7 +21,6 @@ const ServiceCategoryService = require('./services/service-category-service');
 const SessionService = require('./services/session-service');
 const logsService = require('./services/logs-service');
 const DatabaseOperationsService = require('./services/database-operations-service');
-const dbService = require('./utils/db-connect-service');
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');

@@ -1,5 +1,4 @@
-const dbService = require('../utils/db-connect-service');
-const { logger } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');

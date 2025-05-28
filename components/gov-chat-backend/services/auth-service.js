@@ -4,11 +4,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const emailService = require('./email-service');
-const { logger } = require('../shared-lib');
+const { logger, dbService } = require('../shared-lib');
 const retry = require('async-retry');
-
-// Initialize ArangoDB connection
-const dbService = require('../utils/db-connect-service');
 
 class AuthService {
   constructor() {

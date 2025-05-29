@@ -489,7 +489,7 @@ export default {
 .modal-content {
     position: relative;
     width: 90%;
-    max-width: 800px;
+    max-width: calc(800px + 2in); /* Increased by another inch, total 2in wider */
     max-height: 90vh;
     background-color: var(--bg-dialog, #ffffff);
     border-radius: 8px;
@@ -696,12 +696,15 @@ export default {
 .table-container {
     max-height: 300px;
     overflow-y: auto;
+    overflow-x: auto; /* Enable horizontal scrolling */
+    white-space: nowrap; /* Prevent container from wrapping */
 }
 
 .results-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
+    table-layout: auto; /* Dynamic column sizing */
 }
 
 .results-table th,
@@ -709,6 +712,7 @@ export default {
     padding: 0.75rem 1rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color, #dcdfe4);
+    vertical-align: top; /* Top justify table cells */
 }
 
 .results-table th {
@@ -723,6 +727,25 @@ export default {
 
 .results-table tr:last-child td {
     border-bottom: none;
+}
+
+.results-table th:nth-child(1),
+.results-table td:nth-child(1),
+.results-table th:nth-child(2),
+.results-table td:nth-child(2),
+.results-table th:nth-child(3),
+.results-table td:nth-child(3),
+.results-table th:nth-child(4),
+.results-table td:nth-child(4) {
+    width: auto; /* Dynamic sizing for Date, Time, Level, Service */
+    white-space: nowrap; /* Prevent wrapping in these columns */
+}
+
+.results-table th:nth-child(5),
+.results-table td:nth-child(5) {
+    min-width: 200px; /* Minimum width to ensure usability */
+    white-space: normal; /* Enable text wrapping */
+    word-wrap: break-word; /* Ensure long words wrap */
 }
 
 .log-level {
@@ -908,24 +931,21 @@ export default {
         width: 100%;
         padding-top: 0.5rem;
     }
+
+    .table-container {
+        overflow-x: auto; /* Ensure horizontal scrolling on mobile */
+    }
 }
 
-/* Fix for missing message column in search results */
-.results-table {
-    table-layout: fixed;
-}
-
+/* Removed outdated styles for column widths */
 .results-table th:last-child, 
 .results-table td:last-child {
-    width: 40%;
+    white-space: normal; /* Enable text wrapping */
+    word-wrap: break-word; /* Ensure long words wrap */
 }
 
 /* Force display of message column */
 .results-table th:nth-child(5), .results-table td:nth-child(5) {
     display: table-cell !important;
-    max-width: 50% !important;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 </style>

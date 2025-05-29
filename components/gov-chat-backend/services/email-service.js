@@ -24,6 +24,11 @@ class EmailService {
         appName: process.env.APP_NAME,
         defaultFrontendUrl: process.env.FRONTEND_URL
       });
+      logger.debug('EMAIL_HOST:' + process.env.EMAIL_HOST);
+      logger.debug('EMAIL_PORT:' + process.env.EMAIL_PORT);
+      logger.debug('EMAIL_SECURE:' + process.env.EMAIL_SECURE);
+      logger.debug('EMAIL_USER:' + process.env.EMAIL_USER);
+      logger.debug('EMAIL_PASSWORD:' + process.env.EMAIL_PASSWORD);
     }
 
     // Create a transporter with email provider settings

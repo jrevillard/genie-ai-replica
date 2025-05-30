@@ -143,30 +143,42 @@ class AuthController {
       const { token } = req.params;
       const frontendUrl = getFrontendUrl(req);
       logger.info(`Frontend URL for verification redirect: ${frontendUrl}`);
+  
       if (!token) {
         logger.warn('Token is required for email verification');
-        return res.status(400).send(`Redirecting...`);
+        return res.redirect(`${frontendUrl}/registration-success?status=error&message=${encodeURIComponent('Token is required')}`);
       }
+  
       const result = await this.authService.verifyEmail(token);
+  
+      // Retrieve user email from verificationTokens
+      let userEmail = '';
+      const tokenDoc = await this.authService.db.collection('verificationTokens').firstExample({ token }).catch(() => null);
+      if (tokenDoc) {
+        const user = await this.authService.getUserById(tokenDoc.userId.split('/')[1]).catch(() => null);
+        if (user) userEmail = user.email;
+      }
+  
       if (result.success) {
         logger.info('Email verified successfully');
-        return res.status(200).send(`Email verified successfully! Redirecting...`);
+        return res.redirect(`${frontendUrl}/registration-success?email=${encodeURIComponent(userEmail)}`);
       } else {
-        let errorType = 'invalid';
+        let errorMessage = result.message || 'Email verification failed';
         if (result.expired) {
-          errorType = 'expired';
           logger.warn('Email verification failed: Token expired');
+          errorMessage = 'Token has expired';
         } else if (result.used) {
-          errorType = 'used';
           logger.warn('Email verification failed: Token already used');
+          errorMessage = 'Token has already been used';
         } else {
           logger.warn('Email verification failed: Invalid token');
+          errorMessage = 'Invalid token';
         }
-        return res.status(400).send(`Verification failed. Redirecting...`);
+        return res.redirect(`${frontendUrl}/registration-success?status=error&message=${encodeURIComponent(errorMessage)}&email=${encodeURIComponent(userEmail)}`);
       }
     } catch (error) {
       logger.error(`Email verification error: ${error.message}`, { stack: error.stack });
-      return res.status(500).send(`An error occurred. Redirecting...`);
+      return res.redirect(`${getFrontendUrl(req)}/registration-success?status=error&message=${encodeURIComponent('An unexpected error occurred')}`);
     }
   }
 

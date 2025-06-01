@@ -13,36 +13,13 @@
         {{ error }}
       </div>
 
-      <form
-        id="login-form"
-        name="login-form"
-        action="/api/auth/login"
-        method="POST"
-        @submit.prevent="handleLogin"
-        class="login-form"
-      >
+      <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <input
-            id="username"
-            v-model="username"
-            type="text"
-            :placeholder="$t('login.username')"
-            class="form-control"
-            autocomplete="username"
-            required
-          />
+          <input v-model="username" type="text" :placeholder="$t('login.username')" class="form-control" required />
         </div>
 
         <div class="form-group">
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            :placeholder="$t('login.password')"
-            class="form-control"
-            autocomplete="current-password"
-            required
-          />
+          <input v-model="password" type="password" :placeholder="$t('login.password')" class="form-control" required />
         </div>
 
         <div class="remember-forgot">
@@ -218,23 +195,6 @@ export default {
     if (this.$route.query.error) {
       this.error = this.$route.query.error;
     }
-
-    // DEBUG: Attempt to read stored credentials from localStorage
-    try {
-      console.log('[DEBUG] Attempting to retrieve credentials from localStorage');
-      const savedLoginName = localStorage.getItem('savedLoginName');
-      const savedPassword = localStorage.getItem('savedPassword');
-      if (savedLoginName && savedPassword) {
-        console.log('[DEBUG] Retrieved credentials from localStorage:', { id: savedLoginName });
-        this.username = savedLoginName;
-        this.password = savedPassword;
-        this.rememberMe = true;
-      } else {
-        console.log('[DEBUG] No credentials found in localStorage');
-      }
-    } catch (error) {
-      console.error('[DEBUG] Error retrieving credentials from localStorage:', error);
-    }
   },
   mounted() {
     // Fix for full-height issues on mobile browsers
@@ -294,28 +254,8 @@ export default {
           this.error = this.$t('login.invalidCredentials');
           return;
         }
-
-        // Store credentials in localStorage if rememberMe is checked
-        if (this.rememberMe) {
-          try {
-            console.log('[DEBUG] Attempting to store credentials in localStorage for username:', result.loginName);
-            localStorage.setItem('savedLoginName', result.loginName);
-            localStorage.setItem('savedPassword', this.password); // Insecure, development only
-            console.log('[DEBUG] Credentials stored successfully in localStorage');
-          } catch (error) {
-            console.error('[DEBUG] Error storing credentials in localStorage:', error);
-          }
-        } else {
-          // Clear stored credentials
-          try {
-            console.log('[DEBUG] Clearing credentials from localStorage');
-            localStorage.removeItem('savedLoginName');
-            localStorage.removeItem('savedPassword');
-            console.log('[DEBUG] Credentials cleared from localStorage');
-          } catch (error) {
-            console.error('[DEBUG] Error clearing credentials from localStorage:', error);
-          }
-        }
+        
+        // If remember me is checked, this is handled by userService storing in localStorage
         
         // Dispatch auth action to store
         this.$store.dispatch('initAuth');
@@ -349,8 +289,15 @@ export default {
         this.isLoading = true;
         
         // This would normally call your OAuth implementation
-        // For now, we'll just show a message that it’s not implemented
+        // For now, we'll just show a message that it's not implemented
         this.error = this.$t('login.oauthNotImplemented');
+        
+        // In a real implementation, you would:
+        // 1. Call an OAuth service
+        // 2. Get a token back
+        // 3. Verify the token with your backend
+        // 4. Get user info and auth token
+        // 5. Store the token and proceed as with normal login
       } catch (error) {
         console.error('Google login error:', error);
         this.error = this.$t('login.loginFailed');
@@ -365,7 +312,7 @@ export default {
         this.isLoading = true;
         
         // This would normally call your OAuth implementation
-        // For now, we'll just show a message that it’s not implemented
+        // For now, we'll just show a message that it's not implemented
         this.error = this.$t('login.oauthNotImplemented');
       } catch (error) {
         console.error('Facebook login error:', error);
@@ -384,7 +331,7 @@ export default {
         // 1. Look up the saved credentials securely
         // 2. Use them to authenticate
         
-        // For now, we'll just show a message that it’s not implemented
+        // For now, we'll just show a message that it's not implemented
         this.error = this.$t('login.savedLoginNotImplemented');
       } catch (error) {
         console.error('Saved account login error:', error);
@@ -800,4 +747,5 @@ export default {
 .login-card .saved-accounts h3 {
   color: #fff !important;
 }
+
 </style>

@@ -1,3 +1,4 @@
+<!-- Modified version with chat history service integration -->
 <template>
   <div class="chat-folders" :data-theme="$route.meta.theme || 'light'">
     <!-- Folders Section - Only show in second-level folders tab, hide in history tab when viewing All tab -->
@@ -386,7 +387,6 @@
       v-if="showChatMenu"
       :position="menuPosition"
       @close="showChatMenu = false"
-      :class="themeClass"
     >
       <button @click="promptRenameChat" class="menu-item">
         <i class="fas fa-edit"></i>
@@ -580,10 +580,7 @@ export default {
       "getFolderById",
       "getChatById",
     ]),
-    themeClass() {
-      const theme = this.$route.meta.theme || 'light';
-      return theme === 'dark' ? 'context-menu-dark' : 'context-menu-light';
-    },
+
     folders() {
       return this.getAllFolders;
     },
@@ -2322,7 +2319,7 @@ html[data-theme="dark"] .folders-header h3 {
   flex-direction: column;
   gap: 8px;
 }
-
+/* Adjusted chat-item width (15% wider) and updated layout */
 .chat-item {
   display: flex;
   padding: 12px;
@@ -2333,8 +2330,8 @@ html[data-theme="dark"] .folders-header h3 {
   transition: transform 0.2s, box-shadow 0.2s;
   color: var(--text-primary);
   position: relative;
-  width: calc(100% - 10px);
-  max-width: 412px;
+  width: calc(100% - 10px); /* Adjust to fit sidebar width */
+  max-width: 412px; /* 450px sidebar - 2*16px padding - 6px margins */
   margin-bottom: 8px;
 }
 
@@ -2350,6 +2347,7 @@ html[data-theme="dark"] .folders-header h3 {
   flex-shrink: 0;
 }
 
+/* New structure for chat content */
 .chat-content {
   flex: 1;
   min-width: 0;
@@ -2357,6 +2355,7 @@ html[data-theme="dark"] .folders-header h3 {
   flex-direction: column;
 }
 
+/* Header with title and action buttons */
 .chat-header {
   display: flex;
   justify-content: space-between;
@@ -2381,6 +2380,7 @@ html[data-theme="dark"] .folders-header h3 {
   color: var(--accent-color);
 }
 
+/* Grouped action buttons */
 .chat-actions-group {
   display: flex;
   align-items: center;
@@ -2404,6 +2404,7 @@ html[data-theme="dark"] .folders-header h3 {
   overflow: hidden;
 }
 
+/* Footer with category and dates */
 .chat-footer {
   display: flex;
   flex-direction: column;
@@ -2600,26 +2601,6 @@ html[data-theme="dark"] .folders-header h3 {
   background-color: #c62828;
 }
 
-/* Context menu base styles */
-.context-menu {
-  background-color: var(--bg-card); /* Light background (e.g., white) */
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  box-shadow: var(--shadow-md);
-}
-
-/* Explicit light mode class */
-.context-menu-light {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-light);
-}
-
-/* Explicit dark mode class */
-.context-menu-dark {
-  background-color: #333; /* Dark background */
-  border: 1px solid rgba(255, 255, 255, 0.2); /* Light border */
-}
-
 .menu-item {
   display: flex;
   align-items: center;
@@ -2631,75 +2612,20 @@ html[data-theme="dark"] .folders-header h3 {
   border: none;
   cursor: pointer;
   transition: background-color 0.2s;
-  color: var(--text-primary); /* Dark text in light mode */
+  color: var(--text-primary);
 }
 
 .menu-item:hover {
-  background-color: var(--bg-tertiary); /* Light hover effect */
+  background-color: var(--bg-tertiary);
 }
 
 .menu-item i {
   width: 16px;
-  color: var(--text-secondary); /* Lighter icons in light mode */
-}
-
-/* Red text for delete option */
-.text-danger {
-  color: #e53935 !important; /* Ensure red in both modes */
-}
-
-/* Light mode specific menu item styles */
-.context-menu-light .menu-item {
-  color: var(--text-primary);
-}
-
-.context-menu-light .menu-item:hover {
-  background-color: var(--bg-tertiary);
-}
-
-.context-menu-light .menu-item i {
   color: var(--text-secondary);
 }
 
-/* Dark mode specific menu item styles */
-.context-menu-dark .menu-item {
-  color: #ffffff; /* Light text */
-}
-
-.context-menu-dark .menu-item:hover {
-  background-color: #444; /* Darker hover effect */
-}
-
-.context-menu-dark .menu-item i {
-  color: rgba(255, 255, 255, 0.7); /* Light icons */
-}
-
-/* Fallback for global theme attribute */
-[data-theme="dark"] .context-menu,
-html[data-theme="dark"] .context-menu {
-  background-color: #333;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-[data-theme="dark"] .menu-item,
-html[data-theme="dark"] .menu-item {
-  color: #ffffff;
-}
-
-[data-theme="dark"] .menu-item:hover,
-html[data-theme="dark"] .menu-item:hover {
-  background-color: #444;
-}
-
-[data-theme="dark"] .menu-item i,
-html[data-theme="dark"] .menu-item i {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Ensure red text in dark mode */
-[data-theme="dark"] .menu-item.text-danger,
-html[data-theme="dark"] .menu-item.text-danger {
-  color: #e53935 !important;
+.text-danger {
+  color: #e53935;
 }
 
 /* Debug information styling */
@@ -2782,13 +2708,13 @@ html[data-theme="dark"] .menu-item.text-danger {
 }
 
 .star-btn .fa-star-o {
-  color: #8e8e8e !important;
+  color: #8e8e8e !important; /* Force this color with !important to override any other styles */
 }
 
 /* Tab titles and section headings in dark mode */
 [data-theme="dark"] .folder-chats h3,
 html[data-theme="dark"] .folder-chats h3 {
-  color: #ffffff !important;
+  color: #ffffff !important; /* Force white color in dark mode */
 }
 
 /* This targets the "All Chats", "Starred", and "Archived" headings specifically */

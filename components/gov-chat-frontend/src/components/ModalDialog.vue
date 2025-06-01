@@ -93,6 +93,11 @@ export default {
   z-index: 1050;
 }
 
+[data-theme="dark"] .modal-backdrop,
+html[data-theme="dark"] .modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
 .modal-content {
   background-color: white;
   border-radius: 8px;
@@ -103,6 +108,14 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: #333;
+}
+
+[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .modal-content {
+  background-color: #333;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  color: #ffffff;
 }
 
 .modal-header {
@@ -113,10 +126,24 @@ export default {
   border-bottom: 1px solid #eee;
 }
 
-.modal-header h3 {
+[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-header {
+  border-bottom: 1px solid #444;
+}
+
+.modal-header h3,
+.modal-header ::v-slotted(h3) {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  color: #333;
+}
+
+[data-theme="dark"] .modal-header h3,
+[data-theme="dark"] .modal-header ::v-slotted(h3),
+html[data-theme="dark"] .modal-header h3,
+html[data-theme="dark"] .modal-header ::v-slotted(h3) {
+  color: #ffffff !important; /* Ensure title text is white */
 }
 
 .close-button {
@@ -128,9 +155,36 @@ export default {
   line-height: 1;
 }
 
+[data-theme="dark"] .close-button,
+html[data-theme="dark"] .close-button {
+  color: #ccc;
+}
+
+.close-button:hover {
+  color: #333;
+}
+
+[data-theme="dark"] .close-button:hover,
+html[data-theme="dark"] .close-button:hover {
+  color: #ffffff;
+}
+
 .modal-body {
   padding: 20px;
   overflow-y: auto;
+}
+
+.modal-body p,
+.modal-body ::v-slotted(p) {
+  color: #333;
+  margin: 8px 0;
+}
+
+[data-theme="dark"] .modal-body p,
+[data-theme="dark"] .modal-body ::v-slotted(p),
+html[data-theme="dark"] .modal-body p,
+html[data-theme="dark"] .modal-body ::v-slotted(p) {
+  color: #ffffff !important; /* Ensure message text is white */
 }
 
 .modal-footer {
@@ -141,8 +195,14 @@ export default {
   gap: 12px;
 }
 
-.cancel-btn, 
-.primary-btn {
+[data-theme="dark"] .modal-footer,
+html[data-theme="dark"] .modal-footer {
+  border-top: 1px solid #444;
+}
+
+.cancel-btn,
+.primary-btn,
+.danger-btn {
   padding: 8px 16px;
   border-radius: 4px;
   font-weight: 500;
@@ -156,8 +216,20 @@ export default {
   color: #666;
 }
 
+[data-theme="dark"] .cancel-btn,
+html[data-theme="dark"] .cancel-btn {
+  background: none;
+  border: 1px solid #555;
+  color: #ccc;
+}
+
 .cancel-btn:hover {
   background-color: #f5f5f5;
+}
+
+[data-theme="dark"] .cancel-btn:hover,
+html[data-theme="dark"] .cancel-btn:hover {
+  background-color: #444;
 }
 
 .primary-btn {
@@ -166,11 +238,94 @@ export default {
   color: white;
 }
 
+[data-theme="dark"] .primary-btn,
+html[data-theme="dark"] .primary-btn {
+  background-color: #4e97d1;
+  color: #ffffff;
+}
+
 .primary-btn:hover {
   background-color: #3a7cb5;
 }
 
-/* Global style to prevent body scrolling when modal is open */
+[data-theme="dark"] .primary-btn:hover,
+html[data-theme="dark"] .primary-btn:hover {
+  background-color: #5aa8e6;
+}
+
+.primary-btn:disabled {
+  background-color: #ddd;
+  color: #999;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .primary-btn:disabled,
+html[data-theme="dark"] .primary-btn:disabled {
+  background-color: #555;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.danger-btn {
+  background-color: #e53935;
+  border: none;
+  color: white;
+}
+
+[data-theme="dark"] .danger-btn,
+html[data-theme="dark"] .danger-btn {
+  background-color: #e53935;
+  color: #ffffff;
+}
+
+.danger-btn:hover {
+  background-color: #c62828;
+}
+
+[data-theme="dark"] .danger-btn:hover,
+html[data-theme="dark"] .danger-btn:hover {
+  background-color: #c62828;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  color: #333;
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: block;
+}
+
+[data-theme="dark"] .form-group label,
+html[data-theme="dark"] .form-group label {
+  color: #ffffff;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  color: #333;
+  font-size: 1rem;
+}
+
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select,
+html[data-theme="dark"] .form-group input,
+html[data-theme="dark"] .form-group select {
+  background-color: #444;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.warning-text {
+  color: #e53935 !important;
+}
+
 :global(body.modal-open) {
   overflow: hidden;
 }

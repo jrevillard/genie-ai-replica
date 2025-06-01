@@ -568,7 +568,7 @@ export default {
       showDeleteChatDialog: false,
       currentUser: null,
       categories: {},
-      folderCounts: {}, // Added for conversation counts
+      folderCounts: {},
       debug: false,
     };
   },
@@ -1551,7 +1551,7 @@ export default {
       console.log(`Selecting folder: ${folderId}`);
       this.selectedFolderId = folderId;
       this.folderSelected = true;
-      await this.fetchFolderChats(folderId, true); // Set this.conversations for the selected folder
+      await this.fetchFolderChats(folderId, true);
     },
 
     async getChatsByFolderId({ commit }, folderId) {
@@ -1569,7 +1569,6 @@ export default {
     },
 
     getChatCount(folderId) {
-      // Use folderCounts for the count, fallback to 0
       return this.folderCounts[folderId] || 0;
     },
 
@@ -1607,7 +1606,6 @@ export default {
         console.log("Creating folder with data:", folderData);
         const result = await chatHistoryService.createFolder(folderData);
         console.log("Folder created successfully:", result);
-        // Initialize folderCounts for new folder
         this.folderCounts[result._key] = 0;
         notificationService.success(
           this.safeT("sidebar.folderCreated", "Folder created successfully")
@@ -1654,18 +1652,16 @@ export default {
             description: folder.description || "",
             isDefault: folder.isDefault || false,
           }));
-        // Initialize folderCounts with 0 for all folders
         foldersArray.forEach((folder) => {
           this.folderCounts[folder._key] = 0;
         });
-        // Add default folder explicitly
         const defaultFolder = {
           id: "default",
           name: "All Chats",
           isDefault: true,
           createdAt: new Date().toISOString(),
         };
-        this.folderCounts[defaultFolder.id] = 0; // Initialize default folder count
+        this.folderCounts[defaultFolder.id] = 0;
         const allFolders = [defaultFolder, ...processedFolders];
         console.log(
           "All folders (with default) before dispatch:",
@@ -1686,7 +1682,6 @@ export default {
           "Computed nonDefaultFolders after dispatch:",
           nonDefaultFoldersDebug
         );
-        // Preload conversations for all non-default folders without setting this.conversations
         for (const folder of processedFolders) {
           await this.fetchFolderChats(folder.id, false);
         }
@@ -1722,7 +1717,6 @@ export default {
           userId: this.currentUser._key,
         });
 
-        // Update Vuex store by reloading folders
         await this.loadFoldersFromBackend();
 
         notificationService.success(
@@ -1766,7 +1760,6 @@ export default {
           false
         );
 
-        // Update Vuex store by reloading folders
         await this.loadFoldersFromBackend();
 
         if (this.selectedFolderId === this.editingFolder.id) {
@@ -1800,29 +1793,29 @@ export default {
       console.log(`Showing actions menu for chat ${chat._key}`);
       this.activeChat = chat;
 
-      // Determine the conversation's current folder from Vuex store
-      const folderChats = this.$store.state.chatHistory.folderChats;
-      let foundFolderId = null;
+      // Only update folder selection if not in Folders tab
+      if (this.currentSecondLevelTab !== "folders") {
+        const folderChats = this.$store.state.chatHistory.folderChats;
+        let foundFolderId = null;
 
-      // Check all folders to find where this chat resides (excluding "default")
-      for (const folderId in folderChats) {
-        if (
-          folderId !== "default" &&
-          folderChats[folderId] &&
-          folderChats[folderId].includes(chat._key)
-        ) {
-          foundFolderId = folderId;
-          break;
+        for (const folderId in folderChats) {
+          if (
+            folderId !== "default" &&
+            folderChats[folderId] &&
+            folderChats[folderId].includes(chat._key)
+          ) {
+            foundFolderId = folderId;
+            break;
+          }
         }
-      }
 
-      // Update selectedFolderId based on the current folder
-      if (foundFolderId) {
-        this.selectedFolderId = foundFolderId;
-        this.folderSelected = true;
-      } else {
-        this.selectedFolderId = "default";
-        this.folderSelected = false;
+        if (foundFolderId) {
+          this.selectedFolderId = foundFolderId;
+          this.folderSelected = true;
+        } else {
+          this.selectedFolderId = "default";
+          this.folderSelected = false;
+        }
       }
 
       const rect = event.target.getBoundingClientRect();
@@ -1887,7 +1880,7 @@ export default {
         });
 
         this.showRenameChatDialog = false;
-        this.showChatMenu = false; // Ensure context menu stays closed
+        this.showChatMenu = false;
 
         notificationService.success(
           this.safeT("sidebar.chatRenamed", "Conversation renamed successfully")
@@ -1934,7 +1927,6 @@ export default {
           (c) => c._key !== this.activeChat._key
         );
         this.deleteChat(this.activeChat._key);
-        // Update folderCounts for the current folder
         if (
           this.selectedFolderId &&
           this.folderCounts[this.selectedFolderId] !== undefined
@@ -1996,7 +1988,6 @@ export default {
               folderId: this.selectedFolderId,
             });
           }
-          // Update folderCounts for source folder
           const sourceCount =
             (this.folderCounts[this.selectedFolderId] || 1) - 1;
           this.folderCounts[this.selectedFolderId] = Math.max(0, sourceCount);
@@ -2014,7 +2005,6 @@ export default {
             fromFolderId: this.selectedFolderId,
             toFolderId: this.destinationFolderId,
           });
-          // Update folderCounts
           const sourceCount =
             (this.folderCounts[this.selectedFolderId] || 1) - 1;
           const destCount =
@@ -2122,7 +2112,7 @@ export default {
         this.isLoading = true;
         this.errorMessage = null;
         if (isSelected) {
-          this.conversations = []; // Reset only when selecting a folder
+          this.conversations = [];
         }
         console.log(`Fetching conversations for folder ${folderId}`);
         if (!this.currentUser || !this.currentUser._key) {
@@ -2142,7 +2132,7 @@ export default {
             messageCount: conv.messageCount || 0,
           }));
           if (isSelected) {
-            this.conversations = convs; // Set only when folder is selected
+            this.conversations = convs;
             this.forceDisplayConversations();
           }
           this.folderCounts[folderId] = convs.length;
@@ -2800,4 +2790,5 @@ html[data-theme="dark"] .folder-chats > h3 {
 .move-chat-dialog {
   z-index: 10000 !important;
 }
+
 </style>

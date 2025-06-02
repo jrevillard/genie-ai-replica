@@ -603,4 +603,9 @@ li {
 [data-theme="dark"] .sidebar-header h3 {
   color: rgba(255, 255, 255, 0.7) !important;
 }
+
+/* Updated hover color for dark mode */
+[data-theme="dark"] .node-label:hover {
+  background-color: #4a4a4a !important; /* Gray shade for better contrast */
+}
 </style>

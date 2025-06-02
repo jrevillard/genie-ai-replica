@@ -865,6 +865,7 @@ export default {
     savedChats: 'Mazungumzo Yaliyohifadhiwa',
     folders: "Folda",
     allChats: "Mazungumzo Yote",
+    noFolder: "Mazungumzo Yote",
     starredChats: "Yaliyowekwa Nyota",
     archivedChats: "Yaliyohifadhiwa",
     emptyFolder: "Folda hii ni tupu. Hamisha mazungumzo hapa kutoka kwa menyu ya mazungumzo.",

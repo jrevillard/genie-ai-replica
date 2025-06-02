@@ -742,6 +742,7 @@ export default {
     savedChats: 'Conversations Enregistrées',
     folders: "Dossiers",
     allChats: "Toutes les Conversations",
+    noFolder: "Tous les chats",
     starredChats: "Favorites",
     archivedChats: "Archivées",
     emptyFolder: "Ce dossier est vide. Déplacez les conversations ici depuis le menu de conversation.",

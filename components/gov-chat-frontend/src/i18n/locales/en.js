@@ -741,6 +741,7 @@ export default {
     savedChats: 'Saved Chats',
     folders: "Folders",
     allChats: "All Chats",
+    noFolder: "All Chats",
     starredChats: "Starred",
     archivedChats: "Archived",
     emptyFolder: "This folder is empty. Move conversations here from the chat menu.",

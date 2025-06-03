@@ -1,0 +1,1 @@
+This file is only used for testing the connection between Gitlab repo to the local machines.

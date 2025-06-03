@@ -4,6 +4,7 @@ import store from '../store'
 
 // Import the login component
 import LoginScreen from '../components/LoginScreen.vue'
+import PasswordResetConfirmScreen from '../components/PasswordResetConfirmScreen.vue' // Added
 
 // Import your existing route components
 // Examples (replace with your actual components):
@@ -16,6 +17,13 @@ const routes = [
     name: 'Login',
     component: LoginScreen,
     meta: { requiresAuth: false }
+  },
+  {
+    path: '/reset-password/:token', // Added
+    name: 'PasswordResetConfirm', // Added
+    component: PasswordResetConfirmScreen, // Added
+    meta: { requiresAuth: false }, // Added
+    props: true // Added
   },
   {
     path: '/',
@@ -51,6 +59,9 @@ router.beforeEach((to, from, next) => {
   if (store.state.auth.user === null) {
     store.dispatch('initAuth')
   }
+  
+  // Debug navigation
+  console.log(`Navigating to ${to.path}, requiresAuth: ${to.meta.requiresAuth}, isAuthenticated: ${store.getters.isAuthenticated}`) // Added
   
   // Check if the route requires authentication
   if (to.matched.some(record => record.meta.requiresAuth)) {

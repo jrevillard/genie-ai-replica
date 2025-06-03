@@ -1,5 +1,6 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
+const { URL } = require('url'); // Added
 const { logger } = require('../shared-lib');
 
 // Add debug flag - can be controlled via environment variable
@@ -28,13 +29,13 @@ class EmailService {
       logger.debug('EMAIL_PORT:' + process.env.EMAIL_PORT);
       logger.debug('EMAIL_SECURE:' + process.env.EMAIL_SECURE);
       logger.debug('EMAIL_USER:' + process.env.EMAIL_USER);
-      logger.debug('EMAIL_PASSWORD:' + process.env.EMAIL_PASSWORD);
+      logger.debug('EMAIL_PASSWORD:' + (process.env.EMAIL_PASSWORD ? '[REDACTED]' : 'undefined')); // Modified
     }
 
     // Create a transporter with email provider settings
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST || 'in-V3.mailjet.com',
-      port: process.env.EMAIL_PORT || 587,
+      port: parseInt(process.env.EMAIL_PORT) || 587, // Modified
       secure: process.env.EMAIL_SECURE === 'true',
       auth: {
         user: process.env.EMAIL_USER,
@@ -43,18 +44,63 @@ class EmailService {
     });
 
     // Sender email address
-    this.fromEmail = process.env.EMAIL_FROM || 'noreply@huduma.com';
+    this.fromEmail = process.env.EMAIL_FROM || 'noreply@hud.email';
 
     // App name for email templates
     this.appName = process.env.APP_NAME || 'Huduma AI';
 
-    // Default frontend URL for links in emails
-    this.defaultFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:8090';
+    // Default frontend URL for links, normalized
+    this.defaultFrontendUrl = this.normalizeBaseUrl(process.env.FRONTEND_URL || 'http://localhost:8080'); // Modified
 
     // Test SMTP connection at startup
     this.verifyConnection();
 
     logger.info('EmailService.initialized');
+  }
+
+  /**
+   * Normalize a base URL to remove trailing slashes and ensure proper format
+   * @param {string} url - The URL to normalize
+   * @returns {string} - Normalized URL
+   */
+  normalizeBaseUrl(url) { // Added
+    try {
+      const parsedUrl = new URL(url);
+      parsedUrl.pathname = parsedUrl.pathname.replace(/\/+$/, '');
+      return parsedUrl.toString();
+    } catch (error) {
+      logger.error('EmailService.invalid_base_url', {
+        url,
+        error: error.message
+      });
+      return 'http://localhost:8080';
+    }
+  }
+
+  /**
+   * Build a clean URL by combining base URL and path
+   * @param {string} baseUrl - Base URL
+   * @param {string} path - Path to append
+   * @returns {string} - Clean, normalized URL
+   */
+  buildUrl(baseUrl, path) { // Added
+    try {
+      const normalizedBase = this.normalizeBaseUrl(baseUrl);
+      const url = new URL(normalizedBase);
+      url.pathname = `/${path.replace(/^\/+/, '')}`;
+      const finalUrl = url.toString();
+      if (DEBUG) {
+        logger.debug('EmailService.build_url', { baseUrl, path, finalUrl });
+      }
+      return finalUrl;
+    } catch (error) {
+      logger.error('EmailService.url_build_failed', {
+        baseUrl,
+        path,
+        error: error.message
+      });
+      return `${this.defaultFrontendUrl}/${path.replace(/^\/+/, '')}`;
+    }
   }
 
   /**
@@ -111,7 +157,7 @@ class EmailService {
    * @param {string} token - Password reset token
    * @param {string} userName - User's name
    * @param {string} frontendUrl - Frontend URL for UI links
-   * @returns {Promise<Object>} Send result
+   * @returns {Promise} Send result
    */
   async sendPasswordResetEmail(email, token, userName, frontendUrl) {
     const startTime = Date.now();
@@ -125,12 +171,11 @@ class EmailService {
     }
 
     // Use provided frontend URL or fall back to default
-    const baseUrl = frontendUrl || this.defaultFrontendUrl;
-    const resetLink = `${baseUrl}/reset-password/${token}`;
+    const resetLink = this.buildUrl(frontendUrl || this.defaultFrontendUrl, `reset-password/${token}`); // Modified
 
     // Email content
     const mailOptions = {
-      from: `"${this.appName}" <${this.fromEmail}>`,
+      from: `"${this.appName}" <${this.fromEmail}>`, // Modified
       to: email,
       subject: `Password Reset Request - ${this.appName}`,
       text: `
@@ -155,29 +200,29 @@ The ${this.appName} Team
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <title>${this.appName} Password Reset</title>
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: #4E97D1; color: white; padding: 10px 20px; text-align: center; }
-    .content { padding: 20px; background-color: #f9f9f9; }
-    .token { font-size: 18px; font-weight: bold; text-align: center; margin: 20px 0; padding: 10px; background-color: #eee; }
-    .button { display: inline-block; padding: 10px 20px; background-color: #4E97D1; color: white; text-decoration: none; border-radius: 5px; }
-    .footer { font-size: 12px; color: #999; text-align: center; margin-top: 20px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header img { max-width: 150px; }
+    .content { background: #f9f9f9; padding: 20px; border-radius: 5px; }
+    .button { display: inline-block; padding: 10px 20px; background: #4E97D1; color: white !important; text-decoration: none; border-radius: 5px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #777; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h2>${this.appName}</h2>
+      <h1>${this.appName}</h1>
     </div>
     <div class="content">
       <p>Hello ${userName || ''},</p>
       <p>You recently requested to reset your password for your ${this.appName} account. Use the following token to complete the process:</p>
-      <div class="token">${token}</div>
+      <p><strong>${token}</strong></p>
       <p>Alternatively, you can click the button below:</p>
-      <p style="text-align: center;">
-        <a href="${resetLink}" class="button">Reset Password</a>
-      </p>
+      <p><a href="${resetLink}" class="button">Reset Password</a></p>
       <p>This token is only valid for the next 5 minutes.</p>
       <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
     </div>
@@ -195,7 +240,8 @@ The ${this.appName} Team
         from: mailOptions.from,
         to: mailOptions.to,
         subject: mailOptions.subject,
-        textPreview: mailOptions.text.substring(0, 100) + '...'
+        textPreview: mailOptions.text.substring(0, 100) + '...',
+        resetLink // Added
       });
     }
 
@@ -205,6 +251,7 @@ The ${this.appName} Team
       logger.info('EmailService.password_reset_email_sent', {
         to: email,
         messageId: info.messageId,
+        resetLink, // Added
         durationMs: Date.now() - startTime
       });
       return { success: true, messageId: info.messageId };
@@ -251,7 +298,7 @@ The ${this.appName} Team
    * @param {string} userName - User's name
    * @param {string} frontendUrl - Frontend URL for UI links
    * @param {string} verificationUrl - The complete verification URL to use (back-end endpoint)
-   * @returns {Promise<Object>} Send result
+   * @returns {Promise} Send result
    */
   async sendVerificationEmail(email, token, userName, frontendUrl, verificationUrl) {
     const startTime = Date.now();
@@ -276,12 +323,11 @@ The ${this.appName} Team
     }
 
     // Use provided frontend URL or fall back to default
-    const baseUrl = frontendUrl || this.defaultFrontendUrl;
-    const verificationLink = verificationUrl || `${baseUrl}/api/auth/verify-email/${token}`;
+    const verificationLink = verificationUrl || this.buildUrl(frontendUrl || this.defaultFrontendUrl, `api/auth/verify-email/${token}`); // Modified
 
     // Email content
     const mailOptions = {
-      from: `"${this.appName}" <${this.fromEmail}>`,
+      from: `"${this.appName}" <${this.fromEmail}>`, // Modified
       to: email,
       subject: `Verify Your Email - ${this.appName}`,
       text: `
@@ -304,29 +350,29 @@ The ${this.appName} Team
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <title>${this.appName} Email Verification</title>
   <style>
     body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: #4E97D1; color: white; padding: 10px 20px; text-align: center; }
-    .content { padding: 20px; background-color: #f9f9f9; }
-    .token { font-size: 18px; font-weight: bold; text-align: center; margin: 20px 0; padding: 10px; background-color: #eee; }
-    .button { display: inline-block; padding: 10px 20px; background-color: #4E97D1; color: white; text-decoration: none; border-radius: 5px; }
-    .footer { font-size: 12px; color: #999; text-align: center; margin-top: 20px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .header img { max-width: 150px; }
+    .content { background: #f9f9f9; padding: 20px; border-radius: 5px; }
+    .button { display: inline-block; padding: 10px 20px; background: #4E97D1; color: white !important; text-decoration: none; border-radius: 5px; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #777; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h2>${this.appName}</h2>
+      <h1>${this.appName}</h1>
     </div>
     <div class="content">
       <p>Hello ${userName || ''},</p>
       <p>Thank you for registering with ${this.appName}. Please verify your email address by using the following token:</p>
-      <div class="token">${token}</div>
+      <p><strong>${token}</strong></p>
       <p>Alternatively, you can click the button below:</p>
-      <p style="text-align: center;">
-        <a href="${verificationLink}" class="button">Verify Email</a>
-      </p>
+      <p><a href="${verificationLink}" class="button">Verify Email</a></p>
       <p>This link will expire in 24 hours.</p>
     </div>
     <div class="footer">
@@ -343,7 +389,8 @@ The ${this.appName} Team
         from: mailOptions.from,
         to: mailOptions.to,
         subject: mailOptions.subject,
-        textPreview: mailOptions.text.substring(0, 100) + '...'
+        textPreview: mailOptions.text.substring(0, 100) + '...',
+        verificationLink // Added
       });
     }
 
@@ -353,6 +400,7 @@ The ${this.appName} Team
       logger.info('EmailService.verification_email_sent', {
         to: email,
         messageId: info.messageId,
+        verificationLink, // Added
         durationMs: Date.now() - startTime
       });
       return { success: true, messageId: info.messageId };
@@ -382,7 +430,7 @@ The ${this.appName} Team
       if (DEBUG) {
         logger.debug('EmailService.verification_email_error_details', {
           error: error.message,
-          code: error.code,
+          code: error,
           response: error.response,
           responseCode: error.responseCode
         });

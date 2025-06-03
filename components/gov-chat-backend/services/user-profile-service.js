@@ -682,6 +682,47 @@ class UserProfileService {
       throw error;
     }
   }
+
+  /**
+ * Send a verification email for a user, storing the token in verificationTokens
+ * @param {Object} user - User object containing _key, email, and optional personalIdentification or loginName
+ * @returns {Promise<Object>} Result of the operation
+ */
+  async sendVerificationEmail(user) {
+    const startTime = Date.now();
+    try {
+      logger.info('UserProfileService.send_verification_email_start', { userId: user._key });
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const userName = user.personalIdentification?.fullName || user.loginName || 'User';
+
+      // Store the token in the verificationTokens collection
+      const verificationTokens = this.db.collection('verificationTokens');
+      const tokenDoc = {
+        userId: `users/${user._key}`,
+        token: token,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24-hour expiry
+      };
+
+      await verificationTokens.save(tokenDoc);
+      logger.info('UserProfileService.verification_token_stored', { userId: user._key, token: token.substring(0, 10) + '...' });
+
+      // Send the verification email
+      await emailService.sendVerificationEmail(user.email, token, userName);
+      logger.info('UserProfileService.verification_email_sent', { userId: user._key, email: user.email });
+
+      return { success: true, message: 'Verification email sent' };
+    } catch (error) {
+      logger.error('UserProfileService.send_verification_email_failed', {
+        userId: user._key,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
 }
 
 // Singleton instance

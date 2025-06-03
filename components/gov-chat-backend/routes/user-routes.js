@@ -1122,113 +1122,105 @@ module.exports = (userService) => {
     }
   });
 
-  /**
-   * @swagger
-   * /api/users/admin/users/{userId}/resend-verification:
-   *   post:
-   *     summary: Resend email verification
-   *     description: Admin only endpoint to resend verification email to a user
-   *     tags: [User Administration]
-   *     security:
-   *       - bearerAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: userId
-   *         schema:
-   *           type: string
-   *         required: true
-   *         description: ID of the user to resend verification email to
-   *     responses:
-   *       200:
-   *         description: Verification email sent successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 success:
-   *                   type: boolean
-   *                   example: true
-   *                 message:
-   *                   type: string
-   *                   example: Verification email sent successfully
-   *       401:
-   *         description: Authentication required
-   *       403:
-   *         description: Forbidden, admin privileges required
-   *       404:
-   *         description: User not found
-   *       500:
-   *         description: Server error
-   */
-  router.post('/admin/users/:userId/resend-verification', authMiddleware.authenticate, async (req, res) => {
-    logger.info('\n=======================================================');
-    logger.info('========= POST ADMIN/USERS/:userId/RESEND-VERIFICATION ROUTE ACCESSED =========');
-    logger.info(`Method: ${req.method}`);
-    logger.info(`Full URL: ${req.originalUrl}`);
-    logger.info(`User ID from params: ${req.params.userId}`);
-    logger.info(`Is authenticated: ${!!req.user}`);
-    logger.info(`User role: ${req.user?.role}`);
-    logger.info('=======================================');
+/**
+ * @swagger
+ * /api/users/admin/users/{userId}/resend-verification:
+ *   post:
+ *     summary: Resend email verification
+ *     description: Admin only endpoint to resend verification email to a user
+ *     tags: [User Administration]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to resend verification email to
+ *     responses:
+ *       200:
+ *         description: Verification email sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Verification email sent successfully
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden, admin privileges required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/admin/users/:userId/resend-verification', authMiddleware.authenticate, async (req, res) => {
+  logger.info('\n=======================================================');
+  logger.info('========= POST ADMIN/USERS/:userId/RESEND-VERIFICATION ROUTE ACCESSED =========');
+  logger.info(`Method: ${req.method}`);
+  logger.info(`Full URL: ${req.originalUrl}`);
+  logger.info(`User ID from params: ${req.params.userId}`);
+  logger.info(`Is authenticated: ${!!req.user}`);
+  logger.info(`User role: ${req.user?.role}`);
+  logger.info('=======================================');
 
-    try {
-      const isAdmin = req.user && req.user.role === 'Admin';
-      if (!isAdmin) {
-        logger.warn(`Non-admin attempt to resend verification email for user ${req.params.userId}`);
-        return res.status(403).json({
-          success: false,
-          message: 'Admin privileges required to resend verification email'
-        });
-      }
-
-      const userId = req.params.userId;
-      logger.info(`[ADMIN] Resend verification email request for user ID: ${userId}`);
-
-      const user = await userService.getUserProfile(userId);
-      if (!user) {
-        logger.warn(`[ADMIN] User with ID ${userId} not found`);
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
-
-      if (user.emailVerified) {
-        logger.info(`[ADMIN] User ${userId} email is already verified, marking as unverified`);
-        
-        await userService.users.update(userId, {
-          emailVerified: false,
-          updatedAt: new Date().toISOString()
-        });
-      } else {
-        logger.info(`[ADMIN] User ${userId} email is not verified, proceeding with resend`);
-      }
-
-      try {
-        await userService.sendVerificationEmail(user);
-        logger.info(`[ADMIN] Verification email sent to ${user.email} for user ${userId}`);
-      } catch (emailError) {
-        logger.error(`[ADMIN] Failed to send verification email to ${user.email}: ${emailError.message}`, { stack: emailError.stack });
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send verification email'
-        });
-      }
-
-      logger.info(`[ADMIN] Verification email process completed successfully for user ${userId}`);
-      
-      return res.json({
-        success: true,
-        message: 'Verification email sent successfully'
-      });
-    } catch (error) {
-      logger.error(`[ADMIN] Error resending verification email for user ${req.params.userId}: ${error.message}`, { stack: error.stack });
-      return res.status(500).json({
+  try {
+    const isAdmin = req.user && req.user.role === 'Admin';
+    if (!isAdmin) {
+      logger.warn(`Non-admin attempt to resend verification email for user ${req.params.userId}`);
+      return res.status(403).json({
         success: false,
-        message: error.message || 'Failed to resend verification email'
+        message: 'Admin privileges required to resend verification email'
       });
     }
-  });
+
+    const userId = req.params.userId;
+    logger.info(`[ADMIN] Resend verification email request for user ID: ${userId}`);
+
+    const user = await userService.getUserProfile(userId);
+    if (!user) {
+      logger.warn(`[ADMIN] User with ID ${userId} not found`);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (user.emailVerified) {
+      logger.info(`[ADMIN] User ${userId} email is already verified, marking as unverified`);
+      await userService.users.update(userId, {
+        emailVerified: false,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      logger.info(`[ADMIN] User ${userId} email is not verified, proceeding with resend`);
+    }
+
+    // Send verification email using UserProfileService
+    await userService.sendVerificationEmail(user);
+    logger.info(`[ADMIN] Verification email sent to ${user.email} for user ${userId}`);
+
+    logger.info(`[ADMIN] Verification email process completed successfully for user ${userId}`);
+    
+    return res.json({
+      success: true,
+      message: 'Verification email sent successfully'
+    });
+  } catch (error) {
+    logger.error(`[ADMIN] Error resending verification email for user ${req.params.userId}: ${error.message}`, { stack: error.stack });
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to resend verification email'
+    });
+  }
+});
 
   return router;
 };

@@ -563,6 +563,7 @@ async function initializeServices() {
   services.chatHistoryService = chatHistoryService;
   services.logsService = logsService;
   logger.debug('Using AuthService, ServiceCategoryService, UserProfileService, AdminDashboardService, AnalyticsService, DatabaseOperationsService, SessionService, QueryService, ChatHistoryService, and LogsService singletons');
+  // Ensure authService is initialized before userProfileService in the application startup
   await services.sessionService.init();
   await services.authService.setSessionService(services.sessionService);
   await services.authService.init();

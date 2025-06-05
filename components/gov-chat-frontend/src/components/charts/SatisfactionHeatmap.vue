@@ -2,12 +2,17 @@
 <template>
   <div class="heatmap-wrapper">
     <div ref="chart" class="chart-container">
-      <apexchart v-if="!loading && !error && chartOptions" type="heatmap" height="580" :options="chartOptions"
-        :series="chartSeries"></apexchart>
+      <apexchart
+        v-if="!loading && !error && chartOptions"
+        type="heatmap"
+        height="580"
+        :options="chartOptions"
+        :series="chartSeries"
+      ></apexchart>
     </div>
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
+      <span>{{ translate("analytics.status.loading", "Loading...") }}</span>
     </div>
     <div v-if="error" class="error-message">
       {{ error }}
@@ -16,36 +21,32 @@
 </template>
 
 <script>
-import analyticsService from '../../services/analyticsService';
-import { getThemeInfo as getThemeFromManager } from '../../utils/ThemeManager';
+import analyticsService from "../../services/analyticsService";
+import { getThemeInfo as getThemeFromManager } from "../../utils/ThemeManager";
 
 export default {
-  name: 'SatisfactionHeatmap',
+  name: "SatisfactionHeatmap",
   props: {
-    // Data can be provided by parent component
     data: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
-    // Whether to use provided data or fetch from API
     externalData: {
       type: Boolean,
-      default: true
+      default: true,
     },
-    // Period and date for API fetching if not using external data
     period: {
       type: String,
-      default: 'monthly'
+      default: "monthly",
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split('T')[0]
+      default: () => new Date().toISOString().split("T")[0],
     },
-    // Added to force re-render when language changes
     renderKey: {
       type: String,
-      default: null
-    }
+      default: null,
+    },
   },
   data() {
     return {
@@ -57,113 +58,98 @@ export default {
       isMobile: false,
       themeObserver: null,
       systemThemeMediaQuery: null,
-      systemThemeChangeHandler: null
+      systemThemeChangeHandler: null,
     };
   },
   computed: {
     isI18nReady() {
-      return typeof this.$t === 'function';
+      return typeof this.$t === "function";
     },
   },
   watch: {
-    // Watch for data changes from parent
     data: {
       handler(newData) {
         if (this.externalData && newData && newData.length > 0) {
-          console.log('[SatisfactionHeatmap] Updating chart with new external data:', newData);
+          console.log(
+            "[SatisfactionHeatmap] Updating chart with new external data:",
+            newData
+          );
           this.chartData = newData;
           this.updateChart();
         }
       },
-      deep: true
+      deep: true,
     },
-    // Re-fetch if period or date changes
     period: {
       handler() {
         if (!this.externalData) {
-          console.log('[SatisfactionHeatmap] Period changed, fetching new data');
+          console.log(
+            "[SatisfactionHeatmap] Period changed, fetching new data"
+          );
           this.fetchData();
         }
-      }
+      },
     },
     selectedDate: {
       handler() {
         if (!this.externalData) {
-          console.log('[SatisfactionHeatmap] Selected date changed, fetching new data');
+          console.log(
+            "[SatisfactionHeatmap] Selected date changed, fetching new data"
+          );
           this.fetchData();
         }
-      }
+      },
     },
-    // Watch for renderKey (locale) changes to force complete re-render
     renderKey: {
       handler() {
         if (this.chartData && this.chartData.length > 0) {
-          console.log('[SatisfactionHeatmap] Render key changed, updating chart');
+          console.log(
+            "[SatisfactionHeatmap] Render key changed, updating chart"
+          );
           this.updateChart();
         }
-      }
-    }
+      },
+    },
   },
   mounted() {
-    // Check if mobile on mount
     this.checkMobile();
-
-    // Add theme change listener
     this.setupThemeChangeListener();
-    
-    // Inject global style to ensure text is properly colored
     this.injectGlobalStyleForDarkMode();
 
-    // Use data from props or fetch from API
     if (this.externalData && this.data.length > 0) {
-      console.log('[SatisfactionHeatmap] Using external data:', this.data);
+      console.log("[SatisfactionHeatmap] Using external data:", this.data);
       this.chartData = this.data;
       this.updateChart();
     } else if (!this.externalData) {
-      console.log('[SatisfactionHeatmap] Fetching data from API');
+      console.log("[SatisfactionHeatmap] Fetching data from API");
       this.fetchData();
     } else {
-      console.log('[SatisfactionHeatmap] Using fallback data');
+      console.log("[SatisfactionHeatmap] Using fallback data");
       this.chartData = this.getFallbackData();
       this.updateChart();
     }
 
-    // Add resize listener
-    window.addEventListener('resize', this.handleResize);
-    
-    // Initial enforcement of white text for dark mode
+    window.addEventListener("resize", this.handleResize);
     this.$nextTick(() => {
       this.enforceColorScheme();
     });
   },
   beforeUnmount() {
-    window.removeEventListener('resize', this.handleResize);
-
-    // Clean up theme change listeners
+    window.removeEventListener("resize", this.handleResize);
     this.cleanupThemeChangeListener();
-    
-    // Remove the injected style if it exists
-    const injectedStyle = document.getElementById('satisfaction-heatmap-dark-mode-style');
+    const injectedStyle = document.getElementById(
+      "satisfaction-heatmap-dark-mode-style"
+    );
     if (injectedStyle) {
       document.head.removeChild(injectedStyle);
     }
   },
   methods: {
-    /**
-     * Safe translation method
-     * @param {string} key - Translation key
-     * @param {string} defaultValue - Default value if key not found or i18n not ready
-     * @returns {string} Translated text or default value
-     */
     translate(key, defaultValue) {
-      // Check if i18n is available and properly initialized
       if (this.isI18nReady) {
         try {
-          // Get translation with explicit locale
-          const locale = this.$i18n ? this.$i18n.locale : 'en';
+          const locale = this.$i18n ? this.$i18n.locale : "en";
           const translation = this.$i18n.t(key, { locale: locale });
-
-          // If translation key is returned unchanged, fall back to default
           if (translation === key) {
             return defaultValue;
           }
@@ -176,52 +162,36 @@ export default {
       return defaultValue;
     },
 
-    /**
-     * Inject a global stylesheet that targets ApexCharts elements
-     * This ensures all text elements are white in dark mode
-     */
     injectGlobalStyleForDarkMode() {
-      // Check if the style already exists
-      if (document.getElementById('satisfaction-heatmap-dark-mode-style')) {
+      if (document.getElementById("satisfaction-heatmap-dark-mode-style")) {
         return;
       }
-      
-      // Create style element
-      const styleEl = document.createElement('style');
-      styleEl.id = 'satisfaction-heatmap-dark-mode-style';
+      const styleEl = document.createElement("style");
+      styleEl.id = "satisfaction-heatmap-dark-mode-style";
       styleEl.textContent = `
-        /* Force ApexCharts title and subtitle to be white in dark mode */
         [data-theme="dark"] .apexcharts-title-text,
         [data-theme="dark"] .apexcharts-subtitle-text {
           fill: #FFFFFF !important;
         }
-        
-        /* Additional styling for other text elements */
         [data-theme="dark"] .apexcharts-text,
         [data-theme="dark"] .apexcharts-xaxis-label text,
         [data-theme="dark"] .apexcharts-yaxis-label text {
           fill: #FFFFFF !important;
         }
-        
-        /* Legend text needs color property, not fill */
         [data-theme="dark"] .apexcharts-legend-text {
           color: #FFFFFF !important;
         }
-        
-        /* Force tooltips to match CategoryDistributionChart */
         .apexcharts-tooltip {
           background-color: rgba(0, 0, 0, 0.65) !important;
           color: #FFFFFF !important;
           border: none !important;
           box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
         }
-        
         .apexcharts-tooltip-title {
           background-color: rgba(0, 0, 0, 0.65) !important;
           color: #FFFFFF !important;
           border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
         }
-        
         .apexcharts-tooltip-text-y-label, 
         .apexcharts-tooltip-text-y-value,
         .apexcharts-tooltip-text-z-label,
@@ -231,35 +201,28 @@ export default {
           color: #FFFFFF !important;
         }
       `;
-      
-      // Append to document head
       document.head.appendChild(styleEl);
     },
-    
-    /**
-     * Check if the device is mobile based on screen width
-     */
+
     checkMobile() {
       this.isMobile = window.innerWidth < 768;
     },
 
-    /**
-     * Fetch satisfaction heatmap data from API
-     */
     async fetchData() {
       if (this.externalData) {
-        console.log('[SatisfactionHeatmap] Skipping fetchData due to externalData=true');
+        console.log(
+          "[SatisfactionHeatmap] Skipping fetchData due to externalData=true"
+        );
         return;
       }
       this.loading = true;
       this.error = null;
 
       try {
-        // Get current locale from i18n
-        const locale = this.isI18nReady ? this.$i18n.locale : 'en';
-        console.log(`[SatisfactionHeatmap] Fetching data with period=${this.period}, date=${this.selectedDate}, locale=${locale}`);
-
-        // Fetch satisfaction heatmap data
+        const locale = this.isI18nReady ? this.$i18n.locale : "en";
+        console.log(
+          `[SatisfactionHeatmap] Fetching data with period=${this.period}, date=${this.selectedDate}, locale=${locale}`
+        );
         const heatmapData = await analyticsService.getSatisfactionHeatmap(
           this.period,
           this.selectedDate,
@@ -267,19 +230,28 @@ export default {
         );
 
         if (heatmapData && heatmapData.length > 0) {
-          console.log('[SatisfactionHeatmap] Heatmap data received:', heatmapData);
+          console.log(
+            "[SatisfactionHeatmap] Heatmap data received:",
+            heatmapData
+          );
           this.chartData = heatmapData;
           this.updateChart();
         } else {
-          console.warn('[SatisfactionHeatmap] No satisfaction heatmap data returned from API');
+          console.warn(
+            "[SatisfactionHeatmap] No satisfaction heatmap data returned from API"
+          );
           this.chartData = this.getFallbackData();
           this.updateChart();
         }
       } catch (error) {
-        console.error('[SatisfactionHeatmap] Error fetching satisfaction heatmap data:', error);
-        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data. Please try again.');
-        
-        // Use fallback data in case of error
+        console.error(
+          "[SatisfactionHeatmap] Error fetching satisfaction heatmap data:",
+          error
+        );
+        this.error = this.translate(
+          "analytics.errors.loading",
+          "Failed to load satisfaction data. Please try again."
+        );
         this.chartData = this.getFallbackData();
         this.updateChart();
       } finally {
@@ -287,109 +259,131 @@ export default {
       }
     },
 
-    /**
-     * Get fallback data in case API fails
-     * @returns {Array} Sample satisfaction heatmap data
-     */
     getFallbackData() {
-      // Knowledge areas
+      // All 13 categories from serviceCategories
       const areas = [
-        this.translate('analytics.areas.immigration', 'Immigration & Citizenship'),
-        this.translate('analytics.areas.business', 'Business & Trade'),
-        this.translate('analytics.areas.identity', 'Identity & Civil Registration'),
-        this.translate('analytics.areas.social', 'Social Security & Pensions'),
-        this.translate('analytics.areas.education', 'Education & Learning'),
-        this.translate('analytics.areas.employment', 'Employment & Labor Services'),
-        this.translate('analytics.areas.health', 'Health & Social Services')
+        this.translate(
+          "analytics.areas.identity",
+          "Identity & Civil Registration"
+        ),
+        this.translate(
+          "analytics.areas.health",
+          "Healthcare & Social Services"
+        ),
+        this.translate("analytics.areas.education", "Education & Learning"),
+        this.translate(
+          "analytics.areas.employment",
+          "Employment & Labor Services"
+        ),
+        this.translate("analytics.areas.taxes", "Taxes & Revenue"),
+        this.translate(
+          "analytics.areas.transportation",
+          "Transportation & Mobility"
+        ),
+        this.translate("analytics.areas.business", "Business & Trade"),
+        this.translate(
+          "analytics.areas.housing",
+          "Housing & Urban Development"
+        ),
+        this.translate("analytics.areas.utilities", "Utilities & Environment"),
+        this.translate("analytics.areas.social", "Social Security & Pensions"),
+        this.translate(
+          "analytics.areas.immigration",
+          "Immigration & Citizenship"
+        ),
+        this.translate("analytics.areas.legal", "Legal & Judicial Services"),
+        this.translate(
+          "analytics.areas.public",
+          "Public Safety & Emergency Services"
+        ),
       ];
 
-      // Time periods
+      // Dynamic time periods based on period and selectedDate
+      const endDate = this.selectedDate
+        ? new Date(this.selectedDate)
+        : new Date();
+      const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const timePeriods = [
-        this.translate('analytics.timePeriods.week4', '4 Weeks Ago'),
-        this.translate('analytics.timePeriods.week3', '3 Weeks Ago'),
-        this.translate('analytics.timePeriods.week2', '2 Weeks Ago'),
-        this.translate('analytics.timePeriods.week1', 'Last Week'),
-        this.translate('analytics.timePeriods.current', 'Current')
+        {
+          label: this.translate("analytics.timePeriods.current", "Current"),
+          offset: 0,
+        },
+        {
+          label: this.translate("analytics.timePeriods.week1", "Last Week"),
+          offset: 1,
+        },
+        {
+          label: this.translate("analytics.timePeriods.week2", "2 Weeks Ago"),
+          offset: 2,
+        },
+        {
+          label: this.translate("analytics.timePeriods.week3", "3 Weeks Ago"),
+          offset: 3,
+        },
+        {
+          label: this.translate("analytics.timePeriods.week4", "4 Weeks Ago"),
+          offset: 4,
+        },
       ];
 
-      // Generate sample data for each area and time period
-      return areas.map(area => {
-        const data = {};
-        data.name = area;
-        data.data = timePeriods.map((period, index) => {
-          // Generate random satisfaction scores that trend slightly upward
-          let baseScore = 75 + Math.floor(Math.random() * 15);
-          // Add a small upward trend (with some randomness)
-          baseScore += index * (1 + Math.random());
-          // Ensure score doesn't exceed 100
-          const score = Math.min(Math.round(baseScore), 100);
-          
-          return {
-            x: period,
-            y: score
-          };
-        });
+      return areas.map((area) => {
+        const data = {
+          name: area,
+          data: timePeriods.map((period) => ({
+            x: period.label,
+            y: 0, // Default to 0 for fallback
+          })),
+        };
         return data;
       });
     },
 
-    /**
-     * Handle window resize
-     */
     handleResize() {
       this.checkMobile();
       this.updateChart();
     },
 
-    /**
-     * Set up theme change listener to update chart when theme changes
-     */
     setupThemeChangeListener() {
-      // Watch for theme changes through classList mutations
-      this.themeObserver = new MutationObserver(mutations => {
+      this.themeObserver = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
-          if (mutation.attributeName === 'class' || mutation.attributeName === 'data-theme') {
+          if (
+            mutation.attributeName === "class" ||
+            mutation.attributeName === "data-theme"
+          ) {
             this.updateChart();
-            
-            // Also enforce color scheme after chart updates
             setTimeout(() => {
               this.enforceColorScheme();
             }, 300);
-            
             break;
           }
         }
       });
 
-      // Observe document root for theme changes
       this.themeObserver.observe(document.documentElement, {
         attributes: true,
-        attributeFilter: ['class', 'data-theme']
+        attributeFilter: ["class", "data-theme"],
       });
 
-      // Also listen for system preference changes
-      this.systemThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      this.systemThemeMediaQuery = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      );
       this.systemThemeChangeHandler = () => {
         this.updateChart();
-        
-        // Also enforce color scheme after chart updates
         setTimeout(() => {
           this.enforceColorScheme();
         }, 300);
       };
 
-      // Add listener with compatibility for older browsers
       if (this.systemThemeMediaQuery.addEventListener) {
-        this.systemThemeMediaQuery.addEventListener('change', this.systemThemeChangeHandler);
+        this.systemThemeMediaQuery.addEventListener(
+          "change",
+          this.systemThemeChangeHandler
+        );
       } else {
-        // Fallback for older browsers
         this.systemThemeMediaQuery.addListener(this.systemThemeChangeHandler);
       }
     },
 
-    /**
-     * Clean up theme change listeners
-     */
     cleanupThemeChangeListener() {
       if (this.themeObserver) {
         this.themeObserver.disconnect();
@@ -397,198 +391,187 @@ export default {
 
       if (this.systemThemeMediaQuery) {
         if (this.systemThemeMediaQuery.removeEventListener) {
-          this.systemThemeMediaQuery.removeEventListener('change', this.systemThemeChangeHandler);
+          this.systemThemeMediaQuery.removeEventListener(
+            "change",
+            this.systemThemeChangeHandler
+          );
         } else {
-          // Fallback for older browsers
-          this.systemThemeMediaQuery.removeListener(this.systemThemeChangeHandler);
+          this.systemThemeMediaQuery.removeListener(
+            this.systemThemeChangeHandler
+          );
         }
       }
     },
 
-    /**
-     * Get current theme information
-     */
     getThemeInfo() {
-      // Use the singleton theme manager
       return getThemeFromManager();
     },
-    
-    /**
-     * Enforce color scheme on chart text elements directly
-     * This ensures text is visible in dark mode
-     */
+
     enforceColorScheme() {
-      // Directly modify SVG text elements for better visibility in dark mode
       const theme = this.getThemeInfo();
       if (theme.isDarkMode) {
         setTimeout(() => {
-          // Get the chart container
           const chartContainer = this.$refs.chart;
           if (!chartContainer) return;
-          
-          // Find all SVG text elements
-          const textElements = chartContainer.querySelectorAll('text');
-          textElements.forEach(text => {
-            text.setAttribute('fill', '#FFFFFF');
-            
-            // Also handle any tspan elements inside
-            const tspans = text.querySelectorAll('tspan');
-            tspans.forEach(tspan => {
-              tspan.setAttribute('fill', '#FFFFFF');
+
+          const textElements = chartContainer.querySelectorAll("text");
+          textElements.forEach((text) => {
+            text.setAttribute("fill", "#FFFFFF");
+            const tspans = text.querySelectorAll("tspan");
+            tspans.forEach((tspan) => {
+              tspan.setAttribute("fill", "#FFFFFF");
             });
           });
-          
-          // Specifically target title and subtitle
-          const title = chartContainer.querySelector('.apexcharts-title-text');
-          if (title) title.setAttribute('fill', '#FFFFFF');
-          
-          const subtitle = chartContainer.querySelector('.apexcharts-subtitle-text');
-          if (subtitle) subtitle.setAttribute('fill', '#FFFFFF');
-          
-          // Specifically target legend text
-          const legendItems = chartContainer.querySelectorAll('.apexcharts-legend-text');
-          legendItems.forEach(item => {
-            item.style.color = '#FFFFFF';
+
+          const title = chartContainer.querySelector(".apexcharts-title-text");
+          if (title) title.setAttribute("fill", "#FFFFFF");
+
+          const subtitle = chartContainer.querySelector(
+            ".apexcharts-subtitle-text"
+          );
+          if (subtitle) subtitle.setAttribute("fill", "#FFFFFF");
+
+          const legendItems = chartContainer.querySelectorAll(
+            ".apexcharts-legend-text"
+          );
+          legendItems.forEach((item) => {
+            item.style.color = "#FFFFFF";
           });
         }, 200);
       }
     },
 
-    /**
-     * Update the chart with current data and theme
-     */
     updateChart() {
       if (!this.chartData || this.chartData.length === 0) {
-        this.error = this.translate('analytics.status.noData', 'No data available');
+        this.error = this.translate(
+          "analytics.status.noData",
+          "No data available"
+        );
         return;
       }
 
-      // Get theme information
       const theme = this.getThemeInfo();
-      
-      // Get text and background colors - FORCE white text in dark mode
-      const textColor = theme.isDarkMode ? '#FFFFFF' : '#333333';
-      const backgroundColor = theme.isDarkMode ? '#414141' : '#FFFFFF';
-      const borderColor = theme.isDarkMode ? '#555555' : '#E5E7EB';
+      const textColor = theme.isDarkMode ? "#FFFFFF" : "#333333";
+      const backgroundColor = theme.isDarkMode ? "#414141" : "#FFFFFF";
+      const borderColor = theme.isDarkMode ? "#555555" : "#E5E7EB";
 
-      // Series data is the chartData directly
       this.chartSeries = this.chartData;
 
-      // Color function for heatmap cells
       const getColorScale = () => {
-        // Translate rating categories for the legend
-        const poorText = this.translate('analytics.ratings.poor', 'Poor');
-        const averageText = this.translate('analytics.ratings.average', 'Average');
-        const goodText = this.translate('analytics.ratings.good', 'Good');
-        const excellentText = this.translate('analytics.ratings.excellent', 'Excellent');
-        
+        const poorText = this.translate("analytics.ratings.poor", "Poor");
+        const averageText = this.translate(
+          "analytics.ratings.average",
+          "Average"
+        );
+        const goodText = this.translate("analytics.ratings.good", "Good");
+        const excellentText = this.translate(
+          "analytics.ratings.excellent",
+          "Excellent"
+        );
+
         if (theme.isDarkMode) {
-          // Dark mode: slightly different, more visible colors
           return {
             ranges: [
-              { from: 0, to: 69.99, color: '#7D3030', name: poorText },
-              { from: 70, to: 79.99, color: '#A36624', name: averageText },
-              { from: 80, to: 89.99, color: '#3D7242', name: goodText },
-              { from: 90, to: 100, color: '#1A9350', name: excellentText }
-            ]
+              { from: 0, to: 69.99, color: "#7D3030", name: poorText },
+              { from: 70, to: 79.99, color: "#A36624", name: averageText },
+              { from: 80, to: 89.99, color: "#3D7242", name: goodText },
+              { from: 90, to: 100, color: "#1A9350", name: excellentText },
+            ],
           };
         } else {
-          // Light mode
           return {
             ranges: [
-              { from: 0, to: 69.99, color: '#EF4444', name: poorText },
-              { from: 70, to: 79.99, color: '#F59E0B', name: averageText },
-              { from: 80, to: 89.99, color: '#84CC16', name: goodText },
-              { from: 90, to: 100, color: '#22C55E', name: excellentText }
-            ]
+              { from: 0, to: 69.99, color: "#EF4444", name: poorText },
+              { from: 70, to: 79.99, color: "#F59E0B", name: averageText },
+              { from: 80, to: 89.99, color: "#84CC16", name: goodText },
+              { from: 90, to: 100, color: "#22C55E", name: excellentText },
+            ],
           };
         }
       };
 
-      // Set up chart options with proper text colors for dark mode
       this.chartOptions = {
         chart: {
-          type: 'heatmap',
-          fontFamily: 'inherit',
+          type: "heatmap",
+          fontFamily: "inherit",
           toolbar: {
-            show: false
+            show: false,
           },
           background: backgroundColor,
-          foreColor: textColor, // This sets the base text color
+          foreColor: textColor,
           events: {
             mounted: () => {
-              // Once chart is mounted, enforce the color scheme
               this.enforceColorScheme();
             },
             updated: () => {
-              // When chart updates, re-enforce the color scheme
               this.enforceColorScheme();
-            }
-          }
+            },
+          },
         },
         plotOptions: {
           heatmap: {
             colorScale: getColorScale(),
             radius: 2,
             enableShades: true,
-            shadeIntensity: 0.5
-          }
+            shadeIntensity: 0.5,
+          },
         },
         dataLabels: {
           enabled: true,
           style: {
-            colors: ['#FFFFFF'],  // Always white for better visibility on colored cells
-            fontSize: '12px',
-            fontWeight: 'bold'
+            colors: ["#FFFFFF"],
+            fontSize: "12px",
+            fontWeight: "bold",
           },
-          formatter: function(val) {
-            return val + '%';
-          }
+          formatter: function (val) {
+            return val + "%";
+          },
         },
         stroke: {
           width: 1,
-          colors: [backgroundColor]
+          colors: [backgroundColor],
         },
         title: {
-          text: this.translate('analytics.charts.satisfactionHeatmap', 'Satisfaction by Knowledge Area'),
-          align: 'center',
+          text: this.translate(
+            "analytics.charts.satisfactionHeatmap",
+            "Satisfaction by Knowledge Area"
+          ),
+          align: "center",
           style: {
-            fontSize: '16px',
-            fontWeight: 'bold',
+            fontSize: "16px",
+            fontWeight: "bold",
             color: textColor,
-            fill: textColor // Added fill property for SVG text
-          }
+            fill: textColor,
+          },
         },
         subtitle: {
-          text: this.translate('analytics.charts.satisfactionSubtitle', 'Percentage scores over time'),
-          align: 'center',
+          text: this.translate(
+            "analytics.charts.satisfactionSubtitle",
+            "Percentage scores over time"
+          ),
+          align: "center",
           style: {
-            fontSize: '12px',
+            fontSize: "12px",
             color: textColor,
-            fill: textColor // Added fill property for SVG text
-          }
+            fill: textColor,
+          },
         },
         legend: {
-          position: 'bottom',
+          position: "bottom",
           labels: {
-            colors: textColor
-          }
+            colors: textColor,
+          },
         },
         tooltip: {
           enabled: true,
-          // Always use dark theme for tooltips regardless of current theme
-          theme: 'dark',
+          theme: "dark",
           style: {
-            fontSize: '12px'
+            fontSize: "12px",
           },
-          // Custom tooltip formatter to match CategoryDistributionChart
           custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-            // Get the value and category
             const value = series[seriesIndex][dataPointIndex];
             const category = w.globals.seriesNames[seriesIndex];
             const xLabel = w.globals.labels[dataPointIndex];
-            
-            // Use exact same tooltip style as CategoryDistributionChart
             return `
               <div class="apexcharts-tooltip-box" style="background: rgba(0, 0, 0, 0.65); color: #fff; padding: 8px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
                 <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px;">
@@ -602,54 +585,53 @@ export default {
             `;
           },
           y: {
-            formatter: function(val) {
-              return val + '%';
+            formatter: function (val) {
+              return val + "%";
             },
             title: {
-              formatter: function(seriesName) {
+              formatter: function (seriesName) {
                 return seriesName;
-              }
-            }
-          }
+              },
+            },
+          },
         },
         xaxis: {
           labels: {
             style: {
               colors: textColor,
-              fontSize: '12px'
-            }
-          }
+              fontSize: "12px",
+            },
+          },
         },
         yaxis: {
           labels: {
             style: {
               colors: textColor,
-              fontSize: '12px'
+              fontSize: "12px",
             },
-            offsetX: -14 // Add a moderate offset to move labels left
-          }
+            offsetX: -14,
+          },
         },
         grid: {
           borderColor: borderColor,
           padding: {
             right: 0,
-            left: 0
-          }
+            left: 0,
+          },
         },
         theme: {
-          mode: theme.isDarkMode ? 'dark' : 'light',
-          palette: 'palette1'
-        }
+          mode: theme.isDarkMode ? "dark" : "light",
+          palette: "palette1",
+        },
       };
-      
-      // Schedule another color enforcement after chart renders
+
       this.$nextTick(() => {
         setTimeout(() => {
           this.enforceColorScheme();
         }, 300);
       });
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -687,7 +669,7 @@ export default {
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid var(--accent-color, #4E97D1);
+  border-top: 3px solid var(--accent-color, #4e97d1);
   width: 30px;
   height: 30px;
   animation: spin 1s linear infinite;
@@ -713,43 +695,36 @@ export default {
   color: var(--status-outage, #d32f2f);
 }
 
-/* Mobile-specific styles */
 @media (max-width: 767px) {
   .heatmap-wrapper {
     min-height: 400px;
   }
 }
 
-/* Fix dark mode spinner */
 [data-theme="dark"] .spinner {
   border-color: rgba(255, 255, 255, 0.1);
-  border-top-color: var(--accent-color, #4E97D1);
+  border-top-color: var(--accent-color, #4e97d1);
 }
 
-/* Force title and subtitle to be white in dark mode */
 :deep([data-theme="dark"]) .apexcharts-title-text,
 :deep([data-theme="dark"]) .apexcharts-subtitle-text {
   fill: white !important;
 }
 
-/* Force axis labels to be white in dark mode */
 :deep([data-theme="dark"]) .apexcharts-yaxis-label text,
 :deep([data-theme="dark"]) .apexcharts-xaxis-label text {
   fill: white !important;
 }
 
-/* Force legend text to be white in dark mode */
 :deep([data-theme="dark"]) .apexcharts-legend-text {
   color: white !important;
 }
 
-/* Ensure all text elements are white in dark mode */
 :deep([data-theme="dark"]) text,
 :deep([data-theme="dark"]) tspan {
   fill: white !important;
 }
 
-/* Match tooltip styling exactly with CategoryDistributionChart */
 :deep(.apexcharts-tooltip) {
   background-color: rgba(0, 0, 0, 0.65) !important;
   color: white !important;
@@ -763,7 +738,7 @@ export default {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
 }
 
-:deep(.apexcharts-tooltip-text), 
+:deep(.apexcharts-tooltip-text),
 :deep(.apexcharts-tooltip-y-group),
 :deep(.apexcharts-tooltip-text-y-label),
 :deep(.apexcharts-tooltip-text-y-value) {

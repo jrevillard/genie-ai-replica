@@ -897,13 +897,13 @@ class AnalyticsService {
         locale,
         method: 'getSatisfactionGaugeData'
       });
-  
+
       // Calculate date range
       let startDate, endDate;
       const now = new Date();
       const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
       const endDateISO = selectedDateObj.toISOString();
-  
+
       switch (period) {
         case 'daily':
           startDate = new Date(selectedDateObj.setHours(0, 0, 0, 0)).toISOString();
@@ -925,10 +925,10 @@ class AnalyticsService {
           startDate = new Date(now.setDate(now.getDate() - 30)).toISOString();
           endDate = endDateISO;
       }
-  
+
       const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const endTimestamp = Date.parse(endDate);
-  
+
       // Define time periods
       const timePeriods = [
         {
@@ -937,35 +937,27 @@ class AnalyticsService {
           end: endTimestamp
         },
         {
-          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki nyuma' : 'Last Week',
+          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
           start: endTimestamp - 2 * weekDuration,
           end: endTimestamp - weekDuration
         },
         {
-          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 nyuma' : '2 Weeks Ago',
+          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
           start: endTimestamp - 3 * weekDuration,
           end: endTimestamp - 2 * weekDuration
         },
         {
-          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 nyuma' : '3 Weeks Ago',
+          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
           start: endTimestamp - 4 * weekDuration,
           end: endTimestamp - 3 * weekDuration
         },
         {
-          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 nyuma' : '4 Weeks Ago',
+          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago',
           start: endTimestamp - 5 * weekDuration,
           end: endTimestamp - 4 * weekDuration
         }
       ];
-  
-      // Fetch all service categories
-      const categoriesQuery = aql`
-        FOR c IN serviceCategories
-        RETURN c._key
-      `;
-      const categoriesCursor = await this.db.query(categoriesQuery);
-      const categoryIds = await categoriesCursor.all();
-  
+
       const result = {
         currentValue: 0,
         previousValue: 0,
@@ -973,62 +965,56 @@ class AnalyticsService {
         target: 85,
         historicalData: []
       };
-  
-      // Calculate gauge values as average of non-zero category values
+
+      // Batch query for all categories per period
       for (const period of timePeriods) {
-        const categoryValues = [];
-        for (const categoryId of categoryIds) {
-          const feedbackQuery = aql`
-            FOR q IN queries
-              FILTER q.userFeedback != null
-              FILTER q.userFeedback.rating != null
-              FILTER q.categoryId == ${categoryId}
-              FILTER DATE_TIMESTAMP(q.timestamp) >= ${period.start} AND DATE_TIMESTAMP(q.timestamp) <= ${period.end}
-              COLLECT AGGREGATE
-                totalRatings = COUNT(),
-                sumRatings = SUM(TO_NUMBER(q.userFeedback.rating))
-              RETURN {
-                count: totalRatings,
-                average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
-              }
-          `;
-          const feedbackCursor = await this.db.query(feedbackQuery);
-          const feedbackResult = await feedbackCursor.next();
-          const value = feedbackResult && feedbackResult.average ? Math.floor((feedbackResult.average / 5) * 100) : 0;
-          if (value > 0) {
-            categoryValues.push(value);
-          }
-        }
-  
+        const feedbackQuery = aql`
+          FOR q IN queries
+            FILTER q.userFeedback != null
+            FILTER q.userFeedback.rating != null
+            FILTER DATE_TIMESTAMP(q.timestamp) >= ${period.start} AND DATE_TIMESTAMP(q.timestamp) <= ${period.end}
+            COLLECT categoryId = q.categoryId AGGREGATE
+              totalRatings = COUNT(),
+              sumRatings = SUM(TO_NUMBER(q.userFeedback.rating))
+            FILTER totalRatings > 0
+            RETURN {
+              categoryId,
+              average: (sumRatings / totalRatings)
+            }
+        `;
+        const feedbackCursor = await this.db.query(feedbackQuery);
+        const categoryResults = await feedbackCursor.all();
+
         // Calculate average of non-zero category values
+        const categoryValues = categoryResults.map(r => Math.floor((r.average / 5) * 100)).filter(v => v > 0);
         const periodValue = categoryValues.length > 0 ? Math.floor(categoryValues.reduce((sum, val) => sum + val, 0) / categoryValues.length) : 0;
-  
+
         result.historicalData.push({
           label: period.label,
           value: periodValue,
           periodStart: new Date(period.start).toISOString(),
           periodEnd: new Date(period.end).toISOString()
         });
-  
+
         if (period.label === (locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current')) {
           result.currentValue = periodValue;
-        } else if (period.label === (locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki nyuma' : 'Last Week')) {
+        } else if (period.label === (locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week')) {
           result.previousValue = periodValue;
         }
       }
-  
+
       // Calculate change percentage
       result.changePercentage = result.previousValue > 0 ?
         Math.round(((result.currentValue - result.previousValue) / result.previousValue) * 100) : 0;
-  
+
       // Ensure historicalData is always 5 entries
       if (result.historicalData.length < 5) {
         const defaultLabels = [
           locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
-          locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki nyuma' : 'Last Week',
-          locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 nyuma' : '2 Weeks Ago',
-          locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 nyuma' : '3 Weeks Ago',
-          locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 nyuma' : '4 Weeks Ago'
+          locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
+          locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
+          locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
+          locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'
         ];
         const defaultHistoricalData = defaultLabels.map((label, i) => ({
           label,
@@ -1038,14 +1024,14 @@ class AnalyticsService {
         }));
         result.historicalData = defaultHistoricalData.slice(0, 5 - result.historicalData.length).concat(result.historicalData);
       }
-  
+
       logger.info('getSatisfactionGaugeData: Successful data retrieval', {
         currentValue: result.currentValue,
         historicalDataLength: result.historicalData.length,
         historicalData: result.historicalData,
         method: 'getSatisfactionGaugeData'
       });
-  
+
       return result;
     } catch (error) {
       logger.error('getSatisfactionGaugeData: Query execution failed', {
@@ -1132,13 +1118,13 @@ class AnalyticsService {
         locale,
         method: 'getSatisfactionHeatmapData'
       });
-  
+
       // Calculate date range
       let startDate, endDate;
       const now = new Date();
       const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
       const endDateISO = selectedDateObj.toISOString();
-  
+
       switch (period) {
         case 'daily':
           startDate = new Date(selectedDateObj.setHours(0, 0, 0, 0)).toISOString();
@@ -1160,11 +1146,11 @@ class AnalyticsService {
           startDate = new Date(now.setDate(now.getDate() - 30)).toISOString();
           endDate = endDateISO;
       }
-  
+
       const weekDuration = 7 * 24 * 60 * 60 * 1000;
       const endTimestamp = Date.parse(endDate);
-  
-      // Define time periods (rightmost column = last week ending on selectedDate)
+
+      // Define time periods
       const timePeriods = [
         {
           label: locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current',
@@ -1172,30 +1158,31 @@ class AnalyticsService {
           end: endTimestamp
         },
         {
-          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki nyuma' : 'Last Week',
+          label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week',
           start: endTimestamp - 2 * weekDuration,
           end: endTimestamp - weekDuration
         },
         {
-          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 nyuma' : '2 Weeks Ago',
+          label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago',
           start: endTimestamp - 3 * weekDuration,
           end: endTimestamp - 2 * weekDuration
         },
         {
-          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 nyuma' : '3 Weeks Ago',
+          label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago',
           start: endTimestamp - 4 * weekDuration,
           end: endTimestamp - 3 * weekDuration
         },
         {
-          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 nyuma' : '4 Weeks Ago',
+          label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago',
           start: endTimestamp - 5 * weekDuration,
           end: endTimestamp - 4 * weekDuration
         }
       ];
-  
+
       // Fetch all service categories
       const categoriesQuery = aql`
         FOR c IN serviceCategories
+        SORT c._key
         RETURN {
           id: c._key,
           name: c[${locale == 'fr' ? 'nameFR' : locale == 'sw' ? 'nameSW' : 'nameEN'}]
@@ -1203,42 +1190,50 @@ class AnalyticsService {
       `;
       const categoriesCursor = await this.db.query(categoriesQuery);
       const categories = await categoriesCursor.all();
-  
-      // Fetch feedback data for all categories and periods
-      const heatmapData = [];
-      for (const category of categories) {
-        const categoryData = { name: category.name, data: [] };
-        for (const period of timePeriods) {
-          const feedbackQuery = aql`
-            FOR q IN queries
-              FILTER q.userFeedback != null
-              FILTER q.userFeedback.rating != null
-              FILTER q.categoryId == ${category.id}
-              FILTER DATE_TIMESTAMP(q.timestamp) >= ${period.start} AND DATE_TIMESTAMP(q.timestamp) <= ${period.end}
-              COLLECT AGGREGATE
-                totalRatings = COUNT(),
-                sumRatings = SUM(TO_NUMBER(q.userFeedback.rating))
-              RETURN {
-                count: totalRatings,
-                average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
-              }
-          `;
-          const feedbackCursor = await this.db.query(feedbackQuery);
-          const feedbackResult = await feedbackCursor.next();
-          const value = feedbackResult && feedbackResult.average ? Math.floor((feedbackResult.average / 5) * 100) : 0;
-  
-          categoryData.data.push({ x: period.label, y: value });
-        }
-        heatmapData.push(categoryData);
+
+      // Initialize heatmap data with zeros for all categories
+      const heatmapData = categories.map(category => ({
+        name: category.name,
+        data: timePeriods.map(period => ({ x: period.label, y: 0 }))
+      }));
+
+      // Batch query for all feedback per period
+      for (const period of timePeriods) {
+        const feedbackQuery = aql`
+          FOR q IN queries
+            FILTER q.userFeedback != null
+            FILTER q.userFeedback.rating != null
+            FILTER DATE_TIMESTAMP(q.timestamp) >= ${period.start} AND DATE_TIMESTAMP(q.timestamp) <= ${period.end}
+            COLLECT categoryId = q.categoryId AGGREGATE
+              totalRatings = COUNT(),
+              sumRatings = SUM(TO_NUMBER(q.userFeedback.rating))
+            RETURN {
+              categoryId,
+              average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
+            }
+        `;
+        const feedbackCursor = await this.db.query(feedbackQuery);
+        const feedbackResults = await feedbackCursor.all();
+
+        // Update heatmap data for this period
+        feedbackResults.forEach(result => {
+          const categoryIndex = categories.findIndex(c => c.id === result.categoryId);
+          if (categoryIndex !== -1) {
+            const periodIndex = timePeriods.findIndex(p => p.label === period.label);
+            if (periodIndex !== -1) {
+              heatmapData[categoryIndex].data[periodIndex].y = Math.floor((result.average / 5) * 100);
+            }
+          }
+        });
       }
-  
+
       logger.info('getSatisfactionHeatmapData: Successful data retrieval', {
         categories: categories.length,
         periods: timePeriods.length,
         data: heatmapData,
         method: 'getSatisfactionHeatmapData'
       });
-  
+
       return heatmapData;
     } catch (error) {
       logger.error('getSatisfactionHeatmapData: Query execution failed', {

@@ -646,7 +646,7 @@ class AnalyticsService {
     ];
 
     logger.info('Sample dashboard data generated successfully');
-    
+
     return {
       queries: {
         total: 12452,
@@ -734,7 +734,7 @@ class AnalyticsService {
       }
 
       logger.info(`Time series data retrieved successfully with ${chartData.length} data points`);
-      
+
       return chartData;
     } catch (error) {
       logger.error(`Error in getTimeSeriesData: ${error.message}`, { stack: error.stack });
@@ -877,155 +877,175 @@ class AnalyticsService {
     }
 
     logger.info(`Sample time series data generated successfully with ${data.length} points`);
-    
+
     return data;
   }
 
   /**
-   * Get satisfaction gauge data
-   * @param {String} startDate - Start date (ISO string)
-   * @param {String} endDate - End date (ISO string)
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise<Object>} Satisfaction gauge data
-   */
-  async getSatisfactionGaugeData(startDate, endDate, locale = 'en') {
+ * Get satisfaction gauge data
+ * @param {String} period - Period type (daily, weekly, monthly, all-time)
+ * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
+ * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
+ * @returns {Promise<Object>} Satisfaction gauge data
+ */
+  async getSatisfactionGaugeData(period, selectedDate, locale = 'en') {
     try {
-      const validStartDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const validEndDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
+      await this.init(); // Ensure service is initialized
+      logger.debug('getSatisfactionGaugeData: Starting execution', {
+        period,
+        selectedDate,
+        locale,
+        method: 'getSatisfactionGaugeData'
+      });
 
-      const periodLength = new Date(validEndDate).getTime() - new Date(validStartDate).getTime();
-      const previousPeriodStart = new Date(new Date(validStartDate).getTime() - periodLength).toISOString();
-      const previousPeriodEnd = new Date(new Date(validEndDate).getTime() - periodLength).toISOString();
+      // Calculate date range based on period and selected date
+      let startDate, endDate;
+      const now = new Date();
+      const endDateISO = selectedDate ? new Date(selectedDate).toISOString() : now.toISOString();
 
-      logger.info(`Getting satisfaction gauge data from ${validStartDate} to ${validEndDate} with locale ${locale}`);
-      logger.info(`Previous period: ${previousPeriodStart} to ${previousPeriodEnd}`);
-
-      const query = `
-        LET currentPeriod = (
-          FOR a IN analytics
-            FILTER a.type == 'feedback'
-            FILTER a.timestamp >= @startDate AND a.timestamp <= @endDate
-            FILTER a.data.rating != null
-            
-            COLLECT AGGREGATE 
-              totalRatings = COUNT(),
-              sumRatings = SUM(a.data.rating)
-              
-            RETURN {
-              count: totalRatings,
-              average: totalRatings > 0 ? (sumRatings / totalRatings) : null
-            }
-        )[0]
-        
-        LET previousPeriod = (
-          FOR a IN analytics
-            FILTER a.type == 'feedback'
-            FILTER a.timestamp >= @prevStartDate AND a.timestamp <= @prevEndDate
-            FILTER a.data.rating != null
-            
-            COLLECT AGGREGATE 
-              totalRatings = COUNT(),
-              sumRatings = SUM(a.data.rating)
-              
-            RETURN {
-              count: totalRatings,
-              average: totalRatings > 0 ? (sumRatings / totalRatings) : null
-            }
-        )[0]
-        
-        LET currentValue = currentPeriod.average != null ? 
-          FLOOR((currentPeriod.average / 5) * 100) : null
-          
-        LET previousValue = previousPeriod.average != null ? 
-          FLOOR((previousPeriod.average / 5) * 100) : null
-          
-        LET changePercentage = (
-          previousValue != null && previousValue > 0 ? 
-            ROUND(((currentValue - previousValue) / previousValue) * 100 * 10) / 10 : null
-        )
-        
-        LET historicalPeriods = 5
-        LET periodDuration = @endDate - @startDate
-        
-        LET historicalData = (
-          FOR i IN 0..4
-            LET periodEndDate = DATE_SUBTRACT(@endDate, i * periodDuration, "ms")
-            LET periodStartDate = DATE_SUBTRACT(periodEndDate, periodDuration, "ms")
-            
-            LET periodData = (
-              FOR a IN analytics
-                FILTER a.type == 'feedback'
-                FILTER a.timestamp >= periodStartDate AND a.timestamp <= periodEndDate
-                FILTER a.data.rating != null
-                
-                COLLECT AGGREGATE 
-                  totalRatings = COUNT(),
-                  sumRatings = SUM(a.data.rating)
-                  
-                RETURN {
-                  count: totalRatings,
-                  average: totalRatings > 0 ? (sumRatings / totalRatings) : null
-                }
-            )[0]
-            
-            LET periodLabel = (
-              i == 0 ? 
-                (@locale == 'fr' ? 'Actuel' : (@locale == 'sw' ? 'Sasa' : 'Current')) :
-              i == 1 ? 
-                (@locale == 'fr' ? 'Semaine dernière' : (@locale == 'sw' ? 'Wiki iliyopita' : 'Last Week')) :
-              i == 2 ? 
-                (@locale == 'fr' ? 'Il y a 2 semaines' : (@locale == 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago')) :
-              i == 3 ? 
-                (@locale == 'fr' ? 'Il y a 3 semaines' : (@locale == 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago')) :
-                (@locale == 'fr' ? 'Il y a 4 semaines' : (@locale == 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'))
-            )
-            
-            RETURN {
-              label: periodLabel,
-              value: periodData.average != null ? 
-                FLOOR((periodData.average / 5) * 100) : null
-            }
-        )
-        
-        RETURN {
-          currentValue: currentValue || 72.5,
-          previousValue: previousValue || 73.1,
-          changePercentage: changePercentage || -0.6,
-          target: 85,
-          historicalData: historicalData
-        }
-      `;
-
-      logger.info("Executing satisfaction gauge query...");
-
-      try {
-        const testCursor = await this.db.query(`RETURN { test: true }`);
-        const testResult = await testCursor.next();
-        logger.info(`Database test query result: ${JSON.stringify(testResult)}`);
-
-        const result = await this.db.query(query, {
-          startDate: validStartDate,
-          endDate: validEndDate,
-          prevStartDate: previousPeriodStart,
-          prevEndDate: previousPeriodEnd,
-          locale: locale
-        }).then(cursor => cursor.next());
-
-        if (!result || !result.currentValue) {
-          logger.info("No satisfaction data found, returning sample data");
-          return this.getSampleSatisfactionGaugeData(locale);
-        }
-
-        logger.info('Satisfaction gauge data retrieved successfully');
-        
-        return result;
-      } catch (error) {
-        logger.error(`Database query error: ${error.message}`, { stack: error.stack });
-        return this.getSampleSatisfactionGaugeData(locale);
+      switch (period) {
+        case 'daily':
+          startDate = new Date(new Date(endDateISO).setHours(0, 0, 0, 0)).toISOString();
+          endDate = new Date(new Date(endDateISO).setHours(23, 59, 59, 999)).toISOString();
+          break;
+        case 'weekly':
+          startDate = new Date(new Date(endDateISO).setDate(new Date(endDateISO).getDate() - 6)).toISOString();
+          endDate = endDateISO;
+          break;
+        case 'monthly':
+          startDate = new Date(new Date(endDateISO).setDate(new Date(endDateISO).getDate() - 29)).toISOString();
+          endDate = endDateISO;
+          break;
+        case 'all-time':
+          startDate = '2020-01-01T00:00:00.000Z'; // Arbitrary start
+          endDate = endDateISO;
+          break;
+        default:
+          startDate = new Date(now.setDate(now.getDate() - 30)).toISOString();
+          endDate = endDateISO;
       }
+
+      const weekDuration = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+      const endTimestamp = Date.parse(endDate);
+
+      const query = aql`
+      LET currentData = (
+        FOR a IN analytics
+          FILTER a.type == 'feedback'
+          FILTER DATE_TIMESTAMP(a.timestamp) >= ${endTimestamp - weekDuration} AND DATE_TIMESTAMP(a.timestamp) <= ${endTimestamp}
+          FILTER a.data.rating != null
+          COLLECT AGGREGATE 
+            totalRatings = COUNT(),
+            sumRatings = SUM(a.data.rating)
+          RETURN {
+            count: totalRatings,
+            average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
+          }
+      )[0]
+      LET previousData = (
+        FOR a IN analytics
+          FILTER a.type == 'feedback'
+          FILTER DATE_TIMESTAMP(a.timestamp) >= ${endTimestamp - 2 * weekDuration} AND DATE_TIMESTAMP(a.timestamp) < ${endTimestamp - weekDuration}
+          FILTER a.data.rating != null
+          COLLECT AGGREGATE 
+            totalRatings = COUNT(),
+            sumRatings = SUM(a.data.rating)
+          RETURN {
+            count: totalRatings,
+            average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
+          }
+      )[0]
+      LET historicalData = (
+        FOR i IN 0..4
+          LET periodEndDate = ${endTimestamp} - (i * ${weekDuration})
+          LET periodStartDate = periodEndDate - (${weekDuration} - 1)
+          LET periodData = (
+            FOR a IN analytics
+              FILTER a.type == 'feedback'
+              FILTER DATE_TIMESTAMP(a.timestamp) >= periodStartDate AND DATE_TIMESTAMP(a.timestamp) <= periodEndDate
+              FILTER a.data.rating != null
+              COLLECT AGGREGATE 
+                totalRatings = COUNT(),
+                sumRatings = SUM(a.data.rating)
+              RETURN {
+                count: totalRatings,
+                average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
+              }
+          )[0]
+          LET periodLabel = (
+            i == 0 ? (${locale} == 'fr' ? 'Actuel' : (${locale} == 'sw' ? 'Sasa' : 'Current')) :
+            i == 1 ? (${locale} == 'fr' ? 'Semaine dernière' : (${locale} == 'sw' ? 'Wiki iliyopita' : 'Last Week')) :
+            i == 2 ? (${locale} == 'fr' ? 'Il y a 2 semaines' : (${locale} == 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago')) :
+            i == 3 ? (${locale} == 'fr' ? 'Il y a 3 semaines' : (${locale} == 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago')) :
+            (${locale} == 'fr' ? 'Il y a 4 semaines' : (${locale} == 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'))
+          )
+          RETURN {
+            label: periodLabel,
+            value: periodData.average != null ? FLOOR((periodData.average / 5) * 100) : 0,
+            periodStart: DATE_ISO8601(periodStartDate),
+            periodEnd: DATE_ISO8601(periodEndDate)
+          }
+      )
+      RETURN {
+        currentValue: currentData.average != null ? FLOOR((currentData.average / 5) * 100) : 0,
+        previousValue: previousData.average != null ? FLOOR((previousData.average / 5) * 100) : 0,
+        changePercentage: (currentData.average != null && previousData.average != null && previousData.average > 0) ?
+          ROUND(((currentData.average - previousData.average) / previousData.average) * 100) : 0,
+        target: 85,
+        historicalData: historicalData
+      }
+    `;
+
+      logger.debug('getSatisfactionGaugeData: Query details', {
+        query: query.query,
+        bindVars: { endTimestamp, weekDuration, locale },
+        method: 'getSatisfactionGaugeData'
+      });
+
+      const cursor = await this.db.query(query);
+      const result = await cursor.next();
+
+      logger.debug('getSatisfactionGaugeData: Query result', {
+        result,
+        currentValue: result ? result.currentValue : null,
+        historicalData: result ? result.historicalData : null,
+        historicalDataLength: result && Array.isArray(result.historicalData) ? result.historicalData.length : 0,
+        method: 'getSatisfactionGaugeData'
+      });
+
+      if (!result || result.currentValue === null) {
+        logger.warn('getSatisfactionGaugeData: No valid gauge data returned', {
+          result,
+          method: 'getSatisfactionGaugeData'
+        });
+        throw new Error('No valid satisfaction data found');
+      }
+
+      // Ensure historicalData is always an array with 5 entries
+      const defaultHistoricalData = [
+        { label: locale === 'fr' ? 'Actuel' : locale === 'sw' ? 'Sasa' : 'Current', value: result.currentValue || 0, periodStart: new Date(endTimestamp).toISOString(), periodEnd: new Date(endTimestamp).toISOString() },
+        { label: locale === 'fr' ? 'Semaine dernière' : locale === 'sw' ? 'Wiki iliyopita' : 'Last Week', value: 0, periodStart: new Date(endTimestamp - weekDuration).toISOString(), periodEnd: new Date(endTimestamp - weekDuration).toISOString() },
+        { label: locale === 'fr' ? 'Il y a 2 semaines' : locale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago', value: 0, periodStart: new Date(endTimestamp - 2 * weekDuration).toISOString(), periodEnd: new Date(endTimestamp - 2 * weekDuration).toISOString() },
+        { label: locale === 'fr' ? 'Il y a 3 semaines' : locale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago', value: 0, periodStart: new Date(endTimestamp - 3 * weekDuration).toISOString(), periodEnd: new Date(endTimestamp - 3 * weekDuration).toISOString() },
+        { label: locale === 'fr' ? 'Il y a 4 semaines' : locale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago', value: 0, periodStart: new Date(endTimestamp - 4 * weekDuration).toISOString(), periodEnd: new Date(endTimestamp - 4 * weekDuration).toISOString() }
+      ];
+      result.historicalData = Array.isArray(result.historicalData) && result.historicalData.length === 5 ? result.historicalData : defaultHistoricalData;
+
+      logger.info('getSatisfactionGaugeData: Successful data retrieval', {
+        currentValue: result.currentValue,
+        historicalDataLength: result.historicalData.length,
+        historicalData: result.historicalData,
+        method: 'getSatisfactionGaugeData'
+      });
+
+      return result;
     } catch (error) {
-      logger.error(`Error getting satisfaction gauge data: ${error.message}`, { stack: error.stack });
-      return this.getSampleSatisfactionGaugeData(locale);
+      logger.error('getSatisfactionGaugeData: Query execution failed', {
+        error: error.message,
+        stack: error.stack,
+        method: 'getSatisfactionGaugeData'
+      });
+      throw error;
     }
   }
 
@@ -1078,7 +1098,7 @@ class AnalyticsService {
     ];
 
     logger.info('Sample satisfaction gauge data generated successfully');
-    
+
     return {
       currentValue,
       previousValue,
@@ -1203,7 +1223,7 @@ class AnalyticsService {
       }
 
       logger.info(`Satisfaction heatmap data retrieved successfully with ${result.length} categories`);
-      
+
       return result;
     } catch (error) {
       logger.error(`Error getting satisfaction heatmap data: ${error.message}`, { stack: error.stack });
@@ -1236,9 +1256,9 @@ class AnalyticsService {
             y: 0
           }))
         }));
-        
+
         logger.info('Fallback satisfaction heatmap data generated successfully');
-        
+
         return fallbackData;
       } catch (fallbackError) {
         logger.error(`Error creating fallback data: ${fallbackError.message}`, { stack: fallbackError.stack });
@@ -1333,7 +1353,7 @@ class AnalyticsService {
     });
 
     logger.info(`Sample satisfaction heatmap data generated successfully with ${sampleData.length} areas`);
-    
+
     return sampleData;
   }
 }

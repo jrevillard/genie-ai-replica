@@ -45,12 +45,12 @@ class AnalyticsService {
     try {
       const currentLocale = this.getCurrentLocale(locale);
       console.log(`Directly getting unique users count from ${startDate} to ${endDate} with locale: ${currentLocale}`);
-      
+
       const response = await httpService.get('analytics/metric/uniqueUsers', {
-        params: { 
-          startDate, 
+        params: {
+          startDate,
           endDate,
-          locale: currentLocale 
+          locale: currentLocale
         }
       });
 
@@ -131,8 +131,8 @@ class AnalyticsService {
 
       // Get current period data
       const currentResponse = await httpService.get(`analytics/metric/${apiMetric}`, {
-        params: { 
-          startDate: current.startDate, 
+        params: {
+          startDate: current.startDate,
           endDate: current.endDate,
           locale: currentLocale
         }
@@ -140,8 +140,8 @@ class AnalyticsService {
 
       // Get previous period data
       const previousResponse = await httpService.get(`analytics/metric/${apiMetric}`, {
-        params: { 
-          startDate: previous.startDate, 
+        params: {
+          startDate: previous.startDate,
           endDate: previous.endDate,
           locale: currentLocale
         }
@@ -181,13 +181,13 @@ class AnalyticsService {
     try {
       // Get current locale
       const currentLocale = this.getCurrentLocale(locale);
-      
+
       console.log(`Fetching time series data for ${metricType}, interval ${interval}, locale: ${currentLocale}`);
 
       const response = await httpService.get(`analytics/timeseries/${metricType}`, {
-        params: { 
-          interval, 
-          startDate, 
+        params: {
+          interval,
+          startDate,
           endDate,
           locale: currentLocale
         }
@@ -294,7 +294,7 @@ class AnalyticsService {
     try {
       // Get current locale for formatting
       const locale = this.$i18n ? this.$i18n.locale : 'en';
-      
+
       switch (interval) {
         case 'hourly':
           return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
@@ -312,7 +312,7 @@ class AnalyticsService {
       return String(timestamp);
     }
   }
-  
+
   /**
    * Transform time series data for charts
    * @param {Array} data - Raw time series data
@@ -325,7 +325,7 @@ class AnalyticsService {
 
     // Filter out invalid entries
     const validData = data.filter(item => item && item.timestamp);
-    
+
     // Get current locale for formatting
     const locale = this.$i18n ? this.$i18n.locale : 'en';
 
@@ -385,7 +385,7 @@ class AnalyticsService {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
-  
+
   /**
    * Calculate start and end date for a given period
    * @param {string} period - Time period (daily, weekly, monthly, all-time)
@@ -676,12 +676,12 @@ class AnalyticsService {
   }
 
   /**
-   * Get satisfaction gauge data
-   * @param {string} period - Time period (daily, weekly, monthly, all-time)
-   * @param {string} date - Selected date (YYYY-MM-DD)
-   * @param {string} locale - Locale override (optional)
-   * @returns {Promise<Object>} Satisfaction gauge data
-   */
+ * Get satisfaction gauge data
+ * @param {string} period - Time period (daily, weekly, monthly, all-time)
+ * @param {string} date - Selected date (YYYY-MM-DD)
+ * @param {string} locale - Locale override (optional)
+ * @returns {Promise<Object>} Satisfaction gauge data
+ */
   async getSatisfactionGauge(period, date, locale = null) {
     try {
       // Calculate start and end dates based on period and date
@@ -690,10 +690,10 @@ class AnalyticsService {
       // Get current locale from parameter, instance, or fallback
       const currentLocale = this.getCurrentLocale(locale);
 
-      console.log(`Fetching satisfaction gauge with locale: ${currentLocale}`);
+      console.log(`Fetching satisfaction gauge with locale: ${currentLocale}`, { startDate, endDate });
 
       // Make API call to get the satisfaction gauge data
-      const response = await httpService.get('analytics/metric/satisfactionRate', {
+      const response = await httpService.get('analytics/satisfaction/gauge', {
         params: {
           startDate,
           endDate,
@@ -701,56 +701,27 @@ class AnalyticsService {
         }
       });
 
-      if (!response.data || typeof response.data.value !== 'number') {
-        console.warn('Invalid response format for satisfaction gauge:', response.data);
-        return this.getFallbackSatisfactionGauge(currentLocale);
+      console.log('[SatisfactionGauge] Raw API response:', response);
+
+      if (!response.data || typeof response.data.currentValue !== 'number') {
+        console.warn('Invalid gauge data response:', response.data);
+        throw new Error(`Invalid gauge data response: ${JSON.stringify(response.data)}`);
       }
 
-      console.log('[SatisfactionGauge] Satisfaction data received:', response.data);
-
-      // Calculate previous period for comparison
-      const periodLength = new Date(endDate).getTime() - new Date(startDate).getTime();
-      const previousStartDate = new Date(new Date(startDate).getTime() - periodLength).toISOString();
-      const previousEndDate = new Date(new Date(endDate).getTime() - periodLength).toISOString();
-
-      // Get previous period data
-      const previousResponse = await httpService.get('analytics/metric/satisfactionRate', {
-        params: {
-          startDate: previousStartDate,
-          endDate: previousEndDate,
-          locale: currentLocale
-        }
-      });
-
-      // Get the current and previous values
-      const currentValue = response.data.value;
-      const previousValue = previousResponse.data && typeof previousResponse.data.value === 'number' ?
-        previousResponse.data.value : currentValue * 0.99;
-
-      // Calculate change percentage
-      const changePercentage = previousValue > 0 ?
-        ((currentValue - previousValue) / previousValue) * 100 : 0;
-
-      // Create historical data (could be enhanced with real historical data if available)
-      const historicalData = [
-        { label: currentLocale === 'fr' ? 'Actuel' : (currentLocale === 'sw' ? 'Sasa' : 'Current'), value: currentValue },
-        { label: currentLocale === 'fr' ? 'Semaine dernière' : (currentLocale === 'sw' ? 'Wiki iliyopita' : 'Last Week'), value: previousValue },
-        { label: currentLocale === 'fr' ? 'Il y a 2 semaines' : (currentLocale === 'sw' ? 'Wiki 2 iliyopita' : '2 Weeks Ago'), value: Math.round(previousValue * 0.99 * 10) / 10 },
-        { label: currentLocale === 'fr' ? 'Il y a 3 semaines' : (currentLocale === 'sw' ? 'Wiki 3 iliyopita' : '3 Weeks Ago'), value: Math.round(previousValue * 0.98 * 10) / 10 },
-        { label: currentLocale === 'fr' ? 'Il y a 4 semaines' : (currentLocale === 'sw' ? 'Wiki 4 iliyopita' : '4 Weeks Ago'), value: Math.round(previousValue * 0.97 * 10) / 10 }
-      ];
-
-      // Return the data in the format expected by the SatisfactionGauge component
-      return {
-        currentValue,
-        previousValue,
-        changePercentage,
-        target: 85, // Default target
-        historicalData
+      const gaugeData = {
+        currentValue: response.data.currentValue,
+        previousValue: response.data.previousValue || 0,
+        changePercentage: response.data.changePercentage || 0,
+        target: response.data.target || 85,
+        historicalData: Array.isArray(response.data.historicalData) ? response.data.historicalData : []
       };
+
+      console.log('[SatisfactionGauge] Processed gauge data:', gaugeData);
+
+      return gaugeData;
     } catch (error) {
       console.error('Error fetching satisfaction gauge data:', error);
-      return this.getFallbackSatisfactionGauge(this.getCurrentLocale(locale));
+      throw error; // No fallback to force real data
     }
   }
 
@@ -759,95 +730,35 @@ class AnalyticsService {
  * @param {Object} queryDoc - Query document
  * @returns {Promise<Object>} The created analytics record
  */
-async recordQuery(queryDoc) {
-  try {
-    const response = await httpService.post(`${this.baseUrl}/analytics/query`, queryDoc);
-    return response.data;
-  } catch (error) {
-    console.error('Error recording query in analytics:', error);
-    throw error;
+  async recordQuery(queryDoc) {
+    try {
+      const response = await httpService.post(`${this.baseUrl}/analytics/query`, queryDoc);
+      return response.data;
+    } catch (error) {
+      console.error('Error recording query in analytics:', error);
+      throw error;
+    }
   }
-}
-
-/**
- * Record feedback in analytics
- * @param {String} queryId - Query ID
- * @param {Object} feedback - Feedback data
- * @returns {Promise<Object>} The created analytics record
- */
-async recordFeedback(queryId, feedback) {
-  try {
-    const response = await httpService.post(`${this.baseUrl}/analytics/feedback`, {
-      queryId,
-      feedback
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Error recording feedback in analytics:', error);
-    throw error;
-  }
-}
 
   /**
-   * Get fallback satisfaction gauge data
-   * @param {string} locale - Locale for translations
-   * @returns {Object} Sample satisfaction gauge data
+   * Record feedback in analytics
+   * @param {String} queryId - Query ID
+   * @param {Object} feedback - Feedback data
+   * @returns {Promise<Object>} The created analytics record
    */
-  getFallbackSatisfactionGauge(locale = 'en') {
-    // Define periods based on locale for historical data
-    const getLocalizedPeriods = () => {
-      if (locale === 'fr') {
-        return [
-          'Il y a 4 semaines',
-          'Il y a 3 semaines',
-          'Il y a 2 semaines',
-          'Semaine dernière',
-          'Actuel'
-        ];
-      } else if (locale === 'sw') {
-        return [
-          'Wiki 4 iliyopita',
-          'Wiki 3 iliyopita',
-          'Wiki 2 iliyopita',
-          'Wiki iliyopita',
-          'Sasa'
-        ];
-      } else {
-        // Default to English
-        return [
-          '4 Weeks Ago',
-          '3 Weeks Ago',
-          '2 Weeks Ago',
-          'Last Week',
-          'Current'
-        ];
-      }
-    };
-
-    const periods = getLocalizedPeriods();
-
-    // Define sample values
-    const currentValue = 72.5;
-    const previousValue = 73.1;
-    const changePercentage = -0.6;
-
-    // Create sample historical data
-    const historicalData = [
-      { label: periods[0], value: 71.2 },
-      { label: periods[1], value: 72.4 },
-      { label: periods[2], value: 73.8 },
-      { label: periods[3], value: 73.1 },
-      { label: periods[4], value: 72.5 },
-    ];
-
-    return {
-      currentValue,
-      previousValue,
-      changePercentage,
-      target: 85,
-      historicalData
-    };
+  async recordFeedback(queryId, feedback) {
+    try {
+      const response = await httpService.post(`${this.baseUrl}/analytics/feedback`, {
+        queryId,
+        feedback
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error recording feedback in analytics:', error);
+      throw error;
+    }
   }
+
 }
 
 export default new AnalyticsService();

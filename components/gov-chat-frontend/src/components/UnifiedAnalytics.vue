@@ -1,42 +1,62 @@
-<!-- UnifiedAnalytics.vue - Fixed version with proper theming support -->
+<!-- UnifiedAnalytics.vue - Updated version with proper date range handling for all charts -->
 <template>
   <div class="analytics-modal" @click.self="close">
     <div class="analytics-content" :key="'analytics-content-' + currentLocale">
       <div class="analytics-header">
-        <h2 style="color: var(--text-primary) !important;">{{ $t('analytics.title') }}</h2>
+        <h2 style="color: var(--text-primary) !important">
+          {{ $t("analytics.title") }}
+        </h2>
         <button class="close-btn" @click="close" aria-label="Close">×</button>
       </div>
 
       <div class="analytics-body">
         <!-- Period selector (for dynamic mode) -->
         <div v-if="useDynamicData" class="period-selector">
-          <label style="color: var(--text-primary) !important;">{{ translate('analytics.period') }}</label>
-          <select v-model="selectedPeriod" @change="loadAnalytics"
-            style="background-color: var(--bg-dialog) !important;">
-            <option value="daily">{{ translate('analytics.periods.daily') }}</option>
-            <option value="weekly">{{ translate('analytics.periods.weekly') }}</option>
-            <option value="monthly">{{ translate('analytics.periods.monthly') }}</option>
-            <option value="all-time">{{ translate('analytics.periods.allTime') }}</option>
+          <label style="color: var(--text-primary) !important">{{
+            translate("analytics.period")
+          }}</label>
+          <select
+            v-model="selectedPeriod"
+            @change="loadAnalytics"
+            style="background-color: var(--bg-dialog) !important"
+          >
+            <option value="daily">
+              {{ translate("analytics.periods.daily") }}
+            </option>
+            <option value="weekly">
+              {{ translate("analytics.periods.weekly") }}
+            </option>
+            <option value="monthly">
+              {{ translate("analytics.periods.monthly") }}
+            </option>
+            <option value="all-time">
+              {{ translate("analytics.periods.allTime") }}
+            </option>
           </select>
 
           <!-- Date picker (hidden for all-time) -->
           <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
-            <input type="date" v-model="selectedDate" @change="loadAnalytics" :max="todayStr"
-              style="background-color: var(--bg-dialog) !important;" />
+            <input
+              type="date"
+              v-model="selectedDate"
+              @change="loadAnalytics"
+              :max="todayStr"
+              style="background-color: var(--bg-dialog) !important"
+            />
           </div>
         </div>
 
         <!-- Loading state -->
         <div v-if="isLoading" class="loading-container">
           <div class="spinner"></div>
-          <p>{{ translate('analytics.loading') }}</p>
+          <p>{{ translate("analytics.loading") }}</p>
         </div>
 
         <!-- Error state -->
         <div v-else-if="error" class="error-container">
           <p class="error-message">{{ error }}</p>
           <button @click="loadAnalytics" class="retry-button">
-            {{ translate('analytics.retry') }}
+            {{ translate("analytics.retry") }}
           </button>
         </div>
 
@@ -44,41 +64,70 @@
         <div v-else class="dashboard-content">
           <!-- Usage Trend Chart -->
           <div class="analytics-section">
-            <usage-trend-chart ref="usageTrendChart" :data="timeSeriesData" :externalData="true"
-              :showPeriodSelector="true" :showDualChart="true" @period-change="onPeriodChange" />
+            <usage-trend-chart
+              ref="usageTrendChart"
+              :data="timeSeriesData"
+              :externalData="true"
+              :showPeriodSelector="true"
+              :showDualChart="true"
+              @period-change="onPeriodChange"
+            />
           </div>
 
           <!-- Key metrics summary -->
           <div class="metrics-summary">
             <div class="metric-card">
-              <h3>{{ translate('analytics.metrics.totalQueries') }}</h3>
-              <div class="metric-value">{{ formatValue(analytics.totalQueries) }}</div>
-              <div v-if="comparison.totalQueries" class="trend" :class="getTrendClass(comparison.totalQueries)">
+              <h3>{{ translate("analytics.metrics.totalQueries") }}</h3>
+              <div class="metric-value">
+                {{ formatValue(analytics.totalQueries) }}
+              </div>
+              <div
+                v-if="comparison.totalQueries"
+                class="trend"
+                :class="getTrendClass(comparison.totalQueries)"
+              >
                 {{ formatTrend(comparison.totalQueries) }}
               </div>
             </div>
 
             <div class="metric-card">
-              <h3>{{ translate('analytics.metrics.uniqueUsers') }}</h3>
-              <div class="metric-value">{{ formatValue(analytics.uniqueUsers) }}</div>
-              <div v-if="comparison.uniqueUsers" class="trend" :class="getTrendClass(comparison.uniqueUsers)">
+              <h3>{{ translate("analytics.metrics.uniqueUsers") }}</h3>
+              <div class="metric-value">
+                {{ formatValue(analytics.uniqueUsers) }}
+              </div>
+              <div
+                v-if="comparison.uniqueUsers"
+                class="trend"
+                :class="getTrendClass(comparison.uniqueUsers)"
+              >
                 {{ formatTrend(comparison.uniqueUsers) }}
               </div>
             </div>
 
             <div class="metric-card">
-              <h3>{{ translate('analytics.metrics.avgResponseTime') }}</h3>
-              <div class="metric-value">{{ formatValue(analytics.averageResponseTime, 'time') }}</div>
-              <div v-if="comparison.averageResponseTime" class="trend"
-                :class="getTrendClass(comparison.averageResponseTime, true)">
+              <h3>{{ translate("analytics.metrics.avgResponseTime") }}</h3>
+              <div class="metric-value">
+                {{ formatValue(analytics.averageResponseTime, "time") }}
+              </div>
+              <div
+                v-if="comparison.averageResponseTime"
+                class="trend"
+                :class="getTrendClass(comparison.averageResponseTime, true)"
+              >
                 {{ formatTrend(comparison.averageResponseTime, true) }}
               </div>
             </div>
 
             <div class="metric-card">
-              <h3>{{ translate('analytics.metrics.satisfaction') }}</h3>
-              <div class="metric-value">{{ formatValue(analytics.satisfactionRate, 'percent') }}</div>
-              <div v-if="comparison.satisfactionRate" class="trend" :class="getTrendClass(comparison.satisfactionRate)">
+              <h3>{{ translate("analytics.metrics.satisfaction") }}</h3>
+              <div class="metric-value">
+                {{ formatValue(analytics.satisfactionRate, "percent") }}
+              </div>
+              <div
+                v-if="comparison.satisfactionRate"
+                class="trend"
+                :class="getTrendClass(comparison.satisfactionRate)"
+              >
                 {{ formatTrend(comparison.satisfactionRate) }}
               </div>
             </div>
@@ -86,19 +135,40 @@
 
           <!-- Satisfaction charts section -->
           <div class="satisfaction-charts">
-            <h3 class="satisfaction-title">{{ translate('analytics.satisfactionAnalysis', 'User Satisfaction Analysis')
-              }}</h3>
+            <h3 class="satisfaction-title">
+              {{
+                translate(
+                  "analytics.satisfactionAnalysis",
+                  "User Satisfaction Analysis"
+                )
+              }}
+            </h3>
             <div class="satisfaction-container">
               <!-- Satisfaction Gauge Chart -->
               <div class="analytics-section half-width">
-                <satisfaction-gauge :value="analytics.satisfactionRate" :target="85" :externalData="false"
-                  :renderKey="currentLocale" />
+                <satisfaction-gauge
+                  :value="analytics.satisfactionGaugeData?.currentValue || 0"
+                  :historical-data="
+                    analytics.satisfactionGaugeData?.historicalData || []
+                  "
+                  :change-percentage="
+                    analytics.satisfactionGaugeData?.changePercentage || 0
+                  "
+                  :target="analytics.satisfactionGaugeData?.target || 85"
+                  :external-data="true"
+                  :render-key="currentLocale"
+                />
               </div>
 
               <!-- Satisfaction Heatmap Chart -->
               <div class="analytics-section half-width">
-                <satisfaction-heatmap :externalData="false" :period="selectedPeriod" :selectedDate="selectedDate"
-                  :renderKey="currentLocale" />
+                <satisfaction-heatmap
+                  :data="analytics.satisfactionHeatmapData"
+                  :external-data="true"
+                  :period="selectedPeriod"
+                  :selected-date="selectedDate"
+                  :render-key="currentLocale"
+                />
               </div>
             </div>
           </div>
@@ -106,25 +176,35 @@
           <div class="charts-container">
             <!-- Top Queries Section -->
             <div class="analytics-section half-width">
-              <h3>{{ translate('analytics.topQueries') }}</h3>
-              <top-queries-chart v-if="analytics.topQueries && analytics.topQueries.length > 0"
-                :data="analytics.topQueries" :externalData="true" />
+              <h3>{{ translate("analytics.topQueries") }}</h3>
+              <top-queries-chart
+                v-if="analytics.topQueries && analytics.topQueries.length > 0"
+                :data="analytics.topQueries"
+                :external-data="true"
+              />
               <div v-else class="no-data">
-                {{ translate('analytics.noData') }}
+                {{ translate("analytics.noData") }}
               </div>
             </div>
 
             <!-- Service Categories Usage -->
             <div class="analytics-section half-width">
-              <h3>{{ translate('analytics.serviceUsage') }}</h3>
-              <category-distribution-chart v-if="analytics.queryDistribution && analytics.queryDistribution.length > 0"
-                :data="analytics.queryDistribution" :externalData="true" :renderKey="currentLocale" />
+              <h3>{{ translate("analytics.serviceUsage") }}</h3>
+              <category-distribution-chart
+                v-if="
+                  analytics.queryDistribution &&
+                  analytics.queryDistribution.length > 0
+                "
+                :data="analytics.queryDistribution"
+                :external-data="true"
+                :render-key="currentLocale"
+              />
               <div v-else class="category-chart-container">
                 <div v-if="categoryLoading" class="chart-loading">
-                  {{ translate('analytics.loading') }}
+                  {{ translate("analytics.loading") }}
                 </div>
                 <div v-else class="no-data">
-                  {{ translate('analytics.noData') }}
+                  {{ translate("analytics.noData") }}
                 </div>
               </div>
             </div>
@@ -136,37 +216,36 @@
 </template>
 
 <script>
-
-import UsageTrendChart from './charts/UsageTrendChart.vue';
-import TopQueriesChart from './charts/TopQueriesChart.vue';
-import CategoryDistributionChart from './charts/CategoryDistributionChart.vue';
-import SatisfactionGauge from './charts/SatisfactionGauge.vue';
-import SatisfactionHeatmap from './charts/SatisfactionHeatmap.vue';
-import analyticsService from '../services/analyticsService';
+import UsageTrendChart from "./charts/UsageTrendChart.vue";
+import TopQueriesChart from "./charts/TopQueriesChart.vue";
+import CategoryDistributionChart from "./charts/CategoryDistributionChart.vue";
+import SatisfactionGauge from "./charts/SatisfactionGauge.vue";
+import SatisfactionHeatmap from "./charts/SatisfactionHeatmap.vue";
+import analyticsService from "../services/analyticsService";
 
 export default {
-  name: 'UnifiedAnalytics',
+  name: "UnifiedAnalytics",
   components: {
     UsageTrendChart,
     TopQueriesChart,
     CategoryDistributionChart,
     SatisfactionGauge,
-    SatisfactionHeatmap
+    SatisfactionHeatmap,
   },
 
-  emits: ['close'],
+  emits: ["close"],
 
   data() {
     return {
       // CONFIGURE HERE: Set to false for static sample data, true for API calls
-      useDynamicData: true,  // false = static data, true = dynamic data
+      useDynamicData: true, // false = static data, true = dynamic data
 
       isLoading: false,
       categoryLoading: false,
       error: null,
-      selectedPeriod: 'monthly',
-      selectedDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
-      currentLocale: this.$i18n ? this.$i18n.locale : 'en',
+      selectedPeriod: "monthly",
+      selectedDate: new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
+      currentLocale: this.$i18n ? this.$i18n.locale : "en",
 
       // Analytics data
       analytics: {
@@ -175,13 +254,15 @@ export default {
         averageResponseTime: 0,
         satisfactionRate: 0,
         queryDistribution: [],
-        topQueries: []
+        topQueries: [],
+        satisfactionGaugeData: null, // Store gauge data
+        satisfactionHeatmapData: [], // Store heatmap data
       },
       comparison: {
         totalQueries: null,
         uniqueUsers: null,
         averageResponseTime: null,
-        satisfactionRate: null
+        satisfactionRate: null,
       },
       timeSeriesData: [],
 
@@ -196,17 +277,52 @@ export default {
         averageResponseTime: 2.3,
         satisfactionRate: 87.5,
         queryDistribution: [
-          { categoryId: 'cat1', name: 'Business & Economy', count: 2347, value: 24 },
-          { categoryId: 'cat2', name: 'Transportation', count: 1782, value: 18 },
-          { categoryId: 'cat3', name: 'Taxes & Revenue', count: 1645, value: 16 },
-          { categoryId: 'cat4', name: 'Immigration & Citizenship', count: 1245, value: 12 },
-          { categoryId: 'cat5', name: 'Education & Learning', count: 980, value: 10 },
-          { categoryId: 'cat6', name: 'Housing & Properties', count: 850, value: 8 },
-          { categoryId: 'cat7', name: 'Health & Healthcare', count: 720, value: 6 },
-          { categoryId: 'cat8', name: 'Others', count: 650, value: 6 }
+          {
+            categoryId: "cat1",
+            name: "Business & Economy",
+            count: 2347,
+            value: 24,
+          },
+          {
+            categoryId: "cat2",
+            name: "Transportation",
+            count: 1782,
+            value: 18,
+          },
+          {
+            categoryId: "cat3",
+            name: "Taxes & Revenue",
+            count: 1645,
+            value: 16,
+          },
+          {
+            categoryId: "cat4",
+            name: "Immigration & Citizenship",
+            count: 1245,
+            value: 12,
+          },
+          {
+            categoryId: "cat5",
+            name: "Education & Learning",
+            count: 980,
+            value: 10,
+          },
+          {
+            categoryId: "cat6",
+            name: "Housing & Properties",
+            count: 850,
+            value: 8,
+          },
+          {
+            categoryId: "cat7",
+            name: "Health & Healthcare",
+            count: 720,
+            value: 6,
+          },
+          { categoryId: "cat8", name: "Others", count: 650, value: 6 },
         ],
-        topQueries: []
-      }
+        topQueries: [],
+      },
     };
   },
 
@@ -215,8 +331,8 @@ export default {
      * Today's date in YYYY-MM-DD format
      */
     todayStr() {
-      return new Date().toISOString().split('T')[0];
-    }
+      return new Date().toISOString().split("T")[0];
+    },
   },
 
   created() {
@@ -239,8 +355,8 @@ export default {
     // Listen for locale changes
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
-      this.$watch('$i18n.locale', (newLocale) => {
-        console.log('Locale changed in UnifiedAnalytics:', newLocale);
+      this.$watch("$i18n.locale", (newLocale) => {
+        console.log("Locale changed in UnifiedAnalytics:", newLocale);
 
         // Update current locale
         this.currentLocale = newLocale;
@@ -267,19 +383,19 @@ export default {
 
   mounted() {
     // Add resize listener
-    window.addEventListener('resize', this.handleResize);
-    console.log('UnifiedAnalytics mounted with locale:', this.currentLocale);
+    window.addEventListener("resize", this.handleResize);
+    console.log("UnifiedAnalytics mounted with locale:", this.currentLocale);
   },
 
   beforeUnmount() {
-    window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener("resize", this.handleResize);
   },
 
   methods: {
     /**
      * Custom translation method to ensure correct locale is used
      */
-    translate(key, fallback = '') {
+    translate(key, fallback = "") {
       if (!this.$i18n) return fallback;
 
       try {
@@ -290,7 +406,7 @@ export default {
         }
         return translation;
       } catch (e) {
-        console.error('Translation error:', e);
+        console.error("Translation error:", e);
         return fallback || key;
       }
     },
@@ -310,32 +426,81 @@ export default {
      */
     translateQueries() {
       const sampleQueriesPerLanguage = {
-        'en': [
-          { text: "How do I apply for a business license?", count: 2347, avgTime: 2.3 },
+        en: [
+          {
+            text: "How do I apply for a business license?",
+            count: 2347,
+            avgTime: 2.3,
+          },
           { text: "Where can I find tax forms?", count: 1982, avgTime: 1.8 },
-          { text: "How to renew my driver's license?", count: 1645, avgTime: 2.1 },
-          { text: "What documents do I need for passport application?", count: 1423, avgTime: 3.4 },
-          { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
+          {
+            text: "How to renew my driver's license?",
+            count: 1645,
+            avgTime: 2.1,
+          },
+          {
+            text: "What documents do I need for passport application?",
+            count: 1423,
+            avgTime: 3.4,
+          },
+          { text: "When are property taxes due?", count: 1289, avgTime: 1.5 },
         ],
-        'fr': [
-          { text: "Comment faire une demande de licence commerciale?", count: 2347, avgTime: 2.3 },
-          { text: "Où puis-je trouver des formulaires fiscaux?", count: 1982, avgTime: 1.8 },
-          { text: "Comment renouveler mon permis de conduire?", count: 1645, avgTime: 2.1 },
-          { text: "Quels documents me faut-il pour une demande de passeport?", count: 1423, avgTime: 3.4 },
-          { text: "Quand les taxes foncières sont-elles dues?", count: 1289, avgTime: 1.5 }
+        fr: [
+          {
+            text: "Comment faire une demande de licence commerciale?",
+            count: 2347,
+            avgTime: 2.3,
+          },
+          {
+            text: "Où puis-je trouver des formulaires fiscaux?",
+            count: 1982,
+            avgTime: 1.8,
+          },
+          {
+            text: "Comment renouveler mon permis de conduire?",
+            count: 1645,
+            avgTime: 2.1,
+          },
+          {
+            text: "Quels documents me faut-il pour une demande de passeport?",
+            count: 1423,
+            avgTime: 3.4,
+          },
+          {
+            text: "Quand les taxes foncières sont-elles dues?",
+            count: 1289,
+            avgTime: 1.5,
+          },
         ],
-        'sw': [
-          { text: "Nawezaje kuomba leseni ya biashara?", count: 2347, avgTime: 2.3 },
-          { text: "Naweza kupata fomu za kodi wapi?", count: 1982, avgTime: 1.8 },
-          { text: "Jinsi ya kufanya upya leseni yangu ya udereva?", count: 1645, avgTime: 2.1 },
-          { text: "Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?", count: 1423, avgTime: 3.4 },
-          { text: "Kodi za mali hulipwa lini?", count: 1289, avgTime: 1.5 }
-        ]
+        sw: [
+          {
+            text: "Nawezaje kuomba leseni ya biashara?",
+            count: 2347,
+            avgTime: 2.3,
+          },
+          {
+            text: "Naweza kupata fomu za kodi wapi?",
+            count: 1982,
+            avgTime: 1.8,
+          },
+          {
+            text: "Jinsi ya kufanya upya leseni yangu ya udereva?",
+            count: 1645,
+            avgTime: 2.1,
+          },
+          {
+            text: "Ni nyaraka gani ninahitaji kwa maombi ya pasipoti?",
+            count: 1423,
+            avgTime: 3.4,
+          },
+          { text: "Kodi za mali hulipwa lini?", count: 1289, avgTime: 1.5 },
+        ],
       };
 
       // Use current locale or fall back to English
-      const locale = this.currentLocale || 'en';
-      this.translatedTopQueries = sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage['en'];
+      const locale = this.currentLocale || "en";
+      this.translatedTopQueries =
+        sampleQueriesPerLanguage[locale] || sampleQueriesPerLanguage["en"];
     },
 
     /**
@@ -343,38 +508,39 @@ export default {
      */
     translateCategories() {
       const categoryDataPerLanguage = {
-        'en': [
+        en: [
           { category: "Business & Economy", value: 24 },
           { category: "Transportation", value: 18 },
           { category: "Taxes & Revenue", value: 16 },
           { category: "Immigration & Citizenship", value: 12 },
           { category: "Education & Learning", value: 10 },
           { category: "Housing & Properties", value: 8 },
-          { category: "Others", value: 12 }
+          { category: "Others", value: 12 },
         ],
-        'fr': [
+        fr: [
           { category: "Affaires & Économie", value: 24 },
           { category: "Transport", value: 18 },
           { category: "Impôts & Recettes", value: 16 },
           { category: "Immigration & Citoyenneté", value: 12 },
           { category: "Éducation & Apprentissage", value: 10 },
           { category: "Logement & Propriétés", value: 8 },
-          { category: "Autres", value: 12 }
+          { category: "Autres", value: 12 },
         ],
-        'sw': [
+        sw: [
           { category: "Biashara & Uchumi", value: 24 },
           { category: "Usafiri", value: 18 },
           { category: "Kodi & Mapato", value: 16 },
           { category: "Uhamiaji & Uraia", value: 12 },
           { category: "Elimu & Mafunzo", value: 10 },
           { category: "Makazi & Mali", value: 8 },
-          { category: "Nyinginezo", value: 12 }
-        ]
+          { category: "Nyinginezo", value: 12 },
+        ],
       };
 
       // Use current locale or fall back to English
-      const locale = this.currentLocale || 'en';
-      this.translatedCategories = categoryDataPerLanguage[locale] || categoryDataPerLanguage['en'];
+      const locale = this.currentLocale || "en";
+      this.translatedCategories =
+        categoryDataPerLanguage[locale] || categoryDataPerLanguage["en"];
 
       // Update static data with translated categories
       if (this.staticData.queryDistribution) {
@@ -390,7 +556,7 @@ export default {
      * Close the analytics modal
      */
     close() {
-      this.$emit('close');
+      this.$emit("close");
     },
 
     /**
@@ -408,10 +574,36 @@ export default {
 
       // Simulate loading delay for consistent UX
       setTimeout(() => {
-        this.analytics = { ...this.staticData };
+        this.analytics = {
+          ...this.staticData,
+          satisfactionGaugeData: {
+            currentValue: 87.5,
+            changePercentage: 1.2,
+            historicalData: [
+              { label: "Previous Month", value: 86.3 },
+              { label: "Two Months Ago", value: 85.0 },
+            ],
+            target: 85,
+          },
+          satisfactionHeatmapData: this.staticData.queryDistribution.map(
+            (category) => ({
+              name: category.name,
+              data: [
+                { x: "4 Weeks Ago", y: 75 + Math.random() * 10 },
+                { x: "3 Weeks Ago", y: 78 + Math.random() * 10 },
+                { x: "2 Weeks Ago", y: 80 + Math.random() * 10 },
+                { x: "Last Week", y: 82 + Math.random() * 10 },
+                { x: "Current", y: 85 + Math.random() * 10 },
+              ],
+            })
+          ),
+        };
 
         // Ensure top queries data is available
-        if (!this.analytics.topQueries || this.analytics.topQueries.length === 0) {
+        if (
+          !this.analytics.topQueries ||
+          this.analytics.topQueries.length === 0
+        ) {
           this.analytics.topQueries = [...this.translatedTopQueries];
         }
 
@@ -423,7 +615,7 @@ export default {
           totalQueries: 5.2,
           uniqueUsers: 3.8,
           averageResponseTime: -0.3,
-          satisfactionRate: 1.2
+          satisfactionRate: 1.2,
         };
 
         this.isLoading = false;
@@ -431,8 +623,8 @@ export default {
     },
 
     /**
-    * Load dynamic analytics data from the API
-    */
+     * Load dynamic analytics data from the API
+     */
     async loadAnalytics() {
       if (!this.useDynamicData) {
         this.loadStaticData();
@@ -445,51 +637,60 @@ export default {
       try {
         console.log(`Loading analytics with locale: ${this.currentLocale}`);
 
-        // Get main analytics data, explicitly passing the current locale
+        // Get main analytics data
         const analyticsData = await analyticsService.getDashboardAnalytics(
           this.selectedPeriod,
           this.selectedDate,
           this.currentLocale
         );
 
-        this.analytics = analyticsData;
+        // Get satisfaction gauge data
+        const gaugeData = await analyticsService.getSatisfactionGauge(
+          this.selectedPeriod,
+          this.selectedDate,
+          this.currentLocale
+        );
+        console.log(
+          "[UnifiedAnalytics] Gauge data received:",
+          JSON.stringify(gaugeData, null, 2)
+        ); // Detailed debug log
 
-        // Ensure top queries data is available - if API didn't return any, use translated queries
-        if (!this.analytics.topQueries || this.analytics.topQueries.length === 0) {
-          this.analytics.topQueries = [...this.translatedTopQueries];
-        }
+        // Get satisfaction heatmap data
+        const heatmapData = await analyticsService.getSatisfactionHeatmap(
+          this.selectedPeriod,
+          this.selectedDate,
+          this.currentLocale
+        );
+
+        // Update analytics data with fallback values
+        this.analytics = {
+          ...analyticsData,
+          satisfactionGaugeData: {
+            currentValue: gaugeData?.currentValue || 0,
+            historicalData: gaugeData?.historicalData || [],
+            changePercentage: gaugeData?.changePercentage || 0,
+            target: gaugeData?.target || 85,
+          },
+          satisfactionRate: gaugeData?.currentValue || 0,
+          satisfactionHeatmapData: heatmapData || [],
+        };
+
+        console.log(
+          "[UnifiedAnalytics] Analytics data updated:",
+          JSON.stringify(this.analytics.satisfactionGaugeData, null, 2)
+        ); // Confirm prop data
 
         // Get comparison data
         await this.loadComparisonData();
 
         // Get time series data
         await this.loadTimeSeriesData();
-
-        // === IMPORTANT FIX: Get satisfaction rate from the analytics service ===
-        try {
-          // Use the same method that the gauge component uses
-          const gaugeData = await analyticsService.getSatisfactionGauge(
-            this.selectedPeriod,
-            this.selectedDate,
-            this.currentLocale
-          );
-
-          if (gaugeData && typeof gaugeData.currentValue === 'number') {
-            console.log('Updated satisfaction rate from service:', gaugeData.currentValue);
-            this.analytics.satisfactionRate = gaugeData.currentValue;
-          }
-        } catch (error) {
-          console.error('Error syncing satisfaction rate:', error);
-          // Non-critical error, continue without stopping the dashboard load
-        }
-        // === END OF FIX ===
-
       } catch (error) {
-        console.error('Error loading analytics data:', error);
-        this.error = this.translate('analytics.errors.loading', 'Failed to load analytics data. Please try again.');
-
-        // Fallback to static data if API fails
-        this.loadStaticData();
+        console.error("Error loading analytics data:", error);
+        this.error = this.translate(
+          "analytics.errors.loading",
+          `Failed to load analytics data: ${error.message}`
+        );
       } finally {
         this.isLoading = false;
       }
@@ -503,7 +704,7 @@ export default {
       const result = [];
 
       // Generate data based on selected period
-      if (this.selectedPeriod === 'daily') {
+      if (this.selectedPeriod === "daily") {
         // Hourly data for today
         for (let hour = 0; hour < 24; hour++) {
           const time = new Date(now);
@@ -515,11 +716,14 @@ export default {
 
           result.push({
             timestamp: time.toISOString(),
-            dateLabel: time.toLocaleTimeString(this.currentLocale, { hour: '2-digit', minute: '2-digit' }),
-            value: value
+            dateLabel: time.toLocaleTimeString(this.currentLocale, {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            value: value,
           });
         }
-      } else if (this.selectedPeriod === 'weekly') {
+      } else if (this.selectedPeriod === "weekly") {
         // Daily data for the week
         for (let day = 6; day >= 0; day--) {
           const date = new Date(now);
@@ -533,8 +737,11 @@ export default {
 
           result.push({
             timestamp: date.toISOString(),
-            dateLabel: date.toLocaleDateString(this.currentLocale, { month: 'short', day: 'numeric' }),
-            value: value
+            dateLabel: date.toLocaleDateString(this.currentLocale, {
+              month: "short",
+              day: "numeric",
+            }),
+            value: value,
           });
         }
       } else {
@@ -553,8 +760,11 @@ export default {
 
           result.push({
             timestamp: date.toISOString(),
-            dateLabel: date.toLocaleDateString(this.currentLocale, { month: 'short', day: 'numeric' }),
-            value: value
+            dateLabel: date.toLocaleDateString(this.currentLocale, {
+              month: "short",
+              day: "numeric",
+            }),
+            value: value,
           });
         }
       }
@@ -571,7 +781,12 @@ export default {
         const { previousPeriod, previousDate } = this.calculatePreviousPeriod();
 
         // Get comparison data for all key metrics
-        const metrics = ['totalQueries', 'uniqueUsers', 'averageResponseTime', 'satisfactionRate'];
+        const metrics = [
+          "totalQueries",
+          "uniqueUsers",
+          "averageResponseTime",
+          "satisfactionRate",
+        ];
 
         // Process each metric one by one
         for (const metric of metrics) {
@@ -585,7 +800,10 @@ export default {
           );
 
           // Calculate percentage change
-          if (comparisonData.previous !== null && comparisonData.previous !== undefined) {
+          if (
+            comparisonData.previous !== null &&
+            comparisonData.previous !== undefined
+          ) {
             this.comparison[metric] = this.calculatePercentChange(
               comparisonData.current,
               comparisonData.previous
@@ -595,13 +813,13 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Error loading comparison data:', error);
+        console.error("Error loading comparison data:", error);
         // Non-critical error, continue without comparison data
         this.comparison = {
           totalQueries: null,
           uniqueUsers: null,
           averageResponseTime: null,
-          satisfactionRate: null
+          satisfactionRate: null,
         };
       }
     },
@@ -612,17 +830,18 @@ export default {
     async loadTimeSeriesData() {
       try {
         // Determine the appropriate interval and date range
-        const { interval, startDate, endDate } = this.calculateTimeSeriesParams();
+        const { interval, startDate, endDate } =
+          this.calculateTimeSeriesParams();
 
         this.timeSeriesData = await analyticsService.getTimeSeriesData(
-          'queries',
+          "queries",
           interval,
           startDate,
           endDate,
           this.currentLocale // Pass the current locale
         );
       } catch (error) {
-        console.error('Error loading time series data:', error);
+        console.error("Error loading time series data:", error);
         this.timeSeriesData = this.getStaticTimeSeriesData();
       }
     },
@@ -630,7 +849,7 @@ export default {
     /**
      * Format numeric values for display
      */
-    formatValue(value, format = 'number') {
+    formatValue(value, format = "number") {
       return analyticsService.formatValue(value, format, this.currentLocale);
     },
 
@@ -638,10 +857,12 @@ export default {
      * Format trend percentage for display
      */
     formatTrend(percentChange, isInverse = false) {
-      const prefix = percentChange > 0 ? '+' : '';
+      const prefix = percentChange > 0 ? "+" : "";
       const suffix = isInverse
-        ? (percentChange > 0 ? ' ' + this.translate('analytics.slower') : ' ' + this.translate('analytics.faster'))
-        : '';
+        ? percentChange > 0
+          ? " " + this.translate("analytics.slower")
+          : " " + this.translate("analytics.faster")
+        : "";
 
       return `${prefix}${percentChange.toFixed(1)}%${suffix}`;
     },
@@ -661,38 +882,40 @@ export default {
       let previousDate, previousPeriod;
 
       switch (this.selectedPeriod) {
-        case 'daily':
+        case "daily":
           // Previous day
           previousDate = new Date(currentDate);
           previousDate.setDate(currentDate.getDate() - 1);
-          previousPeriod = 'daily';
+          previousPeriod = "daily";
           break;
 
-        case 'weekly':
+        case "weekly":
           // Previous week
           previousDate = new Date(currentDate);
           previousDate.setDate(currentDate.getDate() - 7);
-          previousPeriod = 'weekly';
+          previousPeriod = "weekly";
           break;
 
-        case 'monthly':
+        case "monthly":
           // Previous month
           previousDate = new Date(currentDate);
           previousDate.setMonth(currentDate.getMonth() - 1);
-          previousPeriod = 'monthly';
+          previousPeriod = "monthly";
           break;
 
-        case 'all-time':
+        case "all-time":
           // Compare with previous equivalent time period
           // For all-time, we'll compare with half the total time
-          previousPeriod = 'all-time';
+          previousPeriod = "all-time";
           previousDate = null; // Not needed for all-time
           break;
       }
 
       return {
         previousPeriod,
-        previousDate: previousDate ? previousDate.toISOString().split('T')[0] : null
+        previousDate: previousDate
+          ? previousDate.toISOString().split("T")[0]
+          : null,
       };
     },
 
@@ -703,31 +926,39 @@ export default {
       let interval, startDate, endDate;
 
       // End date is always selected date or today
-      endDate = this.selectedDate || new Date().toISOString().split('T')[0];
+      endDate = this.selectedDate || new Date().toISOString().split("T")[0];
 
       switch (this.selectedPeriod) {
-        case 'daily':
+        case "daily":
           // For daily view, show hourly data for the selected day
-          interval = 'hourly';
+          interval = "hourly";
           startDate = endDate;
           break;
 
-        case 'weekly':
+        case "weekly":
           // For weekly view, show daily data for the week
-          interval = 'daily';
-          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 6)).toISOString().split('T')[0];
+          interval = "daily";
+          startDate = new Date(
+            new Date(endDate).setDate(new Date(endDate).getDate() - 6)
+          )
+            .toISOString()
+            .split("T")[0];
           break;
 
-        case 'monthly':
+        case "monthly":
           // For monthly view, show daily data for the month
-          interval = 'daily';
-          startDate = new Date(new Date(endDate).setDate(new Date(endDate).getDate() - 29)).toISOString().split('T')[0];
+          interval = "daily";
+          startDate = new Date(
+            new Date(endDate).setDate(new Date(endDate).getDate() - 29)
+          )
+            .toISOString()
+            .split("T")[0];
           break;
 
-        case 'all-time':
+        case "all-time":
           // For all-time view, show monthly data
-          interval = 'monthly';
-          startDate = '2020-01-01'; // Arbitrary start date in the past
+          interval = "monthly";
+          startDate = "2020-01-01"; // Arbitrary start date in the past
           break;
       }
 
@@ -739,8 +970,8 @@ export default {
      */
     calculatePercentChange(current, previous) {
       return analyticsService.calculatePercentChange(current, previous);
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -842,7 +1073,7 @@ export default {
 .spinner {
   border: 4px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 4px solid var(--accent-color, #4E97D1);
+  border-top: 4px solid var(--accent-color, #4e97d1);
   width: 40px;
   height: 40px;
   animation: spin 1s linear infinite;
@@ -876,7 +1107,7 @@ export default {
 
 .retry-button {
   padding: 8px 16px;
-  background-color: var(--bg-button-primary, #4E97D1);
+  background-color: var(--bg-button-primary, #4e97d1);
   color: var(--text-button-primary, white);
   border: none;
   border-radius: 4px;
@@ -1012,112 +1243,11 @@ export default {
 /* Fix dark mode spinner */
 [data-theme="dark"] .spinner {
   border-color: rgba(255, 255, 255, 0.1);
-  border-top-color: var(--accent-color, #4E97D1);
+  border-top-color: var(--accent-color, #4e97d1);
 }
 
 /* Fix chart background in dark mode */
 [data-theme="dark"] .chart-container {
-  background-color: var(--bg-card, #2a2a2a);
-}
-
-@media (max-width: 768px) {
-  .analytics-content {
-    width: 95%;
-    max-height: 95vh;
-  }
-
-  .analytics-header h2 {
-    font-size: 1.3rem;
-  }
-
-  .charts-container {
-    flex-direction: column;
-  }
-
-  .half-width {
-    width: 100%;
-  }
-
-  .metrics-summary {
-    flex-wrap: wrap;
-  }
-
-  .metric-card {
-    min-width: calc(50% - 10px);
-  }
-
-  /* Force white text for metric titles and values in dark mode */
-  [data-theme="dark"] .metric-card h3,
-  [data-theme="dark"] .metric-value {
-    color: #ffffff !important;
-  }
-
-  /* Force white text for section titles in dark mode */
-  [data-theme="dark"] .analytics-section h3 {
-    color: #ffffff !important;
-  }
-
-  /* Force white text for "Total Queries", "Unique Users", etc. */
-  [data-theme="dark"] h3 {
-    color: #ffffff !important;
-  }
-}
-/* Add this to the bottom of your global CSS or add as a <style> tag at the root level of your app */
-
-/* Ensure text is visible in dark mode for analytics */
-[data-theme="dark"] .metric-card h3,
-[data-theme="dark"] .metrics-summary h3,
-[data-theme="dark"] .metric-value,
-[data-theme="dark"] .analytics-section h3,
-[data-theme="dark"] .metrics-summary .metric-value,
-[data-theme="dark"] .dashboard-content h3 {
-  color: white !important;
-  -webkit-text-fill-color: white !important;
-  text-shadow: 0 0 1px rgba(255,255,255,0.5) !important;
-}
-
-/* Direct fix for the dashboard text */
-[data-theme="dark"] .dashboard-content .metric-value,
-[data-theme="dark"] .metrics-summary .metric-value,
-[data-theme="dark"] .metrics-summary h3 {
-  color: white !important;
-  -webkit-text-fill-color: white !important;
-  font-weight: bold !important;
-}
-
-/* Ensure section titles are visible */
-[data-theme="dark"] .analytics-section h3,
-[data-theme="dark"] .half-width h3 {
-  color: white !important;
-  -webkit-text-fill-color: white !important;
-}
-
-/* Extremely specific selectors for metrics values */
-[data-theme="dark"] .metric-card > .metric-value,
-[data-theme="dark"] .metric-card > div[class*="value"],
-[data-theme="dark"] div.metric-value {
-  color: white !important;
-  -webkit-text-fill-color: white !important;
-  text-shadow: 0 0 1px rgba(255,255,255,0.5) !important;
-}
-
-/* Dark mode background changes only */
-[data-theme="dark"] .analytics-content,
-.dark-theme .analytics-content,
-.dark-mode .analytics-content {
-  background-color: #414141 !important; /* Slightly lighter gray background for dark mode */
-}
-
-[data-theme="dark"] .analytics-body,
-.dark-theme .analytics-body,
-.dark-mode .analytics-body {
-  background-color: #414141 !important; /* Match content background for dark mode */
-}
-
-/* Chart background only - conditional for dark mode */
-[data-theme="dark"] .chart-container,
-.dark-theme .chart-container,
-.dark-mode .chart-container {
   background-color: #d9d9d9 !important; /* Light gray for chart area in dark mode */
 }
 
@@ -1163,10 +1293,51 @@ export default {
 
 /* Add this to the existing media query for mobile screens */
 @media (max-width: 768px) {
+  .analytics-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .analytics-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .charts-container {
+    flex-direction: column;
+  }
+
+  .half-width {
+    width: 100%;
+  }
+
+  .metrics-summary {
+    flex-wrap: wrap;
+  }
+
+  .metric-card {
+    min-width: calc(50% - 10px);
+  }
+
+  /* Force white text for metric titles and values in dark mode */
+  [data-theme="dark"] .metric-card h3,
+  [data-theme="dark"] .metric-value {
+    color: #ffffff !important;
+  }
+
+  /* Force white text for section titles in dark mode */
+  [data-theme="dark"] .analytics-section h3 {
+    color: #ffffff !important;
+  }
+
+  /* Force white text for "Total Queries", "Unique Users", etc. */
+  [data-theme="dark"] h3 {
+    color: #ffffff !important;
+  }
+
   .satisfaction-container {
     flex-direction: column;
   }
-  
+
   /* Force white text for satisfaction title in dark mode */
   [data-theme="dark"] .satisfaction-title {
     color: #ffffff !important;
@@ -1179,7 +1350,7 @@ export default {
 .dark-mode .satisfaction-title {
   color: white !important;
   -webkit-text-fill-color: white !important;
-  text-shadow: 0 0 1px rgba(255,255,255,0.5) !important;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5) !important;
 }
 
 [data-theme="dark"] .analytics-modal {
@@ -1190,5 +1361,62 @@ export default {
 [data-theme="dark"] .analytics-content,
 [data-theme="dark"] .analytics-body {
   background-color: var(--bg-dialog) !important; /* Use the variable */
+}
+
+/* Ensure text is visible in dark mode for analytics */
+[data-theme="dark"] .metric-card h3,
+[data-theme="dark"] .metrics-summary h3,
+[data-theme="dark"] .metric-value,
+[data-theme="dark"] .analytics-section h3,
+[data-theme="dark"] .metrics-summary .metric-value,
+[data-theme="dark"] .dashboard-content h3 {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Direct fix for the dashboard text */
+[data-theme="dark"] .dashboard-content .metric-value,
+[data-theme="dark"] .metrics-summary .metric-value,
+[data-theme="dark"] .metrics-summary h3 {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  font-weight: bold !important;
+}
+
+/* Ensure section titles are visible */
+[data-theme="dark"] .analytics-section h3,
+[data-theme="dark"] .half-width h3 {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+}
+
+/* Extremely specific selectors for metrics values */
+[data-theme="dark"] .metric-card > .metric-value,
+[data-theme="dark"] .metric-card > div[class*="value"],
+[data-theme="dark"] div.metric-value {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Dark mode background changes only */
+[data-theme="dark"] .analytics-content,
+.dark-theme .analytics-content,
+.dark-mode .analytics-content {
+  background-color: #414141 !important; /* Slightly lighter gray background for dark mode */
+}
+
+[data-theme="dark"] .analytics-body,
+.dark-theme .analytics-body,
+.dark-mode .analytics-body {
+  background-color: #414141 !important; /* Match content background for dark mode */
+}
+
+/* Chart background only - conditional for dark mode */
+[data-theme="dark"] .chart-container,
+.dark-theme .chart-container,
+.dark-mode .chart-container {
+  background-color: #d9d9d9 !important; /* Light gray for chart area in dark mode */
 }
 </style>

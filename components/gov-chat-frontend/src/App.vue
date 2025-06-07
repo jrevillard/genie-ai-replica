@@ -1,4 +1,4 @@
-<!-- App.vue - FIXED to ensure proper theme handling -->
+<!-- App.vue - FIXED to ensure proper theme handling for configured styling -->
 <template>
   <div id="app" :class="{ 'sidebar-collapsed': !isSidebarOpen }" :data-theme="theme">
     <!-- Always show public routes without authentication requirement -->
@@ -9,7 +9,7 @@
       <!-- Top navigation bar -->
       <nav-bar-component :is-sidebar-open="isSidebarOpen" @toggleSidebar="toggleSidebar"
         @openAnalytics="showAnalytics = true" @openProfile="showUserProfile = true" @openSettings="showSettings = true"
-        @logout="handleLogout" @open-admin="showAdminDashboard = true" />
+        @logout="handleLogout" @open-admin="showAdminDashboard = true" :config="$config" />
 
       <div class="main-container">
         <!-- Sidebar (collapsible) -->
@@ -70,7 +70,7 @@ export default {
       showUserProfile: false,
       showSettings: false,
       showAdminDashboard: false,
-      theme: 'light', // Default to light theme
+      theme: 'light', // Default to light theme, will be synced with main.js
       notification: {
         visible: false,
         message: '',
@@ -149,29 +149,12 @@ export default {
       }
     },
 
-    // Initialize theme from localStorage or system preference
+    // Initialize theme by syncing with main.js
     initTheme() {
-      try {
-        // First try to get from localStorage
-        const savedTheme = localStorage.getItem('theme')
-        if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
-          this.theme = savedTheme
-        } else {
-          // Default to light theme if no valid saved preference
-          this.theme = 'light'
-        }
-
-        // Apply theme to both document elements
-        document.documentElement.setAttribute('data-theme', this.theme)
-        document.body.setAttribute('data-theme', this.theme)
-        
-        console.log('App component initialized theme to:', this.theme)
-      } catch (e) {
-        console.warn('Unable to get theme preference:', e)
-        this.theme = 'light' // Fallback to light theme
-        document.documentElement.setAttribute('data-theme', 'light')
-        document.body.setAttribute('data-theme', 'light')
-      }
+      // Theme is now initialized in main.js, so we sync with the current theme
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+      this.theme = currentTheme;
+      console.log('App component synchronized theme to:', this.theme);
     },
 
     // Initialize font size from settings

@@ -22,14 +22,13 @@
 
 <script>
 import analyticsService from "../../services/analyticsService";
-import { getThemeInfo as getThemeFromManager } from "../../utils/ThemeManager";
 
 export default {
   name: "SatisfactionHeatmap",
   props: {
     data: {
       type: Array,
-      default: () => [],
+      default: null,
     },
     externalData: {
       type: Boolean,
@@ -50,6 +49,7 @@ export default {
   },
   data() {
     return {
+      theme: "light", // Store current theme
       chartData: [],
       loading: false,
       error: null,
@@ -114,9 +114,9 @@ export default {
   mounted() {
     this.checkMobile();
     this.setupThemeChangeListener();
-    this.injectGlobalStyleForDarkMode();
+    this.injectGlobalStyleForTheme();
 
-    if (this.externalData && this.data.length > 0) {
+    if (this.externalData && this.data && this.data.length > 0) {
       console.log("[SatisfactionHeatmap] Using external data:", this.data);
       this.chartData = this.data;
       this.updateChart();
@@ -138,13 +138,135 @@ export default {
     window.removeEventListener("resize", this.handleResize);
     this.cleanupThemeChangeListener();
     const injectedStyle = document.getElementById(
-      "satisfaction-heatmap-dark-mode-style"
+      "satisfaction-heatmap-theme-style"
     );
     if (injectedStyle) {
       document.head.removeChild(injectedStyle);
     }
   },
   methods: {
+    /**
+     * Inject a global stylesheet for chart text based on theme
+     */
+    injectGlobalStyleForTheme() {
+      if (document.getElementById("satisfaction-heatmap-theme-style")) {
+        return;
+      }
+      const styleEl = document.createElement("style");
+      styleEl.id = "satisfaction-heatmap-theme-style";
+      const theme = this.getTheme();
+      if (theme.isDarkMode) {
+        styleEl.textContent = `
+          [data-theme="dark"] .apexcharts-title-text,
+          [data-theme="dark"] .apexcharts-subtitle-text,
+          [data-theme="dark"] .apexcharts-text,
+          [data-theme="dark"] .apexcharts-xaxis-label,
+          [data-theme="dark"] .apexcharts-yaxis-label,
+          [data-theme="dark"] .apexcharts-legend-text {
+            fill: #FFFFFF !important;
+            color: #FFFFFF !important;
+          }
+          .apexcharts-tooltip, .apexcharts-tooltip * {
+            background-color: transparent !important;
+          }
+          .apexcharts-tooltip-box {
+            background-color: rgba(0, 0, 0, 0.55) !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
+          }
+          .apexcharts-tooltip-title {
+            background-color: rgba(0, 0, 0, 0.55) !important;
+            color: #FFFFFF !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+          }
+          .apexcharts-tooltip-text-y-label,
+          .apexcharts-tooltip-text-y-value,
+          .apexcharts-tooltip-text-z-label,
+          .apexcharts-tooltip-text-z-value,
+          .apexcharts-tooltip-marker,
+          .apexcharts-tooltip * {
+            color: #FFFFFF !important;
+          }
+        `;
+        console.log("[SatisfactionHeatmap] Injected dark mode style");
+      } else {
+        styleEl.textContent = `
+          [data-theme="light"] .apexcharts-title-text,
+          [data-theme="light"] .apexcharts-subtitle-text,
+          [data-theme="light"] .apexcharts-text,
+          [data-theme="light"] .apexcharts-xaxis-label,
+          [data-theme="light"] .apexcharts-yaxis-label,
+          [data-theme="light"] .apexcharts-legend-text {
+            fill: #333333 !important;
+            color: #333333 !important;
+          }
+          .apexcharts-tooltip, .apexcharts-tooltip * {
+            background-color: transparent !important;
+          }
+          .apexcharts-tooltip-box {
+            background-color: rgba(0, 0, 0, 0.55) !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
+          }
+          .apexcharts-tooltip-title {
+            background-color: rgba(0, 0, 0, 0.55) !important;
+            color: #FFFFFF !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+          }
+          .apexcharts-tooltip-text-y-label,
+          .apexcharts-tooltip-text-y-value,
+          .apexcharts-tooltip-text-z-label,
+          .apexcharts-tooltip-text-z-value,
+          .apexcharts-tooltip-marker,
+          .apexcharts-tooltip * {
+            color: #FFFFFF !important;
+          }
+        `;
+        console.log("[SatisfactionHeatmap] Injected light mode style");
+      }
+      document.head.appendChild(styleEl);
+      console.log(
+        "[DEBUG] Injected theme style:",
+        theme.isDarkMode ? "dark" : "light"
+      );
+      console.log("[DEBUG] Tooltip styles applied with !important");
+      console.log("[DEBUG] Tooltip wrapper background set to transparent");
+    },
+
+    /**
+     * Get current theme information
+     * @returns {Object} Theme colors and mode information
+     */
+    getTheme() {
+      let themeMode =
+        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
+        document.documentElement.getAttribute("data-theme") ||
+        localStorage.getItem("theme") ||
+        "light";
+      if (!["light", "dark", "system"].includes(themeMode)) {
+        console.warn(
+          `[SatisfactionHeatmap] Invalid themeMode: ${themeMode}, defaulting to light`
+        );
+        themeMode = "light";
+      }
+      if (themeMode === "system") {
+        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+      this.theme = themeMode;
+      const isDarkMode = themeMode === "dark";
+      console.log(`[DEBUG] Theme detected: ${isDarkMode ? "dark" : "light"}`);
+      return {
+        isDarkMode,
+        textColor: isDarkMode ? "#FFFFFF" : "#333333",
+        backgroundColor: isDarkMode ? "#414141" : "#FFFFFF",
+        borderColor: isDarkMode ? "#555555" : "#E5E7EB",
+      };
+    },
+
     translate(key, defaultValue) {
       if (this.isI18nReady) {
         try {
@@ -160,48 +282,6 @@ export default {
         }
       }
       return defaultValue;
-    },
-
-    injectGlobalStyleForDarkMode() {
-      if (document.getElementById("satisfaction-heatmap-dark-mode-style")) {
-        return;
-      }
-      const styleEl = document.createElement("style");
-      styleEl.id = "satisfaction-heatmap-dark-mode-style";
-      styleEl.textContent = `
-        [data-theme="dark"] .apexcharts-title-text,
-        [data-theme="dark"] .apexcharts-subtitle-text {
-          fill: #FFFFFF !important;
-        }
-        [data-theme="dark"] .apexcharts-text,
-        [data-theme="dark"] .apexcharts-xaxis-label text,
-        [data-theme="dark"] .apexcharts-yaxis-label text {
-          fill: #FFFFFF !important;
-        }
-        [data-theme="dark"] .apexcharts-legend-text {
-          color: #FFFFFF !important;
-        }
-        .apexcharts-tooltip {
-          background-color: rgba(0, 0, 0, 0.65) !important;
-          color: #FFFFFF !important;
-          border: none !important;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
-        }
-        .apexcharts-tooltip-title {
-          background-color: rgba(0, 0, 0, 0.65) !important;
-          color: #FFFFFF !important;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-        }
-        .apexcharts-tooltip-text-y-label, 
-        .apexcharts-tooltip-text-y-value,
-        .apexcharts-tooltip-text-z-label,
-        .apexcharts-tooltip-text-z-value,
-        .apexcharts-tooltip-marker,
-        .apexcharts-tooltip * {
-          color: #FFFFFF !important;
-        }
-      `;
-      document.head.appendChild(styleEl);
     },
 
     checkMobile() {
@@ -245,12 +325,12 @@ export default {
         }
       } catch (error) {
         console.error(
-          "[SatisfactionHeatmap] Error fetching satisfaction heatmap data:",
-          error
+          error,
+          "[SatisfactionHeatmap] Error fetching satisfaction heatmap"
         );
         this.error = this.translate(
-          "analytics.errors.loading",
-          "Failed to load satisfaction data. Please try again."
+          "analytics.error.loading",
+          "Failed to load satisfaction data."
         );
         this.chartData = this.getFallbackData();
         this.updateChart();
@@ -360,8 +440,8 @@ export default {
       });
 
       this.themeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class", "data-theme"],
+        arguments: true,
+        attributeFilter: ["arguments", "data-theme"],
       });
 
       this.systemThemeMediaQuery = window.matchMedia(
@@ -403,42 +483,39 @@ export default {
       }
     },
 
-    getThemeInfo() {
-      return getThemeFromManager();
-    },
-
     enforceColorScheme() {
-      const theme = this.getThemeInfo();
-      if (theme.isDarkMode) {
-        setTimeout(() => {
-          const chartContainer = this.$refs.chart;
-          if (!chartContainer) return;
+      const theme = this.getTheme();
+      const textColor = theme.textColor;
+      setTimeout(() => {
+        const chartContainer = this.$refs.chart;
+        if (!chartContainer) return;
 
-          const textElements = chartContainer.querySelectorAll("text");
-          textElements.forEach((text) => {
-            text.setAttribute("fill", "#FFFFFF");
-            const tspans = text.querySelectorAll("tspan");
-            tspans.forEach((tspan) => {
-              tspan.setAttribute("fill", "#FFFFFF");
-            });
+        const textElements = chartContainer.querySelectorAll("text");
+        textElements.forEach((text) => {
+          text.setAttribute("fill", textColor);
+          const tspans = text.querySelectorAll("tspan");
+          tspans.forEach((tspan) => {
+            tspan.setAttribute("fill", textColor);
           });
+        });
 
-          const title = chartContainer.querySelector(".apexcharts-title-text");
-          if (title) title.setAttribute("fill", "#FFFFFF");
+        const title = chartContainer.querySelector(".apexcharts-title-text");
+        if (title) title.setAttribute("fill", textColor);
 
-          const subtitle = chartContainer.querySelector(
-            ".apexcharts-subtitle-text"
-          );
-          if (subtitle) subtitle.setAttribute("fill", "#FFFFFF");
+        const subtitle = chartContainer.querySelector(
+          ".apexcharts-subtitle-text"
+        );
+        if (subtitle) subtitle.setAttribute("fill", textColor);
 
-          const legendItems = chartContainer.querySelectorAll(
-            ".apexcharts-legend-text"
-          );
-          legendItems.forEach((item) => {
-            item.style.color = "#FFFFFF";
-          });
-        }, 200);
-      }
+        const legendItems = chartContainer.querySelectorAll(
+          ".apexcharts-legend-text"
+        );
+        legendItems.forEach((item) => {
+          item.style.color = textColor;
+        });
+
+        console.log(`[DEBUG] Enforcing text color: ${textColor}`);
+      }, 200);
     },
 
     updateChart() {
@@ -450,10 +527,10 @@ export default {
         return;
       }
 
-      const theme = this.getThemeInfo();
-      const textColor = theme.isDarkMode ? "#FFFFFF" : "#333333";
-      const backgroundColor = theme.isDarkMode ? "#414141" : "#FFFFFF";
-      const borderColor = theme.isDarkMode ? "#555555" : "#E5E7EB";
+      const theme = this.getTheme();
+      const textColor = theme.textColor;
+      const backgroundColor = theme.backgroundColor;
+      const borderColor = theme.borderColor;
 
       this.chartSeries = this.chartData;
 
@@ -569,11 +646,14 @@ export default {
             fontSize: "12px",
           },
           custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+            console.log(
+              "[DEBUG] Tooltip background set to rgba(0, 0, 0, 0.55)"
+            );
             const value = series[seriesIndex][dataPointIndex];
             const category = w.globals.seriesNames[seriesIndex];
             const xLabel = w.globals.labels[dataPointIndex];
             return `
-              <div class="apexcharts-tooltip-box" style="background: rgba(0, 0, 0, 0.65); color: #fff; padding: 8px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+              <div class="apexcharts-tooltip-box" style="background: rgba(0, 0, 0, 0.55) !important; color: #fff; padding: 8px 10px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
                 <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px;">
                   ${category}
                 </div>
@@ -725,15 +805,19 @@ export default {
   fill: white !important;
 }
 
-:deep(.apexcharts-tooltip) {
-  background-color: rgba(0, 0, 0, 0.65) !important;
+:deep(.apexcharts-tooltip, .apexcharts-tooltip *) {
+  background-color: transparent !important;
+}
+
+:deep(.apexcharts-tooltip-box) {
+  background-color: rgba(0, 0, 0, 0.55) !important;
   color: white !important;
   border: none !important;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
 }
 
 :deep(.apexcharts-tooltip-title) {
-  background-color: rgba(0, 0, 0, 0.65) !important;
+  background-color: rgba(0, 0, 0, 0.55) !important;
   color: white !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
 }

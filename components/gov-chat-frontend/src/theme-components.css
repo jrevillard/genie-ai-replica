@@ -1,4 +1,4 @@
-/* theme-components.css - Fixed to ensure navbar title is white on blue */
+/* theme-components.css - Fixed to ensure navbar title is white on blue, support GENIE.AI configurable colors, and remove !important for better local overrides */
 
 /* Apply theme variables to all needed components */
 body {
@@ -12,7 +12,7 @@ body {
   color: var(--text-primary);
 }
 
-/* Nav Bar - Ensure text is white */
+/* Nav Bar - Use GENIE.AI configured gradient and text color */
 .nav-bar {
   background: var(--bg-navbar);
   color: var(--text-navbar);
@@ -20,7 +20,7 @@ body {
 
 /* Brand name/title in navbar - Force white color */
 .brand-name,
-.nav-bar h1,
+.nav-bar h4,
 .nav-bar .brand-name,
 [class*="brand-name"],
 .nav-bar [class*="title"],
@@ -80,8 +80,8 @@ main {
 }
 
 /* Form controls */
-input, 
-select, 
+input,
+select,
 textarea,
 .dropdown,
 .search-box {
@@ -137,11 +137,11 @@ textarea::placeholder {
 }
 
 .slider::-webkit-slider-thumb {
-  background-color: var(--slider-thumb);
+  background-color: var(--bg-button-primary);
 }
 
 .slider::-moz-range-thumb {
-  background-color: var(--slider-thumb);
+  background-color: var(--bg-button-primary);
 }
 
 /* Switch styling */
@@ -165,11 +165,23 @@ textarea::placeholder {
   color: var(--text-button-primary);
 }
 
+.btn-primary:hover,
+.primary-btn:hover,
+.send-btn:hover {
+  background-color: var(--bg-button-primary-hover);
+}
+
 .btn-secondary,
 .cancel-btn,
 .btn-close {
   background-color: var(--bg-button-secondary);
   color: var(--text-button-secondary);
+}
+
+.btn-secondary:hover,
+.cancel-btn:hover,
+.btn-close:hover {
+  background-color: var(--bg-button-secondary-hover);
 }
 
 /* Tables */
@@ -195,16 +207,16 @@ td {
   color: var(--text-primary);
 }
 
-/* Force important styles on the settings dialog */
+/* Styles for settings dialog - removed !important for better local overrides */
 .settings-dialog {
-  background-color: var(--bg-dialog) !important;
-  color: var(--text-primary) !important;
+  background-color: var(--bg-dialog);
+  color: var(--text-primary);
 }
 
 .settings-dialog .section-title,
 .settings-dialog .dialog-header,
 .settings-dialog label {
-  color: var(--text-primary) !important;
+  color: var(--text-primary);
 }
 
 /* Force theme on Light/Dark/System buttons */

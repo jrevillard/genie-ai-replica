@@ -5,19 +5,25 @@
         <slot name="header">
           <h3>{{ translateIfKey(title) }}</h3>
         </slot>
-        <button class="close-button" @click="$emit('close')" aria-label="Close">×</button>
+        <button class="close-button" @click="$emit('close')" aria-label="Close">
+          ×
+        </button>
       </div>
-      
+
       <div class="modal-body">
         <slot name="body">
           <p>{{ translateIfKey(message) }}</p>
         </slot>
       </div>
-      
+
       <div class="modal-footer">
         <slot name="footer">
-          <button @click="$emit('close')" class="cancel-btn">{{ translateIfKey(cancelText) }}</button>
-          <button @click="$emit('confirm')" class="primary-btn">{{ translateIfKey(confirmText) }}</button>
+          <button @click="$emit('close')" class="cancel-btn">
+            {{ translateIfKey(cancelText) }}
+          </button>
+          <button @click="$emit('confirm')" class="primary-btn">
+            {{ translateIfKey(confirmText) }}
+          </button>
         </slot>
       </div>
     </div>
@@ -26,56 +32,56 @@
 
 <script>
 export default {
-  name: 'ModalDialog',
-  
+  name: "ModalDialog",
+
   props: {
     title: {
       type: String,
-      default: 'Dialog'
+      default: "Dialog",
     },
     message: {
       type: String,
-      default: ''
+      default: "",
     },
     cancelText: {
       type: String,
-      default: 'Cancel'
+      default: "Cancel",
     },
     confirmText: {
       type: String,
-      default: 'Confirm'
+      default: "Confirm",
     },
     useTranslation: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
-  
+
   methods: {
     translateIfKey(key) {
       if (this.useTranslation && key) {
         return this.$t(key);
       }
       return key;
-    }
+    },
   },
-  
+
   mounted() {
-    document.body.classList.add('modal-open');
-    
+    document.body.classList.add("modal-open");
+
     // Allow ESC key to close the modal
     this.handleEscKey = (e) => {
-      if (e.key === 'Escape') {
-        this.$emit('close');
+      if (e.key === "Escape") {
+        this.$emit("close");
       }
     };
-    document.addEventListener('keydown', this.handleEscKey);
+    document.addEventListener("keydown", this.handleEscKey);
   },
-  
+
   beforeUnmount() {
-    document.body.classList.remove('modal-open');
-    document.removeEventListener('keydown', this.handleEscKey);
-  }
+    document.body.classList.remove("modal-open");
+    document.removeEventListener("keydown", this.handleEscKey);
+  },
 };
 </script>
 
@@ -211,46 +217,23 @@ html[data-theme="dark"] .modal-footer {
 }
 
 .cancel-btn {
-  background: none;
-  border: 1px solid #ddd;
-  color: #666;
-}
-
-[data-theme="dark"] .cancel-btn,
-html[data-theme="dark"] .cancel-btn {
-  background: none;
-  border: 1px solid #555;
-  color: #ccc;
+  background-color: var(--bg-button-secondary);
+  border: none;
+  color: var(--text-button-secondary);
 }
 
 .cancel-btn:hover {
-  background-color: #f5f5f5;
-}
-
-[data-theme="dark"] .cancel-btn:hover,
-html[data-theme="dark"] .cancel-btn:hover {
-  background-color: #444;
+  background-color: var(--bg-button-secondary-hover);
 }
 
 .primary-btn {
-  background-color: #4e97d1;
+  background-color: var(--bg-button-primary);
   border: none;
-  color: white;
-}
-
-[data-theme="dark"] .primary-btn,
-html[data-theme="dark"] .primary-btn {
-  background-color: #4e97d1;
-  color: #ffffff;
+  color: var(--text-button-primary);
 }
 
 .primary-btn:hover {
-  background-color: #3a7cb5;
-}
-
-[data-theme="dark"] .primary-btn:hover,
-html[data-theme="dark"] .primary-btn:hover {
-  background-color: #5aa8e6;
+  background-color: var(--bg-button-primary-hover);
 }
 
 .primary-btn:disabled {

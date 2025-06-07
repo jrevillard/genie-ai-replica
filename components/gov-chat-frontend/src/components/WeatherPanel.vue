@@ -254,6 +254,7 @@ html[data-theme="dark"] .weather-header h4 {
 
 .refresh-btn:hover {
   opacity: 1;
+  color: var(--accent-hover);
 }
 
 .rotating {

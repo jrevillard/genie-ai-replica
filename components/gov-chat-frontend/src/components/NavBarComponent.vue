@@ -1,68 +1,26 @@
-<!-- NavBarComponent.vue with logout button -->
 <!-- NavBarComponent.vue with logout button and admin role check -->
 <template>
   <div class="nav-container">
     <header class="nav-bar">
       <!-- Left section with hamburger menu, logo, and title -->
       <div class="nav-left">
-        <!-- Existing code for hamburger menu, logo, and title -->
+        <!-- Hamburger button for sidebar toggle -->
         <button class="icon-btn hamburger-btn" @click="toggleSidebar" :class="{ 'is-active': isSidebarOpen }"
           aria-label="Toggle sidebar">
           <span class="hamburger-inner"></span>
         </button>
 
+        <!-- Logo container for GENIE.AI configured icon -->
         <div class="logo-container">
-          <!-- Animated Government Logo - Size adjusted to match control buttons -->
-          <svg class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40">
-            <defs>
-              <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#4E97D1" />
-                <stop offset="100%" stop-color="#2C5F8A" />
-              </linearGradient>
-              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-            </defs>
-
-            <!-- Background circle -->
-            <circle cx="50" cy="50" r="30" fill="#f0f9ff" class="logo-base" />
-
-            <!-- Building base -->
-            <rect x="25" y="65" width="50" height="5" fill="#2C5F8A" class="logo-steps" />
-
-            <!-- Steps -->
-            <rect x="30" y="60" width="40" height="5" fill="#3A7DA0" class="logo-steps" />
-            <rect x="35" y="55" width="30" height="5" fill="#4E97D1" class="logo-steps" />
-
-            <!-- Pillars -->
-            <rect x="38" y="30" width="6" height="25" fill="#2C5F8A" class="logo-pillars" />
-            <rect x="47" y="30" width="6" height="25" fill="#3A7DA0" class="logo-pillars" />
-            <rect x="56" y="30" width="6" height="25" fill="#2C5F8A" class="logo-pillars" />
-
-            <!-- Roof/Pediment -->
-            <path d="M32 30 L68 30 L50 18 Z" fill="#4E97D1" class="logo-roof" />
-
-            <!-- Star symbolizing service -->
-            <g class="logo-star" filter="url(#glow)">
-              <path d="M50 12 L52 17 L58 17 L53 21 L55 26 L50 22 L45 26 L47 21 L42 17 L48 17 Z" fill="#FFD700" />
-            </g>
-
-            <!-- Glow effect -->
-            <circle cx="50" cy="50" r="31" fill="none" stroke="#4E97D1" stroke-width="1.5" opacity="0.5"
-              class="logo-glow" />
-
-            <!-- Animated outline -->
-            <path d="M32 30 L68 30 L50 18 Z M38 30 L38 55 M47 30 L47 55 M56 30 L56 55" fill="none" stroke="white"
-              stroke-width="1.2" class="logo-outline" />
-          </svg>
+          <!-- Display SVG icon from config (file or inline) -->
+          <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
+          <span v-else v-html="config.app.icon.value" class="govt-logo"></span>
         </div>
-        <!-- Title moved to left, adjacent to logo - Hide on mobile -->
-        <h1 class="brand-name hide-on-mobile">{{ $t('brandName') }}</h1>
+        <!-- Title from GENIE.AI config - Hide on mobile -->
+        <h1 class="brand-name hide-on-mobile">{{ config.app.title }}</h1>
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
-          <!-- Existing mobile controls code -->
           <!-- Status Indicator for Mobile -->
           <div class="status-indicator-container" ref="mobileStatusContainer">
             <button class="status-indicator-btn mobile-status-btn" @click="toggleStatusDropdown"
@@ -73,7 +31,6 @@
 
             <!-- Status Dropdown (shared with desktop version) -->
             <div v-if="isStatusDropdownOpen" class="status-dropdown">
-              <!-- Existing dropdown content -->
               <div class="status-dropdown-header">
                 <h4>{{ $t('systemStatus.title') }}</h4>
                 <div class="status-summary">
@@ -127,7 +84,6 @@
             <div class="select-arrow"></div>
           </div>
 
-          <!-- Other mobile controls -->
           <!-- Analytics button for Mobile -->
           <button class="icon-btn mobile-btn" @click="$emit('openAnalytics')" aria-label="Analytics"
                  :disabled="!isAdmin" :class="{'disabled-btn': !isAdmin}">
@@ -156,7 +112,7 @@
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
               <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
               </path>
             </svg>
             <span class="tooltip">{{ $t('nav.settings') }}</span>
@@ -196,7 +152,6 @@
 
           <!-- Status Dropdown -->
           <div v-if="isStatusDropdownOpen" class="status-dropdown">
-            <!-- Existing dropdown content -->
             <div class="status-dropdown-header">
               <h4>{{ $t('systemStatus.title') }}</h4>
               <div class="status-summary">
@@ -280,7 +235,7 @@
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
             </path>
           </svg>
           <span class="tooltip">{{ $t('nav.settings') }}</span>
@@ -322,6 +277,15 @@ export default {
     sidebarWidth: {
       type: Number,
       default: 250 // Default sidebar width in pixels
+    },
+    // GENIE.AI configuration for title, icon, and navbar styling
+    config: {
+      type: Object,
+      required: true,
+      default: () => ({
+        app: { title: 'Huduma AI', icon: { type: 'file', value: '/config/huduma-icon.svg' } },
+        theme: { navbar: { textColor: '#ffffff' } }
+      })
     }
   },
   data() {
@@ -559,11 +523,12 @@ export default {
   position: relative;
 }
 
+/* Navbar styling with GENIE.AI configured gradient and text color */
 .nav-bar {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, #4E97D1, #2C5F8A);
-  color: #fff;
+  background: linear-gradient(135deg, var(--navbar-gradient-start, #4E97D1), var(--navbar-gradient-end, #2C5F8A));
+  color: var(--navbar-text-color, #fff);
   height: 60px;
   padding: 0 16px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
@@ -615,6 +580,7 @@ export default {
   border-radius: 50%;
 }
 
+/* Adjusted for GENIE.AI configured SVG icon */
 .govt-logo {
   height: 40px;
   width: 40px;
@@ -1307,7 +1273,7 @@ export default {
 html[data-theme="dark"] .nav-bar,
 .nav-bar[data-theme="system"].dark-mode,
 html[data-theme="system"].dark-mode .nav-bar {
-  background: linear-gradient(135deg, #1e3a58, #0f1c2b);
+  background: linear-gradient(135deg, var(--navbar-gradient-start, #1e3a58), var(--navbar-gradient-end, #0f1c2b));
 }
 
 /* Buttons and Controls - Dark Mode */

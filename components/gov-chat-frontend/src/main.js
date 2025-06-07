@@ -6,7 +6,8 @@
  * - Setting up locale based on user preference or browser
  * - Logging all messages for each locale (only in development mode)
  * - Logging the active locale before and after mount
- * - Theme system integration - FIXED to ensure Light theme is default
+ * - Theme system integration - Synchronized with ThemeManager.js
+ * - Loading genie-ai-config.json from /config folder for GENIE.AI framework customization
  *****************************************************************************************************/
 
 import { createApp } from 'vue'
@@ -16,14 +17,103 @@ import i18n from './i18n'
 import store from './store' // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe' // Import our custom directive
 import '@fortawesome/fontawesome-free/css/all.min.css';
-
-
 import VueApexCharts from 'vue3-apexcharts'
 import './text-fix.css'
+import { themeManager } from './utils/ThemeManager'; // Updated import path
 
 // Import theme CSS files
 import './theme-variables.css'
 import './theme-components.css'
+
+// Fetch configuration for GENIE.AI framework with fallback defaults
+let config = {
+  app: {
+    title: 'Huduma AI',
+    icon: { type: 'file', value: '/config/huduma-icon.svg' }
+  },
+  theme: {
+    primaryColor: '#4E97D1',
+    secondaryColor: '#2C5F8A',
+    backgroundColor: '#f5f7fa',
+    textColor: '#333333',
+    navbar: {
+      gradientStart: '#4E97D1',
+      gradientEnd: '#2C5F8A',
+      textColor: '#ffffff'
+    }
+  },
+  features: {
+    chat: {
+      welcomeMessage: 'Welcome to Huduma AI, your public service assistant!',
+      botName: 'Huduma'
+    }
+  },
+  custom: {}
+};
+async function loadConfig() {
+  try {
+    const response = await fetch('/config/genie-ai-config.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    config = { ...config, ...data }; // Merge fetched config with defaults
+    console.log('Configuration loaded:', config);
+
+    // Dynamically set CSS variables based on config
+    const root = document.documentElement;
+    if (config.theme) {
+      // Navbar colors
+      if (config.theme.navbar) {
+        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
+        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
+        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
+      }
+      // Accent and button colors
+      root.style.setProperty('--accent-color', config.theme.primaryColor);
+      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20)); // Darken by 20%
+      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor); // Use secondaryColor as an accent
+      root.style.setProperty('--bg-button-primary', config.theme.primaryColor);
+      root.style.setProperty('--bg-button-primary-hover', adjustColor(config.theme.primaryColor, -20));
+    }
+  } catch (error) {
+    console.error('Error loading config:', error);
+    console.warn('Using default configuration');
+
+    // Set default CSS variables
+    const root = document.documentElement;
+    if (config.theme) {
+      if (config.theme.navbar) {
+        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
+        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
+        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
+      }
+      root.style.setProperty('--accent-color', config.theme.primaryColor);
+      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
+      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
+      root.style.setProperty('--bg-button-primary', config.theme.primaryColor);
+      root.style.setProperty('--bg-button-primary-hover', adjustColor(config.theme.primaryColor, -20));
+    }
+  }
+}
+
+// Helper function to adjust color brightness (for hover states)
+function adjustColor(hexColor, percent) {
+  let r = parseInt(hexColor.slice(1, 3), 16);
+  let g = parseInt(hexColor.slice(3, 5), 16);
+  let b = parseInt(hexColor.slice(5, 7), 16);
+
+  // Adjust brightness
+  r = Math.min(255, Math.max(0, Math.round(r * (1 + percent / 100))));
+  g = Math.min(255, Math.max(0, Math.round(g * (1 + percent / 100))));
+  b = Math.min(255, Math.max(0, Math.round(b * (1 + percent / 100))));
+
+  // Convert back to hex
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Initialize configuration before app creation to ensure it's available globally
+await loadConfig();
 
 // Determine the initial locale - prioritize:
 // 1. Previously saved user preference
@@ -57,7 +147,7 @@ const getBrowserLocale = () => {
   // Get browser language (e.g. 'en-US' -> 'en')
   const browserLang = navigator.language || navigator.userLanguage
   const shortLang = browserLang.split('-')[0]
-  
+
   // Check if we support this language
   const supportedLocales = ['en', 'fr', 'sw']
   return supportedLocales.includes(shortLang) ? shortLang : null
@@ -83,24 +173,25 @@ if (process.env.NODE_ENV === 'development') {
 
 // Initialize theme system BEFORE creating the app
 const initializeTheme = () => {
-  // ALWAYS default to light theme unless explicitly saved as something else
-  let theme = 'light';
-  
+  let theme = 'light'; // Default theme
+
   try {
-    // Check localStorage for saved theme preference
+    // Synchronize with ThemeManager.js for initial theme detection
+    const themeInfo = themeManager.getThemeInfo();
+    theme = themeInfo.theme || 'light'; // Use ThemeManager's detected theme
+
+    // Override with saved user preference if it exists
     const savedTheme = localStorage.getItem('theme');
-    
-    // Only use saved theme if it exists and is valid
     if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
       theme = savedTheme;
     }
-    
+
     // Apply theme to both HTML and BODY elements to ensure it cascades properly
     document.documentElement.setAttribute('data-theme', theme);
     document.body.setAttribute('data-theme', theme);
-    
+
     console.log('Theme initialized to:', theme);
-    
+
     // Initialize font size if saved
     const fontSize = localStorage.getItem('fontSize');
     if (fontSize) {
@@ -119,6 +210,9 @@ initializeTheme();
 // Create the Vue app
 const app = createApp(App)
 
+// Make config available globally for GENIE.AI framework customization (e.g., title, icon, navbar colors)
+app.config.globalProperties.$config = config;
+
 // Use router, i18n, and store
 app.use(router)
 app.use(i18n)
@@ -127,14 +221,14 @@ app.use(FileDialogSafe) // Register our custom directive
 app.use(VueApexCharts)
 
 // Create a global method for changing locale
-app.config.globalProperties.$setLocale = function(locale) {
+app.config.globalProperties.$setLocale = function (locale) {
   i18n.global.locale = locale
   try {
     localStorage.setItem('userLocale', locale)
   } catch (e) {
     console.warn('Unable to save locale preference:', e)
   }
-  
+
   // Update HTML lang attribute for accessibility
   document.documentElement.setAttribute('lang', locale)
 }
@@ -159,25 +253,27 @@ function setViewportHeight() {
 document.addEventListener('DOMContentLoaded', () => {
   // Set initial height
   setViewportHeight();
-  
+
   // Update on resize
   window.addEventListener('resize', setViewportHeight);
-  
+
   // For iOS devices, use VisualViewport API if available
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
       // Update the CSS variable with the visual viewport height
       document.documentElement.style.setProperty('--window-height', `${window.visualViewport.height}px`);
-      
+
       // Check if keyboard is likely open (viewport significantly smaller)
       const heightDifference = window.innerHeight - window.visualViewport.height;
       const isKeyboardOpen = heightDifference > 150;
-      
-      // Add/remove class from body
-      if (isKeyboardOpen) {
-        document.body.classList.add('keyboard-open');
-      } else {
-        document.body.classList.remove('keyboard-open');
+
+      // Add/remove class
+      if (document.body) {
+        if (isKeyboardOpen) {
+          document.body.classList.add('keyboard-open');
+        } else {
+          document.body.classList.remove('keyboard-open');
+        }
       }
     });
   }
@@ -185,62 +281,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Helper function to detect iOS devices
 function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 // Add iOS-specific class if needed
-if (isIOS()) {
+if (isIOS() && document.documentElement) {
   document.documentElement.classList.add('ios-device');
 }
-
-// Add this code to your main.js file or create a separate file and import it
 
 // Function to handle Android keyboard behavior
 const handleAndroidKeyboard = () => {
   // Detect Android devices
   const isAndroid = /Android/i.test(navigator.userAgent);
-  
+
   if (!isAndroid) return;
-  
+
   // Add Android flag to document
-  document.documentElement.classList.add('android-device');
-  
+  if (document.documentElement) {
+    document.documentElement.classList.add('android-device');
+  }
+
   // Store initial window height
   const initialWindowHeight = window.innerHeight;
-  
+
   // Listen for resize events to detect keyboard
   window.addEventListener('resize', () => {
     const currentHeight = window.innerHeight;
     const heightDifference = initialWindowHeight - currentHeight;
-    
+
     // If height difference is significant, keyboard is likely open
-    if (heightDifference > 150) {
+    if (heightDifference > 150 && document.documentElement) {
       document.documentElement.classList.add('keyboard-open');
-      
+
       // Set CSS variable for keyboard height
       document.documentElement.style.setProperty('--keyboard-height', `${heightDifference}px`);
       document.documentElement.style.setProperty('--visible-height', `${currentHeight}px`);
-    } else {
+    } else if (document.documentElement) {
       document.documentElement.classList.remove('keyboard-open');
       document.documentElement.style.removeProperty('--keyboard-height');
       document.documentElement.style.removeProperty('--visible-height');
     }
   });
-  
+
   // Add listener for input focus/blur
   document.addEventListener('focusin', (event) => {
     // Only handle input and textarea elements
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-      document.documentElement.classList.add('input-focused');
+      if (document.documentElement) {
+        document.documentElement.classList.add('input-focused');
+      }
     }
   });
-  
+
   document.addEventListener('focusout', (event) => {
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
       // Use timeout to ensure keyboard is fully closed
       setTimeout(() => {
-        document.documentElement.classList.remove('input-focused');
+        if (document.documentElement) {
+          document.documentElement.classList.remove('input-focused');
+        }
       }, 300);
     }
   });

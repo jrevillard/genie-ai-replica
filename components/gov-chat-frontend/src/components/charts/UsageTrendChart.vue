@@ -3,55 +3,56 @@
   <div class="usage-trend-chart">
     <div v-if="loading" class="loading-overlay">
       <div class="spinner"></div>
-      <span>{{ $t('analytics.status.loading') }}</span>
+      <span>{{ $t("analytics.status.loading") }}</span>
     </div>
     <div v-else-if="error" class="error-container">
       <p class="error-message">{{ error }}</p>
     </div>
     <div v-else-if="!data || data.length === 0" class="no-data">
-      {{ $t('analytics.status.noData') }}
+      {{ $t("analytics.status.noData") }}
     </div>
     <div v-else ref="chartContainer" class="chart-container"></div>
   </div>
 </template>
 
 <script>
-import * as d3 from 'd3';
-import analyticsService from '../../services/analyticsService';
-import { getThemeColors, applyThemeToAxes, cleanupTooltips } from '../../utils/chartThemeUtils';
+import * as d3 from "d3";
+import analyticsService from "../../services/analyticsService";
 
 export default {
-  name: 'UsageTrendChart',
+  name: "UsageTrendChart",
   props: {
     data: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     externalData: {
       type: Boolean,
-      default: true
+      default: true,
     },
     period: {
       type: String,
-      default: 'daily'
+      default: "daily",
     },
     selectedDate: {
       type: String,
-      default: () => new Date().toISOString().split('T')[0]
+      default: () => new Date().toISOString().split("T")[0],
     },
     // Added to force re-render when language changes
     renderKey: {
       type: String,
-      default: null
-    }
+      default: null,
+    },
   },
   data() {
     return {
+      theme: "light", // Store current theme
       chartData: [],
       loading: false,
       error: null,
       width: 0,
-      height: 0
+      height: 0,
+      themeObserver: null,
     };
   },
   watch: {
@@ -62,46 +63,46 @@ export default {
           this.renderChart();
         }
       },
-      deep: true
+      deep: true,
     },
     period: {
       handler() {
         if (!this.externalData) {
           this.fetchData();
         }
-      }
+      },
     },
     selectedDate: {
       handler() {
         if (!this.externalData) {
           this.fetchData();
         }
-      }
+      },
     },
     // Watch for renderKey (locale) changes to force complete re-render
     renderKey: {
       handler() {
         // Clear existing tooltips to prevent duplicates
-        cleanupTooltips();
+        d3.selectAll(".d3-tooltip").remove();
 
         // Re-render chart with new translations
         this.$nextTick(() => {
           if (this.chartData && this.chartData.length > 0) {
             // Force complete recreation
             if (this.$refs.chartContainer) {
-              d3.select(this.$refs.chartContainer).selectAll('*').remove();
+              d3.select(this.$refs.chartContainer).selectAll("*").remove();
               this.renderChart();
             }
           }
         });
-      }
-    }
+      },
+    },
   },
   mounted() {
     this.initChartDimensions();
-    
-    // Inject global stylesheet for dark mode text
-    this.injectGlobalStyleForDarkMode();
+
+    // Inject global stylesheet for theme
+    this.injectGlobalStyleForTheme();
 
     if (this.externalData && this.data.length > 0) {
       this.chartData = this.data;
@@ -110,63 +111,148 @@ export default {
       this.fetchData();
     }
 
-    window.addEventListener('resize', this.handleResize);
+    window.addEventListener("resize", this.handleResize);
+
+    // Set up theme change listener
+    this.setupThemeChangeListener();
   },
   beforeUnmount() {
-    window.removeEventListener('resize', this.handleResize);
-    cleanupTooltips();
-    
+    window.removeEventListener("resize", this.handleResize);
+    d3.selectAll(".d3-tooltip").remove();
+
+    // Clean up theme observer
+    if (this.themeObserver) {
+      this.themeObserver.disconnect();
+    }
+
     // Remove the injected style if it exists
-    const injectedStyle = document.getElementById('usage-trend-chart-dark-mode-style');
+    const injectedStyle = document.getElementById(
+      "usage-trend-chart-theme-style"
+    );
     if (injectedStyle) {
       document.head.removeChild(injectedStyle);
     }
   },
   methods: {
     /**
-     * Inject a global stylesheet for dark mode text
-     * Targets only axis, title, and legend text
+     * Inject a global stylesheet for chart text based on theme
+     * Targets axis, title, and legend text
      */
-    injectGlobalStyleForDarkMode() {
+    injectGlobalStyleForTheme() {
       // Check if the style already exists
-      if (document.getElementById('usage-trend-chart-dark-mode-style')) {
+      if (document.getElementById("usage-trend-chart-theme-style")) {
         return;
       }
-      
+
       // Create style element
-      const styleEl = document.createElement('style');
-      styleEl.id = 'usage-trend-chart-dark-mode-style';
-      styleEl.textContent = `
-        /* Force x-axis text to be white in dark mode */
-        [data-theme="dark"] .x-axis text {
-          fill: #FFFFFF !important;
-        }
-        
-        /* Force y-axis left text to be white in dark mode */
-        [data-theme="dark"] .y-axis-left text {
-          fill: #FFFFFF !important;
-        }
-        
-        /* Force y-axis right text to be white in dark mode */
-        [data-theme="dark"] .y-axis-right text {
-          fill: #FFFFFF !important;
-        }
-        
-        /* Force chart title to be white in dark mode */
-        [data-theme="dark"] svg text[font-size="14px"] {
-          fill: #FFFFFF !important;
-        }
-        
-        /* Force legend text to be white in dark mode */
-        [data-theme="dark"] .legend text {
-          fill: #FFFFFF !important;
-        }
-      `;
-      
+      const styleEl = document.createElement("style");
+      styleEl.id = "usage-trend-chart-theme-style";
+      const theme = this.getTheme();
+      if (theme.isDarkMode) {
+        styleEl.textContent = `
+          /* Force chart text to be white in dark mode */
+          [data-theme="dark"] .x-axis text,
+          [data-theme="dark"] .y-axis-left text,
+          [data-theme="dark"] .y-axis-right text,
+          [data-theme="dark"] svg text[font-size="14px"],
+          [data-theme="dark"] .legend text {
+            fill: #FFFFFF !important;
+          }
+        `;
+        console.log("[UsageTrendChart] Injected dark mode style");
+      } else {
+        styleEl.textContent = `
+          /* Force chart text to be dark in light mode */
+          [data-theme="light"] .x-axis text,
+          [data-theme="light"] .y-axis-left text,
+          [data-theme="light"] .y-axis-right text,
+          [data-theme="light"] svg text[font-size="14px"],
+          [data-theme="light"] .legend text {
+            fill: #333333 !important;
+          }
+        `;
+        console.log("[UsageTrendChart] Injected light mode style");
+      }
+
       // Append to document head
       document.head.appendChild(styleEl);
+      console.log(
+        "[DEBUG] Injected theme style:",
+        theme.isDarkMode ? "dark" : "light"
+      );
     },
-    
+
+    /**
+     * Get current theme information
+     * @returns {Object} Theme colors and mode information
+     */
+    getTheme() {
+      let themeMode =
+        this.$refs.chartContainer
+          ?.closest("[data-theme]")
+          ?.getAttribute("data-theme") ||
+        document.documentElement.getAttribute("data-theme") ||
+        localStorage.getItem("theme") ||
+        "light";
+      if (!["light", "dark", "system"].includes(themeMode)) {
+        console.warn(
+          `[UsageTrendChart] Invalid themeMode: ${themeMode}, defaulting to light`
+        );
+        themeMode = "light";
+      }
+      if (themeMode === "system") {
+        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+      this.theme = themeMode;
+      const isDarkMode = themeMode === "dark";
+      console.log(`[DEBUG] Theme detected: ${isDarkMode ? "dark" : "light"}`);
+      return {
+        isDarkMode,
+        textColor: isDarkMode ? "#FFFFFF" : "#333333",
+        backgroundColor: isDarkMode ? "#414141" : "#FFFFFF",
+        borderColor: isDarkMode ? "#555555" : "#E5E7EB",
+        gridColor: isDarkMode ? "rgba(255, 255, 255, 0.15)" : "#E0E0E0",
+        accentColor: "#4E97D1",
+        chartColors: [
+          "#5470c6",
+          "#91cc75",
+          "#fac858",
+          "#ee6666",
+          "#73c0de",
+          "#3ba272",
+          "#fc8452",
+          "#9a60b4",
+        ],
+      };
+    },
+
+    /**
+     * Set up theme change listener
+     */
+    setupThemeChangeListener() {
+      this.themeObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (
+            mutation.attributeName === "class" ||
+            mutation.attributeName === "data-theme"
+          ) {
+            console.log("[DEBUG] Theme change detected, updating chart...");
+            this.injectGlobalStyleForTheme();
+            this.renderChart();
+            break;
+          }
+        }
+      });
+
+      this.themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class", "data-theme"],
+      });
+      console.log("[DEBUG] Theme change listener set up");
+    },
+
     async fetchData() {
       if (this.externalData) return;
 
@@ -181,9 +267,14 @@ export default {
 
         const url = `/api/analytics/timeseries/queries`;
 
-        console.log(`Fetching time series data from ${url} with params:`, params);
+        console.log(
+          `Fetching time series data from ${url} with params:`,
+          params
+        );
 
-        const response = await fetch(`${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`);
+        const response = await fetch(
+          `${url}?interval=${params.interval}&startDate=${params.startDate}&endDate=${params.endDate}`
+        );
 
         if (!response.ok) {
           throw new Error(`API request failed with status ${response.status}`);
@@ -192,23 +283,23 @@ export default {
         const data = await response.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          console.log('Time series data loaded successfully:', data);
+          console.log("Time series data loaded successfully:", data);
 
-          this.chartData = data.map(item => ({
-            timestamp: item.timestamp || '',
+          this.chartData = data.map((item) => ({
+            timestamp: item.timestamp || "",
             dateLabel: this.formatDate(item.timestamp),
-            value: typeof item.value === 'number' ? item.value : 0,
-            userCount: typeof item.userCount === 'number' ? item.userCount : 0
+            value: typeof item.value === "number" ? item.value : 0,
+            userCount: typeof item.userCount === "number" ? item.userCount : 0,
           }));
         } else {
-          console.warn('Empty or invalid time series data received:', data);
+          console.warn("Empty or invalid time series data received:", data);
           this.chartData = this.generateSampleData();
         }
 
         this.renderChart();
       } catch (error) {
-        console.error('Error loading time series data:', error);
-        this.error = this.$t('analytics.status.error');
+        console.error("Error loading time series data:", error);
+        this.error = this.$t("analytics.status.error");
         this.chartData = this.generateSampleData();
         this.renderChart();
       } finally {
@@ -217,7 +308,7 @@ export default {
     },
 
     formatDate(dateString) {
-      if (!dateString) return '';
+      if (!dateString) return "";
 
       try {
         const date = new Date(dateString);
@@ -239,11 +330,11 @@ export default {
           timestamp: date.toISOString(),
           dateLabel: date.toLocaleDateString(this.$i18n.locale),
           value: Math.floor(Math.random() * 1000),
-          userCount: Math.floor(Math.random() * 200)
+          userCount: Math.floor(Math.random() * 200),
         });
       }
 
-      console.log('Generated sample data for chart:', result);
+      console.log("Generated sample data for chart:", result);
       return result;
     },
 
@@ -259,525 +350,537 @@ export default {
       this.initChartDimensions();
       this.renderChart();
     },
-    
+
     /**
-     * Force text elements to use white fill in dark mode
+     * Force text elements to use appropriate color based on theme
      */
-    forceAxisTextColorInDarkMode() {
-      // Check if dark mode is active
-      const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-      
-      if (!isDarkMode) return;
-      
-      // Target specific text elements in the chart
+    forceAxisTextColor() {
+      const theme = this.getTheme();
+      const textColor = theme.textColor;
+
       const chartContainer = this.$refs.chartContainer;
       if (!chartContainer) return;
-      
+
       setTimeout(() => {
         // X-axis text
-        const xAxisText = chartContainer.querySelectorAll('.x-axis text');
-        xAxisText.forEach(el => {
-          el.setAttribute('fill', '#FFFFFF');
+        const xAxisText = chartContainer.querySelectorAll(".x-axis text");
+        xAxisText.forEach((el) => {
+          el.setAttribute("fill", textColor);
         });
-        
+
         // Y-axis left text
-        const yAxisLeftText = chartContainer.querySelectorAll('.y-axis-left text');
-        yAxisLeftText.forEach(el => {
-          el.setAttribute('fill', '#FFFFFF');
+        const yAxisLeftText =
+          chartContainer.querySelectorAll(".y-axis-left text");
+        yAxisLeftText.forEach((el) => {
+          el.setAttribute("fill", textColor);
         });
-        
+
         // Y-axis right text
-        const yAxisRightText = chartContainer.querySelectorAll('.y-axis-right text');
-        yAxisRightText.forEach(el => {
-          el.setAttribute('fill', '#FFFFFF');
+        const yAxisRightText =
+          chartContainer.querySelectorAll(".y-axis-right text");
+        yAxisRightText.forEach((el) => {
+          el.setAttribute("fill", textColor);
         });
-        
+
         // Chart title
-        const chartTitle = chartContainer.querySelectorAll('text[font-size="14px"]');
-        chartTitle.forEach(el => {
-          el.setAttribute('fill', '#FFFFFF');
+        const chartTitle = chartContainer.querySelectorAll(
+          'text[font-size="14px"]'
+        );
+        chartTitle.forEach((el) => {
+          el.setAttribute("fill", textColor);
         });
-        
+
         // Legend text
-        const legendText = chartContainer.querySelectorAll('.legend text');
-        legendText.forEach(el => {
-          el.setAttribute('fill', '#FFFFFF');
+        const legendText = chartContainer.querySelectorAll(".legend text");
+        legendText.forEach((el) => {
+          el.setAttribute("fill", textColor);
         });
+
+        console.log(`[DEBUG] Forcing axis text color to: ${textColor}`);
       }, 100);
     },
 
     renderChart() {
-      if (!this.chartData || this.chartData.length === 0 || !this.$refs.chartContainer) return;
+      if (
+        !this.chartData ||
+        this.chartData.length === 0 ||
+        !this.$refs.chartContainer
+      )
+        return;
 
       // Clear previous chart
-      d3.select(this.$refs.chartContainer).selectAll('*').remove();
+      d3.select(this.$refs.chartContainer).selectAll("*").remove();
 
-      // Get theme colors using the utility function
-      const theme = getThemeColors();
-      const { textColor, backgroundColor, borderColor, gridColor, isDarkMode } = theme;
+      // Get theme colors
+      const theme = this.getTheme();
+      const { textColor, backgroundColor, borderColor, gridColor, isDarkMode } =
+        theme;
 
-      // Set text color to white in dark mode, or original textColor in light mode
-      const darkModeTextColor = isDarkMode ? '#FFFFFF' : textColor;
+      // Set text color explicitly
+      const darkModeTextColor = textColor;
 
-      // Use a LIGHT GRAY background for dark mode that contrasts with black text
-      // This color will be used for all background elements
-      const chartBackgroundColor = isDarkMode ? '#bbbcbe' : '#ffffff';
+      // Use a consistent background color
+      const chartBackgroundColor = backgroundColor;
 
       const margin = { top: 40, right: 60, bottom: 50, left: 60 };
       const width = this.width - margin.left - margin.right;
       const height = this.height - margin.top - margin.bottom;
 
       // Create SVG element
-      const svg = d3.select(this.$refs.chartContainer)
-        .append('svg')
-        .attr('width', this.width)
-        .attr('height', this.height);
+      const svg = d3
+        .select(this.$refs.chartContainer)
+        .append("svg")
+        .attr("width", this.width)
+        .attr("height", this.height);
 
-      // Add background rectangle that extends beyond the axes to make labels readable
-      // Only add in dark mode with LIGHT GRAY color
-      //if (isDarkMode) {
-      //  svg.append('rect')
-      //    .attr('width', this.width)
-      //    .attr('height', this.height)
-      //    .attr('fill', chartBackgroundColor)
-      //    .attr('rx', 8)
-      //    .attr('ry', 8);
-      //}
-
-      const mainGroup = svg.append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+      const mainGroup = svg
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
 
       // Create defs for gradients and filters
-      const defs = mainGroup.append('defs');
+      const defs = mainGroup.append("defs");
 
       // Add drop shadow filter
-      defs.append('filter')
-        .attr('id', 'drop-shadow')
-        .attr('height', '130%')
-        .append('feDropShadow')
-        .attr('dx', 0)
-        .attr('dy', 3)
-        .attr('stdDeviation', 3)
-        .attr('flood-color', 'rgba(0,0,0,0.3)');
+      defs
+        .append("filter")
+        .attr("id", "drop-shadow")
+        .attr("height", "130%")
+        .append("feDropShadow")
+        .attr("dx", 0)
+        .attr("dy", 3)
+        .attr("stdDeviation", 3)
+        .attr("flood-color", "rgba(0,0,0,0.3)");
 
       // Add bar gradient
-      const barGradient = defs.append('linearGradient')
-        .attr('id', 'bar-gradient')
-        .attr('x1', '0%')
-        .attr('y1', '0%')
-        .attr('x2', '0%')
-        .attr('y2', '100%');
+      const barGradient = defs
+        .append("linearGradient")
+        .attr("id", "bar-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "0%")
+        .attr("y2", "100%");
 
       // Always use light green for bars
-      barGradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#62d9a6');
+      barGradient
+        .append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", "#62d9a6");
 
-      barGradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#2da676');
+      barGradient
+        .append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", "#2da676");
 
       // Add blue area gradient
-      const areaGradient = defs.append('linearGradient')
-        .attr('id', 'area-gradient')
-        .attr('x1', '0%')
-        .attr('y1', '0%')
-        .attr('x2', '0%')
-        .attr('y2', '100%');
+      const areaGradient = defs
+        .append("linearGradient")
+        .attr("id", "area-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "0%")
+        .attr("y2", "100%");
 
-      areaGradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#4682B4')
-        .attr('stop-opacity', 0.7);
+      areaGradient
+        .append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", "#4682B4")
+        .attr("stop-opacity", 0.7);
 
-      areaGradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#4682B4')
-        .attr('stop-opacity', 0.1);
+      areaGradient
+        .append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", "#4682B4")
+        .attr("stop-opacity", 0.1);
 
       // Add line gradient
-      const lineGradient = defs.append('linearGradient')
-        .attr('id', 'line-gradient')
-        .attr('x1', '0%')
-        .attr('y1', '0%')
-        .attr('x2', '100%')
-        .attr('y2', '0%');
+      const lineGradient = defs
+        .append("linearGradient")
+        .attr("id", "line-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "100%")
+        .attr("y2", "0%");
 
-      lineGradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#5b9bd5'); // Start color
+      lineGradient
+        .append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", "#5b9bd5"); // Start color
 
-      lineGradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#3a6da0'); // End color
+      lineGradient
+        .append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", "#3a6da0"); // End color
 
       // Parse dates and prepare data
-      const data = this.chartData.map(d => {
-        return {
-          timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
-          dateLabel: d.dateLabel || '',
-          value: d.value,
-          userCount: d.userCount
-        };
-      }).sort((a, b) => a.timestamp - b.timestamp);
+      const data = this.chartData
+        .map((d) => {
+          return {
+            timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
+            dateLabel: d.dateLabel || "",
+            value: d.value,
+            userCount: d.userCount,
+          };
+        })
+        .sort((a, b) => a.timestamp - b.timestamp);
 
       // Create scales
-      const x = d3.scaleTime()
+      const x = d3
+        .scaleTime()
         .range([0, width])
-        .domain(d3.extent(data, d => d.timestamp));
+        .domain(d3.extent(data, (d) => d.timestamp));
 
-      const yLeft = d3.scaleLinear()
+      const yLeft = d3
+        .scaleLinear()
         .range([height, 0])
-        .domain([0, d3.max(data, d => d.value) * 1.1])
+        .domain([0, d3.max(data, (d) => d.value) * 1.1])
         .nice();
 
-      const yRight = d3.scaleLinear()
+      const yRight = d3
+        .scaleLinear()
         .range([height, 0])
-        .domain([0, d3.max(data, d => d.userCount) * 1.2])
+        .domain([0, d3.max(data, (d) => d.userCount) * 1.2])
         .nice();
-
-      // Add chart background with the same light gray color
-      //mainGroup.append('rect')
-      //  .attr('width', width)
-      //  .attr('height', height)
-      //  .attr('fill', chartBackgroundColor)
-      //  .attr('rx', 5)
-      //  .attr('ry', 5);
 
       // Draw background grid
-      mainGroup.append('g')
-        .attr('class', 'grid')
-        .attr('transform', `translate(0,${height})`)
-        .call(
-          d3.axisBottom(x)
-            .tickSize(-height)
-            .tickFormat('')
-        )
-        .selectAll('line')
-        .attr('stroke', gridColor)
-        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none');
+      mainGroup
+        .append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickSize(-height).tickFormat(""))
+        .selectAll("line")
+        .attr("stroke", gridColor)
+        .attr("stroke-dasharray", isDarkMode ? "3,3" : "none");
 
-      mainGroup.append('g')
-        .attr('class', 'grid')
-        .call(
-          d3.axisLeft(yLeft)
-            .tickSize(-width)
-            .tickFormat('')
-        )
-        .selectAll('line')
-        .attr('stroke', gridColor)
-        .attr('stroke-dasharray', isDarkMode ? '3,3' : 'none');
+      mainGroup
+        .append("g")
+        .attr("class", "grid")
+        .call(d3.axisLeft(yLeft).tickSize(-width).tickFormat(""))
+        .selectAll("line")
+        .attr("stroke", gridColor)
+        .attr("stroke-dasharray", isDarkMode ? "3,3" : "none");
 
       // Remove grid domain lines
-      mainGroup.selectAll('.grid .domain')
-        .attr('stroke', 'none');
+      mainGroup.selectAll(".grid .domain").attr("stroke", "none");
 
       // Calculate 60% wider bar width
-      const barWidth = Math.min(16, width / data.length * 0.7);
+      const barWidth = Math.min(16, (width / data.length) * 0.7);
 
       // Add bars for query counts with 3D effect
-      const bars = mainGroup.selectAll('.bar-group')
+      const bars = mainGroup
+        .selectAll(".bar-group")
         .data(data)
         .enter()
-        .append('g')
-        .attr('class', 'bar-group')
-        .attr('transform', d => `translate(${x(d.timestamp) - barWidth / 2}, 0)`);
+        .append("g")
+        .attr("class", "bar-group")
+        .attr(
+          "transform",
+          (d) => `translate(${x(d.timestamp) - barWidth / 2}, 0)`
+        );
 
       // Main bar with gradient
-      // Main bar with explicit green color
-      bars.append('rect')
-        .attr('class', 'bar')
-        .attr('width', barWidth)
-        .attr('y', d => yLeft(d.value))
-        .attr('height', d => height - yLeft(d.value))
-        .attr('fill', '#62d9a6') // Direct light green color
-        .attr('rx', 1)
-        .attr('ry', 1)
-        .style('filter', 'url(#drop-shadow)')
-        .style('opacity', 0.85);
+      bars
+        .append("rect")
+        .attr("class", "bar")
+        .attr("width", barWidth)
+        .attr("y", (d) => yLeft(d.value))
+        .attr("height", (d) => height - yLeft(d.value))
+        .attr("fill", "url(#bar-gradient)")
+        .attr("rx", 1)
+        .attr("ry", 1)
+        .style("filter", "url(#drop-shadow)")
+        .style("opacity", 0.85);
 
       // Top highlight for 3D effect
-      bars.append('rect')
-        .attr('width', barWidth)
-        .attr('height', 2)
-        .attr('y', d => yLeft(d.value))
-        .attr('fill', '#ffffff')
-        .attr('opacity', 0.5)
-        .attr('rx', 1);
+      bars
+        .append("rect")
+        .attr("width", barWidth)
+        .attr("height", 2)
+        .attr("y", (d) => yLeft(d.value))
+        .attr("fill", "#ffffff")
+        .attr("opacity", 0.5)
+        .attr("rx", 1);
 
       // Create the area fill below line (blue hue over the bars)
-      const area = d3.area()
-        .x(d => x(d.timestamp))
+      const area = d3
+        .area()
+        .x((d) => x(d.timestamp))
         .y0(height)
-        .y1(d => yRight(d.userCount))
+        .y1((d) => yRight(d.userCount))
         .curve(d3.curveCardinal.tension(0.5));
 
       // Add the blue area fill with reduced opacity
-      mainGroup.append('path')
+      mainGroup
+        .append("path")
         .datum(data)
-        .attr('class', 'area')
-        .attr('fill', 'url(#area-gradient)')
-        .attr('d', area)
-        .attr('opacity', 0.4);
+        .attr("class", "area")
+        .attr("fill", "url(#area-gradient)")
+        .attr("d", area)
+        .attr("opacity", 0.4);
 
       // Add line for user counts with THINNER styling
-      const line = d3.line()
-        .x(d => x(d.timestamp))
-        .y(d => yRight(d.userCount))
+      const line = d3
+        .line()
+        .x((d) => x(d.timestamp))
+        .y((d) => yRight(d.userCount))
         .curve(d3.curveCardinal.tension(0.5));
 
       // Add line shadow with reduced size
-      mainGroup.append('path')
+      mainGroup
+        .append("path")
         .datum(data)
-        .attr('class', 'line-shadow')
-        .attr('fill', 'none')
-        .attr('stroke', isDarkMode ? '#555' : '#333')
-        .attr('stroke-width', 1.5)
-        .attr('stroke-opacity', 0.2)
-        .attr('d', line)
-        .attr('transform', 'translate(1,1)');
+        .attr("class", "line-shadow")
+        .attr("fill", "none")
+        .attr("stroke", isDarkMode ? "#555" : "#333")
+        .attr("stroke-width", 1.5)
+        .attr("stroke-opacity", 0.2)
+        .attr("d", line)
+        .attr("transform", "translate(1,1)");
 
       // Add the actual line with reduced thickness
-      mainGroup.append('path')
+      mainGroup
+        .append("path")
         .datum(data)
-        .attr('class', 'line')
-        .attr('fill', 'none')
-        .attr('stroke', 'url(#line-gradient)')
-        .attr('stroke-width', 1.5)
-        .attr('d', line);
+        .attr("class", "line")
+        .attr("fill", "none")
+        .attr("stroke", "url(#line-gradient)")
+        .attr("stroke-width", 1.5)
+        .attr("d", line);
 
       // Add circles for data points with smaller size
-      mainGroup.selectAll('.dot-shadow')
+      mainGroup
+        .selectAll(".dot-shadow")
         .data(data)
         .enter()
-        .append('circle')
-        .attr('class', 'dot-shadow')
-        .attr('cx', d => x(d.timestamp) + 1)
-        .attr('cy', d => yRight(d.userCount) + 1)
-        .attr('r', 3)
-        .attr('fill', 'rgba(0,0,0,0.2)');
+        .append("circle")
+        .attr("class", "dot-shadow")
+        .attr("cx", (d) => x(d.timestamp) + 1)
+        .attr("cy", (d) => yRight(d.userCount) + 1)
+        .attr("r", 3)
+        .attr("fill", "rgba(0,0,0,0.2)");
 
-      mainGroup.selectAll('.dot')
+      mainGroup
+        .selectAll(".dot")
         .data(data)
         .enter()
-        .append('circle')
-        .attr('class', 'dot')
-        .attr('cx', d => x(d.timestamp))
-        .attr('cy', d => yRight(d.userCount))
-        .attr('r', 2.5)
-        .attr('fill', '#5b9bd5')
-        .attr('stroke', '#ffffff')
-        .attr('stroke-width', 1);
+        .append("circle")
+        .attr("class", "dot")
+        .attr("cx", (d) => x(d.timestamp))
+        .attr("cy", (d) => yRight(d.userCount))
+        .attr("r", 2.5)
+        .attr("fill", "#5b9bd5")
+        .attr("stroke", "#ffffff")
+        .attr("stroke-width", 1);
 
       // Draw axes with styled appearance
-      const xAxis = d3.axisBottom(x)
+      const xAxis = d3
+        .axisBottom(x)
         .ticks(d3.timeDay.every(Math.ceil(data.length / 12)))
-        .tickFormat(d => {
-          const month = d.toLocaleString(this.$i18n.locale, { month: 'short' });
+        .tickFormat((d) => {
+          const month = d.toLocaleString(this.$i18n.locale, { month: "short" });
           const day = d.getDate();
           return `${month} ${day}`;
         });
 
-      // X-axis - use white text in dark mode
-      const xAxisGroup = mainGroup.append('g')
-        .attr('class', 'x-axis')
-        .attr('transform', `translate(0,${height})`)
+      // X-axis
+      const xAxisGroup = mainGroup
+        .append("g")
+        .attr("class", "x-axis")
+        .attr("transform", `translate(0,${height})`)
         .call(xAxis);
 
-      // Use white text in dark mode for axes
-      const axisTextColor = isDarkMode ? '#FFFFFF' : textColor;
-      const axisLineColor = isDarkMode ? '#FFFFFF' : textColor;
+      const axisTextColor = textColor;
+      const axisLineColor = borderColor;
 
-      xAxisGroup.selectAll('text')
-        .style('text-anchor', 'end')
-        .style('font-weight', 'bold')
-        .style('font-size', '11px')
-        .style('fill', axisTextColor)
-        .attr('dx', '-.8em')
-        .attr('dy', '.15em')
-        .attr('transform', 'rotate(-45)');
+      xAxisGroup
+        .selectAll("text")
+        .style("text-anchor", "end")
+        .style("font-weight", "bold")
+        .style("font-size", "11px")
+        .style("fill", axisTextColor)
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em")
+        .attr("transform", "rotate(-45)");
 
-      xAxisGroup.selectAll('path')
-        .attr('stroke', axisLineColor);
+      xAxisGroup.selectAll("path").attr("stroke", axisLineColor);
 
-      xAxisGroup.selectAll('line')
-        .attr('stroke', axisLineColor);
+      xAxisGroup.selectAll("line").attr("stroke", axisLineColor);
 
-      // Y-axis left with white text in dark mode
-      const yAxisLeftGroup = mainGroup.append('g')
-        .attr('class', 'y-axis-left')
+      // Y-axis left
+      const yAxisLeftGroup = mainGroup
+        .append("g")
+        .attr("class", "y-axis-left")
         .call(d3.axisLeft(yLeft).ticks(5));
 
-      yAxisLeftGroup.selectAll('text')
-        .style('font-weight', 'bold')
-        .style('font-size', '11px')
-        .style('fill', axisTextColor);
+      yAxisLeftGroup
+        .selectAll("text")
+        .style("font-weight", "bold")
+        .style("font-size", "11px")
+        .style("fill", axisTextColor);
 
-      yAxisLeftGroup.selectAll('path')
-        .attr('stroke', axisLineColor);
+      yAxisLeftGroup.selectAll("path").attr("stroke", axisLineColor);
 
-      yAxisLeftGroup.selectAll('line')
-        .attr('stroke', axisLineColor);
+      yAxisLeftGroup.selectAll("line").attr("stroke", axisLineColor);
 
-      // Y-axis right with white text in dark mode
-      const yAxisRightGroup = mainGroup.append('g')
-        .attr('class', 'y-axis-right')
-        .attr('transform', `translate(${width},0)`)
+      // Y-axis right
+      const yAxisRightGroup = mainGroup
+        .append("g")
+        .attr("class", "y-axis-right")
+        .attr("transform", `translate(${width},0)`)
         .call(d3.axisRight(yRight).ticks(5));
 
-      yAxisRightGroup.selectAll('text')
-        .style('font-weight', 'bold')
-        .style('font-size', '11px')
-        .style('fill', axisTextColor);
+      yAxisRightGroup
+        .selectAll("text")
+        .style("font-weight", "bold")
+        .style("font-size", "11px")
+        .style("fill", axisTextColor);
 
-      yAxisRightGroup.selectAll('path')
-        .attr('stroke', axisLineColor);
+      yAxisRightGroup.selectAll("path").attr("stroke", axisLineColor);
 
-      yAxisRightGroup.selectAll('line')
-        .attr('stroke', axisLineColor);
+      yAxisRightGroup.selectAll("line").attr("stroke", axisLineColor);
 
-      // Chart title with white text in dark mode
-      mainGroup.append('text')
-        .attr('x', width / 2)
-        .attr('y', -30)
-        .attr('text-anchor', 'middle')
-        .attr('font-size', '14px')
-        .attr('font-weight', 'bold')
-        .attr('fill', axisTextColor)
-        .text(this.$t('charts.usageTrend'));
+      // Chart title
+      mainGroup
+        .append("text")
+        .attr("x", width / 2)
+        .attr("y", -30)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "14px")
+        .attr("font-weight", "bold")
+        .attr("fill", axisTextColor)
+        .text(this.$t("charts.usageTrend"));
 
-      // Add enhanced legend with white text in dark mode
-      const legendBox = mainGroup.append('g')
-        .attr('class', 'legend-box')
-        .attr('transform', `translate(${width / 2 - 170}, -15)`);
+      // Add enhanced legend
+      const legendBox = mainGroup
+        .append("g")
+        .attr("class", "legend-box")
+        .attr("transform", `translate(${width / 2 - 170}, -15)`);
 
-      // Legend background - also use same light gray
-      //legendBox.append('rect')
-      //  .attr('x', -5)
-      //  .attr('y', -15)
-      //  .attr('width', 340)
-      //  .attr('height', 30)
-      //  .attr('rx', 5)
-      //  .attr('ry', 5)
-      //  .attr('fill', chartBackgroundColor)
-      //  .style('filter', 'url(#drop-shadow)');
-
-      const legend = legendBox.append('g')
-        .attr('class', 'legend');
+      const legend = legendBox.append("g").attr("class", "legend");
 
       // Total Queries legend
-      legend.append('rect')
-        .attr('x', 10)
-        .attr('y', -5)
-        .attr('width', 12)
-        .attr('height', 10)
-        .attr('fill', 'url(#bar-gradient)')
-        .attr('rx', 1)
-        .attr('ry', 1);
+      legend
+        .append("rect")
+        .attr("x", 10)
+        .attr("y", -5)
+        .attr("width", 12)
+        .attr("height", 10)
+        .attr("fill", "url(#bar-gradient)")
+        .attr("rx", 1)
+        .attr("ry", 1);
 
-      // Legend text with white text in dark mode
-      const totalQueriesText = legend.append('text')
-        .attr('x', 30)
-        .attr('y', 0)
-        .attr('dy', '.15em')
-        .style('font-size', '12px')
-        .style('font-weight', 'bold')
-        .attr('fill', axisTextColor)
-        .text(this.$t('charts.tooltip.totalQueries'));
+      // Legend text
+      const totalQueriesText = legend
+        .append("text")
+        .attr("x", 30)
+        .attr("y", 0)
+        .attr("dy", ".15em")
+        .style("font-size", "12px")
+        .style("font-weight", "bold")
+        .attr("fill", axisTextColor)
+        .text(this.$t("charts.tooltip.totalQueries"));
 
       // Unique Users legend with thinner line
-      legend.append('line')
-        .attr('x1', 170)
-        .attr('y1', 0)
-        .attr('x2', 200)
-        .attr('y2', 0)
-        .attr('stroke', '#5b9bd5')
-        .attr('stroke-width', 1.5);
+      legend
+        .append("line")
+        .attr("x1", 170)
+        .attr("y1", 0)
+        .attr("x2", 200)
+        .attr("y2", 0)
+        .attr("stroke", "#5b9bd5")
+        .attr("stroke-width", 1.5);
 
-      legend.append('circle')
-        .attr('cx', 185)
-        .attr('cy', 0)
-        .attr('r', 2.5)
-        .attr('fill', '#5b9bd5')
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1);
+      legend
+        .append("circle")
+        .attr("cx", 185)
+        .attr("cy", 0)
+        .attr("r", 2.5)
+        .attr("fill", "#5b9bd5")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1);
 
-      // Legend text with white text in dark mode
-      const uniqueUsersText = legend.append('text')
-        .attr('x', 210)
-        .attr('y', 0)
-        .attr('dy', '.15em')
-        .style('font-size', '12px')
-        .style('font-weight', 'bold')
-        .attr('fill', axisTextColor)
-        .text(this.$t('charts.tooltip.uniqueUsers'));
+      // Legend text
+      const uniqueUsersText = legend
+        .append("text")
+        .attr("x", 210)
+        .attr("y", 0)
+        .attr("dy", ".15em")
+        .style("font-size", "12px")
+        .style("font-weight", "bold")
+        .attr("fill", axisTextColor)
+        .text(this.$t("charts.tooltip.uniqueUsers"));
 
       // Create enhanced tooltip div
-      if (d3.select('body').select('.d3-tooltip').empty()) {
-        d3.select('body')
-          .append('div')
-          .attr('class', 'd3-tooltip')
-          .style('position', 'absolute')
-          .style('background', 'rgba(0, 0, 0, 0.7)')
-          .style('color', 'white')
-          .style('padding', '10px')
-          .style('border-radius', '5px')
-          .style('font-size', '12px')
-          .style('box-shadow', '0 3px 14px rgba(0,0,0,0.4)')
-          .style('pointer-events', 'none')
-          .style('opacity', 0)
-          .style('z-index', 1000);
+      if (d3.select("body").select(".d3-tooltip").empty()) {
+        d3.select("body")
+          .append("div")
+          .attr("class", "d3-tooltip")
+          .style("position", "absolute")
+          .style("background", "rgba(0, 0, 0, 0.7)")
+          .style("color", "white")
+          .style("padding", "10px")
+          .style("border-radius", "5px")
+          .style("font-size", "12px")
+          .style("box-shadow", "0 3px 14px rgba(0,0,0,0.4)")
+          .style("pointer-events", "none")
+          .style("opacity", 0)
+          .style("z-index", 1000);
+        console.log("[DEBUG] Tooltip initialized");
       }
 
       // Add interactive overlay with vertical guide line
-      const verticalLine = mainGroup.append('line')
-        .attr('class', 'vertical-line')
-        .attr('y1', 0)
-        .attr('y2', height)
-        .attr('stroke', borderColor)
-        .attr('stroke-width', 1)
-        .attr('stroke-dasharray', '3,3')
-        .style('opacity', 0);
+      const verticalLine = mainGroup
+        .append("line")
+        .attr("class", "vertical-line")
+        .attr("y1", 0)
+        .attr("y2", height)
+        .attr("stroke", borderColor)
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "3,3")
+        .style("opacity", 0);
 
       // Add hover dots that appear on the guide line
-      const hoverDotLeft = mainGroup.append('circle')
-        .attr('class', 'hover-dot')
-        .attr('r', 5)
-        .attr('fill', 'url(#bar-gradient)')
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .style('opacity', 0);
+      const hoverDotLeft = mainGroup
+        .append("circle")
+        .attr("class", "hover-dot")
+        .attr("r", 5)
+        .attr("fill", "url(#bar-gradient)")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1.5)
+        .style("opacity", 0);
 
-      const hoverDotRight = mainGroup.append('circle')
-        .attr('class', 'hover-dot')
-        .attr('r', 3)
-        .attr('fill', '#5b9bd5')
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1)
-        .style('opacity', 0);
+      const hoverDotRight = mainGroup
+        .append("circle")
+        .attr("class", "hover-dot")
+        .attr("r", 3)
+        .attr("fill", "#5b9bd5")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1)
+        .style("opacity", 0);
 
-      mainGroup.append('rect')
-        .attr('width', width)
-        .attr('height', height)
-        .style('fill', 'none')
-        .style('pointer-events', 'all')
-        .on('mouseover', () => {
-          d3.select('.d3-tooltip').style('opacity', 0.9);
-          verticalLine.style('opacity', 1);
-          hoverDotLeft.style('opacity', 1);
-          hoverDotRight.style('opacity', 1);
+      mainGroup
+        .append("rect")
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "none")
+        .style("pointer-events", "all")
+        .on("mouseover", () => {
+          d3.select(".d3-tooltip").style("opacity", 0.9);
+          verticalLine.style("opacity", 1);
+          hoverDotLeft.style("opacity", 1);
+          hoverDotRight.style("opacity", 1);
         })
-        .on('mouseout', () => {
-          d3.select('.d3-tooltip').style('opacity', 0);
-          verticalLine.style('opacity', 0);
-          hoverDotLeft.style('opacity', 0);
-          hoverDotRight.style('opacity', 0);
+        .on("mouseout", () => {
+          d3.select(".d3-tooltip").style("opacity", 0);
+          verticalLine.style("opacity", 0);
+          hoverDotLeft.style("opacity", 0);
+          hoverDotRight.style("opacity", 0);
         })
-        .on('mousemove', (event) => {
+        .on("mousemove", (event) => {
+          console.log("[DEBUG] Tooltip mousemove triggered");
           const mouseX = d3.pointer(event)[0];
 
           // Find the closest data point
-          const bisect = d3.bisector(d => d.timestamp).left;
+          const bisect = d3.bisector((d) => d.timestamp).left;
           const x0 = x.invert(mouseX);
           const i = bisect(data, x0, 1);
 
@@ -790,49 +893,51 @@ export default {
           const d = x0 - d0.timestamp > d1.timestamp - x0 ? d1 : d0;
 
           // Update vertical line position
-          verticalLine
-            .attr('x1', x(d.timestamp))
-            .attr('x2', x(d.timestamp));
+          verticalLine.attr("x1", x(d.timestamp)).attr("x2", x(d.timestamp));
 
           // Update hover dots positions
-          hoverDotLeft
-            .attr('cx', x(d.timestamp))
-            .attr('cy', yLeft(d.value));
+          hoverDotLeft.attr("cx", x(d.timestamp)).attr("cy", yLeft(d.value));
 
           hoverDotRight
-            .attr('cx', x(d.timestamp))
-            .attr('cy', yRight(d.userCount));
+            .attr("cx", x(d.timestamp))
+            .attr("cy", yRight(d.userCount));
 
           // Format the tooltip content
-          const totalQueriesLabel = this.$t('charts.tooltip.totalQueries');
-          const uniqueUsersLabel = this.$t('charts.tooltip.uniqueUsers');
+          const totalQueriesLabel = this.$t("charts.tooltip.totalQueries");
+          const uniqueUsersLabel = this.$t("charts.tooltip.uniqueUsers");
 
           // Updated tooltip with proper contrasting colors regardless of theme
           const tooltipContent = `
-        <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
-          ${d.dateLabel}
-        </div>
-        <div style="margin: 5px 0;">
-          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, ${isDarkMode ? '#4a8bbf, #2d6fa7' : '#62d9a6, #2da676'}); border-radius: 2px; vertical-align: middle;"></span>
-          ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
-        </div>
-        <div style="margin: 5px 0;">
-          <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: #5b9bd5; border-radius: 50%; vertical-align: middle;"></span>
-          ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
-        </div>
-      `;
+            <div style="margin-bottom: 5px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 4px;">
+              ${d.dateLabel}
+            </div>
+            <div style="margin: 5px 0;">
+              <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: linear-gradient(to bottom, ${
+                isDarkMode ? "#4a8bbf, #2d6fa7" : "#62d9a6, #2da676"
+              }); border-radius: 2px; vertical-align: middle;"></span>
+              ${totalQueriesLabel}: <strong>${d.value.toLocaleString(
+            this.$i18n.locale
+          )}</strong>
+            </div>
+            <div style="margin: 5px 0;">
+              <span style="display: inline-block; width: 12px; height: 12px; margin-right: 5px; background: #5b9bd5; border-radius: 50%; vertical-align: middle;"></span>
+              ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(
+            this.$i18n.locale
+          )}</strong>
+            </div>
+          `;
 
           // Position and show the tooltip
-          d3.select('.d3-tooltip')
+          d3.select(".d3-tooltip")
             .html(tooltipContent)
-            .style('left', (event.pageX + 15) + 'px')
-            .style('top', (event.pageY - 60) + 'px');
+            .style("left", event.pageX + 15 + "px")
+            .style("top", event.pageY - 60 + "px");
         });
-        
-      // Force text colors for dark mode after chart is rendered
-      this.forceAxisTextColorInDarkMode();
-    }
-  }
+
+      // Force text colors for theme after render
+      this.forceAxisTextColor();
+    },
+  },
 };
 </script>
 
@@ -872,7 +977,7 @@ export default {
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 3px solid var(--accent-color, #4E97D1);
+  border-top: 3px solid var(--accent-color, #4e97d1);
   width: 30px;
   height: 30px;
   animation: spin 1s linear infinite;

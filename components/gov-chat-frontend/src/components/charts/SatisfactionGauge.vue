@@ -126,7 +126,6 @@
 
 <script>
 import analyticsService from "../../services/analyticsService";
-import { getThemeInfo as getThemeFromManager } from "../../utils/ThemeManager";
 
 export default {
   name: "SatisfactionGauge",
@@ -173,6 +172,7 @@ export default {
   },
   data() {
     return {
+      theme: "light", // Store current theme
       satisfactionValue: null, // Internal value when externalData is false
       internalHistoricalData: [], // Internal data when externalData is false
       internalChangeIndicator: null, // Internal change when externalData is false
@@ -363,6 +363,7 @@ export default {
       }`
     );
 
+    this.updateTheme(); // Set initial theme
     if (!this.externalData) {
       console.log("[SatisfactionGauge] Fetching data from API");
       this.fetchData();
@@ -380,7 +381,6 @@ export default {
     }
 
     this.setupThemeChangeListener();
-    this.injectGlobalStyleForDarkMode();
     window.addEventListener("error", this.handleGlobalError);
   },
   beforeUnmount() {
@@ -389,7 +389,7 @@ export default {
     }
     window.removeEventListener("error", this.handleGlobalError);
     const injectedStyle = document.getElementById(
-      "satisfaction-gauge-dark-mode-style"
+      "satisfaction-gauge-theme-style"
     );
     if (injectedStyle) {
       document.head.removeChild(injectedStyle);
@@ -501,6 +501,7 @@ export default {
             mutation.attributeName === "data-theme"
           ) {
             console.log("[SatisfactionGauge] Theme change detected");
+            this.updateTheme();
             this.chartOptions = null;
             this.$nextTick(() => {
               this.chartKey++;
@@ -518,18 +519,35 @@ export default {
     },
 
     /**
-     * Get theme information
+     * Update theme based on parent or global settings
      */
-    getThemeInfo() {
-      return getThemeFromManager();
+    updateTheme() {
+      let themeMode =
+        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
+        document.documentElement.getAttribute("data-theme") ||
+        localStorage.getItem("theme") ||
+        "light";
+      if (!["light", "dark", "system"].includes(themeMode)) {
+        console.warn(
+          `[SatisfactionGauge] Invalid themeMode: ${themeMode}, defaulting to light`
+        );
+        themeMode = "light";
+      }
+      if (themeMode === "system") {
+        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+      this.theme = themeMode;
+      console.log(`[SatisfactionGauge] Theme detected: ${themeMode}`);
+      this.injectGlobalStyleForTheme(); // Apply theme-specific styles
     },
 
     /**
      * Get gauge color based on value
      */
     getGaugeColor(value) {
-      const theme = this.getThemeInfo();
-      const isDarkMode = theme.isDarkMode;
+      const isDarkMode = this.theme === "dark";
 
       if (value >= 90) return "#22C55E"; // Green
       if (value >= 80) return "#84CC16"; // Light green
@@ -552,8 +570,7 @@ export default {
         return;
       }
 
-      const theme = this.getThemeInfo();
-      const isDarkMode = theme.isDarkMode;
+      const isDarkMode = this.theme === "dark";
 
       const textColor = isDarkMode ? "#FFFFFF" : "#333333";
       const backgroundColor = isDarkMode ? "#414141" : "#FFFFFF";
@@ -670,28 +687,42 @@ export default {
     },
 
     /**
-     * Inject dark mode styles for ApexCharts
+     * Inject global styles for the current theme
      */
-    injectGlobalStyleForDarkMode() {
-      if (document.getElementById("satisfaction-gauge-dark-mode-style")) {
-        return;
+    injectGlobalStyleForTheme() {
+      const styleId = "satisfaction-gauge-theme-style";
+      let styleEl = document.getElementById(styleId);
+      if (styleEl) {
+        styleEl.remove(); // Remove existing style to prevent duplicates
       }
 
-      const styleEl = document.createElement("style");
-      styleEl.id = "satisfaction-gauge-dark-mode-style";
-      styleEl.textContent = `
-        /* Force all ApexCharts text to be white in dark mode */
-        [data-theme="dark"] .apexcharts-text,
-        [data-theme="dark"] .apexcharts-datalabel-label,
-        [data-theme="dark"] .apexcharts-datalabel-value,
-        [data-theme="dark"] .apexcharts-radialbar-label text,
-        [data-theme="dark"] .apexcharts-radialbar text {
-          fill: #FFFFFF !important;
-        }
-      `;
+      styleEl = document.createElement("style");
+      styleEl.id = styleId;
+      if (this.theme === "dark") {
+        styleEl.textContent = `
+          [data-theme="dark"] .apexcharts-text,
+          [data-theme="dark"] .apexcharts-datalabel-label,
+          [data-theme="dark"] .apexcharts-datalabel-value,
+          [data-theme="dark"] .apexcharts-radialbar-label text,
+          [data-theme="dark"] .apexcharts-radialbar text {
+            fill: #FFFFFF !important;
+          }
+        `;
+        console.log("[SatisfactionGauge] Injected dark mode style");
+      } else {
+        styleEl.textContent = `
+          [data-theme="light"] .apexcharts-text,
+          [data-theme="light"] .apexcharts-datalabel-label,
+          [data-theme="light"] .apexcharts-datalabel-value,
+          [data-theme="light"] .apexcharts-radialbar-label text,
+          [data-theme="light"] .apexcharts-radialbar text {
+            fill: #333333 !important;
+          }
+        `;
+        console.log("[SatisfactionGauge] Injected light mode style");
+      }
 
       document.head.appendChild(styleEl);
-      console.log("[SatisfactionGauge] Injected dark mode style");
     },
 
     /**
@@ -699,8 +730,7 @@ export default {
      */
     forceTextColorUpdate() {
       console.log("[SatisfactionGauge] Attempting to force text color update");
-      const theme = this.getThemeInfo();
-      const isDarkMode = theme.isDarkMode;
+      const isDarkMode = this.theme === "dark";
 
       if (isDarkMode) {
         const chartElement = this.$refs.chart;

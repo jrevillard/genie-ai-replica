@@ -1,11 +1,7 @@
 <!-- src/components/ConfirmDialog.vue -->
 <template>
   <div v-if="visible" class="confirm-dialog-overlay">
-    <div 
-      class="confirm-dialog" 
-      :style="parentStyles"
-      :data-theme="theme"
-    >
+    <div class="confirm-dialog" :style="parentStyles" :data-theme="theme">
       <div class="confirm-dialog-header">
         <h3 :data-themed="true">{{ title }}</h3>
       </div>
@@ -13,7 +9,9 @@
         <p>{{ message }}</p>
       </div>
       <div class="confirm-dialog-footer">
-        <button v-if="secondaryText" class="btn-secondary" @click="secondary">{{ secondaryText }}</button>
+        <button v-if="secondaryText" class="btn-secondary" @click="secondary">
+          {{ secondaryText }}
+        </button>
         <button class="btn-cancel" @click="cancel">{{ cancelText }}</button>
         <button class="btn-confirm" @click="confirm">{{ confirmText }}</button>
       </div>
@@ -23,53 +21,53 @@
 
 <script>
 export default {
-  name: 'ConfirmDialog',
+  name: "ConfirmDialog",
   props: {
     visible: {
       type: Boolean,
-      default: false
+      default: false,
     },
     title: {
       type: String,
-      default: 'Confirm'
+      default: "Confirm",
     },
     message: {
       type: String,
-      default: 'Are you sure?'
+      default: "Are you sure?",
     },
     confirmText: {
       type: String,
-      default: 'OK'
+      default: "OK",
     },
     cancelText: {
       type: String,
-      default: 'Cancel'
+      default: "Cancel",
     },
     theme: {
       type: String,
-      default: 'light'
+      default: "light",
     },
     parentStyles: {
       type: Object,
-      default: () => ({})
+      default: () => ({}),
     },
     secondaryText: {
       type: String,
-      default: ''
-    }
+      default: "",
+    },
   },
   methods: {
     confirm() {
-      this.$emit('confirm');
+      this.$emit("confirm");
     },
     cancel() {
-      this.$emit('cancel');
+      this.$emit("cancel");
     },
     secondary() {
-      this.$emit('secondary');
-    }
-  }
-}
+      this.$emit("secondary");
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -122,7 +120,9 @@ export default {
   border-top: 1px solid var(--dialog-border-color, #eaeaea);
 }
 
-.btn-cancel, .btn-confirm, .btn-secondary {
+.btn-cancel,
+.btn-confirm,
+.btn-secondary {
   padding: 8px 16px;
   border-radius: 4px;
   font-weight: 500;
@@ -132,63 +132,49 @@ export default {
 }
 
 .btn-cancel {
-  background-color: var(--dialog-secondary-button-bg, #cccccc);
-  color: var(--dialog-secondary-button-text, #333333);
+  background-color: var(--bg-button-secondary, #d1d5db);
+  color: var(--text-button-secondary, #333333);
 }
 
 .btn-cancel:hover {
-  background-color: var(--dialog-secondary-button-hover-bg, #bbbbbb);
+  background-color: var(--bg-button-secondary-hover, #b9bfc9);
 }
 
 .btn-confirm {
-  background-color: var(--dialog-primary-button-bg, #4E97D1);
-  color: var(--dialog-primary-button-text, #ffffff);
+  background-color: var(--bg-button-primary, #4e97d1);
+  color: var(--text-button-primary, #ffffff);
 }
 
 .btn-confirm:hover {
-  background-color: var(--dialog-primary-button-hover-bg, #3a7da0);
+  background-color: var(--bg-button-primary-hover, #3a7da0);
 }
 
 .btn-secondary {
-  background-color: var(--dialog-secondary-button-bg, #10b981);
-  color: var(--dialog-secondary-button-text, #ffffff);
+  background-color: var(--bg-button-secondary, #d1d5db);
+  color: var(--text-button-secondary, #333333);
 }
 
 .btn-secondary:hover {
-  background-color: var(--dialog-secondary-button-hover-bg, #059669);
+  background-color: var(--bg-button-secondary-hover, #b9bfc9);
 }
 
-/* Base dark theme styles - these will apply ONLY when no parentStyles are provided */
+/* Base dark theme styles - apply non-button styles when parentStyles are not provided */
 .confirm-dialog[data-theme="dark"]:not([style*="--dialog-background"]) {
   background-color: #2a2a2a;
   color: #ffffff;
 }
 
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-border-color"]) .confirm-dialog-header,
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-border-color"]) .confirm-dialog-footer {
+.confirm-dialog[data-theme="dark"]:not([style*="--dialog-border-color"])
+  .confirm-dialog-header,
+.confirm-dialog[data-theme="dark"]:not([style*="--dialog-border-color"])
+  .confirm-dialog-footer {
   border-color: #444444;
 }
 
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-title-color"]) .confirm-dialog-header h3 {
+.confirm-dialog[data-theme="dark"]:not([style*="--dialog-title-color"])
+  .confirm-dialog-header
+  h3 {
   color: #ffffff;
-}
-
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-secondary-button-bg"]) .btn-cancel {
-  background-color: #444444;
-  color: #ffffff;
-}
-
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-secondary-button-hover-bg"]) .btn-cancel:hover {
-  background-color: #555555;
-}
-
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-secondary-button-bg"]) .btn-secondary {
-  background-color: #059669;
-  color: #ffffff;
-}
-
-.confirm-dialog[data-theme="dark"]:not([style*="--dialog-secondary-button-hover-bg"]) .btn-secondary:hover {
-  background-color: #047857;
 }
 
 /* Ensure data-themed="true" works regardless of other settings */
@@ -196,7 +182,9 @@ export default {
   color: var(--dialog-title-color, #333333) !important;
 }
 
-.confirm-dialog[data-theme="dark"] .confirm-dialog-header h3[data-themed="true"] {
+.confirm-dialog[data-theme="dark"]
+  .confirm-dialog-header
+  h3[data-themed="true"] {
   color: var(--dialog-title-color-dark, #ffffff) !important;
 }
 </style>

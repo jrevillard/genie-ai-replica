@@ -1,0 +1,138 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "GENIE.AI Framework Configuration",
+    "description": "Configuration file for customizing the GENIE.AI chatbot framework",
+    "type": "object",
+    "properties": {
+      "app": {
+        "type": "object",
+        "description": "General application settings",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Main application title displayed in the UI",
+            "default": "GENIE.AI Chatbot"
+          },
+          "icon": {
+            "type": "object",
+            "description": "Application icon configuration (SVG)",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["file", "inline"],
+                "description": "Type of icon source",
+                "default": "file"
+              },
+              "value": {
+                "type": "string",
+                "description": "Path to SVG file (for 'file') or inline SVG content (for 'inline')"
+              }
+            },
+            "required": ["type", "value"]
+          }
+        },
+        "required": ["title", "icon"]
+      },
+      "theme": {
+        "type": "object",
+        "description": "UI theme and color scheme settings",
+        "properties": {
+          "primaryColor": {
+            "type": "string",
+            "description": "Primary color for buttons and accents",
+            "default": "#4E97D1"
+          },
+          "secondaryColor": {
+            "type": "string",
+            "description": "Secondary color for accents and highlights",
+            "default": "#2C5F8A"
+          },
+          "backgroundColor": {
+            "type": "string",
+            "description": "Background color for main content area",
+            "default": "#f5f7fa"
+          },
+          "textColor": {
+            "type": "string",
+            "description": "Primary text color",
+            "default": "#333333"
+          },
+          "navbar": {
+            "type": "object",
+            "description": "Navbar-specific styling",
+            "properties": {
+              "gradientStart": {
+                "type": "string",
+                "description": "Start color for navbar gradient",
+                "default": "#4E97D1"
+              },
+              "gradientEnd": {
+                "type": "string",
+                "description": "End color for navbar gradient",
+                "default": "#2C5F8A"
+              },
+              "textColor": {
+                "type": "string",
+                "description": "Navbar text/icon color",
+                "default": "#ffffff"
+              }
+            }
+          }
+        },
+        "required": ["primaryColor", "secondaryColor", "navbar"]
+      },
+      "features": {
+        "type": "object",
+        "description": "Feature toggles and configurations",
+        "properties": {
+          "chat": {
+            "type": "object",
+            "description": "Chat-specific settings",
+            "properties": {
+              "welcomeMessage": {
+                "type": "string",
+                "description": "Custom welcome message for the chatbot",
+                "default": "Welcome to GENIE.AI!"
+              },
+              "botName": {
+                "type": "string",
+                "description": "Name of the chatbot",
+                "default": "Genie"
+              }
+            }
+          }
+        }
+      },
+      "custom": {
+        "type": "object",
+        "description": "Custom key-value pairs for use case-specific configurations",
+        "additionalProperties": true
+      }
+    },
+    "required": ["app", "theme"],
+    "app": {
+      "title": "Huduma AI",
+      "icon": {
+        "type": "file",
+        "value": "/config/huduma-icon.svg"
+      }
+    },
+    "theme": {
+      "primaryColor": "#4E97D1",
+      "secondaryColor": "#2C5F8A",
+      "backgroundColor": "#f5f7fa",
+      "textColor": "#333333",
+      "navbar": {
+        "gradientStart": "#4E97D1",
+        "gradientEnd": "#2C5F8A",
+        "textColor": "#ffffff"
+      }
+    },
+    "features": {
+      "chat": {
+        "welcomeMessage": "Welcome to Huduma AI, your public service assistant!",
+        "botName": "Huduma"
+      }
+    },
+    "custom": {}
+  }

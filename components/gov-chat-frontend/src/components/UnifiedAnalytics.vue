@@ -1,6 +1,6 @@
 <!-- UnifiedAnalytics.vue - Updated version with proper date range handling for all charts -->
 <template>
-  <div class="analytics-modal" @click.self="close">
+  <div class="analytics-modal" @click.self="close" :data-theme="theme">
     <div class="analytics-content" :key="'analytics-content-' + currentLocale">
       <div class="analytics-header">
         <h2 style="color: var(--text-primary) !important">
@@ -222,6 +222,7 @@ import CategoryDistributionChart from "./charts/CategoryDistributionChart.vue";
 import SatisfactionGauge from "./charts/SatisfactionGauge.vue";
 import SatisfactionHeatmap from "./charts/SatisfactionHeatmap.vue";
 import analyticsService from "../services/analyticsService";
+import { getThemeInfo } from "../utils/ThemeManager";
 
 export default {
   name: "UnifiedAnalytics",
@@ -323,6 +324,7 @@ export default {
         ],
         topQueries: [],
       },
+      theme: null,
     };
   },
 
@@ -351,7 +353,11 @@ export default {
     } else {
       this.loadStaticData();
     }
-
+    // Initialize theme
+    this.theme =
+      localStorage.getItem("theme") ||
+      document.documentElement.getAttribute("data-theme") ||
+      "light";
     // Listen for locale changes
     if (this.$i18n) {
       this.currentLocale = this.$i18n.locale;
@@ -385,6 +391,8 @@ export default {
     // Add resize listener
     window.addEventListener("resize", this.handleResize);
     console.log("UnifiedAnalytics mounted with locale:", this.currentLocale);
+    // Ensure theme is applied on mount
+    this.applyTheme();
   },
 
   beforeUnmount() {
@@ -392,6 +400,29 @@ export default {
   },
 
   methods: {
+    applyTheme() {
+      // Get current theme from ThemeManager
+      // Use saved theme preference or data-theme attribute
+      let themeMode =
+        localStorage.getItem("theme") ||
+        document.documentElement.getAttribute("data-theme") ||
+        "light";
+      // Validate themeMode
+      if (!["light", "dark", "system"].includes(themeMode)) {
+        console.warn(
+          `[UnifiedAnalytics] Invalid themeMode: ${themeMode}, defaulting to light`
+        );
+        themeMode = "light";
+      }
+      this.theme = themeMode;
+      // Set data-theme attribute on root element
+      this.$el.setAttribute("data-theme", themeMode);
+      console.log(`[UnifiedAnalytics] Applied theme: ${themeMode}`);
+      // Force re-render of charts to pick up theme
+      this.$nextTick(() => {
+        this.loadAnalytics();
+      });
+    },
     /**
      * Custom translation method to ensure correct locale is used
      */
@@ -976,6 +1007,23 @@ export default {
 </script>
 
 <style scoped>
+.analytics-modal {
+  --bg-dialog: var(--bg-primary, #fff);
+  --text-primary: var(--text-color, #333);
+  --border-color: var(--border-light, #eee);
+}
+
+[data-theme="dark"] .analytics-modal {
+  --bg-dialog: #414141;
+  --text-primary: #ffffff;
+  --border-color: #555;
+}
+
+/* Ensure analytics-content follows theme */
+.analytics-content {
+  background: var(--bg-dialog);
+  color: var(--text-primary);
+}
 .analytics-modal {
   position: fixed;
   top: 0;

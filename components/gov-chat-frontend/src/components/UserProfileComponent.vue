@@ -1,37 +1,48 @@
-// UserProfileComponent.vue with centralized translation function
+// UserProfileComponent.vue with centralized translation function and updated theme variables
 
-<<template>
-  <div class="user-profile-modal" :style="dialogThemeStyles" :data-themed="isThemeReady" ref="modalContainer">
+<template>
+  <div
+    class="user-profile-modal"
+    :style="dialogThemeStyles"
+    :data-themed="isThemeReady"
+    ref="modalContainer"
+  >
     <div class="overlay" @click="cancel"></div>
     <div class="modal-content">
-      <h2 :data-themed="isThemeReady">{{ translate('title') }}</h2>
+      <h2 :data-themed="isThemeReady">{{ translate("title") }}</h2>
 
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <p>{{ translate('loadingProfile', 'Loading user profile...') }}</p>
+        <p>{{ translate("loadingProfile", "Loading user profile...") }}</p>
       </div>
 
       <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
         <button @click="retryLoading" class="retry-btn">
-          {{ translate('retryLoading', 'Retry') }}
+          {{ translate("retryLoading", "Retry") }}
         </button>
       </div>
 
       <!-- Main content - shown when not loading and no errors -->
       <div v-else>
         <p class="privacy-info" :data-themed="isThemeReady">
-          {{ translate('privacyInfo') }}
-          <a href="#" class="privacy-link">{{ translate('privacyPolicyLink') }}</a>
+          {{ translate("privacyInfo") }}
+          <a href="#" class="privacy-link">{{
+            translate("privacyPolicyLink")
+          }}</a>
         </p>
 
         <!-- Tabs -->
         <div class="tabs">
-          <button v-for="(tab, index) in tabs" :key="index" :class="{ active: activeTab === index }"
-            @click="activeTab = index">
-            {{ translate(`tabs.tab${index+1}`) }}
+          <button
+            v-for="(tab, index) in tabs"
+            :key="index"
+            :class="{ active: activeTab === index }"
+            @click="activeTab = index"
+          >
+            {{ translate(`tabs.tab${index + 1}`) }}
           </button>
         </div>
 
@@ -41,37 +52,67 @@
           <div v-if="activeTab === 0">
             <!-- Profile Icon Section -->
             <div class="profile-icon-section">
-              <label>{{ translate('profileIcon') }}</label>
+              <label>{{ translate("profileIcon") }}</label>
               <div class="profile-icon-container">
                 <div class="current-icon" @click="openIconSelector">
-                  <img v-if="formData.personalIdentification.profileIcon"
-                    :src="formData.personalIdentification.profileIcon" alt="Profile icon" />
+                  <img
+                    v-if="formData.personalIdentification.profileIcon"
+                    :src="formData.personalIdentification.profileIcon"
+                    alt="Profile icon"
+                  />
                   <div v-else class="icon-placeholder">
                     {{ getInitials(formData.personalIdentification.fullName) }}
                   </div>
                   <div class="icon-overlay">
-                    <span>{{ translate('change') }}</span>
+                    <span>{{ translate("change") }}</span>
                   </div>
                 </div>
               </div>
 
               <!-- Icon Selection Modal -->
-              <div v-if="showIconSelector" class="icon-selector-overlay" @click="closeIconSelector">
+              <div
+                v-if="showIconSelector"
+                class="icon-selector-overlay"
+                @click="closeIconSelector"
+              >
                 <div class="icon-selector-modal" @click.stop>
-                  <h4>{{ translate('chooseProfileIcon') }}</h4>
+                  <h4>{{ translate("chooseProfileIcon") }}</h4>
 
                   <div class="icon-tabs">
-                    <button :class="{ active: iconTab === 'preset' }" @click="iconTab = 'preset'">{{ translate('presetIcons') }}</button>
-                    <button :class="{ active: iconTab === 'upload' }" @click="iconTab = 'upload'">{{ translate('upload') }}</button>
-                    <button :class="{ active: iconTab === 'initials' }" @click="iconTab = 'initials'">{{ translate('initials') }}</button>
+                    <button
+                      :class="{ active: iconTab === 'preset' }"
+                      @click="iconTab = 'preset'"
+                    >
+                      {{ translate("presetIcons") }}
+                    </button>
+                    <button
+                      :class="{ active: iconTab === 'upload' }"
+                      @click="iconTab = 'upload'"
+                    >
+                      {{ translate("upload") }}
+                    </button>
+                    <button
+                      :class="{ active: iconTab === 'initials' }"
+                      @click="iconTab = 'initials'"
+                    >
+                      {{ translate("initials") }}
+                    </button>
                   </div>
 
                   <div class="icon-content">
                     <!-- Preset Icons -->
                     <div v-if="iconTab === 'preset'" class="preset-icons">
-                      <div v-for="(icon, index) in presetIcons" :key="index" class="preset-icon"
-                        :class="{ selected: formData.personalIdentification.profileIcon === icon }"
-                        @click="selectPresetIcon(icon)">
+                      <div
+                        v-for="(icon, index) in presetIcons"
+                        :key="index"
+                        class="preset-icon"
+                        :class="{
+                          selected:
+                            formData.personalIdentification.profileIcon ===
+                            icon,
+                        }"
+                        @click="selectPresetIcon(icon)"
+                      >
                         <img :src="icon" alt="Preset icon" />
                       </div>
                     </div>
@@ -79,107 +120,178 @@
                     <!-- Upload Option -->
                     <div v-if="iconTab === 'upload'" class="upload-icon">
                       <div class="upload-zone" @click="triggerFileUpload">
-                        <span v-if="!uploadedImage">{{ translate('clickToUpload') }}</span>
+                        <span v-if="!uploadedImage">{{
+                          translate("clickToUpload")
+                        }}</span>
                         <img v-else :src="uploadedImage" alt="Uploaded icon" />
                       </div>
-                      <input type="file" ref="fileInput" style="display:none" accept="image/*"
-                        @change="handleFileUpload" />
-                      <button v-if="uploadedImage" class="btn-confirm" @click="confirmUpload">{{ translate('useThisImage') }}</button>
+                      <input
+                        type="file"
+                        ref="fileInput"
+                        style="display: none"
+                        accept="image/*"
+                        @change="handleFileUpload"
+                      />
+                      <button
+                        v-if="uploadedImage"
+                        class="btn-confirm"
+                        @click="confirmUpload"
+                      >
+                        {{ translate("useThisImage") }}
+                      </button>
                     </div>
 
                     <!-- Initials Option -->
-                    <div v-if="iconTab === 'initials'" class="initials-selector">
+                    <div
+                      v-if="iconTab === 'initials'"
+                      class="initials-selector"
+                    >
                       <div class="initials-preview">
-                        <div class="initials-icon" :style="{ backgroundColor: initialsColor }">
-                          {{ getInitials(formData.personalIdentification.fullName) }}
+                        <div
+                          class="initials-icon"
+                          :style="{ backgroundColor: initialsColor }"
+                        >
+                          {{
+                            getInitials(
+                              formData.personalIdentification.fullName
+                            )
+                          }}
                         </div>
                       </div>
                       <div class="color-selector">
-                        <div v-for="(color, index) in colorOptions" :key="index" class="color-option"
-                          :style="{ backgroundColor: color }" :class="{ selected: initialsColor === color }"
-                          @click="initialsColor = color"></div>
+                        <div
+                          v-for="(color, index) in colorOptions"
+                          :key="index"
+                          class="color-option"
+                          :style="{ backgroundColor: color }"
+                          :class="{ selected: initialsColor === color }"
+                          @click="initialsColor = color"
+                        ></div>
                       </div>
-                      <button class="btn-confirm" @click="useInitials">{{ translate('useInitials') }}</button>
+                      <button class="btn-confirm" @click="useInitials">
+                        {{ translate("useInitials") }}
+                      </button>
                     </div>
                   </div>
 
                   <div class="icon-selector-footer">
-                    <button class="btn-cancel" @click="closeIconSelector">{{ translate('actions.cancel') }}</button>
+                    <button class="btn-cancel" @click="closeIconSelector">
+                      {{ translate("actions.cancel") }}
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.fullName') }}</label>
-              <input v-model="formData.personalIdentification.fullName" type="text"
-                :placeholder="translate('placeholders.fullName')" />
+              <label>{{ translate("fields.fullName") }}</label>
+              <input
+                v-model="formData.personalIdentification.fullName"
+                type="text"
+                :placeholder="translate('placeholders.fullName')"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.dob') }}</label>
-              <input v-model="formData.personalIdentification.dob" type="date" />
+              <label>{{ translate("fields.dob") }}</label>
+              <input
+                v-model="formData.personalIdentification.dob"
+                type="date"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.gender') }}</label>
+              <label>{{ translate("fields.gender") }}</label>
               <select v-model="formData.personalIdentification.gender">
-                <option value="">{{ translate('select') }}</option>
-                <option value="male">{{ translate('gender.male') }}</option>
-                <option value="female">{{ translate('gender.female') }}</option>
-                <option value="other">{{ translate('gender.other') }}</option>
-                <option value="prefer-not-to-say">{{ translate('gender.preferNot') }}</option>
+                <option value="">{{ translate("select") }}</option>
+                <option value="male">{{ translate("gender.male") }}</option>
+                <option value="female">{{ translate("gender.female") }}</option>
+                <option value="other">{{ translate("gender.other") }}</option>
+                <option value="prefer-not-to-say">
+                  {{ translate("gender.preferNot") }}
+                </option>
               </select>
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.nationality') }}</label>
-              <searchable-country-dropdown v-model="formData.personalIdentification.nationality" :label="''"
+              <label>{{ translate("fields.nationality") }}</label>
+              <searchable-country-dropdown
+                v-model="formData.personalIdentification.nationality"
+                :label="''"
                 ref="nationalityDropdown"
                 :placeholder="translate('placeholders.selectCountry')"
                 :search-placeholder="translate('placeholders.searchCountries')"
                 :no-results-text="translate('noMatchingCountries')"
-                @update:name="updateNationalityName" @change="onNationalityChange" />
+                @update:name="updateNationalityName"
+                @change="onNationalityChange"
+              />
             </div>
           </div>
 
           <!-- Civil Registration & Documentation -->
           <div v-else-if="activeTab === 1">
             <div class="field-group">
-              <label>{{ translate('fields.birthCert') }}</label>
-              <input v-model="formData.civilRegistration.birthCert" type="text" />
+              <label>{{ translate("fields.birthCert") }}</label>
+              <input
+                v-model="formData.civilRegistration.birthCert"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.citizenship') }}</label>
-              <input v-model="formData.civilRegistration.citizenship" type="text" />
+              <label>{{ translate("fields.citizenship") }}</label>
+              <input
+                v-model="formData.civilRegistration.citizenship"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.immigration') }}</label>
-              <input v-model="formData.civilRegistration.immigration" type="text" />
+              <label>{{ translate("fields.immigration") }}</label>
+              <input
+                v-model="formData.civilRegistration.immigration"
+                type="text"
+              />
             </div>
           </div>
 
           <!-- Address & Residency Information -->
           <div v-else-if="activeTab === 2">
             <div class="field-group">
-              <label>{{ translate('fields.currentAddress') }}</label>
-              <textarea v-model="formData.addressResidency.currentAddress"></textarea>
+              <label>{{ translate("fields.currentAddress") }}</label>
+              <textarea
+                v-model="formData.addressResidency.currentAddress"
+              ></textarea>
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.postalCode') }}</label>
-              <input v-model="formData.addressResidency.postalCode" type="text" />
+              <label>{{ translate("fields.postalCode") }}</label>
+              <input
+                v-model="formData.addressResidency.postalCode"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.country') }}</label>
-              <searchable-country-dropdown v-model="formData.addressResidency.country" :label="''" ref="countryDropdown"
+              <label>{{ translate("fields.country") }}</label>
+              <searchable-country-dropdown
+                v-model="formData.addressResidency.country"
+                :label="''"
+                ref="countryDropdown"
                 :placeholder="translate('placeholders.selectCountry')"
                 :search-placeholder="translate('placeholders.searchCountries')"
                 :no-results-text="translate('noMatchingCountries')"
-                @update:name="updateCountryName" @change="onCountryChange" />
+                @update:name="updateCountryName"
+                @change="onCountryChange"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.residencyStatus') }}</label>
+              <label>{{ translate("fields.residencyStatus") }}</label>
               <select v-model="formData.addressResidency.residencyStatus">
-                <option value="citizen">{{ translate('residencyStatuses.citizen') }}</option>
-                <option value="permanent-resident">{{ translate('residencyStatuses.permanentResident') }}</option>
-                <option value="temporary-resident">{{ translate('residencyStatuses.temporaryResident') }}</option>
-                <option value="other">{{ translate('residencyStatuses.other') }}</option>
+                <option value="citizen">
+                  {{ translate("residencyStatuses.citizen") }}
+                </option>
+                <option value="permanent-resident">
+                  {{ translate("residencyStatuses.permanentResident") }}
+                </option>
+                <option value="temporary-resident">
+                  {{ translate("residencyStatuses.temporaryResident") }}
+                </option>
+                <option value="other">
+                  {{ translate("residencyStatuses.other") }}
+                </option>
               </select>
             </div>
           </div>
@@ -187,23 +299,29 @@
           <!-- Identity & Travel Documents -->
           <div v-else-if="activeTab === 3">
             <div class="field-group">
-              <label>{{ translate('fields.idCard') }}</label>
+              <label>{{ translate("fields.idCard") }}</label>
               <input v-model="formData.identityDocuments.idCard" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.passport') }}</label>
-              <input v-model="formData.identityDocuments.passport" type="text" />
+              <label>{{ translate("fields.passport") }}</label>
+              <input
+                v-model="formData.identityDocuments.passport"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.driversLicense') }}</label>
-              <input v-model="formData.identityDocuments.driversLicense" type="text" />
+              <label>{{ translate("fields.driversLicense") }}</label>
+              <input
+                v-model="formData.identityDocuments.driversLicense"
+                type="text"
+              />
             </div>
           </div>
 
           <!-- Health & Medical Records -->
           <div v-else-if="activeTab === 4">
             <div class="field-group">
-              <label>{{ translate('fields.bloodType') }}</label>
+              <label>{{ translate("fields.bloodType") }}</label>
               <select v-model="formData.healthInfo.bloodType">
                 <option value="a-positive">A+</option>
                 <option value="a-negative">A-</option>
@@ -216,10 +334,10 @@
               </select>
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.organDonor') }}</label>
+              <label>{{ translate("fields.organDonor") }}</label>
               <select v-model="formData.healthInfo.organDonor">
-                <option value="yes">{{ translate('yesNo.yes') }}</option>
-                <option value="no">{{ translate('yesNo.no') }}</option>
+                <option value="yes">{{ translate("yesNo.yes") }}</option>
+                <option value="no">{{ translate("yesNo.no") }}</option>
               </select>
             </div>
           </div>
@@ -227,15 +345,21 @@
           <!-- Employment & Economic Data -->
           <div v-else-if="activeTab === 5">
             <div class="field-group">
-              <label>{{ translate('fields.eHistory') }}</label>
-              <input v-model="formData.employmentInfo.employmentHistory" type="text" />
+              <label>{{ translate("fields.eHistory") }}</label>
+              <input
+                v-model="formData.employmentInfo.employmentHistory"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.currentEmployer') }}</label>
-              <input v-model="formData.employmentInfo.currentEmployer" type="text" />
+              <label>{{ translate("fields.currentEmployer") }}</label>
+              <input
+                v-model="formData.employmentInfo.currentEmployer"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.tin') }}</label>
+              <label>{{ translate("fields.tin") }}</label>
               <input v-model="formData.employmentInfo.taxId" type="text" />
             </div>
           </div>
@@ -243,70 +367,120 @@
           <!-- Education & Academic Records -->
           <div v-else-if="activeTab === 6">
             <div class="field-group">
-              <label>{{ translate('fields.education') }}</label>
+              <label>{{ translate("fields.education") }}</label>
               <div class="select-wrapper">
-                <input v-if="showEducationSearch" type="text" v-model="educationSearchTerm" class="search-input"
+                <input
+                  v-if="showEducationSearch"
+                  type="text"
+                  v-model="educationSearchTerm"
+                  class="search-input"
                   :placeholder="translate('placeholders.searchDisciplines')"
-                  @input="filterEducationOptions" @blur="handleEducationBlur"
-                  @keydown.enter="selectFirstEducationOption" @keydown.down="navigateEducationOptions(1)"
-                  @keydown.up="navigateEducationOptions(-1)" ref="educationSearchInput" />
-                <div v-else class="selected-option" @click="toggleEducationSearch">
-                  {{ formData.educationRecords.education || translate('placeholders.selectDiscipline') }}
+                  @input="filterEducationOptions"
+                  @blur="handleEducationBlur"
+                  @keydown.enter="selectFirstEducationOption"
+                  @keydown.down="navigateEducationOptions(1)"
+                  @keydown.up="navigateEducationOptions(-1)"
+                  ref="educationSearchInput"
+                />
+                <div
+                  v-else
+                  class="selected-option"
+                  @click="toggleEducationSearch"
+                >
+                  {{
+                    formData.educationRecords.education ||
+                    translate("placeholders.selectDiscipline")
+                  }}
                 </div>
                 <div v-if="showEducationSearch" class="options-dropdown">
-                  <div v-for="(option, index) in filteredEducationOptions" :key="index" class="option"
-                    :class="{ 'active': index === selectedEducationIndex }" @click="selectEducationOption(option)"
-                    @mouseenter="selectedEducationIndex = index">
+                  <div
+                    v-for="(option, index) in filteredEducationOptions"
+                    :key="index"
+                    class="option"
+                    :class="{ active: index === selectedEducationIndex }"
+                    @click="selectEducationOption(option)"
+                    @mouseenter="selectedEducationIndex = index"
+                  >
                     {{ option }}
                   </div>
-                  <div v-if="filteredEducationOptions.length === 0" class="no-results">
-                    {{ translate('noMatchingDisciplines') }}
+                  <div
+                    v-if="filteredEducationOptions.length === 0"
+                    class="no-results"
+                  >
+                    {{ translate("noMatchingDisciplines") }}
                   </div>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.degrees') }}</label>
+              <label>{{ translate("fields.degrees") }}</label>
               <div class="select-wrapper">
-                <input v-if="showDegreeSearch" type="text" v-model="degreeSearchTerm" class="search-input"
+                <input
+                  v-if="showDegreeSearch"
+                  type="text"
+                  v-model="degreeSearchTerm"
+                  class="search-input"
                   :placeholder="translate('placeholders.searchDegrees')"
-                  @input="filterDegreeOptions" @blur="handleDegreeBlur" @keydown.enter="selectFirstDegreeOption"
-                  @keydown.down="navigateDegreeOptions(1)" @keydown.up="navigateDegreeOptions(-1)"
-                  ref="degreeSearchInput" />
+                  @input="filterDegreeOptions"
+                  @blur="handleDegreeBlur"
+                  @keydown.enter="selectFirstDegreeOption"
+                  @keydown.down="navigateDegreeOptions(1)"
+                  @keydown.up="navigateDegreeOptions(-1)"
+                  ref="degreeSearchInput"
+                />
                 <div v-else class="selected-option" @click="toggleDegreeSearch">
-                  {{ formData.educationRecords.degrees || translate('placeholders.selectDegree') }}
+                  {{
+                    formData.educationRecords.degrees ||
+                    translate("placeholders.selectDegree")
+                  }}
                 </div>
                 <div v-if="showDegreeSearch" class="options-dropdown">
-                  <div v-for="(option, index) in filteredDegreeOptions" :key="index" class="option"
-                    :class="{ 'active': index === selectedDegreeIndex }" @click="selectDegreeOption(option)"
-                    @mouseenter="selectedDegreeIndex = index">
+                  <div
+                    v-for="(option, index) in filteredDegreeOptions"
+                    :key="index"
+                    class="option"
+                    :class="{ active: index === selectedDegreeIndex }"
+                    @click="selectDegreeOption(option)"
+                    @mouseenter="selectedDegreeIndex = index"
+                  >
                     {{ option }}
                   </div>
-                  <div v-if="filteredDegreeOptions.length === 0" class="no-results">
-                    {{ translate('noMatchingDegrees') }}
+                  <div
+                    v-if="filteredDegreeOptions.length === 0"
+                    class="no-results"
+                  >
+                    {{ translate("noMatchingDegrees") }}
                   </div>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.certifications') }}</label>
-              <input v-model="formData.educationRecords.certifications" type="text" />
+              <label>{{ translate("fields.certifications") }}</label>
+              <input
+                v-model="formData.educationRecords.certifications"
+                type="text"
+              />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.academicRecords') }}</label>
-              <textarea v-model="formData.educationRecords.academicRecords"></textarea>
+              <label>{{ translate("fields.academicRecords") }}</label>
+              <textarea
+                v-model="formData.educationRecords.academicRecords"
+              ></textarea>
             </div>
           </div>
 
           <!-- Financial & Tax Data -->
           <div v-else-if="activeTab === 7">
             <div class="field-group">
-              <label>{{ translate('fields.incomeTax') }}</label>
+              <label>{{ translate("fields.incomeTax") }}</label>
               <input v-model="formData.financialInfo.incomeTax" type="text" />
             </div>
             <div class="field-group">
-              <label>{{ translate('fields.bankAccounts') }}</label>
-              <input v-model="formData.financialInfo.bankAccounts" type="text" />
+              <label>{{ translate("fields.bankAccounts") }}</label>
+              <input
+                v-model="formData.financialInfo.bankAccounts"
+                type="text"
+              />
             </div>
           </div>
         </div>
@@ -314,175 +488,189 @@
         <!-- Action buttons -->
         <div class="actions">
           <button class="cancel-btn" @click="cancel" :disabled="isSubmitting">
-            {{ translate('actions.cancel') }}
+            {{ translate("actions.cancel") }}
           </button>
-          <button class="save-btn" @click="saveProfile" :disabled="isSubmitting">
-            {{ isSubmitting ? translate('actions.saving') : translate('actions.save') }}
+          <button
+            class="save-btn"
+            @click="saveProfile"
+            :disabled="isSubmitting"
+          >
+            {{
+              isSubmitting
+                ? translate("actions.saving")
+                : translate("actions.save")
+            }}
           </button>
         </div>
       </div>
     </div>
-    <confirm-dialog :visible="showConfirmDialog" :title="translate('confirmSaveTitle')"
+    <confirm-dialog
+      :visible="showConfirmDialog"
+      :title="translate('confirmSaveTitle')"
       :message="translate('confirmSave')"
-      :confirm-text="translate('actions.save')" :cancel-text="translate('actions.cancel')"
-      :theme="isDarkMode ? 'dark' : 'light'" :parent-styles="dialogThemeStyles" @confirm="confirmSave"
-      @cancel="cancelSave" />
+      :confirm-text="translate('actions.save')"
+      :cancel-text="translate('actions.cancel')"
+      :theme="isDarkMode ? 'dark' : 'light'"
+      :parent-styles="dialogThemeStyles"
+      @confirm="confirmSave"
+      @cancel="cancelSave"
+    />
   </div>
 </template>
 
 <script>
-import userProfileService from '@/services/userProfileService';
-import userService from '@/services/userService';
-import notificationService from '@/services/notificationService';
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
-import SearchableCountryDropdown from '@/components/SearchableCountryDropdown.vue';
+import userProfileService from "@/services/userProfileService";
+import userService from "@/services/userService";
+import notificationService from "@/services/notificationService";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import SearchableCountryDropdown from "@/components/SearchableCountryDropdown.vue";
 
 export default {
-  name: 'UserProfileComponent',
+  name: "UserProfileComponent",
   components: {
     ConfirmDialog,
-    SearchableCountryDropdown
+    SearchableCountryDropdown,
   },
   data() {
     return {
       isThemeReady: false,
       activeTab: 0,
       tabs: [
-        { key: 'personalIdentification' },
-        { key: 'civilRegistration' },
-        { key: 'addressResidency' },
-        { key: 'identityDocuments' },
-        { key: 'healthInfo' },
-        { key: 'employmentInfo' },
-        { key: 'educationRecords' },
-        { key: 'financialInfo' }
+        { key: "personalIdentification" },
+        { key: "civilRegistration" },
+        { key: "addressResidency" },
+        { key: "identityDocuments" },
+        { key: "healthInfo" },
+        { key: "employmentInfo" },
+        { key: "educationRecords" },
+        { key: "financialInfo" },
       ],
       formData: {
         personalIdentification: {
-          fullName: '',
-          dob: '',
-          gender: '',
-          nationality: '',
-          profileIcon: ''
+          fullName: "",
+          dob: "",
+          gender: "",
+          nationality: "",
+          profileIcon: "",
         },
         civilRegistration: {
-          birthCert: '',
-          citizenship: '',
-          immigration: ''
+          birthCert: "",
+          citizenship: "",
+          immigration: "",
         },
         addressResidency: {
-          currentAddress: '',
-          postalCode: '',
-          country: '',
-          residencyStatus: ''
+          currentAddress: "",
+          postalCode: "",
+          country: "",
+          residencyStatus: "",
         },
         identityDocuments: {
-          idCard: '',
-          passport: '',
-          driversLicense: ''
+          idCard: "",
+          passport: "",
+          driversLicense: "",
         },
         healthInfo: {
-          bloodType: '',
-          organDonor: ''
+          bloodType: "",
+          organDonor: "",
         },
         employmentInfo: {
-          employmentHistory: '',
-          currentEmployer: '',
-          taxId: ''
+          employmentHistory: "",
+          currentEmployer: "",
+          taxId: "",
         },
         educationRecords: {
-          education: '',
-          degrees: '',
-          certifications: '',
-          academicRecords: ''
+          education: "",
+          degrees: "",
+          certifications: "",
+          academicRecords: "",
         },
         financialInfo: {
-          incomeTax: '',
-          bankAccounts: ''
-        }
+          incomeTax: "",
+          bankAccounts: "",
+        },
       },
-      nationalityName: '',
-      countryName: '',
+      nationalityName: "",
+      countryName: "",
       isLoading: false,
       errorMessage: null,
-      currentUserId: '',
+      currentUserId: "",
       isSubmitting: false,
       showEducationSearch: false,
-      educationSearchTerm: '',
+      educationSearchTerm: "",
       educationOptions: [],
       filteredEducationOptions: [],
       selectedEducationIndex: -1,
       degreeOptions: [],
       showDegreeSearch: false,
-      degreeSearchTerm: '',
+      degreeSearchTerm: "",
       filteredDegreeOptions: [],
       selectedDegreeIndex: -1,
       showConfirmDialog: false,
       showIconSelector: false,
-      iconTab: 'preset',
+      iconTab: "preset",
       presetIcons: [
-        '/assets/icons/profile1.png',
-        '/assets/icons/profile2.png',
-        '/assets/icons/profile3.png',
-        '/assets/icons/profile4.png',
-        '/assets/icons/profile5.png',
-        '/assets/icons/profile6.png',
-        '/assets/icons/profile7.png',
-        '/assets/icons/profile8.png',
+        "/assets/icons/profile1.png",
+        "/assets/icons/profile2.png",
+        "/assets/icons/profile3.png",
+        "/assets/icons/profile4.png",
+        "/assets/icons/profile5.png",
+        "/assets/icons/profile6.png",
+        "/assets/icons/profile7.png",
+        "/assets/icons/profile8.png",
       ],
       uploadedImage: null,
-      initialsColor: '#4E97D1',
+      initialsColor: "#4E97D1",
       colorOptions: [
-        '#4E97D1', // Blue
-        '#2ECC71', // Green
-        '#E74C3C', // Red
-        '#F39C12', // Orange
-        '#9B59B6', // Purple
-        '#1ABC9C', // Teal
-        '#34495E', // Dark Blue
-        '#D35400'  // Burnt Orange
-      ]
+        "#4E97D1", // Blue
+        "#2ECC71", // Green
+        "#E74C3C", // Red
+        "#F39C12", // Orange
+        "#9B59B6", // Purple
+        "#1ABC9C", // Teal
+        "#34495E", // Dark Blue
+        "#D35400", // Burnt Orange
+      ],
     };
   },
   computed: {
     isDarkMode() {
       return (
-        document.documentElement.getAttribute('data-theme') === 'dark' ||
-        document.body.getAttribute('data-theme') === 'dark'
+        document.documentElement.getAttribute("data-theme") === "dark" ||
+        document.body.getAttribute("data-theme") === "dark"
       );
     },
     dialogThemeStyles() {
       const isDark = this.isDarkMode;
       return {
-        '--dialog-background': isDark ? '#2a2a2a' : '#ffffff',
-        '--dialog-title-color': isDark ? '#ffffff' : '#333333',
-        '--dialog-text-color': isDark ? 'rgba(255, 255, 255, 0.8)' : '#666666',
-        '--dialog-border-color': isDark ? '#3a3a3a' : '#dcdfe4',
-        '--dialog-box-shadow': isDark ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.15)',
-        '--dialog-overlay-background': isDark ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)',
-        '--dialog-primary-button-bg': '#4E97D1',
-        '--dialog-primary-button-text': '#ffffff',
-        '--dialog-primary-button-hover-bg': '#3a7da0',
-        '--dialog-secondary-button-bg': isDark ? '#3a3a3a' : '#cccccc',
-        '--dialog-secondary-button-text': isDark ? '#e0e0e0' : '#333333',
-        '--dialog-secondary-button-hover-bg': isDark ? '#4a4a4a' : '#bbbbbb',
-        '--dialog-input-background': isDark ? '#333333' : '#ffffff',
-        '--dialog-input-text-color': isDark ? '#f0f0f0' : '#333333',
-        '--dialog-input-border-color': isDark ? '#3a3a3a' : '#ddd',
-        '--dialog-input-placeholder-color': isDark ? '#8c8c8c' : '#767676',
-        '--dialog-tabs-background': isDark ? '#252525' : '#f0f2f5',
-        '--dialog-tabs-active-background': isDark ? '#2a2a2a' : '#ffffff',
-        '--dialog-tabs-text-color': isDark ? '#f0f0f0' : '#333333',
-        '--dialog-tabs-active-text-color': isDark ? '#ffffff' : '#000000',
-        '--dialog-tabs-border-color': isDark ? '#3a3a3a' : '#cccccc'
+        "--dialog-background": isDark ? "#2a2a2a" : "#ffffff",
+        "--dialog-title-color": isDark ? "#ffffff" : "#333333",
+        "--dialog-text-color": isDark ? "rgba(255, 255, 255, 0.8)" : "#666666",
+        "--dialog-border-color": isDark ? "#3a3a3a" : "#dcdfe4",
+        "--dialog-box-shadow": isDark
+          ? "0 4px 12px rgba(0, 0, 0, 0.4)"
+          : "0 4px 12px rgba(0, 0, 0, 0.15)",
+        "--dialog-overlay-background": isDark
+          ? "rgba(0, 0, 0, 0.7)"
+          : "rgba(0, 0, 0, 0.5)",
+        "--dialog-input-background": isDark ? "#333333" : "#ffffff",
+        "--dialog-input-text-color": isDark ? "#f0f0f0" : "#333333",
+        "--dialog-input-border-color": isDark ? "#3a3a3a" : "#ddd",
+        "--dialog-input-placeholder-color": isDark ? "#8c8c8c" : "#767676",
+        "--dialog-tabs-background": isDark ? "#252525" : "#f0f2f5",
+        "--dialog-tabs-active-background": isDark ? "#2a2a2a" : "#ffffff",
+        "--dialog-tabs-text-color": isDark ? "#f0f0f0" : "#333333",
+        "--dialog-tabs-active-text-color": isDark ? "#ffffff" : "#000000",
+        "--dialog-tabs-border-color": isDark ? "#3a3a3a" : "#cccccc",
       };
-    }
+    },
   },
   methods: {
     // Centralized translation function
-    translate(key, fallback = '') {
+    translate(key, fallback = "") {
       // Try direct path first
-      const fullKey = key.startsWith('userProfile.') ? key : `userProfile.${key}`;
+      const fullKey = key.startsWith("userProfile.")
+        ? key
+        : `userProfile.${key}`;
 
       // Next try with fields prefix if it's not already there
       let result;
@@ -490,7 +678,7 @@ export default {
         result = this.$t(fullKey);
       }
       // If the key doesn't contain "fields." already, try with it
-      else if (!key.includes('fields.')) {
+      else if (!key.includes("fields.")) {
         const fieldsKey = `userProfile.fields.${key}`;
         if (this.$te(fieldsKey)) {
           result = this.$t(fieldsKey);
@@ -499,66 +687,74 @@ export default {
 
       return result || fallback || key;
     },
-
-
     onNationalityChange(code) {
-      console.log('Nationality changed to:', code, 'Type:', typeof code);
+      console.log("Nationality changed to:", code, "Type:", typeof code);
       // Only update if we received a valid code
       if (code !== undefined) {
         this.formData.personalIdentification.nationality = code;
       }
     },
-    
+
     onCountryChange(code) {
-      console.log('Country changed to:', code, 'Type:', typeof code);
+      console.log("Country changed to:", code, "Type:", typeof code);
       // Only update if we received a valid code
       if (code !== undefined) {
         this.formData.addressResidency.country = code;
       }
     },
-    
+
     updateNationalityName(name) {
-      console.log('Updating nationality name:', name);
-      this.nationalityName = name || '';
+      console.log("Updating nationality name:", name);
+      this.nationalityName = name || "";
 
       if (name && !this.formData.personalIdentification.nationality) {
-        console.warn('Country name set but code is missing, attempting to find code');
+        console.warn(
+          "Country name set but code is missing, attempting to find code"
+        );
         // Try to find the code from the name (this could be expanded if needed)
       }
 
       // Store this in localStorage to persist across tab changes
       if (name && this.formData.personalIdentification.nationality) {
         try {
-          localStorage.setItem('user_nationality_name', name);
-          localStorage.setItem('user_nationality_code', this.formData.personalIdentification.nationality);
+          localStorage.setItem("user_nationality_name", name);
+          localStorage.setItem(
+            "user_nationality_code",
+            this.formData.personalIdentification.nationality
+          );
         } catch (e) {
-          console.warn('Could not store nationality in localStorage', e);
+          console.warn("Could not store nationality in localStorage", e);
         }
       }
     },
 
     updateCountryName(name) {
-      console.log('Updating country name:', name);
-      this.countryName = name || '';
+      console.log("Updating country name:", name);
+      this.countryName = name || "";
 
       if (name && !this.formData.addressResidency.country) {
-        console.warn('Country name set but code is missing, attempting to find code');
+        console.warn(
+          "Country name set but code is missing, attempting to find code"
+        );
         // Try to find the code from the name (this could be expanded if needed)
       }
 
       // Store this in localStorage to persist across tab changes
       if (name && this.formData.addressResidency.country) {
         try {
-          localStorage.setItem('user_country_name', name);
-          localStorage.setItem('user_country_code', this.formData.addressResidency.country);
+          localStorage.setItem("user_country_name", name);
+          localStorage.setItem(
+            "user_country_code",
+            this.formData.addressResidency.country
+          );
         } catch (e) {
-          console.warn('Could not store country in localStorage', e);
+          console.warn("Could not store country in localStorage", e);
         }
       }
     },
-    
+
     refreshCountryDropdowns() {
-      console.log('Refreshing country dropdowns due to locale change');
+      console.log("Refreshing country dropdowns due to locale change");
       this.$nextTick(() => {
         // Refresh nationality dropdown if it exists
         if (this.$refs.nationalityDropdown) {
@@ -590,48 +786,69 @@ export default {
     restoreCountryState() {
       // Try to restore from localStorage
       try {
-        const nationalityCode = localStorage.getItem('user_nationality_code');
-        const countryCode = localStorage.getItem('user_country_code');
-        const nationalityName = localStorage.getItem('user_nationality_name');
-        const countryName = localStorage.getItem('user_country_name');
+        const nationalityCode = localStorage.getItem("user_nationality_code");
+        const countryCode = localStorage.getItem("user_country_code");
+        const nationalityName = localStorage.getItem("user_nationality_name");
+        const countryName = localStorage.getItem("user_country_name");
 
-        console.log('Restoring from localStorage:', { nationalityCode, nationalityName, countryCode, countryName });
+        console.log("Restoring from localStorage:", {
+          nationalityCode,
+          nationalityName,
+          countryCode,
+          countryName,
+        });
 
         // Restore nationality if needed
-        if (nationalityCode && this.activeTab === 0 && this.$refs.nationalityDropdown) {
-          if (!this.formData.personalIdentification.nationality ||
-            this.formData.personalIdentification.nationality !== nationalityCode) {
-            console.log('Restoring nationality from localStorage');
+        if (
+          nationalityCode &&
+          this.activeTab === 0 &&
+          this.$refs.nationalityDropdown
+        ) {
+          if (
+            !this.formData.personalIdentification.nationality ||
+            this.formData.personalIdentification.nationality !== nationalityCode
+          ) {
+            console.log("Restoring nationality from localStorage");
             this.formData.personalIdentification.nationality = nationalityCode;
-            this.nationalityName = nationalityName || '';
-            this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
+            this.nationalityName = nationalityName || "";
+            this.$refs.nationalityDropdown.manuallySetCountryName(
+              nationalityCode
+            );
           }
         }
 
         // Restore country if needed
         if (countryCode && this.activeTab === 2 && this.$refs.countryDropdown) {
-          if (!this.formData.addressResidency.country ||
-            this.formData.addressResidency.country !== countryCode) {
-            console.log('Restoring country from localStorage');
+          if (
+            !this.formData.addressResidency.country ||
+            this.formData.addressResidency.country !== countryCode
+          ) {
+            console.log("Restoring country from localStorage");
             this.formData.addressResidency.country = countryCode;
-            this.countryName = countryName || '';
+            this.countryName = countryName || "";
             this.$refs.countryDropdown.manuallySetCountryName(countryCode);
           }
         }
       } catch (e) {
-        console.warn('Error restoring country state from localStorage', e);
+        console.warn("Error restoring country state from localStorage", e);
       }
     },
 
     updateCountryDisplay() {
       // This function ensures the country dropdowns properly display the correct values
       if (this.formData.personalIdentification.nationality) {
-        console.log('Setting nationality display for:', this.formData.personalIdentification.nationality);
+        console.log(
+          "Setting nationality display for:",
+          this.formData.personalIdentification.nationality
+        );
         // The SearchableCountryDropdown component will handle this through its value prop
       }
-      
+
       if (this.formData.addressResidency.country) {
-        console.log('Setting country display for:', this.formData.addressResidency.country);
+        console.log(
+          "Setting country display for:",
+          this.formData.addressResidency.country
+        );
         // The SearchableCountryDropdown component will handle this through its value prop
       }
     },
@@ -642,96 +859,127 @@ export default {
       });
     },
     cancel() {
-      this.$emit('cancel');
+      this.$emit("cancel");
     },
     saveProfile() {
-      console.log('Save profile button clicked');
+      console.log("Save profile button clicked");
       this.showConfirmDialog = true;
     },
     async confirmSave() {
       this.showConfirmDialog = false;
       this.isSubmitting = true;
-      
+
       // Safety check to make sure we have a valid user ID
       if (!this.currentUserId) {
-        console.error('Missing currentUserId in confirmSave, attempting to retrieve it');
+        console.error(
+          "Missing currentUserId in confirmSave, attempting to retrieve it"
+        );
         this.currentUserId = await this.getCurrentUserId();
-        
+
         if (!this.currentUserId) {
-          notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile: Missing user ID'));
+          notificationService.error(
+            this.translate(
+              "errors.savingFailed",
+              "Failed to save profile: Missing user ID"
+            )
+          );
           this.isSubmitting = false;
           return;
         }
       }
-      
-      console.log('Submitting form, currentUserId:', this.currentUserId);
+
+      console.log("Submitting form, currentUserId:", this.currentUserId);
 
       try {
         const validation = this.validateForm();
-        console.log('Form validation result:', validation);
+        console.log("Form validation result:", validation);
 
         if (!validation.isValid) {
-          notificationService.error(this.translate('errors.invalidForm', 'Please fill all required fields'));
+          notificationService.error(
+            this.translate(
+              "errors.invalidForm",
+              "Please fill all required fields"
+            )
+          );
           return;
         }
 
         const profileData = JSON.parse(JSON.stringify(this.formData));
-        console.log('Profile data before submission:', profileData);
+        console.log("Profile data before submission:", profileData);
 
-        console.log('Country data before submission:', {
+        console.log("Country data before submission:", {
           nationality: profileData.personalIdentification.nationality,
           nationalityName: this.nationalityName,
           country: profileData.addressResidency.country,
-          countryName: this.countryName
+          countryName: this.countryName,
         });
 
         if (this.formData.personalIdentification.nationality) {
-          profileData.personalIdentification.nationality = this.formData.personalIdentification.nationality;
-          console.log('Explicitly set nationality to:', profileData.personalIdentification.nationality);
+          profileData.personalIdentification.nationality =
+            this.formData.personalIdentification.nationality;
+          console.log(
+            "Explicitly set nationality to:",
+            profileData.personalIdentification.nationality
+          );
         } else {
-          console.warn('Nationality code is missing from form data');
+          console.warn("Nationality code is missing from form data");
         }
 
         if (this.formData.addressResidency.country) {
-          profileData.addressResidency.country = this.formData.addressResidency.country;
-          console.log('Explicitly set country to:', profileData.addressResidency.country);
+          profileData.addressResidency.country =
+            this.formData.addressResidency.country;
+          console.log(
+            "Explicitly set country to:",
+            profileData.addressResidency.country
+          );
         } else {
-          console.warn('Country code is missing from form data');
+          console.warn("Country code is missing from form data");
         }
 
-        console.log('Profile data being sent to API:', profileData);
-        console.log('API URL will be /api/users/' + this.currentUserId);
-        
-        const result = await userProfileService.updateProfile(this.currentUserId, profileData);
-        console.log('Update profile API response:', result);
+        console.log("Profile data being sent to API:", profileData);
+        console.log("API URL will be /api/users/" + this.currentUserId);
 
-        notificationService.success(this.translate('saveSuccess', 'Profile saved successfully'));
-        this.$emit('save', profileData);
+        const result = await userProfileService.updateProfile(
+          this.currentUserId,
+          profileData
+        );
+        console.log("Update profile API response:", result);
+
+        notificationService.success(
+          this.translate("saveSuccess", "Profile saved successfully")
+        );
+        this.$emit("save", profileData);
       } catch (error) {
-        console.error('Error saving profile:', error);
-        notificationService.error(this.translate('errors.savingFailed', 'Failed to save profile'));
+        console.error("Error saving profile:", error);
+        notificationService.error(
+          this.translate("errors.savingFailed", "Failed to save profile")
+        );
       } finally {
         this.isSubmitting = false;
       }
     },
     cancelSave() {
       this.showConfirmDialog = false;
-      console.log('User cancelled save operation');
+      console.log("User cancelled save operation");
     },
     onFileChange(e, section, fieldKey) {
       const file = e.target.files[0];
       if (!file) return;
 
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
       const maxSize = 5 * 1024 * 1024; // 5MB
 
       if (!allowedTypes.includes(file.type)) {
-        notificationService.error(this.translate('errors.invalidFileType', 'Invalid file type'));
+        notificationService.error(
+          this.translate("errors.invalidFileType", "Invalid file type")
+        );
         return;
       }
 
       if (file.size > maxSize) {
-        notificationService.error(this.translate('errors.fileTooLarge', 'File is too large'));
+        notificationService.error(
+          this.translate("errors.fileTooLarge", "File is too large")
+        );
         return;
       }
 
@@ -740,36 +988,44 @@ export default {
     validateForm() {
       const validations = {
         personalIdentification: [
-          { field: 'fullName', required: true },
-          { field: 'dob', required: true }
-        ]
+          { field: "fullName", required: true },
+          { field: "dob", required: true },
+        ],
       };
 
       const errors = {};
 
-      Object.keys(validations).forEach(section => {
-        validations[section].forEach(validation => {
+      Object.keys(validations).forEach((section) => {
+        validations[section].forEach((validation) => {
           const value = this.formData[section][validation.field];
           if (validation.required && !value) {
-            errors[`${section}.${validation.field}`] = this.translate('validation.nameRequired');
+            errors[`${section}.${validation.field}`] = this.translate(
+              "validation.nameRequired"
+            );
           }
         });
       });
 
       if (this.isTabComplete(this.activeTab)) {
-        notificationService.info(this.translate('tabComplete', 'Tab completed!'), 1500);
+        notificationService.info(
+          this.translate("tabComplete", "Tab completed!"),
+          1500
+        );
       }
 
       return {
         isValid: Object.keys(errors).length === 0,
-        errors
+        errors,
       };
     },
     isTabComplete(tabIndex) {
       const tab = this.tabs[tabIndex];
       if (!tab) return false;
-      if (tab.key === 'personalIdentification') {
-        return !!this.formData.personalIdentification.fullName && !!this.formData.personalIdentification.dob;
+      if (tab.key === "personalIdentification") {
+        return (
+          !!this.formData.personalIdentification.fullName &&
+          !!this.formData.personalIdentification.dob
+        );
       }
       return true; // Other tabs considered complete for simplicity
     },
@@ -777,18 +1033,18 @@ export default {
       try {
         const userData = userService.getCurrentUser();
         if (!userData) {
-          console.error('No user data available');
-          return '';
+          console.error("No user data available");
+          return "";
         }
-        let userId = userData.id || userData.userId || userData._id || '';
-        if (typeof userId === 'string' && userId.includes('/')) {
-          userId = userId.split('/').pop();
+        let userId = userData.id || userData.userId || userData._id || "";
+        if (typeof userId === "string" && userId.includes("/")) {
+          userId = userId.split("/").pop();
         }
-        console.log('Retrieved user ID:', userId);
+        console.log("Retrieved user ID:", userId);
         return userId;
       } catch (error) {
-        console.error('Error getting current user ID:', error);
-        return '';
+        console.error("Error getting current user ID:", error);
+        return "";
       }
     },
     async loadUserProfileData() {
@@ -799,23 +1055,26 @@ export default {
         this.currentUserId = await this.getCurrentUserId();
 
         if (!this.currentUserId) {
-          throw new Error('Unable to determine current user ID');
+          throw new Error("Unable to determine current user ID");
         }
 
-        console.log('Loading profile data for user ID:', this.currentUserId);
+        console.log("Loading profile data for user ID:", this.currentUserId);
 
-        const profileData = await userProfileService.getProfile(this.currentUserId);
-        console.log('Retrieved profile data:', profileData);
+        const profileData = await userProfileService.getProfile(
+          this.currentUserId
+        );
+        console.log("Retrieved profile data:", profileData);
 
         if (profileData) {
           // Extract the nationality and country codes before mapping other data
-          const nationalityCode = profileData.personalIdentification?.nationality || '';
-          const countryCode = profileData.addressResidency?.country || '';
+          const nationalityCode =
+            profileData.personalIdentification?.nationality || "";
+          const countryCode = profileData.addressResidency?.country || "";
 
           // Map profile data to form data
-          Object.keys(this.formData).forEach(section => {
+          Object.keys(this.formData).forEach((section) => {
             if (profileData[section]) {
-              Object.keys(this.formData[section]).forEach(field => {
+              Object.keys(this.formData[section]).forEach((field) => {
                 if (profileData[section][field] !== undefined) {
                   this.formData[section][field] = profileData[section][field];
                 }
@@ -823,18 +1082,18 @@ export default {
             }
           });
 
-          console.log('Form data after population:', this.formData);
+          console.log("Form data after population:", this.formData);
 
           // Store country values to localStorage for tab-switching persistence
           try {
             if (nationalityCode) {
-              localStorage.setItem('user_nationality_code', nationalityCode);
+              localStorage.setItem("user_nationality_code", nationalityCode);
             }
             if (countryCode) {
-              localStorage.setItem('user_country_code', countryCode);
+              localStorage.setItem("user_country_code", countryCode);
             }
           } catch (e) {
-            console.warn('Could not store country codes in localStorage', e);
+            console.warn("Could not store country codes in localStorage", e);
           }
 
           // Ensuring the country dropdowns get initialized with their values
@@ -842,20 +1101,28 @@ export default {
             // Set nationality dropdown with a delay to ensure component is mounted
             setTimeout(() => {
               if (nationalityCode && this.$refs.nationalityDropdown) {
-                console.log('Setting nationality dropdown with code:', nationalityCode);
-                this.$refs.nationalityDropdown.manuallySetCountryName(nationalityCode);
+                console.log(
+                  "Setting nationality dropdown with code:",
+                  nationalityCode
+                );
+                this.$refs.nationalityDropdown.manuallySetCountryName(
+                  nationalityCode
+                );
               }
 
               if (countryCode && this.$refs.countryDropdown) {
-                console.log('Setting country dropdown with code:', countryCode);
+                console.log("Setting country dropdown with code:", countryCode);
                 this.$refs.countryDropdown.manuallySetCountryName(countryCode);
               }
             }, 300); // Small delay to ensure components are ready
           });
         }
       } catch (error) {
-        console.error('Error loading user profile:', error);
-        this.errorMessage = this.translate('errors.loadingFailed', 'Failed to load profile data');
+        console.error("Error loading user profile:", error);
+        this.errorMessage = this.translate(
+          "errors.loadingFailed",
+          "Failed to load profile data"
+        );
       } finally {
         this.isLoading = false;
       }
@@ -864,44 +1131,44 @@ export default {
       this.loadUserProfileData();
     },
     loadDegreeOptions() {
-      const defaultOptions = this.translate('degreeOptions', [
-        'Associate Degree',
-        'Bachelor of Arts (BA)',
-        'Bachelor of Science (BS)',
-        'Bachelor of Engineering (BEng)',
-        'Bachelor of Business Administration (BBA)',
-        'Bachelor of Fine Arts (BFA)',
-        'Bachelor of Education (BEd)',
-        'Bachelor of Medicine (MBBS)',
-        'Bachelor of Laws (LLB)',
-        'Master of Arts (MA)',
-        'Master of Science (MS)',
-        'Master of Business Administration (MBA)',
-        'Master of Engineering (MEng)',
-        'Master of Fine Arts (MFA)',
-        'Master of Education (MEd)',
-        'Master of Laws (LLM)',
-        'Master of Public Health (MPH)',
-        'Doctor of Philosophy (PhD)',
-        'Doctor of Medicine (MD)',
-        'Doctor of Education (EdD)',
-        'Doctor of Business Administration (DBA)',
-        'Doctor of Jurisprudence (JD)',
-        'Professional Diploma',
-        'Technical Diploma',
-        'Vocational Certificate',
-        'Graduate Certificate',
-        'Post-Graduate Diploma',
-        'Post-Doctoral'
+      const defaultOptions = this.translate("degreeOptions", [
+        "Associate Degree",
+        "Bachelor of Arts (BA)",
+        "Bachelor of Science (BS)",
+        "Bachelor of Engineering (BEng)",
+        "Bachelor of Business Administration (BBA)",
+        "Bachelor of Fine Arts (BFA)",
+        "Bachelor of Education (BEd)",
+        "Bachelor of Medicine (MBBS)",
+        "Bachelor of Laws (LLB)",
+        "Master of Arts (MA)",
+        "Master of Science (MS)",
+        "Master of Business Administration (MBA)",
+        "Master of Engineering (MEng)",
+        "Master of Fine Arts (MFA)",
+        "Master of Education (MEd)",
+        "Master of Laws (LLM)",
+        "Master of Public Health (MPH)",
+        "Doctor of Philosophy (PhD)",
+        "Doctor of Medicine (MD)",
+        "Doctor of Education (EdD)",
+        "Doctor of Business Administration (DBA)",
+        "Doctor of Jurisprudence (JD)",
+        "Professional Diploma",
+        "Technical Diploma",
+        "Vocational Certificate",
+        "Graduate Certificate",
+        "Post-Graduate Diploma",
+        "Post-Doctoral",
       ]);
-      
+
       this.degreeOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
-      const locale = this.$i18n ? this.$i18n.locale : 'en';
+      const locale = this.$i18n ? this.$i18n.locale : "en";
       this.degreeOptions.sort((a, b) => a.localeCompare(b, locale));
     },
     toggleDegreeSearch() {
       this.showDegreeSearch = true;
-      this.degreeSearchTerm = this.formData.educationRecords.degrees || '';
+      this.degreeSearchTerm = this.formData.educationRecords.degrees || "";
       this.filterDegreeOptions();
       this.$nextTick(() => {
         if (this.$refs.degreeSearchInput) {
@@ -914,7 +1181,7 @@ export default {
         this.filteredDegreeOptions = [...this.degreeOptions];
       } else {
         const searchTerm = this.degreeSearchTerm.toLowerCase();
-        this.filteredDegreeOptions = this.degreeOptions.filter(option =>
+        this.filteredDegreeOptions = this.degreeOptions.filter((option) =>
           option.toLowerCase().includes(searchTerm)
         );
       }
@@ -927,7 +1194,8 @@ export default {
     handleDegreeBlur(event) {
       if (
         !event.relatedTarget ||
-        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))
+        (event.relatedTarget &&
+          !event.relatedTarget.closest(".options-dropdown"))
       ) {
         setTimeout(() => {
           this.showDegreeSearch = false;
@@ -943,122 +1211,128 @@ export default {
       const optionsLength = this.filteredDegreeOptions.length;
       if (optionsLength > 0) {
         this.selectedDegreeIndex =
-          (this.selectedDegreeIndex + direction + optionsLength) % optionsLength;
-        if (this.selectedDegreeIndex >= 0 && this.selectedDegreeIndex < optionsLength) {
+          (this.selectedDegreeIndex + direction + optionsLength) %
+          optionsLength;
+        if (
+          this.selectedDegreeIndex >= 0 &&
+          this.selectedDegreeIndex < optionsLength
+        ) {
           this.$refs.degreeSearchInput.focus();
         }
       }
     },
     loadEducationOptions() {
-      const defaultOptions = this.translate('educationOptions', [
-        'Accounting',
-        'Aerospace Engineering',
-        'Agricultural Science',
-        'Anthropology',
-        'Architecture',
-        'Art History',
-        'Artificial Intelligence',
-        'Astronomy',
-        'Astrophysics',
-        'Biochemistry',
-        'Biomedical Engineering',
-        'Biotechnology',
-        'Business Administration',
-        'Chemical Engineering',
-        'Chemistry',
-        'Civil Engineering',
-        'Communications',
-        'Computer Engineering',
-        'Computer Science',
-        'Construction Management',
-        'Criminal Justice',
-        'Cybersecurity',
-        'Data Science',
-        'Dentistry',
-        'Economics',
-        'Education',
-        'Electrical Engineering',
-        'Elementary Education',
-        'English Literature',
-        'Environmental Engineering',
-        'Environmental Science',
-        'Fashion Design',
-        'Film Studies',
-        'Finance',
-        'Fine Arts',
-        'Food Science',
-        'Forensic Science',
-        'Game Design',
-        'Geography',
-        'Geology',
-        'Graphic Design',
-        'Health Administration',
-        'History',
-        'Hospitality Management',
-        'Human Resources',
-        'Industrial Design',
-        'Industrial Engineering',
-        'Information Systems',
-        'Information Technology',
-        'Interior Design',
-        'International Business',
-        'International Relations',
-        'Journalism',
-        'Law',
-        'Library Science',
-        'Linguistics',
-        'Management',
-        'Marketing',
-        'Materials Science',
-        'Mathematics',
-        'Mechanical Engineering',
-        'Media Studies',
-        'Medicine',
-        'Meteorology',
-        'Microbiology',
-        'Music',
-        'Nanotechnology',
-        'Nursing',
-        'Nutrition',
-        'Occupational Therapy',
-        'Oceanography',
-        'Petroleum Engineering',
-        'Pharmacy',
-        'Philosophy',
-        'Photography',
-        'Physical Education',
-        'Physical Therapy',
-        'Physics',
-        'Political Science',
-        'Psychology',
-        'Public Administration',
-        'Public Health',
-        'Public Relations',
-        'Robotics',
-        'Secondary Education',
-        'Social Work',
-        'Sociology',
-        'Software Engineering',
-        'Special Education',
-        'Sports Management',
-        'Statistics',
-        'Systems Engineering',
-        'Theatre Arts',
-        'Tourism',
-        'Urban Planning',
-        'Veterinary Medicine',
-        'Web Development',
-        'Wildlife Biology',
-        'Zoology'
+      const defaultOptions = this.translate("educationOptions", [
+        "Accounting",
+        "Aerospace Engineering",
+        "Agricultural Science",
+        "Anthropology",
+        "Architecture",
+        "Art History",
+        "Artificial Intelligence",
+        "Astronomy",
+        "Astrophysics",
+        "Biochemistry",
+        "Biomedical Engineering",
+        "Biotechnology",
+        "Business Administration",
+        "Chemical Engineering",
+        "Chemistry",
+        "Civil Engineering",
+        "Communications",
+        "Computer Engineering",
+        "Computer Science",
+        "Construction Management",
+        "Criminal Justice",
+        "Cybersecurity",
+        "Data Science",
+        "Dentistry",
+        "Economics",
+        "Education",
+        "Electrical Engineering",
+        "Elementary Education",
+        "English Literature",
+        "Environmental Engineering",
+        "Environmental Science",
+        "Fashion Design",
+        "Film Studies",
+        "Finance",
+        "Fine Arts",
+        "Food Science",
+        "Forensic Science",
+        "Game Design",
+        "Geography",
+        "Geology",
+        "Graphic Design",
+        "Health Administration",
+        "History",
+        "Hospitality Management",
+        "Human Resources",
+        "Industrial Design",
+        "Industrial Engineering",
+        "Information Systems",
+        "Information Technology",
+        "Interior Design",
+        "International Business",
+        "International Relations",
+        "Journalism",
+        "Law",
+        "Library Science",
+        "Linguistics",
+        "Management",
+        "Marketing",
+        "Materials Science",
+        "Mathematics",
+        "Mechanical Engineering",
+        "Media Studies",
+        "Medicine",
+        "Meteorology",
+        "Microbiology",
+        "Music",
+        "Nanotechnology",
+        "Nursing",
+        "Nutrition",
+        "Occupational Therapy",
+        "Oceanography",
+        "Petroleum Engineering",
+        "Pharmacy",
+        "Philosophy",
+        "Photography",
+        "Physical Education",
+        "Physical Therapy",
+        "Physics",
+        "Political Science",
+        "Psychology",
+        "Public Administration",
+        "Public Health",
+        "Public Relations",
+        "Robotics",
+        "Secondary Education",
+        "Social Work",
+        "Sociology",
+        "Software Engineering",
+        "Special Education",
+        "Sports Management",
+        "Statistics",
+        "Systems Engineering",
+        "Theatre Arts",
+        "Tourism",
+        "Urban Planning",
+        "Veterinary Medicine",
+        "Web Development",
+        "Wildlife Biology",
+        "Zoology",
       ]);
-      
-      this.educationOptions = Array.isArray(defaultOptions) ? defaultOptions : [];
-      const locale = this.$i18n ? this.$i18n.locale : 'en';
+
+      this.educationOptions = Array.isArray(defaultOptions)
+        ? defaultOptions
+        : [];
+      const locale = this.$i18n ? this.$i18n.locale : "en";
       this.educationOptions.sort((a, b) => a.localeCompare(b, locale));
     },
     toggleEducationSearch() {
       this.showEducationSearch = true;
-      this.educationSearchTerm = this.formData.educationRecords.education || '';
+      this.educationSearchTerm = this.formData.educationRecords.education || "";
       this.filterEducationOptions();
       this.$nextTick(() => {
         if (this.$refs.educationSearchInput) {
@@ -1071,7 +1345,7 @@ export default {
         this.filteredEducationOptions = [...this.educationOptions];
       } else {
         const searchTerm = this.educationSearchTerm.toLowerCase();
-        this.filteredEducationOptions = this.educationOptions.filter(option =>
+        this.filteredEducationOptions = this.educationOptions.filter((option) =>
           option.toLowerCase().includes(searchTerm)
         );
       }
@@ -1084,7 +1358,8 @@ export default {
     handleEducationBlur(event) {
       if (
         !event.relatedTarget ||
-        (event.relatedTarget && !event.relatedTarget.closest('.options-dropdown'))
+        (event.relatedTarget &&
+          !event.relatedTarget.closest(".options-dropdown"))
       ) {
         setTimeout(() => {
           this.showEducationSearch = false;
@@ -1100,8 +1375,12 @@ export default {
       const optionsLength = this.filteredEducationOptions.length;
       if (optionsLength > 0) {
         this.selectedEducationIndex =
-          (this.selectedEducationIndex + direction + optionsLength) % optionsLength;
-        if (this.selectedEducationIndex >= 0 && this.selectedEducationIndex < optionsLength) {
+          (this.selectedEducationIndex + direction + optionsLength) %
+          optionsLength;
+        if (
+          this.selectedEducationIndex >= 0 &&
+          this.selectedEducationIndex < optionsLength
+        ) {
           this.$refs.educationSearchInput.focus();
         }
       }
@@ -1114,11 +1393,11 @@ export default {
       this.uploadedImage = null;
     },
     getInitials(name) {
-      if (!name) return '?';
+      if (!name) return "?";
       return name
-        .split(' ')
-        .map(n => n[0])
-        .join('')
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
         .toUpperCase()
         .substring(0, 2);
     },
@@ -1133,19 +1412,29 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      const validTypes = ["image/jpeg", "image/png", "image/gif"];
       if (!validTypes.includes(file.type)) {
-        notificationService.error(this.translate('errors.invalidFileType', 'Please upload a valid image (JPEG, PNG, GIF)'));
+        notificationService.error(
+          this.translate(
+            "errors.invalidFileType",
+            "Please upload a valid image (JPEG, PNG, GIF)"
+          )
+        );
         return;
       }
 
       if (file.size > 2 * 1024 * 1024) {
-        notificationService.error(this.translate('errors.fileTooLarge', 'Image size must be less than 2MB'));
+        notificationService.error(
+          this.translate(
+            "errors.fileTooLarge",
+            "Image size must be less than 2MB"
+          )
+        );
         return;
       }
 
       const reader = new FileReader();
-      reader.onload = e => {
+      reader.onload = (e) => {
         this.uploadedImage = e.target.result;
       };
       reader.readAsDataURL(file);
@@ -1155,41 +1444,46 @@ export default {
       this.closeIconSelector();
     },
     useInitials() {
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       const size = 200;
       canvas.width = size;
       canvas.height = size;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
 
       ctx.fillStyle = this.initialsColor;
       ctx.fillRect(0, 0, size, size);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 80px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(this.getInitials(this.formData.personalIdentification.fullName), size / 2, size / 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 80px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        this.getInitials(this.formData.personalIdentification.fullName),
+        size / 2,
+        size / 2
+      );
 
-      this.formData.personalIdentification.profileIcon = canvas.toDataURL('image/png');
+      this.formData.personalIdentification.profileIcon =
+        canvas.toDataURL("image/png");
       this.closeIconSelector();
-    }
+    },
   },
   watch: {
-    'formData.personalIdentification.nationality': {
+    "formData.personalIdentification.nationality": {
       handler(newVal) {
-        console.log('Nationality model changed to:', newVal);
+        console.log("Nationality model changed to:", newVal);
         // Rely on SearchableCountryDropdown to emit the name via update:name
       },
-      immediate: true
+      immediate: true,
     },
-    'formData.addressResidency.country': {
+    "formData.addressResidency.country": {
       handler(newVal) {
-        console.log('Country model changed to:', newVal);
+        console.log("Country model changed to:", newVal);
         // Rely on SearchableCountryDropdown to emit the name via update:name
       },
-      immediate: true
+      immediate: true,
     },
-    '$i18n.locale'() {
+    "$i18n.locale"() {
       this.loadEducationOptions();
       this.loadDegreeOptions();
       this.refreshCountryDropdowns();
@@ -1201,11 +1495,14 @@ export default {
         console.log(`Tab changed from ${oldTabIndex} to ${newTabIndex}`);
 
         // If we're switching to the Personal Identification tab (0)
-        if (newTabIndex === 0 && this.formData.personalIdentification.nationality) {
+        if (
+          newTabIndex === 0 &&
+          this.formData.personalIdentification.nationality
+        ) {
           this.$nextTick(() => {
             setTimeout(() => {
               if (this.$refs.nationalityDropdown) {
-                console.log('Restoring nationality dropdown after tab switch');
+                console.log("Restoring nationality dropdown after tab switch");
                 this.$refs.nationalityDropdown.manuallySetCountryName(
                   this.formData.personalIdentification.nationality
                 );
@@ -1219,7 +1516,7 @@ export default {
           this.$nextTick(() => {
             setTimeout(() => {
               if (this.$refs.countryDropdown) {
-                console.log('Restoring country dropdown after tab switch');
+                console.log("Restoring country dropdown after tab switch");
                 this.$refs.countryDropdown.manuallySetCountryName(
                   this.formData.addressResidency.country
                 );
@@ -1227,11 +1524,11 @@ export default {
             }, 50);
           });
         }
-      }
-    }
+      },
+    },
   },
   mounted() {
-    window.addEventListener('themeChange', this.updateTheme);
+    window.addEventListener("themeChange", this.updateTheme);
     this.$nextTick(() => {
       this.isThemeReady = true;
     });
@@ -1240,13 +1537,12 @@ export default {
     this.loadUserProfileData();
   },
   beforeDestroy() {
-    window.removeEventListener('themeChange', this.updateTheme);
-  }
+    window.removeEventListener("themeChange", this.updateTheme);
+  },
 };
 </script>
 
 <style scoped>
-/* Base Modal Styling */
 /* Base Modal Styling */
 .user-profile-modal {
   position: fixed;
@@ -1396,21 +1692,21 @@ h2[data-themed="true"] {
 }
 
 .cancel-btn {
-  background-color: var(--dialog-secondary-button-bg, #cccccc);
-  color: var(--dialog-secondary-button-text, #333333);
+  background-color: var(--bg-button-secondary, #cccccc);
+  color: var(--text-button-secondary, #333333);
 }
 
 .cancel-btn:hover {
-  background-color: var(--dialog-secondary-button-hover-bg, #bbbbbb);
+  background-color: var(--bg-button-secondary-hover, #bbbbbb);
 }
 
 .save-btn {
-  background-color: var(--dialog-primary-button-bg, #4E97D1);
-  color: var(--dialog-primary-button-text, #ffffff);
+  background-color: var(--bg-button-primary, #4e97d1);
+  color: var(--text-button-primary, #ffffff);
 }
 
 .save-btn:hover {
-  background-color: var(--dialog-primary-button-hover-bg, #3a7da0);
+  background-color: var(--bg-button-primary-hover, #3a7da0);
 }
 
 /* Dark Mode Specific Overrides */
@@ -1430,8 +1726,6 @@ h2[data-themed="true"] {
   color: rgba(255, 255, 255, 0.8) !important;
 }
 
-/* Add these styles to the existing <style> section */
-
 /* Loading spinner */
 .loading-overlay {
   display: flex;
@@ -1447,7 +1741,7 @@ h2[data-themed="true"] {
   height: 40px;
   border: 4px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top-color: var(--dialog-primary-button-bg, #4E97D1);
+  border-top-color: var(--bg-button-primary, #4e97d1);
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
 }
@@ -1471,15 +1765,15 @@ h2[data-themed="true"] {
 
 .retry-btn {
   padding: 0.5rem 1.5rem;
-  background-color: var(--dialog-secondary-button-bg, #cccccc);
-  color: var(--dialog-secondary-button-text, #333333);
+  background-color: var(--bg-button-secondary, #cccccc);
+  color: var(--text-button-secondary, #333333);
   border: 1px solid var(--dialog-tabs-border-color, #cccccc);
   border-radius: 4px;
   cursor: pointer;
 }
 
 .retry-btn:hover {
-  background-color: var(--dialog-secondary-button-hover-bg, #bbbbbb);
+  background-color: var(--bg-button-secondary-hover, #bbbbbb);
 }
 
 /* Disabled button styles */
@@ -1518,7 +1812,7 @@ h2[data-themed="true"] {
 }
 
 .selected-option:after {
-  content: '▼';
+  content: "▼";
   position: absolute;
   right: 10px;
   top: 50%;
@@ -1548,8 +1842,8 @@ h2[data-themed="true"] {
 
 .option:hover,
 .option.active {
-  background-color: var(--dialog-primary-button-bg, #4E97D1);
-  color: var(--dialog-primary-button-text, #ffffff);
+  background-color: var(--bg-button-primary, #4e97d1);
+  color: var(--text-button-primary, #ffffff);
 }
 
 .no-results {
@@ -1570,7 +1864,7 @@ h2[data-themed="true"] {
 .dark-mode .option:hover,
 [data-theme="dark"] .option.active,
 .dark-mode .option.active {
-  background-color: var(--dialog-primary-button-bg, #4E97D1);
+  background-color: var(--bg-button-primary, #4e97d1);
 }
 
 [data-theme="dark"] .no-results,
@@ -1580,22 +1874,22 @@ h2[data-themed="true"] {
 
 /* Add these to your UserProfileComponent.vue style section */
 .tabs button.active {
-  border-bottom: 2px solid var(--dialog-primary-button-bg, #4E97D1);
+  border-bottom: 2px solid var(--bg-button-primary, #4e97d1);
   /* Optional: add a faint background to active tab */
-  background-color: rgba(78, 151, 209, 0.1);
+  background-color: rgba(var(--bg-button-primary-rgb, 78, 151, 209), 0.1);
 }
 
 /* Add a subtle border to the sections */
 .tab-content {
-  border-left: 3px solid var(--dialog-primary-button-bg, #4E97D1);
+  border-left: 3px solid var(--bg-button-primary, #4e97d1);
 }
 
 /* Add color focus to input fields on focus */
 .field-group input:focus,
 .field-group textarea:focus,
 .field-group select:focus {
-  border-color: var(--dialog-primary-button-bg, #4E97D1);
-  box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.2);
+  border-color: var(--bg-button-primary, #4e97d1);
+  box-shadow: 0 0 0 2px rgba(var(--bg-button-primary-rgb, 78, 151, 209), 0.2);
   outline: none;
 }
 
@@ -1632,11 +1926,13 @@ h2 {
 }
 
 /* Slight animation on buttons */
-.cancel-btn, .save-btn {
+.cancel-btn,
+.save-btn {
   transition: transform 0.1s ease;
 }
 
-.cancel-btn:hover, .save-btn:hover {
+.cancel-btn:hover,
+.save-btn:hover {
   transform: translateY(-1px);
 }
 
@@ -1650,7 +1946,7 @@ h2 {
 .tab-content {
   background: linear-gradient(
     to bottom,
-    rgba(78, 151, 209, 0.05) 0%,
+    rgba(var(--bg-button-primary-rgb, 78, 151, 209), 0.05) 0%,
     transparent 100px
   );
   padding: 15px;
@@ -1665,12 +1961,12 @@ h2 {
 
 .cancel-btn {
   background-color: transparent;
-  border: 1px solid var(--dialog-secondary-button-bg, #cccccc);
+  border: 1px solid var(--bg-button-secondary, #cccccc);
 }
 
 /* Better hover effects */
 .save-btn:hover {
-  background-color: var(--dialog-primary-button-hover-bg, #3a7da0);
+  background-color: var(--bg-button-primary-hover, #3a7da0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -1692,7 +1988,7 @@ h2 {
   overflow: hidden;
   position: relative;
   cursor: pointer;
-  background-color: var(--dialog-secondary-button-bg, #cccccc);
+  background-color: var(--bg-button-secondary, #cccccc);
 }
 
 .current-icon img {
@@ -1778,8 +2074,8 @@ h2 {
 }
 
 .icon-tabs button.active {
-  border-bottom: 2px solid var(--dialog-primary-button-bg, #4E97D1);
-  color: var(--dialog-primary-button-bg, #4E97D1);
+  border-bottom: 2px solid var(--bg-button-primary, #4e97d1);
+  color: var(--bg-button-primary, #4e97d1);
 }
 
 .icon-content {
@@ -1810,8 +2106,9 @@ h2 {
   object-fit: cover;
 }
 
-.preset-icon.selected, .preset-icon:hover {
-  border-color: var(--dialog-primary-button-bg, #4E97D1);
+.preset-icon.selected,
+.preset-icon:hover {
+  border-color: var(--bg-button-primary, #4e97d1);
 }
 
 /* Upload Zone */
@@ -1890,8 +2187,8 @@ h2 {
 }
 
 .btn-confirm {
-  background-color: var(--dialog-primary-button-bg, #4E97D1);
-  color: white;
+  background-color: var(--bg-button-primary, #4e97d1);
+  color: var(--text-button-primary, #ffffff);
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -1899,8 +2196,8 @@ h2 {
 }
 
 .btn-cancel {
-  background-color: var(--dialog-secondary-button-bg, #cccccc);
-  color: var(--dialog-secondary-button-text, #333333);
+  background-color: var(--bg-button-secondary, #cccccc);
+  color: var(--text-button-secondary, #333333);
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -1915,7 +2212,7 @@ h2 {
 }
 
 [data-theme="dark"] .icon-tabs button.active {
-  color: var(--dialog-primary-button-bg, #4E97D1);
+  color: var(--bg-button-primary, #4e97d1);
 }
 
 [data-theme="dark"] .upload-zone {

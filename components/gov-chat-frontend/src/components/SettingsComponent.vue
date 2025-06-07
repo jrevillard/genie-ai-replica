@@ -1,15 +1,21 @@
 <template>
   <div class="settings-overlay">
-    <div class="settings-dialog" :key="'settings-dialog-' + currentLocale">
+    <div
+      class="settings-dialog"
+      :key="'settings-dialog-' + currentLocale"
+      :style="dialogThemeStyles"
+    >
       <!-- Header with Buttons -->
       <div class="dialog-header">
-        <h2 class="header-title">{{ translate('settings.title', 'Settings') }}</h2>
+        <h2 class="header-title" :data-themed="isThemeReady">
+          {{ translate("settings.title", "Settings") }}
+        </h2>
         <div class="header-actions">
           <button class="btn-close" @click="close">
-            {{ translate('settings.close', 'Close') }}
+            {{ translate("settings.close", "Close") }}
           </button>
           <button class="btn-save" @click="save">
-            {{ translate('settings.saveSettings', 'Save Settings') }}
+            {{ translate("settings.saveSettings", "Save Settings") }}
           </button>
         </div>
       </div>
@@ -17,13 +23,19 @@
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
-        <p>{{ translate('settings.loadingUserInfo', 'Loading user information...') }}</p>
+        <p>
+          {{
+            translate("settings.loadingUserInfo", "Loading user information...")
+          }}
+        </p>
       </div>
 
       <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
-        <button @click="fetchUserData" class="btn-retry">{{ translate('settings.retry', 'Retry') }}</button>
+        <button @click="fetchUserData" class="btn-retry">
+          {{ translate("settings.retry", "Retry") }}
+        </button>
       </div>
 
       <div v-else>
@@ -31,14 +43,36 @@
         <div class="profile-section">
           <div class="account-avatar">
             <div class="avatar-placeholder" v-if="!userAvatar">
-              {{userData.name ? userData.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) : '?'}}
+              {{
+                userData.name
+                  ? userData.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .substring(0, 2)
+                  : "?"
+              }}
             </div>
-            <img v-else :src="userAvatar" alt="User avatar" class="avatar-image" />
+            <img
+              v-else
+              :src="userAvatar"
+              alt="User avatar"
+              class="avatar-image"
+            />
           </div>
           <div class="account-details">
-            <div class="user-name">{{ userData.name || translate('settings.userName', 'User') }}</div>
-            <div class="user-email">{{ userData.email || 'email@example.com' }}</div>
-            <div class="account-type">{{ userData.accountType || translate('settings.standardAccount', 'Standard Account') }}
+            <div class="user-name">
+              {{ userData.name || translate("settings.userName", "User") }}
+            </div>
+            <div class="user-email">
+              {{ userData.email || "email@example.com" }}
+            </div>
+            <div class="account-type">
+              {{
+                userData.accountType ||
+                translate("settings.standardAccount", "Standard Account")
+              }}
             </div>
           </div>
         </div>
@@ -47,37 +81,68 @@
         <div class="settings-grid">
           <!-- Display Box (Language + Theme) -->
           <div class="settings-box">
-            <h3 class="section-title">{{ translate('settings.display', 'Display') }}</h3>
+            <h3 class="section-title">
+              {{ translate("settings.display", "Display") }}
+            </h3>
 
             <!-- Language Selector -->
             <div class="setting-item">
-              <label class="section-label">{{ translate('settings.displayLanguage', 'Display Language') }}</label>
-              <select class="dropdown" v-model="settings.language" @change="applyLanguage">
-                <option value="en">{{ translate('settings.languages.english', 'English') }}</option>
-                <option value="fr">{{ translate('settings.languages.french', 'Français') }}</option>
-                <option value="sw">{{ translate('settings.languages.swahili', 'Kiswahili') }}</option>
+              <label class="section-label">{{
+                translate("settings.displayLanguage", "Display Language")
+              }}</label>
+              <select
+                class="dropdown"
+                v-model="settings.language"
+                @change="applyLanguage"
+              >
+                <option value="en">
+                  {{ translate("settings.languages.english", "English") }}
+                </option>
+                <option value="fr">
+                  {{ translate("settings.languages.french", "Français") }}
+                </option>
+                <option value="sw">
+                  {{ translate("settings.languages.swahili", "Kiswahili") }}
+                </option>
               </select>
             </div>
 
             <!-- Theme Controls -->
             <div class="setting-item">
-              <label class="section-label">{{ translate('settings.theme', 'Theme') }}</label>
+              <label class="section-label">{{
+                translate("settings.theme", "Theme")
+              }}</label>
               <div class="theme-buttons">
-                <button class="theme-toggle" :class="{ active: settings.theme === 'light' }"
-                  @click="applyTheme('light')">
-                  {{ translate('settings.themes.light', 'Light') }}
+                <button
+                  class="theme-toggle"
+                  :class="{ active: settings.theme === 'light' }"
+                  @click="applyTheme('light')"
+                >
+                  {{ translate("settings.themes.light", "Light") }}
                 </button>
-                <button class="theme-toggle" :class="{ active: settings.theme === 'dark' }" @click="applyTheme('dark')">
-                  {{ translate('settings.themes.dark', 'Dark') }}
+                <button
+                  class="theme-toggle"
+                  :class="{ active: settings.theme === 'dark' }"
+                  @click="applyTheme('dark')"
+                >
+                  {{ translate("settings.themes.dark", "Dark") }}
                 </button>
               </div>
             </div>
 
             <!-- Font Size -->
             <div class="setting-item">
-              <label class="section-label">{{ translate('settings.fontSize', 'Font Size') }}</label>
+              <label class="section-label">{{
+                translate("settings.fontSize", "Font Size")
+              }}</label>
               <div class="slider-container">
-                <input type="range" min="30" max="100" v-model.number="settings.fontSize" class="slider" />
+                <input
+                  type="range"
+                  min="30"
+                  max="100"
+                  v-model.number="settings.fontSize"
+                  class="slider"
+                />
                 <span class="slider-value">{{ settings.fontSize }}%</span>
               </div>
             </div>
@@ -85,13 +150,23 @@
 
           <!-- Notifications Box -->
           <div class="settings-box">
-            <h3 class="section-title">{{ translate('settings.notifications', 'Notifications') }}</h3>
+            <h3 class="section-title">
+              {{ translate("settings.notifications", "Notifications") }}
+            </h3>
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{ translate('settings.emailUpdates', 'Email Updates') }}</label>
-                <div class="switch" @click="settings.emailUpdates = !settings.emailUpdates">
-                  <div class="switch-track" :class="{ active: settings.emailUpdates }">
+                <label class="section-label">{{
+                  translate("settings.emailUpdates", "Email Updates")
+                }}</label>
+                <div
+                  class="switch"
+                  @click="settings.emailUpdates = !settings.emailUpdates"
+                >
+                  <div
+                    class="switch-track"
+                    :class="{ active: settings.emailUpdates }"
+                  >
                     <div class="switch-thumb"></div>
                   </div>
                 </div>
@@ -100,10 +175,22 @@
 
             <div class="setting-item">
               <div class="toggle-row">
-                <label class="section-label">{{ translate('settings.soundNotifications', 'Sound Notifications')
-                  }}</label>
-                <div class="switch" @click="settings.soundNotifications = !settings.soundNotifications">
-                  <div class="switch-track" :class="{ active: settings.soundNotifications }">
+                <label class="section-label">{{
+                  translate(
+                    "settings.soundNotifications",
+                    "Sound Notifications"
+                  )
+                }}</label>
+                <div
+                  class="switch"
+                  @click="
+                    settings.soundNotifications = !settings.soundNotifications
+                  "
+                >
+                  <div
+                    class="switch-track"
+                    :class="{ active: settings.soundNotifications }"
+                  >
                     <div class="switch-thumb"></div>
                   </div>
                 </div>
@@ -114,27 +201,54 @@
 
         <!-- Account Management Section -->
         <div class="account-management-section">
-          <h3 class="section-title">{{ translate('settings.accountManagement', 'Account Management') }}</h3>
+          <h3 class="section-title">
+            {{ translate("settings.accountManagement", "Account Management") }}
+          </h3>
 
           <div class="account-management-grid">
             <!-- Row 1: Email & Password -->
             <div class="management-row">
               <div class="management-col">
-                <label class="section-label">{{ translate('settings.emailAddress', 'Email Address') }}</label>
+                <label class="section-label">{{
+                  translate("settings.emailAddress", "Email Address")
+                }}</label>
                 <div class="input-with-button">
-                  <input type="email" class="text-input" v-model="userData.email" :disabled="!isEditingEmail"
-                    :placeholder="translate('settings.emailAddressPlaceholder', 'Your email address')" />
-                  <button class="btn-secondary" @click="toggleEmailEdit" :disabled="isEmailUpdating">
-                    {{ isEditingEmail ? translate('settings.save', 'Save') : translate('settings.edit', 'Edit') }}
+                  <input
+                    type="email"
+                    class="text-input"
+                    v-model="userData.email"
+                    :disabled="!isEditingEmail"
+                    :placeholder="
+                      translate(
+                        'settings.emailAddressPlaceholder',
+                        'Your email address'
+                      )
+                    "
+                  />
+                  <button
+                    class="btn-secondary"
+                    @click="toggleEmailEdit"
+                    :disabled="isEmailUpdating"
+                  >
+                    {{
+                      isEditingEmail
+                        ? translate("settings.save", "Save")
+                        : translate("settings.edit", "Edit")
+                    }}
                   </button>
                 </div>
                 <p v-if="emailError" class="error-text">{{ emailError }}</p>
               </div>
 
               <div class="management-col">
-                <label class="section-label">{{ translate('settings.password', 'Password') }}</label>
-                <button class="btn-secondary full-width" @click="initiatePasswordChange">
-                  {{ translate('settings.changePassword', 'Change Password') }}
+                <label class="section-label">{{
+                  translate("settings.password", "Password")
+                }}</label>
+                <button
+                  class="btn-secondary full-width"
+                  @click="initiatePasswordChange"
+                >
+                  {{ translate("settings.changePassword", "Change Password") }}
                 </button>
               </div>
             </div>
@@ -142,21 +256,36 @@
             <!-- Row 2: Reset & Delete -->
             <div class="management-row">
               <div class="management-col">
-                <button class="btn-secondary full-width" @click="confirmResetUserData">
-                  {{ translate('settings.resetUserData', 'Reset User Data') }}
+                <button
+                  class="btn-secondary full-width"
+                  @click="confirmResetUserData"
+                >
+                  {{ translate("settings.resetUserData", "Reset User Data") }}
                 </button>
                 <p class="description-text">
-                  {{ translate('settings.resetUserDataDesc', 'This will clear all your profile data and chat history.')
+                  {{
+                    translate(
+                      "settings.resetUserDataDesc",
+                      "This will clear all your profile data and chat history."
+                    )
                   }}
                 </p>
               </div>
 
               <div class="management-col">
-                <button class="btn-danger full-width" @click="confirmDeleteAccount">
-                  {{ translate('settings.deleteAccount', 'Delete Account') }}
+                <button
+                  class="btn-danger full-width"
+                  @click="confirmDeleteAccount"
+                >
+                  {{ translate("settings.deleteAccount", "Delete Account") }}
                 </button>
                 <p class="description-text danger-text">
-                  {{ translate('settings.deleteAccountDesc', 'This will permanently delete your account and all associated data.') }}
+                  {{
+                    translate(
+                      "settings.deleteAccountDesc",
+                      "This will permanently delete your account and all associated data."
+                    )
+                  }}
                 </p>
               </div>
             </div>
@@ -167,36 +296,89 @@
       <!-- Email Change Confirmation Modal -->
       <div class="modal" v-if="showEmailConfirmModal">
         <div class="modal-content" :data-theme="settings.theme">
-          <h3 class="modal-title" :data-themed="true">{{ translate('settings.confirmEmailChange', 'Confirm Email Change') }}</h3>
+          <h3 class="modal-title" :data-themed="true">
+            {{
+              translate("settings.confirmEmailChange", "Confirm Email Change")
+            }}
+          </h3>
 
           <div class="modal-body">
-            <p :data-themed="true">{{ translate('settings.changingEmailTo', 'Changing your email to') }} <strong>{{
-                newEmail }}</strong> {{
-              translate('settings.will', 'will') }}:</p>
+            <p :data-themed="true">
+              {{
+                translate("settings.changingEmailTo", "Changing your email to")
+              }}
+              <strong>{{ newEmail }}</strong>
+              {{ translate("settings.will", "will") }}:
+            </p>
             <ul>
-              <li>{{ translate('settings.logOutSystem', 'Log you out of the system') }}</li>
-              <li>{{ translate('settings.sendVerificationLink', 'Send a verification link to your new email') }}</li>
-              <li>{{ translate('settings.requireVerification', 'Require verification before you can log in again') }}
+              <li>
+                {{
+                  translate(
+                    "settings.logOutSystem",
+                    "Log you out of the system"
+                  )
+                }}
+              </li>
+              <li>
+                {{
+                  translate(
+                    "settings.sendVerificationLink",
+                    "Send a verification link to your new email"
+                  )
+                }}
+              </li>
+              <li>
+                {{
+                  translate(
+                    "settings.requireVerification",
+                    "Require verification before you can log in again"
+                  )
+                }}
               </li>
             </ul>
 
             <div class="form-group">
-              <label for="confirmPassword" :data-themed="true">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm')
-                }}:</label>
-              <input v-model="emailChangePassword" type="password" id="confirmPassword"
-                :placeholder="translate('settings.currentPasswordPlaceholder', 'Your current password')"
-                class="text-input" required />
-              <p v-if="emailChangeError" class="error-text">{{ emailChangeError }}</p>
+              <label for="confirmPassword" :data-themed="true"
+                >{{
+                  translate(
+                    "settings.enterPasswordConfirm",
+                    "Enter your password to confirm"
+                  )
+                }}:</label
+              >
+              <input
+                v-model="emailChangePassword"
+                type="password"
+                id="confirmPassword"
+                :placeholder="
+                  translate(
+                    'settings.currentPasswordPlaceholder',
+                    'Your current password'
+                  )
+                "
+                class="text-input"
+                required
+              />
+              <p v-if="emailChangeError" class="error-text">
+                {{ emailChangeError }}
+              </p>
             </div>
           </div>
 
           <div class="modal-footer">
             <button class="btn-close" @click="cancelEmailChange">
-              {{ translate('settings.cancel', 'Cancel') }}
+              {{ translate("settings.cancel", "Cancel") }}
             </button>
-            <button class="btn-save" @click="confirmEmailChange" :disabled="!emailChangePassword || isEmailUpdating">
-              {{ isEmailUpdating ? translate('settings.processing', 'Processing...') :
-              translate('settings.confirmChange', 'Confirm Change') }}
+            <button
+              class="btn-save"
+              @click="confirmEmailChange"
+              :disabled="!emailChangePassword || isEmailUpdating"
+            >
+              {{
+                isEmailUpdating
+                  ? translate("settings.processing", "Processing...")
+                  : translate("settings.confirmChange", "Confirm Change")
+              }}
             </button>
           </div>
         </div>
@@ -204,8 +386,12 @@
 
       <!-- Password Reset Modal - FIXED -->
       <div class="modal" v-if="showPasswordReset">
-        <PasswordResetInitiateScreen :prefilledEmail="userData.email" :isEmbedded="true"
-          @reset-initiated="handlePasswordResetInitiated" @cancel="cancelPasswordReset" />
+        <PasswordResetInitiateScreen
+          :prefilledEmail="userData.email"
+          :isEmbedded="true"
+          @reset-initiated="handlePasswordResetInitiated"
+          @cancel="cancelPasswordReset"
+        />
       </div>
     </div>
   </div>
@@ -213,775 +399,1010 @@
   <!-- Delete Account Confirmation Modal -->
   <div class="modal" v-if="showDeleteAccountModal">
     <div class="modal-content">
-      <h3 class="modal-title">{{ translate('settings.confirmAccountDeletion', 'Confirm Account Deletion') }}</h3>
+      <h3 class="modal-title">
+        {{
+          translate(
+            "settings.confirmAccountDeletion",
+            "Confirm Account Deletion"
+          )
+        }}
+      </h3>
       <div class="modal-body">
-        <p class="warning-text">{{ translate('settings.accountDeletionWarning', 'Warning: This action is permanent and cannot be undone.') }}</p>
+        <p class="warning-text">
+          {{
+            translate(
+              "settings.accountDeletionWarning",
+              "Warning: This action is permanent and cannot be undone."
+            )
+          }}
+        </p>
 
         <div class="form-group">
-          <label for="deleteReason">{{ translate('settings.deletionReason', 'Reason for deletion (optional):')
-            }}</label>
-          <textarea v-model="deleteAccountReason" id="deleteReason" rows="3" class="text-input"></textarea>
+          <label for="deleteReason">{{
+            translate(
+              "settings.deletionReason",
+              "Reason for deletion (optional):"
+            )
+          }}</label>
+          <textarea
+            v-model="deleteAccountReason"
+            id="deleteReason"
+            rows="3"
+            class="text-input"
+          ></textarea>
         </div>
 
         <div class="form-group">
-          <label for="confirmDeletePassword">{{ translate('settings.enterPasswordConfirm', 'Enter your password to confirm:') }}</label>
-          <input v-model="deleteAccountPassword" type="password" id="confirmDeletePassword" class="text-input"
-            required />
-          <p v-if="deleteAccountError" class="error-text">{{ deleteAccountError }}</p>
+          <label for="confirmDeletePassword">{{
+            translate(
+              "settings.enterPasswordConfirm",
+              "Enter your password to confirm:"
+            )
+          }}</label>
+          <input
+            v-model="deleteAccountPassword"
+            type="password"
+            id="confirmDeletePassword"
+            class="text-input"
+            required
+          />
+          <p v-if="deleteAccountError" class="error-text">
+            {{ deleteAccountError }}
+          </p>
         </div>
       </div>
 
       <div class="modal-footer">
         <button class="btn-close" @click="cancelAccountDeletion">
-          {{ translate('settings.cancel', 'Cancel') }}
+          {{ translate("settings.cancel", "Cancel") }}
         </button>
-        <button class="btn-danger" @click="processAccountDeletion"
-          :disabled="!deleteAccountPassword || isDeletingAccount">
-          {{ isDeletingAccount ? translate('settings.deleting', 'Deleting...') :
-          translate('settings.permanentlyDeleteAccount', 'Delete Account') }}
+        <button
+          class="btn-danger"
+          @click="processAccountDeletion"
+          :disabled="!deleteAccountPassword || isDeletingAccount"
+        >
+          {{
+            isDeletingAccount
+              ? translate("settings.deleting", "Deleting...")
+              : translate("settings.permanentlyDeleteAccount", "Delete Account")
+          }}
         </button>
       </div>
     </div>
   </div>
 
   <!-- Reset User Data Confirmation Dialog -->
-  <ConfirmDialog :visible="showResetDataConfirm" :title="resetDataDialog.title" :message="resetDataDialog.message"
-    :confirm-text="resetDataDialog.confirmText" :cancel-text="resetDataDialog.cancelText" :theme="getCurrentTheme()"
-    :parent-styles="{ maxWidth: '450px' }" @confirm="handleResetDataConfirm" @cancel="handleResetDataCancel" />
+  <ConfirmDialog
+    :visible="showResetDataConfirm"
+    :title="resetDataDialog.title"
+    :message="resetDataDialog.message"
+    :confirm-text="resetDataDialog.confirmText"
+    :cancel-text="resetDataDialog.cancelText"
+    :theme="getCurrentTheme()"
+    :parent-styles="{ maxWidth: '450px' }"
+    @confirm="handleResetDataConfirm"
+    @cancel="handleResetDataCancel"
+  />
 
   <!-- Delete Account Confirmation Dialog -->
-  <ConfirmDialog :visible="showDeleteAccountConfirm" :title="deleteAccountDialog.title"
-    :message="deleteAccountDialog.message" :confirm-text="deleteAccountDialog.confirmText"
-    :cancel-text="deleteAccountDialog.cancelText" :theme="getCurrentTheme()" :parent-styles="{ maxWidth: '450px' }"
-    @confirm="handleDeleteAccountConfirm" @cancel="handleDeleteAccountCancel" />
-
-  <!-- Add a key to force re-rendering on locale changes -->
-  <div class="settings-dialog" :key="'settings-dialog-' + currentLocale"></div>
-
+  <ConfirmDialog
+    :visible="showDeleteAccountConfirm"
+    :title="deleteAccountDialog.title"
+    :message="deleteAccountDialog.message"
+    :confirm-text="deleteAccountDialog.confirmText"
+    :cancel-text="deleteAccountDialog.cancelText"
+    :theme="getCurrentTheme()"
+    :parent-styles="{ maxWidth: '450px' }"
+    @confirm="handleDeleteAccountConfirm"
+    @cancel="handleDeleteAccountCancel"
+  />
 </template>
 
 <script>
-// Import the user service
-import userService from '@/services/userService';
-// Import the PasswordResetInitiateScreen component
-import PasswordResetInitiateScreen from '@/components/PasswordResetInitiateScreen.vue';
-// Import the notifications service
-import notificationService from '@/services/notificationService';
-// Import the theme manager
-import { themeManager, setTheme } from '@/utils/ThemeManager';
-// Import the ConfirmDialog component
-import ConfirmDialog from '@/components/ConfirmDialog.vue';
+// Import the user service to handle user-related API calls and data management
+import userService from "@/services/userService";
+
+// Import the PasswordResetInitiateScreen component for initiating password reset flows
+import PasswordResetInitiateScreen from "@/components/PasswordResetInitiateScreen.vue";
+
+// Import the notifications service to display user feedback messages (success, error, info)
+import notificationService from "@/services/notificationService";
+
+// Import the theme manager utilities to handle theme application and persistence
+import { themeManager } from "@/utils/ThemeManager";
+
+// Import the ConfirmDialog component for displaying confirmation dialogs
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 
 export default {
-  name: 'SettingsComponent',
+  name: "SettingsComponent",
   components: {
     PasswordResetInitiateScreen,
-    ConfirmDialog
+    ConfirmDialog,
   },
   data() {
     return {
-      // Add this
-      currentLocale: this.$i18n ? this.$i18n.locale : 'en',
-      // Data loading state
+      currentLocale: this.$i18n ? this.$i18n.locale : "en",
       isLoading: true,
       errorMessage: null,
-
-      // Store userId for authentication during email changes
-      currentUserId: '',
-
-      // Initialize with current app settings
+      isThemeReady: false,
+      currentUserId: "",
       settings: {
         language: this.getCurrentLanguage(),
-        theme: document.documentElement.getAttribute('data-theme') || 'light',
+        theme: this.getCurrentTheme(),
         fontSize: this.getSavedFontSize(),
-        emailUpdates: this.getSavedPreference('emailUpdates', false),
-        soundNotifications: this.getSavedPreference('soundNotifications', true)
+        emailUpdates: this.getSavedPreference("emailUpdates", false),
+        soundNotifications: this.getSavedPreference("soundNotifications", true),
       },
-
-      // User account data
       userData: {
-        name: '',
-        email: '',
-        accountType: '',
-        userId: '',
-        createdAt: ''
+        name: "",
+        email: "",
+        accountType: "",
+        userId: "",
+        createdAt: "",
       },
       userAvatar: null,
-
-      // Email editing state
       isEditingEmail: false,
       emailError: null,
-      newEmail: '',
+      newEmail: "",
       isEmailUpdating: false,
-
-      // Email change confirmation
       showEmailConfirmModal: false,
-      emailChangePassword: '',
+      emailChangePassword: "",
       emailChangeError: null,
-
-      // Password Reset Flow - FIXED
       showPasswordReset: false,
-
-      // Account Deletion
       showDeleteAccountModal: false,
-      deleteAccountPassword: '',
-      deleteAccountReason: '',
+      deleteAccountPassword: "",
+      deleteAccountReason: "",
       deleteAccountError: null,
       isDeletingAccount: false,
-
-      // Custom confirmation dialogs
       showResetDataConfirm: false,
       showDeleteAccountConfirm: false,
-      
-      // Dialog configuration objects
       resetDataDialog: {
-        title: '',
-        message: '',
-        confirmText: '',
-        cancelText: ''
+        title: "",
+        message: "",
+        confirmText: "",
+        cancelText: "",
       },
       deleteAccountDialog: {
-        title: '',
-        message: '',
-        confirmText: '',
-        cancelText: ''
-      }
-    }
+        title: "",
+        message: "",
+        confirmText: "",
+        cancelText: "",
+      },
+    };
   },
-
-  // Add this to your created() lifecycle hook (to replace the watcher in your original code)
+  computed: {
+    isDarkMode() {
+      console.log(
+        "[SETTINGS] Computing isDarkMode, settings.theme:",
+        this.settings.theme
+      );
+      return this.settings.theme === "dark";
+    },
+    dialogThemeStyles() {
+      const isDark = this.isDarkMode;
+      console.log("[SETTINGS] Computing dialogThemeStyles, isDark:", isDark);
+      return {
+        "--dialog-background": isDark ? "#2a2a2a" : "#ffffff",
+        "--dialog-title-color": isDark ? "#f0f0f0" : "#333333",
+        "--dialog-text-color": isDark ? "rgba(255, 255, 255, 0.8)" : "#666666",
+        "--dialog-border-color": isDark ? "#3a3a3a" : "#dcdfe4",
+        "--dialog-box-shadow": isDark
+          ? "0 4px 12px rgba(0, 0, 0, 0.4)"
+          : "0 4px 12px rgba(0, 0, 0, 0.15)",
+        "--dialog-overlay-background": isDark
+          ? "rgba(0, 0, 0, 0.7)"
+          : "rgba(0, 0, 0, 0.5)",
+      };
+    },
+  },
   created() {
-    // Initialize currentLocale
-    this.currentLocale = this.$i18n ? this.$i18n.locale : 'en';
-    
-    // Fetch user data when component is created
+    console.log("[SETTINGS] Initializing currentLocale...");
+    this.currentLocale = this.$i18n ? this.$i18n.locale : "en";
+    console.log("[SETTINGS] currentLocale initialized to:", this.currentLocale);
+
+    console.log("[SETTINGS] Component created, fetching user data...");
     this.fetchUserData();
 
-    // Initialize dialog texts
+    console.log("[SETTINGS] Initializing dialog texts...");
     this.updateDialogTexts();
 
-    // Add a watcher for language changes that forces rendering updates
-    this.$watch('settings.language', (newVal) => {
-      // Apply language change without page reload
-      if (this.$i18n) {
-        this.$i18n.locale = newVal;
-        this.currentLocale = newVal; // Update currentLocale when language changes
-        this.$forceUpdate();
+    console.log("[SETTINGS] Initial settings.theme:", this.settings.theme);
+    console.log(
+      "[SETTINGS] Initial DOM data-theme:",
+      document.documentElement.getAttribute("data-theme")
+    );
 
-        // Force update the entire component tree if possible
+    console.log("[SETTINGS] Setting up watcher for settings.language...");
+    this.$watch("settings.language", (newVal) => {
+      console.log("[SETTINGS] settings.language changed to:", newVal);
+      if (this.$i18n) {
+        console.log("[SETTINGS] Updating i18n locale...");
+        this.$i18n.locale = newVal;
+        console.log("[SETTINGS] Updating currentLocale to:", newVal);
+        this.currentLocale = newVal;
+        console.log(
+          "[SETTINGS] Forcing component re-render for language update..."
+        );
+        this.$forceUpdate();
         if (this.$root) {
+          console.log("[SETTINGS] Forcing root component re-render...");
           this.$root.$forceUpdate();
         }
       }
     });
-    
-    // Also watch for locale changes from outside this component
+
+    console.log("[SETTINGS] Setting up watcher for $i18n.locale...");
     if (this.$i18n) {
-      this.$watch('$i18n.locale', (newLocale) => {
-        console.log('Locale changed in Settings:', newLocale);
+      this.$watch("$i18n.locale", (newLocale) => {
+        console.log("Locale changed in Settings:", newLocale);
         this.currentLocale = newLocale;
-        
-        // Update settings language to match if different
         if (this.settings && this.settings.language !== newLocale) {
+          console.log("[SETTINGS] Syncing settings.language to:", newLocale);
           this.settings.language = newLocale;
         }
-        
-        // Force component to re-render
+        console.log(
+          "[SETTINGS] Forcing component re-render for external locale change..."
+        );
         this.$forceUpdate();
       });
     }
   },
+  mounted() {
+    console.log("[SETTINGS] Adding theme change event listener...");
+    window.addEventListener("themeChange", this.updateTheme);
 
+    console.log("[SETTINGS] Forcing theme application on mount...");
+    this.applyTheme(this.settings.theme);
+
+    // Continuously enforce theme to handle external overrides
+    console.log("[SETTINGS] Setting up theme enforcement interval...");
+    const themeEnforcementInterval = setInterval(() => {
+      const currentDomTheme =
+        document.documentElement.getAttribute("data-theme") || "light";
+      if (currentDomTheme !== this.settings.theme) {
+        console.log(
+          "[SETTINGS] Theme mismatch detected! DOM data-theme:",
+          currentDomTheme,
+          "Settings theme:",
+          this.settings.theme
+        );
+        console.log("[SETTINGS] Re-applying settings.theme...");
+        this.applyTheme(this.settings.theme);
+      }
+    }, 100);
+
+    // Clean up interval on component destroy
+    this.$once("hook:beforeDestroy", () => {
+      console.log("[SETTINGS] Cleaning up theme enforcement interval...");
+      clearInterval(themeEnforcementInterval);
+    });
+
+    console.log("[SETTINGS] Scheduling theme readiness update...");
+    this.$nextTick(() => {
+      console.log("[SETTINGS] Setting isThemeReady to true...");
+      this.isThemeReady = true;
+    });
+
+    console.log("[SETTINGS] Forcing i18n update on mount...");
+    if (this.$i18n) {
+      const savedLanguage = localStorage.getItem("userLocale") || "en";
+      console.log(
+        "[SETTINGS] Saved language from localStorage:",
+        savedLanguage
+      );
+      console.log("[SETTINGS] Setting i18n locale to:", savedLanguage);
+      this.$i18n.locale = savedLanguage;
+      console.log("[SETTINGS] Setting settings.language to:", savedLanguage);
+      this.settings.language = savedLanguage;
+      console.log("[SETTINGS] Scheduling $forceUpdate after i18n update...");
+      this.$nextTick(() => {
+        console.log(
+          "[SETTINGS] Forcing component re-render after i18n update..."
+        );
+        this.$forceUpdate();
+      });
+    }
+
+    console.log("Current locale:", this.$i18n.locale);
+    console.log("Available locales:", this.$i18n.availableLocales);
+    console.log(
+      "Sample translation for deleteAccount:",
+      this.$i18n.t("settings.deleteAccount"),
+      this.$i18n.te("settings.deleteAccount") ? "exists" : "missing"
+    );
+  },
   methods: {
-    // Update dialog text content based on current locale
-    updateDialogTexts() {
-      this.resetDataDialog = {
-        title: this.translate('settings.resetUserDataTitle', 'Reset User Data'),
-        message: this.translate('settings.confirmResetUserData', 'Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.'),
-        confirmText: this.translate('settings.reset', 'Reset'),
-        cancelText: this.translate('settings.cancel', 'Cancel')
-      };
-      
-      this.deleteAccountDialog = {
-        title: this.translate('settings.deleteAccountTitle', 'Delete Account'),
-        message: this.translate('settings.confirmDeleteAccount', 'Are you sure you want to delete your account? This action cannot be undone.'),
-        confirmText: this.translate('settings.delete', 'Delete'),
-        cancelText: this.translate('settings.cancel', 'Cancel')
-      };
-    },
+    getCurrentTheme() {
+      console.log("[SETTINGS] Getting current theme...");
+      let theme = localStorage.getItem("theme") || "light";
+      console.log("[SETTINGS] Theme from localStorage:", theme);
 
-    // Get current language from i18n or localStorage
+      if (theme === "system") {
+        console.log(
+          "[SETTINGS] Theme set to 'system', checking OS preference..."
+        );
+        theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        console.log("[SETTINGS] Resolved system theme to:", theme);
+      }
+      return theme;
+    },
     getCurrentLanguage() {
-      // First try to get from i18n instance
+      console.log("[SETTINGS] Getting current language...");
+
       if (this.$i18n && this.$i18n.locale) {
+        console.log("[SETTINGS] Language from i18n:", this.$i18n.locale);
         return this.$i18n.locale;
       }
-      
-      // Fallback to localStorage
+
       try {
-        const savedLocale = localStorage.getItem('userLocale');
+        const savedLocale = localStorage.getItem("userLocale");
         if (savedLocale) {
+          console.log("[SETTINGS] Language from localStorage:", savedLocale);
           return savedLocale;
         }
       } catch (e) {
-        console.warn('Error accessing localStorage for language:', e);
+        console.warn(
+          "[SETTINGS] Error accessing localStorage for language:",
+          e
+        );
       }
-      
-      // Default to English if nothing else works
-      return 'en';
-    },
-    
-    // Get saved font size or default to 50%
-    getSavedFontSize() {
-      try {
-        const fontSize = localStorage.getItem('fontSize')
-        return fontSize ? parseInt(fontSize) : 50
-      } catch (e) {
-        console.warn('Error accessing localStorage:', e)
-        return 50
-      }
-    },
 
-    // Get saved preference with fallback
-    getSavedPreference(key, defaultValue) {
+      console.log("[SETTINGS] Defaulting to language: 'en'");
+      return "en";
+    },
+    getSavedFontSize() {
+      console.log("[SETTINGS] Getting saved font size...");
       try {
-        const value = localStorage.getItem(key)
-        return value !== null ? JSON.parse(value) : defaultValue
+        const fontSize = localStorage.getItem("fontSize");
+        if (fontSize) {
+          console.log("[SETTINGS] Font size from localStorage:", fontSize);
+          return parseInt(fontSize);
+        }
+        console.log("[SETTINGS] No font size found, defaulting to 50%");
+        return 50;
       } catch (e) {
-        console.warn(`Error accessing localStorage for ${key}:`, e)
-        return defaultValue
+        console.warn(
+          "[SETTINGS] Error accessing localStorage for font size:",
+          e
+        );
+        return 50;
       }
     },
-    // In SettingsComponent.vue, modify your applyLanguage method:
-    // Method 1: Don't reload in applyLanguage, just update the local component
+    getSavedPreference(key, defaultValue) {
+      console.log(`[SETTINGS] Getting saved preference for ${key}...`);
+      try {
+        const value = localStorage.getItem(key);
+        if (value !== null) {
+          console.log(`[SETTINGS] Preference ${key} from localStorage:`, value);
+          return JSON.parse(value);
+        }
+        console.log(
+          `[SETTINGS] No preference for ${key}, defaulting to:`,
+          defaultValue
+        );
+        return defaultValue;
+      } catch (e) {
+        console.warn(`[SETTINGS] Error accessing localStorage for ${key}:`, e);
+        return defaultValue;
+      }
+    },
     applyLanguage() {
+      console.log(
+        "[SETTINGS] Applying language change:",
+        this.settings.language
+      );
       if (this.$i18n) {
-        // Set the i18n locale for this component only
+        console.log(
+          "[SETTINGS] Setting i18n locale to:",
+          this.settings.language
+        );
         this.$i18n.locale = this.settings.language;
 
-        // Save to localStorage
         try {
-          localStorage.setItem('userLocale', this.settings.language);
+          console.log("[SETTINGS] Saving language to localStorage...");
+          localStorage.setItem("userLocale", this.settings.language);
+          console.log("[SETTINGS] Language saved successfully");
         } catch (e) {
-          console.warn('Error saving language preference:', e);
+          console.warn("[SETTINGS] Error saving language preference:", e);
         }
 
-        // Just update this component
+        console.log(
+          "[SETTINGS] Forcing component re-render for language update..."
+        );
         this.$forceUpdate();
       }
     },
-
-    translate(key, fallback = '') {
-      if (!this.$i18n) return fallback;
+    translate(key, fallback = "") {
+      console.log("[SETTINGS] Translating key:", key);
+      if (!this.$i18n) {
+        console.log(
+          "[SETTINGS] No i18n instance, returning fallback:",
+          fallback
+        );
+        return fallback;
+      }
       try {
-        // Force the correct locale
+        console.log("[SETTINGS] Using locale:", this.currentLocale);
         const translation = this.$i18n.t(key, { locale: this.currentLocale });
         if (translation === key) {
+          console.log(
+            "[SETTINGS] Translation not found, using fallback:",
+            fallback || key
+          );
           return fallback || key;
         }
+        console.log("[SETTINGS] Translation found:", translation);
         return translation;
       } catch (e) {
-        console.error('Translation error:', e);
+        console.error("[SETTINGS] Translation error:", e);
+        console.log(
+          "[SETTINGS] Returning fallback due to error:",
+          fallback || key
+        );
         return fallback || key;
       }
     },
-
-    mounted() {
-      // Add theme change listener
-      window.addEventListener('themeChange', this.updateTheme);
-
-      // CRUCIAL FIX: Force updating i18n when component mounts
-      // This ensures translations are applied on initial render
-      if (this.$i18n) {
-        const savedLanguage = localStorage.getItem('userLocale') || 'en';
-
-        // Force the i18n locale to match the saved locale
-        this.$i18n.locale = savedLanguage;
-
-        // Update the component state to match
-        this.settings.language = savedLanguage;
-
-        // Explicitly trigger Vue's reactivity system
-        this.$nextTick(() => {
-          // Force a re-render of this component specifically
-          this.$forceUpdate();
-        });
+    updateTheme() {
+      console.log("[SETTINGS] Theme change event triggered");
+      const currentTheme =
+        document.documentElement.getAttribute("data-theme") || "light";
+      console.log("[SETTINGS] Current theme from DOM:", currentTheme);
+      if (this.settings.theme !== currentTheme) {
+        console.log(
+          "[SETTINGS] Updating settings.theme to match DOM:",
+          currentTheme
+        );
+        this.settings.theme = currentTheme;
       }
-
-      // Add this in your mounted hook or a method you can call
-      console.log('Current locale:', this.$i18n.locale);
-      console.log('Available locales:', this.$i18n.availableLocales);
-      console.log('Sample translation for deleteAccount:',
-        this.$i18n.t('settings.deleteAccount'),
-        this.$i18n.te('settings.deleteAccount') ? 'exists' : 'missing');
+      console.log("[SETTINGS] Resetting theme readiness...");
+      this.isThemeReady = false;
+      this.$nextTick(() => {
+        console.log("[SETTINGS] Setting theme readiness to true...");
+        this.isThemeReady = true;
+        console.log(
+          "[SETTINGS] Forcing component update after theme change..."
+        );
+        this.$forceUpdate();
+      });
     },
-
     applyTheme(theme) {
-      console.log('Theme button clicked:', theme);
-
-      // Update local state
+      console.log("[SETTINGS] Theme button clicked:", theme);
+      console.log("[SETTINGS] Updating settings.theme to:", theme);
       this.settings.theme = theme;
-
-      // First save to localStorage
-      localStorage.setItem('theme', theme);
-
-      // Let the ThemeManager handle the theme application
-      // It already supports 'system' option with OS preference detection
+      console.log("[SETTINGS] Saving theme to localStorage...");
+      localStorage.setItem("theme", theme);
+      console.log("[SETTINGS] Theme saved successfully");
       try {
-        if (typeof themeManager !== 'undefined' && themeManager) {
-          // Use the ThemeManager's setTheme method which handles 'system' theme
+        console.log("[SETTINGS] Applying theme with ThemeManager...");
+        if (themeManager && typeof themeManager.setTheme === "function") {
+          console.log("[SETTINGS] Using ThemeManager.setTheme...");
           themeManager.setTheme(theme);
-
-          // Since ThemeManager.setTheme already handles everything, we don't need
-          // to manually set attributes or classes here
+          console.log("[SETTINGS] Theme applied via ThemeManager");
         } else {
-          // Fallback if ThemeManager is not available
-          // Simple direct application without system detection
-          const effectiveTheme = theme === 'system'
-            ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-            : theme;
-
-          document.documentElement.setAttribute('data-theme', effectiveTheme);
-          document.body.setAttribute('data-theme', effectiveTheme);
-
-          // Update dark mode classes
-          if (effectiveTheme === 'dark') {
-            document.documentElement.classList.add('dark-mode');
-            document.documentElement.classList.remove('light-mode');
-            document.body.classList.remove('light-mode');
-            document.body.classList.add('dark-mode');
+          console.log("[SETTINGS] ThemeManager unavailable, using fallback...");
+          const effectiveTheme =
+            theme === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : theme;
+          console.log(
+            "[SETTINGS] Effective theme resolved to:",
+            effectiveTheme
+          );
+          console.log("[SETTINGS] Setting data-theme attribute on document...");
+          document.documentElement.setAttribute("data-theme", effectiveTheme);
+          document.body.setAttribute("data-theme", effectiveTheme);
+          if (effectiveTheme === "dark") {
+            console.log("[SETTINGS] Applying dark mode classes...");
+            document.documentElement.classList.add("dark-mode");
+            document.documentElement.classList.remove("light-mode");
+            document.body.classList.remove("light-mode");
+            document.body.classList.add("dark-mode");
           } else {
-            document.documentElement.classList.remove('dark-mode');
-            document.documentElement.classList.add('light-mode');
-            document.body.classList.remove('dark-mode');
-            document.body.classList.add('light-mode');
+            console.log("[SETTINGS] Applying light mode classes...");
+            document.documentElement.classList.remove("dark-mode");
+            document.documentElement.classList.add("light-mode");
+            document.body.classList.remove("dark-mode");
+            document.body.classList.add("light-mode");
           }
+          console.log("[SETTINGS] Fallback theme application completed");
         }
       } catch (e) {
-        console.warn('Error applying theme:', e);
+        console.warn("[SETTINGS] Error applying theme:", e);
       }
-
-      // Notify parent component
-      this.$emit('themeChanged', theme);
+      console.log("[SETTINGS] Emitting themeChanged event with theme:", theme);
+      this.$emit("themeChanged", theme);
+      console.log(
+        "[SETTINGS] Forcing component re-render after theme change..."
+      );
+      this.$forceUpdate();
     },
-
-    // Fetch user data from the backend
+    updateDialogTexts() {
+      console.log("[SETTINGS] Updating dialog texts for current locale...");
+      this.resetDataDialog = {
+        title: this.translate("settings.resetUserDataTitle", "Reset User Data"),
+        message: this.translate(
+          "settings.confirmResetUserData",
+          "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials."
+        ),
+        confirmText: this.translate("settings.reset", "Reset"),
+        cancelText: this.translate("settings.cancel", "Cancel"),
+      };
+      this.deleteAccountDialog = {
+        title: this.translate("settings.deleteAccountTitle", "Delete Account"),
+        message: this.translate(
+          "settings.confirmDeleteAccount",
+          "Are you sure you want to delete your account? This action cannot be undone."
+        ),
+        confirmText: this.translate("settings.delete", "Delete"),
+        cancelText: this.translate("settings.cancel", "Cancel"),
+      };
+      console.log("[SETTINGS] Dialog texts updated:", {
+        resetDataDialog: this.resetDataDialog,
+        deleteAccountDialog: this.deleteAccountDialog,
+      });
+    },
     async fetchUserData() {
+      console.log("[SETTINGS] Fetching user data...");
       this.isLoading = true;
       this.errorMessage = null;
-
       try {
-        // First try to get from cached user data (fast)
+        console.log("[SETTINGS] Checking for cached user data...");
         let userData = userService.getCurrentUser();
-
         if (!userData) {
-          // If no cached data, fetch from API
+          console.log("[SETTINGS] No cached data, fetching from API...");
           userData = await userService.getCurrentUserInfo();
+          console.log("[SETTINGS] User data fetched from API:", userData);
         } else {
-          // If we have cached data, refresh in background
-          userService.refreshUserData().catch(err => {
-            console.warn('Background refresh failed:', err);
+          console.log(
+            "[SETTINGS] Using cached data, refreshing in background..."
+          );
+          userService.refreshUserData().catch((err) => {
+            console.warn("[SETTINGS] Background refresh failed:", err);
           });
         }
-
-        // Extract the numeric ID part if it includes 'users/' prefix
-        let userId = userData.id || userData.userId || userData._id || '';
-
-        // Remove 'users/' prefix if present
-        if (typeof userId === 'string' && userId.includes('/')) {
-          userId = userId.split('/').pop();
+        console.log("[SETTINGS] Extracting user ID...");
+        let userId = userData.id || userData.userId || userData._id || "";
+        if (typeof userId === "string" && userId.includes("/")) {
+          userId = userId.split("/").pop();
         }
-
         this.currentUserId = userId;
-        console.log('[SETTINGS] Stored user ID for authentication:', this.currentUserId);
-
-        // Update component with user data
+        console.log(
+          "[SETTINGS] Stored user ID for authentication:",
+          this.currentUserId
+        );
+        console.log("[SETTINGS] Updating userData state...");
         this.userData = {
-          name: userData.fullName || userData.loginName || userData.username || this.translate('settings.user'),
-          email: userData.email || '',
-          accountType: userData.accountType || userData.role || this.translate('settings.standardAccount'),
-          userId: this.currentUserId, // Use the cleaned ID
-          createdAt: userData.createdAt || ''
+          name:
+            userData.fullName ||
+            userData.loginName ||
+            userData.username ||
+            this.translate("settings.user"),
+          email: userData.email || "",
+          accountType:
+            userData.accountType ||
+            userData.role ||
+            this.translate("settings.standardAccount"),
+          userId: this.currentUserId,
+          createdAt: userData.createdAt || "",
         };
-
-        // Set avatar if available
+        console.log("[SETTINGS] userData updated:", this.userData);
         if (userData.avatarUrl) {
+          console.log("[SETTINGS] Setting user avatar:", userData.avatarUrl);
           this.userAvatar = userData.avatarUrl;
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
-        // this.errorMessage = this.translate('settings.unableToLoadUser');
-        notificationService.error(this.translate('settings.unableToLoadUser'));
-
-        // Use any data we might already have
+        console.error("[SETTINGS] Error fetching user data:", error);
+        notificationService.error(this.translate("settings.unableToLoadUser"));
+        console.log("[SETTINGS] Attempting to use fallback user data...");
         const fallbackUser = userService.getCurrentUser();
         if (fallbackUser) {
-          let userId = fallbackUser.id || fallbackUser.userId || fallbackUser._id || '';
-
-          // Remove 'users/' prefix if present
-          if (typeof userId === 'string' && userId.includes('/')) {
-            userId = userId.split('/').pop();
+          console.log("[SETTINGS] Fallback user data found:", fallbackUser);
+          let userId =
+            fallbackUser.id || fallbackUser.userId || fallbackUser._id || "";
+          if (typeof userId === "string" && userId.includes("/")) {
+            userId = userId.split("/").pop();
           }
-
           this.currentUserId = userId;
-
+          console.log("[SETTINGS] Fallback user ID:", this.currentUserId);
           this.userData = {
-            name: fallbackUser.fullName || fallbackUser.loginName || this.translate('settings.user'),
-            email: fallbackUser.email || '',
-            accountType: fallbackUser.accountType || this.translate('settings.account'),
+            name:
+              fallbackUser.fullName ||
+              fallbackUser.loginName ||
+              this.translate("settings.user"),
+            email: fallbackUser.email || "",
+            accountType:
+              fallbackUser.accountType || this.translate("settings.account"),
             userId: this.currentUserId,
-            createdAt: fallbackUser.createdAt || ''
+            createdAt: fallbackUser.createdAt || "",
           };
+          console.log("[SETTINGS] Fallback userData set:", this.userData);
         }
       } finally {
+        console.log("[SETTINGS] Setting isLoading to false");
         this.isLoading = false;
       }
     },
-
-    // Close without saving
     close() {
-      this.$emit('close')
+      console.log("[SETTINGS] Closing dialog without saving...");
+      this.$emit("close");
     },
-
-    // Then update your save method to dispatch the global event:
-    // Method 2: When saving, do the global reload after closing
     save() {
-
-      notificationService.info(this.translate('settings.savingSettings', 'Saving your settings...'), 1000);
-      // First set a flag to indicate we're changing language
-      const isChangingLanguage = this.$i18n &&
-        this.$i18n.locale !== this.settings.language;
-
-      // Save language preference
+      console.log("[SETTINGS] Saving settings...");
+      notificationService.info(
+        this.translate("settings.savingSettings", "Saving your settings..."),
+        1000
+      );
+      const isChangingLanguage =
+        this.$i18n && this.$i18n.locale !== this.settings.language;
+      console.log("[SETTINGS] Is language changing?:", isChangingLanguage);
       if (this.$i18n) {
+        console.log(
+          "[SETTINGS] Saving language preference:",
+          this.settings.language
+        );
         this.$i18n.locale = this.settings.language;
         try {
-          localStorage.setItem('userLocale', this.settings.language);
+          localStorage.setItem("userLocale", this.settings.language);
+          console.log("[SETTINGS] Language preference saved to localStorage");
         } catch (e) {
-          console.warn('Error saving language preference:', e);
+          console.warn("[SETTINGS] Error saving language preference:", e);
         }
       }
-
-      // Save all other settings as before...
-
-      // Ensure theme is applied and saved
-      document.documentElement.setAttribute('data-theme', this.settings.theme);
-      document.body.setAttribute('data-theme', this.settings.theme);
+      console.log("[SETTINGS] Applying theme to DOM:", this.settings.theme);
+      document.documentElement.setAttribute("data-theme", this.settings.theme);
+      document.body.setAttribute("data-theme", this.settings.theme);
       try {
-        localStorage.setItem('theme', this.settings.theme);
+        localStorage.setItem("theme", this.settings.theme);
+        console.log("[SETTINGS] Theme preference saved to localStorage");
       } catch (e) {
-        console.warn('Error saving theme preference:', e);
+        console.warn("[SETTINGS] Error saving theme preference:", e);
       }
-
-      // Save font size
+      console.log("[SETTINGS] Saving font size:", this.settings.fontSize);
       try {
-        localStorage.setItem('fontSize', this.settings.fontSize.toString())
-        document.documentElement.style.fontSize = `${this.settings.fontSize / 50}rem`
+        localStorage.setItem("fontSize", this.settings.fontSize.toString());
+        document.documentElement.style.fontSize = `${
+          this.settings.fontSize / 50
+        }rem`;
+        console.log("[SETTINGS] Font size applied and saved");
       } catch (e) {
-        console.warn('Error saving font size:', e)
+        console.warn("[SETTINGS] Error saving font size:", e);
       }
-
-      // Save notification preferences
+      console.log("[SETTINGS] Saving notification preferences...");
       try {
-        localStorage.setItem('emailUpdates', JSON.stringify(this.settings.emailUpdates))
-        localStorage.setItem('soundNotifications', JSON.stringify(this.settings.soundNotifications))
+        localStorage.setItem(
+          "emailUpdates",
+          JSON.stringify(this.settings.emailUpdates)
+        );
+        localStorage.setItem(
+          "soundNotifications",
+          JSON.stringify(this.settings.soundNotifications)
+        );
+        console.log("[SETTINGS] Notification preferences saved:", {
+          emailUpdates: this.settings.emailUpdates,
+          soundNotifications: this.settings.soundNotifications,
+        });
       } catch (e) {
-        console.warn('Error saving notification preferences:', e)
+        console.warn("[SETTINGS] Error saving notification preferences:", e);
       }
-
-      // Emit events
-      this.$emit('themeChanged', this.settings.theme);
-
-      notificationService.success(this.translate('settings.settingsSaved', 'Settings saved successfully!'));
-
-      // Close dialog
-      this.$emit('close');
-
-      // If language was changed, reload AFTER dialog closed
+      console.log(
+        "[SETTINGS] Emitting themeChanged event:",
+        this.settings.theme
+      );
+      this.$emit("themeChanged", this.settings.theme);
+      notificationService.success(
+        this.translate("settings.settingsSaved", "Settings saved successfully!")
+      );
+      console.log("[SETTINGS] Closing dialog after saving...");
+      this.$emit("close");
       if (isChangingLanguage) {
+        console.log("[SETTINGS] Language changed, scheduling page reload...");
         setTimeout(() => {
           window.location.reload();
-        }, 100); // Short delay to ensure dialog closes first
+        }, 100);
       }
     },
-
-    // Show confirmation dialog before resetting user data
     confirmResetUserData() {
-      // Show the custom ConfirmDialog instead of browser confirm
+      console.log("[SETTINGS] Showing reset user data confirmation...");
       this.showResetDataConfirm = true;
     },
-    
-    // Handle reset data confirmation
     handleResetDataConfirm() {
+      console.log("[SETTINGS] User confirmed reset user data...");
       this.showResetDataConfirm = false;
       this.resetUserData();
     },
-    
-    // Handle reset data cancellation
     handleResetDataCancel() {
+      console.log("[SETTINGS] User cancelled reset user data...");
       this.showResetDataConfirm = false;
     },
-
-    // Reset all user data
     async resetUserData() {
+      console.log("[SETTINGS] Resetting user data...");
       try {
-        // Show loading state
         this.isLoading = true;
-
-        // Call the backend API through userService
+        console.log("[SETTINGS] Calling userService.resetUserData...");
         const response = await userService.resetUserData();
-
-        // Inform user of success
-        //alert(this.translate('settings.userDataReset', 'Your profile data has been successfully reset.'));
-        notificationService.success(this.translate('settings.userDataReset', 'Your profile data has been successfully reset.'));
-
-        // Refresh the user data displayed in the component
+        console.log("[SETTINGS] Reset user data response:", response);
+        notificationService.success(
+          this.translate(
+            "settings.userDataReset",
+            "Your profile data has been successfully reset."
+          )
+        );
+        console.log("[SETTINGS] Refreshing user data after reset...");
         await this.fetchUserData();
-        // Clear all localStorage items except theme and language
-        const themeValue = localStorage.getItem('theme')
-        const langValue = localStorage.getItem('userLocale')
-
-        localStorage.clear()
-
-        // Restore theme and language
-        if (themeValue) localStorage.setItem('theme', themeValue)
-        if (langValue) localStorage.setItem('userLocale', langValue)
-
+        console.log(
+          "[SETTINGS] Clearing localStorage except theme and language..."
+        );
+        const themeValue = localStorage.getItem("theme");
+        const langValue = localStorage.getItem("userLocale");
+        localStorage.clear();
+        if (themeValue) localStorage.setItem("theme", themeValue);
+        if (langValue) localStorage.setItem("userLocale", langValue);
+        console.log("[SETTINGS] Restored theme and language to localStorage");
       } catch (e) {
-        console.error('Error resetting user data:', e);
-        //alert(this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
-        notificationService.error(this.translate('settings.failedToResetUserData', 'Failed to reset your profile data. Please try again later.'));
-
+        console.error("[SETTINGS] Error resetting user data:", e);
+        notificationService.error(
+          this.translate(
+            "settings.failedToResetUserData",
+            "Failed to reset your profile data. Please try again later."
+          )
+        );
       } finally {
-        // Hide loading state
+        console.log("[SETTINGS] Setting isLoading to false after reset...");
         this.isLoading = false;
       }
     },
-
-    // Toggle email editing state
     toggleEmailEdit() {
+      console.log("[SETTINGS] Toggling email edit state...");
       if (this.isEditingEmail) {
-        // Save email changes
+        console.log("[SETTINGS] Saving email changes...");
         this.prepareEmailChange();
       } else {
-        // Enable editing and store the original email
+        console.log("[SETTINGS] Enabling email editing...");
         this.isEditingEmail = true;
         this.newEmail = this.userData.email;
+        console.log("[SETTINGS] Original email stored:", this.newEmail);
       }
     },
-
-    // Get the effective current theme (resolving 'system' preference)
     getCurrentTheme() {
-      // If theme is set to 'system', determine from OS preference
-      if (this.settings.theme === 'system') {
-        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      console.log("[SETTINGS] Getting current theme...");
+      let theme = localStorage.getItem("theme") || "light";
+      console.log("[SETTINGS] Theme from localStorage:", theme);
+      if (theme === "system") {
+        console.log(
+          "[SETTINGS] Theme set to 'system', checking OS preference..."
+        );
+        theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        console.log("[SETTINGS] Resolved system theme to:", theme);
       }
-      // Otherwise return the explicitly set theme
-      return this.settings.theme;
+      return theme;
     },
-
-    // Confirm delete account
     confirmDeleteAccount() {
-      // Show the custom ConfirmDialog instead of browser confirm
+      console.log("[SETTINGS] Showing delete account confirmation...");
       this.showDeleteAccountConfirm = true;
     },
-
-    // Handle delete account confirmation
     handleDeleteAccountConfirm() {
+      console.log("[SETTINGS] User confirmed delete account...");
       this.showDeleteAccountConfirm = false;
-      this.showDeleteAccountModal = true; // Show the existing delete account modal
+      this.showDeleteAccountModal = true;
     },
-
-    // Handle delete account cancellation
     handleDeleteAccountCancel() {
+      console.log("[SETTINGS] User cancelled delete account...");
       this.showDeleteAccountConfirm = false;
     },
-
-    // Process account deletion
     async processAccountDeletion() {
+      console.log("[SETTINGS] Processing account deletion...");
       if (!this.deleteAccountPassword) {
-        // this.deleteAccountError = this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion');
-        notificationService.error(this.translate('settings.pleaseEnterPassword', 'Please enter your password to confirm deletion'));
+        console.log("[SETTINGS] Password missing for account deletion");
+        notificationService.error(
+          this.translate(
+            "settings.pleaseEnterPassword",
+            "Please enter your password to confirm deletion"
+          )
+        );
         return;
       }
-
       try {
+        console.log("[SETTINGS] Initiating account deletion...");
         this.isDeletingAccount = true;
         this.deleteAccountError = null;
-
-        // Call the service to delete the account
+        console.log("[SETTINGS] Calling userService.deleteAccount...");
         await userService.deleteAccount(
           this.deleteAccountPassword,
           this.deleteAccountReason
         );
-
-        // Show success message
-        // alert(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
-        notificationService.success(this.translate('settings.accountDeletedSuccess', 'Your account has been deleted successfully.'));
-
-        // Close modal and redirect to login
+        console.log("[SETTINGS] Account deletion successful");
+        notificationService.success(
+          this.translate(
+            "settings.accountDeletedSuccess",
+            "Your account has been deleted successfully."
+          )
+        );
+        console.log("[SETTINGS] Closing delete account modal...");
         this.showDeleteAccountModal = false;
-
-        // Redirect to login page
-        window.location.href = '/login';
+        console.log("[SETTINGS] Redirecting to login page...");
+        window.location.href = "/login";
       } catch (error) {
-        console.error('Error deleting account:', error);
-
+        console.error("[SETTINGS] Error deleting account:", error);
         if (error.response && error.response.status === 403) {
-          // this.deleteAccountError = this.translate('settings.incorrectPassword', 'Incorrect password');
-          notificationService.error(this.translate('settings.incorrectPassword', 'Incorrect password'));
+          console.log("[SETTINGS] Incorrect password for account deletion");
+          notificationService.error(
+            this.translate("settings.incorrectPassword", "Incorrect password")
+          );
         } else {
-          // this.deleteAccountError = this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.');
-          notificationService.error(this.translate('settings.accountDeletionFailed', 'Failed to delete account. Please try again later.'));
+          console.log("[SETTINGS] General error during account deletion");
+          notificationService.error(
+            this.translate(
+              "settings.accountDeletionFailed",
+              "Failed to delete account. Please try again later."
+            )
+          );
         }
       } finally {
+        console.log("[SETTINGS] Setting isDeletingAccount to false...");
         this.isDeletingAccount = false;
       }
     },
-
-    // Cancel account deletion
     cancelAccountDeletion() {
+      console.log("[SETTINGS] Cancelling account deletion...");
       this.showDeleteAccountModal = false;
-      this.deleteAccountPassword = '';
-      this.deleteAccountReason = '';
+      this.deleteAccountPassword = "";
+      this.deleteAccountReason = "";
       this.deleteAccountError = null;
+      console.log("[SETTINGS] Account deletion cancelled, state reset");
     },
-
-    // Password Reset Methods - FIXED
-    // Initiate password change flow
     initiatePasswordChange() {
-      // Show the password reset component
+      console.log("[SETTINGS] Initiating password change...");
       this.showPasswordReset = true;
     },
-
-    // Handle successful password reset initiation
     handlePasswordResetInitiated(email) {
-      console.log('Password reset initiated for:', email);
-
-      // Close the modal after showing success message
+      console.log("[SETTINGS] Password reset initiated for:", email);
       setTimeout(() => {
+        console.log("[SETTINGS] Closing password reset modal...");
         this.showPasswordReset = false;
-        //alert(this.translate('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
-        notificationService.success(this.translate('settings.passwordResetInitiated', 'A password reset link has been sent to your email address.'));
+        notificationService.success(
+          this.translate(
+            "settings.passwordResetInitiated",
+            "A password reset link has been sent to your email address."
+          )
+        );
       }, 1500);
     },
-
-    // Cancel password reset flow
     cancelPasswordReset() {
+      console.log("[SETTINGS] Cancelling password reset...");
       this.showPasswordReset = false;
     },
-
-    // Email-related methods
-    //Prepare the email change 
     async prepareEmailChange() {
-      // Reset errors
+      console.log("[SETTINGS] Preparing email change...");
       this.emailError = null;
-
-      // Validate email format
+      console.log("[SETTINGS] Validating email format...");
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(this.userData.email)) {
-        // this.emailError = this.translate('settings.enterValidEmail');
-        notificationService.error(this.translate('settings.enterValidEmail'));
+        console.log("[SETTINGS] Invalid email format:", this.userData.email);
+        notificationService.error(this.translate("settings.enterValidEmail"));
         return;
       }
-
-      // If email hasn't changed, just exit edit mode
       if (this.userData.email === this.newEmail) {
+        console.log("[SETTINGS] Email unchanged, exiting edit mode...");
         this.isEditingEmail = false;
         return;
       }
-
       try {
-        console.log(`Checking availability for ${this.userData.email}`);
-        const isAvailable = await userService.checkEmailAvailability(this.userData.email);
-
+        console.log(
+          `[SETTINGS] Checking availability for ${this.userData.email}`
+        );
+        const isAvailable = await userService.checkEmailAvailability(
+          this.userData.email
+        );
+        console.log("[SETTINGS] Email availability check result:", isAvailable);
         if (!isAvailable) {
-          // this.emailError = this.translate('settings.emailAlreadyInUse');
-          notificationService.error(this.translate('settings.emailAlreadyInUse'));
+          console.log("[SETTINGS] Email already in use:", this.userData.email);
+          notificationService.error(
+            this.translate("settings.emailAlreadyInUse")
+          );
           return;
         }
-
-        // Email is available, continue with change
+        console.log("[SETTINGS] Email available, proceeding with change...");
         this.newEmail = this.userData.email;
         this.showEmailConfirmModal = true;
       } catch (error) {
-        console.error('Error checking email availability:', error);
-        // this.emailError = this.translate('settings.unableToVerifyEmail');
-        notificationService.error(this.translate('settings.unableToVerifyEmail'));
+        console.error("[SETTINGS] Error checking email availability:", error);
+        notificationService.error(
+          this.translate("settings.unableToVerifyEmail")
+        );
       }
     },
-
-    // Confirm and process email change
     async confirmEmailChange() {
+      console.log("[SETTINGS] Confirming email change...");
       if (!this.emailChangePassword) {
-        // this.emailChangeError = this.translate('settings.pleaseEnterPassword');
-        notificationService.error(this.translate('settings.pleaseEnterPassword'));
+        console.log("[SETTINGS] Password missing for email change");
+        notificationService.error(
+          this.translate("settings.pleaseEnterPassword")
+        );
         return;
       }
-
-      // Set updating state
+      console.log("[SETTINGS] Setting isEmailUpdating to true...");
       this.isEmailUpdating = true;
       this.emailChangeError = null;
-
       try {
-        console.log('[SETTINGS] Confirming email change to:', this.userData.email);
-        console.log('[SETTINGS] Using userId for authentication:', this.currentUserId);
-
-        // Call the user service to update the email
-        const response = await userService.updateEmail(
-          this.userData.email,  // New email
-          this.emailChangePassword,  // Password for verification
-          this.currentUserId  // User ID for authentication
+        console.log(
+          "[SETTINGS] Confirming email change to:",
+          this.userData.email
         );
-
-        console.log('[SETTINGS] Email update response:', response);
-
-        // Show success message
-        // alert(this.translate('settings.checkNewEmailVerification'));
-        notificationService.info(this.translate('settings.checkNewEmailVerification'));
-
-        // Close modals
+        console.log(
+          "[SETTINGS] Using userId for authentication:",
+          this.currentUserId
+        );
+        console.log("[SETTINGS] Calling userService.updateEmail...");
+        const response = await userService.updateEmail(
+          this.userData.email,
+          this.emailChangePassword,
+          this.currentUserId
+        );
+        console.log("[SETTINGS] Email update response:", response);
+        notificationService.info(
+          this.translate("settings.checkNewEmailVerification")
+        );
+        console.log("[SETTINGS] Closing email change modal...");
         this.showEmailConfirmModal = false;
         this.isEditingEmail = false;
-
-        // Immediate logout
+        console.log("[SETTINGS] Scheduling logout after email change...");
         setTimeout(() => {
-          userService.logout().then(() => {
-            // Redirect to login page
-            window.location.href = '/login';
-          }).catch(err => {
-            console.error('Logout error:', err);
-            window.location.href = '/login'; // Redirect anyway
-          });
-        }, 1500); // Short delay to allow user to read the message
+          userService
+            .logout()
+            .then(() => {
+              console.log(
+                "[SETTINGS] Logout successful, redirecting to login..."
+              );
+              window.location.href = "/login";
+            })
+            .catch((err) => {
+              console.error("[SETTINGS] Logout error:", err);
+              console.log("[SETTINGS] Redirecting to login despite error...");
+              window.location.href = "/login";
+            });
+        }, 1500);
       } catch (error) {
-        console.error('Error updating email:', error);
-        // this.emailChangeError = this.translate('settings.failedToUpdateEmail');
-        notificationService.error(this.translate('settings.failedToUpdateEmail'));
+        console.error("[SETTINGS] Error updating email:", error);
+        notificationService.error(
+          this.translate("settings.failedToUpdateEmail")
+        );
       } finally {
+        console.log("[SETTINGS] Setting isEmailUpdating to false...");
         this.isEmailUpdating = false;
       }
     },
-
-    // Cancel email change
     cancelEmailChange() {
+      console.log("[SETTINGS] Cancelling email change...");
       this.showEmailConfirmModal = false;
-      this.emailChangePassword = '';
+      this.emailChangePassword = "";
       this.emailChangeError = null;
-    }
+      console.log("[SETTINGS] Email change cancelled, state reset");
+    },
   },
-
   watch: {
-    // Add watchers for language/locale changes to update dialog texts
-    'settings.language': function () {
+    "settings.theme"(newTheme) {
+      console.log("[SETTINGS] settings.theme changed to:", newTheme);
+      this.$forceUpdate();
+    },
+    "settings.language": function () {
+      console.log("[SETTINGS] Language changed, updating dialog texts...");
       this.updateDialogTexts();
     },
-
     currentLocale: function () {
+      console.log(
+        "[SETTINGS] Current locale changed, updating dialog texts..."
+      );
       this.updateDialogTexts();
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -992,7 +1413,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1005,9 +1426,8 @@ export default {
   max-width: 95vw;
   max-height: 95vh;
   border-radius: 8px;
-  background-color: var(--bg-dialog, #ffffff);
-  color: var(--text-primary, #333333);
-  box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
+  background-color: var(--dialog-background, #ffffff) !important;
+  box-shadow: var(--dialog-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1020,14 +1440,25 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color, #dcdfe4);
+  border-bottom: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
 .header-title {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--text-primary, #333333);
+}
+
+.header-title[data-themed="true"] {
+  color: var(--dialog-title-color, #333333) !important;
+}
+
+/* Fallback override for dark mode */
+[data-theme="dark"]
+  .settings-dialog
+  .dialog-header
+  .header-title[data-themed="true"] {
+  color: #f0f0f0 !important;
 }
 
 .header-actions {
@@ -1043,6 +1474,7 @@ export default {
   justify-content: center;
   padding: 2rem;
   height: 300px;
+  color: var(--dialog-text-color, #666666);
 }
 
 .loading-spinner {
@@ -1050,7 +1482,7 @@ export default {
   height: 40px;
   border: 4px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top-color: var(--bg-button-primary, #4E97D1);
+  border-top-color: var(--bg-button-primary, #4e97d1);
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
 }
@@ -1074,9 +1506,9 @@ export default {
 
 .btn-retry {
   padding: 0.5rem 1.5rem;
-  background-color: var(--bg-button-secondary, #e9ecef);
-  color: var(--text-button-secondary, #4d4d4d);
-  border: 1px solid var(--border-color, #dcdfe4);
+  background-color: var(--bg-button-secondary, #d1d5db);
+  color: var(--text-button-secondary, #333333);
+  border: 1px solid var(--dialog-border-color, #dcdfe4);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -1104,7 +1536,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-button-primary, #4E97D1);
+  background-color: var(--bg-button-primary, #4e97d1);
   color: white;
   font-size: 1.5rem;
   font-weight: 500;
@@ -1124,6 +1556,7 @@ export default {
   font-size: 1.25rem;
   font-weight: 500;
   margin-bottom: 0.25rem;
+  color: var(--dialog-title-color, #333333);
 }
 
 .user-email {
@@ -1156,7 +1589,12 @@ export default {
   margin-bottom: 1rem;
   font-size: 1.25rem;
   font-weight: 500;
-  color: var(--text-primary, #333333);
+  color: var(--dialog-title-color, #333333) !important;
+}
+
+/* Fallback override for dark mode */
+[data-theme="dark"] .settings-dialog .section-title {
+  color: #f0f0f0 !important;
 }
 
 .setting-item {
@@ -1168,7 +1606,12 @@ export default {
   margin-bottom: 0.5rem;
   font-size: 1rem;
   font-weight: 400;
-  color: var(--text-secondary, #4d4d4d);
+  color: var(--dialog-text-color, #666666);
+}
+
+/* Override text colors for dark mode */
+[data-theme="dark"] .settings-dialog .section-label {
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 /* Toggle row */
@@ -1228,15 +1671,15 @@ export default {
   text-align: center;
   font-weight: 500;
   transition: all 0.2s;
-  background-color: var(--bg-button-secondary, #e9ecef);
-  color: var(--text-button-secondary, #4d4d4d);
-  border: 1px solid var(--border-color, #dcdfe4);
+  background-color: var(--bg-button-secondary, #d1d5db);
+  color: var(--text-button-secondary, #333333);
+  border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
 .theme-toggle.active {
-  background-color: var(--bg-button-primary, #4E97D1);
-  color: var(--text-button-primary, #ffffff);
-  border-color: var(--bg-button-primary, #4E97D1);
+  background-color: var(--bg-button-primary, #4e97d1) !important;
+  color: var(--text-button-primary, #ffffff) !important;
+  border-color: var(--bg-button-primary, #4e97d1) !important;
 }
 
 /* Dropdown styling */
@@ -1246,7 +1689,7 @@ export default {
   border-radius: 4px;
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
-  border: 1px solid var(--border-input, #dcdfe4);
+  border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
 /* Slider styling */
@@ -1272,7 +1715,7 @@ export default {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--slider-thumb, #4E97D1);
+  background: var(--slider-thumb, #4e97d1);
   cursor: pointer;
 }
 
@@ -1280,7 +1723,7 @@ export default {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--slider-thumb, #4E97D1);
+  background: var(--slider-thumb, #4e97d1);
   cursor: pointer;
   border: none;
 }
@@ -1288,7 +1731,7 @@ export default {
 .slider-value {
   min-width: 3rem;
   text-align: right;
-  color: var(--text-primary, #333333);
+  color: var(--dialog-text-color, #666666);
 }
 
 /* Switch toggle */
@@ -1308,7 +1751,7 @@ export default {
   bottom: 0;
   background-color: var(--switch-track-off, #d0d0d0);
   border-radius: 12px;
-  transition: .4s;
+  transition: 0.4s;
 }
 
 .switch-thumb {
@@ -1319,7 +1762,7 @@ export default {
   bottom: 2px;
   background-color: var(--switch-thumb, #ffffff);
   border-radius: 50%;
-  transition: .4s;
+  transition: 0.4s;
 }
 
 .switch-track.active .switch-thumb {
@@ -1327,7 +1770,7 @@ export default {
 }
 
 .switch-track.active {
-  background-color: var(--switch-track-on, #4E97D1);
+  background-color: var(--switch-track-on, #4e97d1);
 }
 
 /* Text input styling */
@@ -1337,7 +1780,7 @@ export default {
   border-radius: 4px;
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
-  border: 1px solid var(--border-input, #dcdfe4);
+  border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
 .input-with-button {
@@ -1362,9 +1805,9 @@ export default {
 }
 
 .btn-secondary {
-  background-color: var(--bg-button-secondary, #e9ecef);
-  color: var(--text-button-secondary, #4d4d4d);
-  border: 1px solid var(--border-color, #dcdfe4);
+  background-color: var(--bg-button-secondary, #d1d5db);
+  color: var(--text-button-secondary, #333333);
+  border: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
 .btn-secondary:disabled {
@@ -1393,13 +1836,22 @@ export default {
 }
 
 .btn-save {
-  background-color: var(--bg-button-primary, #4E97D1);
+  background-color: var(--bg-button-primary, #4e97d1);
   color: var(--text-button-primary, #ffffff);
 }
 
+/* Removed hardcoded dark mode override for btn-save */
+/* Let btn-save use theme variables defined in theme-variables.css */
+
 .btn-close {
-  background-color: var(--bg-button-secondary, #e9ecef);
-  color: var(--text-button-secondary, #4d4d4d);
+  background-color: var(--bg-button-secondary, #d1d5db);
+  color: var(--text-button-secondary, #333333);
+}
+
+/* Override button colors for dark mode */
+[data-theme="dark"] .settings-dialog .btn-close {
+  background-color: #444444 !important;
+  color: #f0f0f0 !important;
 }
 
 .description-text {
@@ -1419,7 +1871,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1431,9 +1883,9 @@ export default {
   max-width: 90vw;
   max-height: 90vh;
   overflow-y: auto;
-  background-color: var(--bg-dialog, #ffffff);
+  background-color: var(--dialog-background, #ffffff);
   border-radius: 8px;
-  box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
+  box-shadow: var(--dialog-box-shadow, 0 4px 12px rgba(0, 0, 0, 0.15));
 }
 
 .modal-title {
@@ -1441,11 +1893,18 @@ export default {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  border-bottom: 1px solid var(--border-color, #dcdfe4);
+  border-bottom: 1px solid var(--dialog-border-color, #dcdfe4);
+  color: var(--dialog-title-color, #333333);
 }
 
 .modal-body {
   padding: 1.5rem;
+  color: var(--dialog-text-color, #666666);
+}
+
+/* Override text colors for dark mode */
+[data-theme="dark"] .settings-dialog .modal-body {
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 .modal-body ul {
@@ -1463,7 +1922,7 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  border-top: 1px solid var(--border-color, #dcdfe4);
+  border-top: 1px solid var(--dialog-border-color, #dcdfe4);
 }
 
 /* Password Reset Dialog Styles */
@@ -1486,7 +1945,7 @@ export default {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background-color: #4E97D1;
+  background-color: var(--bg-button-primary, #4e97d1);
   margin-bottom: 0.5rem;
 }
 
@@ -1556,90 +2015,24 @@ export default {
 .reset-button {
   width: 100%;
   padding: 0.625rem;
-  background-color: #4E97D1;
-  color: white;
+  background-color: var(--bg-button-primary, #4e97d1);
+  color: var(--text-button-primary, #ffffff);
   font-size: 0.9375rem;
   font-weight: bold;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
-  margin-top: 0.5rem;
 }
 
 .reset-button:hover:not(:disabled) {
-  background-color: #4589c0;
+  background-color: var(--bg-button-primary-hover, #3a7da0);
 }
 
 .reset-button:disabled {
   background-color: #3a7da8;
   cursor: not-allowed;
   opacity: 0.7;
-}
-
-/* Password strength indicator */
-.password-strength-indicator {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-}
-
-.strength-label {
-  margin-bottom: 0.25rem;
-  color: #ddd;
-}
-
-.strength-0 {
-  color: #ff4d4d;
-}
-
-.strength-1 {
-  color: #ffa64d;
-}
-
-.strength-2 {
-  color: #ffcc00;
-}
-
-.strength-3 {
-  color: #80cc33;
-}
-
-.strength-4 {
-  color: #47d147;
-}
-
-.strength-bar-container {
-  height: 4px;
-  background-color: #444;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.strength-bar {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.strength-bar.strength-0 {
-  background-color: #ff4d4d;
-}
-
-.strength-bar.strength-1 {
-  background-color: #ffa64d;
-}
-
-.strength-bar.strength-2 {
-  background-color: #ffcc00;
-}
-
-.strength-bar.strength-3 {
-  background-color: #80cc33;
-}
-
-.strength-bar.strength-4 {
-  background-color: #47d147;
 }
 
 /* Responsive adjustments */
@@ -1667,7 +2060,7 @@ export default {
   .dialog-header {
     position: sticky;
     top: 0;
-    background-color: var(--bg-dialog, #ffffff);
+    background-color: var(--dialog-background, #ffffff);
     z-index: 10;
   }
 
@@ -1683,8 +2076,6 @@ export default {
     width: 60px;
   }
 }
-
-/* Add these styles to the <style scoped> section of SettingsComponent.vue */
 
 /* Password strength indicator */
 .password-strength-indicator {
@@ -1766,7 +2157,7 @@ export default {
 
 .strength-suggestions li::before {
   content: "• ";
-  color: #4E97D1;
+  color: var(--bg-button-primary, #4e97d1);
 }
 
 .password-reset-modal-container {
@@ -1779,28 +2170,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.header-title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #333333;
-}
-
-/* Dark mode - target the title directly without CSS variables */
-.dark-mode .dialog-header .header-title,
-[data-theme="dark"] .dialog-header .header-title {
-  color: #ffffff;
-}
-
-/* Dark mode styles - using multiple selectors to ensure higher specificity */
-[data-theme="dark"] .header-title,
-.dark-mode .header-title,
-body.dark-mode .dialog-header .header-title,
-html[data-theme="dark"] .settings-dialog .dialog-header .header-title {
-  color: #ffffff !important;
+  background-color: var(--dialog-overlay-background, rgba(0, 0, 0, 0.5));
 }
 
 .warning-text {
@@ -1815,46 +2185,35 @@ html[data-theme="dark"] .settings-dialog .dialog-header .header-title {
 
 /* Add themed styles for modal components */
 .modal-content[data-theme="dark"] {
-  background-color: var(--bg-dialog-dark, #2a2a2a);
-  color: var(--text-primary-dark, #ffffff);
+  background-color: var(--dialog-background, #2a2a2a);
+  color: var(--dialog-text-color, rgba(255, 255, 255, 0.8));
 }
 
 .modal-content[data-theme="dark"] .modal-title,
 .modal-content[data-theme="dark"] label[data-themed="true"] {
-  color: var(--text-primary-dark, #ffffff) !important;
+  color: var(--dialog-title-color, #f0f0f0);
 }
 
 .modal-content[data-theme="dark"] .modal-footer {
-  border-top-color: var(--border-color-dark, #444444);
+  border-top-color: var(--dialog-border-color, #444444);
 }
 
 .modal-content[data-theme="dark"] .modal-title {
-  border-bottom-color: var(--border-color-dark, #444444);
+  border-bottom-color: var(--dialog-border-color, #444444);
 }
 
 .modal-content[data-theme="dark"] .text-input {
-  background-color: var(--bg-input-dark, #333333);
-  color: var(--text-primary-dark, #ffffff);
-  border-color: var(--border-input-dark, #555555);
+  background-color: var(--bg-input, #333333);
+  color: var(--text-primary, #f0f0f0);
+  border-color: var(--dialog-border-color, #555555);
 }
 
 .modal-title[data-themed="true"] {
-  color: var(--dialog-title-color, #333333) !important;
+  color: var(--dialog-title-color, #333333);
 }
 
-/* Make sure buttons have proper styling in dark mode */
-.modal-content[data-theme="dark"] .btn-close {
-  background-color: var(--bg-button-secondary-dark, #444444);
-  color: var(--text-button-secondary-dark, #cccccc);
-}
-
-.modal-content[data-theme="dark"] .btn-save {
-  background-color: var(--bg-button-primary, #4E97D1);
-  color: var(--text-button-primary, #ffffff);
-}
-
+.modal-content[data-theme="dark"] .modal-title[data-themed="true"],
 .modal-content[data-theme="dark"] p[data-themed="true"] {
-  color: var(--text-primary-dark, #ffffff) !important;
+  color: var(--dialog-title-color, #f0f0f0);
 }
-
 </style>

@@ -69,12 +69,10 @@ async function loadConfig() {
         root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
         root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
       }
-      // Accent and button colors
+      // Accent colors
       root.style.setProperty('--accent-color', config.theme.primaryColor);
       root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20)); // Darken by 20%
       root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor); // Use secondaryColor as an accent
-      root.style.setProperty('--bg-button-primary', config.theme.primaryColor);
-      root.style.setProperty('--bg-button-primary-hover', adjustColor(config.theme.primaryColor, -20));
     }
   } catch (error) {
     console.error('Error loading config:', error);
@@ -91,8 +89,6 @@ async function loadConfig() {
       root.style.setProperty('--accent-color', config.theme.primaryColor);
       root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
       root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
-      root.style.setProperty('--bg-button-primary', config.theme.primaryColor);
-      root.style.setProperty('--bg-button-primary-hover', adjustColor(config.theme.primaryColor, -20));
     }
   }
 }

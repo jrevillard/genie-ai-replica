@@ -1,73 +1,105 @@
 <!-- src/components/PasswordResetInitiateScreen.vue -->
 <template>
-  <div class="password-reset-initiate-container" :class="{ 'embedded': isEmbedded }">
+  <div
+    class="password-reset-initiate-container"
+    :class="{ embedded: isEmbedded }"
+    :data-theme="theme"
+  >
     <div class="password-reset-initiate-card">
       <div class="logo">
         <div class="app-logo">
-          <div class="vue-logo"></div>
+          <img
+            :src="$config.app.icon.value"
+            alt="App Icon"
+            class="ui-icon"
+            v-if="
+              $config &&
+              $config.app &&
+              $config.app.icon &&
+              $config.app.icon.type === 'file'
+            "
+          />
+          <div class="app-logo-fallback" v-else></div>
         </div>
-        <h1 class="app-name">{{ $t('passwordReset.appTitle') }}</h1>
+        <h1 class="app-name">
+          {{
+            $config && $config.app
+              ? $config.app.title
+              : $t("passwordReset.appTitle")
+          }}
+        </h1>
       </div>
 
-      <h2 class="password-reset-initiate-heading" style="color: #fff !important;">{{ $t('passwordReset.resetPassword') }}</h2>
+      <h2 class="password-reset-initiate-heading">
+        {{ $t("passwordReset.resetPassword") }}
+      </h2>
 
       <!-- Success message after submitting email -->
       <div v-if="resetRequested" class="success-message">
-        <p>{{ $t('passwordReset.resetRequestSuccess') }}</p>
-        <p>{{ $t('passwordReset.checkEmail', 'Please check your email for further instructions.') }}</p>
+        <p>{{ $t("passwordReset.resetRequestSuccess") }}</p>
+        <p>
+          {{
+            $t(
+              "passwordReset.checkEmail",
+              "Please check your email for further instructions."
+            )
+          }}
+        </p>
       </div>
 
       <!-- Email Form -->
-      <form 
+      <form
         v-else
-        @submit.prevent="handleInitiateReset" 
+        @submit.prevent="handleInitiateReset"
         class="password-reset-initiate-form"
       >
         <!-- Force email label to always be visible by setting display -->
         <div class="form-group">
-          <label for="email" class="form-label" style="display: block; color: #fff !important;">
-            {{ $t('passwordReset.emailLabel') }}
+          <label for="email" class="form-label" style="display: block">
+            {{ $t("passwordReset.emailLabel") }}
           </label>
-          <input 
-            v-model="email" 
-            type="email" 
+          <input
+            v-model="email"
+            type="email"
             id="email"
-            :placeholder="$t('passwordReset.emailPlaceholder')" 
-            class="form-control" 
-            required 
+            :placeholder="$t('passwordReset.emailPlaceholder')"
+            class="form-control"
+            required
             @focus="emailError = ''"
           />
           <p v-if="emailError" class="error-message">{{ emailError }}</p>
         </div>
 
-        <button 
-          type="submit" 
-          class="reset-initiate-button" 
+        <button
+          type="submit"
+          class="reset-initiate-button"
           :disabled="isSubmitting || !isValidEmail"
         >
           <span v-if="isSubmitting" class="button-spinner"></span>
-          {{ isSubmitting ? 
-             $t('passwordReset.processing') : 
-             $t('passwordReset.resetButton') }}
+          {{
+            isSubmitting
+              ? $t("passwordReset.processing")
+              : $t("passwordReset.resetButton")
+          }}
         </button>
       </form>
 
       <div class="login-link">
         <p>
-          {{ $t('passwordReset.rememberPassword') }} 
+          {{ $t("passwordReset.rememberPassword") }}
           <router-link to="/login" class="login-link-text">
-            {{ $t('passwordReset.backToLogin') }}
+            {{ $t("passwordReset.backToLogin") }}
           </router-link>
         </p>
       </div>
 
       <div class="password-reset-initiate-footer">
-        <p class="support-message">{{ $t('passwordReset.supportMessage') }}</p>
+        <p class="support-message">{{ $t("passwordReset.supportMessage") }}</p>
         <div class="language-selector">
           <select v-model="selectedLocale" @change="changeLocale">
-            <option value="en">{{ $t('settings.languages.english') }}</option>
-            <option value="fr">{{ $t('settings.languages.french') }}</option>
-            <option value="sw">{{ $t('settings.languages.swahili') }}</option>
+            <option value="en">{{ $t("settings.languages.english") }}</option>
+            <option value="fr">{{ $t("settings.languages.french") }}</option>
+            <option value="sw">{{ $t("settings.languages.swahili") }}</option>
           </select>
         </div>
       </div>
@@ -75,7 +107,7 @@
       <!-- Cancel button for embedded mode -->
       <div v-if="isEmbedded" class="modal-footer">
         <button class="cancel-button" @click="cancelReset">
-          {{ $t('common.cancel') }}
+          {{ $t("common.cancel") }}
         </button>
       </div>
     </div>
@@ -83,151 +115,273 @@
 </template>
 
 <script>
-import passwordService from '@/services/passwordService';
-import userService from '@/services/userService';
+import passwordService from "@/services/passwordService";
+import userService from "@/services/userService";
 
 export default {
-  name: 'PasswordResetInitiateScreen',
+  name: "PasswordResetInitiateScreen",
   props: {
-    // Add a prop to determine if this component is embedded in another component
     isEmbedded: {
       type: Boolean,
-      default: false
+      default: false,
     },
-    // Add a prop to pre-fill email when coming from settings
     prefilledEmail: {
       type: String,
-      default: ''
-    }
+      default: "",
+    },
+    theme: {
+      type: String,
+      default: "light",
+    },
   },
   data() {
     return {
-      // Component state
-      email: this.prefilledEmail || '',
-      emailError: '',
+      email: this.prefilledEmail || "",
+      emailError: "",
       isSubmitting: false,
       resetRequested: false,
-      selectedLocale: this.$i18n ? this.$i18n.locale : 'en'
-    }
+      selectedLocale: this.$i18n ? this.$i18n.locale : "en",
+    };
   },
   computed: {
-    // Simple email validation
     isValidEmail() {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       return emailRegex.test(this.email);
-    }
+    },
   },
   created() {
-    // If email is not provided via props and user is logged in, get it from userService
     this.setCurrentUserEmail();
-    
-    // Force debug log to verify translations loading
+    document.documentElement.setAttribute("data-theme", this.theme);
+    this.error = "";
+    if (this.$route.query.error) {
+      this.error = this.$route.query.error;
+    }
     if (this.$i18n) {
-      console.log('Current locale:', this.$i18n.locale);
-      console.log('Email label translation:', this.$t('passwordReset.emailLabel'));
+      console.log("[RESET] Current locale:", this.$i18n.locale);
+      console.log(
+        "[RESET] Email label translation:",
+        this.$t("passwordReset.emailLabel")
+      );
     }
   },
+  mounted() {
+    this.setMobileHeight();
+    window.addEventListener("resize", this.setMobileHeight);
+    this.applyTheme();
+    this.observeThemeChanges();
+    // Debug: Log computed styles and configuration values
+    const title = document.querySelector(
+      ".password-reset-initiate-card .app-name"
+    );
+    console.log(
+      "[RESET] Title text content:",
+      title ? title.textContent : "not found"
+    );
+    console.log(
+      "[RESET] Title computed color:",
+      title ? window.getComputedStyle(title).color : "not found"
+    );
+    const subtitle = document.querySelector(".password-reset-initiate-heading");
+    console.log(
+      "[RESET] Subtitle computed color:",
+      subtitle ? window.getComputedStyle(subtitle).color : "not found"
+    );
+    const icon = document.querySelector(".app-logo");
+    console.log(
+      "[RESET] Icon source:",
+      icon ? icon.querySelector("img")?.src : "fallback"
+    );
+    console.log(
+      "[RESET] Icon computed background color:",
+      icon ? window.getComputedStyle(icon).backgroundColor : "not found"
+    );
+    const button = document.querySelector(".reset-initiate-button");
+    console.log(
+      "[RESET] Button computed background color:",
+      button ? window.getComputedStyle(button).backgroundColor : "not found"
+    );
+    const formField = document.querySelector(".form-control");
+    console.log(
+      "[RESET] Form field computed background color:",
+      formField
+        ? window.getComputedStyle(formField).backgroundColor
+        : "not found"
+    );
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.setMobileHeight);
+    if (this.themeObserver) {
+      console.log("[RESET] Disconnecting MutationObserver");
+      this.themeObserver.disconnect();
+    }
+  },
+  watch: {
+    theme(newTheme) {
+      console.log(
+        "[RESET] Theme prop updated:",
+        newTheme,
+        "source: prop change",
+        new Date().toISOString()
+      );
+      this.applyTheme();
+    },
+  },
   methods: {
-    // Get currently logged in user's email if available
-    async setCurrentUserEmail() {
+    setCurrentUserEmail() {
       if (!this.email && this.isEmbedded) {
         try {
-          const currentUser = await userService.getCurrentUserInfo();
+          const currentUser = userService.getCurrentUserInfo();
           if (currentUser && currentUser.email) {
             this.email = currentUser.email;
           }
         } catch (error) {
-          console.warn('Could not fetch current user email:', error);
+          console.warn("[RESET] Could not fetch current user email:", error);
         }
       }
     },
-    
     async handleInitiateReset() {
-      // Reset previous errors
-      this.emailError = '';
-      
-      // Validate email
+      this.emailError = "";
       if (!this.isValidEmail) {
-        this.emailError = this.$t('passwordReset.invalidEmail');
+        this.emailError = this.$t("passwordReset.invalidEmail");
         return;
       }
-
-      // Set submitting state
       this.isSubmitting = true;
-
       try {
-        // Call the API to initiate password reset
         const response = await passwordService.initiateReset(this.email);
-        console.log('Password reset initiated successfully');
-
-        // Handle success - even if user doesn't exist, we show success for security
+        console.log("[RESET] Password reset initiated successfully");
         this.resetRequested = true;
-        
-        // If embedded, emit an event to notify the parent component after a delay
         if (this.isEmbedded) {
           setTimeout(() => {
-            this.$emit('reset-initiated', this.email);
+            this.$emit("reset-initiated", this.email);
           }, 2000);
         }
       } catch (error) {
-        console.error('Password reset initiation failed:', error);
-        
-        // For security, we don't want to reveal if the email exists or not
-        // Always show success message, but log the error for debugging
+        console.error("[RESET] Password reset initiation failed:", error);
         this.resetRequested = true;
-        
-        // If embedded, still emit event after delay
         if (this.isEmbedded) {
           setTimeout(() => {
-            this.$emit('reset-initiated', this.email);
+            this.$emit("reset-initiated", this.email);
           }, 2000);
         }
       } finally {
         this.isSubmitting = false;
       }
     },
-
-    // Cancel method for embedded mode
     cancelReset() {
-      this.$emit('cancel');
+      this.$emit("cancel");
     },
-
     changeLocale() {
       if (this.$i18n) {
-        // Update locale using standard Vue I18n
         this.$i18n.locale = this.selectedLocale;
-        
-        // Save to localStorage
         try {
-          localStorage.setItem('userLocale', this.selectedLocale);
+          localStorage.setItem("userLocale", this.selectedLocale);
         } catch (e) {
-          console.warn('Error saving language preference:', e);
+          console.warn("[RESET] Error saving language preference:", e);
         }
-      } else if (typeof this.$setLocale === 'function') {
-        // Fallback to custom method if provided
+      } else if (typeof this.$setLocale === "function") {
         this.$setLocale(this.selectedLocale);
       }
-    }
-  }
-}
+    },
+    setMobileHeight() {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
+    },
+    applyTheme() {
+      console.log(
+        "[RESET] Applying theme:",
+        this.theme,
+        new Date().toISOString()
+      );
+      const currentTheme = document.documentElement.getAttribute("data-theme");
+      if (currentTheme !== this.theme) {
+        console.warn(
+          "[RESET] Theme mismatch: component theme=",
+          this.theme,
+          "vs DOM theme=",
+          currentTheme
+        );
+      }
+      document.documentElement.setAttribute("data-theme", this.theme);
+      const title = document.querySelector(
+        ".password-reset-initiate-card .app-name"
+      );
+      console.log(
+        "[RESET] Title computed color after apply:",
+        title ? window.getComputedStyle(title).color : "not found"
+      );
+      const subtitle = document.querySelector(
+        ".password-reset-initiate-heading"
+      );
+      console.log(
+        "[RESET] Subtitle computed color after apply:",
+        subtitle ? window.getComputedStyle(subtitle).color : "not found"
+      );
+    },
+    observeThemeChanges() {
+      console.log(
+        "[RESET] Setting up MutationObserver, initial theme:",
+        this.theme,
+        new Date().toISOString()
+      );
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.attributeName === "data-theme") {
+            const newTheme =
+              document.documentElement.getAttribute("data-theme");
+            console.log(
+              "[RESET] Detected theme change via MutationObserver:",
+              newTheme,
+              new Date().toISOString()
+            );
+            if (newTheme !== this.theme) {
+              console.log("[RESET] Updating component theme to:", newTheme);
+              this.theme = newTheme;
+              const title = document.querySelector(
+                ".password-reset-initiate-card .app-name"
+              );
+              console.log(
+                "[RESET] Title computed color after change:",
+                title ? window.getComputedStyle(title).color : "not found"
+              );
+              const subtitle = document.querySelector(
+                ".password-reset-initiate-heading"
+              );
+              console.log(
+                "[RESET] Subtitle computed color after change:",
+                subtitle ? window.getComputedStyle(subtitle).color : "not found"
+              );
+            }
+          }
+        });
+      });
+      observer.observe(document.documentElement, { attributes: true });
+      this.themeObserver = observer;
+    },
+  },
+};
 </script>
 
 <style scoped>
-/* Styles for Password Reset Initiate Screen - Dark Mode by default */
 .password-reset-initiate-container {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
   min-height: calc(var(--vh, 1vh) * 100);
-  background-color: #1c1c1c;
   padding: 16px;
   padding-top: env(safe-area-inset-top, 16px);
   padding-bottom: env(safe-area-inset-bottom, 16px);
   box-sizing: border-box;
 }
 
-/* When embedded in Settings, remove the background and adjust dimensions */
+[data-theme="light"] .password-reset-initiate-container {
+  background-color: var(--bg-primary, #f5f7fa);
+}
+
+[data-theme="dark"] .password-reset-initiate-container {
+  background-color: var(--bg-primary, #1e1e1e);
+}
+
 .password-reset-initiate-container.embedded {
   background-color: transparent;
   min-height: auto;
@@ -242,17 +396,24 @@ export default {
   width: 100%;
   max-width: 400px;
   max-height: 95vh;
-  background: #2d2d2d;
   border-radius: 16px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   padding: 24px;
-  color: #fff;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
 }
 
-/* When embedded, adjust card styling */
+[data-theme="light"] .password-reset-initiate-card {
+  background-color: var(--bg-secondary, #ffffff);
+  color: var(--text-primary, #333333);
+}
+
+[data-theme="dark"] .password-reset-initiate-card {
+  background-color: var(--bg-secondary, #252525);
+  color: var(--text-primary, #f0f0f0);
+}
+
 .embedded .password-reset-initiate-card {
   max-height: none;
   box-shadow: none;
@@ -270,23 +431,36 @@ export default {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background-color: #4E97D1;
+  background-color: var(--bg-button-primary, #2a9d8f);
   margin-bottom: 10px;
 }
 
-.vue-logo {
-  width: 0;
-  height: 0;
-  border-left: 12px solid transparent;
-  border-right: 12px solid transparent;
-  border-bottom: 20px solid #fff;
+.ui-icon {
+  width: 60px;
+  height: 60px;
+  display: block;
+  margin: 0 auto;
+}
+
+.app-logo-fallback {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: var(--bg-button-primary, #2a9d8f);
 }
 
 .app-name {
   font-size: 28px;
-  color: #fff;
   margin: 0;
-  font-weight: 500;
+  font-weight: bold;
+}
+
+[data-theme="light"] .password-reset-initiate-card .app-name {
+  color: #000000 !important;
+}
+
+[data-theme="dark"] .password-reset-initiate-card .app-name {
+  color: var(--text-primary, #f0f0f0) !important;
 }
 
 .password-reset-initiate-heading {
@@ -295,11 +469,18 @@ export default {
   margin-top: 0;
   margin-bottom: 20px;
   font-weight: 500;
-  color: #fff !important; /* Ensure heading is white, not black */
 }
 
-.password-reset-initiate-container .password-reset-initiate-card .password-reset-initiate-heading {
-  color: #fff !important;
+[data-theme="light"]
+  .password-reset-initiate-card
+  .password-reset-initiate-heading {
+  color: var(--text-secondary, #4d4d4d) !important;
+}
+
+[data-theme="dark"]
+  .password-reset-initiate-card
+  .password-reset-initiate-heading {
+  color: var(--text-secondary, #b3b3b3) !important;
 }
 
 .password-reset-initiate-form {
@@ -311,11 +492,18 @@ export default {
 }
 
 .form-label {
-  display: block !important; /* Force display */
+  display: block !important;
   margin-bottom: 6px;
   font-size: 14px;
-  color: #eee !important; /* Force color */
   font-weight: 500;
+}
+
+[data-theme="light"] .form-label {
+  color: var(--text-primary, #333333) !important;
+}
+
+[data-theme="dark"] .form-label {
+  color: var(--text-primary, #f0f0f0) !important;
 }
 
 .form-control {
@@ -324,22 +512,37 @@ export default {
   font-size: 15px;
   border: none;
   border-radius: 8px;
-  background-color: #f5f9fc;
-  color: #333;
   transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+[data-theme="light"] .form-control {
+  background-color: var(--bg-tertiary, #f0f2f5) !important;
+  color: var(--text-primary, #333333) !important;
+}
+
+[data-theme="dark"] .form-control {
+  background-color: var(--bg-input, #333333) !important;
+  color: var(--text-primary, #f0f0f0) !important;
 }
 
 .form-control:focus {
   outline: none;
-  background-color: #fff;
-  box-shadow: 0 0 0 2px rgba(78, 151, 209, 0.3);
+  box-shadow: 0 0 0 2px var(--bg-button-primary, #2a9d8f);
+}
+
+[data-theme="light"] .form-control:focus {
+  background-color: var(--bg-primary, #f5f7fa) !important;
+}
+
+[data-theme="dark"] .form-control:focus {
+  background-color: var(--bg-input, #2a2a2a) !important;
 }
 
 .reset-initiate-button {
   width: 100%;
   padding: 12px;
-  background-color: #4E97D1;
-  color: white;
+  background-color: var(--bg-button-primary, #2a9d8f);
+  color: var(--text-button-primary, #ffffff);
   font-size: 16px;
   font-weight: 600;
   border: none;
@@ -350,12 +553,16 @@ export default {
   margin-top: 8px;
 }
 
+[data-theme="dark"] .reset-initiate-button {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 .reset-initiate-button:hover:not(:disabled) {
-  background-color: #4589c0;
+  background-color: var(--bg-button-primary-hover, #24887d);
 }
 
 .reset-initiate-button:disabled {
-  background-color: #3a7da8;
+  background-color: var(--bg-button-primary, #2a9d8f);
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -397,11 +604,18 @@ export default {
   text-align: center;
   margin-top: 16px;
   font-size: 14px;
-  color: #ddd;
+}
+
+[data-theme="light"] .login-link {
+  color: var(--text-secondary, #4d4d4d);
+}
+
+[data-theme="dark"] .login-link {
+  color: var(--text-secondary, #b3b3b3);
 }
 
 .login-link-text {
-  color: #4E97D1;
+  color: var(--bg-button-primary, #2a9d8f);
   text-decoration: none;
   cursor: pointer;
   font-weight: 500;
@@ -416,7 +630,18 @@ export default {
   padding-top: 10px;
   text-align: center;
   font-size: 11px;
-  color: #aaa;
+}
+
+.support-message {
+  margin-bottom: 10px;
+}
+
+[data-theme="light"] .support-message {
+  color: var(--text-muted, #6c757d);
+}
+
+[data-theme="dark"] .support-message {
+  color: var(--text-muted, #9ca3af);
 }
 
 .language-selector {
@@ -425,10 +650,7 @@ export default {
 
 .language-selector select {
   padding: 8px 12px;
-  border: 1px solid #444;
   border-radius: 8px;
-  background-color: #333;
-  color: #ddd;
   font-size: 13px;
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
@@ -439,12 +661,23 @@ export default {
   cursor: pointer;
 }
 
-.language-selector select:focus {
-  outline: none;
-  border-color: #4E97D1;
+[data-theme="light"] .language-selector select {
+  background-color: var(--bg-input, #ffffff);
+  color: var(--text-primary, #333333);
+  border: 1px solid var(--border-input, #dcdfe4);
 }
 
-/* Cancel button for embedded mode */
+[data-theme="dark"] .language-selector select {
+  background-color: var(--bg-input, #333333);
+  color: var(--text-primary, #f0f0f0);
+  border: 1px solid var(--border-input, #3a3a3a);
+}
+
+.language-selector select:focus {
+  outline: none;
+  border-color: var(--bg-button-primary, #2a9d8f);
+}
+
 .modal-footer {
   text-align: center;
   margin-top: 16px;
@@ -453,10 +686,10 @@ export default {
 .cancel-button {
   padding: 8px 16px;
   background-color: transparent;
-  color: #4E97D1;
+  color: #4e97d1;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid #4E97D1;
+  border: 1px solid #4e97d1;
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -467,16 +700,17 @@ export default {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Responsive adjustments */
 @media (max-width: 480px) {
   .password-reset-initiate-card {
     padding: 20px 16px;
     max-height: 92vh;
   }
-  
+
   .embedded .password-reset-initiate-card {
     max-height: none;
   }

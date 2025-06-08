@@ -1,138 +1,138 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "GENIE.AI Framework Configuration",
-    "description": "Configuration for NAAT - Noor AI AL Tafsir with Muslim green theme",
-    "type": "object",
-    "properties": {
-      "app": {
-        "type": "object",
-        "description": "General application settings",
-        "properties": {
-          "title": {
-            "type": "string",
-            "description": "Main application title displayed in the UI",
-            "default": "GENIE.AI Chatbot"
-          },
-          "icon": {
-            "type": "object",
-            "description": "Application icon configuration (SVG)",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["file", "inline"],
-                "description": "Type of icon source",
-                "default": "file"
-              },
-              "value": {
-                "type": "string",
-                "description": "Path to SVG file (for 'file') or inline SVG content (for 'inline')"
-              }
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GENIE.AI Framework Configuration",
+  "description": "Configuration for NAAT - Noor AI AL Tafsir with Muslim green theme",
+  "type": "object",
+  "properties": {
+    "app": {
+      "type": "object",
+      "description": "General application settings",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Main application title displayed in the UI",
+          "default": "GENIE.AI Chatbot"
+        },
+        "icon": {
+          "type": "object",
+          "description": "Application icon configuration (SVG)",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["file", "inline"],
+              "description": "Type of icon source",
+              "default": "file"
             },
-            "required": ["type", "value"]
-          }
-        },
-        "required": ["title", "icon"]
-      },
-      "theme": {
-        "type": "object",
-        "description": "UI theme and color scheme settings",
-        "properties": {
-          "primaryColor": {
-            "type": "string",
-            "description": "Primary color for buttons and accents",
-            "default": "#4E97D1"
-          },
-          "secondaryColor": {
-            "type": "string",
-            "description": "Secondary color for accents and highlights",
-            "default": "#2C5F8A"
-          },
-          "backgroundColor": {
-            "type": "string",
-            "description": "Background color for main content area",
-            "default": "#f5f7fa"
-          },
-          "textColor": {
-            "type": "string",
-            "description": "Primary text color",
-            "default": "#333333"
-          },
-          "navbar": {
-            "type": "object",
-            "description": "Navbar-specific styling",
-            "properties": {
-              "gradientStart": {
-                "type": "string",
-                "description": "Start color for navbar gradient",
-                "default": "#4E97D1"
-              },
-              "gradientEnd": {
-                "type": "string",
-                "description": "End color for navbar gradient",
-                "default": "#2C5F8A"
-              },
-              "textColor": {
-                "type": "string",
-                "description": "Navbar text/icon color",
-                "default": "#ffffff"
-              }
+            "value": {
+              "type": "string",
+              "description": "Path to SVG file (for 'file') or inline SVG content (for 'inline')"
             }
-          }
-        },
-        "required": ["primaryColor", "secondaryColor", "navbar"]
+          },
+          "required": ["type", "value"]
+        }
       },
-      "features": {
-        "type": "object",
-        "description": "Feature toggles and configurations",
-        "properties": {
-          "chat": {
-            "type": "object",
-            "description": "Chat-specific settings",
-            "properties": {
-              "welcomeMessage": {
-                "type": "string",
-                "description": "Custom welcome message for the chatbot",
-                "default": "Welcome to GENIE.AI!"
-              },
-              "botName": {
-                "type": "string",
-                "description": "Name of the chatbot",
-                "default": "Genie"
-              }
+      "required": ["title", "icon"]
+    },
+    "theme": {
+      "type": "object",
+      "description": "UI theme and color scheme settings",
+      "properties": {
+        "primaryColor": {
+          "type": "string",
+          "description": "Primary color for buttons and accents",
+          "default": "#4E97D1"
+        },
+        "secondaryColor": {
+          "type": "string",
+          "description": "Secondary color for accents and highlights",
+          "default": "#2C5F8A"
+        },
+        "backgroundColor": {
+          "type": "string",
+          "description": "Background color for main content area",
+          "default": "#f5f7fa"
+        },
+        "textColor": {
+          "type": "string",
+          "description": "Primary text color",
+          "default": "#333333"
+        },
+        "navbar": {
+          "type": "object",
+          "description": "Navbar-specific styling",
+          "properties": {
+            "gradientStart": {
+              "type": "string",
+              "description": "Start color for navbar gradient",
+              "default": "#4E97D1"
+            },
+            "gradientEnd": {
+              "type": "string",
+              "description": "End color for navbar gradient",
+              "default": "#2C5F8A"
+            },
+            "textColor": {
+              "type": "string",
+              "description": "Navbar text/icon color",
+              "default": "#ffffff"
             }
           }
         }
       },
-      "custom": {
-        "type": "object",
-        "description": "Custom key-value pairs for use case-specific configurations",
-        "additionalProperties": true
-      }
-    },
-    "required": ["app", "theme"],
-    "app": {
-      "title": "NAAT - Noor AI AL Tafsir",
-      "icon": {
-        "type": "file",
-        "value": "/config/naat-icon-miniature.svg"
-      }
-    },
-    "theme": {
-      "primaryColor": "#2A9D8F",
-      "secondaryColor": "#264653",
-      "backgroundColor": "#EAF4F4",
-      "textColor": "#1A3C34",
-      "navbar": {
-        "gradientStart": "#2A9D8F",
-        "gradientEnd": "#1A6D62",
-        "textColor": "#F8EDEB"
-      }
+      "required": ["primaryColor", "secondaryColor", "navbar"]
     },
     "features": {
-      "chat": {
-        "welcomeMessage": "Welcome to NAAT - Noor AI AL Tafsir, your guide to Quranic interpretation!",
-        "botName": "Noor"
+      "type": "object",
+      "description": "Feature toggles and configurations",
+      "properties": {
+        "chat": {
+          "type": "object",
+          "description": "Chat-specific settings",
+          "properties": {
+            "welcomeMessage": {
+              "type": "string",
+              "description": "Custom welcome message for the chatbot",
+              "default": "Welcome to GENIE.AI!"
+            },
+            "botName": {
+              "type": "string",
+              "description": "Name of the chatbot",
+              "default": "Genie"
+            }
+          }
+        }
       }
     },
-    "custom": {}
-  }
+    "custom": {
+      "type": "object",
+      "description": "Custom key-value pairs for use case-specific configurations",
+      "additionalProperties": true
+    }
+  },
+  "required": ["app", "theme"],
+  "app": {
+    "title": "NAAT - Noor AI AL Tafsir",
+    "icon": {
+      "type": "file",
+      "value": "/config/naat-icon.svg"
+    }
+  },
+  "theme": {
+    "primaryColor": "#2A9D8F",
+    "secondaryColor": "#264653",
+    "backgroundColor": "#EAF4F4",
+    "textColor": "#1A3C34",
+    "navbar": {
+      "gradientStart": "#2A9D8F",
+      "gradientEnd": "#1A6D62",
+      "textColor": "#F8EDEB"
+    }
+  },
+  "features": {
+    "chat": {
+      "welcomeMessage": "Welcome to NAAT - Noor AI AL Tafsir, your guide to Quranic interpretation!",
+      "botName": "Noor"
+    }
+  },
+  "custom": {}
+}

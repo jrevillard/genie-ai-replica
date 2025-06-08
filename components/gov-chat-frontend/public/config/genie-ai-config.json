@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration for NAAT - Noor AI AL Tafsir with Muslim green theme",
+  "description": "Configuration file for customizing the GENIE.AI chatbot framework",
   "type": "object",
   "properties": {
     "app": {
@@ -111,27 +111,27 @@
   },
   "required": ["app", "theme"],
   "app": {
-    "title": "NAAT - Noor AI AL Tafsir",
+    "title": "Huduma AI",
     "icon": {
       "type": "file",
-      "value": "/config/naat-icon.svg"
+      "value": "/config/huduma-icon.svg"
     }
   },
   "theme": {
-    "primaryColor": "#2A9D8F",
-    "secondaryColor": "#264653",
-    "backgroundColor": "#EAF4F4",
-    "textColor": "#1A3C34",
+    "primaryColor": "#4E97D1",
+    "secondaryColor": "#2C5F8A",
+    "backgroundColor": "#f5f7fa",
+    "textColor": "#333333",
     "navbar": {
-      "gradientStart": "#2A9D8F",
-      "gradientEnd": "#1A6D62",
-      "textColor": "#F8EDEB"
+      "gradientStart": "#4E97D1",
+      "gradientEnd": "#2C5F8A",
+      "textColor": "#ffffff"
     }
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to NAAT - Noor AI AL Tafsir, your guide to Quranic interpretation!",
-      "botName": "Noor"
+      "welcomeMessage": "Welcome to Huduma AI, your public service assistant!",
+      "botName": "Huduma"
     }
   },
   "custom": {}

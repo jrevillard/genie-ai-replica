@@ -1,4 +1,4 @@
-<!-- TopQueriesChart.vue - Modified to force white data labels in dark mode -->
+<!-- TopQueriesChart.vue - Changed dark mode table background to transparent to blend with analytics dialog (#414141) -->
 <template>
   <div class="top-queries-chart">
     <div v-if="loading" class="loading-overlay">
@@ -14,21 +14,29 @@
     <div v-else>
       <!-- Compressed table view -->
       <div class="table-container">
-        <table class="top-queries-table">
+        <table class="top-queries-table" :style="tableStyle">
           <thead>
             <tr>
-              <th class="rank">{{ $t("analytics.table.rank") }}</th>
-              <th>{{ $t("analytics.table.query") }}</th>
-              <th class="count">{{ $t("analytics.table.count") }}</th>
-              <th class="avg-time">{{ $t("analytics.table.avgTime") }}</th>
+              <th class="rank" :style="textStyle">
+                {{ $t("analytics.table.rank") }}
+              </th>
+              <th :style="textStyle">{{ $t("analytics.table.query") }}</th>
+              <th class="count" :style="textStyle">
+                {{ $t("analytics.table.count") }}
+              </th>
+              <th class="avg-time" :style="textStyle">
+                {{ $t("analytics.table.avgTime") }}
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(query, index) in data" :key="index">
-              <td class="rank">{{ index + 1 }}</td>
-              <td class="query-text">{{ query.text }}</td>
-              <td class="count">{{ query.count.toLocaleString() }}</td>
-              <td class="avg-time">{{ query.avgTime }}s</td>
+              <td class="rank" :style="textStyle">{{ index + 1 }}</td>
+              <td class="query-text" :style="textStyle">{{ query.text }}</td>
+              <td class="count" :style="textStyle">
+                {{ query.count.toLocaleString() }}
+              </td>
+              <td class="avg-time" :style="textStyle">{{ query.avgTime }}s</td>
             </tr>
           </tbody>
         </table>
@@ -92,6 +100,21 @@ export default {
       themeObserver: null,
     };
   },
+  computed: {
+    tableStyle() {
+      // Apply inline style to force correct background color
+      // Dark mode uses transparent to blend with UnifiedAnalytics.vue .analytics-content (#414141)
+      return this.theme === "light"
+        ? { backgroundColor: "#ffffff !important" }
+        : { backgroundColor: "transparent !important" };
+    },
+    textStyle() {
+      // Apply inline style to force correct text color
+      return this.theme === "light"
+        ? { color: "#333333 !important" }
+        : { color: "#ffffff !important" };
+    },
+  },
   watch: {
     // Watch for data changes from parent
     data: {
@@ -144,8 +167,11 @@ export default {
     // Check if mobile on mount
     this.checkMobile();
 
-    // Inject global stylesheet for theme
-    this.injectGlobalStyleForTheme();
+    // Initialize theme based on localStorage
+    this.initializeTheme();
+
+    // Force theme sync with localStorage
+    this.forceThemeSync();
 
     // Use data from props or fetch from API
     if (this.externalData && this.data.length > 0) {
@@ -163,6 +189,12 @@ export default {
 
     // Set up theme change listener
     this.setupThemeChangeListener();
+
+    // Force re-render after parent theme sync
+    setTimeout(() => {
+      this.injectGlobalStyleForTheme();
+      this.updateChart();
+    }, 300); // Increased delay for parent theme sync
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
@@ -185,53 +217,128 @@ export default {
   },
   methods: {
     /**
-     * Inject a global stylesheet that targets ApexCharts data labels specifically
-     * This ensures data label elements are styled according to the current theme
+     * Initialize theme based on localStorage to ensure correct initial rendering
+     */
+    initializeTheme() {
+      let themeMode = localStorage.getItem("theme") || "light";
+      if (!["light", "dark", "system"].includes(themeMode)) {
+        console.warn(
+          `[TopQueriesChart] Invalid themeMode: ${themeMode}, defaulting to light`
+        );
+        themeMode = "light";
+      }
+      if (themeMode === "system") {
+        themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      }
+      this.theme = themeMode;
+      console.log(`[TopQueriesChart] Initial theme set to: ${themeMode}`);
+      this.injectGlobalStyleForTheme();
+    },
+
+    /**
+     * Force sync of DOM data-theme with localStorage to prevent mismatches
+     */
+    forceThemeSync() {
+      const localStorageTheme = localStorage.getItem("theme") || "light";
+      const parentElement = this.$el.closest("[data-theme]");
+      if (
+        parentElement &&
+        parentElement.getAttribute("data-theme") !== localStorageTheme
+      ) {
+        console.warn(
+          `[TopQueriesChart] Forcing DOM data-theme to match localStorage: ${localStorageTheme}`
+        );
+        parentElement.setAttribute("data-theme", localStorageTheme);
+      }
+      document.documentElement.setAttribute("data-theme", localStorageTheme);
+    },
+
+    /**
+     * Inject a global stylesheet that targets ApexCharts data labels and chart elements
      */
     injectGlobalStyleForTheme() {
-      // Check if the style already exists
-      if (document.getElementById("top-queries-chart-theme-style")) {
-        return;
+      let styleEl = document.getElementById("top-queries-chart-theme-style");
+      if (!styleEl) {
+        styleEl = document.createElement("style");
+        styleEl.id = "top-queries-chart-theme-style";
+        document.head.appendChild(styleEl);
       }
 
-      // Create style element
-      const styleEl = document.createElement("style");
-      styleEl.id = "top-queries-chart-theme-style";
       const theme = this.getTheme();
+      console.log(
+        `[TopQueriesChart] Injected ${
+          theme.isDarkMode ? "dark" : "light"
+        } mode style`
+      );
+
       if (theme.isDarkMode) {
         styleEl.textContent = `
           /* Force ApexCharts data labels to be white in dark mode */
-          [data-theme="dark"] .apexcharts-datalabels text,
-          [data-theme="dark"] .apexcharts-datalabel-value,
-          [data-theme="dark"] .apexcharts-datalabel,
-          [data-theme="dark"] .apexcharts-datalabel-label {
+          [data-theme="dark"] .top-queries-chart .apexcharts-datalabels text,
+          [data-theme="dark"] .top-queries-chart .apexcharts-datalabel-value,
+          [data-theme="dark"] .top-queries-chart .apexcharts-datalabel,
+          [data-theme="dark"] .top-queries-chart .apexcharts-datalabel-label {
             fill: #FFFFFF !important;
           }
-          /* Target specifically the bar chart data labels */
-          [data-theme="dark"] .apexcharts-bar-series .apexcharts-datalabels text {
+          /* Target bar chart data labels */
+          [data-theme="dark"] .top-queries-chart .apexcharts-bar-series .apexcharts-datalabels text {
+            fill: #FFFFFF !important;
+          }
+          /* Override table background - transparent to blend with UnifiedAnalytics.vue #414141 */
+          [data-theme="dark"] .top-queries-chart .top-queries-table,
+          [data-theme="dark"] .top-queries-chart .top-queries-table th,
+          [data-theme="dark"] .top-queries-chart .top-queries-table td {
+            background-color: transparent !important;
+            color: #FFFFFF !important;
+          }
+          /* Override chart container */
+          [data-theme="dark"] .top-queries-chart .bar-chart-container {
+            background-color: #414141 !important;
+          }
+          /* Override ApexCharts x-axis */
+          [data-theme="dark"] .top-queries-chart .apexcharts-xaxis,
+          [data-theme="dark"] .top-queries-chart .apexcharts-xaxis-texts-g {
+            background-color: #414141 !important;
             fill: #FFFFFF !important;
           }
         `;
-        console.log("[TopQueriesChart] Injected dark mode style");
       } else {
         styleEl.textContent = `
           /* Force ApexCharts data labels to be black in light mode */
-          [data-theme="light"] .apexcharts-datalabels text,
-          [data-theme="light"] .apexcharts-datalabel-value,
-          [data-theme="light"] .apexcharts-datalabel,
-          [data-theme="light"] .apexcharts-datalabel-label {
+          [data-theme="light"] .top-queries-chart .apexcharts-datalabels text,
+          [data-theme="light"] .top-queries-chart .apexcharts-datalabel-value,
+          [data-theme="light"] .top-queries-chart .apexcharts-datalabel,
+          [data-theme="light"] .top-queries-chart .apexcharts-datalabel-label {
             fill: #333333 !important;
           }
-          /* Target specifically the bar chart data labels */
-          [data-theme="light"] .apexcharts-bar-series .apexcharts-datalabels text {
+          /* Target bar chart data labels */
+          [data-theme="light"] .top-queries-chart .apexcharts-bar-series .apexcharts-datalabels text {
+            fill: #333333 !important;
+          }
+          /* Override table background */
+          [data-theme="light"] .top-queries-chart .top-queries-table,
+          [data-theme="light"] .top-queries-chart .top-queries-table td {
+            background-color: #ffffff !important;
+            color: #333333 !important;
+          }
+          [data-theme="light"] .top-queries-chart .top-queries-table th {
+            background-color: #f5f7fa !important;
+            color: #333333 !important;
+          }
+          /* Override chart container */
+          [data-theme="light"] .top-queries-chart .bar-chart-container {
+            background-color: transparent !important;
+          }
+          /* Override ApexCharts x-axis */
+          [data-theme="light"] .top-queries-chart .apexcharts-xaxis,
+          [data-theme="light"] .top-queries-chart .apexcharts-xaxis-texts-g {
+            background-color: #ffffff !important;
             fill: #333333 !important;
           }
         `;
-        console.log("[TopQueriesChart] Injected light mode style");
       }
-
-      // Append to document head
-      document.head.appendChild(styleEl);
     },
 
     /**
@@ -239,17 +346,24 @@ export default {
      */
     checkMobile() {
       this.isMobile = window.innerWidth < 768;
+      console.log(
+        `[DEBUG] Device detected as ${this.isMobile ? "mobile" : "desktop"}`
+      );
     },
 
     /**
      * Get current theme information
      */
     getTheme() {
-      let themeMode =
-        this.$refs.chart?.closest("[data-theme]")?.getAttribute("data-theme") ||
-        document.documentElement.getAttribute("data-theme") ||
-        localStorage.getItem("theme") ||
-        "light";
+      let themeMode = this.theme;
+      const localStorageTheme = localStorage.getItem("theme") || "light";
+      if (themeMode !== localStorageTheme) {
+        console.warn(
+          `[TopQueriesChart] Theme mismatch: component=${themeMode}, localStorage=${localStorageTheme}`
+        );
+        themeMode = localStorageTheme;
+        this.theme = themeMode;
+      }
       if (!["light", "dark", "system"].includes(themeMode)) {
         console.warn(
           `[TopQueriesChart] Invalid themeMode: ${themeMode}, defaulting to light`
@@ -281,6 +395,7 @@ export default {
             mutation.attributeName === "data-theme"
           ) {
             console.log("[TopQueriesChart] Theme change detected");
+            this.forceThemeSync();
             this.injectGlobalStyleForTheme();
             this.updateChart();
             break;
@@ -292,6 +407,7 @@ export default {
         attributes: true,
         attributeFilter: ["class", "data-theme"],
       });
+      console.log("[DEBUG] Theme change listener set up");
     },
 
     /**
@@ -304,9 +420,7 @@ export default {
       this.error = null;
 
       try {
-        // Try to call the real API
         try {
-          // In a real implementation, you would call the API to get top queries data
           const dashboardData = await analyticsService.getDashboardAnalytics(
             this.period,
             this.selectedDate
@@ -319,7 +433,6 @@ export default {
         } catch (apiError) {
           console.error("Error calling API:", apiError);
           console.log("Falling back to sample query data...");
-          // Fall back to hard-coded data
           this.chartData = this.getFallbackData();
         }
 
@@ -378,10 +491,7 @@ export default {
      * Create a custom tooltip element with a unique ID
      */
     ensureCustomTooltipExists() {
-      // Remove any existing tooltip with this ID
       this.cleanupTooltip();
-
-      // Create a new tooltip element
       const tooltip = document.createElement("div");
       tooltip.id = this.tooltipId;
       tooltip.style.cssText = `
@@ -414,18 +524,15 @@ export default {
      * Add tooltip event handlers to chart bars
      */
     addTooltipHandlers() {
-      // Get the tooltip element
       const tooltip = document.getElementById(this.tooltipId);
       if (!tooltip) {
         this.ensureCustomTooltipExists();
         return;
       }
 
-      // Get chart container
       const chartContainer = this.$refs.chart;
       if (!chartContainer) return;
 
-      // All possible selectors for chart bars
       const barSelectors = [
         ".apexcharts-bar-area",
         ".apexcharts-bar-series rect",
@@ -433,7 +540,6 @@ export default {
         ".apexcharts-series rect",
       ];
 
-      // Try different selectors until we find bars
       let bars = [];
       for (const selector of barSelectors) {
         bars = chartContainer.querySelectorAll(selector);
@@ -445,7 +551,6 @@ export default {
         }
       }
 
-      // If we still can't find bars, try the document
       if (bars.length === 0) {
         for (const selector of barSelectors) {
           bars = document.querySelectorAll(selector);
@@ -458,26 +563,19 @@ export default {
         }
       }
 
-      // Apply hover handlers to each bar
       if (bars.length > 0) {
         bars.forEach((bar, index) => {
-          // Make sure index is in range of our data
           if (index >= this.chartData.length) return;
 
-          // Set cursor style
           bar.style.cursor = "pointer";
-
-          // Create data attribute to identify the bar
           bar.setAttribute("data-bar-index", index);
 
-          // Mouse enter handler - show tooltip
           bar.addEventListener("mouseenter", (e) => {
             const barIndex = parseInt(e.target.getAttribute("data-bar-index"));
             const item =
               this.chartData[barIndex !== undefined ? barIndex : index];
             if (!item) return;
 
-            // Update tooltip content
             tooltip.innerHTML = `
               <div style="font-weight: bold; margin-bottom: 6px;">${this.truncateText(
                 item.text,
@@ -492,20 +590,15 @@ export default {
                 <span style="font-weight: 500;">${item.avgTime}s</span>
               </div>
             `;
-
-            // Show tooltip
             tooltip.style.display = "block";
           });
 
-          // Mouse move handler - position tooltip
           bar.addEventListener("mousemove", (e) => {
-            // Position tooltip near cursor but not directly under it
             const offset = 15;
             tooltip.style.left = e.pageX + offset + "px";
             tooltip.style.top = e.pageY + offset + "px";
           });
 
-          // Mouse leave handler - hide tooltip
           bar.addEventListener("mouseleave", () => {
             tooltip.style.display = "none";
           });
@@ -516,8 +609,6 @@ export default {
         console.log(
           "[DEBUG] No bars found to attach tooltips, trying again later"
         );
-
-        // Last resort: try again after a longer delay
         setTimeout(() => {
           this.addTooltipHandlers();
         }, 1000);
@@ -533,16 +624,13 @@ export default {
         return;
       }
 
-      // Get theme information
       const theme = this.getTheme();
       console.log(
         `[DEBUG] Theme detected: ${theme.isDarkMode ? "dark" : "light"}`
       );
 
-      // Determine text color based on theme - white for dark mode, black for light mode
       const textColor = theme.isDarkMode ? "#FFFFFF" : "#333333";
 
-      // Create series data for ApexCharts (limit to top 5)
       const topQueries = this.chartData.slice(0, 5);
 
       this.chartSeries = [
@@ -552,7 +640,6 @@ export default {
         },
       ];
 
-      // Set up chart options
       this.chartOptions = {
         chart: {
           type: "bar",
@@ -565,23 +652,17 @@ export default {
             speed: 300,
           },
           background: theme.backgroundColor,
-          foreColor: textColor, // Set foreColor for all text based on theme
+          foreColor: textColor,
           events: {
             mounted: () => {
-              // Add tooltip handlers when chart is first mounted
               setTimeout(() => {
                 this.addTooltipHandlers();
-
-                // Fix label colors after render
                 this.fixLabelColors(textColor);
               }, 300);
             },
             updated: () => {
-              // Re-add tooltip handlers when chart updates
               setTimeout(() => {
                 this.addTooltipHandlers();
-
-                // Fix label colors after update
                 this.fixLabelColors(textColor);
               }, 300);
             },
@@ -606,7 +687,7 @@ export default {
           offsetY: -20,
           style: {
             fontSize: "10px",
-            colors: [textColor], // Set to match the theme
+            colors: [textColor],
             fontWeight: "600",
           },
           background: {
@@ -624,7 +705,7 @@ export default {
           },
           labels: {
             style: {
-              colors: textColor, // Set x-axis label color based on theme
+              colors: textColor,
               fontSize: "10px",
             },
           },
@@ -635,7 +716,7 @@ export default {
               return value.toLocaleString();
             },
             style: {
-              colors: textColor, // Set y-axis label color based on theme
+              colors: textColor,
               fontSize: "10px",
             },
           },
@@ -646,18 +727,18 @@ export default {
             : "rgba(0, 0, 0, 0.1)",
         },
         tooltip: {
-          enabled: false, // Disable built-in tooltips completely
+          enabled: false,
         },
         states: {
           hover: {
             filter: {
-              type: "none", // No filter on hover
+              type: "none",
             },
           },
           active: {
             allowMultipleDataPointsSelection: false,
             filter: {
-              type: "none", // No filter on active state
+              type: "none",
             },
           },
         },
@@ -669,30 +750,21 @@ export default {
 
     /**
      * Fix label colors after chart render to ensure they match the theme
-     * This is a backup method in case the config options don't apply correctly
      */
     fixLabelColors(textColor) {
-      // Select all chart text elements
       const chartContainer = this.$refs.chart;
       if (!chartContainer) return;
 
-      // Find all text elements in the chart
       const textElements = chartContainer.querySelectorAll("text");
-
-      // Apply the correct color based on theme
       textElements.forEach((element) => {
-        // Don't change dataLabel colors (they're inside the bars)
         element.setAttribute("fill", textColor);
       });
 
-      // Specifically target data labels for bar values
       const dataLabels = chartContainer.querySelectorAll(
         ".apexcharts-datalabels text"
       );
       dataLabels.forEach((label) => {
         label.setAttribute("fill", textColor);
-
-        // Find any child elements and set them too
         const children = label.querySelectorAll("*");
         children.forEach((child) => {
           if (child.tagName === "tspan") {
@@ -701,7 +773,6 @@ export default {
         });
       });
 
-      // Target data labels on top of bars specifically
       const topDataLabels = chartContainer.querySelectorAll(
         ".apexcharts-bar-top-datalabels text, .apexcharts-datalabel-value"
       );
@@ -709,7 +780,6 @@ export default {
         label.setAttribute("fill", textColor);
       });
 
-      // If we are in dark mode, force white text for data labels
       if (textColor === "#FFFFFF") {
         const allDataLabelElements = chartContainer.querySelectorAll(
           ".apexcharts-datalabels text, .apexcharts-datalabel, .apexcharts-datalabel-label, .apexcharts-datalabel-value"
@@ -840,7 +910,7 @@ export default {
   background-color: transparent;
 }
 
-/* Force data labels to be white in dark mode - focused selector */
+/* Force data labels to be white in dark mode */
 :deep([data-theme="dark"]) .apexcharts-datalabels text,
 :deep([data-theme="dark"]) .apexcharts-datalabel-value,
 :deep([data-theme="dark"]) .apexcharts-datalabel-label {
@@ -852,87 +922,99 @@ export default {
   fill: white !important;
 }
 
-/* Retain existing dark mode styles */
 /* Force all text in charts to follow theme colors */
-:deep([data-theme="dark"]) .apexcharts-text,
-:deep(.dark-theme) .apexcharts-text,
-:deep(.dark-mode) .apexcharts-text {
+:deep([data-theme="dark"]) .apexcharts-text {
   fill: white !important;
 }
 
-:deep([data-theme="light"]) .apexcharts-text,
-:deep(:not([data-theme="dark"]):not(.dark-theme):not(.dark-mode))
-  .apexcharts-text {
+:deep([data-theme="light"]) .apexcharts-text {
   fill: #333333 !important;
 }
 
-/* Target specifically the X-axis labels at the bottom which appear to be the problem */
+/* Target x-axis and y-axis labels */
 :deep([data-theme="dark"]) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
-:deep(.dark-theme) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
-:deep(.dark-mode) .apexcharts-xaxis .apexcharts-xaxis-texts-g text {
+:deep([data-theme="dark"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
   fill: white !important;
   color: white !important;
 }
 
-/* Target the Y-axis labels too */
-:deep([data-theme="dark"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text,
-:deep(.dark-theme) .apexcharts-yaxis .apexcharts-yaxis-texts-g text,
-:deep(.dark-mode) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
-  fill: white !important;
-  color: white !important;
+:deep([data-theme="light"]) .apexcharts-xaxis .apexcharts-xaxis-texts-g text,
+:deep([data-theme="light"]) .apexcharts-yaxis .apexcharts-yaxis-texts-g text {
+  fill: #333333 !important;
+  color: #333333 !important;
 }
 
 /* Target data value labels on top of bars */
-:deep([data-theme="dark"]) .apexcharts-datalabels text,
-:deep(.dark-theme) .apexcharts-datalabels text,
-:deep(.dark-mode) .apexcharts-datalabels text {
+:deep([data-theme="dark"]) .apexcharts-datalabels text {
   fill: white !important;
   color: white !important;
 }
 
-/* Dark mode overrides - these will only apply in dark mode */
-[data-theme="dark"] .top-queries-chart,
-.dark-theme .top-queries-chart,
-.dark-mode .top-queries-chart {
-  background-color: #414141 !important; /* Dark mode background */
+:deep([data-theme="light"]) .apexcharts-datalabels text {
+  fill: #333333 !important;
+  color: #333333 !important;
 }
 
-[data-theme="dark"] .top-queries-table th,
-.dark-theme .top-queries-table th,
-.dark-mode .top-queries-table th {
-  background-color: #414141 !important; /* Dark mode background */
-  color: white !important; /* Dark mode text */
+/* Dark mode overrides */
+[data-theme="dark"] .top-queries-chart {
+  background-color: #414141 !important;
 }
 
-[data-theme="dark"] .bar-chart-container,
-.dark-theme .bar-chart-container,
-.dark-mode .bar-chart-container {
-  background-color: #414141 !important; /* Dark mode background */
+[data-theme="dark"] .top-queries-table th {
+  background-color: #414141 !important;
+  color: white !important;
 }
 
-[data-theme="dark"] .top-queries-table td,
-.dark-theme .top-queries-table td,
-.dark-mode .top-queries-table td {
-  border-top: 1px solid #555 !important; /* Dark mode border */
-  color: white !important; /* Dark mode text */
-  background-color: #414141 !important; /* Dark mode background */
+[data-theme="dark"] .bar-chart-container {
+  background-color: #414141 !important;
 }
 
-[data-theme="dark"] .table-container,
-.dark-theme .table-container,
-.dark-mode .table-container {
-  background-color: #414141 !important; /* Dark mode background */
+[data-theme="dark"] .top-queries-table td {
+  border-top: 1px solid #555 !important;
+  color: white !important;
+  background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table .query-text,
-.dark-theme .top-queries-table .query-text,
-.dark-mode .top-queries-table .query-text {
-  color: white !important; /* Dark mode text */
+[data-theme="dark"] .table-container {
+  background-color: #414141 !important;
 }
 
-[data-theme="dark"] .top-queries-table,
-.dark-theme .top-queries-table,
-.dark-mode .top-queries-table {
-  background-color: #414141 !important; /* Dark mode background */
+[data-theme="dark"] .top-queries-table .query-text {
+  color: white !important;
+}
+
+[data-theme="dark"] .top-queries-table {
+  background-color: #414141 !important;
+}
+
+/* Light mode overrides */
+[data-theme="light"] .top-queries-chart {
+  background-color: #ffffff !important;
+}
+
+[data-theme="light"] .top-queries-table {
+  background-color: #ffffff !important;
+}
+
+[data-theme="light"] .top-queries-table th {
+  background-color: #f5f7fa !important;
+  color: #333333 !important;
+}
+
+[data-theme="light"] .top-queries-table td {
+  background-color: #ffffff !important;
+  color: #333333 !important;
+}
+
+[data-theme="light"] .table-container {
+  background-color: #ffffff !important;
+}
+
+[data-theme="light"] .top-queries-table .query-text {
+  color: #333333 !important;
+}
+
+[data-theme="light"] .bar-chart-container {
+  background-color: transparent !important;
 }
 </style>

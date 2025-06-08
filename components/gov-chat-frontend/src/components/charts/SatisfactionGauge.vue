@@ -1,4 +1,4 @@
-<!-- SatisfactionGauge.vue - Displays satisfaction gauge with historical trends -->
+<!-- SatisfactionGauge.vue - Changed dark mode gauge center circle background to transparent to blend with UnifiedAnalytics.vue (#414141) -->
 <template>
   <div class="gauge-wrapper">
     <!-- Debug panel for troubleshooting -->
@@ -573,7 +573,7 @@ export default {
       const isDarkMode = this.theme === "dark";
 
       const textColor = isDarkMode ? "#FFFFFF" : "#333333";
-      const backgroundColor = isDarkMode ? "#414141" : "#FFFFFF";
+      const backgroundColor = isDarkMode ? "transparent" : "#FFFFFF"; // Transparent in dark mode to blend with UnifiedAnalytics.vue
       const trackColor = isDarkMode ? "#666666" : "#E5E7EB";
 
       const getGradientColors = (value) => {

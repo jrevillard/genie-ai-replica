@@ -259,6 +259,45 @@ class QueryService {
   }
 
   /**
+ * Update the response time for a query
+ * @param {String} queryId - Query ID
+ * @param {Number} responseTime - Response time in milliseconds
+ * @returns {Promise<Object>} The updated query
+ */
+  async updateQueryResponseTime(queryId, responseTime) {
+    const startTime = Date.now();
+    try {
+      logger.info('QueryService.update_query_response_time_start', { queryId, responseTime });
+
+      // Validate responseTime
+      if (typeof responseTime !== 'number' || responseTime < 0) {
+        logger.warn('QueryService.invalid_response_time', { queryId, responseTime });
+        throw new Error('Invalid response time');
+      }
+
+      // Update the query with response time
+      const updatedQuery = await this.queries.update(queryId, {
+        responseTime,
+        updatedAt: new Date().toISOString()
+      }, { returnNew: true });
+
+      logger.info('QueryService.query_response_time_updated', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
+      return updatedQuery.new;
+    } catch (error) {
+      logger.error('QueryService.update_query_response_time_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Set query category and service
    * @param {String} queryId - Query ID
    * @param {String} categoryId - Category ID

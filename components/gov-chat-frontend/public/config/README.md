@@ -1,50 +1,48 @@
 # GENIE.AI Framework Configuration Guide
 
-This document provides comprehensive details for developers on managing and changing configurations for the GENIE.AI chatbot framework, used in applications like Huduma AI. The configuration is driven by a JSON file (`genie-ai-config.json`) that customizes the application’s title, icon, color scheme, and feature settings. This guide covers the configuration file’s structure, how to modify it, integration with the Vue 3 application, and deployment considerations.
+This guide provides developers with detailed instructions for configuring the GENIE.AI chatbot framework, used in applications like Huduma AI and NAAT - Noor AI AL Tafsir. The configuration system, driven by JSON files (e.g., `genie-ai-config.json`, `genie-ai-config-huduma.json`, `genie-ai-config-naat.json`), customizes the application’s title, icon, color scheme, and chatbot features. This document explains how the configuration system works, how to apply style changes (e.g., navbar gradient, button colors), how to create new use cases, and the impact on all screens and components, including how button styles propagate across the application.
 
 ## Overview
 
-The GENIE.AI framework is designed to support customizable chatbot applications. Huduma AI is the first use case, with configurations managed via `/public/config/genie-ai-config.json`. This file is loaded at runtime by `main.js`, passed to components like `NavBarComponent.vue`, and used to style the navbar via CSS variables in `theme-variables.css` and `theme-components.css`.
+The GENIE.AI framework powers customizable chatbot applications, with configurations stored in JSON files under `/public/config/`. These files are loaded at runtime by `main.js`, passed to components like `NavBarComponent.vue`, `SideBarComponent.vue`, and various screens, and used to style elements via CSS variables in `theme-variables.css` and component styles. Key configuration aspects include:
+- **Application Title and Icon**: Define the navbar and screen titles (e.g., `Huduma AI`) and SVG logos.
+- **Color Scheme**: Set primary colors for buttons, tabs, and links; navbar gradients; backgrounds; and text styles.
+- **Chatbot Features**: Configure welcome messages and bot names.
+- **Custom Settings**: Support use case-specific configurations.
 
-Key configuration aspects:
-- **Application Title**: Sets the title displayed in the navbar (e.g., `Huduma AI`).
-- **Application Icon**: Specifies an SVG icon (file or inline) for the navbar logo.
-- **Color Scheme**: Defines primary, secondary, and navbar-specific colors (gradient and text).
-- **Features**: Configures chatbot-specific settings (e.g., welcome message, bot name).
-- **Custom Settings**: Allows arbitrary key-value pairs for use case-specific needs.
+## Configuration Files
 
-## Configuration File: `genie-ai-config.json`
-
-The configuration file is located at `/public/config/genie-ai-config.json` and follows a JSON schema for validation and extensibility. Below is the structure and key sections:
+Configurations are JSON files in `/public/config/`, validated against a JSON schema. Multiple files can coexist for different use cases in the folder for testing convenience (e.g., `genie-ai-config-huduma.json`, `genie-ai-config-naat.json`) but only the `genie-ai-config.json` will be used by the app.
 
 ### Schema
-- **`$schema`**: References JSON Schema draft-07 for validation (`http://json-schema.org/draft-07/schema#`).
+- **`$schema`**: JSON Schema draft-07 (`http://json-schema.org/draft-07/schema#`).
 - **Type**: Object with required sections: `app`, `theme`.
 - **Properties**:
   - **`app`**:
-    - `title` (string): Navbar title (default: `GENIE.AI Chatbot`).
+    - `title` (string): Application title for navbar and screens (default: `GENIE.AI Chatbot`).
     - `icon` (object):
-      - `type` (enum: `file`, `inline`): Source type for the SVG icon (default: `file`).
-      - `value` (string): Path to SVG file (e.g., `/public/config/huduma-icon.svg`) or inline SVG content.
+      - `type` (enum: `file`, `inline`): Icon source (default: `file`).
+      - `value` (string): SVG file path (e.g., `/public/config/huduma-icon.svg`) or inline SVG.
   - **`theme`**:
-    - `primaryColor` (string): Primary color for buttons/accents (hex, e.g., `#4E97D1`).
-    - `secondaryColor` (string): Secondary color for highlights (hex, e.g., `#2C5F8A`).
-    - `backgroundColor` (string): Main content background (hex, e.g., `#f5f7fa`).
-    - `textColor` (string): Primary text color (hex, e.g., `#333333`).
+    - `primaryColor` (string): Color for buttons, tabs, checkboxes, and links (default: `#4E97D1`).
+    - `secondaryColor` (string): Secondary text and highlights (default: `#2C5F8A`).
+    - `backgroundColor` (string): Main content background (default: `#f5f7fa`).
+    - `textColor` (string): Primary text color (default: `#333333`).
     - `navbar` (object):
-      - `gradientStart` (string): Start color for navbar gradient (hex, e.g., `#4E97D1`).
-      - `gradientEnd` (string): End color for navbar gradient (hex, e.g., `#2C5F8A`).
-      - `textColor` (string): Navbar text/icon color (hex, e.g., `#ffffff`).
+      - `gradientStart` (string): Navbar gradient start (default: `#4E97D1`).
+      - `gradientEnd` (string): Navbar gradient end (default: `#2C5F8A`).
+      - `textColor` (string): Navbar text/icon color (default: `#ffffff`).
   - **`features`**:
     - `chat` (object):
-      - `welcomeMessage` (string): Chatbot welcome message (default: `Welcome to GENIE.AI!`).
+      - `welcomeMessage` (string): Chatbot greeting (default: `Welcome to GENIE.AI!`).
       - `botName` (string): Chatbot name (default: `Genie`).
-  - **`custom`**: Arbitrary key-value pairs for use case-specific settings (e.g., API endpoints).
+  - **`custom`**: Arbitrary key-value pairs for custom settings.
 
-### Example Configuration (Huduma AI)
+### Example Configurations
+
+#### Huduma AI (`genie-ai-config-huduma.json`)
 ```json
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "app": {
     "title": "Huduma AI",
     "icon": {
@@ -73,231 +71,310 @@ The configuration file is located at `/public/config/genie-ai-config.json` and f
 }
 ```
 
+#### NAAT - Noor AI AL Tafsir (`genie-ai-config-naat.json`)
+```json
+{
+  "app": {
+    "title": "NAAT - Noor AI AL Tafsir",
+    "icon": {
+      "type": "file",
+      "value": "/public/config/naat-icon.svg"
+    }
+  },
+  "theme": {
+    "primaryColor": "#2A9D8F",
+    "secondaryColor": "#264653",
+    "backgroundColor": "#EAF4F4",
+    "textColor": "#1A3C34",
+    "navbar": {
+      "gradientStart": "#2A9D8F",
+      "gradientEnd": "#1A6D62",
+      "textColor": "#F8EDEB"
+    }
+  },
+  "features": {
+    "chat": {
+      "welcomeMessage": "Welcome to NAAT - Noor AI AL Tafsir, your guide to Quranic interpretation!",
+      "botName": "Noor"
+    }
+  },
+  "custom": {}
+}
+```
+
 ## Managing Configurations
 
-### Modifying `genie-ai-config.json`
-1. **Edit the File**:
-   - Open `/public/config/genie-ai-config.json` in a text editor.
-   - Update fields like `app.title`, `app.icon.value`, `theme.navbar.gradientStart`, etc.
-   - For a new icon, place the SVG file in `/public/config` and update `app.icon.value` (e.g., `/public/config/new-icon.svg`).
-   - Validate changes using a JSON schema validator to ensure compliance with the schema.
-2. **Test Changes**:
-   - Run the development server (`npm run serve`).
-   - Verify the navbar displays the updated title, icon, and colors in the browser.
-   - Check the console log for `Configuration loaded: Object` in `main.js`.
-3. **Deploy Changes**:
-   - Ensure `/public/config/genie-ai-config.json` and any referenced SVG files are included in the build (`npm run build`).
-   - Deploy the updated `/public` folder to your server, verifying the files are accessible at `/public/config/*`.
-
-### Creating a New Use Case
-To configure a new chatbot application (e.g., NOOR-AI-AL-TAFSIR):
-1. **Copy the Config File**:
-   - Duplicate `genie-ai-config.json` to `/public/config/noor-ai-config.json`.
-   - Update `app.title` (e.g., `NOOR-AI-AL-TAFSIR`), `app.icon.value` (e.g., `/public/config/noor-icon.svg`), and `theme` colors as needed.
-2. **Update `main.js`**:
-   - Modify `loadConfig` to fetch the new config file based on an environment variable or route:
-     ```javascript
-     async function loadConfig() {
-       try {
-         const configFile = process.env.VUE_APP_CONFIG_FILE || '/public/config/genie-ai-config.json';
-         const response = await fetch(configFile);
-         if (!response.ok) {
-           throw new Error(`HTTP error! status: ${response.status}`);
-         }
-         const data = await response.json();
-         config = { ...config, ...data };
-         console.log('Configuration loaded:', config);
-       } catch (error) {
-         console.error('Error loading config:', error);
-         console.warn('Using default configuration');
+### Modifying Styles
+To change styles like navbar gradients, button colors, or other UI elements:
+1. **Edit the Config File**:
+   - Open the desired config (e.g., `/public/config/genie-ai-config-huduma.json`).
+   - Update `theme` properties:
+     - **Navbar Gradient**: Set `theme.navbar.gradientStart` and `theme.navbar.gradientEnd` (e.g., `#4E97D1` to `#FF5733`).
+     - **Primary Buttons/Tabs/Checkboxes/Links**: Set `theme.primaryColor` (e.g., `#4E97D1` to `#2A9D8F`).
+     - **Background**: Set `theme.backgroundColor` (e.g., `#f5f7fa` to `#EAF4F4`).
+     - **Primary Text**: Set `theme.textColor` (e.g., `#333333` to `#1A3C34`).
+     - **Secondary Text**: Set `theme.secondaryColor` (e.g., `#2C5F8A` to `#264653`).
+     - **Navbar Text/Icons**: Set `theme.navbar.textColor` (e.g., `#ffffff` to `#F8EDEB`).
+   - Example: To change buttons and tabs to orange:
+     ```json
+     "theme": {
+       "primaryColor": "#FF5733",
+       "navbar": {
+         "gradientStart": "#FF5733",
+         "gradientEnd": "#C82333"
        }
      }
      ```
-   - Set `VUE_APP_CONFIG_FILE=/public/config/noor-ai-config.json` in your `.env` file.
+2. **Test Changes**:
+   - Run `npm run serve`.
+   - Verify navbar gradient, button colors, and screen styles in the browser.
+   - Check console for `Configuration loaded: Object` in `main.js`.
 3. **Deploy**:
-   - Include the new config and icon files in the deployment.
-   - Test the new use case to ensure the navbar and chatbot reflect the updated settings.
+   - Run `npm run build` to include updated config.
+   - Deploy `/public/config/*` to the server, ensuring accessibility.
 
-## Integration with Vue 3 Application
+### Creating a New Use Case
+To configure a new chatbot (e.g., "EcoChat"):
+1. **Duplicate Config**:
+   - Copy `genie-ai-config.json` to `/public/config/ecochat-config.json`.
+   - Update:
+     ```json
+     "app": {
+       "title": "EcoChat",
+       "icon": { "type": "file", "value": "/public/config/ecochat-icon.svg" }
+     },
+     "theme": {
+       "primaryColor": "#28A745",
+       "secondaryColor": "#1E7E34",
+       "backgroundColor": "#E6F4EA",
+       "textColor": "#1A3C34",
+       "navbar": {
+         "gradientStart": "#28A745",
+         "gradientEnd": "#1E7E34",
+         "textColor": "#ffffff"
+       }
+     },
+     "features": {
+       "chat": {
+         "welcomeMessage": "Welcome to EcoChat, your sustainability assistant!",
+         "botName": "Eco"
+       }
+     }
+     ```
+2. **Add Icon**:
+   - Place `ecochat-icon.svg` in `/public/config/`.
+3. **Update `main.js`**:
+   - Set `VUE_APP_CONFIG_FILE=/public/config/ecochat-config.json` in `.env`:
+     ```javascript
+     const configFile = process.env.VUE_APP_CONFIG_FILE || '/public/config/genie-ai-config.json';
+     const response = await fetch(configFile);
+     ```
+4. **Test and Deploy**:
+   - Run `npm run serve` to verify styles and chatbot settings.
+   - Deploy updated config and SVG files.
 
-### Loading Configuration
-- **File**: `main.js`
-- **Process**:
-  - Fetches `/public/config/genie-ai-config.json` using `fetch`.
-  - Merges the fetched config with a default configuration to handle missing files or properties.
-  - Stores the config in `app.config.globalProperties.$config` for global access.
-- **Key Code**:
-  ```javascript
-  let config = {
-    app: { title: 'Huduma AI', icon: { type: 'file', value: '/public/config/huduma-icon.svg' } },
-    theme: { primaryColor: '#4E97D1', secondaryColor: '#2C5F8A', backgroundColor: '#f5f7fa', textColor: '#333333', navbar: { gradientStart: '#4E97D1', gradientEnd: '#2C5F8A', textColor: '#ffffff' } },
-    features: { chat: { welcomeMessage: 'Welcome to Huduma AI, your public service assistant!', botName: 'Huduma' } },
-    custom: {}
-  };
-  async function loadConfig() {
-    try {
-      const response = await fetch('/public/config/genie-ai-config.json');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+## How Configuration Works
+
+### Loading and Distribution
+- **Loading** (`main.js`):
+  - Fetches the config file using `fetch` and merges with defaults:
+    ```javascript
+    let config = {
+      app: { title: 'GENIE.AI Chatbot', icon: { type: 'file', value: '/public/config/default-icon.svg' } },
+      theme: { primaryColor: '#4E97D1', secondaryColor: '#2C5F8A', backgroundColor: '#f5f7fa', textColor: '#333333', navbar: { gradientStart: '#4E97D1', gradientEnd: '#2C5F8A', textColor: '#ffffff' } },
+      features: { chat: { welcomeMessage: 'Welcome to GENIE.AI!', botName: 'Genie' } },
+      custom: {}
+    };
+    async function loadConfig() {
+      try {
+        const response = await fetch(process.env.VUE_APP_CONFIG_FILE || '/public/config/genie-ai-config.json');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        config = { ...config, ...data };
+        console.log('Configuration loaded:', config);
+      } catch (error) {
+        console.error('Error loading config:', error);
       }
-      const data = await response.json();
-      config = { ...config, ...data };
-      console.log('Configuration loaded:', config);
-    } catch (error) {
-      console.error('Error loading config:', error);
-      console.warn('Using default configuration');
     }
-  }
-  await loadConfig();
-  const app = createApp(App);
-  app.config.globalProperties.$config = config;
-  ```
+    await loadConfig();
+    app.config.globalProperties.$config = config;
+    ```
+- **Distribution** (`App.vue`):
+  - Passes `$config` to components via props:
+    ```html
+    <nav-bar-component :config="$config" />
+    ```
 
-### Passing Configuration to Components
-- **File**: `App.vue`
-- **Process**:
-  - Passes the global `$config` to `NavBarComponent.vue` via the `:config="$config"` prop.
-- **Key Code**:
-  ```html
-  <nav-bar-component :is-sidebar-open="isSidebarOpen" @toggleSidebar="toggleSidebar"
-    @openAnalytics="showAnalytics = true" @openProfile="showUserProfile = true"
-    @openSettings="showSettings = true" @logout="handleLogout"
-    @open-admin="showAdminDashboard = true" :config="$config" />
-  ```
+### Applying Styles
+- **CSS Variables** (`theme-variables.css`):
+  - Maps config to variables:
+    ```css
+    :root {
+      --bg-button-primary: var(--primary-color, #4E97D1);
+      --text-secondary: var(--secondary-color, #2C5F8A);
+      --bg-primary: var(--background-color, #f5f7fa);
+      --text-primary: var(--text-color, #333333);
+      --bg-navbar: linear-gradient(135deg, var(--navbar-gradient-start, #4E97D1), var(--navbar-gradient-end, #2C5F8A));
+      --text-navbar: var(--navbar-text-color, #ffffff);
+    }
+    [data-theme="dark"] {
+      --bg-primary: #1e1e1e;
+      --text-primary: #f0f0f0;
+      --text-secondary: #b3b3b3;
+    }
+    ```
+- **Button Style Propagation**:
+  - The `theme.primaryColor` is mapped to `--bg-button-primary`, which is applied to:
+    - **Buttons**: Across all screens and components using `.primary-button`, `.login-button`, `.btn-primary`, or similar (e.g., "Login" button in `LoginScreen.vue`, "Save" button in `SettingsComponent.vue`).
+    - **Tabs**: Active tabs in `SideBarComponent.vue` (`.tab-button-active`).
+    - **Checkboxes**: In `LoginScreen.vue` (`.remember-me input`) and `RegisterScreen.vue` (`.terms input`).
+    - **Links**: Navigation links like `.forgot-password-text`, `.login-link-text`, `.terms-link` in authentication screens.
+    - **Spinners**: Loading indicators in `EmailVerificationScreen.vue` (`.spinner`).
+  - This ensures a consistent primary color for interactive elements throughout the application, including:
+    - **Authentication Screens**: `LoginScreen.vue`, `PasswordResetInitiateScreen.vue`, `RegistrationSuccessScreen.vue`, `EmailVerificationScreen.vue`, `PasswordResetConfirmScreen.vue`, `RegisterScreen.vue`.
+    - **Navigation Components**: `SideBarComponent.vue` (tabs), `NavBarComponent.vue` (potential buttons).
+    - **SettingsComponent.vue**: Buttons for saving theme/language settings.
+    - **UserProfileComponent.vue**: Buttons for profile updates.
+    - **Modal Dialogs**: Confirmation, error, or action dialogs using `.primary-button`.
+    - **AdminDashboard.vue and Related Components**: Buttons for administrative actions (e.g., user management, analytics).
+  - Example: Changing `theme.primaryColor` from `#4E97D1` to `#FF5733` updates all buttons, tabs, checkboxes, links, and spinners to orange across the app.
+- **Component Styles**:
+  - Components apply `--bg-button-primary` via scoped styles or `theme-components.css`:
+    ```css
+    .primary-button {
+      background-color: var(--bg-button-primary);
+      color: var(--text-button-primary, #ffffff);
+    }
+    ```
 
-### Using Configuration in Navbar
-- **File**: `NavBarComponent.vue`
-- **Process**:
-  - Uses `config.app.title` for the navbar title.
-  - Renders `config.app.icon` as an `<img>` (for `type: file`) or `<span v-html>` (for `type: inline`), with a fallback SVG if the config is invalid.
-  - Applies navbar colors via CSS variables set in `theme-variables.css`.
-- **Key Code**:
-  ```html
-  <h1 class="brand-name hide-on-mobile">{{ config?.app?.title || 'Huduma AI' }}</h1>
-  <img v-if="config?.app?.icon?.type === 'file' && config.app.icon.value" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
-  <span v-else-if="config?.app?.icon?.type === 'inline' && config.app.icon.value" v-html="config.app.icon.value" class="govt-logo"></span>
-  <svg v-else class="govt-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40">...</svg>
-  ```
+## Screen and Component-Specific Configuration Impacts
 
-### Applying Navbar Colors
-- **Files**: `theme-variables.css`, `theme-components.css`
-- **Process**:
-  - `theme-variables.css` defines `--bg-navbar` using `--navbar-gradient-start` and `--navbar-gradient-end` from the config, with fallbacks for light, dark, and system themes.
-  - `theme-components.css` applies `--bg-navbar` and `--text-navbar` to the `.nav-bar` class.
-- **Key Code** (`theme-variables.css`):
-  ```css
-  :root {
-    --bg-navbar: linear-gradient(135deg, var(--navbar-gradient-start, #4E97D1), var(--navbar-gradient-end, #2C5F8A));
-    --text-navbar: #ffffff;
-  }
-  html[data-theme="dark"], [data-theme="dark"] {
-    --bg-navbar: linear-gradient(135deg, var(--navbar-gradient-start, #2C5F8A), var(--navbar-gradient-end, #1e3c58));
-  }
-  ```
-- **Key Code** (`theme-components.css`):
-  ```css
-  .nav-bar {
-    background: var(--bg-navbar);
-    color: var(--text-navbar);
-  }
-  ```
+Configuration changes affect the following screens and components:
+1. **LoginScreen.vue**:
+   - **Title**: `app.title` in `.app-name` (e.g., `Huduma AI`).
+   - **Icon**: `app.icon.value` in `.app-logo` (e.g., `/config/huduma-icon.svg`).
+   - **Colors**:
+     - Login button (`.login-button`): `--bg-button-primary` (`theme.primaryColor`).
+     - Remember Me checkbox (`.remember-me input`): `--bg-button-primary`.
+     - Forgot Password link (`.forgot-password-text`): `--bg-button-primary`.
+     - Background: `--bg-primary` (`theme.backgroundColor`).
+     - Text: `--text-primary` (`theme.textColor`), `--text-secondary` (`theme.secondaryColor`).
+2. **PasswordResetInitiateScreen.vue**:
+   - **Title**: `app.title`.
+   - **Icon**: `app.icon.value`.
+   - **Colors**:
+     - Reset Password button (`.reset-initiate-button`): `--bg-button-primary`.
+     - Login link (`.login-link-text`): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+3. **RegistrationSuccessScreen.vue**:
+   - **Title**: `app.title`.
+   - **Icon**: `app.icon.value`.
+   - **Colors**:
+     - Back to Login button (`.primary-button`): `--bg-button-primary`.
+     - Resend Verification link (`.text-button`): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+4. **EmailVerificationScreen.vue**:
+   - **Title**: `app.title`.
+   - **Icon**: `app.icon.value`.
+   - **Colors**:
+     - Proceed/Back to Login button (`.primary-button`): `--bg-button-primary`.
+     - Spinner (`.spinner`): `border-top-color: --bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+5. **PasswordResetConfirmScreen.vue**:
+   - **Title**: `app.title`.
+   - **Icon**: `app.icon.value`.
+   - **Colors**:
+     - Validate Token/Reset Password buttons (`.validate-token-button`, `.reset-confirm-button`): `--bg-button-primary`.
+     - Login link (`.login-link-text`): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+6. **RegisterScreen.vue**:
+   - **Title**: `app.title`.
+   - **Icon**: `app.icon.value`.
+   - **Colors**:
+     - Register button (`.register-button`): `--bg-button-primary`.
+     - Accept Terms checkbox (`.terms input`): `--bg-button-primary`.
+     - Login/Terms links (`.login-link-text`, `.terms-link`): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+7. **SideBarComponent.vue**:
+   - **Colors**:
+     - Active tabs (`.tab-button-active` for "Government Services", "Saved Chats"): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`.
+8. **SettingsComponent.vue**:
+   - **Colors**:
+     - Save buttons (e.g., for theme/language settings, typically `.primary-button`): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+9. **UserProfileComponent.vue**:
+   - **Colors**:
+     - Update profile buttons (e.g., `.primary-button`): `--bg-button-primary`.
+     - Background: `--bg-primary`.
+     - Text: `--text-primary`, `--text-secondary`.
+10. **Modal Dialogs**:
+    - **Colors**:
+      - Action buttons (e.g., "Confirm", "Cancel" in `.primary-button`): `--bg-button-primary`.
+      - Background: `--bg-primary`.
+      - Text: `--text-primary`, `--text-secondary`.
+11. **AdminDashboard.vue and Related Components**:
+    - **Colors**:
+      - Administrative buttons (e.g., user management, analytics, typically `.primary-button`): `--bg-button-primary`.
+      - Background: `--bg-primary`.
+      - Text: `--text-primary`, `--text-secondary`.
 
 ## Theme Integration
 
-The GENIE.AI framework supports light, dark, and system themes, managed by `ThemeManager.js` and initialized in `main.js` and `App.vue`. The configuration’s navbar colors adapt to the theme via `theme-variables.css`.
-
-- **User Preference**:
-  - Users select a theme (light, dark, system) via `SettingsComponent.vue`, which saves it to `localStorage` (`theme` key).
-  - The saved theme is applied on login, logout, or refresh, ensuring persistence.
-- **System Theme**:
-  - Used only when no user preference is set, detected via `prefers-color-scheme` in `ThemeManager.js`.
-- **Integration with Config**:
-  - Navbar colors (`theme.navbar.gradientStart`, `theme.navbar.gradientEnd`, `theme.navbar.textColor`) are applied regardless of theme, but `theme-variables.css` adjusts the gradient for dark mode if specified in the config.
+The framework supports light, dark, and system themes via `ThemeManager.js`. Configuration colors are applied consistently:
+- **Primary Colors**: `theme.primaryColor` (`--bg-button-primary`) is uniform across modes for buttons, tabs, checkboxes, and links.
+- **Navbar Gradient**: `theme.navbar.gradientStart` and `theme.navbar.gradientEnd` adjust for dark mode in `theme-variables.css`.
+- **User Preference**: Set in `SettingsComponent.vue`, saved to `localStorage` (`theme` key).
+- **System Theme**: Uses `prefers-color-scheme` if no preference is set.
 
 ## Troubleshooting
 
-- **404 Error for Config File**:
-  - Ensure `/public/config/genie-ai-config.json` and `/public/config/huduma-icon.svg` are in the `/public` folder and included in the build.
-  - Check the server’s file serving configuration (e.g., Nginx) to ensure `/public/config/*` is accessible.
-  - Verify the fetch URL in `main.js` matches the deployment path.
-- **TypeError in NavBarComponent.vue**:
-  - If `Cannot read properties of undefined (reading 'icon')` occurs, confirm `main.js` loads the config correctly and `NavBarComponent.vue` has defensive checks.
-  - Check the console for `Configuration loaded: Object` to ensure the config was parsed.
-- **Incorrect Navbar Colors**:
-  - Inspect `.nav-bar` in DevTools to verify `--bg-navbar` and `--text-navbar` match the config.
-  - Ensure `theme-variables.css` and `theme-components.css` are loaded and not overridden by other styles.
+- **Config File Errors**:
+  - Ensure `/public/config/*.json` and SVGs are in `dist/public/config/` after `npm run build`.
+  - Check server configuration (e.g., Nginx: `location /public { root /path/to/dist; }`).
+- **Component Errors**:
+  - If `Cannot read properties of undefined`, verify `main.js` loads config and components use `this.$config` defensively.
+- **Style Issues**:
+  - Inspect elements (e.g., `.primary-button`, `.nav-bar`) to confirm `--bg-button-primary`, `--bg-navbar`.
+  - Ensure `theme-variables.css` isn’t overridden.
 - **Theme Conflicts**:
-  - If the navbar’s gradient doesn’t match the expected theme, check for conflicts in `ThemeManager.js`, `main.js`, and `App.vue` (see GitLab issue #1).
-  - Verify `localStorage.getItem('theme')` reflects the user’s preference.
+  - Check `localStorage.getItem('theme')` and `ThemeManager.js` (GitLab issue #1).
 
-## Deployment Considerations
+## Deployment
 
-- **Build Process**:
-  - Run `npm run build` to include `/public/config/*` in the output (`dist` folder).
-  - Verify the `dist/public/config` directory contains `genie-ai-config.json` and any SVG icons.
-- **Server Configuration**:
-  - Configure the server to serve `/public/config/*` as static files (e.g., `location /public { root /path/to/dist; }` in Nginx).
-  - Avoid redirects or error pages for `/public/config/*` to prevent JSON parsing errors.
-- **Environment Variables**:
-  - Use `VUE_APP_CONFIG_FILE` to specify different config files for multiple use cases (e.g., `.env.production`).
-- **Version Control**:
-  - Commit `/public/config/genie-ai-config.json` and SVG files to your repository.
-  - Consider versioning config files for different use cases (e.g., `genie-ai-config-v2.json`).
+- **Build**: Include `/public/config/*.json` and SVGs in `npm run build`.
+- **Server**: Serve `/public/config/*` as static files.
+- **Environment**: Use `VUE_APP_CONFIG_FILE` for different configs.
+- **Versioning**: Commit configs to Git, version as needed.
 
-## Extending the Configuration
+## Extending Configuration
 
-To add new configuration options:
-1. **Update Schema**:
-   - Modify `genie-ai-config.json`’s `$schema` to include new properties (e.g., `theme.sidebar` for sidebar colors).
-   - Update the `properties` section with new fields and defaults.
-2. **Update Components**:
-   - Access new properties in components (e.g., `this.$config.theme.sidebar.backgroundColor` in `SideBarComponent.vue`).
-   - Add CSS variables in `theme-variables.css` (e.g., `--sidebar-bg`) and apply them in `theme-components.css`.
-3. **Update Fallbacks**:
-   - Add new defaults in `main.js`’s `config` object to handle missing properties.
-4. **Test and Deploy**:
-   - Validate the new schema, test the changes, and deploy the updated config and code.
-
-## Example: Adding Sidebar Colors
-1. Update `genie-ai-config.json`:
+To add new styles (e.g., sidebar colors):
+1. Update schema:
    ```json
    "theme": {
      "sidebar": {
-       "backgroundColor": "#f0f2f5",
-       "textColor": "#333333"
+       "backgroundColor": { "type": "string", "default": "#f0f2f5" }
      }
    }
    ```
-2. Update `theme-variables.css`:
-   ```css
-   :root {
-     --sidebar-bg: var(--sidebar-background-color, #f0f2f5);
-     --sidebar-text: var(--sidebar-text-color, #333333);
-   }
-   ```
-3. Update `theme-components.css`:
-   ```css
-   .side-bar, .sidebar {
-     background-color: var(--sidebar-bg);
-     color: var(--sidebar-text);
-   }
-   ```
-4. Update `main.js`:
+2. Update components:
    ```javascript
-   let config = {
-     // ... existing defaults
-     theme: {
-       // ... existing theme defaults
-       sidebar: {
-         backgroundColor: '#f0f2f5',
-         textColor: '#333333'
-       }
-     }
-   };
+   computed: { sidebarBg() { return this.$config.theme.sidebar.backgroundColor; } }
    ```
+3. Update `theme-variables.css`:
+   ```css
+   --sidebar-bg: var(--sidebar-background-color, #f0f2f5);
+   ```
+4. Deploy updated config and code.
 
-## Conclusion
+## Summary
 
-The GENIE.AI framework’s configuration system is flexible and extensible, allowing developers to customize chatbot applications like Huduma AI with ease. By managing `genie-ai-config.json`, developers can tailor the UI and features for different use cases while ensuring robustness through fallback configurations and defensive coding practices.
-
-For issues or enhancements, refer to the GitLab issues or contact the development team.
+The GENIE.AI framework’s configuration system enables seamless customization of chatbot applications, with `theme.primaryColor` ensuring consistent button styles across all screens, modals, and components like `SettingsComponent.vue` and `AdminDashboard.vue`. Developers can tailor UI and features for new use cases by modifying JSON configs. For support, refer to GitLab issues or contact the development team.

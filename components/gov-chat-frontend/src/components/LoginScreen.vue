@@ -224,6 +224,7 @@
 
 <script>
 import userService from "@/services/userService";
+import { eventBus } from "@/eventBus.js";
 
 export default {
   name: "LoginScreen",
@@ -417,6 +418,30 @@ export default {
 
         // Emit login success event
         this.$emit("login-success", result);
+
+        // Show welcome toast if not already shown
+        const welcomeToastShown = localStorage.getItem("welcomeToastShown");
+        if (
+          !welcomeToastShown &&
+          this.$config?.features?.chat?.welcomeMessage
+        ) {
+          eventBus.$emit("notification:show", {
+            message: this.$config.features.chat.welcomeMessage,
+            type: "success",
+            duration: 5000,
+          });
+          try {
+            localStorage.setItem("welcomeToastShown", "true");
+            console.log(
+              "[DEBUG] Welcome toast shown and flag set in localStorage"
+            );
+          } catch (error) {
+            console.error(
+              "[DEBUG] Error setting welcomeToastShown in localStorage:",
+              error
+            );
+          }
+        }
 
         // Navigate to home or dashboard or redirect URL if it exists
         const redirectPath = this.$route.query.redirect || "/";

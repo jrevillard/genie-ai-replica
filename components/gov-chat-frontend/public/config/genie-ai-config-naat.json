@@ -118,14 +118,14 @@
     }
   },
   "theme": {
-    "primaryColor": "#2A9D8F",
-    "secondaryColor": "#264653",
-    "backgroundColor": "#EAF4F4",
-    "textColor": "#1A3C34",
+    "primaryColor": "#7FBA59",
+    "secondaryColor": "#548B2A",
+    "backgroundColor": "#E8F5E1",
+    "textColor": "#2A3D1A",
     "navbar": {
-      "gradientStart": "#2A9D8F",
-      "gradientEnd": "#1A6D62",
-      "textColor": "#F8EDEB"
+      "gradientStart": "#6FB34A",
+      "gradientEnd": "#4D8C28",
+      "textColor": "#F5EDE8"
     }
   },
   "features": {

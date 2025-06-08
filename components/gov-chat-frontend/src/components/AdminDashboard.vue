@@ -2676,17 +2676,6 @@ export default {
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
 }
 
-/* Sidebar Theming */
-[data-theme="light"] .sidebar {
-  background-color: #334155; /* Dark background for light mode */
-  color: #f8fafc; /* Light text for readability */
-}
-
-[data-theme="dark"] .sidebar {
-  background-color: #1e293b;
-  color: #f8fafc;
-}
-
 /* Ensure consistent styling for sidebar elements in both themes */
 .sidebar .logo {
   color: #f8fafc;
@@ -2781,7 +2770,7 @@ export default {
 
 /* Sidebar */
 .sidebar {
-  background-color: var(--dark);
+  background: var(--bg-navbar);
   color: #f8fafc;
   padding: 1.5rem 1rem;
   max-height: calc(100vh - 80px);

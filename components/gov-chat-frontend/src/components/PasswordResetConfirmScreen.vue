@@ -704,6 +704,10 @@ export default {
   margin-bottom: 10px;
 }
 
+.app-logo:has(.ui-icon) {
+  background-color: transparent;
+}
+
 .ui-icon {
   width: 60px;
   height: 60px;

@@ -625,6 +625,11 @@ export default {
   margin-bottom: 10px; /* Reduced margin */
 }
 
+/* Add after .app-logo rule (around line 50) */
+.app-logo:has(.ui-icon) {
+  background-color: transparent;
+}
+
 .ui-icon {
   width: 60px;
   height: 60px;

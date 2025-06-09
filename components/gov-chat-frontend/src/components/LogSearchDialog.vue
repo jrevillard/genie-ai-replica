@@ -343,7 +343,6 @@ export default {
               2
             )
           );
-          // Log CSS rules
           const rules = Array.from(document.styleSheets)
             .flatMap((sheet) => {
               try {
@@ -1019,23 +1018,6 @@ export default {
 [data-theme] .modal .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-/* Primary Button Styles */
-:deep(.btn-primary) {
-  background-color: var(--bg-button-primary) !important;
-  color: var(--text-button-primary, #ffffff) !important;
-}
-
-html[data-theme="dark"][data-v-c52f0784] .modal .btn-primary {
-  background-color: var(--bg-button-primary) !important;
-  color: var(--text-button-primary, #ffffff) !important;
-}
-
-html[data-theme="dark"][data-v-c52f0784]
-  .modal
-  .btn-primary:hover:not(:disabled) {
-  background-color: var(--bg-button-primary-hover, #8b3c7a) !important;
 }
 
 [data-theme] .modal .btn-outline {

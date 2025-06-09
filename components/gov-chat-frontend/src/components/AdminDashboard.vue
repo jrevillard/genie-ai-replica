@@ -2635,7 +2635,6 @@ export default {
   --text-tertiary: #767676;
   --text-button-primary: #ffffff;
   --text-button-secondary: #4d4d4d;
-  --bg-button-primary: #3b82f6;
   --bg-button-secondary: #e9ecef;
   --border-color: #dcdfe4;
   --bg-section: rgba(0, 0, 0, 0.02);
@@ -2660,7 +2659,6 @@ export default {
   --text-tertiary: #94a3b8;
   --text-button-primary: #ffffff;
   --text-button-secondary: #cbd5e1;
-  --bg-button-primary: #3b82f6;
   --bg-button-secondary: #334155;
   --border-color: #334155;
   --bg-section: rgba(255, 255, 255, 0.03);
@@ -3030,12 +3028,12 @@ export default {
 }
 
 .btn-primary {
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary);
+  background-color: var(--bg-button-primary) !important;
+  color: var(--text-button-primary) !important;
 }
 
 .btn-primary:hover {
-  background-color: var(--primary-dark);
+  background-color: var(--bg-button-primary-hover, #8b3c7a) !important;
 }
 
 .btn-outline {

@@ -772,7 +772,8 @@ export default {
     errorDeletingChat: "Échec de la suppression de la conversation",
     chatMoved: "Conversation déplacée avec succès",
     errorMovingChat: "Échec du déplacement de la conversation",
-    noPreview: "Aucun aperçu disponible"
+    noPreview: "Aucun aperçu disponible",
+    searchConversations: 'Rechercher des conversations...'
   },
   leftPanel: {
     cat1: {

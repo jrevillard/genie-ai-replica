@@ -712,14 +712,14 @@ export default {
     } catch (error) {
       console.warn("Could not determine API base URL:", error);
     }
+    console.log('[SideBar] Search input exists:', document.querySelector('input.search-box'))
   },
 
   beforeDestroy() {
     window.removeEventListener("hashchange", this.checkCurrentTab);
 
-    const searchInput = document.querySelector(
-      'input[placeholder="Search conversations..."]'
-    );
+    const searchInput = document.querySelector('input.search-box');
+
     if (searchInput) {
       searchInput.removeEventListener("input", this.handleExistingSearchInput);
     }
@@ -744,9 +744,8 @@ export default {
       this.isLoading = false;
       this.errorMessage = null;
 
-      const searchInput = document.querySelector(
-        'input[placeholder="Search conversations..."]'
-      );
+      const searchInput = document.querySelector('input.search-box');
+
       if (searchInput) {
         searchInput.value = "";
       }
@@ -1372,9 +1371,8 @@ export default {
         );
         this.searchTerm = "";
 
-        const searchInput = document.querySelector(
-          'input[placeholder="Search conversations..."]'
-        );
+        const searchInput = document.querySelector('input.search-box');
+
         if (searchInput) {
           searchInput.value = "";
         }
@@ -1397,9 +1395,8 @@ export default {
     connectExistingSearchField() {
       console.log("Connecting to existing search field");
 
-      const searchInput = document.querySelector(
-        'input[placeholder="Search conversations..."]'
-      );
+      const searchInput = document.querySelector('input.search-box');
+      console.log('[ChatFolders] Search input found:', searchInput);
 
       if (searchInput) {
         console.log("Found existing search input:", searchInput);
@@ -1422,9 +1419,7 @@ export default {
     },
 
     ensureSearchFieldVisible() {
-      const searchInput = document.querySelector(
-        'input[placeholder="Search conversations..."]'
-      );
+      const searchInput = document.querySelector('input.search-box');
 
       if (!searchInput) {
         console.log("Search field not found");

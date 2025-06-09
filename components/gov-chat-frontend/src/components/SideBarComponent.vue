@@ -29,7 +29,7 @@
           @click="activeTab = 'services'"
         >
           <i class="fas fa-list"></i>
-          {{ $t("sidebar.governmentServices", "Government Services") }}
+          {{ $t("sidebar.governmentServices") }}
         </button>
         <button
           class="tab-button"
@@ -37,7 +37,7 @@
           @click="activeTab = 'history'"
         >
           <i class="fas fa-history"></i>
-          {{ $t("sidebar.savedChats", "Saved Chats") }}
+          {{ $t("sidebar.savedChats") }}
         </button>
       </div>
 
@@ -96,7 +96,7 @@
                 <input
                   type="text"
                   class="search-box"
-                  placeholder="Search conversations..."
+                  :placeholder="$t('sidebar.searchConversations')"
                   v-model="searchQuery"
                 />
                 <button class="search-btn">
@@ -127,7 +127,7 @@
             <div v-else-if="activeSubTab === 'starred'" class="starred-content">
               <div class="empty-state">
                 <i class="fas fa-star empty-icon"></i>
-                <p>No starred chats</p>
+                <p>{{ $t("sidebar.noStarredChats") }}</p>
               </div>
             </div>
 
@@ -138,7 +138,7 @@
             >
               <div class="empty-state">
                 <i class="fas fa-archive empty-icon"></i>
-                <p>No archived chats</p>
+                <p>{{ $t("sidebar.noArchivedChats") }}</p>
               </div>
             </div>
           </div>
@@ -229,8 +229,8 @@ export default {
     if (this.isAndroid) {
       document.body.classList.add("android-device");
     }
-    if (this.$root.$i18n) {
-      this.currentLocale = this.$root.$i18n.locale;
+    if (this.$i18n) {
+      this.currentLocale = this.$i18n.locale;
     }
     // Debug: Log active tab computed background color
     const activeTab = document.querySelector(".tab-button-active");

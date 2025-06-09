@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with a darker blue theme for Huduma AI",
+  "description": "Configuration file for customizing the GENIE.AI chatbot framework",
   "type": "object",
   "properties": {
     "app": {
@@ -118,14 +118,14 @@
     }
   },
   "theme": {
-    "primaryColor": "#255C92",
-    "secondaryColor": "#132F4D",
-    "backgroundColor": "#D9E2EA",
-    "textColor": "#151B1C",
+    "primaryColor": "#4E97D1",
+    "secondaryColor": "#2C5F8A",
+    "backgroundColor": "#f5f7fa",
+    "textColor": "#333333",
     "navbar": {
-      "gradientStart": "#1F4B7A",
-      "gradientEnd": "#0D243D",
-      "textColor": "#E7ECEF"
+      "gradientStart": "#4E97D1",
+      "gradientEnd": "#2C5F8A",
+      "textColor": "#ffffff"
     }
   },
   "features": {

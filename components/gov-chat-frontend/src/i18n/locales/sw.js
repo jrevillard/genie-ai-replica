@@ -895,7 +895,8 @@ export default {
     errorDeletingChat: "Imeshindwa kufuta mazungumzo",
     chatMoved: "Mazungumzo yamehamishwa kwa mafanikio",
     errorMovingChat: "Imeshindwa kuhamisha mazungumzo",
-    noPreview: "Hakuna hakikisho linalopatikana"
+    noPreview: "Hakuna hakikisho linalopatikana",
+    searchConversations: 'Tafuta mazungumzo...'
   },
   leftPanel: {
     cat1: {

@@ -771,7 +771,8 @@ export default {
     errorDeletingChat: "Failed to delete conversation",
     chatMoved: "Conversation moved successfully",
     errorMovingChat: "Failed to move conversation",
-    noPreview: "No preview available"
+    noPreview: "No preview available",
+    searchConversations: 'Search conversations...'
   },
   leftPanel: {
     cat1: {

@@ -3,57 +3,112 @@
     <div class="overlay" @click="$emit('close')"></div>
     <div class="modal-content">
       <div class="modal-title">
-        <h2>{{ translate('admin.userEdit.title', 'Edit User') }}</h2>
-        <button class="close-btn" @click="$emit('close')" aria-label="Close dialog">×</button>
+        <h2>{{ translate("admin.userEdit.title", "Edit User") }}</h2>
+        <button
+          class="close-btn"
+          @click="$emit('close')"
+          aria-label="Close dialog"
+        >
+          ×
+        </button>
       </div>
 
       <div class="modal-body">
         <!-- Loading indicator -->
         <div class="loading-overlay" v-if="isLoading">
           <div class="loading-spinner"></div>
-          <p>{{ translate('admin.userEdit.loading', 'Loading user data...') }}</p>
+          <p>
+            {{ translate("admin.userEdit.loading", "Loading user data...") }}
+          </p>
         </div>
 
         <!-- Horizontal layout for sections -->
         <div class="content-wrapper">
           <!-- User Information Section -->
           <div class="user-info-section">
-            <h3>{{ translate('admin.userEdit.userInfo', 'User Information') }}</h3>
+            <h3>
+              {{ translate("admin.userEdit.userInfo", "User Information") }}
+            </h3>
             <div class="info-grid">
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.userId', 'User ID') }}:</span>
-                <span class="info-value">{{ userData._key || userData.userId }}</span>
+                <span class="info-label"
+                  >{{ translate("admin.userEdit.userId", "User ID") }}:</span
+                >
+                <span class="info-value">{{
+                  userData._key || userData.userId
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.loginName', 'Login Name') }}:</span>
+                <span class="info-label"
+                  >{{
+                    translate("admin.userEdit.loginName", "Login Name")
+                  }}:</span
+                >
                 <span class="info-value">{{ userData.loginName }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.fullName', 'Full Name') }}:</span>
-                <span class="info-value">{{ userData.personalIdentification?.fullName || '-' }}</span>
+                <span class="info-label"
+                  >{{
+                    translate("admin.userEdit.fullName", "Full Name")
+                  }}:</span
+                >
+                <span class="info-value">{{
+                  userData.personalIdentification?.fullName || "-"
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.dob', 'Date of Birth') }}:</span>
-                <span class="info-value">{{ userData.personalIdentification?.dob || '-' }}</span>
+                <span class="info-label"
+                  >{{ translate("admin.userEdit.dob", "Date of Birth") }}:</span
+                >
+                <span class="info-value">{{
+                  userData.personalIdentification?.dob || "-"
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.email', 'Email') }}:</span>
+                <span class="info-label"
+                  >{{ translate("admin.userEdit.email", "Email") }}:</span
+                >
                 <span class="info-value">{{ userData.email }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.emailVerified', 'Email Verified') }}:</span>
+                <span class="info-label"
+                  >{{
+                    translate("admin.userEdit.emailVerified", "Email Verified")
+                  }}:</span
+                >
                 <span class="info-value">
-                  <span :class="['status-badge', userData.emailVerified ? 'status-good' : 'status-error']"></span>
-                  {{ userData.emailVerified ? translate('admin.userEdit.verified', 'Verified') : translate('admin.userEdit.notVerified', 'Not Verified') }}
+                  <span
+                    :class="[
+                      'status-badge',
+                      userData.emailVerified ? 'status-good' : 'status-error',
+                    ]"
+                  ></span>
+                  {{
+                    userData.emailVerified
+                      ? translate("admin.userEdit.verified", "Verified")
+                      : translate("admin.userEdit.notVerified", "Not Verified")
+                  }}
                 </span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.createdAt', 'Created') }}:</span>
-                <span class="info-value">{{ formatDate(userData.createdAt) }}</span>
+                <span class="info-label"
+                  >{{ translate("admin.userEdit.createdAt", "Created") }}:</span
+                >
+                <span class="info-value">{{
+                  formatDate(userData.createdAt)
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ translate('admin.userEdit.lastLogin', 'Last Login') }}:</span>
-                <span class="info-value">{{ userData.lastLogin ? formatDate(userData.lastLogin) : translate('admin.userEdit.never', 'Never') }}</span>
+                <span class="info-label"
+                  >{{
+                    translate("admin.userEdit.lastLogin", "Last Login")
+                  }}:</span
+                >
+                <span class="info-value">{{
+                  userData.lastLogin
+                    ? formatDate(userData.lastLogin)
+                    : translate("admin.userEdit.never", "Never")
+                }}</span>
               </div>
             </div>
           </div>
@@ -62,43 +117,86 @@
           <div class="settings-actions-wrapper">
             <!-- Account Settings Section -->
             <div class="account-settings-section">
-              <h3>{{ translate('admin.userEdit.accountSettings', 'Account Settings') }}</h3>
+              <h3>
+                {{
+                  translate(
+                    "admin.userEdit.accountSettings",
+                    "Account Settings"
+                  )
+                }}
+              </h3>
               <div class="settings-grid">
                 <div class="settings-card">
                   <div class="card-header">
-                    <h4>{{ translate('admin.userEdit.accountStatus', 'Account Status') }}</h4>
+                    <h4>
+                      {{
+                        translate(
+                          "admin.userEdit.accountStatus",
+                          "Account Status"
+                        )
+                      }}
+                    </h4>
                   </div>
                   <div class="card-body">
                     <div class="toggle-wrapper">
                       <div class="toggle-label">
-                        {{ translate('admin.userEdit.accountEnabled', 'Account Enabled') }}
+                        {{
+                          translate(
+                            "admin.userEdit.accountEnabled",
+                            "Account Enabled"
+                          )
+                        }}
                       </div>
                       <label class="toggle">
-                        <input type="checkbox" v-model="userSettings.enabled" :disabled="isCurrentUser || isSaving">
+                        <input
+                          type="checkbox"
+                          v-model="userSettings.enabled"
+                          :disabled="isCurrentUser || isSaving"
+                        />
                         <span class="slider"></span>
                       </label>
                     </div>
                     <div class="setting-hint" v-if="isCurrentUser">
-                      {{ translate('admin.userEdit.cannotDisableSelf', 'You cannot disable your own account') }}
+                      {{
+                        translate(
+                          "admin.userEdit.cannotDisableSelf",
+                          "You cannot disable your own account"
+                        )
+                      }}
                     </div>
                   </div>
                 </div>
                 <div class="settings-card">
                   <div class="card-header">
-                    <h4>{{ translate('admin.userEdit.accountRole', 'Account Role') }}</h4>
+                    <h4>
+                      {{
+                        translate("admin.userEdit.accountRole", "Account Role")
+                      }}
+                    </h4>
                   </div>
                   <div class="card-body">
                     <div class="toggle-wrapper">
                       <div class="toggle-label">
-                        {{ translate('admin.userEdit.adminRole', 'Admin Role') }}
+                        {{
+                          translate("admin.userEdit.adminRole", "Admin Role")
+                        }}
                       </div>
                       <label class="toggle">
-                        <input type="checkbox" v-model="userSettings.isAdmin" :disabled="isCurrentUser || isSaving">
+                        <input
+                          type="checkbox"
+                          v-model="userSettings.isAdmin"
+                          :disabled="isCurrentUser || isSaving"
+                        />
                         <span class="slider"></span>
                       </label>
                     </div>
                     <div class="setting-hint" v-if="isCurrentUser">
-                      {{ translate('admin.userEdit.cannotChangeOwnRole', 'You cannot change your own role') }}
+                      {{
+                        translate(
+                          "admin.userEdit.cannotChangeOwnRole",
+                          "You cannot change your own role"
+                        )
+                      }}
                     </div>
                   </div>
                 </div>
@@ -107,25 +205,35 @@
 
             <!-- Admin Actions Section -->
             <div class="admin-actions-section">
-              <h3>{{ translate('admin.userEdit.adminActions', 'Admin Actions') }}</h3>
+              <h3>
+                {{ translate("admin.userEdit.adminActions", "Admin Actions") }}
+              </h3>
               <div class="actions-grid">
-                <button 
-                  class="action-button verify-email-button" 
+                <button
+                  class="action-button verify-email-button"
                   @click="verifyEmail"
-                  :disabled="isSaving">
-                  {{ translate('admin.userEdit.verifyEmail', 'Verify Email') }}
+                  :disabled="isSaving"
+                >
+                  {{ translate("admin.userEdit.verifyEmail", "Verify Email") }}
                 </button>
-                <button 
-                  class="action-button reset-password-button" 
+                <button
+                  class="action-button reset-password-button"
                   @click="resetPassword"
-                  :disabled="!userData.email || isSaving">
-                  {{ translate('admin.userEdit.resetPassword', 'Send Password Reset') }}
+                  :disabled="!userData.email || isSaving"
+                >
+                  {{
+                    translate(
+                      "admin.userEdit.resetPassword",
+                      "Send Password Reset"
+                    )
+                  }}
                 </button>
-                <button 
-                  class="action-button force-logout-button" 
+                <button
+                  class="action-button force-logout-button"
                   @click="forceLogout"
-                  :disabled="!userData.accessToken || isSaving">
-                  {{ translate('admin.userEdit.forceLogout', 'Force Logout') }}
+                  :disabled="!userData.accessToken || isSaving"
+                >
+                  {{ translate("admin.userEdit.forceLogout", "Force Logout") }}
                 </button>
               </div>
             </div>
@@ -136,20 +244,37 @@
       <div class="modal-footer">
         <div class="footer-content">
           <div class="footer-message" v-if="operationMessage">
-            <span :class="['message', operationSuccess ? 'success' : 'error']">{{ operationMessage }}</span>
+            <span
+              :class="['message', operationSuccess ? 'success' : 'error']"
+              >{{ operationMessage }}</span
+            >
           </div>
           <div class="footer-actions">
             <button class="btn btn-outline" @click="$emit('close')">
-              {{ translate('admin.operations.cancel', 'Cancel') }}
+              {{ translate("admin.operations.cancel", "Cancel") }}
             </button>
-            <button class="btn btn-primary" @click="saveChanges" :disabled="!hasChanges || isSaving">
+            <button
+              class="btn btn-primary"
+              @click="saveChanges"
+              :disabled="!hasChanges || isSaving"
+            >
               <span class="btn-content">
-                <svg v-if="isSaving" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round" class="spin-icon">
+                <svg
+                  v-if="isSaving"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="spin-icon"
+                >
                   <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                 </svg>
-                {{ translate('admin.operations.save', 'Save Changes') }}
+                {{ translate("admin.operations.save", "Save Changes") }}
               </span>
             </button>
           </div>
@@ -160,346 +285,461 @@
 </template>
   
   <script>
-  import userService from '../services/userService';
-  import userProfileService from '../services/userProfileService';
-  
-  export default {
-    name: 'UserEditDialog',
-    props: {
-      userId: {
-        type: String,
-        required: true
+import userService from "../services/userService";
+import userProfileService from "../services/userProfileService";
+
+export default {
+  name: "UserEditDialog",
+  props: {
+    userId: {
+      type: String,
+      required: true,
+    },
+    currentUserId: {
+      type: String,
+      required: true,
+    },
+    theme: {
+      type: String,
+      default: "light",
+    },
+  },
+  emits: ["close", "user-updated"],
+  data() {
+    return {
+      // Current locale for translations (copied from AdminDashboard)
+      currentLocale: this.getCurrentLanguage(),
+
+      // User data
+      userData: {},
+      originalUserData: {},
+
+      // User settings that can be modified
+      userSettings: {
+        enabled: true,
+        isAdmin: false,
       },
-      currentUserId: {
-        type: String,
-        required: true
+      originalSettings: {
+        enabled: true,
+        isAdmin: false,
       },
-      theme: {
-        type: String,
-        default: 'light'
+
+      // State flags
+      isLoading: true,
+      isSaving: false,
+      operationMessage: "",
+      operationSuccess: false,
+
+      // Timestamps for auto-clearing messages
+      messageTimer: null,
+    };
+  },
+  computed: {
+    isCurrentUser() {
+      // Check if the user being edited is the current logged-in user
+      return this.userId === this.currentUserId;
+    },
+    hasChanges() {
+      // Check if settings have been changed
+      return (
+        this.userSettings.enabled !== this.originalSettings.enabled ||
+        this.userSettings.isAdmin !== this.originalSettings.isAdmin
+      );
+    },
+  },
+  created() {
+    // Load user data when component is created
+    this.loadUserData();
+  },
+  beforeUnmount() {
+    // Clear any pending timers
+    if (this.messageTimer) {
+      clearTimeout(this.messageTimer);
+    }
+  },
+  methods: {
+    // Translation method (copied from AdminDashboard for consistency)
+    translate(key, fallback = "") {
+      if (!this.$i18n) return fallback;
+      try {
+        // Force the correct locale
+        const translation = this.$i18n.t(key, { locale: this.currentLocale });
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      } catch (e) {
+        console.error("Translation error:", e);
+        return fallback || key;
       }
     },
-    emits: ['close', 'user-updated'],
-    data() {
-      return {
-        // Current locale for translations (copied from AdminDashboard)
-        currentLocale: this.getCurrentLanguage(),
-  
-        // User data
-        userData: {},
-        originalUserData: {},
-  
-        // User settings that can be modified
-        userSettings: {
-          enabled: true,
-          isAdmin: false
-        },
-        originalSettings: {
-          enabled: true,
-          isAdmin: false
-        },
-  
-        // State flags
-        isLoading: true,
-        isSaving: false,
-        operationMessage: '',
-        operationSuccess: false,
-        
-        // Timestamps for auto-clearing messages
-        messageTimer: null
-      };
+
+    // Get current language (copied from AdminDashboard)
+    getCurrentLanguage() {
+      // First try to get from i18n instance
+      if (this.$i18n && this.$i18n.locale) {
+        return this.$i18n.locale;
+      }
+
+      // Fallback to localStorage
+      try {
+        const savedLocale = localStorage.getItem("userLocale");
+        if (savedLocale) {
+          return savedLocale;
+        }
+      } catch (e) {
+        console.warn("Error accessing localStorage for language:", e);
+      }
+
+      // Default to English if nothing else works
+      return "en";
     },
-    computed: {
-      isCurrentUser() {
-        // Check if the user being edited is the current logged-in user
-        return this.userId === this.currentUserId;
-      },
-      hasChanges() {
-        // Check if settings have been changed
-        return this.userSettings.enabled !== this.originalSettings.enabled || 
-               this.userSettings.isAdmin !== this.originalSettings.isAdmin;
+
+    // Format date for display
+    formatDate(dateString) {
+      if (!dateString) return "-";
+
+      try {
+        const date = new Date(dateString);
+        return new Intl.DateTimeFormat(this.currentLocale, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(date);
+      } catch (e) {
+        console.error("Date formatting error:", e);
+        return dateString;
       }
     },
-    created() {
-      // Load user data when component is created
-      this.loadUserData();
+
+    // Load user data from the server
+    async loadUserData() {
+      try {
+        this.isLoading = true;
+        this.operationMessage = "";
+
+        // Call service to get user data - using userProfileService for detailed profile data
+        const userData = await userProfileService.getProfile(this.userId);
+
+        if (userData) {
+          this.userData = userData;
+          this.originalUserData = { ...userData };
+
+          // Initialize settings based on user data
+          this.userSettings.enabled = !this.userData.disabled;
+          this.userSettings.isAdmin = this.userData.role === "Admin";
+
+          // Save original settings for comparison
+          this.originalSettings.enabled = this.userSettings.enabled;
+          this.originalSettings.isAdmin = this.userSettings.isAdmin;
+        } else {
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.failedToLoad",
+              "Failed to load user data"
+            ),
+            false
+          );
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+        this.showMessage(
+          this.translate(
+            "admin.userEdit.errorLoading",
+            "Error loading user data"
+          ),
+          false
+        );
+      } finally {
+        this.isLoading = false;
+      }
     },
-    beforeUnmount() {
-      // Clear any pending timers
+
+    // Save changes to user settings
+    async saveChanges() {
+      try {
+        this.isSaving = true;
+        this.operationMessage = "";
+
+        // For debugging
+        console.log("Current settings:", {
+          enabled: this.userSettings.enabled,
+          isAdmin: this.userSettings.isAdmin,
+        });
+        console.log("Original settings:", {
+          enabled: this.originalSettings.enabled,
+          isAdmin: this.originalSettings.isAdmin,
+        });
+
+        // Track if we have changes to make
+        const roleChanged =
+          this.userSettings.isAdmin !== this.originalSettings.isAdmin;
+        const enabledChanged =
+          this.userSettings.enabled !== this.originalSettings.enabled;
+
+        console.log("Changes detected:", { roleChanged, enabledChanged });
+
+        // Prepare update data
+        const updateData = {};
+
+        if (roleChanged) {
+          updateData.role = this.userSettings.isAdmin ? "Admin" : "User";
+        }
+
+        if (enabledChanged) {
+          updateData.disabled = !this.userSettings.enabled; // Note: API expects 'disabled' (true when account is disabled)
+        }
+
+        console.log("Update data being sent:", updateData);
+
+        // Only proceed if we have changes
+        if (Object.keys(updateData).length > 0) {
+          // Try to use userProfileService.updateProfile which should handle both properties
+          console.log(`Saving changes for user ${this.userId}`);
+
+          try {
+            const response = await userProfileService.updateProfile(
+              this.userId,
+              updateData
+            );
+            console.log("Response from update:", response);
+
+            if (response && response.success) {
+              // Update original settings
+              if (roleChanged)
+                this.originalSettings.isAdmin = this.userSettings.isAdmin;
+              if (enabledChanged)
+                this.originalSettings.enabled = this.userSettings.enabled;
+
+              this.showMessage(
+                this.translate(
+                  "admin.userEdit.saveSuccess",
+                  "User settings updated successfully"
+                ),
+                true
+              );
+
+              // Emit event to parent component
+              this.$emit("user-updated", {
+                userId: this.userId,
+                changes: updateData,
+              });
+            } else {
+              let errorMessage = "Failed to update user settings";
+              if (response && response.message) {
+                errorMessage = response.message;
+              }
+              this.showMessage(errorMessage, false);
+            }
+          } catch (error) {
+            console.error("Error saving user settings:", error);
+            this.showMessage(
+              error.message ||
+                this.translate(
+                  "admin.userEdit.errorSaving",
+                  "Error saving user settings"
+                ),
+              false
+            );
+          }
+        } else {
+          console.log("No changes detected, skipping update");
+          this.showMessage(
+            this.translate("admin.userEdit.noChanges", "No changes to save"),
+            true
+          );
+        }
+      } catch (error) {
+        console.error("Unexpected error in saveChanges:", error);
+        this.showMessage(
+          this.translate(
+            "admin.userEdit.errorSaving",
+            "Error saving user settings"
+          ),
+          false
+        );
+      } finally {
+        this.isSaving = false;
+      }
+    },
+
+    // Manually verify user's email
+    // Manually verify user's email
+    async verifyEmail() {
+      try {
+        this.isSaving = true;
+        this.operationMessage = "";
+
+        // Call the new admin-specific method to resend verification email
+        const response = await userService.resendVerificationEmailAdmin(
+          this.userId
+        );
+
+        if (response && response.success) {
+          // Update user data to reflect that email verification is pending
+          this.userData.emailVerified = false;
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.verifyEmailSuccess",
+              "Verification email sent successfully"
+            ),
+            true
+          );
+
+          // Emit event to parent component
+          this.$emit("user-updated", {
+            userId: this.userId,
+            changes: { emailVerified: false },
+          });
+        } else {
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.emailVerificationFailed",
+              "Failed to send verification email"
+            ),
+            false
+          );
+        }
+      } catch (error) {
+        console.error("Error resending verification email:", error);
+        this.showMessage(
+          this.translate(
+            "admin.userEdit.errorVerifyingEmail",
+            "Error sending verification email"
+          ),
+          false
+        );
+      } finally {
+        this.isSaving = false;
+      }
+    },
+
+    // Send password reset email
+    async resetPassword() {
+      try {
+        this.isSaving = true;
+        this.operationMessage = "";
+
+        // Call service to send password reset email - using existing method
+        const response = await userService.initiatePasswordReset(
+          this.userData.email
+        );
+
+        if (response && response.success) {
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.passwordResetSent",
+              "Password reset email sent"
+            ),
+            true
+          );
+        } else {
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.passwordResetFailed",
+              "Failed to send password reset"
+            ),
+            false
+          );
+        }
+      } catch (error) {
+        console.error("Error sending password reset:", error);
+        this.showMessage(
+          this.translate(
+            "admin.userEdit.errorSendingReset",
+            "Error sending password reset"
+          ),
+          false
+        );
+      } finally {
+        this.isSaving = false;
+      }
+    },
+
+    // Force user logout by invalidating access token
+    async forceLogout() {
+      try {
+        this.isSaving = true;
+        this.operationMessage = "";
+
+        // Call service to invalidate token - using the new admin method
+        const response = await userService.forceUserLogout(this.userId);
+
+        if (response && response.data && response.data.success) {
+          // Update user data
+          this.userData.accessToken = null;
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.logoutForced",
+              "User has been logged out"
+            ),
+            true
+          );
+
+          // Emit event to parent component
+          this.$emit("user-updated", {
+            userId: this.userId,
+            changes: { accessToken: null },
+          });
+        } else {
+          this.showMessage(
+            this.translate(
+              "admin.userEdit.logoutFailed",
+              "Failed to force logout"
+            ),
+            false
+          );
+        }
+      } catch (error) {
+        console.error("Error forcing logout:", error);
+        this.showMessage(
+          this.translate(
+            "admin.userEdit.errorForcingLogout",
+            "Error forcing logout"
+          ),
+          false
+        );
+      } finally {
+        this.isSaving = false;
+      }
+    },
+
+    // Show operation message with auto-clear after 5 seconds
+    showMessage(message, isSuccess) {
+      this.operationMessage = message;
+      this.operationSuccess = isSuccess;
+
+      // Clear any existing timer
       if (this.messageTimer) {
         clearTimeout(this.messageTimer);
       }
+
+      // Set new timer to clear message after 5 seconds
+      this.messageTimer = setTimeout(() => {
+        this.operationMessage = "";
+      }, 5000);
     },
-    methods: {
-      // Translation method (copied from AdminDashboard for consistency)
-      translate(key, fallback = '') {
-        if (!this.$i18n) return fallback;
-        try {
-          // Force the correct locale
-          const translation = this.$i18n.t(key, { locale: this.currentLocale });
-          if (translation === key) {
-            return fallback || key;
-          }
-          return translation;
-        } catch (e) {
-          console.error('Translation error:', e);
-          return fallback || key;
-        }
-      },
+  },
+};
+</script>
   
-      // Get current language (copied from AdminDashboard)
-      getCurrentLanguage() {
-        // First try to get from i18n instance
-        if (this.$i18n && this.$i18n.locale) {
-          return this.$i18n.locale;
-        }
-  
-        // Fallback to localStorage
-        try {
-          const savedLocale = localStorage.getItem('userLocale');
-          if (savedLocale) {
-            return savedLocale;
-          }
-        } catch (e) {
-          console.warn('Error accessing localStorage for language:', e);
-        }
-  
-        // Default to English if nothing else works
-        return 'en';
-      },
-  
-      // Format date for display
-      formatDate(dateString) {
-        if (!dateString) return '-';
-        
-        try {
-          const date = new Date(dateString);
-          return new Intl.DateTimeFormat(this.currentLocale, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          }).format(date);
-        } catch (e) {
-          console.error('Date formatting error:', e);
-          return dateString;
-        }
-      },
-  
-      // Load user data from the server
-      async loadUserData() {
-        try {
-          this.isLoading = true;
-          this.operationMessage = '';
-          
-          // Call service to get user data - using userProfileService for detailed profile data
-          const userData = await userProfileService.getProfile(this.userId);
-          
-          if (userData) {
-            this.userData = userData;
-            this.originalUserData = { ...userData };
-            
-            // Initialize settings based on user data
-            this.userSettings.enabled = !this.userData.disabled;
-            this.userSettings.isAdmin = this.userData.role === 'Admin';
-            
-            // Save original settings for comparison
-            this.originalSettings.enabled = this.userSettings.enabled;
-            this.originalSettings.isAdmin = this.userSettings.isAdmin;
-          } else {
-            this.showMessage(this.translate('admin.userEdit.failedToLoad', 'Failed to load user data'), false);
-          }
-        } catch (error) {
-          console.error('Error loading user data:', error);
-          this.showMessage(this.translate('admin.userEdit.errorLoading', 'Error loading user data'), false);
-        } finally {
-          this.isLoading = false;
-        }
-      },
-  
-      // Save changes to user settings
-      async saveChanges() {
-        try {
-          this.isSaving = true;
-          this.operationMessage = '';
+ <style scoped>
+/* Theme variables */
+:root {
+  --bg-button-primary-hover: #3a7da0; /* Fallback, overridden by config */
+  --switch-track-off: #d0d0d0;
+  --switch-track-on: var(--bg-button-primary);
+  --switch-thumb: #ffffff;
+}
+[data-theme="dark"] {
+  --bg-button-primary-hover: #3a7da0;
+  --switch-track-off: #475569;
+  --switch-track-on: var(--bg-button-primary);
+  --switch-thumb: #ffffff;
+}
 
-          // For debugging
-          console.log('Current settings:', {
-            enabled: this.userSettings.enabled,
-            isAdmin: this.userSettings.isAdmin
-          });
-          console.log('Original settings:', {
-            enabled: this.originalSettings.enabled,
-            isAdmin: this.originalSettings.isAdmin
-          });
-
-          // Track if we have changes to make
-          const roleChanged = this.userSettings.isAdmin !== this.originalSettings.isAdmin;
-          const enabledChanged = this.userSettings.enabled !== this.originalSettings.enabled;
-
-          console.log('Changes detected:', { roleChanged, enabledChanged });
-
-          // Prepare update data
-          const updateData = {};
-
-          if (roleChanged) {
-            updateData.role = this.userSettings.isAdmin ? 'Admin' : 'User';
-          }
-
-          if (enabledChanged) {
-            updateData.disabled = !this.userSettings.enabled; // Note: API expects 'disabled' (true when account is disabled)
-          }
-
-          console.log('Update data being sent:', updateData);
-
-          // Only proceed if we have changes
-          if (Object.keys(updateData).length > 0) {
-            // Try to use userProfileService.updateProfile which should handle both properties
-            console.log(`Saving changes for user ${this.userId}`);
-
-            try {
-              const response = await userProfileService.updateProfile(this.userId, updateData);
-              console.log('Response from update:', response);
-
-              if (response && response.success) {
-                // Update original settings
-                if (roleChanged) this.originalSettings.isAdmin = this.userSettings.isAdmin;
-                if (enabledChanged) this.originalSettings.enabled = this.userSettings.enabled;
-
-                this.showMessage(this.translate('admin.userEdit.saveSuccess', 'User settings updated successfully'), true);
-
-                // Emit event to parent component
-                this.$emit('user-updated', {
-                  userId: this.userId,
-                  changes: updateData
-                });
-              } else {
-                let errorMessage = 'Failed to update user settings';
-                if (response && response.message) {
-                  errorMessage = response.message;
-                }
-                this.showMessage(errorMessage, false);
-              }
-            } catch (error) {
-              console.error('Error saving user settings:', error);
-              this.showMessage(error.message || this.translate('admin.userEdit.errorSaving', 'Error saving user settings'), false);
-            }
-          } else {
-            console.log('No changes detected, skipping update');
-            this.showMessage(this.translate('admin.userEdit.noChanges', 'No changes to save'), true);
-          }
-        } catch (error) {
-          console.error('Unexpected error in saveChanges:', error);
-          this.showMessage(this.translate('admin.userEdit.errorSaving', 'Error saving user settings'), false);
-        } finally {
-          this.isSaving = false;
-        }
-      },
-  
-      // Manually verify user's email
-          // Manually verify user's email
-      async verifyEmail() {
-        try {
-          this.isSaving = true;
-          this.operationMessage = '';
-
-          // Call the new admin-specific method to resend verification email
-          const response = await userService.resendVerificationEmailAdmin(this.userId);
-
-          if (response && response.success) {
-            // Update user data to reflect that email verification is pending
-            this.userData.emailVerified = false;
-            this.showMessage(this.translate('admin.userEdit.verifyEmailSuccess', 'Verification email sent successfully'), true);
-
-            // Emit event to parent component
-            this.$emit('user-updated', {
-              userId: this.userId,
-              changes: { emailVerified: false }
-            });
-          } else {
-            this.showMessage(this.translate('admin.userEdit.emailVerificationFailed', 'Failed to send verification email'), false);
-          }
-        } catch (error) {
-          console.error('Error resending verification email:', error);
-          this.showMessage(this.translate('admin.userEdit.errorVerifyingEmail', 'Error sending verification email'), false);
-        } finally {
-          this.isSaving = false;
-        }
-      },
-  
-      // Send password reset email
-      async resetPassword() {
-        try {
-          this.isSaving = true;
-          this.operationMessage = '';
-          
-          // Call service to send password reset email - using existing method
-          const response = await userService.initiatePasswordReset(this.userData.email);
-          
-          if (response && response.success) {
-            this.showMessage(this.translate('admin.userEdit.passwordResetSent', 'Password reset email sent'), true);
-          } else {
-            this.showMessage(this.translate('admin.userEdit.passwordResetFailed', 'Failed to send password reset'), false);
-          }
-        } catch (error) {
-          console.error('Error sending password reset:', error);
-          this.showMessage(this.translate('admin.userEdit.errorSendingReset', 'Error sending password reset'), false);
-        } finally {
-          this.isSaving = false;
-        }
-      },
-  
-      // Force user logout by invalidating access token
-      async forceLogout() {
-        try {
-          this.isSaving = true;
-          this.operationMessage = '';
-          
-          // Call service to invalidate token - using the new admin method
-          const response = await userService.forceUserLogout(this.userId);
-          
-          if (response && response.data && response.data.success) {
-            // Update user data
-            this.userData.accessToken = null;
-            this.showMessage(this.translate('admin.userEdit.logoutForced', 'User has been logged out'), true);
-            
-            // Emit event to parent component
-            this.$emit('user-updated', {
-              userId: this.userId,
-              changes: { accessToken: null }
-            });
-          } else {
-            this.showMessage(this.translate('admin.userEdit.logoutFailed', 'Failed to force logout'), false);
-          }
-        } catch (error) {
-          console.error('Error forcing logout:', error);
-          this.showMessage(this.translate('admin.userEdit.errorForcingLogout', 'Error forcing logout'), false);
-        } finally {
-          this.isSaving = false;
-        }
-      },
-  
-      // Show operation message with auto-clear after 5 seconds
-      showMessage(message, isSuccess) {
-        this.operationMessage = message;
-        this.operationSuccess = isSuccess;
-        
-        // Clear any existing timer
-        if (this.messageTimer) {
-          clearTimeout(this.messageTimer);
-        }
-        
-        // Set new timer to clear message after 5 seconds
-        this.messageTimer = setTimeout(() => {
-          this.operationMessage = '';
-        }, 5000);
-      }
-    }
-  };
-  </script>
-  
-  <style scoped>
 /* Modal Base Styles */
 .modal {
   position: fixed;
@@ -525,7 +765,7 @@
 .modal-content {
   position: relative;
   width: 90%;
-  max-width: 1000px; /* Increased width for horizontal layout */
+  max-width: 1000px;
   max-height: 90vh;
   background-color: var(--bg-dialog, #ffffff);
   border-radius: 8px;
@@ -538,13 +778,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem; /* Reduced padding */
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-color, #dcdfe4);
 }
 
 .modal-title h2 {
   margin: 0;
-  font-size: 1.1rem; /* Slightly smaller */
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-primary, #333333);
 }
@@ -572,7 +812,7 @@
 
 .modal-body {
   padding: 1rem;
-  overflow-y: hidden; /* No scrollbars */
+  overflow-y: hidden;
   flex-grow: 1;
   position: relative;
 }
@@ -612,7 +852,7 @@
 }
 
 .info-label {
-  width: 120px; /* Reduced width */
+  width: 120px;
   flex-shrink: 0;
   font-weight: 500;
   color: var(--text-secondary, #4d4d4d);
@@ -724,8 +964,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--switch-track-off, #d0d0d0);
-  transition: .4s;
+  background-color: var(--switch-track-off);
+  transition: 0.4s;
   border-radius: 20px;
 }
 
@@ -736,13 +976,16 @@
   width: 16px;
   left: 2px;
   bottom: 2px;
-  background-color: var(--switch-thumb, #ffffff);
-  transition: .4s;
+  background-color: var(--switch-thumb);
+  transition: 0.4s;
   border-radius: 50%;
 }
 
 input:checked + .slider {
-  background-color: var(--switch-track-on, #3b82f6);
+  background-color: var(--switch-track-on);
+}
+[data-theme="dark"] input:checked + .slider {
+  background-color: var(--switch-track-on);
 }
 
 input:disabled + .slider {
@@ -804,12 +1047,12 @@ input:checked + .slider:before {
 }
 
 .verify-email-button {
-  border-color: var(--primary, #3b82f6);
-  color: var(--primary, #3b82f6);
+  border-color: var(--success, #10b981);
+  color: var(--success, #10b981);
 }
 
 .verify-email-button:hover:not(:disabled) {
-  background-color: rgba(59, 130, 246, 0.05);
+  background-color: rgba(16, 185, 129, 0.05);
 }
 
 .reset-password-button {
@@ -868,12 +1111,19 @@ input:checked + .slider:before {
 }
 
 .btn-primary {
-  background-color: var(--bg-button-primary, #3b82f6);
+  background-color: var(--bg-button-primary);
+  color: var(--text-button-primary, #ffffff);
+}
+[data-theme="dark"] .btn-primary {
+  background-color: var(--bg-button-primary);
   color: var(--text-button-primary, #ffffff);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-dark, #2563eb);
+  background-color: var(--bg-button-primary-hover);
+}
+[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  background-color: var(--bg-button-primary-hover);
 }
 
 .btn-outline {
@@ -906,7 +1156,7 @@ input:checked + .slider:before {
   height: 32px;
   border: 3px solid rgba(59, 130, 246, 0.3);
   border-radius: 50%;
-  border-top-color: var(--primary, #3b82f6);
+  border-top-color: var(--bg-button-primary);
   animation: spin 1s linear infinite;
   margin-bottom: 0.75rem;
 }

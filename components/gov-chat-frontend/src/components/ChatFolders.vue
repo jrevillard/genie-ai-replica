@@ -570,6 +570,7 @@ export default {
       categories: {},
       folderCounts: {},
       debug: false,
+      forceUpdateKey: 0,
     };
   },
 
@@ -581,8 +582,8 @@ export default {
       "getChatById",
     ]),
     themeClass() {
-      const theme = this.$route.meta.theme || 'light';
-      return theme === 'dark' ? 'context-menu-dark' : 'context-menu-light';
+      const theme = this.$route.meta.theme || "light";
+      return theme === "dark" ? "context-menu-dark" : "context-menu-light";
     },
     folders() {
       return this.getAllFolders;
@@ -673,6 +674,18 @@ export default {
   created() {
     this.loadCurrentUser();
     this.checkCurrentTab();
+    // Watch for locale changes to notify parent for tab title updates
+    if (this.$i18n) {
+      this.$watch(
+        () => this.$i18n.locale,
+        (newLocale) => {
+          console.log("[ChatFolders] Locale changed to:", newLocale);
+          this.currentLocale = newLocale;
+          this.forceUpdateKey++; // Track locale change
+          this.$emit("locale-changed", newLocale); // Notify parent to re-render tabs
+        }
+      );
+    }
   },
 
   mounted() {
@@ -712,13 +725,16 @@ export default {
     } catch (error) {
       console.warn("Could not determine API base URL:", error);
     }
-    console.log('[SideBar] Search input exists:', document.querySelector('input.search-box'))
+    console.log(
+      "[SideBar] Search input exists:",
+      document.querySelector("input.search-box")
+    );
   },
 
   beforeDestroy() {
     window.removeEventListener("hashchange", this.checkCurrentTab);
 
-    const searchInput = document.querySelector('input.search-box');
+    const searchInput = document.querySelector("input.search-box");
 
     if (searchInput) {
       searchInput.removeEventListener("input", this.handleExistingSearchInput);
@@ -744,7 +760,7 @@ export default {
       this.isLoading = false;
       this.errorMessage = null;
 
-      const searchInput = document.querySelector('input.search-box');
+      const searchInput = document.querySelector("input.search-box");
 
       if (searchInput) {
         searchInput.value = "";
@@ -1371,7 +1387,7 @@ export default {
         );
         this.searchTerm = "";
 
-        const searchInput = document.querySelector('input.search-box');
+        const searchInput = document.querySelector("input.search-box");
 
         if (searchInput) {
           searchInput.value = "";
@@ -1395,8 +1411,8 @@ export default {
     connectExistingSearchField() {
       console.log("Connecting to existing search field");
 
-      const searchInput = document.querySelector('input.search-box');
-      console.log('[ChatFolders] Search input found:', searchInput);
+      const searchInput = document.querySelector("input.search-box");
+      console.log("[ChatFolders] Search input found:", searchInput);
 
       if (searchInput) {
         console.log("Found existing search input:", searchInput);
@@ -1419,7 +1435,7 @@ export default {
     },
 
     ensureSearchFieldVisible() {
-      const searchInput = document.querySelector('input.search-box');
+      const searchInput = document.querySelector("input.search-box");
 
       if (!searchInput) {
         console.log("Search field not found");
@@ -2785,5 +2801,4 @@ html[data-theme="dark"] .folder-chats > h3 {
 .move-chat-dialog {
   z-index: 10000 !important;
 }
-
 </style>

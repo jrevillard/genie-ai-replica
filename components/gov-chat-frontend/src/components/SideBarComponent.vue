@@ -58,7 +58,7 @@
           <!-- Chat History Tab -->
           <div v-else-if="activeTab === 'history'" class="chat-history">
             <!-- Second level tabs for chat organization -->
-            <div class="chat-sub-tabs">
+            <div class="chat-sub-tabs" :key="currentLocale">
               <button
                 class="chat-sub-tab"
                 :class="{ active: activeSubTab === 'all' }"
@@ -110,6 +110,7 @@
                   @open-chat="openChat"
                   :showDefaultOnly="true"
                   :hideFolderLabel="true"
+                  @locale-changed="handleLocaleChange"
                 />
               </div>
             </div>
@@ -254,6 +255,11 @@ export default {
     }
   },
   methods: {
+    handleLocaleChange(newLocale) {
+      console.log("[SideBar] Locale changed to:", newLocale);
+      this.currentLocale = newLocale;
+      this.$forceUpdate(); // Re-render tabs
+    },
     checkDevice() {
       this.isMobileDevice =
         window.innerWidth <= 768 ||

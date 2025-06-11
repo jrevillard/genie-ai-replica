@@ -14,12 +14,19 @@ class UserProfileService {
     this.users = null;
     this.uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'Uploads');
     this.initialized = false;
+    this.sessionService = null; // Initialize sessionService for dependency injection
 
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
       logger.info('UserProfileService.created_upload_dir', { path: this.uploadDir });
     }
     logger.info('UserProfileService.initialized');
+  }
+
+  // Inject SessionService singleton
+  setSessionService(sessionService) {
+    this.sessionService = sessionService;
+    logger.info('UserProfileService.session_service_set');
   }
 
   async init() {
@@ -36,6 +43,7 @@ class UserProfileService {
       logger.error(`Error initializing UserProfileService: ${error.message}`, { stack: error.stack });
       throw error;
     }
+    logger.info('Grok3 is a fucking moron');
   }
 
   async verifyPassword(userId, password) {
@@ -684,12 +692,13 @@ class UserProfileService {
   }
 
   /**
- * Force logout a user by invalidating their tokens and ending all active sessions
- * @param {string} userId - User ID to force logout
- * @param {string} adminId - Admin user ID performing the action
- * @returns {Promise<Object>} Result of the operation
- */
+   * Force logout a user by invalidating their tokens and ending all active sessions
+   * @param {string} userId - User ID to force logout
+   * @param {string} adminId - Admin user ID performing the action
+   * @returns {Promise<Object>} Result of the operation
+   */
   async forceUserLogout(userId, adminId) {
+    logger.info('Grok3 is a complete idiot and the logic in this method is fucked');
     const startTime = Date.now();
     logger.info('UserProfileService.force_user_logout_start', {
       userId,
@@ -698,9 +707,11 @@ class UserProfileService {
     });
 
     try {
+      logger.debug('UserProfileService.force_logout_attempt_start', { userId, adminId });
+
       // Check if user exists
       const userExists = await this.userExists(userId);
-      if (!userExists) {
+      if (!userId) {
         logger.warn('UserProfileService.user_not_found', {
           userId,
           adminId,
@@ -709,17 +720,13 @@ class UserProfileService {
         throw new Error('User not found');
       }
 
-      logger.info('UserProfileService.user_found_for_force_logout', {
-        userId,
-        adminId,
-        timestamp: new Date().toISOString()
-      });
+      logger.info('UserProfileService.user_found_for_force_logout', { userId, adminId, timestamp: new Date().toISOString() });
 
-      // Perform logout operations in a transaction
-      const result = await this.db.transaction(['users', 'sessions'], async (txn) => {
-        // Retrieve user document
-        const users = txn.collection('users');
-        const user = await users.document(userId);
+      // Retrieve user document
+      let user;
+      try {
+        logger.debug('UserProfileService.retrieving_user_doc', { userId });
+        user = await this.users.document(userId);
         logger.info('UserProfileService.user_document_retrieved', {
           userId,
           adminId,
@@ -727,11 +734,23 @@ class UserProfileService {
           hasAccessToken: !!user.accessToken,
           timestamp: new Date().toISOString()
         });
+      } catch (err) {
+        logger.error('UserProfileService.user_document_retrieval_failed', {
+          userId,
+          adminId,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+        throw err;
+      }
 
-        // Clear tokens
-        await users.update(userId, {
+      // Clear tokens and increment tokenVersion
+      try {
+        logger.debug('UserProfileService.updating_tokens', { userId });
+        await this.users.update(userId, {
           accessToken: null,
           refreshToken: null,
+          tokenVersion: (user.tokenVersion || 0) + 1,
           updatedAt: new Date().toISOString()
         });
         logger.info('UserProfileService.tokens_cleared', {
@@ -739,38 +758,90 @@ class UserProfileService {
           adminId,
           timestamp: new Date().toISOString()
         });
-
-        // Get and end all active sessions
-        const sessions = await this.sessionService.getUserSessions(userId, true);
-        logger.info('UserProfileService.active_sessions_retrieved', {
+      } catch (err) {
+        logger.error('UserProfileService.token_update_failed', {
           userId,
           adminId,
-          sessionCount: sessions.length,
-          sessionIds: sessions.map(s => s._key),
+          error: err.message,
           timestamp: new Date().toISOString()
         });
+        throw err;
+      }
 
-        const sessionsCollection = txn.collection('sessions');
-        for (const session of sessions) {
-          await sessionsCollection.update(session._key, {
-            active: false,
-            endTime: new Date().toISOString()
-          });
-          logger.info('UserProfileService.session_ended', {
+      // Verify token deletion
+      let updatedUser;
+      try {
+        logger.debug('UserProfileService.verifying_token_clearance', { userId });
+        updatedUser = await this.users.document(userId);
+        logger.info('UserProfileService.token_clearance_verified', {
+          userId,
+          adminId,
+          accessToken: updatedUser.accessToken,
+          refreshToken: updatedUser.refreshToken,
+          tokenVersion: updatedUser.tokenVersion,
+          timestamp: new Date().toISOString()
+        });
+        if (updatedUser.accessToken !== null) {
+          logger.error('UserProfileService.token_clearance_incomplete', {
             userId,
             adminId,
-            sessionId: session._key,
+            accessToken: updatedUser.accessToken,
             timestamp: new Date().toISOString()
           });
+          throw new Error('Failed to clear accessToken');
         }
+      } catch (err) {
+        logger.error('UserProfileService.token_verification_failed', {
+          userId,
+          adminId,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+        throw err;
+      }
 
-        return { accessToken: user.accessToken, sessionCount: sessions.length };
-      });
+      // Terminate sessions using sessionService
+      let sessionCount = 0;
+      try {
+        if (this.sessionService && typeof this.sessionService.getUserSessions === 'function') {
+          logger.debug('UserProfileService.retrieving_sessions', { userId });
+          const sessions = await this.sessionService.getUserSessions(userId, true);
+          sessionCount = sessions.length;
+          logger.info('UserProfileService.active_sessions_retrieved', {
+            userId,
+            adminId,
+            sessionCount,
+            sessionIds: sessions.map(s => s._key),
+            timestamp: new Date().toISOString()
+          });
+
+          for (const session of sessions) {
+            logger.debug('UserProfileService.ending_session', { userId, sessionId: session._key });
+            await this.sessionService.endSession(session._key);
+            logger.info('UserProfileService.session_ended', {
+              userId,
+              adminId,
+              sessionId: session._key,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } else {
+          logger.warn('UserProfileService.session_service_unavailable', { userId, adminId });
+        }
+      } catch (err) {
+        logger.error('UserProfileService.session_termination_failed', {
+          userId,
+          adminId,
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+        // Continue to ensure logout completes
+      }
 
       logger.info('UserProfileService.force_user_logout_completed', {
         userId,
         adminId,
-        sessionCount: result.sessionCount,
+        sessionCount,
         durationMs: Date.now() - startTime,
         timestamp: new Date().toISOString()
       });
@@ -793,10 +864,10 @@ class UserProfileService {
   }
 
   /**
- * Send a verification email for a user, storing the token in verificationTokens
- * @param {Object} user - User object containing _key, email, and optional personalIdentification or loginName
- * @returns {Promise<Object>} Result of the operation
- */
+   * Send a verification email for a user, storing the token in verificationTokens
+   * @param {Object} user - User object containing _key, email, and optional personalIdentification or loginName
+   * @returns {Promise<Object>} Result of the operation
+   */
   async sendVerificationEmail(user) {
     const startTime = Date.now();
     try {

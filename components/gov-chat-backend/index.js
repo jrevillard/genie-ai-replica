@@ -575,6 +575,8 @@ async function initializeServices() {
   await services.queryService.init();
   await services.chatHistoryService.init();
   await services.logsService.init();
+  services.userProfileService.setSessionService(services.sessionService);
+  logger.debug('UserProfileService.setSessionService completed');
   logger.debug('AuthService singleton initialized', {
     methods: Object.getOwnPropertyNames(authService.__proto__).filter(m => m !== 'constructor')
   });

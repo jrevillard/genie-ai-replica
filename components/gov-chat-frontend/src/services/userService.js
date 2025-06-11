@@ -821,10 +821,12 @@ class UserService {
    */
   async forceUserLogout(userId) {
     try {
-      const response = await httpService.post(`admin/users/${userId}/force-logout`);
-      return response;
+      console.log(`[USER SERVICE DEBUG] Attempting force logout for user ${userId} at endpoint: /api/users/admin/users/${userId}/force-logout`);
+      const response = await httpService.post(`users/admin/users/${userId}/force-logout`);
+      console.log(`[USER SERVICE DEBUG] Force logout successful for user ${userId}:`, response.data);
+      return response.data; // Ensure data is returned
     } catch (error) {
-      console.error('Error forcing user logout:', error);
+      console.error(`[USER SERVICE DEBUG] Error forcing logout for user ${userId}:`, error.message, error.response?.data);
       throw error;
     }
   }
@@ -845,12 +847,12 @@ class UserService {
     }
   }
 
-   /**
-   * Force user logout by invalidating their token (admin only)
-   * @param {String} userId - User ID
-   * @returns {Promise} Operation result
-   */
-   async forceUserLogout(userId) {
+  /**
+  * Force user logout by invalidating their token (admin only)
+  * @param {String} userId - User ID
+  * @returns {Promise} Operation result
+  */
+  async forceUserLogout(userId) {
     try {
       console.log(`[USER SERVICE DEBUG] Attempting force logout for user ${userId} at endpoint: /api/users/admin/users/${userId}/force-logout`);
       const response = await httpService.post(`users/admin/users/${userId}/force-logout`);

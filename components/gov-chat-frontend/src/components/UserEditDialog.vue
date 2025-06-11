@@ -664,11 +664,13 @@ export default {
         this.isSaving = true;
         this.operationMessage = "";
 
-        // Call service to invalidate token - using the new admin method
         const response = await userService.forceUserLogout(this.userId);
+        console.log(
+          "[FORCE LOGOUT DEBUG] Response:",
+          JSON.stringify(response, null, 2)
+        );
 
-        if (response && response.data && response.data.success) {
-          // Update user data
+        if (response && response.success) {
           this.userData.accessToken = null;
           this.showMessage(
             this.translate(
@@ -677,13 +679,15 @@ export default {
             ),
             true
           );
-
-          // Emit event to parent component
           this.$emit("user-updated", {
             userId: this.userId,
             changes: { accessToken: null },
           });
         } else {
+          console.warn(
+            "[FORCE LOGOUT DEBUG] Unexpected response structure:",
+            response
+          );
           this.showMessage(
             this.translate(
               "admin.userEdit.logoutFailed",
@@ -693,7 +697,11 @@ export default {
           );
         }
       } catch (error) {
-        console.error("Error forcing logout:", error);
+        console.error(
+          "[FORCE LOGOUT DEBUG] Error:",
+          error.message,
+          error.stack
+        );
         this.showMessage(
           this.translate(
             "admin.userEdit.errorForcingLogout",

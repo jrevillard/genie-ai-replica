@@ -182,6 +182,10 @@ curl -X DELETE http://<remote-node-ip>:9981/api/files/1748524213244-962969549-Ex
 - Users authenticated as administrators can access all the file operations.
 - File access is not restricted to intranet or localhost; remote access is supported.
 
+## Notes
+
+* For metadata-related operations, please see [`README_metadata.md`](./README_metadata.md) for more details.
+
 ## Extending
 
 * Hybrid Upload/Ingest feature: Default to Manual Ingest, but Offer "Auto-Ingest" as a Setting

@@ -95,11 +95,78 @@ const getFileMetadata = async (filePath, originalFilename, mimeType) => {
   }
 };
 
+/**
+ * Get metadata file path for a given file
+ * It appends "_meta.json" to the original filename.
+ */
+function getMetadataFilePath(filePath) {
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
+  return path.join(dir, `${base}_meta.json`);
+};
+
+/**
+ * Count lines in a text file
+ */
+const getTxtLineCount = async (filePath) => {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    return content.split('\n').length;
+  } catch {
+    return null; // Return null if file reading fails
+  }
+};
+
+/**
+ * Count words in a text file
+ */
+const getTxtWordCount = async (filePath) => {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    return content.split(/\s+/).filter(word => word.length > 0).length;
+  }
+  catch {
+    return null; // Return null if file reading fails
+  }
+};
+
+const getPdfPageCount = async (filePath) => {
+  try {
+    const pdf = require('pdf-parse');
+    const dataBuffer = await fs.readFile(filePath);
+    const data = await pdf(dataBuffer);
+    return data.numpages || null;
+  } catch (error) {
+    console.error(`Failed to extract PDF page count: ${error.message}`);
+    return null; // Return null if extraction fails
+  }
+};
+
+const getDocxWordCount = async (filePath) => {
+  try {
+    const docx = require('docx-parser');
+    const content = await docx.parseDocx(filePath);
+    return content.split(/\s+/).filter(word => word.length > 0).length;
+  } catch (error) {
+    console.error(`Failed to extract DOCX word count: ${error.message}`);
+    return null; // Return null if extraction fails
+  }
+};
+
+
+
+
+
 module.exports = {
   generateUniqueFilename,
   ensureDirectoryExists,
   saveFileToDisk,
   deleteFile,
-  getFileSize,
-  getFileMetadata
+  getFileSize, // To be edited
+  getFileMetadata, // To be edited
+  getMetadataFilePath,
+  getTxtLineCount,
+  getTxtWordCount,
+  getPdfPageCount,
+  getDocxWordCount
 };

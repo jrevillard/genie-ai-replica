@@ -4,7 +4,7 @@ const appConfig = require('./config/appConfig');
 const { logger } = require('./shared-lib/logger');
 
 const PORT = appConfig.port || process.env.PORT || 3000;
-const HOST = appConfig.host || process.env.HOST || 'localhost';
+const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 
 // Graceful shutdown function
 const gracefulShutdown = (signal) => {

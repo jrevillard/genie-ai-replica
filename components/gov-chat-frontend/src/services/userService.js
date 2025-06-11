@@ -86,7 +86,7 @@ class UserService {
    * Log out the user
    * @returns {Promise} Promise with logout result
    */
-  
+
   async logout() {
     try {
       const userData = this.getCurrentUser();
@@ -634,20 +634,20 @@ class UserService {
  * @param {string} email - Email to check
  * @returns {Promise<boolean>} True if email is available
  */
-async checkEmailAvailability(email) {
-  try {
-    // Direct approach - manually construct the URL with the email parameter
-    const encodedEmail = encodeURIComponent(email);
-    const url = `${this.userEndpoint}/check-email?email=${encodedEmail}`;
-    console.log(`Checking email availability at: ${url}`);
-    
-    const response = await httpService.get(url);
-    return response.data.available;
-  } catch (error) {
-    console.error('Error checking email availability:', error);
-    return false;
+  async checkEmailAvailability(email) {
+    try {
+      // Direct approach - manually construct the URL with the email parameter
+      const encodedEmail = encodeURIComponent(email);
+      const url = `${this.userEndpoint}/check-email?email=${encodedEmail}`;
+      console.log(`Checking email availability at: ${url}`);
+
+      const response = await httpService.get(url);
+      return response.data.available;
+    } catch (error) {
+      console.error('Error checking email availability:', error);
+      return false;
+    }
   }
-}
 
   /**
    * Check if passwords match
@@ -677,7 +677,7 @@ async checkEmailAvailability(email) {
       throw error;
     }
   }
-  
+
   /**
    * Permanently delete user account
    * @param {string} password - Password confirmation for security
@@ -690,12 +690,12 @@ async checkEmailAvailability(email) {
         password: this.hashPassword(password),
         reason
       });
-      
+
       // If successful, clear user data from local storage
       if (response.data && response.data.success) {
         this.clearUserData();
       }
-      
+
       return response.data;
     } catch (error) {
       console.error('Error deleting account:', error);
@@ -745,21 +745,6 @@ async checkEmailAvailability(email) {
       return response;
     } catch (error) {
       console.error('Error verifying user email:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Force user logout by invalidating their token (admin only)
-   * @param {String} userId - User ID
-   * @returns {Promise} Operation result
-   */
-  async forceUserLogout(userId) {
-    try {
-      const response = await httpService.post(`admin/users/${userId}/force-logout`);
-      return response;
-    } catch (error) {
-      console.error('Error forcing user logout:', error);
       throw error;
     }
   }
@@ -856,6 +841,23 @@ async checkEmailAvailability(email) {
       return response.data;
     } catch (error) {
       console.error('Verification email resend error:', error.response || error);
+      throw error;
+    }
+  }
+
+   /**
+   * Force user logout by invalidating their token (admin only)
+   * @param {String} userId - User ID
+   * @returns {Promise} Operation result
+   */
+   async forceUserLogout(userId) {
+    try {
+      console.log(`[USER SERVICE DEBUG] Attempting force logout for user ${userId} at endpoint: /api/users/admin/users/${userId}/force-logout`);
+      const response = await httpService.post(`users/admin/users/${userId}/force-logout`);
+      console.log(`[USER SERVICE DEBUG] Force logout successful for user ${userId}:`, response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`[USER SERVICE DEBUG] Error forcing logout for user ${userId}:`, error.message, error.response?.data);
       throw error;
     }
   }

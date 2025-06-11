@@ -684,6 +684,115 @@ class UserProfileService {
   }
 
   /**
+ * Force logout a user by invalidating their tokens and ending all active sessions
+ * @param {string} userId - User ID to force logout
+ * @param {string} adminId - Admin user ID performing the action
+ * @returns {Promise<Object>} Result of the operation
+ */
+  async forceUserLogout(userId, adminId) {
+    const startTime = Date.now();
+    logger.info('UserProfileService.force_user_logout_start', {
+      userId,
+      adminId,
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      // Check if user exists
+      const userExists = await this.userExists(userId);
+      if (!userExists) {
+        logger.warn('UserProfileService.user_not_found', {
+          userId,
+          adminId,
+          timestamp: new Date().toISOString()
+        });
+        throw new Error('User not found');
+      }
+
+      logger.info('UserProfileService.user_found_for_force_logout', {
+        userId,
+        adminId,
+        timestamp: new Date().toISOString()
+      });
+
+      // Perform logout operations in a transaction
+      const result = await this.db.transaction(['users', 'sessions'], async (txn) => {
+        // Retrieve user document
+        const users = txn.collection('users');
+        const user = await users.document(userId);
+        logger.info('UserProfileService.user_document_retrieved', {
+          userId,
+          adminId,
+          email: user.email,
+          hasAccessToken: !!user.accessToken,
+          timestamp: new Date().toISOString()
+        });
+
+        // Clear tokens
+        await users.update(userId, {
+          accessToken: null,
+          refreshToken: null,
+          updatedAt: new Date().toISOString()
+        });
+        logger.info('UserProfileService.tokens_cleared', {
+          userId,
+          adminId,
+          timestamp: new Date().toISOString()
+        });
+
+        // Get and end all active sessions
+        const sessions = await this.sessionService.getUserSessions(userId, true);
+        logger.info('UserProfileService.active_sessions_retrieved', {
+          userId,
+          adminId,
+          sessionCount: sessions.length,
+          sessionIds: sessions.map(s => s._key),
+          timestamp: new Date().toISOString()
+        });
+
+        const sessionsCollection = txn.collection('sessions');
+        for (const session of sessions) {
+          await sessionsCollection.update(session._key, {
+            active: false,
+            endTime: new Date().toISOString()
+          });
+          logger.info('UserProfileService.session_ended', {
+            userId,
+            adminId,
+            sessionId: session._key,
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        return { accessToken: user.accessToken, sessionCount: sessions.length };
+      });
+
+      logger.info('UserProfileService.force_user_logout_completed', {
+        userId,
+        adminId,
+        sessionCount: result.sessionCount,
+        durationMs: Date.now() - startTime,
+        timestamp: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        message: 'User logged out successfully'
+      };
+    } catch (error) {
+      logger.error('UserProfileService.force_user_logout_failed', {
+        userId,
+        adminId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
+  }
+
+  /**
  * Send a verification email for a user, storing the token in verificationTokens
  * @param {Object} user - User object containing _key, email, and optional personalIdentification or loginName
  * @returns {Promise<Object>} Result of the operation

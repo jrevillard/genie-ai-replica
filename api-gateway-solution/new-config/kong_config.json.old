@@ -152,36 +152,6 @@
       "tags": null
     },
     {
-      "name": "user-admin-route",
-      "id": "b7c9d2a3-8e4f-4d8a-9b7c-5d6e8f9a0b1c",
-      "service": {"name": "express-api"},
-      "paths": ["/api/users/admin/users"],
-      "strip_path": false,
-      "preserve_host": true,
-      "regex_priority": 0,
-      "path_handling": "v0",
-      "request_buffering": true,
-      "response_buffering": true,
-      "https_redirect_status_code": 426,
-      "protocols": ["http", "https"],
-      "methods": null,
-      "hosts": null,
-      "headers": null,
-      "snis": null,
-      "sources": null,
-      "destinations": null,
-      "tags": null,
-      "plugins": [
-        {
-          "name": "jwt",
-          "config": {
-            "key_claim_name": "iss",
-            "secret_is_base64": false
-          }
-        }
-      ]
-    },
-    {
       "name": "session-route",
       "id": "58777b89-a66d-438a-a399-b7d3bc67990e",
       "service": {"name": "express-api"},

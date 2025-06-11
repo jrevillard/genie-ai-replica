@@ -833,3 +833,100 @@
 [2025-06-10 22:34:36] Target e2e-109-51:3000 already exists, skipping
 [2025-06-10 22:34:36] Configuration applied successfully
 [2025-06-10 22:34:36] Operation completed successfully
+[2025-06-11 08:44:49] Applying configuration from kong_config.json
+[2025-06-11 08:44:49] Processing service express-api
+[2025-06-11 08:44:50] Service express-api processed successfully
+[2025-06-11 08:44:50] Processing route api-fallback
+[2025-06-11 08:44:50] Route api-fallback processed successfully
+[2025-06-11 08:44:50] No plugins found for api-fallback
+[2025-06-11 08:44:50] Processing route auth-route
+[2025-06-11 08:44:50] Route auth-route processed successfully
+[2025-06-11 08:44:50] No plugins found for auth-route
+[2025-06-11 08:44:50] Processing route auth-refresh-route
+[2025-06-11 08:44:50] Route auth-refresh-route processed successfully
+[2025-06-11 08:44:50] No plugins found for auth-refresh-route
+[2025-06-11 08:44:50] Processing route auth-login-route
+[2025-06-11 08:44:50] Route auth-login-route processed successfully
+[2025-06-11 08:44:50] No plugins found for auth-login-route
+[2025-06-11 08:44:50] Processing route user-route
+[2025-06-11 08:44:50] Route user-route processed successfully
+[2025-06-11 08:44:50] No plugins found for user-route
+[2025-06-11 08:44:50] Processing route user-admin-route
+[2025-06-11 08:44:50] Route user-admin-route processed successfully
+[2025-06-11 08:44:50] No plugins found for user-admin-route
+[2025-06-11 08:44:50] Processing route session-route
+[2025-06-11 08:44:51] Route session-route processed successfully
+[2025-06-11 08:44:51] No plugins found for session-route
+[2025-06-11 08:44:51] Processing route query-route
+[2025-06-11 08:44:51] Route query-route processed successfully
+[2025-06-11 08:44:51] No plugins found for query-route
+[2025-06-11 08:44:51] Processing route service-route
+[2025-06-11 08:44:51] Route service-route processed successfully
+[2025-06-11 08:44:51] No plugins found for service-route
+[2025-06-11 08:44:51] Processing route service-category-route
+[2025-06-11 08:44:51] Route service-category-route processed successfully
+[2025-06-11 08:44:51] No plugins found for service-category-route
+[2025-06-11 08:44:51] Processing route database-operations-route
+[2025-06-11 08:44:51] Route database-operations-route processed successfully
+[2025-06-11 08:44:51] No plugins found for database-operations-route
+[2025-06-11 08:44:51] Processing route analytics-route
+[2025-06-11 08:44:51] Route analytics-route processed successfully
+[2025-06-11 08:44:51] No plugins found for analytics-route
+[2025-06-11 08:44:51] Processing route logger-route
+[2025-06-11 08:44:52] Route logger-route processed successfully
+[2025-06-11 08:44:52] No plugins found for logger-route
+[2025-06-11 08:44:52] Processing route security-route
+[2025-06-11 08:44:52] Route security-route processed successfully
+[2025-06-11 08:44:52] No plugins found for security-route
+[2025-06-11 08:44:52] Processing route admin-route
+[2025-06-11 08:44:52] Route admin-route processed successfully
+[2025-06-11 08:44:52] No plugins found for admin-route
+[2025-06-11 08:44:52] Processing route chat-history-route
+[2025-06-11 08:44:52] Route chat-history-route processed successfully
+[2025-06-11 08:44:52] Processing plugin cors for chat-history-route
+[2025-06-11 08:44:52] Plugin cors for chat-history-route completed successfully
+[2025-06-11 08:44:52] Processing plugin rate-limiting for chat-history-route
+[2025-06-11 08:44:52] Plugin rate-limiting for chat-history-route completed successfully
+[2025-06-11 08:44:52] Processing plugin file-log for chat-history-route
+[2025-06-11 08:44:52] Plugin file-log for chat-history-route completed successfully
+[2025-06-11 08:44:52] Processing route folder-main-route
+[2025-06-11 08:44:53] Route folder-main-route processed successfully
+[2025-06-11 08:44:53] No plugins found for folder-main-route
+[2025-06-11 08:44:53] Processing route folder-search-route
+[2025-06-11 08:44:53] Route folder-search-route processed successfully
+[2025-06-11 08:44:53] No plugins found for folder-search-route
+[2025-06-11 08:44:53] Processing route folder-shared-route
+[2025-06-11 08:44:53] Route folder-shared-route processed successfully
+[2025-06-11 08:44:53] No plugins found for folder-shared-route
+[2025-06-11 08:44:53] Processing route folder-reorder-route
+[2025-06-11 08:44:53] Route folder-reorder-route processed successfully
+[2025-06-11 08:44:53] No plugins found for folder-reorder-route
+[2025-06-11 08:44:53] Processing route folder-detail-route
+[2025-06-11 08:44:53] Route folder-detail-route processed successfully
+[2025-06-11 08:44:53] No plugins found for folder-detail-route
+[2025-06-11 08:44:53] Processing route conversation-move-route
+[2025-06-11 08:44:53] Route conversation-move-route processed successfully
+[2025-06-11 08:44:53] No plugins found for conversation-move-route
+[2025-06-11 08:44:53] Processing route conversation-folder-route
+[2025-06-11 08:44:53] Route conversation-folder-route processed successfully
+[2025-06-11 08:44:53] No plugins found for conversation-folder-route
+[2025-06-11 08:44:54] Processing service plugin request-transformer
+[2025-06-11 08:44:54] Service plugin request-transformer processed successfully
+[2025-06-11 08:44:54] Processing service plugin rate-limiting
+[2025-06-11 08:44:54] Service plugin rate-limiting processed successfully
+[2025-06-11 08:44:54] Processing service plugin cors
+[2025-06-11 08:44:54] Service plugin cors processed successfully
+[2025-06-11 08:44:54] Processing service plugin file-log
+[2025-06-11 08:44:54] Service plugin file-log processed successfully
+[2025-06-11 08:44:54] Processing service plugin response-transformer
+[2025-06-11 08:44:54] Service plugin response-transformer processed successfully
+[2025-06-11 08:44:54] Processing service plugin request-termination
+[2025-06-11 08:44:54] Service plugin request-termination processed successfully
+[2025-06-11 08:44:54] Processing global plugin prometheus
+[2025-06-11 08:44:54] Global plugin prometheus processed successfully
+[2025-06-11 08:44:54] Processing upstream express-api-servers
+[2025-06-11 08:44:54] Upstream express-api-servers processed successfully
+[2025-06-11 08:44:54] No targets found for upstream express-api-servers
+[2025-06-11 08:44:55] Target e2e-109-51:3000 already exists, skipping
+[2025-06-11 08:44:55] Configuration applied successfully
+[2025-06-11 08:44:55] Operation completed successfully

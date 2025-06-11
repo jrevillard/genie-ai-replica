@@ -61,19 +61,11 @@
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": null,
-      "plugins": [
-        {
-          "name": "jwt",
-          "config": {
-            "key_claim_name": "iss",
-            "secret_is_base64": false
-          }
-        }
-      ]
+      "tags": null
     },
     {
       "name": "auth-refresh-route",
+      "id": "898b5b34-0d52-4cae-b4f4-c42655a55952",
       "service": {"name": "express-api"},
       "paths": ["/api/auth/refresh-token"],
       "strip_path": false,
@@ -90,19 +82,11 @@
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": null,
-      "plugins": [
-        {
-          "name": "jwt",
-          "config": {
-            "key_claim_name": "iss",
-            "secret_is_base64": false
-          }
-        }
-      ]
+      "tags": null
     },
     {
       "name": "auth-login-route",
+      "id": "a19f9d61-ed62-4185-a826-9f3e07547498",
       "service": {"name": "express-api"},
       "paths": ["/api/auth/login"],
       "strip_path": false,
@@ -119,16 +103,7 @@
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": null,
-      "plugins": [
-        {
-          "name": "jwt",
-          "config": {
-            "key_claim_name": "iss",
-            "secret_is_base64": false
-          }
-        }
-      ]
+      "tags": null
     },
     {
       "name": "user-route",
@@ -170,16 +145,7 @@
       "snis": null,
       "sources": null,
       "destinations": null,
-      "tags": null,
-      "plugins": [
-        {
-          "name": "jwt",
-          "config": {
-            "key_claim_name": "iss",
-            "secret_is_base64": false
-          }
-        }
-      ]
+      "tags": null
     },
     {
       "name": "session-route",
@@ -818,6 +784,14 @@
         },
         "threshold": 0
       }
+    }
+  ],
+  "targets": [
+    {
+      "id": "7feebc25-b694-408b-a60f-f93493549f71",
+      "target": "e2e-109-51:3000",
+      "weight": 100,
+      "upstream": {"id": "e52e5e95-ddf6-4089-8a70-34b9b38934fc"}
     }
   ]
 }

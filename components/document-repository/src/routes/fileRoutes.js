@@ -1,6 +1,6 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
-const { uploadSingle } = require('../middlewares/fileUpload');
+const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
 
 const router = express.Router();
 
@@ -8,10 +8,25 @@ const router = express.Router();
 
 /**
  * @route POST /api/files/upload
- * @desc Upload a new file
+ * @desc Upload a single file
  * @access Public
+ * @body {File} file - The file to upload
+ * @body {string} [description] - File description
+ * @body {string} [category] - File category (general, data, reports, documents)
+ * @body {string[]} [tags] - Array of tags
  */
 router.post('/upload', uploadSingle, fileController.uploadFile);
+
+/**
+ * @route POST /api/files/uploas
+ * @desc Upload multiple files
+ * @access Public
+ * @body {File[]} files - Array of files to upload (max 5)
+ * @body {string} [description] - Description for all files
+ * @body {string} [category] - Category for all files (general, data, reports, documents)
+ * @body {string[]} [tags] - Array of tags for all files
+ */
+router.post('/uploads', uploadMultiple, fileController.uploadMultipleFiles);
 
 /**
  * @route GET /api/files

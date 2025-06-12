@@ -57,6 +57,52 @@ components:
               type: string
               example: "uploaded"
 
+    MultipleFileUploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Files uploaded successfully
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              originalName:
+                type: string
+                example: "document1.pdf"
+              mimeType:
+                type: string
+                example: "application/pdf"
+              size:
+                type: integer
+                example: 1024
+              uploadedAt:
+                type: string
+                format: date-time
+                example: "2024-03-20T10:30:00Z"
+              category:
+                type: string
+                enum: [general, data, reports, documents]
+                example: "documents"
+              description:
+                type: string
+                example: "Important document"
+              tags:
+                type: array
+                items:
+                  type: string
+                example: ["important", "finance"]
+              status:
+                type: string
+                example: "uploaded"
+
     ErrorResponse:
       type: object
       properties:
@@ -122,6 +168,83 @@ paths:
                     success: false
                     error: "No file uploaded"
                     message: "Please select a file to upload"
+                invalidFileType:
+                  value:
+                    success: false
+                    error: "Invalid file type"
+                    message: "File type application/exe is not allowed"
+                fileTooLarge:
+                  value:
+                    success: false
+                    error: "File too large"
+                    message: "File size exceeds maximum allowed size of 52428800 bytes"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+
+  /files/uploads:
+    post:
+      tags:
+        - Files
+      summary: Upload multiple files
+      description: Upload up to 10 files with shared metadata
+      operationId: uploadMultipleFiles
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Array of files to upload (maximum 10 files)
+                description:
+                  type: string
+                  description: Optional description for all files
+                  maxLength: 500
+                category:
+                  type: string
+                  description: Category for all files
+                  enum: [general, data, reports, documents]
+                  default: general
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional tags for all files (max 10 tags, each max 50 chars)
+      responses:
+        '201':
+          description: Files uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MultipleFileUploadResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noFiles:
+                  value:
+                    success: false
+                    error: "No files uploaded"
+                    message: "Please select at least one file to upload"
+                tooManyFiles:
+                  value:
+                    success: false
+                    error: "Too many files"
+                    message: "Maximum 5 files allowed per request"
                 invalidFileType:
                   value:
                     success: false

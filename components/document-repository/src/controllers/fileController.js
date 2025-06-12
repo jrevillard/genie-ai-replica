@@ -1,8 +1,12 @@
 const fileService = require('../services/fileService');
+const config = require('../config/appConfig');
 const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../shared-lib/logger');
+
+// Constants
+const MAX_FILES_UPLOAD = config.maxFilesUpload; // Maximum number of files that can be uploaded at once
 
 // Validation schemas
 const uploadSchema = Joi.object({
@@ -28,13 +32,151 @@ const getFilesSchema = Joi.object({
 
 class FileController {
   /**
+   * Process and validate tags from request body
+   * @private
+   * @param {Object} body - Request body
+   * @returns {Array} Processed tags array
+   */
+  _processTags(body) {
+    if (!body.tags) return [];
+    
+    try {
+      let tags = body.tags;
+      
+      // Handle string input
+      if (typeof tags === 'string') {
+        try {
+          // Try to parse as JSON first
+          tags = JSON.parse(tags);
+        } catch (e) {
+          // If JSON parsing fails, treat as comma-separated string
+          tags = tags.split(',').map(tag => tag.trim());
+        }
+      }
+      
+      // Ensure we have an array
+      if (!Array.isArray(tags)) {
+        tags = [tags];
+      }
+      
+      // Filter out empty tags and ensure all tags are strings
+      return tags
+        .map(tag => String(tag).trim())
+        .filter(tag => tag.length > 0);
+    } catch (error) {
+      logger.error('[FILE-CONTROLLER] Error processing tags:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Validate request body against upload schema
+   * @private
+   * @param {Object} body - Request body
+   * @returns {Object} Validation result
+   */
+  _validateUploadRequest(body) {
+    const { error, value } = uploadSchema.validate(body);
+    if (error) {
+      throw {
+        status: 400,
+        error: 'Validation error',
+        message: error.details[0].message
+      };
+    }
+    return value;
+  }
+
+  /**
+   * Handle upload errors
+   * @private
+   * @param {Error} error - Error object
+   * @returns {Object} Error response
+   */
+  _handleUploadError(error) {
+    logger.error('Upload error:', error);
+    
+    if (error.status) {
+      return {
+        status: error.status,
+        response: {
+          success: false,
+          error: error.error,
+          message: error.message
+        }
+      };
+    }
+    
+    if (error.message.includes('File type') && error.message.includes('not allowed')) {
+      return {
+        status: 400,
+        response: {
+          success: false,
+          error: 'Invalid file type',
+          message: error.message
+        }
+      };
+    }
+    
+    if (error.message.includes('File size exceeds')) {
+      return {
+        status: 400,
+        response: {
+          success: false,
+          error: 'File too large',
+          message: error.message
+        }
+      };
+    }
+    
+    if (error.message.includes('virus')) {
+      return {
+        status: 400,
+        response: {
+          success: false,
+          error: 'Security threat detected',
+          message: 'File failed security scan'
+        }
+      };
+    }
+
+    return {
+      status: 500,
+      response: {
+        success: false,
+        error: 'Upload failed',
+        message: 'An error occurred while uploading the file(s)'
+      }
+    };
+  }
+
+  /**
+   * Format file record for response
+   * @private
+   * @param {Object} fileRecord - File record from service
+   * @returns {Object} Formatted file record
+   */
+  _formatFileRecord(fileRecord) {
+    return {
+      id: fileRecord.id,
+      originalName: fileRecord.originalName,
+      mimeType: fileRecord.mimeType,
+      size: fileRecord.size,
+      uploadedAt: fileRecord.uploadedAt,
+      category: fileRecord.category,
+      description: fileRecord.description,
+      tags: fileRecord.tags,
+      status: fileRecord.status
+    };
+  }
+
+  /**
    * Upload a file
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
-  async uploadFile(req, res) {
+  uploadFile = async (req, res) => {
     try {
-      // Check if file was uploaded
       if (!req.file) {
         return res.status(400).json({
           success: false,
@@ -43,84 +185,58 @@ class FileController {
         });
       }
 
-      // Handle tags array from form data
-      if (req.body.tags) {
-        try {
-          // Try to parse as JSON first
-          if (typeof req.body.tags === 'string') {
-            req.body.tags = JSON.parse(req.body.tags);
-          }
-          // If it's not an array, split by comma
-          if (!Array.isArray(req.body.tags)) {
-            req.body.tags = req.body.tags.split(',').map(tag => tag.trim());
-          }
-        } catch (error) {
-          // If JSON parsing fails, treat as comma-separated string
-          req.body.tags = req.body.tags.split(',').map(tag => tag.trim());
-        }
-      }
-
-      // Validate request body
-      const { error, value } = uploadSchema.validate(req.body);
-      if (error) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation error',
-          message: error.details[0].message
-        });
-      }
-
-      // Upload file using service
-      const fileRecord = await fileService.uploadFile(req.file, value);
+      req.body.tags = this._processTags(req.body);
+      const validatedData = this._validateUploadRequest(req.body);
+      const fileRecord = await fileService.uploadFile(req.file, validatedData);
 
       res.status(201).json({
         success: true,
         message: 'File uploaded successfully',
-        data: {
-          id: fileRecord.id,
-          originalName: fileRecord.originalName,
-          mimeType: fileRecord.mimeType,
-          size: fileRecord.size,
-          uploadedAt: fileRecord.uploadedAt,
-          category: fileRecord.category,
-          description: fileRecord.description,
-          tags: fileRecord.tags,
-          status: fileRecord.status
-        }
+        data: this._formatFileRecord(fileRecord)
       });
     } catch (error) {
-      logger.error('Upload error:', error);
-      
-      // Handle specific errors
-      if (error.message.includes('File type') && error.message.includes('not allowed')) {
+      logger.error('[FILE-CONTROLLER] Upload process error:', error);
+      const { status, response } = this._handleUploadError(error);
+      res.status(status).json(response);
+    }
+  }
+
+  /**
+   * Upload multiple files
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  uploadMultipleFiles = async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid file type',
-          message: error.message
-        });
-      }
-      
-      if (error.message.includes('File size exceeds')) {
-        return res.status(400).json({
-          success: false,
-          error: 'File too large',
-          message: error.message
-        });
-      }
-      
-      if (error.message.includes('virus')) {
-        return res.status(400).json({
-          success: false,
-          error: 'Security threat detected',
-          message: 'File failed security scan'
+          error: 'No files uploaded',
+          message: 'Please select at least one file to upload'
         });
       }
 
-      res.status(500).json({
-        success: false,
-        error: 'Upload failed',
-        message: 'An error occurred while uploading the file'
+      if (req.files.length > MAX_FILES_UPLOAD) {
+        return res.status(400).json({
+          success: false,
+          error: 'Too many files',
+          message: `Maximum ${MAX_FILES_UPLOAD} files can be uploaded at once`
+        });
+      }
+
+      req.body.tags = this._processTags(req.body);
+      const validatedData = this._validateUploadRequest(req.body);
+      const uploadPromises = req.files.map(file => fileService.uploadFile(file, validatedData));
+      const fileRecords = await Promise.all(uploadPromises);
+
+      res.status(201).json({
+        success: true,
+        message: 'Files uploaded successfully',
+        data: fileRecords.map(record => this._formatFileRecord(record))
       });
+    } catch (error) {
+      const { status, response } = this._handleUploadError(error);
+      res.status(status).json(response);
     }
   }
 
@@ -418,6 +534,8 @@ class FileController {
       });
     }
   }
+
+  
 }
 
 module.exports = new FileController();

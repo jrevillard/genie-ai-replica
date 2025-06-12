@@ -8,12 +8,13 @@ const config = {
   database: {
     url: process.env.ARANGO_URL || 'http://localhost:8529',
     username: process.env.ARANGO_USERNAME || 'root',
-    password: process.env.ARANGO_PASSWORD || 'Password1234',
+    password: process.env.ARANGO_PASSWORD || 'test',
     databaseName: process.env.ARANGO_DB_NAME || 'document_repository'
   },
 
   // File upload configuration
   upload: {
+    maxFilesUpload: parseInt(process.env.MAX_FILES_UPLOAD) || 10, // Maximum number of files that can be uploaded at once
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024, // 50MB
     uploadDir: process.env.UPLOAD_DIR || './uploads',
     allowedMimeTypes: [

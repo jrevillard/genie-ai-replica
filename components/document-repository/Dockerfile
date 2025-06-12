@@ -22,9 +22,9 @@ RUN npm config set registry https://registry.npmjs.org/ && \
 # Copy app source
 COPY document-repository/src/ ./src/
 
-# Copy shared-lib with all contents
-#RUN rm -rf /app/src/shared-lib/*.js
-COPY shared/lib/ ./scr/shared-lib/
+# Copy shared-lib with all contents\
+RUN rm -rf /app/src/shared-lib/*
+COPY shared/lib/ /app/src/shared-lib/
 
 # Create directories for uploads and logs
 RUN mkdir -p uploads logs
@@ -32,7 +32,6 @@ RUN mkdir -p uploads logs
 # Debug: List contents of directories
 RUN ls -la /app && \
     ls -la /app/src/shared-lib
-
 RUN [ -f /app/src/shared-lib/logger.js ] || { echo "logger.js missing!"; exit 1; }
 RUN [ -f /app/src/shared-lib/db-connection-service.js ] || { echo "db-connection-service.js missing!"; exit 1; }
 
@@ -40,12 +39,13 @@ RUN [ -f /app/src/shared-lib/db-connection-service.js ] || { echo "db-connection
 EXPOSE 3000
 
 # Set environment variables
+ARG ARANGO_PASSWORD
 ENV NODE_ENV=development
 ENV PORT=3000
-ENV ARANGO_URL=http://localhost:8529
+ENV ARANGO_URL=http://arango-vector-db:8529
 ENV ARANGO_DB=document_repository
 ENV ARANGO_USER=root
-ENV ARANGO_PASSWORD=Password1234
+ENV ARANGO_PASSWORD=$ARANGO_PASSWORD
 ENV UPLOAD_DIR=./uploads
 ENV MAX_FILE_SIZE=5242880
 

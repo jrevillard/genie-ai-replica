@@ -421,7 +421,7 @@ export default {
       viewAllResults: 'Ona Matokeo Yote',
       logType: 'Aina',
       logCount: 'Idadi',
-      
+
       // Log types
       logTypes: {
         connectionTimeout: 'Muda wa muunganisho umekwisha',
@@ -431,7 +431,7 @@ export default {
         slowQuery: 'Utendaji wa polepole wa hoja',
         rateLimit: 'Kikomo cha kiwango kinakaribia'
       },
-      
+
       // Security section
       security: {
         criticalVulnerabilities: 'Udhaifu Mkubwa',
@@ -448,7 +448,7 @@ export default {
         noVulnerabilitiesFound: 'Hakuna Udhaifu Uliopatikana',
         systemSecure: 'Mfumo wako unaonekana kuwa salama. Endelea kufuatilia mara kwa mara.'
       },
-      
+
       // Search fields
       searchFields: {
         all: 'Sehemu Zote',
@@ -456,13 +456,13 @@ export default {
         email: 'Barua pepe',
         role: 'Wajibu'
       },
-      
+
       // User search
       userSearch: {
         resultsFound: 'Imepatikana {total} watumiaji wanaofanana na "{term}"',
         error: 'Hitilafu katika kutafuta watumiaji'
       },
-      
+
       logSearch: {
         noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
         resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu'
@@ -666,14 +666,19 @@ export default {
       week1: "Wiki iliyopita",
       current: "Sasa"
     },
-    
+
     errors: {
       loading: "Imeshindwa kupakia data ya kuridhika. Tafadhali jaribu tena.",
     },
-    
+
     status: {
       loading: "Inapakia...",
-      noData: "Hakuna data inayopatikana"
+      noData: "Hakuna data inayopatikana",
+      online: "Mfumo Uko Mtandaoni",
+      offline: "Mfumo Hauko Mtandaoni",
+      responseTime: "Wastani wa Muda wa Kumudu",
+      queueLength: "Foleni",
+      uptime: "Muda wa Kuendelea",
     },
 
     // Period dropdown options
@@ -731,7 +736,7 @@ export default {
     ratings: {
       poor: "Dhaifu",
       average: "Wastani",
-      good: "Nzuri", 
+      good: "Nzuri",
       excellent: "Bora"
     },
 
@@ -1680,7 +1685,22 @@ export default {
     contextRemoved: 'Muktadha umeondolewa kutoka kwenye swali lako',
     sessionUpdated: 'Kikao kimesasishwa',
     newChatStarted: 'Mazungumzo mapya yameanzishwa',
-    loadError: 'Imeshindwa kupakia historia ya mazungumzo'
+    loadError: 'Imeshindwa kupakia historia ya mazungumzo',
+    responsePrefix: "Nimepokea ujumbe wako",
+    withContext: "na muktadha",
+    sessionUpdated: "Kikao kimesasishwa.",
+    newChatStarted: "Mazungumzo mapya yameanzishwa.",
+    conversationLoaded: "Mazungumzo yamepakiwa kwa mafanikio!",
+    loadError: "Imeshindwa kupakia mazungumzo.",
+    saveConfirmTitle: "Hifadhi Mazungumzo Yaliyopo",
+    saveConfirmMessage: "Hifadhi mazungumzo yaliyopo?",
+    loadConfirmTitle: "Pakia Mazungumzo Yaliyopo",
+    loadConfirmMessage: "Una mabadiliko ambayo hayajahifadhiwa. Je, unataka kuyatupa na kupakia mazungumzo yaliyochaguliwa, au kuhifadhi mazungumzo ya sasa kwanza?",
+    loadAndDiscard: "Pakia na Tupa",
+    saveAndLoad: "Hifadhi na Pakia",
+    saveAndStartNew: "Hifadhi na Anza Mazungumzo Mapya",
+    discardAndStartNew: "Tupa na Anza Mazungumzo Mapya",
+    newChatTitle: "Anza Mazungumzo Mapya"
   },
   quickhelp: {
     applyForID: "Omba kitambulisho",

@@ -300,7 +300,7 @@ export default {
       viewAllResults: 'Voir tous les résultats',
       logType: 'Type',
       logCount: 'Nombre',
-      
+
       // Log types
       logTypes: {
         connectionTimeout: 'Délai de connexion dépassé',
@@ -310,7 +310,7 @@ export default {
         slowQuery: 'Performance lente de requête',
         rateLimit: 'Limite de taux proche'
       },
-      
+
       // Security section
       security: {
         criticalVulnerabilities: 'Vulnérabilités critiques',
@@ -327,7 +327,7 @@ export default {
         noVulnerabilitiesFound: 'Aucune vulnérabilité trouvée',
         systemSecure: 'Votre système semble être sécurisé. Continuez à le surveiller régulièrement.'
       },
-      
+
       // Search fields
       searchFields: {
         all: 'Tous les champs',
@@ -335,13 +335,13 @@ export default {
         email: 'Email',
         role: 'Rôle'
       },
-      
+
       // User search
       userSearch: {
         resultsFound: 'Trouvé {total} utilisateurs correspondant à "{term}"',
         error: 'Erreur lors de la recherche d\'utilisateurs'
       },
-      
+
       logSearch: {
         noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
         resultsFound: 'Trouvé {count} entrées de journal'
@@ -547,14 +547,19 @@ export default {
       week1: "Semaine dernière",
       current: "Actuel"
     },
-    
+
     errors: {
       loading: "Échec du chargement des données de satisfaction. Veuillez réessayer.",
     },
-    
+
     status: {
       loading: "Chargement...",
-      noData: "Aucune donnée disponible"
+      noData: "Aucune donnée disponible",
+      online: "Système en Ligne",
+      offline: "Système Hors Ligne",
+      responseTime: "Temps de Réponse Moyen",
+      queueLength: "File d'Attente",
+      uptime: "Temps de Fonctionnement"
     },
 
     // Period dropdown options
@@ -610,7 +615,7 @@ export default {
     ratings: {
       poor: "Faible",
       average: "Moyen",
-      good: "Bon", 
+      good: "Bon",
       excellent: "Excellent"
     },
     // Trend indicators
@@ -1556,7 +1561,22 @@ export default {
     contextRemoved: 'Contexte supprimé de votre requête',
     sessionUpdated: 'Session mise à jour',
     newChatStarted: 'Nouvelle conversation démarrée',
-    loadError: 'Impossible de charger l\'historique de conversation'
+    loadError: 'Impossible de charger l\'historique de conversation',
+    responsePrefix: "J'ai reçu votre message",
+    withContext: "avec le contexte",
+    sessionUpdated: "Session mise à jour.",
+    newChatStarted: "Nouvelle conversation démarrée.",
+    conversationLoaded: "Conversation chargée avec succès !",
+    loadError: "Impossible de charger la conversation.",
+    saveConfirmTitle: "Enregistrer la Conversation Existante",
+    saveConfirmMessage: "Enregistrer la conversation existante ?",
+    loadConfirmTitle: "Charger une Conversation Existante",
+    loadConfirmMessage: "Vous avez des modifications non enregistrées. Voulez-vous les abandonner et charger la conversation sélectionnée, ou enregistrer la conversation actuelle d'abord ?",
+    loadAndDiscard: "Charger et Abandonner",
+    saveAndLoad: "Enregistrer et Charger",
+    saveAndStartNew: "Enregistrer et Démarrer une Nouvelle",
+    discardAndStartNew: "Abandonner et Démarrer une Nouvelle",
+    newChatTitle: "Démarrer une Nouvelle Conversation"
   },
   quickhelp: {
     applyForID: "Demander une pièce d'identité",

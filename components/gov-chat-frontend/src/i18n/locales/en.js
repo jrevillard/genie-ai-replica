@@ -302,7 +302,7 @@ export default {
       viewAllResults: 'View All Results',
       logType: 'Type',
       logCount: 'Count',
-      
+
       // Log types
       logTypes: {
         connectionTimeout: 'Connection timeout',
@@ -312,7 +312,7 @@ export default {
         slowQuery: 'Slow query performance',
         rateLimit: 'Rate limit approaching'
       },
-      
+
       // Security section
       security: {
         criticalVulnerabilities: 'Critical Vulnerabilities',
@@ -329,7 +329,7 @@ export default {
         noVulnerabilitiesFound: 'No Vulnerabilities Found',
         systemSecure: 'Your system appears to be secure. Continue monitoring regularly.'
       },
-      
+
       // Search fields
       searchFields: {
         all: 'All Fields',
@@ -337,13 +337,13 @@ export default {
         email: 'Email',
         role: 'Role'
       },
-      
+
       // User search
       userSearch: {
         resultsFound: 'Found {total} users matching "{term}"',
         error: 'Error searching users'
       },
-      
+
       logSearch: {
         noResultsFound: 'No logs matched your search criteria',
         resultsFound: 'Found {count} log entries'
@@ -547,14 +547,19 @@ export default {
       week1: "Last Week",
       current: "Current"
     },
-    
+
     errors: {
       loading: "Failed to load satisfaction data. Please try again.",
     },
-    
+
     status: {
       loading: "Loading...",
-      noData: "No data available"
+      noData: "No data available",
+      online: "System Online",
+      offline: "System Offline",
+      responseTime: "Avg. Response Time",
+      queueLength: "Queue",
+      uptime: "Uptime"
     },
 
     // Period dropdown options
@@ -652,7 +657,7 @@ export default {
     year: 'Last Year',
     uniqueUsers: 'Unique Users',
     satisfactionRate: 'Satisfaction Rate',
-    satisfactionAnalysis: 'User Satisfaction Analysis'   
+    satisfactionAnalysis: 'User Satisfaction Analysis'
   },
   brandName: 'Huduma AI: Your Digital Government Assistant',
   nav: {
@@ -772,7 +777,8 @@ export default {
     chatMoved: "Conversation moved successfully",
     errorMovingChat: "Failed to move conversation",
     noPreview: "No preview available",
-    searchConversations: 'Search conversations...'
+    searchConversations: 'Search conversations...',
+    title: "Info & Resources",
   },
   leftPanel: {
     cat1: {
@@ -1558,6 +1564,21 @@ export default {
     sessionUpdated: 'Session updated',
     newChatStarted: 'Started a new conversation',
     loadError: 'Unable to load chat history',
+    responsePrefix: "I received your message",
+    withContext: "with context",
+    sessionUpdated: "Session updated.",
+    newChatStarted: "Started a new conversation.",
+    conversationLoaded: "Conversation loaded successfully!",
+    loadError: "Unable to load conversation.",
+    saveConfirmTitle: "Save Existing Conversation",
+    saveConfirmMessage: "Save existing conversation?",
+    loadConfirmTitle: "Load Existing Conversation",
+    loadConfirmMessage: "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?",
+    loadAndDiscard: "Load and Discard",
+    saveAndLoad: "Save and Load",
+    saveAndStartNew: "Save and Start New",
+    discardAndStartNew: "Discard and Start New",
+    newChatTitle: "Start New Chat"
   },
   quickhelp: {
     applyForID: "Apply for ID",

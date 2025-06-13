@@ -50,7 +50,7 @@ let config = {
   },
   custom: {}
 };
-async function loadConfig() {
+export async function loadConfig() {
   try {
     const response = await fetch('/config/genie-ai-config.json');
     if (!response.ok) {
@@ -59,21 +59,7 @@ async function loadConfig() {
     const data = await response.json();
     config = { ...config, ...data }; // Merge fetched config with defaults
     console.log('Configuration loaded:', config);
-
-    // Dynamically set CSS variables based on config
-    const root = document.documentElement;
-    if (config.theme) {
-      // Navbar colors
-      if (config.theme.navbar) {
-        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
-        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
-        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
-      }
-      // Accent colors
-      root.style.setProperty('--accent-color', config.theme.primaryColor);
-      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20)); // Darken by 20%
-      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor); // Use secondaryColor as an accent
-    }
+    console.log('Quick Help config:', config.features?.chat?.quickHelp);
   } catch (error) {
     console.error('Error loading config:', error);
     console.warn('Using default configuration');
@@ -91,6 +77,7 @@ async function loadConfig() {
       root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
     }
   }
+  return config;
 }
 
 // Helper function to adjust color brightness (for hover states)

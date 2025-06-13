@@ -1,6 +1,85 @@
-# File System Backend
+# Document Repository Service
 
 This service provides a backend file system for managing file CRUD + search + ingest&extract operations. It is designed to connect with the frontend located at `/root/chat-ui-vue-app/gov-chat-frontend`.
+
+```mermaid
+%%{init: {'theme':'forest'}}%%
+journey
+    title User Journey for Document Handling
+
+    section Upload & Security
+        Admin selects file: 5:Admin
+        File scanned and metadata auto-extracted: 3:System
+        Metadata is stored in ArangoDB: 4:System
+
+    section File Management (Any Time)
+        Admin views and deletes files: 7:Admin
+        Admin views and edits metadata: 5:Admin
+        Admin searches files by metadata: 5:Admin
+
+    section Ingestion into / Extract from Knowledge Base
+        Admin chooses to ingest file: 5:Admin
+        File sent to dataprep service: 4:System
+        File processed. Metadata enriched automatically: 5:System
+        Admin chooses to retract file (optional): 5:Admin
+        Chunks, entities and relations are deleted: 5:System
+
+    section Search & Traceability
+        User sends a question: 5:Admin, User
+        RAG workflow (enhanced by labels): 5:System
+        User sees source document besides output: 5:Admin, User
+```
+
+```mermaid
+---
+config:
+  layout: dagre,
+  theme: base
+title: Document Repository Service Workflow
+---
+flowchart TD
+ subgraph User_Side["User_Side"]
+        A["User Uploads File"]
+        B["Edit/View Metadata"]
+        C["Search Files by Metadata"]
+        D["Ingest/Retract File"]
+        P["Read/Delete File"]
+  end
+ subgraph Document_Repository_CPU_Node["Document_Repository_CPU_Node"]
+        E["Security Check ClamAV"]
+        O(["File Local Storage"])
+        F["Extract Basic Metadata"]
+        G(["Metadata in ArangoDB"])
+        H["Send File to Dataprep / Delete Chunks, Entities and Relations from Database"]
+  end
+ subgraph Dataprep_Microservice_GPU_Node["Dataprep_Microservice_GPU_Node"]
+        I["Extract Full Text and Language"]
+        J["Chunk Text and Embed"]
+        K["Extract Labels if not given"]
+        L["Update Metadata in ArangoDB"]
+        Q["Knowledge Graph Construction"]
+  end
+ subgraph Downstream["Downstream"]
+        N["Show Source File\nvia Metadata Link"]
+        M["LLM Query Answering (Including Retrieval + Textgen)"]
+  end
+    A --> E
+    E --> O & F
+    F --> G
+    B --> G
+    C --> G
+    G --> O & M
+    D <--> H
+    H <--> I
+    I --> J
+    J --> K
+    K --> L
+    M --> N
+    L --> M
+    P --> O
+    J --> Q
+    Q --> M
+```
 
 ## Supported File Types
 The file system supports various file types, including but not limited to:
@@ -12,16 +91,16 @@ The file system supports various file types, including but not limited to:
 ## Feature Services
 
 - **Upload Files:** Administrators can upload files from their local computers.
-- **Read Files:** Uploaded files are stored in `/root/chat-ui-file-system/uploads` and can be accessed for viewing in browser for all file types.
+- **Read Files:** Uploaded files are stored in `/document-repository/uploads` and can be accessed for viewing in browser for all supported file types.
 - **Download Files:** Files can be downloaded to the administrator's local machine.
 - **Delete Files:** Administrators can remove files from the system.
 - **Virus Scanning:** Files are scanned for viruses before being saved to the file system.
-- **Metadata Extraction:** Metadata such as file labels and language is extracted and stored for search functionality.
+- **Metadata Extraction:** Metadata such as file labels and language is extracted and stored for search functionality. See [`README_metadata.md`](./README_metadata.md) for details.
 - **Search Files:** Users can search files by metadata such as file name, type, and labels.
 - **Ingest Files to Dataprep:** Files can be ingested into the dataprep microservice for further processing.
 - **Retract Files from Dataprep:** Files can be retracted from the dataprep microservice.
 
-## Folder Structure
+## Folder Structure (to be updated)
 
 ```
 document-repository/
@@ -66,12 +145,14 @@ document-repository/
 | Virus scan                | ✔️ (`virusScanner.js`)        |
 | Save to `/uploads` folder | ✔️                            |
 | Read/view/download file   | ✔️                            |
+| Metadata extraction *     | ✔️ (`metadataService.js`)     |
 | Search by metadata        | ✔️                            |
 | Delete file (from disk)   | ✔️                            |
 | Ingest to dataprep        | ✅ via `dataprepClient.js`     |
 | Retract from dataprep     | ✅ via `dataprepClient.js`     |
 
 > ✅ Means this service initiates the action, but the dataprep microservice owns the actual data processing.
+> Metadata extraction is done at both upload time and ingest time, allowing for quick user access and later semantic enrichment. In document-repository, the basic metadata is extracted and stored in the ArangoDB database, while the enrichment is handled by the dataprep microservice.
 
 **Dataprep microservice responsibilities (related to document-repository)**:
 
@@ -95,13 +176,13 @@ document-repository/
 | DELETE | `/files/retract/:filename`  | Retract file from dataprep          |
 | DELETE | `/files/:filename`          | Delete file (and retract if needed) |
 
-## Setup
+## Setup (to be updated)
 
 To set up the file system backend service:
 
 1. **Navigate to the project directory:**
     ```bash
-    cd chat-ui-file-system
+    cd document-repository
     ```
 
 2. **Initialize the project:**
@@ -119,7 +200,7 @@ To set up the file system backend service:
     npm run dev
     ```
 
-## Usage (for testing)
+## Usage (to be updated)
 
 Use the following `curl` commands to interact with the file system backend service. Replace `<remote-node-ip>` with the actual IP address of the remote node if you are accessing it remotely.
 
@@ -191,8 +272,6 @@ curl -X DELETE http://<remote-node-ip>:9981/api/files/1748524213244-962969549-Ex
 * Hybrid Upload/Ingest feature: Default to Manual Ingest, but Offer "Auto-Ingest" as a Setting
 
     By default, uploaded files are **not automatically ingested** into the knowledge base (via the dataprep microservice). This allows users to review or manage files before deciding to include them in retrieval-augmented generation (RAG) workflows. However, for convenience, an **optional auto-ingest setting** can be enabled to automatically push uploaded files to the knowledge base. This setting is configurable and ideal for trusted environments where immediate ingestion is preferred.
-
-> In this case, the files are automatically labelled and the user either has no access to label the files, or can edit the labels after ingestion. But only one metadata file is needed.
 
 ## License
 

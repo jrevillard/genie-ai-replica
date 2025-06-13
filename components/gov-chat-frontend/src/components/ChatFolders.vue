@@ -1964,7 +1964,8 @@ export default {
     },
 
     async handleMoveChat() {
-      if (!this.activeChat) {
+      if (!this.activeChat || !this.destinationFolderId) {
+        console.error("No active chat or destination folder selected");
         return;
       }
       if (!this.currentUser || !this.currentUser._key) {
@@ -2022,8 +2023,17 @@ export default {
             (this.folderCounts[this.destinationFolderId] || 0) + 1;
           this.folderCounts[this.selectedFolderId] = Math.max(0, sourceCount);
           this.folderCounts[this.destinationFolderId] = destCount;
-          this.selectedFolderId = this.destinationFolderId;
-          this.folderSelected = true;
+          // Check if source folder is empty
+          if (sourceCount <= 0 && this.selectedFolderId !== "default") {
+            this.selectedFolderId =
+              this.nonDefaultFolders.length > 0
+                ? this.nonDefaultFolders[0].id
+                : "default";
+            this.folderSelected = this.selectedFolderId !== "default";
+          } else {
+            this.selectedFolderId = this.destinationFolderId;
+            this.folderSelected = true;
+          }
         }
         if (
           !this.$store.state.chatHistory.folderChats.default.includes(
@@ -2048,15 +2058,15 @@ export default {
         );
         this.loadConversationsForCurrentTab();
         if (this.currentSecondLevelTab === "folders") {
-          if (isRemovingFromFolder) {
+          if (isRemovingFromFolder || this.selectedFolderId === "default") {
             if (this.selectedFolderId !== "default") {
-              this.fetchFolderChats(this.selectedFolderId);
+              await this.fetchFolderChats(this.selectedFolderId);
             } else {
               this.conversations = [];
               this.forceDisplayConversations();
             }
           } else {
-            this.selectFolder(this.destinationFolderId);
+            await this.selectFolder(this.selectedFolderId);
           }
         }
       } catch (error) {

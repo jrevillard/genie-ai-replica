@@ -938,7 +938,7 @@ class DatabaseService {
       
       // NEW: Notify all existing proxies that a fresh connection is available
       const proxyCount = this._activeProxies.get(name)?.size || 0;
-      logger.info(`[DB_RECOVERY] í ½í´„ Updated ${proxyCount} existing proxies with fresh connection`);
+      logger.info(`[DB_RECOVERY] ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Updated ${proxyCount} existing proxies with fresh connection`);
       
       // Reset recovery tracking on success
       this._recoveryAttempts.delete(name);
@@ -1108,7 +1108,7 @@ class DatabaseService {
     ];
     
     const message = error.message?.toLowerCase() || '';
-    const code = error.code?.toLowerCase() || '';
+    const code = error.code?.toString()?.toLowerCase() || '';  // âœ… FIX: Convert to string first
     
     const isConnectionError = connectionErrors.some(errCode => 
       code.includes(errCode.toLowerCase()) || 
@@ -1116,7 +1116,7 @@ class DatabaseService {
     );
     
     // Special handling for ArangoDB auth errors which often indicate stale connections
-    if (error.response?.status === 401 || message.includes('not authorized')) {
+    if (error.response?.status === 401 || error.code === 401 || message.includes('not authorized')) {
       logger.debug(`[DB_ERROR] Treating 401/auth error as connection error for recovery`);
       return true;
     }

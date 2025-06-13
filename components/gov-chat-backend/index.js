@@ -21,11 +21,12 @@ const ServiceCategoryService = require('./services/service-category-service');
 const SessionService = require('./services/session-service');
 const logsService = require('./services/logs-service');
 const DatabaseOperationsService = require('./services/database-operations-service');
+const WeatherService = require('./services/weather-service');
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(UploadsDir, { recursive: true });
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Initialize Express app
@@ -39,10 +40,10 @@ app.disable('etag');
 app.disable('x-powered-by');
 
 // Apply comprehensive security headers middleware early
-console.log('Imported shared-lib:', { 
-  logger: typeof logger, 
-  securityHeaders: typeof securityHeaders, 
-  SecurityMiddleware: typeof SecurityMiddleware 
+console.log('Imported shared-lib:', {
+  logger: typeof logger,
+  securityHeaders: typeof securityHeaders,
+  SecurityMiddleware: typeof SecurityMiddleware
 });
 if (!securityHeaders) {
   throw new Error('securityHeaders is undefined');
@@ -217,10 +218,10 @@ const swaggerOptions = {
             messageCount: { type: 'integer', description: 'Number of messages in the conversation' },
             isStarred: { type: 'boolean', description: 'Whether the conversation is starred' },
             isArchived: { type: 'boolean', description: 'Whether the conversation is archived' },
-            tags: { 
-              type: 'array', 
+            tags: {
+              type: 'array',
               items: { type: 'string' },
-              description: 'Tags associated with the conversation' 
+              description: 'Tags associated with the conversation'
             }
           }
         },
@@ -232,16 +233,16 @@ const swaggerOptions = {
             userId: { type: 'string', description: 'ID of the user who sent or received the message' },
             content: { type: 'string', description: 'Message content' },
             timestamp: { type: 'string', format: 'date-time', description: 'Message timestamp' },
-            sender: { 
-              type: 'string', 
+            sender: {
+              type: 'string',
               enum: ['user', 'assistant'],
-              description: 'Sender type (user or assistant)' 
+              description: 'Sender type (user or assistant)'
             },
             queryId: { type: 'string', description: 'Optional ID of a related query (for assistant messages)' },
             readStatus: { type: 'boolean', description: 'Whether the message has been read' },
-            metadata: { 
-              type: 'object', 
-              description: 'Additional message metadata' 
+            metadata: {
+              type: 'object',
+              description: 'Additional message metadata'
             }
           }
         },
@@ -265,7 +266,7 @@ const swaggerOptions = {
           properties: {
             folders: {
               type: 'array',
-              items: { 
+              items: {
                 $ref: '#/components/schemas/Folder'
               }
             }
@@ -276,21 +277,21 @@ const swaggerOptions = {
           properties: {
             conversations: {
               type: 'array',
-              items: { 
+              items: {
                 $ref: '#/components/schemas/Conversation'
               }
             },
-            total: { 
-              type: 'integer', 
-              description: 'Total number of conversations matching the filter criteria' 
+            total: {
+              type: 'integer',
+              description: 'Total number of conversations matching the filter criteria'
             },
-            offset: { 
-              type: 'integer', 
-              description: 'Current offset for pagination' 
+            offset: {
+              type: 'integer',
+              description: 'Current offset for pagination'
             },
-            limit: { 
-              type: 'integer', 
-              description: 'Current limit for pagination' 
+            limit: {
+              type: 'integer',
+              description: 'Current limit for pagination'
             }
           }
         },
@@ -299,21 +300,21 @@ const swaggerOptions = {
           properties: {
             messages: {
               type: 'array',
-              items: { 
+              items: {
                 $ref: '#/components/schemas/Message'
               }
             },
-            total: { 
-              type: 'integer', 
-              description: 'Total number of messages in the conversation' 
+            total: {
+              type: 'integer',
+              description: 'Total number of messages in the conversation'
             },
-            offset: { 
-              type: 'integer', 
-              description: 'Current offset for pagination' 
+            offset: {
+              type: 'integer',
+              description: 'Current offset for pagination'
             },
-            limit: { 
-              type: 'integer', 
-              description: 'Current limit for pagination' 
+            limit: {
+              type: 'integer',
+              description: 'Current limit for pagination'
             }
           }
         },
@@ -379,6 +380,10 @@ const swaggerOptions = {
       {
         name: 'Chat History',
         description: 'Endpoints for managing chat history and conversations'
+      },
+      {
+        name: 'Weather',
+        description: 'Endpoints for fetching weather data'
       }
     ]
   },
@@ -392,10 +397,10 @@ const cspOptions = {
   directives: {
     defaultSrc: ["'self'"],
     scriptSrc: ["'self'", "cdn.jsdelivr.net"],
-    styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+    styleSrc: ["'self'", "'unsafe-inline'"], // Removed Font Awesome
     imgSrc: ["'self'", "data:"],
-    fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
-    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net"],
+    fontSrc: ["'self'", "data:"], // Removed Font Awesome
+    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org"],
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -562,7 +567,8 @@ async function initializeServices() {
   services.queryService = QueryService;
   services.chatHistoryService = chatHistoryService;
   services.logsService = logsService;
-  logger.debug('Using AuthService, ServiceCategoryService, UserProfileService, AdminDashboardService, AnalyticsService, DatabaseOperationsService, SessionService, QueryService, ChatHistoryService, and LogsService singletons');
+  services.weatherService = WeatherService;
+  logger.debug('Using AuthService, ServiceCategoryService, UserProfileService, AdminDashboardService, AnalyticsService, DatabaseOperationsService, SessionService, QueryService, ChatHistoryService, LogsService, and WeatherService singletons');
   // Ensure authService is initialized before userProfileService in the application startup
   await services.sessionService.init();
   await services.authService.setSessionService(services.sessionService);
@@ -575,6 +581,7 @@ async function initializeServices() {
   await services.queryService.init();
   await services.chatHistoryService.init();
   await services.logsService.init();
+  await services.weatherService.init();
   services.userProfileService.setSessionService(services.sessionService);
   logger.debug('UserProfileService.setSessionService completed');
   logger.debug('AuthService singleton initialized', {
@@ -607,6 +614,9 @@ async function initializeServices() {
   logger.debug('LogsService singleton initialized', {
     methods: Object.getOwnPropertyNames(logsService.__proto__).filter(m => m !== 'constructor')
   });
+  logger.debug('WeatherService singleton initialized', {
+    methods: Object.getOwnPropertyNames(WeatherService.__proto__).filter(m => m !== 'constructor')
+  });
 
   // Set dependencies
   logger.debug('Setting service dependencies');
@@ -626,6 +636,10 @@ async function initializeServices() {
     if (services.adminDashboardService && services.logsService) {
       services.adminDashboardService.setLogsService(services.logsService);
       logger.debug('AdminDashboardService.setLogsService completed');
+    }
+    if (services.weatherService && services.analyticsService) {
+      services.weatherService.setAnalyticsService(services.analyticsService);
+      logger.debug('WeatherService.setAnalyticsService completed');
     }
   } catch (error) {
     logger.error('Failed to set service dependencies:', {
@@ -651,7 +665,8 @@ async function initializeServices() {
     serviceCategoryService: services.serviceCategoryService,
     sessionService: services.sessionService,
     databaseOperationsService: services.databaseOperationsService,
-    logsService: services.logsService
+    logsService: services.logsService,
+    weatherService: services.weatherService
   };
 }
 
@@ -700,7 +715,8 @@ async function startApp() {
       { file: 'logger-routes', paths: ['/api/logger'], service: null },
       { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
       { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService },
-      { file: 'security-routes', paths: ['/api/security'], service: null }
+      { file: 'security-routes', paths: ['/api/security'], service: null },
+      { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService }
     ];
 
     // Load and mount routes

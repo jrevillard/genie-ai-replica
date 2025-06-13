@@ -535,7 +535,69 @@ class FileController {
     }
   }
 
-  
+  /**
+   * Get file as base64
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getFileAsBase64(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing file ID',
+          message: 'File ID is required'
+        });
+      }
+
+      const file = await fileService.getFileById(id);
+      const filePath = path.join(__dirname, '..', '..', 'uploads', file.fileName);
+
+      // Check if file exists
+      try {
+        await fs.access(filePath);
+      } catch (error) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found',
+          message: 'The physical file does not exist'
+        });
+      }
+
+      // Read file and convert to base64
+      const fileBuffer = await fs.readFile(filePath);
+      const base64String = fileBuffer.toString('base64');
+
+      res.json({
+        success: true,
+        message: 'File retrieved successfully',
+        data: {
+          id: file.id,
+          originalName: file.originalName,
+          mimeType: file.mimeType,
+          base64: base64String
+        }
+      });
+    } catch (error) {
+      logger.error('Get file as base64 error:', error);
+      
+      if (error.message === 'File not found') {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found',
+          message: 'The requested file does not exist'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve file',
+        message: 'An error occurred while retrieving the file'
+      });
+    }
+  }
 }
 
 module.exports = new FileController();

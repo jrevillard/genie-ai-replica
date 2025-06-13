@@ -67,6 +67,14 @@ router.get('/stats', fileController.getFileStats);
 router.get('/:id', fileController.getFileById);
 
 /**
+ * @route GET /api/files/:id/view
+ * @desc Get file as base64 for viewing
+ * @access Public
+ * @param {string} id - File ID
+ */
+router.get('/:id/view', fileController.getFileAsBase64);
+
+/**
  * @route GET /api/files/:id/download
  * @desc Download file by ID
  * @access Public

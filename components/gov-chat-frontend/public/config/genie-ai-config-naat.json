@@ -241,7 +241,7 @@
       "quickHelp": {
         "buttons": [
           {
-            "id": "justChat",
+            "id": "just-chat",
             "title": "quickhelp.justChat",
             "icon": {
               "type": "file",
@@ -250,129 +250,129 @@
             "category": null,
             "prompt": "quickhelp.justChatPrompt",
             "styles": {
-              "backgroundColor": "#f0f7ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#a3ceff"
+              "backgroundColor": "#E8F5E1",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
             }
           },
           {
-            "id": "idApplication",
+            "id": "identity-civil",
             "title": "quickhelp.applyForID",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/id-application.svg"
+              "value": "/config/quickhelp/identity-civil.svg"
             },
             "category": "1",
             "prompt": "quickhelp.applyForIDPrompt",
             "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
             }
           },
           {
-            "id": "businessRegistration",
-            "title": "quickhelp.registerBusiness",
+            "id": "taxes-revenue",
+            "title": "quickhelp.payTaxes",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/business-registration.svg"
-            },
-            "category": "2",
-            "prompt": "quickhelp.registerBusinessPrompt",
-            "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
-            }
-          },
-          {
-            "id": "taxFiling",
-            "title": "quickhelp.fileTaxes",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/tax-filing.svg"
-            },
-            "category": "3",
-            "prompt": "quickhelp.fileTaxesPrompt",
-            "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
-            }
-          },
-          {
-            "id": "licenseRenewal",
-            "title": "quickhelp.renewLicense",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/license-renewal.svg"
-            },
-            "category": "4",
-            "prompt": "quickhelp.renewLicensePrompt",
-            "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
-            }
-          },
-          {
-            "id": "healthServices",
-            "title": "quickhelp.accessHealthServices",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/health-services.svg"
+              "value": "/config/quickhelp/taxes-revenue.svg"
             },
             "category": "5",
-            "prompt": "quickhelp.accessHealthServicesPrompt",
+            "prompt": "quickhelp.payTaxesPrompt",
             "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
             }
           },
           {
-            "id": "educationInfo",
-            "title": "quickhelp.findEducationInfo",
+            "id": "business-trade",
+            "title": "quickhelp.startBusiness",
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/education-info.svg"
-            },
-            "category": "6",
-            "prompt": "quickhelp.findEducationInfoPrompt",
-            "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
-            }
-          },
-          {
-            "id": "socialServices",
-            "title": "quickhelp.accessSocialServices",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/social-services.svg"
-            },
-            "category": "7",
-            "prompt": "quickhelp.accessSocialServicesPrompt",
-            "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
-            }
-          },
-          {
-            "id": "legalAid",
-            "title": "quickhelp.getLegalAid",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/legal-aid.svg"
+              "value": "/config/quickhelp/business-trade.svg"
             },
             "category": "8",
-            "prompt": "quickhelp.getLegalAidPrompt",
+            "prompt": "quickhelp.startBusinessPrompt",
             "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d6e4ff"
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
+            }
+          },
+          {
+            "id": "healthcare-social",
+            "title": "quickhelp.findHealthcare",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/healthcare-social.svg"
+            },
+            "category": "2",
+            "prompt": "quickhelp.findHealthcarePrompt",
+            "styles": {
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
+            }
+          },
+          {
+            "id": "education-learning",
+            "title": "quickhelp.educationServices",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/education-learning.svg"
+            },
+            "category": "3",
+            "prompt": "quickhelp.educationServicesPrompt",
+            "styles": {
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
+            }
+          },
+          {
+            "id": "transportation-mobility",
+            "title": "quickhelp.transportLicenses",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/transportation-mobility.svg"
+            },
+            "category": "7",
+            "prompt": "quickhelp.transportLicensesPrompt",
+            "styles": {
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
+            }
+          },
+          {
+            "id": "housing-urban",
+            "title": "quickhelp.housingPrograms",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/housing-urban.svg"
+            },
+            "category": "9",
+            "prompt": "quickhelp.housingProgramsPrompt",
+            "styles": {
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
+            }
+          },
+          {
+            "id": "employment-labor",
+            "title": "quickhelp.findJobs",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/employment-labor.svg"
+            },
+            "category": "4",
+            "prompt": "quickhelp.findJobsPrompt",
+            "styles": {
+              "backgroundColor": "#F0F9EB",
+              "hoverColor": "#D4E8C3",
+              "outlineColor": "#A8D08D"
             }
           }
         ]

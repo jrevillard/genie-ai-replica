@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework",
+  "description": "Configuration file for customizing the GENIE.AI chatbot framework with a magenta theme for Huduma AI",
   "type": "object",
   "properties": {
     "app": {
@@ -224,14 +224,14 @@
     }
   },
   "theme": {
-    "primaryColor": "#4E97D1",
-    "secondaryColor": "#2C5F8A",
-    "backgroundColor": "#f5f7fa",
-    "textColor": "#333333",
+    "primaryColor": "#7A2A6A",
+    "secondaryColor": "#4D143F",
+    "backgroundColor": "#EAD9E5",
+    "textColor": "#1C1519",
     "navbar": {
-      "gradientStart": "#4E97D1",
-      "gradientEnd": "#2C5F8A",
-      "textColor": "#ffffff"
+      "gradientStart": "#6B245C",
+      "gradientEnd": "#3D0F31",
+      "textColor": "#F0E7EC"
     }
   },
   "features": {
@@ -250,9 +250,9 @@
             "category": null,
             "prompt": "quickhelp.justChatPrompt",
             "styles": {
-              "backgroundColor": "#f0f7ff",
-              "hoverColor": "#e1f0ff",
-              "outlineColor": "#bcdcff"
+              "backgroundColor": "#EAD9E5",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -265,9 +265,9 @@
             "category": "1",
             "prompt": "quickhelp.applyForIDPrompt",
             "styles": {
-              "backgroundColor": "#f5f9ff",
-              "hoverColor": "#e6f0ff",
-              "outlineColor": "#d1e0ff"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -280,9 +280,9 @@
             "category": "5",
             "prompt": "quickhelp.payTaxesPrompt",
             "styles": {
-              "backgroundColor": "#fff7ed",
-              "hoverColor": "#ffedd5",
-              "outlineColor": "#fed7aa"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -295,9 +295,9 @@
             "category": "8",
             "prompt": "quickhelp.startBusinessPrompt",
             "styles": {
-              "backgroundColor": "#f5f3ff",
-              "hoverColor": "#ede9fe",
-              "outlineColor": "#ddd6fe"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -310,9 +310,9 @@
             "category": "2",
             "prompt": "quickhelp.findHealthcarePrompt",
             "styles": {
-              "backgroundColor": "#fef2f2",
-              "hoverColor": "#fee2e2",
-              "outlineColor": "#fecaca"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -325,9 +325,9 @@
             "category": "3",
             "prompt": "quickhelp.educationServicesPrompt",
             "styles": {
-              "backgroundColor": "#eff6ff",
-              "hoverColor": "#dbeafe",
-              "outlineColor": "#bfdbfe"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -340,9 +340,9 @@
             "category": "7",
             "prompt": "quickhelp.transportLicensesPrompt",
             "styles": {
-              "backgroundColor": "#f5f3ff",
-              "hoverColor": "#ede9fe",
-              "outlineColor": "#ddd6fe"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -355,9 +355,9 @@
             "category": "9",
             "prompt": "quickhelp.housingProgramsPrompt",
             "styles": {
-              "backgroundColor": "#ecfeff",
-              "hoverColor": "#cffafe",
-              "outlineColor": "#a5f3fc"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           },
           {
@@ -370,9 +370,9 @@
             "category": "4",
             "prompt": "quickhelp.findJobsPrompt",
             "styles": {
-              "backgroundColor": "#fdf2f8",
-              "hoverColor": "#fce7f3",
-              "outlineColor": "#f9a8d4"
+              "backgroundColor": "#F0E0EB",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
             }
           }
         ]

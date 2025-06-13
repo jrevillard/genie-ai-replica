@@ -114,28 +114,21 @@
             },
             "quickHelp": {
               "type": "object",
-              "description": "Configuration for quick help buttons in the chat interface",
+              "description": "Quick Help button configurations",
               "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "description": "Enable or disable quick help buttons",
-                  "default": true
-                },
                 "buttons": {
                   "type": "array",
-                  "description": "List of quick help buttons",
+                  "description": "List of Quick Help buttons",
                   "items": {
                     "type": "object",
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "Unique identifier for the button",
-                        "pattern": "^[a-zA-Z0-9_-]+$"
+                        "description": "Unique identifier for the button"
                       },
                       "title": {
                         "type": "string",
-                        "description": "Display title for the button (or translation key)",
-                        "minLength": 1
+                        "description": "i18n key for button label"
                       },
                       "icon": {
                         "type": "object",
@@ -144,16 +137,14 @@
                           "type": {
                             "type": "string",
                             "enum": [
-                              "file"
+                              "file",
+                              "inline"
                             ],
-                            "description": "Type of icon source (only file-based SVG supported)",
-                            "default": "file"
+                            "description": "Type of icon source"
                           },
                           "value": {
                             "type": "string",
-                            "description": "Path to SVG file relative to public/config",
-                            "minLength": 1,
-                            "pattern": "^/config/quickhelp/[^/]+\\.svg$"
+                            "description": "Path to SVG file or inline SVG content"
                           }
                         },
                         "required": [
@@ -166,13 +157,11 @@
                           "string",
                           "null"
                         ],
-                        "description": "Top-level category ID associated with the button (null for no category)",
-                        "minLength": 1
+                        "description": "Category ID for the button (null for general)"
                       },
                       "prompt": {
                         "type": "string",
-                        "description": "Initial prompt sent when the button is clicked (or translation key)",
-                        "minLength": 1
+                        "description": "i18n key for the prompt to send when clicked"
                       },
                       "styles": {
                         "type": "object",
@@ -180,18 +169,15 @@
                         "properties": {
                           "backgroundColor": {
                             "type": "string",
-                            "description": "Background color for the button",
-                            "pattern": "^#([0-9a-fA-F]{3}){1,2}$|^rgb\\(\\d{1,3},\\s*\\d{1,3},\\s*\\d{1,3}\\)$"
+                            "description": "Background color"
                           },
                           "hoverColor": {
                             "type": "string",
-                            "description": "Background color on hover",
-                            "pattern": "^#([0-9a-fA-F]{3}){1,2}$|^rgb\\(\\d{1,3},\\s*\\d{1,3},\\s*\\d{1,3}\\)$"
+                            "description": "Hover background color"
                           },
                           "outlineColor": {
                             "type": "string",
-                            "description": "Border/outline color for the button",
-                            "pattern": "^#([0-9a-fA-F]{3}){1,2}$|^rgb\\(\\d{1,3},\\s*\\d{1,3},\\s*\\d{1,3}\\)$"
+                            "description": "Border/outline color"
                           }
                         },
                         "required": [
@@ -209,12 +195,10 @@
                       "prompt",
                       "styles"
                     ]
-                  },
-                  "minItems": 0
+                  }
                 }
               },
               "required": [
-                "enabled",
                 "buttons"
               ]
             }
@@ -255,7 +239,6 @@
       "welcomeMessage": "Welcome to Huduma AI, your public service assistant!",
       "botName": "Huduma",
       "quickHelp": {
-        "enabled": true,
         "buttons": [
           {
             "id": "just-chat",

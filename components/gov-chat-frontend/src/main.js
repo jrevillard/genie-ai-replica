@@ -60,6 +60,19 @@ export async function loadConfig() {
     config = { ...config, ...data }; // Merge fetched config with defaults
     console.log('Configuration loaded:', config);
     console.log('Quick Help config:', config.features?.chat?.quickHelp);
+
+    // Dynamically set CSS variables based on config (FIX: Added for success case)
+    const root = document.documentElement;
+    if (config.theme) {
+      if (config.theme.navbar) {
+        root.style.setProperty('--navbar-gradient-start', config.theme.navbar.gradientStart);
+        root.style.setProperty('--navbar-gradient-end', config.theme.navbar.gradientEnd);
+        root.style.setProperty('--navbar-text-color', config.theme.navbar.textColor);
+      }
+      root.style.setProperty('--accent-color', config.theme.primaryColor);
+      root.style.setProperty('--accent-hover', adjustColor(config.theme.primaryColor, -20));
+      root.style.setProperty('--accent-color-secondary', config.theme.secondaryColor);
+    }
   } catch (error) {
     console.error('Error loading config:', error);
     console.warn('Using default configuration');
@@ -307,7 +320,6 @@ const handleAndroidKeyboard = () => {
     }
   });
 
-  // Add listener for input focus/blur
   document.addEventListener('focusin', (event) => {
     // Only handle input and textarea elements
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {

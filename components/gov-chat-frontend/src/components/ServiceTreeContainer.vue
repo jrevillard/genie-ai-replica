@@ -248,6 +248,7 @@ export default {
 .service-tree-container {
   position: relative;
   height: 100%;
+  font-size: inherit; /* Added to ensure inheritance */
 }
 
 .loading-overlay {
@@ -262,6 +263,7 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 100;
+  font-size: 0.875rem; /* Explicit rem for clarity */
 }
 
 .error-banner {
@@ -277,6 +279,7 @@ export default {
   align-items: center;
   z-index: 90;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-size: 0.875rem; /* Explicit rem for clarity */
 }
 
 .error-banner p {
@@ -305,7 +308,7 @@ export default {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem; /* Changed from 12px */
 }
 
 .retry-button:hover {

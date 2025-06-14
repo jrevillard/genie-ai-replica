@@ -418,9 +418,8 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  font-size: 10pt;
+  font-size: 0.625rem; /* Changed from 10pt */
   overflow-y: auto;
-  /* Ensure the panel stays attached to the screen */
   position: relative;
   z-index: 10;
 }
@@ -429,7 +428,7 @@ export default {
   margin-bottom: 8px;
   font-weight: 600;
   color: #333;
-  font-size: 12pt;
+  font-size: 0.75rem; /* Changed from 12pt */
   flex-shrink: 0;
 }
 
@@ -438,7 +437,6 @@ export default {
   display: flex;
   margin-bottom: 8px;
   flex-shrink: 0;
-  /* Keep search at top when scrolling */
   position: sticky;
   top: 0;
   z-index: 20;
@@ -449,7 +447,7 @@ export default {
 .search-box {
   flex: 1;
   padding: 6px;
-  font-size: 10pt;
+  font-size: 0.625rem; /* Changed from 10pt */
   border: 1px solid #ccc;
   border-radius: 4px;
   outline: none;
@@ -470,7 +468,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: bold;
   color: #555;
   padding: 0;
@@ -481,16 +479,13 @@ export default {
   background-color: #e5e5e5;
 }
 
-/* Container for tree list to control dimensions */
 .tree-list-container {
   flex-grow: 1;
   overflow-y: auto;
-  /* Default min-height to ensure tree is always visible */
   min-height: 200px;
   transition: height 0.3s ease;
 }
 
-/* Main tree list */
 .service-tree-list {
   list-style: none;
   padding: 0;
@@ -519,7 +514,7 @@ export default {
   text-align: center;
   margin-right: 4px;
   color: #666;
-  font-size: 10pt;
+  font-size: 0.625rem; /* Changed from 10pt */
 }
 
 .toggle-icon.placeholder {
@@ -529,6 +524,7 @@ export default {
 .node-name {
   flex: 1;
   color: #333;
+  font-size: 0.625rem; /* Explicitly set, was inherited as 10pt */
 }
 
 .child-list {
@@ -552,7 +548,6 @@ export default {
   border-left: 2px solid var(--accent-color);
 }
 
-/* Ensure all browser-specific list styling is removed */
 ul {
   list-style-type: none !important;
 }
@@ -564,6 +559,7 @@ li {
 /* Dark mode specific styles */
 [data-theme="dark"] .service-tree-panel h4 {
   color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem; /* Ensure consistency */
 }
 
 [data-theme="dark"] .search-container {
@@ -587,9 +583,22 @@ li {
   color: var(--text-primary);
 }
 
+/* Restored missing dark mode styles */
+[data-theme="dark"] .service-tree-list,
+[data-theme="dark"] .service-tree-list * {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme="dark"] .node-label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+[data-theme="dark"] .toggle-icon {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
 /* Mobile specific styles */
 @media screen and (max-width: 768px) {
-  /* Make search sticky in mobile view */
   .search-container {
     position: sticky;
     top: 0;
@@ -598,13 +607,12 @@ li {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   }
 
-  /* Ensure tree is visible when keyboard is open */
   .tree-list-container {
-    /* Default min-height for mobile */
     min-height: 200px;
   }
 }
 
+/* Additional dark mode title styles */
 [data-theme="dark"] h4,
 [data-theme="dark"] .service-tree-panel h4,
 [data-theme="dark"] .service-categories-title,
@@ -617,8 +625,7 @@ li {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-/* Updated hover color for dark mode */
 [data-theme="dark"] .node-label:hover {
-  background-color: #4a4a4a !important; /* Gray shade for better contrast */
+  background-color: #4a4a4a !important;
 }
 </style>

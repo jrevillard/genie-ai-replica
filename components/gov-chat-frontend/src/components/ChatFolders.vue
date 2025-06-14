@@ -630,6 +630,14 @@ export default {
           console.log(
             `After archived filtering: ${filteredChats.length} conversations`
           );
+        } else if (this.currentSecondLevelTab === "folders") {
+          // Exclude archived conversations in folders tab
+          filteredChats = filteredChats.filter(
+            (conv) => conv.isArchived !== true
+          );
+          console.log(
+            `After excluding archived in folders tab: ${filteredChats.length} conversations`
+          );
         }
         if (this.searchTerm && this.searchTerm.trim() !== "") {
           const searchTermLower = this.searchTerm.trim().toLowerCase();
@@ -2240,13 +2248,23 @@ export default {
             preview: this.generatePreview(conv),
             messageCount: conv.messageCount || 0,
           }));
+          console.log(
+            `Total conversations fetched for folder ${folderId}: ${convs.length}`
+          );
+          // Count only non-archived conversations for folderCounts
+          const nonArchivedConvs = convs.filter(
+            (conv) => conv.isArchived !== true
+          );
+          console.log(
+            `Non-archived conversations for folder ${folderId}: ${nonArchivedConvs.length}`
+          );
           if (isSelected) {
             this.conversations = convs;
             this.forceDisplayConversations();
           }
-          this.folderCounts[folderId] = convs.length;
+          this.folderCounts[folderId] = nonArchivedConvs.length;
           console.log(
-            `Loaded ${convs.length} conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${convs.length}`
+            `Loaded ${nonArchivedConvs.length} non-archived conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${nonArchivedConvs.length}`
           );
           await this.$store.dispatch("chatHistory/setFolderChats", {
             folderId,

@@ -351,49 +351,36 @@ export default {
     /**
      * Load analytics data based on selected period and date
      */
+    // AnalyticsDashboard.vue
     async loadAnalytics() {
       this.isLoading = true;
       this.error = null;
 
       try {
-        // Calculate date ranges
-        const { startDate, endDate } = analyticsService.calculateDateRange(
-          this.selectedPeriod,
-          this.selectedDate
-        );
-
-        // Get main analytics data
+        const { startDate, endDate } = this.calculateTimeSeriesParams();
         const analyticsData = await analyticsService.getDashboardAnalytics(
           this.selectedPeriod,
           this.selectedDate
         );
 
-        // Directly get unique users count (to ensure it's accurate)
         const uniqueUsers = await analyticsService.getUniqueUsersCount(
           startDate,
           endDate
         );
 
-        // Update analytics with the correct unique users count
         this.analytics = {
           ...analyticsData,
-          uniqueUsers: uniqueUsers || analyticsData.uniqueUsers,
+          uniqueUsers,
         };
 
         console.log("Dashboard data loaded:", this.analytics);
 
-        // Get comparison data
         await this.loadComparisonData();
-
-        // Get time series data
         await this.loadTimeSeriesData();
       } catch (error) {
         console.error("Error loading analytics data:", error);
         console.log("Falling back to sample dashboard data...");
-        // Fall back to hard-coded data
         this.analytics = this.getFallbackDashboardData();
-
-        // Also get fallback time series data
         this.timeSeriesData = this.getFallbackTimeSeriesData();
       } finally {
         this.isLoading = false;

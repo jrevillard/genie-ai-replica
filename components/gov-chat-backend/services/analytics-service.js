@@ -678,6 +678,7 @@ class AnalyticsService {
    * @param {string} endDate - End date (ISO string or YYYY-MM-DD)
    * @returns {Promise<Array>} Time series data
    */
+  // analytics-service.js (backend)
   async getTimeSeriesData(metricType, interval, startDate, endDate) {
     try {
       const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -688,42 +689,40 @@ class AnalyticsService {
 
       logger.info(`Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`);
 
+      let dateFormat;
+      switch (interval) {
+        case 'hourly': dateFormat = '%Y-%m-%dT%H:00:00Z'; break;
+        case 'daily': dateFormat = '%Y-%m-%d'; break;
+        case 'weekly': dateFormat = '%Y-W%W'; break;
+        case 'monthly': dateFormat = '%Y-%m'; break;
+        default: dateFormat = '%Y-%m-%d';
+      }
+
       const baseQuery = `
-        LET dailyBreakdown = (
-          FOR q IN queries
-            FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
-            
-            COLLECT dateGroup = DATE_FORMAT(q.timestamp, '%Y-%m-%d')
-            
-            LET dayQueries = (
-              FOR query IN queries
-                FILTER query.timestamp >= @startDate AND query.timestamp <= @endDate
-                FILTER DATE_FORMAT(query.timestamp, '%Y-%m-%d') == dateGroup
-                RETURN query
-            )
-            
-            RETURN {
-              date: dateGroup,
-              totalQueries: LENGTH(dayQueries),
-              uniqueUsers: LENGTH(UNIQUE(dayQueries[*].userId))
-            }
-        )
-        
-        RETURN dailyBreakdown
-      `;
+      FOR q IN queries
+        FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
+        COLLECT dateGroup = DATE_FORMAT(q.timestamp, @dateFormat) INTO groups
+        LET uniqueUsers = LENGTH(UNIQUE(groups[*].q.userId))
+        LET totalQueries = LENGTH(groups)
+        RETURN {
+          date: dateGroup,
+          totalQueries: totalQueries,
+          uniqueUsers: uniqueUsers
+        }
+    `;
 
       logger.info('Executing time series data query...');
       const cursor = await this.db.query(baseQuery, {
         startDate: startDateISO,
-        endDate: endDateISO
+        endDate: endDateISO,
+        dateFormat
       });
 
-      const results = await cursor.all();
-      const dailyBreakdown = results[0] || [];
+      const dailyBreakdown = await cursor.all();
 
       const chartData = dailyBreakdown.map(day => ({
         timestamp: day.date,
-        dateLabel: day.date,
+        dateLabel: this.formatDateLabel(day.date, interval),
         value: day.totalQueries,
         userCount: day.uniqueUsers
       }));
@@ -734,7 +733,6 @@ class AnalyticsService {
       }
 
       logger.info(`Time series data retrieved successfully with ${chartData.length} data points`);
-
       return chartData;
     } catch (error) {
       logger.error(`Error in getTimeSeriesData: ${error.message}`, { stack: error.stack });

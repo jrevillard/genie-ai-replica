@@ -987,6 +987,25 @@ export default {
           }
         }
 
+        // Update Vuex store with the new conversation
+        const chatData = {
+          id: conversation._key, // Use backend _key instead of generating new UUID
+          title: conversationData.title,
+          preview: this.chatPreview,
+          folderId: this.saveChatDialog.folderId || "default",
+          messageCount: this.chatMessages.filter(
+            (msg) =>
+              msg.sender === "user" || (msg.sender === "bot" && msg.queryId)
+          ).length,
+        };
+        console.log("Dispatching createChat with:", chatData);
+        await this.$store.dispatch("chatHistory/createChat", chatData);
+        // Debug: Log Vuex chats state after createChat
+        console.log(
+          "Vuex chats state after createChat:",
+          this.$store.state.chatHistory.chats
+        );
+
         if (
           this.saveChatDialog.folderId &&
           this.saveChatDialog.folderId !== "default"
@@ -1007,6 +1026,22 @@ export default {
           console.log(
             `Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`
           );
+          // Add to specific folder in Vuex store
+          console.log("Dispatching addChatToFolder with:", {
+            chatId: conversation._key,
+            folderId: this.saveChatDialog.folderId,
+          });
+          await this.$store.dispatch("chatHistory/addChatToFolder", {
+            chatId: conversation._key,
+            folderId: this.saveChatDialog.folderId,
+          });
+          // Debug: Log Vuex folderChats state after addChatToFolder
+          console.log(
+            "Vuex folderChats state after addChatToFolder:",
+            this.$store.state.chatHistory.folderChats[
+              this.saveChatDialog.folderId
+            ]
+          );
         }
 
         this.currentChatId = conversation._key;
@@ -1017,6 +1052,12 @@ export default {
 
         notificationService.success(this.translate("chatbot.chatSaved"));
         this.saveChatDialog.visible = false;
+
+        // Emit event to notify ChatFolders.vue of new conversation (moved after Vuex updates)
+        console.log(
+          `Emitting conversation-saved event for conversation ${conversation._key}`
+        );
+        eventBus.$emit("conversation-saved", conversation._key);
       } catch (error) {
         console.error("Error saving chat:", error);
         notificationService.error("Failed to save chat. Please try again.");

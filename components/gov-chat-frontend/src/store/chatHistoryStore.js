@@ -78,7 +78,7 @@ export default {
 
     ADD_CHAT(state, chatData) {
       const newChat = {
-        id: uuidv4(),
+        id: chatData.id || uuidv4(), // Use provided id if available
         title: chatData.title || 'Untitled Chat',
         preview: chatData.preview || '',
         createdAt: new Date().toISOString(),
@@ -92,6 +92,9 @@ export default {
       if (folderId !== 'default' && !state.folderChats.default.includes(newChat.id)) {
         state.folderChats.default.push(newChat.id);
       }
+      // Debug: Log new chat and folderChats
+      console.log("ADD_CHAT mutation: Added chat:", newChat);
+      console.log("ADD_CHAT mutation: Updated folderChats for", folderId, ":", state.folderChats[folderId]);
       return newChat.id;
     },
 
@@ -205,15 +208,15 @@ export default {
     async removeChatFromFolder({ commit, state }, { chatId, folderId }) {
       try {
         console.log(`Removing chat ${chatId} from folder ${folderId}`);
-        
+
         // Call the mutation to remove the chat from the folder
         commit('REMOVE_CHAT_FROM_FOLDER', { chatId, folderId });
-        
+
         // Ensure the chat remains in the default folder
         if (!state.folderChats.default.includes(chatId)) {
           commit('ADD_CHAT_TO_FOLDER', { chatId, folderId: 'default' });
         }
-        
+
         console.log(`Chat ${chatId} removed from folder ${folderId}`);
       } catch (error) {
         console.error(`Error removing chat ${chatId} from folder ${folderId}:`, error);

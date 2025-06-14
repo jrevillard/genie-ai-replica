@@ -686,6 +686,8 @@ export default {
         }
       );
     }
+    // Listen for new conversation saved event
+    eventBus.$on("conversation-saved", this.handleConversationSaved);
   },
 
   mounted() {
@@ -739,6 +741,9 @@ export default {
     if (searchInput) {
       searchInput.removeEventListener("input", this.handleExistingSearchInput);
     }
+
+    // Clean up conversation-saved event listener
+    eventBus.$off("conversation-saved", this.handleConversationSaved);
   },
 
   methods: {
@@ -750,6 +755,89 @@ export default {
       "deleteChat",
       "moveChat",
     ]),
+
+    handleConversationSaved(conversationId) {
+      console.log(
+        `Received conversation-saved event for conversation ${conversationId}`
+      );
+      // Debug: Log Vuex state before processing
+      console.log("Vuex chats state:", this.$store.state.chatHistory.chats);
+      console.log(
+        "Vuex folderChats state for selected folder",
+        this.selectedFolderId,
+        ":",
+        this.$store.state.chatHistory.folderChats[this.selectedFolderId]
+      );
+      // Refresh only if the current tab is 'all' or 'folders'
+      if (
+        this.currentSecondLevelTab === "all" ||
+        this.currentSecondLevelTab === "folders"
+      ) {
+        console.log(
+          `Refreshing ${this.currentSecondLevelTab} tab due to new conversation`
+        );
+        this.loadConversationsForCurrentTab();
+        // If in folders tab and the conversation belongs to the selected folder, add it immediately
+        if (this.currentSecondLevelTab === "folders" && this.selectedFolderId) {
+          // Check if the conversation is in the selected folder's folderChats
+          const folderChats =
+            this.$store.state.chatHistory.folderChats[this.selectedFolderId] ||
+            [];
+          console.log(
+            `Checking if conversation ${conversationId} is in folderChats for ${this.selectedFolderId}:`,
+            folderChats
+          );
+          if (folderChats.includes(conversationId)) {
+            // Retry fetching chat with $nextTick to account for Vuex reactivity
+            this.$nextTick(() => {
+              const chat = this.getChatById(conversationId);
+              console.log(`Fetched chat ${conversationId} from Vuex:`, chat);
+              if (
+                chat &&
+                !this.conversations.find((c) => c._key === conversationId)
+              ) {
+                console.log(
+                  `Manually adding conversation ${conversationId} to conversations for folder ${this.selectedFolderId}`
+                );
+                // Create conversation object matching backend structure
+                const newConversation = {
+                  _key: chat.id,
+                  title: chat.title,
+                  preview: chat.preview,
+                  created: chat.createdAt,
+                  updated: chat.updatedAt,
+                  messageCount: chat.messageCount || 0,
+                  isStarred: false,
+                  isArchived: false,
+                  category: null,
+                  tags: [], // Assume no tags for new conversation
+                };
+                this.conversations = [...this.conversations, newConversation];
+                this.folderCounts[this.selectedFolderId] =
+                  (this.folderCounts[this.selectedFolderId] || 0) + 1;
+                console.log(
+                  `Updated conversations for folder ${this.selectedFolderId}: ${this.conversations.length} chats`
+                );
+              } else if (!chat) {
+                console.warn(
+                  `Conversation ${conversationId} still not found in Vuex store after $nextTick`
+                );
+              } else {
+                console.log(
+                  `Conversation ${conversationId} already in conversations`
+                );
+              }
+            });
+          } else {
+            console.log(
+              `Conversation ${conversationId} not in folder ${this.selectedFolderId}'s folderChats`
+            );
+          }
+        }
+      } else {
+        console.log(`No refresh needed for ${this.currentSecondLevelTab} tab`);
+      }
+    },
 
     resetComponentState() {
       console.log("Resetting component state");

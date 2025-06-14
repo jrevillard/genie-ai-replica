@@ -717,22 +717,26 @@ export default {
     async handleFeedbackSubmit(feedback) {
       const queryId = feedback.message.queryId;
       if (!queryId) {
-        console.error("Cannot submit feedback: No queryId found");
+        console.error("Cannot submit feedback: No queryId found for message");
+        notificationService.error(
+          this.translate("chatbot.feedbackMissingQueryId")
+        );
+        this.closeFeedbackDialog();
         return;
       }
       try {
         await chatbotService.submitFeedback(queryId, {
-          rating: feedback.rating,
-          comment: feedback.text,
+          rating: feedback.rating || (feedback.thumbFeedback === "up" ? 4 : 2),
+          comment: feedback.text || "",
           providedAt: new Date().toISOString(),
         });
-        console.log("Feedback submitted successfully");
-        notificationService.success("Thank you for your feedback!");
-      } catch (error) {
-        console.error("Error submitting feedback:", error);
-        notificationService.error(
-          "Unable to submit feedback. Please try again."
+        console.log("Feedback submitted successfully for queryId:", queryId);
+        notificationService.success(
+          this.translate("chatbot.feedbackSubmitted")
         );
+      } catch (error) {
+        console.error("Error submitting feedback for queryId:", queryId, error);
+        notificationService.error(this.translate("chatbot.feedbackError"));
       }
       this.closeFeedbackDialog();
     },
@@ -767,7 +771,7 @@ export default {
           this.chatMessages.push({
             sender: msg.sender === "user" ? "user" : "bot",
             content: msg.content,
-            timestamp: msg.createdAt || new Date().toISOString(),
+            timestamp: msg.timestamp || new Date().toISOString(),
             queryId: msg.queryId || null,
             isSaved: true,
           });
@@ -778,6 +782,7 @@ export default {
             sender: "bot",
             content: this.translate("chatbot.welcomeMessage"),
             timestamp: new Date().toISOString(),
+            queryId: null,
             isSaved: true,
           });
         }

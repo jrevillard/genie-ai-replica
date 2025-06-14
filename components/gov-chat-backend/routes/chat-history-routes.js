@@ -7,7 +7,7 @@ module.exports = (chatHistoryService) => {
   // Helper function to extract user ID from the request
   const extractUserId = (req) => {
     let userId = '';
-    
+
     if (req.user) {
       // The userId must be in the format "users/2133"
       if (req.user.userId) {
@@ -16,18 +16,18 @@ module.exports = (chatHistoryService) => {
         if (!userId.startsWith('users/')) {
           userId = `users/${userId}`;
         }
-      } 
+      }
       // If not in userId, try _key and other fields
       else if (req.user._key) {
         userId = `users/${req.user._key}`;
-      } 
+      }
       else if (req.user.id) {
         userId = `users/${req.user.id}`;
       }
-      
+
       logger.info(`Using user identifier from req.user: ${userId}`);
     }
-    
+
     // If we don't have a user ID from req.user, check query params
     if (!userId && req.query.userId) {
       userId = req.query.userId;
@@ -37,7 +37,7 @@ module.exports = (chatHistoryService) => {
       }
       logger.info(`Using userId from query parameter: ${userId}`);
     }
-    
+
     // Lastly, check if it's in the body (some routes use this)
     if (!userId && req.body && req.body.userId) {
       userId = req.body.userId;
@@ -47,7 +47,7 @@ module.exports = (chatHistoryService) => {
       }
       logger.info(`Using userId from request body: ${userId}`);
     }
-    
+
     return userId;
   };
 
@@ -102,23 +102,23 @@ module.exports = (chatHistoryService) => {
   router.get('/conversations', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const limit = parseInt(req.query.limit) || 20;
       const offset = parseInt(req.query.offset) || 0;
       const includeArchived = req.query.includeArchived === 'true';
       const filterStarred = req.query.filterStarred === 'true';
       const searchTerm = req.query.searchTerm || '';
-      
+
       logger.info(`Getting conversations for user ${userId} with filters - includeArchived: ${includeArchived}, filterStarred: ${filterStarred}, searchTerm: "${searchTerm}"`);
-      
+
       const options = {
         limit,
         offset,
@@ -126,62 +126,62 @@ module.exports = (chatHistoryService) => {
         filterStarred,
         searchTerm
       };
-      
+
       const result = await chatHistoryService.getUserConversations(userId, options);
       res.json(result);
     } catch (error) {
       logger.error(`Error getting user conversations: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
-        success: false, 
-        message: `Error getting user conversations: ${error.message}` 
+      res.status(500).json({
+        success: false,
+        message: `Error getting user conversations: ${error.message}`
       });
     }
   });
 
   /**
-   * @swagger
-   * /chat/conversations/{conversationId}:
-   *   get:
-   *     summary: Get conversation details
-   *     description: Retrieves a specific conversation including its messages
-   *     tags: [Chat History]
-   *     parameters:
-   *       - in: path
-   *         name: conversationId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: ID of the conversation to retrieve
-   *     responses:
-   *       200:
-   *         description: Conversation details with messages
-   *       401:
-   *         description: Unauthorized
-   *       404:
-   *         description: Conversation not found
-   *       500:
-   *         description: Server error
-   */
+ * @swagger
+ * /chat/conversations/{conversationId}:
+ *   get:
+ *     summary: Get conversation details
+ *     description: Retrieves a specific conversation including its messages
+ *     tags: [Chat History]
+ *     parameters:
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the conversation to retrieve
+ *     responses:
+ *       200:
+ *         description: Conversation details with messages
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Conversation not found
+ *       500:
+ *         description: Server error
+ */
   router.get('/conversations/:conversationId', async (req, res) => {
     try {
       const { conversationId } = req.params;
       logger.info(`Getting conversation ${conversationId}`);
-      
+
       const conversation = await chatHistoryService.getConversation(conversationId);
-      
+
       if (!conversation) {
         logger.warn(`Conversation ${conversationId} not found`);
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       res.json(conversation);
     } catch (error) {
       logger.error(`Error getting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -227,21 +227,21 @@ module.exports = (chatHistoryService) => {
   router.post('/conversations', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const { title, categoryId, initialMessage, tags } = req.body;
-      
+
       logger.info(`Creating new conversation for user ${numericUserId} with title "${title}"`);
-      
+
       const conversationData = {
         userId: numericUserId,
         title: title || 'New Conversation',
@@ -253,9 +253,9 @@ module.exports = (chatHistoryService) => {
         isStarred: false,
         isArchived: false
       };
-      
+
       const conversation = await chatHistoryService.createConversation(conversationData);
-      
+
       if (initialMessage) {
         await chatHistoryService.addMessage({
           conversationId: conversation._key,
@@ -264,7 +264,7 @@ module.exports = (chatHistoryService) => {
           userId: numericUserId
         });
       }
-      
+
       res.status(201).json(conversation);
     } catch (error) {
       logger.error(`Error creating conversation: ${error.message}`, { stack: error.stack });
@@ -323,32 +323,32 @@ module.exports = (chatHistoryService) => {
   router.patch('/conversations/:conversationId', async (req, res) => {
     try {
       const { conversationId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const updateData = { ...req.body, userId: numericUserId };
-      
+
       logger.info(`Updating conversation ${conversationId} with data:`, updateData);
-      
+
       const updatedConversation = await chatHistoryService.updateConversation(conversationId, updateData);
       res.json(updatedConversation);
     } catch (error) {
       logger.error(`Error updating conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -382,34 +382,34 @@ module.exports = (chatHistoryService) => {
   router.delete('/conversations/:conversationId', async (req, res) => {
     try {
       const { conversationId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Deleting conversation ${conversationId} for user ${numericUserId}`);
-      
+
       const result = await chatHistoryService.deleteConversation(conversationId, numericUserId);
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -462,20 +462,20 @@ module.exports = (chatHistoryService) => {
       const limit = parseInt(req.query.limit) || 50;
       const offset = parseInt(req.query.offset) || 0;
       const newestFirst = req.query.newestFirst === 'true';
-      
+
       logger.info(`Getting messages for conversation ${conversationId} with limit ${limit}, offset ${offset}, newestFirst ${newestFirst}`);
-      
+
       const options = { limit, offset, newestFirst };
       const result = await chatHistoryService.getConversationMessages(conversationId, options);
-      
+
       res.json(result);
     } catch (error) {
       logger.error(`Error getting messages for conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -531,7 +531,7 @@ module.exports = (chatHistoryService) => {
     try {
       const { conversationId } = req.params;
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
         return res.status(400).json({
@@ -539,31 +539,31 @@ module.exports = (chatHistoryService) => {
           message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Raw request body for conversation ${conversationId}:`, req.body ? JSON.stringify(req.body, null, 2) : 'No body');
-      
+
       const { content, sender, queryId, metadata } = req.body || {};
-      
+
       logger.info(`Adding ${sender || 'unknown'} message to conversation ${conversationId}`);
       logger.info('Parsed request body:', { content, sender, queryId, metadata });
-      
+
       if (!req.body) {
         logger.warn('Request body is missing');
         return res.status(400).json({ message: 'Request body is required' });
       }
-      
+
       if (!content) {
         logger.warn('Message content is missing');
         return res.status(400).json({ message: 'Message content is required' });
       }
-      
+
       if (!sender || !['user', 'assistant'].includes(sender)) {
         logger.warn(`Invalid sender: ${sender}`);
         return res.status(400).json({ message: 'Sender must be either "user" or "assistant"' });
       }
-      
+
       const messageData = {
         conversationId,
         content,
@@ -573,9 +573,9 @@ module.exports = (chatHistoryService) => {
         queryId,
         metadata: metadata || {}
       };
-      
+
       const message = await chatHistoryService.addMessage(messageData);
-      
+
       if (sender === 'assistant' && queryId) {
         try {
           await chatHistoryService.db.collection('queries').document(queryId);
@@ -589,7 +589,7 @@ module.exports = (chatHistoryService) => {
           logger.warn(`Skipping query linking due to invalid queryId ${queryId}: ${queryError.message}`, { stack: queryError.stack });
         }
       }
-      
+
       res.status(201).json(message);
     } catch (error) {
       logger.error(`Error adding message to conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
@@ -639,18 +639,18 @@ module.exports = (chatHistoryService) => {
     try {
       const { conversationId } = req.params;
       const { messageIds } = req.body;
-      
+
       logger.info(`Marking messages as read in conversation ${conversationId}`);
-      
+
       const result = await chatHistoryService.markMessagesAsRead(conversationId, messageIds);
       res.json(result);
     } catch (error) {
       logger.error(`Error marking messages as read in conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Conversation not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -682,18 +682,18 @@ module.exports = (chatHistoryService) => {
   router.get('/query/:queryId/messages', async (req, res) => {
     try {
       const { queryId } = req.params;
-      
+
       logger.info(`Finding messages related to query ${queryId}`);
-      
+
       const messages = await chatHistoryService.findMessagesForQuery(queryId);
       res.json(messages);
     } catch (error) {
       logger.error(`Error finding messages for query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Query not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -725,15 +725,15 @@ module.exports = (chatHistoryService) => {
   router.get('/messages/:messageId/query', async (req, res) => {
     try {
       const { messageId } = req.params;
-      
+
       logger.info(`Finding originating query for message ${messageId}`);
-      
+
       const query = await chatHistoryService.findOriginatingQuery(messageId);
-      
+
       if (!query) {
         return res.status(404).json({ message: 'No originating query found for this message' });
       }
-      
+
       res.json(query);
     } catch (error) {
       logger.error(`Error finding originating query for message ${req.params.messageId}: ${error.message}`, { stack: error.stack });
@@ -785,37 +785,37 @@ module.exports = (chatHistoryService) => {
   router.post('/query/:queryId/conversation', async (req, res) => {
     try {
       const { queryId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const { title, responseText, tags } = req.body;
-      
+
       logger.info(`Creating conversation from query ${queryId} for user ${numericUserId}`);
-      
+
       const result = await chatHistoryService.createConversationFromQuery(
         queryId,
         numericUserId,
         { title, responseText, tags }
       );
-      
+
       res.status(201).json(result);
     } catch (error) {
       logger.error(`Error creating conversation from query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Query not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -863,31 +863,31 @@ module.exports = (chatHistoryService) => {
   router.get('/search', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const searchTerm = req.query.q || '';
       const limit = parseInt(req.query.limit) || 20;
       const offset = parseInt(req.query.offset) || 0;
       const includeArchived = req.query.includeArchived === 'true';
-      
+
       if (!searchTerm) {
         return res.status(400).json({ message: 'Search term is required' });
       }
-      
+
       logger.info(`Searching conversations for user ${numericUserId} with term "${searchTerm}"`);
-      
+
       const options = { limit, offset, includeArchived };
       const results = await chatHistoryService.searchConversations(numericUserId, searchTerm, options);
-      
+
       res.json(results);
     } catch (error) {
       logger.error(`Error searching conversations: ${error.message}`, { stack: error.stack });
@@ -920,21 +920,21 @@ module.exports = (chatHistoryService) => {
   router.get('/recent', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const limit = parseInt(req.query.limit) || 5;
-      
+
       logger.info(`Getting ${limit} recent conversations for user ${numericUserId}`);
-      
+
       const conversations = await chatHistoryService.getRecentConversations(numericUserId, limit);
       res.json(conversations);
     } catch (error) {
@@ -961,19 +961,19 @@ module.exports = (chatHistoryService) => {
   router.get('/stats', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Getting conversation statistics for user ${numericUserId}`);
-      
+
       const stats = await chatHistoryService.getUserConversationStats(numericUserId);
       res.json(stats);
     } catch (error) {
@@ -1012,32 +1012,32 @@ module.exports = (chatHistoryService) => {
   router.get('/folders', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const includeArchived = req.query.includeArchived === 'true';
       const parentFolderId = req.query.parentFolderId || null;
-      
+
       logger.info(`Getting folders for user ${userId} with filters - includeArchived: ${includeArchived}, parentFolderId: ${parentFolderId || 'root'}`);
-      
+
       const options = {
         includeArchived,
         parentFolderId
       };
-      
+
       const folders = await chatHistoryService.getUserFolders(userId, options);
       res.json(folders);
     } catch (error) {
       logger.error(`Error getting user folders: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
-        success: false, 
-        message: `Error getting user folders: ${error.message}` 
+      res.status(500).json({
+        success: false,
+        message: `Error getting user folders: ${error.message}`
       });
     }
   });
@@ -1084,45 +1084,45 @@ module.exports = (chatHistoryService) => {
   router.post('/folders', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const { name, description, parentFolderId, color, icon } = req.body;
-      
+
       if (!name) {
         return res.status(400).json({ message: 'Folder name is required' });
       }
-      
+
       logger.info(`Creating new folder for user ${numericUserId} with name "${name}"`);
-      
+
       if (parentFolderId) {
         try {
           const parentFolder = await chatHistoryService.getFolder(parentFolderId);
-          
+
           const ownerCheck = parentFolder.owners.some(owner => owner._key === numericUserId);
           if (!ownerCheck) {
-            return res.status(403).json({ 
-              message: 'You do not have permission to create subfolders in this folder' 
+            return res.status(403).json({
+              message: 'You do not have permission to create subfolders in this folder'
             });
           }
         } catch (error) {
           return res.status(404).json({ message: 'Parent folder not found' });
         }
       }
-      
-      const existingFolders = await chatHistoryService.getUserFolders(numericUserId, { 
-        parentFolderId: parentFolderId 
+
+      const existingFolders = await chatHistoryService.getUserFolders(numericUserId, {
+        parentFolderId: parentFolderId
       });
       const order = existingFolders.length;
-      
+
       const folderData = {
         userId: numericUserId,
         name,
@@ -1135,7 +1135,7 @@ module.exports = (chatHistoryService) => {
         parentFolderId: parentFolderId || null,
         order
       };
-      
+
       const folder = await chatHistoryService.createFolder(folderData);
       res.status(201).json(folder);
     } catch (error) {
@@ -1172,22 +1172,22 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId } = req.params;
       logger.info(`Getting folder ${folderId}`);
-      
+
       const folder = await chatHistoryService.getFolder(folderId);
-      
+
       if (!folder) {
         logger.warn(`Folder ${folderId} not found`);
         return res.status(404).json({ message: 'Folder not found' });
       }
-      
+
       res.json(folder);
     } catch (error) {
       logger.error(`Error getting folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1244,38 +1244,38 @@ module.exports = (chatHistoryService) => {
   router.patch('/folders/:folderId', async (req, res) => {
     try {
       const { folderId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const updateData = { ...req.body, userId: numericUserId };
-      
+
       logger.info(`Updating folder ${folderId} with data:`, updateData);
-      
+
       if (updateData.parentFolderId !== undefined) {
         if (updateData.parentFolderId === folderId) {
-          return res.status(400).json({ 
-            message: 'A folder cannot be its own parent' 
+          return res.status(400).json({
+            message: 'A folder cannot be its own parent'
           });
         }
-        
+
         if (updateData.parentFolderId) {
           try {
             const parentFolder = await chatHistoryService.getFolder(updateData.parentFolderId);
-            
+
             const folderPath = await chatHistoryService.getFolderPath(updateData.parentFolderId);
             if (folderPath.some(f => f._key === folderId)) {
-              return res.status(400).json({ 
-                message: 'Cannot move a folder to its own subfolder' 
+              return res.status(400).json({
+                message: 'Cannot move a folder to its own subfolder'
               });
             }
           } catch (error) {
@@ -1283,16 +1283,16 @@ module.exports = (chatHistoryService) => {
           }
         }
       }
-      
+
       const updatedFolder = await chatHistoryService.updateFolder(folderId, updateData);
       res.json(updatedFolder);
     } catch (error) {
       logger.error(`Error updating folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1333,34 +1333,34 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId } = req.params;
       const deleteContents = req.query.deleteContents === 'true';
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Deleting folder ${folderId} for user ${numericUserId}, deleteContents: ${deleteContents}`);
-      
+
       const result = await chatHistoryService.deleteFolder(folderId, numericUserId, deleteContents);
       res.json(result);
     } catch (error) {
       logger.error(`Error deleting folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1390,30 +1390,30 @@ module.exports = (chatHistoryService) => {
   router.get('/folders/shared', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const includeArchived = req.query.includeArchived === 'true';
-      
+
       logger.info(`Getting shared folders for user ${userId} with includeArchived: ${includeArchived}`);
-      
+
       const options = {
         includeArchived
       };
-      
+
       const folders = await chatHistoryService.getSharedFolders(userId, options);
       res.json(folders);
     } catch (error) {
       logger.error(`Error getting shared folders: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ 
-        success: false, 
-        message: `Error getting shared folders: ${error.message}` 
+      res.status(500).json({
+        success: false,
+        message: `Error getting shared folders: ${error.message}`
       });
     }
   });
@@ -1449,29 +1449,29 @@ module.exports = (chatHistoryService) => {
   router.get('/folders/search', async (req, res) => {
     try {
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       const searchTerm = req.query.q || '';
       const includeArchived = req.query.includeArchived === 'true';
-      
+
       if (!searchTerm) {
         return res.status(400).json({ message: 'Search term is required' });
       }
-      
+
       logger.info(`Searching folders for user ${numericUserId} with term "${searchTerm}"`);
-      
+
       const options = { includeArchived };
       const results = await chatHistoryService.searchFolders(numericUserId, searchTerm, options);
-      
+
       res.json(results);
     } catch (error) {
       logger.error(`Error searching folders: ${error.message}`, { stack: error.stack });
@@ -1522,34 +1522,34 @@ module.exports = (chatHistoryService) => {
   router.post('/folders/reorder', async (req, res) => {
     try {
       const { folderOrders, parentFolderId } = req.body;
-      
+
       if (!Array.isArray(folderOrders) || folderOrders.length === 0) {
         return res.status(400).json({ message: 'Invalid folder orders data' });
       }
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Reordering ${folderOrders.length} folders for user ${numericUserId} under parent ${parentFolderId || 'root'}`);
-      
+
       const result = await chatHistoryService.reorderFolders(numericUserId, folderOrders, parentFolderId);
       res.json(result);
     } catch (error) {
       logger.error(`Error reordering folders: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1582,16 +1582,16 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId } = req.params;
       logger.info(`Getting path for folder ${folderId}`);
-      
+
       const path = await chatHistoryService.getFolderPath(folderId);
       res.json(path);
     } catch (error) {
       logger.error(`Error getting path for folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1631,34 +1631,34 @@ module.exports = (chatHistoryService) => {
   router.post('/folders/:folderId/conversations/:conversationId', async (req, res) => {
     try {
       const { folderId, conversationId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Adding conversation ${conversationId} to folder ${folderId} by user ${numericUserId}`);
-      
+
       const result = await chatHistoryService.addConversationToFolder(folderId, conversationId, numericUserId);
       res.json(result);
     } catch (error) {
       logger.error(`Error adding conversation to folder: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder or conversation not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1698,34 +1698,34 @@ module.exports = (chatHistoryService) => {
   router.delete('/folders/:folderId/conversations/:conversationId', async (req, res) => {
     try {
       const { folderId, conversationId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Removing conversation ${conversationId} from folder ${folderId} by user ${numericUserId}`);
-      
+
       const result = await chatHistoryService.removeConversationFromFolder(folderId, conversationId, numericUserId);
       res.json(result);
     } catch (error) {
       logger.error(`Error removing conversation from folder: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: error.message });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1756,16 +1756,16 @@ module.exports = (chatHistoryService) => {
     try {
       const { conversationId } = req.params;
       logger.info(`Finding folder for conversation ${conversationId}`);
-      
+
       const folder = await chatHistoryService.findConversationFolder(conversationId);
-      
+
       if (!folder) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           message: 'Conversation not found or not in any folder',
           inFolder: false
         });
       }
-      
+
       res.json({
         folder,
         inFolder: true
@@ -1819,34 +1819,34 @@ module.exports = (chatHistoryService) => {
     try {
       const { conversationId } = req.params;
       const { sourceFolderId, targetFolderId } = req.body;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Moving conversation ${conversationId} from folder ${sourceFolderId || 'root'} to ${targetFolderId || 'root'} by user ${numericUserId}`);
-      
+
       const result = await chatHistoryService.moveConversation(conversationId, sourceFolderId, targetFolderId, numericUserId);
       res.json(result);
     } catch (error) {
       logger.error(`Error moving conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: error.message });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1898,49 +1898,49 @@ module.exports = (chatHistoryService) => {
     try {
       const { folderId } = req.params;
       const { targetUserId, role } = req.body;
-      
+
       if (!targetUserId) {
         return res.status(400).json({ message: 'Target user ID is required' });
       }
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
       const numericTargetUserId = targetUserId.startsWith('users/') ? targetUserId.substring(6) : targetUserId;
-      
+
       if (numericUserId === numericTargetUserId) {
         return res.status(400).json({ message: 'Cannot share a folder with yourself' });
       }
-      
+
       logger.info(`Sharing folder ${folderId} from user ${numericUserId} to user ${numericTargetUserId} with role ${role || 'viewer'}`);
-      
+
       const result = await chatHistoryService.shareFolder(
-        folderId, 
-        numericUserId, 
-        numericTargetUserId, 
+        folderId,
+        numericUserId,
+        numericTargetUserId,
         role || 'viewer'
       );
-      
+
       res.json(result);
     } catch (error) {
       logger.error(`Error sharing folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission') || error.message.includes('owner')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder or target user not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -1980,35 +1980,35 @@ module.exports = (chatHistoryService) => {
   router.delete('/folders/:folderId/share/:targetUserId', async (req, res) => {
     try {
       const { folderId, targetUserId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
       const numericTargetUserId = targetUserId.startsWith('users/') ? targetUserId.substring(6) : targetUserId;
-      
+
       logger.info(`Removing share for folder ${folderId} from user ${numericTargetUserId} by owner ${numericUserId}`);
-      
+
       const result = await chatHistoryService.removeFolderShare(folderId, numericUserId, numericTargetUserId);
       res.json(result);
     } catch (error) {
       logger.error(`Error removing folder share ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission') || error.message.includes('owner')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: error.message });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -2042,34 +2042,34 @@ module.exports = (chatHistoryService) => {
   router.get('/folders/:folderId/users', async (req, res) => {
     try {
       const { folderId } = req.params;
-      
+
       let userId = extractUserId(req);
-      
+
       if (!userId) {
         logger.warn('No userId available in request');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'User ID is required but not found in request' 
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required but not found in request'
         });
       }
-      
+
       const numericUserId = userId.startsWith('users/') ? userId.substring(6) : userId;
-      
+
       logger.info(`Getting users with access to folder ${folderId} for user ${numericUserId}`);
-      
+
       const users = await chatHistoryService.getFolderUsers(folderId, numericUserId);
       res.json(users);
     } catch (error) {
       logger.error(`Error getting users for folder ${req.params.folderId}: ${error.message}`, { stack: error.stack });
-      
+
       if (error.message.includes('permission')) {
         return res.status(403).json({ message: error.message });
       }
-      
+
       if (error.message.includes('not found')) {
         return res.status(404).json({ message: 'Folder not found' });
       }
-      
+
       res.status(500).json({ message: error.message });
     }
   });
@@ -2115,98 +2115,98 @@ module.exports = (chatHistoryService) => {
  *       500:
  *         description: Server error
  */
-router.get('/conversations/:conversationId/export', async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    const format = req.query.format || 'pdf';
+  router.get('/conversations/:conversationId/export', async (req, res) => {
+    try {
+      const { conversationId } = req.params;
+      const format = req.query.format || 'pdf';
 
-    if (!['pdf', 'json'].includes(format)) {
-      logger.warn(`Invalid export format: ${format}`);
-      return res.status(400).json({ message: 'Invalid format. Use "pdf" or "json"' });
-    }
+      if (!['pdf', 'json'].includes(format)) {
+        logger.warn(`Invalid export format: ${format}`);
+        return res.status(400).json({ message: 'Invalid format. Use "pdf" or "json"' });
+      }
 
-    logger.info(`Exporting conversation ${conversationId} in ${format} format`);
+      logger.info(`Exporting conversation ${conversationId} in ${format} format`);
 
-    // Fetch the conversation and its messages
-    const conversation = await chatHistoryService.getConversation(conversationId);
-    if (!conversation) {
-      logger.warn(`Conversation ${conversationId} not found`);
-      return res.status(404).json({ message: 'Conversation not found' });
-    }
+      // Fetch the conversation and its messages
+      const conversation = await chatHistoryService.getConversation(conversationId);
+      if (!conversation) {
+        logger.warn(`Conversation ${conversationId} not found`);
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
 
-    // Fetch messages (all messages, no pagination)
-    const messagesResult = await chatHistoryService.getConversationMessages(conversationId, {
-      limit: 1000, // Large limit to get all messages
-      offset: 0,
-      newestFirst: false
-    });
-
-    const messages = messagesResult.messages || [];
-
-    if (format === 'json') {
-      // Return JSON response
-      res.setHeader('Content-Type', 'application/json');
-      res.json({
-        conversation: {
-          _key: conversation._key,
-          title: conversation.title,
-          created: conversation.created,
-          updated: conversation.updated,
-          isStarred: conversation.isStarred,
-          isArchived: conversation.isArchived,
-          category: conversation.category,
-          tags: conversation.tags
-        },
-        messages: messages.map(msg => ({
-          _key: msg._key,
-          content: msg.content,
-          sender: msg.sender,
-          timestamp: msg.timestamp,
-          readStatus: msg.readStatus,
-          metadata: msg.metadata
-        }))
+      // Fetch messages (all messages, no pagination)
+      const messagesResult = await chatHistoryService.getConversationMessages(conversationId, {
+        limit: 1000, // Large limit to get all messages
+        offset: 0,
+        newestFirst: false
       });
-    } else {
-      // Generate PDF
-      const doc = new PDFDocument({ margin: 50 });
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="conversation-${conversationId}.pdf"`);
-      doc.pipe(res);
 
-      // Add title
-      doc.fontSize(20).text(`Conversation: ${conversation.title || 'Untitled'}`, { align: 'center' });
-      doc.moveDown();
+      const messages = messagesResult.messages || [];
 
-      // Add metadata
-      doc.fontSize(12).text(`Created: ${new Date(conversation.created).toLocaleString()}`, { align: 'left' });
-      doc.text(`Updated: ${new Date(conversation.updated).toLocaleString()}`, { align: 'left' });
-      doc.text(`Category: ${conversation.category || 'None'}`, { align: 'left' });
-      doc.text(`Tags: ${conversation.tags?.join(', ') || 'None'}`, { align: 'left' });
-      doc.moveDown();
+      if (format === 'json') {
+        // Return JSON response
+        res.setHeader('Content-Type', 'application/json');
+        res.json({
+          conversation: {
+            _key: conversation._key,
+            title: conversation.title,
+            created: conversation.created,
+            updated: conversation.updated,
+            isStarred: conversation.isStarred,
+            isArchived: conversation.isArchived,
+            category: conversation.category,
+            tags: conversation.tags
+          },
+          messages: messages.map(msg => ({
+            _key: msg._key,
+            content: msg.content,
+            sender: msg.sender,
+            timestamp: msg.timestamp,
+            readStatus: msg.readStatus,
+            metadata: msg.metadata
+          }))
+        });
+      } else {
+        // Generate PDF
+        const doc = new PDFDocument({ margin: 50 });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="conversation-${conversationId}.pdf"`);
+        doc.pipe(res);
 
-      // Add messages
-      doc.fontSize(14).text('Messages:', { underline: true });
-      doc.moveDown(0.5);
+        // Add title
+        doc.fontSize(20).text(`Conversation: ${conversation.title || 'Untitled'}`, { align: 'center' });
+        doc.moveDown();
 
-      messages.forEach((msg, index) => {
-        doc.fontSize(12).text(
-          `${index + 1}. ${msg.sender === 'user' ? 'User' : 'Assistant'} (${new Date(msg.timestamp).toLocaleString()}):`,
-          { continued: true }
-        );
-        doc.fontSize(10).text(` ${msg.content}`, { indent: 20 });
+        // Add metadata
+        doc.fontSize(12).text(`Created: ${new Date(conversation.created).toLocaleString()}`, { align: 'left' });
+        doc.text(`Updated: ${new Date(conversation.updated).toLocaleString()}`, { align: 'left' });
+        doc.text(`Category: ${conversation.category || 'None'}`, { align: 'left' });
+        doc.text(`Tags: ${conversation.tags?.join(', ') || 'None'}`, { align: 'left' });
+        doc.moveDown();
+
+        // Add messages
+        doc.fontSize(14).text('Messages:', { underline: true });
         doc.moveDown(0.5);
-      });
 
-      doc.end();
+        messages.forEach((msg, index) => {
+          doc.fontSize(12).text(
+            `${index + 1}. ${msg.sender === 'user' ? 'User' : 'Assistant'} (${new Date(msg.timestamp).toLocaleString()}):`,
+            { continued: true }
+          );
+          doc.fontSize(10).text(` ${msg.content}`, { indent: 20 });
+          doc.moveDown(0.5);
+        });
+
+        doc.end();
+      }
+    } catch (error) {
+      logger.error(`Error exporting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+      res.status(500).json({ message: 'Error exporting conversation' });
     }
-  } catch (error) {
-    logger.error(`Error exporting conversation ${req.params.conversationId}: ${error.message}`, { stack: error.stack });
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ message: 'Conversation not found' });
-    }
-    res.status(500).json({ message: 'Error exporting conversation' });
-  }
-});
+  });
 
   return router;
 };

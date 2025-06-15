@@ -55,6 +55,30 @@ services:
       - ./gov-chat-backend/.env
     networks:
       - chatqna_default
+    
+  arango-vector-db:
+    image: arangodb:latest
+    ports:
+      - "8529:8529"
+    environment:
+      - ARANGO_ROOT_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
+    networks:
+      - chatqna_default
+    restart: unless-stopped
+  
+  document-repository:
+    build:
+      context: .
+      dockerfile: document-repository/Dockerfile
+    environment:
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
+    depends_on:
+      - arango-vector-db
+    ports:
+      - "3000:3000"
+    networks:
+      - chatqna_default
 
 networks:
   chatqna_default:

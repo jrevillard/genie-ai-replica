@@ -10,7 +10,7 @@ const gunzip = util.promisify(zlib.gunzip);
 // Set maximum log file size to prevent stack overflow
 const MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 // Set maximum number of lines to process at once
-const MAX_LINES_TO_PROCESS = 50000;
+const MAX_LINES_TO_PROCESS = 100000;
 
 /**
  * Service for managing system logs
@@ -81,7 +81,6 @@ class LogsService {
       let warningLogs = [];
 
       try {
-        // Check method existence
         if (!this.getLogFilesInRange || !this.readLogFile || !this.extractLogs || !this.groupLogs) {
           logger.error('One or more required methods are undefined in LogsService', {
             getLogFilesInRange: !!this.getLogFilesInRange,
@@ -94,18 +93,17 @@ class LogsService {
 
         const logFiles = await this.getLogFilesInRange(date, date, true);
         logger.info(`Found ${logFiles.length} files for summary: ${logFiles.join(', ')}`);
-        
+
         if (logFiles.length === 0) {
-          logger.error(`No log files found for date ${date}`);
+          logger.warn(`No log files found for date ${date}`);
           return { errors: [], warnings: [], date };
         }
 
-        // Process all found log files
         for (const logFile of logFiles) {
           try {
             logger.debug(`Processing summary for file: ${logFile}`);
             const logContent = await this.readLogFile(logFile);
-            
+
             let logLines = logContent.split('\n').filter(line => line.trim() !== '');
             if (logLines.length > MAX_LINES_TO_PROCESS) {
               logger.warn(`Too many log lines in ${logFile} (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
@@ -114,13 +112,12 @@ class LogsService {
 
             logger.debug(`Processing ${logLines.length} log lines for summary from ${logFile}`);
 
-            // Extract error and warning logs
             const fileErrorLogs = this.extractLogs(logLines, 'ERROR');
             const fileWarningLogs = this.extractLogs(logLines, 'WARN');
-            
+
             errorLogs.push(...fileErrorLogs);
             warningLogs.push(...fileWarningLogs);
-            
+
             logger.debug(`Found ${fileErrorLogs.length} ERROR and ${fileWarningLogs.length} WARN logs in ${logFile}`);
           } catch (fileError) {
             logger.error(`Error processing file ${logFile} for summary: ${fileError.message}`);
@@ -129,7 +126,6 @@ class LogsService {
 
         logger.debug(`Total found: ${errorLogs.length} ERROR logs and ${warningLogs.length} WARN logs`);
 
-        // Group logs by type and service
         const errorLogsSummary = this.groupLogs(errorLogs);
         const warningLogsSummary = this.groupLogs(warningLogs);
 
@@ -144,6 +140,363 @@ class LogsService {
       }
     } catch (error) {
       logger.error(`Error in getLogsSummary: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Search logs with filtering
+   */
+  async searchLogs(options = {}) {
+    try {
+      logger.debug('Searching logs with options:', options);
+
+      if (!this.getDateRange || !this.getLogFilesInRange || !this.readLogFile || !this.parseLogs) {
+        logger.error('One or more required methods are undefined in LogsService', {
+          getDateRange: !!this.getDateRange,
+          getLogFilesInRange: !!this.getLogFilesInRange,
+          readLogFile: !!this.readLogFile,
+          parseLogs: !!this.parseLogs
+        });
+        throw new Error('Required methods are undefined');
+      }
+
+      let searchParams = options;
+      if (options.params && typeof options.params === 'string') {
+        try {
+          searchParams = JSON.parse(options.params);
+          logger.info('Parsed search parameters:', searchParams);
+        } catch (e) {
+          logger.error('Failed to parse search parameters:', e);
+        }
+      }
+
+      const { startDate, endDate } = this.getDateRange(searchParams);
+      logger.debug(`Using date range: ${startDate} to ${endDate}`);
+
+      const logFiles = await this.getLogFilesInRange(startDate, endDate, searchParams.includeArchived);
+      logger.info(`Found ${logFiles.length} log files to search:`, logFiles);
+
+      const allLogs = [];
+      let totalLinesProcessed = 0;
+
+      for (const file of logFiles) {
+        try {
+          logger.debug(`Reading log file: ${file}`);
+          const logContent = await this.readLogFile(file);
+          let logLines = logContent.split('\n').filter(line => line.trim() !== '');
+
+          totalLinesProcessed += logLines.length;
+
+          if (logLines.length > MAX_LINES_TO_PROCESS) {
+            logger.warn(`Too many log lines in ${file} (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
+            logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
+          }
+
+          logger.debug(`Found ${logLines.length} lines in ${file}`);
+          const isErrorLog = file.includes('error');
+          const parsedLogs = this.parseLogs(logLines, isErrorLog ? 'ERROR' : null);
+          logger.debug(`Parsed ${parsedLogs.length} logs from ${file}`);
+          allLogs.push(...parsedLogs);
+        } catch (error) {
+          logger.error(`Error processing log file ${file}: ${error.message}`);
+        }
+      }
+
+      logger.info(`Parsed ${allLogs.length} total log entries from ${totalLinesProcessed} lines before filtering`);
+
+      let filteredLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
+      logger.debug(`After date filter: ${filteredLogs.length} logs`);
+
+      if (searchParams.level && searchParams.level.trim() !== '') {
+        const targetLevel = searchParams.level.toUpperCase();
+        filteredLogs = filteredLogs.filter(log =>
+          log.level === targetLevel || (targetLevel === 'WARN' && log.level === 'WARNING')
+        );
+        logger.debug(`After level filter (${targetLevel}): ${filteredLogs.length} logs`);
+      }
+
+      if (searchParams.service && searchParams.service.trim() !== '') {
+        filteredLogs = filteredLogs.filter(log =>
+          log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase())
+        );
+        logger.debug(`After service filter (${searchParams.service}): ${filteredLogs.length} logs`);
+      }
+
+      if (searchParams.term && searchParams.term.trim() !== '') {
+        filteredLogs = filteredLogs.filter(log =>
+          log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase())
+        );
+        logger.debug(`After term filter (${searchParams.term}): ${filteredLogs.length} logs`);
+      }
+
+      filteredLogs.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
+      });
+
+      logger.debug(`Sorting logs by date and time (most recent first)`);
+
+      const limit = searchParams.limit ? parseInt(searchParams.limit, 10) : 1000;
+      if (filteredLogs.length > limit) {
+        filteredLogs = filteredLogs.slice(0, limit);
+        logger.debug(`Limiting logs to ${limit}`);
+      }
+
+      const formattedLogs = filteredLogs.map(log => ({
+        date: log.date,
+        time: log.time,
+        level: log.level,
+        service: log.service,
+        message: log.message,
+      }));
+
+      logger.debug(`Log search response: ${formattedLogs.length} logs returned out of ${allLogs.length} total`);
+
+      return {
+        logs: formattedLogs,
+        total: formattedLogs.length,
+      };
+    } catch (error) {
+      logger.error(`Error in searchLogs: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Search logs with filtering
+   */
+  async searchLogs(options = {}) {
+    try {
+      logger.debug('Searching logs with options:', options);
+
+      if (!this.getDateRange || !this.getLogFilesInRange || !this.readLogFile || !this.parseLogs) {
+        logger.error('One or more required methods are undefined in LogsService', {
+          getDateRange: !!this.getDateRange,
+          getLogFilesInRange: !!this.getLogFilesInRange,
+          readLogFile: !!this.readLogFile,
+          parseLogs: !!this.parseLogs
+        });
+        throw new Error('Required methods are undefined');
+      }
+
+      let searchParams = options;
+      if (options.params && typeof options.params === 'string') {
+        try {
+          searchParams = JSON.parse(options.params);
+          logger.info('Parsed search parameters:', searchParams);
+        } catch (e) {
+          logger.error('Failed to parse search parameters:', e);
+        }
+      }
+
+      const { startDate, endDate } = this.getDateRange(searchParams);
+      logger.debug(`Using date range: ${startDate} to ${endDate}`);
+
+      const logFiles = await this.getLogFilesInRange(startDate, endDate, searchParams.includeArchived);
+      logger.info(`Found ${logFiles.length} log files to search:`, logFiles);
+
+      const allLogs = [];
+      let totalLinesProcessed = 0;
+
+      for (const file of logFiles) {
+        try {
+          logger.debug(`Reading log file: ${file}`);
+          const logContent = await this.readLogFile(file);
+          let logLines = logContent.split('\n').filter(line => line.trim() !== '');
+
+          totalLinesProcessed += logLines.length;
+
+          if (logLines.length > MAX_LINES_TO_PROCESS) {
+            logger.warn(`Too many log lines in ${file} (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
+            logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
+          }
+
+          logger.debug(`Found ${logLines.length} lines in ${file}`);
+          const isErrorLog = file.includes('error');
+          const parsedLogs = this.parseLogs(logLines, isErrorLog ? 'ERROR' : null);
+          logger.debug(`Parsed ${parsedLogs.length} logs from ${file}`);
+          allLogs.push(...parsedLogs);
+        } catch (error) {
+          logger.error(`Error processing log file ${file}: ${error.message}`);
+        }
+      }
+
+      logger.info(`Parsed ${allLogs.length} total log entries from ${totalLinesProcessed} lines before filtering`);
+
+      let filteredLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
+      logger.debug(`After date filter: ${filteredLogs.length} logs`);
+
+      if (searchParams.level && searchParams.level.trim() !== '') {
+        const targetLevel = searchParams.level.toUpperCase();
+        filteredLogs = filteredLogs.filter(log =>
+          log.level === targetLevel || (targetLevel === 'WARN' && log.level === 'WARNING')
+        );
+        logger.debug(`After level filter (${targetLevel}): ${filteredLogs.length} logs`);
+      }
+
+      if (searchParams.service && searchParams.service.trim() !== '') {
+        filteredLogs = filteredLogs.filter(log =>
+          log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase())
+        );
+        logger.debug(`After service filter (${searchParams.service}): ${filteredLogs.length} logs`);
+      }
+
+      if (searchParams.term && searchParams.term.trim() !== '') {
+        filteredLogs = filteredLogs.filter(log =>
+          log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase())
+        );
+        logger.debug(`After term filter (${searchParams.term}): ${filteredLogs.length} logs`);
+      }
+
+      filteredLogs.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
+      });
+
+      logger.debug(`Sorting logs by date and time (most recent first)`);
+
+      const limit = searchParams.limit ? parseInt(searchParams.limit, 10) : 1000;
+      if (filteredLogs.length > limit) {
+        filteredLogs = filteredLogs.slice(0, limit);
+        logger.debug(`Limiting logs to ${limit}`);
+      }
+
+      const formattedLogs = filteredLogs.map(log => ({
+        date: log.date,
+        time: log.time,
+        level: log.level,
+        service: log.service,
+        message: log.message,
+      }));
+
+      logger.debug(`Log search response: ${formattedLogs.length} logs returned out of ${allLogs.length} total`);
+
+      return {
+        logs: formattedLogs,
+        total: formattedLogs.length,
+      };
+    } catch (error) {
+      logger.error(`Error in searchLogs: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Search logs with filtering
+   */
+  async searchLogs(options = {}) {
+    try {
+      logger.debug('Searching logs with options:', options);
+
+      if (!this.getDateRange || !this.getLogFilesInRange || !this.readLogFile || !this.parseLogs) {
+        logger.error('One or more required methods are undefined in LogsService', {
+          getDateRange: !!this.getDateRange,
+          getLogFilesInRange: !!this.getLogFilesInRange,
+          readLogFile: !!this.readLogFile,
+          parseLogs: !!this.parseLogs
+        });
+        throw new Error('Required methods are undefined');
+      }
+
+      let searchParams = options;
+      if (options.params && typeof options.params === 'string') {
+        try {
+          searchParams = JSON.parse(options.params);
+          logger.info('Parsed search parameters:', searchParams);
+        } catch (e) {
+          logger.error('Failed to parse search parameters:', e);
+        }
+      }
+
+      const { startDate, endDate } = this.getDateRange(searchParams);
+      logger.debug(`Using date range: ${startDate} to ${endDate}`);
+
+      const logFiles = await this.getLogFilesInRange(startDate, endDate, searchParams.includeArchived);
+      logger.info(`Found ${logFiles.length} log files to search:`, logFiles);
+
+      const allLogs = [];
+      let totalLinesProcessed = 0;
+
+      for (const file of logFiles) {
+        try {
+          logger.debug(`Reading log file: ${file}`);
+          const logContent = await this.readLogFile(file);
+          let logLines = logContent.split('\n').filter(line => line.trim() !== '');
+
+          totalLinesProcessed += logLines.length;
+
+          if (logLines.length > MAX_LINES_TO_PROCESS) {
+            logger.warn(`Too many log lines in ${file} (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
+            logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
+          }
+
+          logger.debug(`Found ${logLines.length} lines in ${file}`);
+          const isErrorLog = file.includes('error');
+          const parsedLogs = this.parseLogs(logLines, isErrorLog ? 'ERROR' : null);
+          logger.debug(`Parsed ${parsedLogs.length} logs from ${file}`);
+          allLogs.push(...parsedLogs);
+        } catch (error) {
+          logger.error(`Error processing log file ${file}: ${error.message}`);
+        }
+      }
+
+      logger.info(`Parsed ${allLogs.length} total log entries from ${totalLinesProcessed} lines before filtering`);
+
+      let filteredLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
+      logger.debug(`After date filter: ${filteredLogs.length} logs`);
+
+      if (searchParams.level && searchParams.level.trim() !== '') {
+        const targetLevel = searchParams.level.toUpperCase();
+        filteredLogs = filteredLogs.filter(log =>
+          log.level === targetLevel || (targetLevel === 'WARN' && log.level === 'WARNING')
+        );
+        logger.debug(`After level filter (${targetLevel}): ${filteredLogs.length} logs`);
+      }
+
+      if (searchParams.service && searchParams.service.trim() !== '') {
+        filteredLogs = filteredLogs.filter(log =>
+          log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase())
+        );
+        logger.debug(`After service filter (${searchParams.service}): ${filteredLogs.length} logs`);
+      }
+
+      if (searchParams.term && searchParams.term.trim() !== '') {
+        filteredLogs = filteredLogs.filter(log =>
+          log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase())
+        );
+        logger.debug(`After term filter (${searchParams.term}): ${filteredLogs.length} logs`);
+      }
+
+      filteredLogs.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
+      });
+
+      logger.debug(`Sorting logs by date and time (most recent first)`);
+
+      const limit = searchParams.limit ? parseInt(searchParams.limit, 10) : 1000;
+      if (filteredLogs.length > limit) {
+        filteredLogs = filteredLogs.slice(0, limit);
+        logger.debug(`Limiting logs to ${limit}`);
+      }
+
+      const formattedLogs = filteredLogs.map(log => ({
+        date: log.date,
+        time: log.time,
+        level: log.level,
+        service: log.service,
+        message: log.message,
+      }));
+
+      logger.debug(`Log search response: ${formattedLogs.length} logs returned out of ${allLogs.length} total`);
+
+      return {
+        logs: formattedLogs,
+        total: formattedLogs.length,
+      };
+    } catch (error) {
+      logger.error(`Error in searchLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -172,12 +525,12 @@ class LogsService {
   async readLogFile(filePath) {
     try {
       logger.debug(`Attempting to read file: ${filePath}`);
-      
+
       // Try to read the file directly first
       try {
         await fs.access(filePath);
         const stats = await fs.stat(filePath);
-        
+
         if (stats.size > MAX_LOG_FILE_SIZE) {
           logger.warn(`Log file too large (${Math.round(stats.size / 1024 / 1024)}MB), reading first ${Math.round(MAX_LOG_FILE_SIZE / 1024 / 1024)}MB`);
           const fileHandle = await fs.open(filePath, 'r');
@@ -188,7 +541,7 @@ class LogsService {
           logger.debug(`Read large file: ${filePath}`);
           return content;
         }
-        
+
         if (filePath.endsWith('.gz')) {
           const compressedData = await fs.readFile(filePath);
           const decompressedData = await gunzip(compressedData);
@@ -196,7 +549,7 @@ class LogsService {
           logger.debug(`Successfully read and decompressed: ${filePath}`);
           return content;
         }
-        
+
         const content = await fs.readFile(filePath, 'utf8');
         logger.debug(`Read file: ${filePath}`);
         return content;
@@ -216,7 +569,7 @@ class LogsService {
   async searchLogs(options = {}) {
     try {
       logger.debug('Searching logs with options:', options);
-      
+
       // Check method existence
       if (!this.getDateRange || !this.getLogFilesInRange || !this.readLogFile || !this.parseLogs) {
         logger.error('One or more required methods are undefined in LogsService', {
@@ -240,26 +593,26 @@ class LogsService {
 
       const { startDate, endDate } = this.getDateRange(searchParams);
       logger.debug(`Using date range: ${startDate} to ${endDate}`);
-      
+
       const logFiles = await this.getLogFilesInRange(startDate, endDate, searchParams.includeArchived);
       logger.info(`Found ${logFiles.length} log files to search:`, logFiles);
 
       const allLogs = [];
       let totalLinesProcessed = 0;
-      
+
       for (const file of logFiles) {
         try {
           logger.debug(`Reading log file: ${file}`);
           const logContent = await this.readLogFile(file);
           let logLines = logContent.split('\n').filter(line => line.trim() !== '');
-          
+
           totalLinesProcessed += logLines.length;
-          
+
           if (logLines.length > MAX_LINES_TO_PROCESS) {
             logger.warn(`Too many log lines in ${file} (${logLines.length}), limiting to ${MAX_LINES_TO_PROCESS}`);
             logLines = logLines.slice(0, MAX_LINES_TO_PROCESS);
           }
-          
+
           logger.debug(`Found ${logLines.length} lines in ${file}`);
           const isErrorLog = file.includes('error');
           const parsedLogs = this.parseLogs(logLines, isErrorLog ? 'ERROR' : null);
@@ -271,11 +624,11 @@ class LogsService {
       }
 
       logger.info(`Parsed ${allLogs.length} total log entries from ${totalLinesProcessed} lines before filtering`);
-      
+
       // Apply filters
       let filteredLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
       logger.debug(`After date filter: ${filteredLogs.length} logs`);
-      
+
       if (searchParams.level && searchParams.level.trim() !== '') {
         const targetLevel = searchParams.level.toUpperCase();
         filteredLogs = filteredLogs.filter(log =>
@@ -283,14 +636,14 @@ class LogsService {
         );
         logger.debug(`After level filter (${targetLevel}): ${filteredLogs.length} logs`);
       }
-      
+
       if (searchParams.service && searchParams.service.trim() !== '') {
         filteredLogs = filteredLogs.filter(log =>
           log.service && log.service.toLowerCase().includes(searchParams.service.toLowerCase())
         );
         logger.debug(`After service filter (${searchParams.service}): ${filteredLogs.length} logs`);
       }
-      
+
       if (searchParams.term && searchParams.term.trim() !== '') {
         filteredLogs = filteredLogs.filter(log =>
           log.message && log.message.toLowerCase().includes(searchParams.term.toLowerCase())
@@ -303,9 +656,9 @@ class LogsService {
         if (a.date !== b.date) return b.date.localeCompare(a.date);
         return new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`);
       });
-      
+
       logger.debug(`Sorting logs by date and time (most recent first)`);
-      
+
       // Limit results
       const limit = 1000;
       if (filteredLogs.length > limit) {
@@ -322,7 +675,7 @@ class LogsService {
       }));
 
       logger.debug(`Log search response: ${formattedLogs.length} logs returned out of ${allLogs.length} total`);
-      
+
       return {
         logs: formattedLogs,
         total: formattedLogs.length,
@@ -336,102 +689,111 @@ class LogsService {
   /**
    * Get all log files in the specified date range
    */
-  /**
- * Get all log files in the specified date range
- */
-async getLogFilesInRange(startDate, endDate, includeArchived = true) {
-  try {
-    const logDir = path.join(__dirname, '../logs');
-    logger.debug(`Checking logs directory: ${logDir}`);
-    
-    await fs.access(logDir).catch(() => {
-      logger.error(`Logs directory does not exist: ${logDir}`);
-      return [];
-    });
-
-    const files = await fs.readdir(logDir);
-    logger.debug(`Files in logs directory: ${files.join(', ')}`);
-    const logFiles = [];
-    const today = new Date().toISOString().split('T')[0];
-
-    // Validate date range
-    if (new Date(startDate) > new Date(endDate)) {
-      logger.error(`Invalid date range: startDate (${startDate}) is after endDate (${endDate})`);
-      return [];
-    }
-
-    // Include current active log files if today is in range
-    if (startDate <= today && today <= endDate) {
-      const currentLogs = ['combined.log', 'combined1.log', 'error.log'];
-      for (const file of currentLogs) {
-        const filePath = path.join(logDir, file);
-        try {
-          await fs.access(filePath);
-          logFiles.push(filePath);
-          logger.debug(`Added current active log: ${filePath}`);
-        } catch (error) {
-          logger.debug(`Current log not found: ${filePath}`);
+  async getLogFilesInRange(startDate, endDate, includeArchived = true) {
+    try {
+      const logDir = path.join(__dirname, '../logs');
+      logger.debug(`Checking logs directory: ${logDir}`);
+  
+      await fs.access(logDir).catch(() => {
+        logger.error(`Logs directory does not exist: ${logDir}`);
+        return [];
+      });
+  
+      const files = await fs.readdir(logDir);
+      logger.debug(`Files in logs directory: ${files.join(', ')}`);
+      const logFiles = [];
+      const today = new Date().toISOString().split('T')[0];
+  
+      // Validate date range
+      if (new Date(startDate) > new Date(endDate)) {
+        logger.error(`Invalid date range: startDate (${startDate}) is after endDate (${endDate})`);
+        return [];
+      }
+  
+      // Include current active log files if today is in range
+      if (startDate <= today && today <= endDate) {
+        const currentLogs = ['combined.log', 'combined1.log']; // Excluded error.log
+        for (const file of currentLogs) {
+          const filePath = path.join(logDir, file);
+          try {
+            await fs.access(filePath, fs.constants.R_OK);
+            logFiles.push(filePath);
+            logger.debug(`Added current active log: ${filePath}`);
+          } catch (error) {
+            logger.debug(`Current log not found: ${filePath}`);
+          }
         }
       }
-    }
-
-    // Process all files to find date-based logs
-    for (const file of files) {
-      // Skip non-log files
-      if (!file.startsWith('combined-') && !file.startsWith('error-')) {
-        continue;
-      }
-
-      // Extract date from filename
-      const dateMatch = file.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log/);
-      if (!dateMatch) {
-        logger.debug(`File does not match date pattern: ${file}`);
-        continue;
-      }
-
-      const [, logType, fileDate] = dateMatch;
-      
-      // Strictly enforce date range
-      if (fileDate >= startDate && fileDate <= endDate) {
-        const filePath = path.join(logDir, file);
-        try {
-          await fs.access(filePath);
-          logFiles.push(filePath);
-          logger.debug(`Added dated log file: ${filePath}`);
-        } catch (error) {
-          logger.warn(`Could not access log file ${filePath}: ${error.message}`);
+  
+      // Process all files to find date-based logs
+      for (const file of files) {
+        // Match Winston log patterns: combined-YYYY-MM-DD.log, combined-YYYY-MM-DD.log.N, combined-YYYY-MM-DD.log.gz, combined-YYYY-MM-DD.log.N.gz, error-YYYY-MM-DD.log, error-YYYY-MM-DD.log.gz
+        const dateMatch = file.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?(?:\.gz)?$/);
+        if (!dateMatch) {
+          logger.debug(`File does not match date pattern: ${file}`);
+          continue;
         }
+  
+        const [, logType, fileDate, suffix] = dateMatch;
+  
+        // Enforce date range
+        if (fileDate >= startDate && fileDate <= endDate) {
+          const filePath = path.join(logDir, file);
+          try {
+            await fs.access(filePath, fs.constants.R_OK);
+            logFiles.push(filePath);
+            logger.debug(`Added dated log file: ${filePath}`);
+          } catch (error) {
+            logger.debug(`Could not access log file ${filePath}: ${error.message}`);
+          }
+        } else {
+          logger.debug(`File ${file} date ${fileDate} out of range ${startDate} to ${endDate}`);
+        }
+      }
+  
+      // Sort files by date, type, and suffix for consistent processing order
+      logFiles.sort((a, b) => {
+        const aFile = path.basename(a);
+        const bFile = path.basename(b);
+  
+        // Current logs first
+        if (aFile.startsWith('combined.log') || aFile.startsWith('combined1.log')) return -1;
+        if (bFile.startsWith('combined.log') || bFile.startsWith('combined1.log')) return 1;
+  
+        // Extract date and suffix
+        const aMatch = aFile.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?(?:\.gz)?$/);
+        const bMatch = bFile.match(/^(combined|error)-(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?(?:\.gz)?$/);
+  
+        if (!aMatch || !bMatch) return aFile.localeCompare(bFile);
+  
+        const [, aType, aDate, aSuffix] = aMatch;
+        const [, bType, bDate, bSuffix] = bMatch;
+  
+        // Sort by date first (descending)
+        if (aDate !== bDate) return bDate.localeCompare(aDate);
+  
+        // Then by type (combined before error)
+        if (aType !== bType) return aType.localeCompare(bType);
+  
+        // Then by suffix (ascending, treat undefined as 0)
+        const aNum = aSuffix ? parseInt(aSuffix, 10) : 0;
+        const bNum = bSuffix ? parseInt(bSuffix, 10) : 0;
+        return aNum - bNum;
+      });
+  
+      if (logFiles.length === 0) {
+        logger.warn(`No log files found for date range ${startDate} to ${endDate}`);
+        logger.debug(`Expected patterns: combined-${startDate}.log*, error-${startDate}.log*`);
       } else {
-        logger.debug(`File ${file} date ${fileDate} out of range ${startDate} to ${endDate}`);
+        logger.debug(`Found ${logFiles.length} log files in range ${startDate} to ${endDate}: ${logFiles.join(', ')}`);
       }
+  
+      return logFiles;
+    } catch (error) {
+      logger.error(`Error getting log files: ${error.message}`, { stack: error.stack });
+      throw error;
     }
-
-    // Sort files by date and type for consistent processing order
-    logFiles.sort((a, b) => {
-      const aFile = path.basename(a);
-      const bFile = path.basename(b);
-      
-      // Current logs first
-      if (aFile.startsWith('combined.log') || aFile.startsWith('combined1.log')) return -1;
-      if (bFile.startsWith('combined.log') || bFile.startsWith('combined1.log')) return 1;
-      
-      // Then by date
-      return bFile.localeCompare(aFile);
-    });
-
-    if (logFiles.length === 0) {
-      logger.warn(`No log files found for date range ${startDate} to ${endDate}`);
-      logger.debug(`Expected patterns: combined-${startDate}.log*, error-${startDate}.log*`);
-    } else {
-      logger.debug(`Found ${logFiles.length} log files in range ${startDate} to ${endDate}: ${logFiles.join(', ')}`);
-    }
-    
-    return logFiles;
-  } catch (error) {
-    logger.error(`Error getting log files: ${error.message}`, { stack: error.stack });
-    throw error;
   }
-}
 
   /**
    * Extract date from a log filename
@@ -568,157 +930,168 @@ async getLogFilesInRange(startDate, endDate, includeArchived = true) {
   }
 
   /**
-   * Parse raw log lines into structured log objects
-   */
-  /**
  * Parse raw log lines into structured log objects
  */
-parseLogs(logLines, defaultLevel = null) {
-  try {
-    const logs = [];
-    const processedLines = new Set(); // Track processed lines to avoid duplicates
+  parseLogs(logLines, defaultLevel = null) {
+    try {
+      const logs = [];
+      const processedLines = new Set(); // Track processed lines to avoid duplicates
+      let currentLog = null; // Track the current log entry for multi-line messages
 
-    for (let index = 0; index < logLines.length; index++) {
-      try {
-        const line = logLines[index];
-        if (!line || typeof line !== 'string' || line.trim() === '' || processedLines.has(line)) {
-          continue;
-        }
-
-        processedLines.add(line);
-        const trimmedLine = line.trim();
-
-        // Skip debug lines about skipping unparseable log lines to avoid recursive loops
-        if (trimmedLine.includes('[DEBUG]: Skipping unparseable log line:')) {
-          // Extract embedded log lines
-          const embeddedMatch = trimmedLine.match(/\[DEBUG\]: Skipping unparseable log line: (.+)/);
-          if (embeddedMatch) {
-            const embeddedLine = embeddedMatch[1].trim();
-            if (embeddedLine && !processedLines.has(embeddedLine)) {
-              // Parse the embedded line as a single log entry
-              const embeddedLogs = this.parseLogs([embeddedLine], defaultLevel);
-              logs.push(...embeddedLogs);
-              processedLines.add(embeddedLine);
-            }
+      for (let index = 0; index < logLines.length; index++) {
+        try {
+          const line = logLines[index];
+          if (!line || typeof line !== 'string' || line.trim() === '' || processedLines.has(line)) {
+            continue;
           }
-          continue;
-        }
 
-        // Handle potential embedded logs in debug messages
-        if (trimmedLine.startsWith(`${trimmedLine.split(' ')[0]} [DEBUG]:`) && trimmedLine.includes(':')) {
-          // Try to extract multiple embedded log lines from the debug message
-          const messageStart = trimmedLine.indexOf(':') + 1;
-          const debugMessage = trimmedLine.slice(messageStart).trim();
-          if (debugMessage) {
-            // Split potential embedded logs by common delimiters (newlines, semicolons, or other separators)
-            const potentialEmbeddedLogs = debugMessage.split(/(?:\n|;|\|)/).map(l => l.trim()).filter(l => l);
-            for (const embeddedLine of potentialEmbeddedLogs) {
+          processedLines.add(line);
+          const trimmedLine = line.trim();
+
+          // Skip separator lines
+          if (trimmedLine.match(/^={10,}$/)) {
+            logger.debug(`Skipping separator line at index ${index}`);
+            continue;
+          }
+
+          // Skip debug lines about skipping unparseable log lines to avoid recursive loops
+          if (trimmedLine.includes('[DEBUG]: Skipping unparseable log line:')) {
+            const embeddedMatch = trimmedLine.match(/\[DEBUG\]: Skipping unparseable log line: (.+)/);
+            if (embeddedMatch) {
+              const embeddedLine = embeddedMatch[1].trim();
               if (embeddedLine && !processedLines.has(embeddedLine)) {
-                // Recursively parse each potential embedded log
                 const embeddedLogs = this.parseLogs([embeddedLine], defaultLevel);
                 logs.push(...embeddedLogs);
                 processedLines.add(embeddedLine);
               }
             }
-          }
-        }
-
-        // Primary format: YYYY-MM-DD HH:MM:SS [LEVEL]: Message
-        const standardMatch = trimmedLine.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s*(.*)/);
-        if (standardMatch) {
-          const [, date, time, level, message] = standardMatch;
-          if (!message || message.trim() === '') {
             continue;
           }
-          let normalizedLevel = defaultLevel || level.toUpperCase();
-          if (normalizedLevel === 'WARNING') normalizedLevel = 'WARN';
-          if (!this.detectService || !this.detectLogLevel) {
-            logger.error('One or more required methods are undefined in LogsService', {
-              detectService: !!this.detectService,
-              detectLogLevel: !!this.detectLogLevel
-            });
-            throw new Error('Required methods are undefined');
-          }
-          logs.push({
-            date,
-            time,
-            level: normalizedLevel,
-            message: message.trim(),
-            service: this.detectService(message),
-          });
-          continue;
-        }
 
-        // Alternative format: YYYY-MM-DD HH:MM:SS [LEVEL] Message (without colon)
-        const altMatch = trimmedLine.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
-        if (altMatch) {
-          const [, date, time, level, message] = altMatch;
-          if (!message || message.trim() === '') {
+          // Handle potential embedded logs in debug messages
+          if (trimmedLine.startsWith(`${trimmedLine.split(' ')[0]} [DEBUG]:`) && trimmedLine.includes(':')) {
+            const messageStart = trimmedLine.indexOf(':') + 1;
+            const debugMessage = trimmedLine.slice(messageStart).trim();
+            if (debugMessage) {
+              const potentialEmbeddedLogs = debugMessage.split(/(?:\n|;|\|)/).map(l => l.trim()).filter(l => l);
+              for (const embeddedLine of potentialEmbeddedLogs) {
+                if (embeddedLine && !processedLines.has(embeddedLine)) {
+                  const embeddedLogs = this.parseLogs([embeddedLine], defaultLevel);
+                  logs.push(...embeddedLogs);
+                  processedLines.add(embeddedLine);
+                }
+              }
+            }
+          }
+
+          // Try standard format: YYYY-MM-DD HH:MM:SS [LEVEL]: Message
+          const standardMatch = trimmedLine.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]:\s*(.*)/);
+          if (standardMatch) {
+            const [, date, time, level, message] = standardMatch;
+            if (!message || message.trim() === '') {
+              continue;
+            }
+            let normalizedLevel = defaultLevel || level.toUpperCase();
+            if (normalizedLevel === 'WARNING') normalizedLevel = 'WARN';
+            if (!this.detectService || !this.detectLogLevel) {
+              logger.error('One or more required methods are undefined in LogsService', {
+                detectService: !!this.detectService,
+                detectLogLevel: !!this.detectLogLevel
+              });
+              throw new Error('Required methods are undefined');
+            }
+            currentLog = {
+              date,
+              time,
+              level: normalizedLevel,
+              message: message.trim(),
+              service: this.detectService(message),
+            };
+            logs.push(currentLog);
             continue;
           }
-          let normalizedLevel = defaultLevel || level.toUpperCase();
-          if (normalizedLevel === 'WARNING') normalizedLevel = 'WARN';
-          if (!this.detectService || !this.detectLogLevel) {
-            logger.error('One or more required methods are undefined in LogsService', {
-              detectService: !!this.detectService,
-              detectLogLevel: !!this.detectLogLevel
-            });
-            throw new Error('Required methods are undefined');
-          }
-          logs.push({
-            date,
-            time,
-            level: normalizedLevel,
-            message: message.trim(),
-            service: this.detectService(message),
-          });
-          continue;
-        }
 
-        // Fallback: YYYY-MM-DD HH:MM:SS Message (no level brackets)
-        const dateTimeOnlyMatch = trimmedLine.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
-        if (dateTimeOnlyMatch) {
-          const [, date, time, message] = dateTimeOnlyMatch;
-          if (!message || message.trim() === '') {
+          // Try alternative format: YYYY-MM-DD HH:MM:SS [LEVEL] Message (no colon)
+          const altMatch = trimmedLine.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.*)/);
+          if (altMatch) {
+            const [, date, time, level, message] = altMatch;
+            if (!message || message.trim() === '') {
+              continue;
+            }
+            let normalizedLevel = defaultLevel || level.toUpperCase();
+            if (normalizedLevel === 'WARNING') normalizedLevel = 'WARN';
+            if (!this.detectService || !this.detectLogLevel) {
+              logger.error('One or more required methods are undefined in LogsService', {
+                detectService: !!this.detectService,
+                detectLogLevel: !!this.detectLogLevel
+              });
+              throw new Error('Required methods are undefined');
+            }
+            currentLog = {
+              date,
+              time,
+              level: normalizedLevel,
+              message: message.trim(),
+              service: this.detectService(message),
+            };
+            logs.push(currentLog);
             continue;
           }
-          if (!this.detectService || !this.detectLogLevel) {
-            logger.error('One or more required methods are undefined in LogsService', {
-              detectService: !!this.detectService,
-              detectLogLevel: !!this.detectLogLevel
-            });
-            throw new Error('Required methods are undefined');
-          }
-          let detectedLevel = defaultLevel || this.detectLogLevel(message);
-          if (detectedLevel === 'WARNING') detectedLevel = 'WARN';
-          logs.push({
-            date,
-            time,
-            level: detectedLevel,
-            message: message.trim(),
-            service: this.detectService(message),
-          });
-          continue;
-        }
 
-        // If no pattern matches, log as unparseable
-        logger.debug(`Line ${index} does not match any format: "${trimmedLine.substring(0, 100)}..."`);
-      } catch (lineError) {
-        logger.warn(`Error parsing line ${index}: ${lineError.message}`);
+          // Try fallback format: YYYY-MM-DD HH:MM:SS Message (no level brackets)
+          const dateTimeOnlyMatch = trimmedLine.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.*)/);
+          if (dateTimeOnlyMatch) {
+            const [, date, time, message] = dateTimeOnlyMatch;
+            if (!message || message.trim() === '') {
+              continue;
+            }
+            if (!this.detectService || !this.detectLogLevel) {
+              logger.error('One or more required methods are undefined in LogsService', {
+                detectService: !!this.detectService,
+                detectLogLevel: !!this.detectLogLevel
+              });
+              throw new Error('Required methods are undefined');
+            }
+            let detectedLevel = defaultLevel || this.detectLogLevel(message);
+            if (detectedLevel === 'WARNING') detectedLevel = 'WARN';
+            currentLog = {
+              date,
+              time,
+              level: detectedLevel,
+              message: message.trim(),
+              service: this.detectService(message),
+            };
+            logs.push(currentLog);
+            continue;
+          }
+
+          // Handle multi-line continuations (AQL queries, JSON data, etc.)
+          if (currentLog && trimmedLine.match(/^(?:[A-Z]+\s+|{|\[|"_id":|"[^"]+":|[^:]+:.*|\s*}\s*$|\s*]\s*$)/)) {
+            currentLog.message += `\n${trimmedLine}`;
+            logger.debug(`Appended multi-line continuation at index ${index}: ${trimmedLine.substring(0, 100)}...`);
+            continue;
+          }
+
+          // If no pattern matches, log as unparseable
+          logger.debug(`Line ${index} does not match any format: "${trimmedLine.substring(0, 100)}..."`);
+          currentLog = null; // Reset current log to avoid incorrect appending
+        } catch (lineError) {
+          logger.warn(`Error parsing line ${index}: ${lineError.message}`);
+          currentLog = null; // Reset on error
+        }
       }
-    }
 
-    logger.debug(`Parsed ${logs.length} logs from ${logLines.length} lines`); // Changed from INFO to DEBUG
-    if (logs.length < logLines.length) {
-      const skipped = logLines.length - logs.length;
-      logger.debug(`Skipped ${skipped} lines during parsing`); // Changed from INFO to DEBUG
+      logger.debug(`Parsed ${logs.length} logs from ${logLines.length} lines`);
+      if (logs.length < logLines.length) {
+        const skipped = logLines.length - logs.length;
+        logger.debug(`Skipped ${skipped} lines during parsing`);
+      }
+      return logs;
+    } catch (error) {
+      logger.error(`Error in parseLogs: ${error.message}`);
+      return [];
     }
-    return logs;
-  } catch (error) {
-    logger.error(`Error in parseLogs: ${error.message}`);
-    return [];
   }
-}
 
   /**
    * Detect log level from message if not explicitly provided
@@ -728,7 +1101,7 @@ parseLogs(logLines, defaultLevel = null) {
   detectLogLevel(message) {
     try {
       if (!message) return 'INFO';
-  
+
       const lowerMessage = message.toLowerCase();
       if (lowerMessage.includes('error') || lowerMessage.includes('exception') || lowerMessage.includes('fail')) {
         return 'ERROR';
@@ -753,10 +1126,10 @@ parseLogs(logLines, defaultLevel = null) {
   detectService(message) {
     try {
       if (!message) return 'System';
-  
+
       // Service detection patterns
       if (message.includes('EmailService')) return 'Email Service';
-      if (message.includes('DatabaseService')) return 'Database Service';  
+      if (message.includes('DatabaseService')) return 'Database Service';
       if (message.includes('AuthService')) return 'Auth Service';
       if (message.includes('SessionService')) return 'Session Service';
       if (message.includes('ServiceCategoryService')) return 'Service Category';
@@ -766,7 +1139,7 @@ parseLogs(logLines, defaultLevel = null) {
       if (message.includes('SMTP') || message.includes('smtp')) return 'Email Service';
       if (message.includes('login') || message.includes('auth') || message.includes('token')) return 'Auth Service';
       if (message.includes('route') || message.includes('mount')) return 'Router Service';
-  
+
       // Look for service names in brackets or patterns
       const serviceMatch = message.match(/\[([A-Z]+)\s+DEBUG\]/i);
       if (serviceMatch) {
@@ -780,7 +1153,7 @@ parseLogs(logLines, defaultLevel = null) {
           default: return serviceType + ' Service';
         }
       }
-  
+
       return 'System';
     } catch (error) {
       logger.warn(`Error detecting service: ${error.message}`);
@@ -877,7 +1250,7 @@ parseLogs(logLines, defaultLevel = null) {
       }
 
       const logFiles = await this.getLogFilesInRange(yesterdayStr, yesterdayStr, true);
-      
+
       if (logFiles.length === 0) {
         logger.info('No log files found for yesterday');
         return {

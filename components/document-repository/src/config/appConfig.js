@@ -18,14 +18,12 @@ const config = {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024, // 50MB
     uploadDir: process.env.UPLOAD_DIR || './uploads',
     allowedMimeTypes: [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/markdown',
-      'text/html',
-      'text/plain'
+      'application/pdf',  // pdf files .pdf
+      'application/msword', // word files .doc, .docx
+      'application/vnd.ms-excel', // excel files .xls, .xlsx
+      'text/markdown',  // markdown files .md, .markdown
+      'text/html',  // html files .html
+      'text/plain'  // text files .txt
     ],
     allowedExtensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.md', '.html', '.txt']
   },

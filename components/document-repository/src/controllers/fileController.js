@@ -6,13 +6,14 @@ const fs = require('fs').promises;
 const { logger } = require('../shared-lib/logger');
 
 // Constants
-const MAX_FILES_UPLOAD = config.maxFilesUpload; // Maximum number of files that can be uploaded at once
+const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
 
 // Validation schemas
 const uploadSchema = Joi.object({
-  description: Joi.string().max(500).optional(),
-  category: Joi.string().valid('general', 'data', 'reports', 'documents').default('general'),
-  tags: Joi.array().items(Joi.string().max(50)).max(10).optional()
+  author: Joi.string().max(200).optional(),
+  labels: Joi.array().items(Joi.string().max(50)).max(10).default(['general']),
+  crawlDate: Joi.date().optional(),
+  sourceUrl: Joi.string().uri().optional()
 });
 
 const searchSchema = Joi.object({
@@ -32,39 +33,39 @@ const getFilesSchema = Joi.object({
 
 class FileController {
   /**
-   * Process and validate tags from request body
+   * Process and validate labels from request body
    * @private
    * @param {Object} body - Request body
-   * @returns {Array} Processed tags array
+   * @returns {Array} Processed labels array
    */
-  _processTags(body) {
-    if (!body.tags) return [];
+  _processLabels(body) {
+    if (!body.labels) return [];
     
     try {
-      let tags = body.tags;
+      let labels = body.labels;
       
       // Handle string input
-      if (typeof tags === 'string') {
+      if (typeof labels === 'string') {
         try {
           // Try to parse as JSON first
-          tags = JSON.parse(tags);
+          labels = JSON.parse(labels);
         } catch (e) {
           // If JSON parsing fails, treat as comma-separated string
-          tags = tags.split(',').map(tag => tag.trim());
+          labels = labels.split(',').map(label => label.trim());
         }
       }
       
       // Ensure we have an array
-      if (!Array.isArray(tags)) {
-        tags = [tags];
+      if (!Array.isArray(labels)) {
+        labels = [labels];
       }
       
-      // Filter out empty tags and ensure all tags are strings
-      return tags
-        .map(tag => String(tag).trim())
-        .filter(tag => tag.length > 0);
+      // Filter out empty labels and ensure all labels are strings
+      return labels
+        .map(label => String(label).trim())
+        .filter(label => label.length > 0);
     } catch (error) {
-      logger.error('[FILE-CONTROLLER] Error processing tags:', error);
+      logger.error('[FILE-CONTROLLER] Error processing labels:', error);
       return [];
     }
   }
@@ -158,15 +159,21 @@ class FileController {
    */
   _formatFileRecord(fileRecord) {
     return {
-      id: fileRecord.id,
-      originalName: fileRecord.originalName,
-      mimeType: fileRecord.mimeType,
-      size: fileRecord.size,
-      uploadedAt: fileRecord.uploadedAt,
-      category: fileRecord.category,
-      description: fileRecord.description,
-      tags: fileRecord.tags,
-      status: fileRecord.status
+      file_id: fileRecord.file_id,
+      file_name: fileRecord.file_name,
+      file_size: fileRecord.file_size,
+      file_type: fileRecord.file_type,
+      labels: fileRecord.labels,
+      author: fileRecord.author,
+      uploaded_date: fileRecord.uploaded_date,
+      created_date: fileRecord.created_date,
+      crawl_date: fileRecord.crawl_date,
+      source_url: fileRecord.source_url,
+      language: fileRecord.language,
+      chunk_count: fileRecord.chunk_count,
+      dataprep_status: fileRecord.dataprep.status,
+      dataprep_ingested_date: fileRecord.dataprep.ingested_date,
+      dataprep_retracted_date: fileRecord.dataprep.retracted_date,
     };
   }
 
@@ -185,9 +192,11 @@ class FileController {
         });
       }
 
-      req.body.tags = this._processTags(req.body);
+      req.body.labels = this._processLabels(req.body);
       const validatedData = this._validateUploadRequest(req.body);
       const fileRecord = await fileService.uploadFile(req.file, validatedData);
+
+      logger.debug(`[FILE-CONTROLLER] fileRecord: ${fileRecord}`);
 
       res.status(201).json({
         success: true,
@@ -224,7 +233,7 @@ class FileController {
         });
       }
 
-      req.body.tags = this._processTags(req.body);
+      req.body.labels = this._processLabels(req.body);
       const validatedData = this._validateUploadRequest(req.body);
       const uploadPromises = req.files.map(file => fileService.uploadFile(file, validatedData));
       const fileRecords = await Promise.all(uploadPromises);

@@ -10,13 +10,11 @@ const { v4: uuidv4 } = require('uuid');
 /**
  * Generate unique filename
  */
-const generateUniqueFilename = (originalFilename) => {
-  const extension = path.extname(originalFilename);
-  const baseName = path.basename(originalFilename, extension);
+const generateUniqueFileId = () => {
   const timestamp = Date.now();
   const uuid = uuidv4().split('-')[0];
   
-  return `${baseName}_${timestamp}_${uuid}${extension}`;
+  return `${timestamp}-${uuid}`;
 };
 
 /**
@@ -158,7 +156,7 @@ const getDocxWordCount = async (filePath) => {
 
 
 module.exports = {
-  generateUniqueFilename,
+  generateUniqueFileId,
   ensureDirectoryExists,
   saveFileToDisk,
   deleteFile,

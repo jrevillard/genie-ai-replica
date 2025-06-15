@@ -25,37 +25,66 @@ components:
         data:
           type: object
           properties:
-            id:
+            file_id:
               type: string
               example: "550e8400-e29b-41d4-a716-446655440000"
-            originalName:
+            file_name:
               type: string
               example: "document.pdf"
-            mimeType:
-              type: string
-              example: "application/pdf"
-            size:
+            file_size:
               type: integer
               example: 1024
-            uploadedAt:
+            file_type:
               type: string
-              format: date-time
-              example: "2024-03-20T10:30:00Z"
-            category:
+              example: "application/pdf"
+            file_path:
               type: string
-              enum: [general, data, reports, documents]
-              example: "documents"
-            description:
-              type: string
-              example: "Important document"
-            tags:
+              example: "/uploads/document.pdf"
+            labels:
               type: array
               items:
                 type: string
               example: ["important", "finance"]
-            status:
+            author:
               type: string
-              example: "uploaded"
+              example: "John Doe"
+            uploaded_date:
+              type: string
+              format: date-time
+              example: "2024-03-20T10:30:00Z"
+            created_date:
+              type: string
+              format: date-time
+              example: "2024-03-20T10:30:00Z"
+            crawl_date:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2024-03-20T10:30:00Z"
+            source_url:
+              type: string
+              example: "https://example.com/document.pdf"
+            language:
+              type: string
+              example: "en"
+            chunk_count:
+              type: integer
+              example: 0
+            dataprep:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, processing, completed, failed]
+                  example: "pending"
+                ingested_date:
+                  type: string
+                  format: date-time
+                  example: ""
+                retracted_date:
+                  type: string
+                  format: date-time
+                  example: ""
 
     MultipleFileUploadResponse:
       type: object
@@ -71,37 +100,66 @@ components:
           items:
             type: object
             properties:
-              id:
+              file_id:
                 type: string
                 example: "550e8400-e29b-41d4-a716-446655440000"
-              originalName:
+              file_name:
                 type: string
                 example: "document1.pdf"
-              mimeType:
-                type: string
-                example: "application/pdf"
-              size:
+              file_size:
                 type: integer
                 example: 1024
-              uploadedAt:
+              file_type:
                 type: string
-                format: date-time
-                example: "2024-03-20T10:30:00Z"
-              category:
+                example: "application/pdf"
+              file_path:
                 type: string
-                enum: [general, data, reports, documents]
-                example: "documents"
-              description:
-                type: string
-                example: "Important document"
-              tags:
+                example: "/uploads/document1.pdf"
+              labels:
                 type: array
                 items:
                   type: string
                 example: ["important", "finance"]
-              status:
+              author:
                 type: string
-                example: "uploaded"
+                example: "John Doe"
+              uploaded_date:
+                type: string
+                format: date-time
+                example: "2024-03-20T10:30:00Z"
+              created_date:
+                type: string
+                format: date-time
+                example: "2024-03-20T10:30:00Z"
+              crawl_date:
+                type: string
+                format: date-time
+                nullable: true
+                example: "2024-03-20T10:30:00Z"
+              source_url:
+                type: string
+                example: "https://example.com/document1.pdf"
+              language:
+                type: string
+                example: "en"
+              chunk_count:
+                type: integer
+                example: 0
+              dataprep:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, failed]
+                    example: "pending"
+                  ingested_date:
+                    type: string
+                    format: date-time
+                    example: ""
+                  retracted_date:
+                    type: string
+                    format: date-time
+                    example: ""
     GetFilesResponse:
       type: object
       properties:
@@ -329,20 +387,26 @@ paths:
                   type: string
                   format: binary
                   description: The file to upload
-                description:
+                author:
                   type: string
-                  description: Optional description of the file
-                  maxLength: 500
-                category:
-                  type: string
-                  description: Category of the file
-                  enum: [general, data, reports, documents]
-                  default: general
-                tags:
+                  description: Author of the document
+                  maxLength: 200
+                labels:
                   type: array
                   items:
                     type: string
-                  description: Optional tags for the file (max 10 tags, each max 50 chars)
+                    maxLength: 50
+                  maxItems: 10
+                  default: ["general"]
+                  description: Labels/tags for the document
+                crawlDate:
+                  type: string
+                  format: date-time
+                  description: Date when the document was crawled/collected
+                sourceUrl:
+                  type: string
+                  format: uri
+                  description: Source URL of the document
       responses:
         '201':
           description: File uploaded successfully
@@ -401,20 +465,26 @@ paths:
                     type: string
                     format: binary
                   description: Array of files to upload (maximum 10 files)
-                description:
+                author:
                   type: string
-                  description: Optional description for all files
-                  maxLength: 500
-                category:
-                  type: string
-                  description: Category for all files
-                  enum: [general, data, reports, documents]
-                  default: general
-                tags:
+                  description: Author of the documents
+                  maxLength: 200
+                labels:
                   type: array
                   items:
                     type: string
-                  description: Optional tags for all files (max 10 tags, each max 50 chars)
+                    maxLength: 50
+                  maxItems: 10
+                  default: ["general"]
+                  description: Labels/tags for the documents
+                crawlDate:
+                  type: string
+                  format: date-time
+                  description: Date when the documents were crawled/collected
+                sourceUrl:
+                  type: string
+                  format: uri
+                  description: Source URL of the documents
       responses:
         '201':
           description: Files uploaded successfully

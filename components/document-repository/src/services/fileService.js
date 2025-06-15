@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
 const { logger } = require('../shared-lib/logger');
 const dbService = require('../shared-lib/db-connection-service');
+const fileUtils = require('../utils/fileUtils');
 
 // NOTE: securityService is not implemented yet
 // - securityService is not implemented yet
@@ -16,20 +17,13 @@ const dbService = require('../shared-lib/db-connection-service');
 
 // Import utils
 const appConfig = require('../config/appConfig');
+const { config } = require('dotenv');
 
 class FileService {
   constructor() {
     this.uploadDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
-    this.allowedMimeTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/markdown',
-      'text/html',
-      'text/plain'
-    ];
+    this.allowedMimeTypes = appConfig.upload.allowedMimeTypes;
+    this.allowedExtensions = appConfig.upload.allowedExtensions;
   }
 
   /**
@@ -40,148 +34,38 @@ class FileService {
   }
 
   /**
-   * Extract metadata from a file
-   * @param {string} filePath - Path to the file
-   * @param {string} mimeType - MIME type of the file
-   * @returns {Object} Extracted metadata
-   */
-  async extractMetadata(filePath, mimeType) {
-    try {
-      const stats = await fs.stat(filePath);
-      const metadata = {
-        size: stats.size,
-        created: stats.birthtime,
-        modified: stats.mtime,
-        accessed: stats.atime,
-        type: mimeType,
-        extension: path.extname(filePath).toLowerCase().slice(1)
-      };
-
-      // TODO: [LOW] Implement metadata extraction for more file types
-      // - currently only support pdf extraction to get page count
-      
-      // Extract additional metadata based on file type
-      switch (mimeType) {
-        // pdf file
-        case 'application/pdf':
-          metadata.pageCount = await this.extractPdfPageCount(filePath);
-          break;
-        // word processing file
-        case 'application/msword':
-        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-          metadata.wordCount = 0; //await this.extractWordCount(filePath);
-          break;
-        // spreadsheet file
-        case 'application/vnd.ms-excel':
-        case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-          metadata.sheetCount = 0; //await this.extractExcelSheetCount(filePath);
-          break;
-        // text file, markdown file, html file
-        case 'text/plain':
-        case 'text/markdown':
-        case 'text/html':
-          metadata.lineCount = 0; //await this.extractLineCount(filePath);
-          metadata.wordCount = 0; //await this.extractWordCount(filePath);
-          break;
-      }
-
-      return metadata;
-    } catch (error) {
-      logger.error(`Error extracting metadata: {error}`);
-      return {
-        size: 0,
-        type: mimeType,
-        extension: path.extname(filePath).toLowerCase().slice(1),
-        error: 'Failed to extract metadata'
-      };
-    }
-  }
-
-  // TODO: [LOW] It's still not working
-  // - doc.numPages returns null
-
-  /**
-   * Extract page count from PDF file
-   * @private
-   */
-  async extractPdfPageCount(filePath) {
-    try {
-      const pdfjs = require('pdfjs-dist');
-      const data = await fs.readFile(filePath);
-      logger.debug(`File data length: ${data.length}`);
-      logger.debug(`File data type: ${data.constructor.name}`);
-      // Convert Buffer to Uint8Array
-      const uint8Array = new Uint8Array(data);
-      logger.debug(`Uint8Array length: ${uint8Array.length}`);
-      const doc = await pdfjs.getDocument(uint8Array).promise;
-      logger.debug(`PDF page count: ${doc.numPages}`);
-      return doc.numPages;
-    } catch (error) {
-      logger.warn(`Failed to extract PDF page count: {error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Extract word count from text-based files
-   * @private
-   */
-  async extractWordCount(filePath) {
-    return null;
-  }
-
-  /**
-   * Extract line count from text files
-   * @private
-   */
-  async extractLineCount(filePath) {
-    return null;
-  }
-
-  /**
-   * Extract sheet count from Excel files
-   * @private
-   */
-  async extractExcelSheetCount(filePath) {
-    return null;
-  }
-
-  /**
    * Upload and process a file
    * @param {Object} fileData - File data from multer
    * @param {Object} fileInfo - Additional information about the file (provided by the user)
    * @returns {Object} File record
    */
   async uploadFile(fileData, fileInfo = {}) {
-    logger.debug(`[FILE-SERVICE] uploadFile`);
-    logger.debug(`[FILE-SERVICE] Uploading file: ${fileData}`);
-
+    
     let filePath;
     try {
       // Generate unique file ID
-      const fileId = uuidv4();
-      const originalName = fileData.originalname;
-      const fileExtension = path.extname(originalName);
-      const fileName = `${fileId}${fileExtension}`;
-      filePath = path.join(this.uploadDir, fileName);
-      logger.info(`[FILE-SERVICE] Generate unique file ID: ${fileName}`);
+      const fileId = fileUtils.generateUniqueFileId();
+      const originalFileName = fileData.originalname;
+      const fileExtension = path.extname(originalFileName);
+      const savedFileName = `${fileId}${fileExtension}`;
+      filePath = path.join(this.uploadDir, savedFileName);
+      logger.debug(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
 
-      // Validate file type
-      const mimeType = mime.lookup(originalName) || fileData.mimetype;
-      if (!this.allowedMimeTypes.includes(mimeType)) {
-        throw new Error(`File type ${mimeType} is not allowed`);
+      // Validate file type & extension
+      const mimeType = mime.lookup(originalFileName) || fileData.mimetype;
+      if (!this.allowedMimeTypes.includes(mimeType) || !this.allowedExtensions.includes(fileExtension)) {
+        throw new Error(`File type ${mimeType} or extension ${fileExtension} is not allowed`);
       }
 
-      // TODO: [NORMAL] Move size to config
       // Validate file size (default: 50MB)
-      const maxFileSize = appConfig.maxFileSize || 50 * 1024 * 1024;
+      const maxFileSize = appConfig.upload.maxFileSize;
       if (fileData.size > maxFileSize) {
         throw new Error(`File size exceeds maximum allowed size of ${maxFileSize} bytes`);
       }
 
       // Ensure upload directory exists
       logger.debug(`[FILE-SERVICE]  Ensure upload directory exists: ${this.uploadDir}`);
-      await fs.mkdir(this.uploadDir, { recursive: true });
+      await fileUtils.ensureDirectoryExists(this.uploadDir);
 
       // Write file to disk (using buffer from memory storage)
       logger.debug(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
@@ -198,33 +82,45 @@ class FileService {
       //   }
       // }
 
-      // Extract metadata
-      const extractedMetadata = await this.extractMetadata(filePath, mimeType);
+      // TODO: Review Fix createdDate
+      // - the date is not correct, it's the date when the file was written to the disk in the server
+      // - expected: the date when the file was created on the client side
+      // - limitation: HTTP file uploads don't preserve filesystem metadata
+      // - option 1: current solution, use the date when the file was written to the disk in the server
+      // - option 2: frontend should provide the created_date by extracting it from the file metadata
 
+      // Get file stats to determine creation date
+      const stats = await fs.stat(filePath);
+      const createdDate = stats.birthtime;
+      logger.debug(`[FILE-SERVICE] File creation date: ${createdDate}`);
+      
       // Create file record in database
       const fileRecord = {
-        _key: fileId,
-        id: fileId,
-        originalName,
-        fileName,
-        filePath,
-        mimeType,
-        size: fileData.size,
-        uploadedAt: new Date().toISOString(),
-        metadata: {
-          ...extractedMetadata
-        },
-        status: 'uploaded',
-        processed: false, // indicate if the file has been processed by data prep service
-        tags: fileInfo.tags || [],
-        description: fileInfo.description || '',
-        category: fileInfo.category || 'general'
+        //_key: fileId,
+        file_id: fileId,
+        file_name: originalFileName,
+        file_size: fileData.size,
+        file_type: mimeType,
+        file_path : filePath,
+        labels: fileInfo.labels,
+        author: fileInfo.author,
+        uploaded_date: new Date().toISOString(),
+        created_date: createdDate,
+        crawl_date: fileInfo.crawlDate || null,
+        source_url: fileInfo.sourceUrl || '',
+        language: '',
+        chunk_count: 0,
+        dataprep: {
+          status: 'pending',
+          ingested_date: '',
+          retracted_date: '',
+        }
       };
 
       // Save to database
       const db = await this.getDb();
       await db.collection('files').save(fileRecord);
-      logger.info(`File record saved to database: ${fileId}: ${fileRecord.id}`);
+      logger.info(`File record saved to database: ${fileId}`);
 
       // Index for search if enabled
       if (appConfig.searchIndexing) {

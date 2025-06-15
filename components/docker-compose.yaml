@@ -79,6 +79,8 @@ services:
       - "3000:3000"
     networks:
       - chatqna_default
+    volumes:
+      - ./document-repository/uploads:/app/uploads
 
 networks:
   chatqna_default:

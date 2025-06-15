@@ -178,6 +178,18 @@ document-repository/
 
 ## Setup (to be updated)
 
+1. cd into the `document-repository` directory.
+2. `docker compose build document-repository`
+3. docker network create chatqna_default
+3. `docker compose up arango-vector-db document-repository`
+4. open arando web interface at http://localhost:8529
+5. Create a database named `document_repository` in ArangoDB.
+6. Create a collection named `files` in the `document_repository` database.
+7. Change password for the `root` user in ArangoDB to `test` (or update the password in the config file accordingly).
+8. change user permission for "document_repository" database to "administrate".
+
+
+
 To set up the file system backend service:
 
 1. **Navigate to the project directory:**
@@ -216,18 +228,56 @@ curl -X POST http://localhost:3000/api/files/upload \
 **Response**
 
 ```json
-{"success":true,"message":"File uploaded successfully","data":{"id":"d5e6bd75-1061-4a82-b7db-451dece05661","originalName":"Urban Immunization Toolkit.pdf","mimeType":"application/pdf","size":2770818,"uploadedAt":"2025-06-11T11:19:03.898Z","category":"general","description":"","tags":[],"status":"uploaded"}}
+{"success":true,
+ "message":"File uploaded successfully",
+ "data":{"file_id":"1750013946938-cfb114ab",
+         "file_name":"Urban Immunization Toolkit.pdf",
+         "file_size":2770818,
+         "file_type":"application/pdf",
+         "labels":[],
+         "uploaded_date":"2025-06-15T18:59:06.955Z",
+         "created_date":"2025-06-15T18:59:06.941Z",
+         "crawl_date":null,
+         "source_url":"",
+         "language":"",
+         "chunk_count":0,
+         "dataprep_status":"pending",
+         "dataprep_ingested_date":"",
+         "dataprep_retracted_date":""}}
 ```
 
 ---
 
-### Read/Preview a File
+### Upload Multiple Files (max 5)
 
-Read a file from the backend server:
 ```bash
-curl http://localhost:9981/api/files/read/1748524213244-962969549-AAA-testing.txt
+curl -X POST http://localhost:3000/api/files/uploads \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/txtai.txt" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/Sample_criteria.xlsx" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/EMBEDDING MODEL TESTS.docx" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/pymupdf4llm_markdown.md" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/ExamplePDF.pdf"
 ```
-Or simply open the URL in your browser to view the file.
+
+**Response**
+
+```json
+{"success":true,
+ "message":"Files uploaded successfully",
+ "data":[{"file_id":"1750019618932-e7f71c5b","file_name":"txtai.txt", "file_size":210930, "file_type":"text/plain", "labels":[], "uploaded_date":"2025-06-15T20:33:38.942Z","created_date":"2025-06-15T20:33:38.936Z", "crawl_date":null, "source_url":"", "language":"", "chunk_count":0, "dataprep_status":"pending", "dataprep_ingested_date":"", "dataprep_retracted_date":""},
+         {"file_id":"1750019618934-16fd7f0c","file_name":"Sample_criteria.xlsx","file_size":13004,"file_type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","labels":[],"uploaded_date":"2025-06-15T20:33:38.938Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep_status":"pending","dataprep_ingested_date":"","dataprep_retracted_date":""},{"file_id":"1750019618934-30adc14b","file_name":"EMBEDDING MODEL TESTS.docx","file_size":31880,"file_type":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","labels":[],"uploaded_date":"2025-06-15T20:33:38.937Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep_status":"pending","dataprep_ingested_date":"","dataprep_retracted_date":""},
+         "..."]
+}
+```
+
+---
+
+### View a File
+
+View a file in the browser (for supported file types):
+```bash
+curl http://localhost:3000/api/files/1750018387796-c50dfdf0/view
+```
 
 ---
 

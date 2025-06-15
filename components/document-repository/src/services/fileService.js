@@ -46,14 +46,16 @@ class FileService {
       // Generate unique file ID
       const fileId = fileUtils.generateUniqueFileId();
       const originalFileName = fileData.originalname;
-      const fileExtension = path.extname(originalFileName);
+      const fileExtension = path.extname(originalFileName).toLowerCase();
       const savedFileName = `${fileId}${fileExtension}`;
       filePath = path.join(this.uploadDir, savedFileName);
       logger.debug(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
 
       // Validate file type & extension
       const mimeType = mime.lookup(originalFileName) || fileData.mimetype;
-      if (!this.allowedMimeTypes.includes(mimeType) || !this.allowedExtensions.includes(fileExtension)) {
+      const isMimeAllowed = this.allowedMimeTypes.includes(mimeType);
+      const isExtensionAllowed = this.allowedExtensions.includes(fileExtension);
+      if (!(isMimeAllowed && isExtensionAllowed)) {
         throw new Error(`File type ${mimeType} or extension ${fileExtension} is not allowed`);
       }
 

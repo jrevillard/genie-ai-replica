@@ -242,24 +242,29 @@ class FileService {
       const file = await this.getFileById(fileId);
       
       // Delete physical file
-      const filePath = path.join(this.uploadDir, file.fileName);
+      const fileExtension = path.extname(file.file_name).slice(1);
+      const fileNameOnDisk = file.file_id + '.' + fileExtension;
+      const filePath = path.join(this.uploadDir, fileNameOnDisk);
       try {
         await fs.unlink(filePath);
       } catch (error) {
         logger.warn(`Physical file not found or already deleted: ${filePath}`);
       }
 
-      // Delete from database
+      // Delete from database using file_id and return the deleted record
       const db = await this.getDb();
-      await db.collection('files').remove(fileId);
+      const deletedFile = await db.query(`
+        FOR file IN files
+        FILTER file.file_id == @fileId
+        LET deleted = file
+        REMOVE file IN files
+        RETURN deleted
+      `, { fileId }).then(cursor => cursor.next());
+      
       logger.info(`File deleted from database: ${fileId}`);
 
-      // Remove from search index if enabled
-      if (appConfig.searchIndexing) {
-        await this.removeFromSearchIndex(fileId);
-      }
-
-      return true;
+      return deletedFile;
+      
     } catch (error) {
       logger.error(`Error deleting file: ${error}`);
       throw error;

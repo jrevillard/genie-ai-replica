@@ -464,9 +464,9 @@ class FileController {
    */
   async deleteFile(req, res) {
     try {
-      const { id } = req.params;
+      const { fileId } = req.params;
 
-      if (!id) {
+      if (!fileId) {
         return res.status(400).json({
           success: false,
           error: 'Missing file ID',
@@ -474,11 +474,12 @@ class FileController {
         });
       }
 
-      await fileService.deleteFile(id);
+      const deletedFile = await fileService.deleteFile(fileId);
 
       res.json({
         success: true,
-        message: 'File deleted successfully'
+        message: 'File deleted successfully',
+        data: this._formatFileRecord(deletedFile)
       });
     } catch (error) {
       logger.error('Delete file error:', error);

@@ -81,6 +81,6 @@ router.get('/:fileId/download', fileController.downloadFile);
  * @access Public
  * @param {string} id - File ID
  */
-router.delete('/:id', fileController.deleteFile);
+router.delete('/:fileId', fileController.deleteFile);
 
 module.exports = router;

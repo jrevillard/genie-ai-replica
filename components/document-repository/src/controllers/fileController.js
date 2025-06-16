@@ -1,4 +1,5 @@
 const fileService = require('../services/fileService');
+const metadataService = require('../services/metadataService');
 const config = require('../config/appConfig');
 const Joi = require('joi');
 const path = require('path');
@@ -14,7 +15,14 @@ const uploadSchema = Joi.object({
   labels: Joi.array().items(Joi.string().max(50)).max(10).default(['general']),
   crawlDate: Joi.date().optional(),
   sourceUrl: Joi.string().uri().optional()
-});
+}); // Schema for file upload validation
+// This schema validates the request body for file uploads, ensuring required fields are present and correctly formatted
+// It includes optional fields for author, labels, crawl date, and source URL.
+// Labels are processed to ensure they are an array of strings, with a maximum of 10 labels allowed.
+// The schema also allows for a default label of 'general' if no labels are provided.
+// The author field is optional and can be a string up to 200 characters.
+// The crawl date is optional and must be a valid date if provided.
+// The source URL is optional and must be a valid URI if provided.
 
 const searchSchema = Joi.object({
   q: Joi.string().min(2).max(100).required(),
@@ -35,7 +43,7 @@ const updateFileSchema = Joi.object({
   file_name: Joi.string().max(255).optional(),
   labels: Joi.array().items(Joi.string().max(50)).max(10).optional(),
   author: Joi.string().max(200).optional(),
-  created_date: Joi.date().optional(),
+  create_date: Joi.date().optional(),
   crawl_date: Joi.date().optional(),
   source_url: Joi.string().uri().optional()
 });
@@ -53,6 +61,9 @@ class FileController {
     this.processFile = this.processFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
     this.updateFile = this.updateFile.bind(this);
+    this.searchMetadata = this.searchMetadata.bind(this);
+    this.getMetadata = this.getMetadata.bind(this);
+    this.updateMetadataController = this.updateMetadataController.bind(this);
   }
 
   /**
@@ -188,15 +199,15 @@ class FileController {
       file_type: fileRecord.file_type,
       labels: fileRecord.labels,
       author: fileRecord.author,
-      uploaded_date: fileRecord.uploaded_date,
-      created_date: fileRecord.created_date,
+      uploade_date: fileRecord.uploade_date,
+      create_date: fileRecord.create_date,
       crawl_date: fileRecord.crawl_date,
       source_url: fileRecord.source_url,
       language: fileRecord.language,
       chunk_count: fileRecord.chunk_count,
-      dataprep_status: fileRecord.dataprep.status,
-      dataprep_ingested_date: fileRecord.dataprep.ingested_date,
-      dataprep_retracted_date: fileRecord.dataprep.retracted_date,
+      // dataprep_status: fileRecord.dataprep.status,
+      // dataprep_ingested_date: fileRecord.dataprep.ingested_date,
+      // dataprep_retracted_date: fileRecord.dataprep.retracted_date,
     };
   }
 
@@ -510,7 +521,7 @@ class FileController {
     }
   }
 
-   /**
+  /**
    * Update file metadata
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
@@ -690,33 +701,97 @@ class FileController {
     }
   }
 
- 
+  /**
+   * Search file by metadata
+   */
+  async searchMetadata(req, res) {
+    try {
+      const results = await metadataService.searchMetadata(req.query);
+      res.json({
+        success: true,
+        message: 'Metadata search completed successfully',
+        data: results,
+        query: req.query,
+        resultCount: results.length
+      });
+    } catch (error) {
+      logger.error('Search metadata error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Search failed',
+      });
+    }
+  }
 
-  // /**
-  //  * Get file statistics
-  //  * @param {Object} req - Express request object
-  //  * @param {Object} res - Express response object
-  //  */
-  // async getFileStats(req, res) {
-  //   try {
-  //     const stats = await fileService.getFileStats();
+  /**
+   * Get file metadata by file_id
+   */
+  async getMetadata(req, res) {
+    try {
+      const { file_id } = req.params;
 
-  //     res.json({
-  //       success: true,
-  //       message: 'Statistics retrieved successfully',
-  //       data: stats
-  //     });
-  //   } catch (error) {
-  //     logger.error('Get file stats error:', error);
-  //     res.status(500).json({
-  //       success: false,
-  //       error: 'Failed to retrieve statistics',
-  //       message: 'An error occurred while retrieving file statistics'
-  //     });
-  //   }
-  // }
+      if (!file_id) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing file ID',
+          message: 'File ID is required'
+        });
+      }
 
-  
+      const metadata = await metadataService.getMetadataById(file_id);
+      if (!metadata) {
+        return res.status(404).json({
+          success: false,
+          error: 'Metadata not found',
+          message: 'No metadata found for the specified file ID'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Metadata retrieved successfully',
+        data: metadata
+      });
+    } catch (error) {
+      logger.error('Get metadata by ID error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to retrieve metadata',
+      });
+    }
+  }
+
+  /**
+   * Update file metadata
+   */
+  async updateMetadataController(req, res) {
+    try {
+      const { file_id } = req.params;
+
+      if (!file_id) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing file ID',
+          message: 'File ID is required'
+        });
+      }
+
+      const updatedMetadata = await metadataService.updateMetadata(file_id, req.body);
+
+      res.json({
+        success: true,
+        message: 'Metadata updated successfully',
+        data: updatedMetadata
+      });
+    } catch (error) {
+      logger.error('Update metadata error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to update metadata',
+      });
+    }
+  }
 }
+
 
 module.exports = new FileController();

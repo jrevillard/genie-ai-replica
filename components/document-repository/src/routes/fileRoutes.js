@@ -1,3 +1,11 @@
+/*
+ * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
+ * @Date: 2025-06-16 11:46:56
+ * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
+ * @LastEditTime: 2025-06-16 16:13:29
+ * @FilePath: /genie-ai/components/document-repository/src/routes/fileRoutes.js
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 const express = require('express');
 const fileController = require('../controllers/fileController');
 const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
@@ -18,7 +26,7 @@ const router = express.Router();
 router.post('/upload', uploadSingle, fileController.uploadFile);
 
 /**
- * @route POST /api/files/uploas
+ * @route POST /api/files/uploads
  * @desc Upload multiple files
  * @access Public
  * @body {File[]} files - Array of files to upload (max 5)
@@ -41,6 +49,7 @@ router.post('/uploads', uploadMultiple, fileController.uploadMultipleFiles);
 router.get('/', fileController.getFiles);
 
 /**
+ * Search files by metadata 
  * @route GET /api/files/search
  * @desc Search files
  * @access Public
@@ -52,6 +61,7 @@ router.get('/', fileController.getFiles);
 router.get('/search', fileController.searchFiles);
 
 /**
+ * Get file metadata by ID
  * @route GET /api/files/:id
  * @desc Get file by ID
  * @access Public
@@ -84,6 +94,7 @@ router.get('/:fileId/download', fileController.downloadFile);
 router.delete('/:fileId', fileController.deleteFile);
 
 /**
+ * Update file metadata
  * @route PATCH /api/files/:fileId
  * @desc Update file metadata
  * @access Public
@@ -91,5 +102,11 @@ router.delete('/:fileId', fileController.deleteFile);
  * @body {Object} updates - JSON object with the fields to update
  */
 router.patch('/:fileId', fileController.updateFile);
+
+
+// Metadata routes
+router.get('/metadata/search', fileController.searchMetadata);
+router.get('/metadata/:fileId', fileController.getMetadata);
+router.patch('/metadata/:fileId', fileController.updateMetadata);
 
 module.exports = router;

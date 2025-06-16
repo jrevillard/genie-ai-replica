@@ -99,12 +99,12 @@ class FileService {
       
       // Create file record in database
       const fileRecord = {
-        //_key: fileId,
         file_id: fileId,
         file_name: originalFileName,
         file_size: fileData.size,
         file_type: mimeType,
         storage_path : filePath,
+        file_hash: fileUtils.calculateFileHash(filePath), // Optional: calculate hash if needed
         labels: fileInfo.labels,
         author: fileInfo.author,
         uploaded_date: new Date().toISOString(),
@@ -113,6 +113,9 @@ class FileService {
         source_url: fileInfo.sourceUrl || '',
         language: '',
         chunk_count: 0,
+        status: 'pending',
+        ingest_date: '',
+        retract_date: ''
       };
 
       try {
@@ -123,13 +126,7 @@ class FileService {
         await fs.unlink(filePath);
       }
 
-
-      // // Index for search if enabled
-      // if (appConfig.searchIndexing) {
-      //   await this.indexFileForSearch(fileRecord);
-      // }
-
-      // return fileRecord;
+      return fileRecord;
     } catch (error) {
       logger.error(`Error uploading file: ${error}`);
       

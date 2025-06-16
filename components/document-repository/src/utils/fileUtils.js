@@ -5,7 +5,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-// const { getFileCategory } = require('./mimeTypes');
+const crypto = require('crypto'); // For generating unique IDs and file hashes
 
 /**
  * Generate unique filename
@@ -151,6 +151,18 @@ const getDocxWordCount = async (filePath) => {
   }
 };
 
+// Utility function to compute SHA-256 hash of a file
+const getFileHash = async (filePath) => {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = require('fs').createReadStream(filePath);
+    stream.on('data', (data) => hash.update(data));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+}
+
+
 
 
 
@@ -166,5 +178,6 @@ module.exports = {
   getTxtLineCount,
   getTxtWordCount,
   getPdfPageCount,
-  getDocxWordCount
+  getDocxWordCount,
+  getFileHash
 };

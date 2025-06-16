@@ -9,8 +9,8 @@ const fs = require('fs').promises; // Using promises for async file operations
 const path = require('path');
 const mime = require('mime-types'); // For MIME type detection
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
-const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount } = require('../utils/fileUtils'); // Utility to ensure directory exists
-const dbService = require('../../shared-lib/db-connection-service');
+const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount, getFileHash } = require('../utils/fileUtils'); // Utility to ensure directory exists
+const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 
 async function extractMetadata(filePath, fileInfo = {}) {
@@ -18,16 +18,22 @@ async function extractMetadata(filePath, fileInfo = {}) {
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';
     const baseMeta = {
         file_id: fileInfo.file_id || uuidv4(),
-        filename: fileInfo.filename || path.basename(filePath),
+        file_name: fileInfo.filename || path.basename(filePath),
         file_size: stats.size,
-        mime_type: mimeType,
+        file_type: mimeType,
         storage_path: filePath,
+        file_hash: fileInfo.file_hash || await getFileHash(filePath),
         labels: fileInfo.labels || [],
         author: fileInfo.author || '',
         upload_date: fileInfo.upload_date || new Date().toISOString(),
         create_date: fileInfo.create_date || stats.birthtime.toISOString(),
         crawl_date: fileInfo.crawl_date || '',
         source_url: fileInfo.source_url || '',
+        language: 'unknown',
+        chunk_count: 0,
+        status: 'pending',
+        ingest_date: '',
+        retract_date: ''
     };
 
     // File-type-specific metadata extraction

@@ -31,6 +31,15 @@ const getFilesSchema = Joi.object({
   search: Joi.string().max(100).optional()
 });
 
+const updateFileSchema = Joi.object({
+  file_name: Joi.string().max(255).optional(),
+  labels: Joi.array().items(Joi.string().max(50)).max(10).optional(),
+  author: Joi.string().max(200).optional(),
+  created_date: Joi.date().optional(),
+  crawl_date: Joi.date().optional(),
+  source_url: Joi.string().uri().optional()
+});
+
 class FileController {
   constructor() {
     // Bind methods to preserve 'this' context
@@ -43,6 +52,7 @@ class FileController {
     this.deleteFile = this.deleteFile.bind(this);
     this.processFile = this.processFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
+    this.updateFile = this.updateFile.bind(this);
   }
 
   /**
@@ -500,6 +510,91 @@ class FileController {
     }
   }
 
+   /**
+   * Update file metadata
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+   async updateFile(req, res) {
+    try {
+      const { fileId } = req.params;
+
+      logger.debug(`[FILE-CONTROLLER] Update File Request: ${JSON.stringify(req.body, null, 2)}`);
+
+      if (!fileId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing file ID',
+          message: 'File ID is required'
+        });
+      }
+
+      // Validate request body
+      const { error, value } = updateFileSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+      }
+      logger.debug(`[FILE-CONTROLLER] Update request data: ${JSON.stringify(value, null, 2)}`);
+
+      // Process labels if provided
+      if (value.labels) {
+        value.labels = this._processLabels({ labels: value.labels });
+      }
+
+      // Get current file record
+      const currentFile = await fileService.getFileById(fileId);
+      if (!currentFile) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found',
+          message: 'The requested file does not exist'
+        });
+      }
+
+      // Update file record in database
+      const db = await fileService.getDb();
+      const updatedFile = await db.query(`
+        FOR file IN files
+        FILTER file.file_id == @fileId
+        UPDATE file WITH @updates IN files
+        RETURN NEW
+      `, { 
+        fileId,
+        updates: value
+      }).then(cursor => cursor.next());
+
+      if (!updatedFile) {
+        throw new Error('Failed to update file record');
+      }
+
+      res.json({
+        success: true,
+        message: 'File updated successfully',
+        data: this._formatFileRecord(updatedFile)
+      });
+    } catch (error) {
+      logger.error('Update file error:', error);
+      
+      if (error.message === 'File not found') {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found',
+          message: 'The requested file does not exist'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Update failed',
+        message: 'An error occurred while updating the file'
+      });
+    }
+  }
+
   /**
    * Process file with dataprep service
    * @param {Object} req - Express request object
@@ -594,6 +689,8 @@ class FileController {
       });
     }
   }
+
+ 
 
   // /**
   //  * Get file statistics

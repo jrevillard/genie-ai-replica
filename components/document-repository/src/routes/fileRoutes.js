@@ -83,4 +83,13 @@ router.get('/:fileId/download', fileController.downloadFile);
  */
 router.delete('/:fileId', fileController.deleteFile);
 
+/**
+ * @route PATCH /api/files/:fileId
+ * @desc Update file metadata
+ * @access Public
+ * @param {string} fileId - File ID
+ * @body {Object} updates - JSON object with the fields to update
+ */
+router.patch('/:fileId', fileController.updateFile);
+
 module.exports = router;

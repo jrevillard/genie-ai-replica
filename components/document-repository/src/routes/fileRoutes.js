@@ -52,13 +52,6 @@ router.get('/', fileController.getFiles);
 router.get('/search', fileController.searchFiles);
 
 /**
- * @route GET /api/files/stats
- * @desc Get file statistics
- * @access Public
- */
-router.get('/stats', fileController.getFileStats);
-
-/**
  * @route GET /api/files/:id
  * @desc Get file by ID
  * @access Public
@@ -70,25 +63,17 @@ router.get('/:id', fileController.getFileById);
  * @route GET /api/files/:id/view
  * @desc Get file as base64 for viewing
  * @access Public
- * @param {string} id - File ID
+ * @param {string} fileId - File ID
  */
-router.get('/:id/view', fileController.getFileAsBase64);
+router.get('/:fileId/view', fileController.viewFile);
 
 /**
  * @route GET /api/files/:id/download
  * @desc Download file by ID
  * @access Public
- * @param {string} id - File ID
+ * @param {string} fileId - File ID
  */
-router.get('/:id/download', fileController.downloadFile);
-
-/**
- * @route POST /api/files/:id/process
- * @desc Process file with dataprep service
- * @access Public
- * @param {string} id - File ID
- */
-router.post('/:id/process', fileController.processFile);
+router.get('/:fileId/download', fileController.downloadFile);
 
 /**
  * @route DELETE /api/files/:id

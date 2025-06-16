@@ -150,9 +150,15 @@ class FileService {
    * @returns {Object} File record
    */
   async getFileById(fileId) {
+    logger.debug(`[FILE-SERVICE] Getting file by ID: ${fileId}`);
     try {
       const db = await this.getDb();
-      const file = await db.collection('files').document(fileId);
+      // const file = await db.collection('files').document(fileId);
+      const file = await db.query(`
+        FOR file IN files
+        FILTER file.file_id == @fileId
+        RETURN file
+      `, { fileId }).then(cursor => cursor.next()); 
       return file;
     } catch (error) {
       if (error.code === 404) {

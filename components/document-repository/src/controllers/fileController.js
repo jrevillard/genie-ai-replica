@@ -32,6 +32,19 @@ const getFilesSchema = Joi.object({
 });
 
 class FileController {
+  constructor() {
+    // Bind methods to preserve 'this' context
+    this.downloadFile = this.downloadFile.bind(this);
+    this.viewFile = this.viewFile.bind(this);
+    this.uploadFile = this.uploadFile.bind(this);
+    this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
+    this.getFiles = this.getFiles.bind(this);
+    this.getFileById = this.getFileById.bind(this);
+    this.deleteFile = this.deleteFile.bind(this);
+    this.processFile = this.processFile.bind(this);
+    this.searchFiles = this.searchFiles.bind(this);
+  }
+
   /**
    * Process and validate labels from request body
    * @private
@@ -175,6 +188,43 @@ class FileController {
       dataprep_ingested_date: fileRecord.dataprep.ingested_date,
       dataprep_retracted_date: fileRecord.dataprep.retracted_date,
     };
+  }
+
+  /**
+   * Get file record and physical file path
+   * @private
+   * @param {string} fileId - File ID
+   * @returns {Object} Object containing file record and file path
+   * @throws {Error} If file not found or invalid fileId
+   */
+  async _getFileAndPath(fileId) {
+    if (!fileId) {
+      throw {
+        status: 400,
+        error: 'Missing file ID',
+        message: 'File ID is required'
+      };
+    }
+
+    // retrieve file from database and search actual file on disk
+    const file = await fileService.getFileById(fileId);
+    const fileExtension = path.extname(file.file_name).slice(1);
+    const fileNameOnDisk = file.file_id + '.' + fileExtension;
+    const filePath = path.join(__dirname, '..', '..', 'uploads', fileNameOnDisk);
+    logger.debug(`[FILE-CONTROLLER] filePath: ${filePath}`);
+
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      throw {
+        status: 404,
+        error: 'File not found',
+        message: 'The physical file does not exist'
+      };
+    }
+
+    return { file, filePath };
   }
 
   /**
@@ -334,44 +384,23 @@ class FileController {
    */
   async downloadFile(req, res) {
     try {
-      const { id } = req.params;
+      const { fileId } = req.params;
+      const { file, filePath } = await this._getFileAndPath(fileId);
 
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing file ID',
-          message: 'File ID is required'
-        });
-      }
-
-      const file = await fileService.getFileById(id);
-      const filePath = path.join(__dirname, '..', '..', 'uploads', file.fileName);
-
-      // Check if file exists
-      try {
-        await fs.access(filePath);
-      } catch (error) {
-        return res.status(404).json({
-          success: false,
-          error: 'File not found',
-          message: 'The physical file does not exist'
-        });
-      }
-
-      // Set appropriate headers
-      res.setHeader('Content-Disposition', `attachment; filename="${file.originalName}"`);
-      res.setHeader('Content-Type', file.mimeType);
+      // Set appropriate headers, use file_name as the filename
+      res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
+      res.setHeader('Content-Type', file.file_type);
 
       // Send file
       res.sendFile(path.resolve(filePath));
     } catch (error) {
       logger.error('Download file error:', error);
       
-      if (error.message === 'File not found') {
-        return res.status(404).json({
+      if (error.status) {
+        return res.status(error.status).json({
           success: false,
-          error: 'File not found',
-          message: 'The requested file does not exist'
+          error: error.error,
+          message: error.message
         });
       }
 
@@ -379,6 +408,51 @@ class FileController {
         success: false,
         error: 'Download failed',
         message: 'An error occurred while downloading the file'
+      });
+    }
+  }
+
+  /**
+   * Get file as base64
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async viewFile(req, res) {
+    try {
+      const { fileId } = req.params;
+      const { file, filePath } = await this._getFileAndPath(fileId);
+
+      // Read file and convert to base64
+      const fileBuffer = await fs.readFile(filePath);
+      const base64String = fileBuffer.toString('base64');
+
+      // construct response with file file information and base64 string
+      res.json({
+        success: true,
+        message: 'File retrieved successfully',
+        data: {
+          id: file.file_id,
+          file_name: file.file_name,
+          file_size: file.file_size,
+          file_type: file.file_type,
+          base64: base64String
+        }
+      });
+    } catch (error) {
+      logger.error('Get file as base64 error:', error);
+      
+      if (error.status) {
+        return res.status(error.status).json({
+          success: false,
+          error: error.error,
+          message: error.message
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve file',
+        message: 'An error occurred while retrieving the file'
       });
     }
   }
@@ -520,93 +594,31 @@ class FileController {
     }
   }
 
-  /**
-   * Get file statistics
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async getFileStats(req, res) {
-    try {
-      const stats = await fileService.getFileStats();
+  // /**
+  //  * Get file statistics
+  //  * @param {Object} req - Express request object
+  //  * @param {Object} res - Express response object
+  //  */
+  // async getFileStats(req, res) {
+  //   try {
+  //     const stats = await fileService.getFileStats();
 
-      res.json({
-        success: true,
-        message: 'Statistics retrieved successfully',
-        data: stats
-      });
-    } catch (error) {
-      logger.error('Get file stats error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to retrieve statistics',
-        message: 'An error occurred while retrieving file statistics'
-      });
-    }
-  }
+  //     res.json({
+  //       success: true,
+  //       message: 'Statistics retrieved successfully',
+  //       data: stats
+  //     });
+  //   } catch (error) {
+  //     logger.error('Get file stats error:', error);
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to retrieve statistics',
+  //       message: 'An error occurred while retrieving file statistics'
+  //     });
+  //   }
+  // }
 
-  /**
-   * Get file as base64
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async getFileAsBase64(req, res) {
-    try {
-      const { id } = req.params;
-
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing file ID',
-          message: 'File ID is required'
-        });
-      }
-
-      const file = await fileService.getFileById(id);
-      const filePath = path.join(__dirname, '..', '..', 'uploads', file.fileName);
-
-      // Check if file exists
-      try {
-        await fs.access(filePath);
-      } catch (error) {
-        return res.status(404).json({
-          success: false,
-          error: 'File not found',
-          message: 'The physical file does not exist'
-        });
-      }
-
-      // Read file and convert to base64
-      const fileBuffer = await fs.readFile(filePath);
-      const base64String = fileBuffer.toString('base64');
-
-      res.json({
-        success: true,
-        message: 'File retrieved successfully',
-        data: {
-          id: file.id,
-          originalName: file.originalName,
-          mimeType: file.mimeType,
-          base64: base64String
-        }
-      });
-    } catch (error) {
-      logger.error('Get file as base64 error:', error);
-      
-      if (error.message === 'File not found') {
-        return res.status(404).json({
-          success: false,
-          error: 'File not found',
-          message: 'The requested file does not exist'
-        });
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to retrieve file',
-        message: 'An error occurred while retrieving the file'
-      });
-    }
-  }
+  
 }
 
 module.exports = new FileController();

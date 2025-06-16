@@ -5,6 +5,7 @@ const mime = require('mime-types');
 const { logger } = require('../shared-lib/logger');
 const dbService = require('../shared-lib/db-connection-service');
 const fileUtils = require('../utils/fileUtils');
+const metadataService = require('./metadataService');
 
 // NOTE: securityService is not implemented yet
 // - securityService is not implemented yet
@@ -103,7 +104,7 @@ class FileService {
         file_name: originalFileName,
         file_size: fileData.size,
         file_type: mimeType,
-        file_path : filePath,
+        storage_path : filePath,
         labels: fileInfo.labels,
         author: fileInfo.author,
         uploaded_date: new Date().toISOString(),
@@ -112,24 +113,23 @@ class FileService {
         source_url: fileInfo.sourceUrl || '',
         language: '',
         chunk_count: 0,
-        dataprep: {
-          status: 'pending',
-          ingested_date: '',
-          retracted_date: '',
-        }
       };
 
-      // Save to database
-      const db = await this.getDb();
-      await db.collection('files').save(fileRecord);
-      logger.info(`File record saved to database: ${fileId}`);
-
-      // Index for search if enabled
-      if (appConfig.searchIndexing) {
-        await this.indexFileForSearch(fileRecord);
+      try {
+        await metadataService.addMetadata(filePath, fileRecord);
+      } catch (error) {
+        logger.error(`Failed to add metadata for file ${originalFileName}: ${error.message}`);
+        // Cleanup file if metadata addition fails
+        await fs.unlink(filePath);
       }
 
-      return fileRecord;
+
+      // // Index for search if enabled
+      // if (appConfig.searchIndexing) {
+      //   await this.indexFileForSearch(fileRecord);
+      // }
+
+      // return fileRecord;
     } catch (error) {
       logger.error(`Error uploading file: ${error}`);
       
@@ -252,16 +252,11 @@ class FileService {
       }
 
       // Delete from database using file_id and return the deleted record
-      const db = await this.getDb();
-      const deletedFile = await db.query(`
-        FOR file IN files
-        FILTER file.file_id == @fileId
-        LET deleted = file
-        REMOVE file IN files
-        RETURN deleted
-      `, { fileId }).then(cursor => cursor.next());
-      
-      logger.info(`File deleted from database: ${fileId}`);
+      try {
+        await metadataService.deleteMetadata(fileId);
+      } catch (error) {
+        logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
+      }
 
       return deletedFile;
       

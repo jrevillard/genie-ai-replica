@@ -1,6 +1,6 @@
 // This service handles metadata extraction, storage, and querying for uploaded documents.
 // Extract metadata from uploaded files (e.g., filename, MIME type, size, create/upload dates, text content for PDFs/DOCX).
-// Store metadata (e.g., in a local JSON file, embedded DB like SQLite, or in-memory cache for MVP).
+// Store metadata to ArangoDB.
 // Search/query metadata by criteria (e.g., filename, file type, date range, etc.).
 // Support metadata deletion when a file is deleted.
 // Manually Updating existing metadata; Validating user-provided metadata (optional but helpful)
@@ -9,8 +9,9 @@ const fs = require('fs').promises; // Using promises for async file operations
 const path = require('path');
 const mime = require('mime-types'); // For MIME type detection
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
-const { ensureDirectoryExists, getMetadataFilePath, getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount } = require('../utils/fileUtils'); // Utility to ensure directory exists
-const appConfig = require('../config/appConfig');
+const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount } = require('../utils/fileUtils'); // Utility to ensure directory exists
+const dbService = require('../../shared-lib/db-connection-service');
+const { logger } = require('../shared-lib/logger');
 
 async function extractMetadata(filePath, fileInfo = {}) {
     const stats = await fs.stat(filePath);
@@ -48,14 +49,20 @@ async function extractMetadata(filePath, fileInfo = {}) {
 
 class MetadataService {
     // 1. Extract and store metadata (one JSON file per document)
+    
+    async getDb() {
+        return await dbService.getConnection('files');
+    }
+
     async addMetadata(filePath, fileInfo = {}) {
         try {
             const metadata = await extractMetadata(filePath, fileInfo);
-            const metadataFilePath = getMetadataFilePath(filePath);
-
-            // Write metadata to a JSON file
-            await fs.writeFile(metadataFilePath, JSON.stringify(metadata, null, 2), 'utf8');
-            return metadata;
+            
+            // Save metadata to ArangoDB
+            const db = await this.getDb();
+            await db.collection('files').save(metadata);
+            console.log(`Metadata for ${filePath} added successfully.`);
+            return metadata; // Return the saved metadata
         } catch (error) {
             console.error(`Failed to add metadata for ${filePath}: ${error.message}`);
             throw error;
@@ -63,96 +70,135 @@ class MetadataService {
     }
 
     // 2. Search/query metadata (by filename, MIME type, date range, etc.) by scanning all *_metadata.json files in uploads directory
-    async searchMetadata(file_name, file_type, upload_data_from, upload_date_to, create_data_from, create_data_to, labels, author) {
+    async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author) {
         try {
-            const metadataDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
-            const files = await fs.readdir(metadataDir);
-            const results = [];
+            const db = await this.getDb();
+            let query = `FOR m IN metadata`;
+            const filters = [];
+            const bindVars = {};
 
-            for (const file of files) {
-                if (file.endsWith('_meta.json')) {
-                    const metadataPath = path.join(metadataDir, file);
-                    const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
+            if (file_name) {
+                filters.push('CONTAINS(LOWER(m.filename), LOWER(@file_name))');
+                bindVars.file_name = file_name;
+            }
+            if (file_type) {
+                filters.push('m.mime_type == @file_type');
+                bindVars.file_type = file_type;
+            }
+            if (upload_date_from) {
+                filters.push('m.upload_date >= @upload_date_from');
+                bindVars.upload_date_from = upload_date_from;
+            }
+            if (upload_date_to) {
+                filters.push('m.upload_date <= @upload_date_to');
+                bindVars.upload_date_to = upload_date_to;
+            }
+            if (create_date_from) {
+                filters.push('m.create_date >= @create_date_from');
+                bindVars.create_date_from = create_date_from;
+            }
+            if (create_date_to) {
+                filters.push('m.create_date <= @create_date_to');
+                bindVars.create_date_to = create_date_to;
+            }
+            if (labels && Array.isArray(labels) && labels.length > 0) {
+                filters.push('LENGTH(INTERSECTION(m.labels, @labels)) > 0');
+                bindVars.labels = labels;
+            }
+            if (author) {
+                filters.push('m.author == @author');
+                bindVars.author = author;
+            }
 
-                    // Filter based on search criteria
-                    if ((file_name && metadata.filename.includes(file_name)) || // Check if file_name is provided and matches. includes is used for partial matches, which means its name can contain the search term.
-                        (file_type && metadata.mime_type === file_type) || // Check if file_type is provided and matches exactly
-                        (upload_data_from && new Date(metadata.upload_date) >= new Date(upload_data_from)) || // Check if upload_data_from is provided and matches. If provided, it checks if the upload date is greater than or equal to the specified date.
-                        (upload_date_to && new Date(metadata.upload_date) <= new Date(upload_date_to)) ||
-                        (create_data_from && new Date(metadata.create_date) >= new Date(create_data_from)) || 
-                        (create_data_to && new Date(metadata.create_date) <= new Date(create_data_to)) ||
-                        (labels && labels.some(label => metadata.labels.includes(label))) || // Check if labels are provided and at least one label matches
-                        (author && metadata.author === author)) {
-                        results.push(metadata);
-                    }
-                }
+            if (filters.length > 0) { // Only add FILTER clause if there are filters
+                query += ' FILTER ' + filters.join(' AND ');
             }
-            if (results.length === 0) {
-                console.log('No metadata found matching the search criteria.');
-            }
-            else {
-                console.log(`Found ${results.length} metadata entries matching the search criteria.`);
-            }
-            return results;
+            query += ' SORT m.upload_date DESC RETURN m';
+
+            logger.debug(`🧪Searching metadata with query: ${query} and bindVars: ${JSON.stringify(bindVars)}`);
+
+            const cursor = await db.query(query, bindVars);
+            return await cursor.all();
         } catch (error) {
             console.error(`Failed to search metadata: ${error.message}`);
             throw error;
         }
     }
 
-    // 3. Get metadata by file_id (by scanning all *_metadata.json files in uploads directory). This is useful for retrieving metadata of a specific file during the final source tracking.
+    // 3. Get metadata by file_id.
     async getMetadataById(file_id) {
         try {
-            const metadataDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
-            const files = await fs.readdir(metadataDir);
-            const metaFiles = files.filter(file => file.endsWith('_meta.json'));
-
-            for (const metaFile of metaFiles) {
-                const metadataPath = path.join(metadataDir, metaFile);
-                const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-                if (metadata.file_id === file_id) {
-                    return metadata; // Return the metadata if file_id matches
-                }
-            }
-            return null; // Return null if no matching metadata found
+            const db = await this.getDb();
+            const cursor = await db.query(
+                `FOR m IN metadata FILTER m.file_id == @file_id LIMIT 1 RETURN m`,
+                { file_id }
+            );
+            return await cursor.next() || null; // Return the first matching metadata
         } catch (error) {
             console.error(`Failed to get metadata by ID: ${error.message}`);
             throw error;
         }
     }
 
-    // 4. Delete metadata file when its file is deleted
-    async deleteMetadata(filePath) {
+    // 4. Delete metadata file by file_id (when a file is deleted)
+    async deleteMetadata(file_id) {
         try {
-            const metadataFilePath = getMetadataFilePath(filePath);
-            await fs.unlink(metadataFilePath); // Delete the metadata file
-            console.log(`Metadata for ${filePath} deleted successfully.`);
+            const db = await this.getDb();
+            // Find the metadata by file_id
+            const cursor = await db.query(
+                `FOR m IN metadata FILTER m.file_id == @file_id LIMIT 1 RETURN m`,
+                { file_id }
+            );
+            const metadata = await cursor.next();
+            if (!metadata) {
+                throw new Error(`Metadata not found for file_id: ${file_id}`);
+            }
+            await db.collection('files').remove(metadata._key);
+            return true;
         } catch (error) {
-            console.error(`Failed to delete metadata for ${filePath}: ${error.message}`);
+            console.error(`Failed to delete metadata: ${error.message}`);
             throw error;
         }
     }
 
     // 5. Manually update existing metadata
-    async updateMetadata(filePath, updates= {}) {
+    async updateMetadata(file_id, updates= {}) {
         try {
-            const metaDataPath = getMetadataFilePath(filePath); 
-            metadata = JSON.parse(await fs.readFile(metaDataPath, 'utf8'));
-        } catch {
-            throw new Error(`Metadata file not found for ${filePath}. Please ensure the file exists and has metadata.`);
-        }
-        // Only allow certain fields to be updated
-        const allowedFields = ['file_name', 'labels', 'author', 'create_date', 'crawl_date', 'source_url'];
-        for (const key of Object.keys(updates)) {
-            if (allowedFields.includes(key)) {
-                metadata[key] = updates[key];
-            } else {
-                console.warn(`Field ${key} is not allowed to be updated.`);
+            const db = await this.getDb();
+            const cursor = await db.query(
+                `FOR m IN metadata FILTER m.file_id == @file_id LIMIT 1 RETURN m`,
+                { file_id }
+            );
+            const metadata = await cursor.next();
+            if (!metadata) {
+                throw new Error(`Metadata not found for file_id: ${file_id}`);
             }
+
+            // Update metadata with provided updates. Only update allowed fields.
+            const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url'];
+            const updateObj = {};
+            for (const key of Object.keys(updates)) {
+                if (allowedFields.includes(key)) {
+                    // Special handling for labels: allow adding/removing labels
+                    if (key === 'labels' && Array.isArray(updates[key])) {
+                        updateObj.labels = updates.labels;
+                    } else {
+                        updateObj[key] = updates[key];
+                    }
+                }
+            }
+            if (Object.keys(updateObj).length === 0) {
+                throw new Error('No valid fields to update');
+            }
+            // Update the metadata in the database
+            await db.collection('files').update(metadata._key, updateObj);
+            const updated = await db.collection('files').document(metadata._key);
+            console.log(`Metadata for file_id ${file_id} updated successfully.`);
+            return updated
+        } catch (error) {
+            console.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
+            throw error;
         }
-        await fs.writeFile(metaDataPath, JSON.stringify(metadata, null, 2), 'utf8');
-        console.log(`Metadata for ${filePath} updated successfully.`);
-        return metadata; // Return the updated metadata
     }
 }
 

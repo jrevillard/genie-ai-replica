@@ -1820,6 +1820,13 @@
       :results="operationResults"
       @close="closeOperationResults"
     />
+
+    <UserEditDialog
+      v-if="showUserEditDialog"
+      :userId="selectedUserId"
+      @close="showUserEditDialog = false"
+      @user-updated="handleUserUpdated"
+    />
   </div>
 </template>
 
@@ -2468,7 +2475,10 @@ export default {
         this.isLoading = true;
         const response = await adminDashboardService.getSecurityMetrics();
         if (response && response.data) {
-          console.log("[AdminDashboard] Security metrics loaded successfully:", response.data);
+          console.log(
+            "[AdminDashboard] Security metrics loaded successfully:",
+            response.data
+          );
           this.securityMetrics = {
             failedLoginAttempts: response.data.failedLoginAttempts || 0,
             suspiciousActivities: response.data.suspiciousActivities || 0,
@@ -2481,10 +2491,15 @@ export default {
           };
           await this.loadSecurityDetails();
         } else {
-          console.warn("[AdminDashboard] Security metrics response missing data property");
+          console.warn(
+            "[AdminDashboard] Security metrics response missing data property"
+          );
         }
       } catch (error) {
-        console.error("[AdminDashboard] Error loading security metrics:", error);
+        console.error(
+          "[AdminDashboard] Error loading security metrics:",
+          error
+        );
         this.securityMetrics = {
           failedLoginAttempts: 0,
           suspiciousActivities: 0,
@@ -2746,8 +2761,11 @@ export default {
 
     // Open user edit dialog
     openUserEditDialog(userId) {
+      console.log(`UserId clicked:`, userId);
       this.selectedUserId = userId;
+      console.log(`this.selectedUserId:`, this.selectedUserId);
       this.showUserEditDialog = true;
+      console.log(`this.showUserEditDialog`, this.showUserEditDialog);
     },
 
     // Handle user updated event from dialog
@@ -2838,7 +2856,6 @@ export default {
     },
 
     // Load security metrics from the service
-  
 
     // Load detailed security information
     async loadSecurityDetails() {

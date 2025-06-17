@@ -2,10 +2,10 @@
 
 # restore-kong-config.sh
 # Shell script to restore Kong configuration from a specified backup file
-# Usage: ./restore-kong-config.sh [-b <backup_file>] [-t <jwt_token>] [-h]
+# Usage: ./restore-kong-config.sh [-b <backup_file>] [-t [jwt_token]] [-h]
 # Switches:
 #   -b <backup_file>  Path to Kong configuration backup file (required for restoration)
-#   -t <jwt_token>    Test endpoints with provided JWT token
+#   -t [jwt_token]    Test endpoints with provided JWT token or prompt for credentials if no token
 #   -h                Display help message
 # Environment Variables:
 #   LOGIN_PASSWORD    Password for testing (optional, used if not prompted)
@@ -33,9 +33,9 @@ fi
 
 # Usage function
 usage() {
-    echo "Usage: $0 [-b <backup_file>] [-t <jwt_token>] [-h]"
+    echo "Usage: $0 [-b <backup_file>] [-t [jwt_token]] [-h]"
     echo "  -b <backup_file>  Path to Kong configuration backup file (required for restoration)"
-    echo "  -t <jwt_token>    Test endpoints with provided JWT token"
+    echo "  -t [jwt_token]    Test endpoints with provided JWT token or prompt for credentials if no token"
     echo "  -h                Display this help message"
     echo "Environment Variables:"
     echo "  LOGIN_PASSWORD    Password for testing (optional, used if not prompted)"
@@ -413,13 +413,15 @@ test_endpoints() {
 # Parse command-line options
 BACKUP_FILE=""
 TEST_TOKEN=""
-while getopts "b:t:h" opt; do
+TEST_MODE=false
+while getopts "b:t::h" opt; do
     case $opt in
         b)
             BACKUP_FILE="$OPTARG"
             ;;
         t)
-            TEST_TOKEN="$OPTARG"
+            TEST_TOKEN="${OPTARG:-}"
+            TEST_MODE=true
             ;;
         h)
             usage
@@ -428,16 +430,25 @@ while getopts "b:t:h" opt; do
             log "ERROR: Invalid option: -$OPTARG"
             usage
             ;;
+        :)
+            if [ "$OPTARG" = "t" ]; then
+                TEST_TOKEN=""
+                TEST_MODE=true
+            else
+                log "ERROR: Option -$OPTARG requires an argument"
+                usage
+            fi
+            ;;
     esac
 done
 
 # Execute operations
-if [ -z "$TEST_TOKEN" ] && [ -z "$BACKUP_FILE" ]; then
+if [ "$TEST_MODE" = false ] && [ -z "$BACKUP_FILE" ]; then
     log "ERROR: Backup file is required. Use -b <backup_file>"
     usage
-elif [ -n "$TEST_TOKEN" ]; then
+elif [ "$TEST_MODE" = true ]; then
     test_endpoints "$TEST_TOKEN"
-else
+elif [ -n "$BACKUP_FILE" ]; then
     restore_config "$BACKUP_FILE"
 fi
 

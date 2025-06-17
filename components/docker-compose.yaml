@@ -18,12 +18,17 @@ services:
     build:
       context: .
       dockerfile: gov-chat-backend/Dockerfile
-    restart: unless-stopped 
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M 
     ports:
       - "3000:3000"
     volumes:
       - ./database_backups:/app/database_backups
       - ./logs:/app/logs
+      - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
     environment:
       - NODE_ENV=production

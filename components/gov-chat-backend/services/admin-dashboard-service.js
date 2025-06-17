@@ -11,22 +11,20 @@ class AdminDashboardService {
     this.db = null;
     this.initialized = false;
     this.resourceUsageMonitor = new ResourceUsageMonitor();
-    this.logsService = null; // Will hold LogsService instance
+    this.logsService = null;
+    this.securityScanService = null;
   }
 
-  /**
-   * Set the LogsService instance
-   * @param {Object} logsService - LogsService singleton instance
-   */
   setLogsService(logsService) {
     this.logsService = logsService;
     logger.debug('LogsService set in AdminDashboardService');
   }
 
-  /**
-   * Initialize the database connection
-   * @returns {Promise<void>}
-   */
+  setSecurityScanService(securityScanService) {
+    this.securityScanService = securityScanService;
+    logger.debug('SecurityScanService set in AdminDashboardService');
+  }
+
   async init() {
     if (this.initialized) {
       logger.debug('AdminDashboardService already initialized, skipping');
@@ -897,124 +895,34 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Security metrics
    */
   async getSecurityMetrics() {
-    logger.info('Getting security metrics');
-
     try {
-      const logsDir = path.join(__dirname, '../logs');
-      const logFiles = await fs.readdir(logsDir);
-
-      const isRecentLogFile = (filename) => {
-        const oneDayAgo = new Date();
-        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-        const oneDayAgoStr = oneDayAgo.toISOString().split('T')[0];
-        const dateMatch = filename.match(/(?:combined|error)-(\d{4}-\d{2}-\d{2})\.log/);
-        return dateMatch && dateMatch[1] >= oneDayAgoStr;
-      };
-
-      const recentLogFiles = logFiles
-        .filter(filename =>
-          filename === 'combined.log' ||
-          filename === 'error.log' ||
-          isRecentLogFile(filename)
-        )
-        .map(filename => path.join(logsDir, filename));
-
-      let failedLoginAttempts = 0;
-      let suspiciousActivities = 0;
-      let lastSecurityScan = 'Never';
-      let vulnerabilities = { critical: 0, medium: 0, low: 0 };
-
-      for (const logFile of recentLogFiles) {
-        try {
-          const logContent = await fs.readFile(logFile, 'utf8');
-          const logLines = logContent.split('\n');
-
-          for (const line of logLines) {
-            if (
-              (line.includes('[ERROR]') || line.includes('[WARN]')) && (
-                line.includes('Login failed') ||
-                line.includes('Invalid credentials') ||
-                line.includes('Invalid password') ||
-                line.includes('Current password is incorrect') ||
-                line.includes('login failed') ||
-                line.includes('Login Failed') ||
-                line.includes('Password verification failed') ||
-                line.includes('Token verification error') ||
-                line.includes('Authentication failed') ||
-                line.includes('Authorization header missing')
-              )
-            ) {
-              failedLoginAttempts++;
-            }
-
-            if (
-              (line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[WARNING]')) && (
-                line.includes('suspicious activity') ||
-                line.includes('Suspicious Activity') ||
-                line.includes('Token has expired') ||
-                line.includes('Token has already been used') ||
-                line.includes('Invalid token') ||
-                line.includes('AUTHENTICATION ERROR') ||
-                line.includes('Could not determine user ID') ||
-                line.includes('[AUTH DEBUG] Ã¢ï¿½ï¿½') ||
-                line.includes('Authorization header does not start with "Bearer"') ||
-                line.includes('User is not an admin') ||
-                line.includes('Password reset failed:')
-              )
-            ) {
-              suspiciousActivities++;
-            }
-
-            if (
-              line.includes('Security Scan') ||
-              line.includes('security scan') ||
-              line.includes('Running security scan') ||
-              line.includes('runSecurityScan') ||
-              line.includes('Security scan result')
-            ) {
-              const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
-              if (dateMatch) {
-                lastSecurityScan = dateMatch[1];
-              } else {
-                lastSecurityScan = 'Recent';
-              }
-
-              if (line.includes('critical vulnerability') || line.includes('Critical Vulnerability')) {
-                vulnerabilities.critical++;
-              }
-              if (line.includes('medium vulnerability') || line.includes('Medium Vulnerability')) {
-                vulnerabilities.medium++;
-              }
-              if (line.includes('low vulnerability') || line.includes('Low Vulnerability')) {
-                vulnerabilities.low++;
-              }
-            }
-          }
-        } catch (fileError) {
-          logger.warn(`Could not read log file ${logFile}: ${fileError.message}`);
-        }
+      logger.info('Fetching security metrics');
+      if (!this.securityScanService) {
+        throw new Error('SecurityScanService not initialized in AdminDashboardService');
       }
-
-      if (lastSecurityScan === 'Never') {
-        vulnerabilities = {
-          critical: 0,
-          medium: Math.floor(Math.random() * 3),
-          low: Math.floor(Math.random() * 5) + 1
-        };
-      }
-
-      const response = {
-        failedLoginAttempts,
-        suspiciousActivities,
-        lastSecurityScan,
-        vulnerabilities
+      const vulnerabilities = await this.securityScanService.checkLogsForIssues(this.logsService);
+      logger.debug(`Security metrics response: ${JSON.stringify(vulnerabilities, null, 2)}`);
+      return {
+        lastScan: new Date().toISOString(),
+        vulnerabilities: {
+          critical: vulnerabilities.critical.length,
+          medium: vulnerabilities.medium.length,
+          low: vulnerabilities.low.length,
+          details: [...vulnerabilities.critical, ...vulnerabilities.medium, ...vulnerabilities.low]
+        },
+        vulnerabilityDetails: vulnerabilities,
+        failedLoginDetails: vulnerabilities.low.filter(v => v.type === 'failed_login'),
+        suspiciousDetails: vulnerabilities.critical
       };
-
-      logger.debug(`Security metrics response: ${JSON.stringify(response)}`);
-      return response;
     } catch (error) {
-      logger.error(`Error in getSecurityMetrics: ${error.message}`, { stack: error.stack });
-      throw error;
+      logger.error(`Error fetching security metrics: ${error.message}`, { stack: error.stack });
+      return {
+        lastScan: 'Never',
+        vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        failedLoginDetails: [],
+        suspiciousDetails: []
+      };
     }
   }
 

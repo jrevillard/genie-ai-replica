@@ -1,10 +1,11 @@
-// src/services/securityScanService.js - with critical display and date fixes
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
 const { logger } = require('../shared-lib');
-const logsService = require('./logs-service');
+const { DateTime } = require('luxon');
 const axios = require('axios');
-const config = require('../config'); // Assume config has API endpoints and base URLs
+const config = require('../config');
+const readline = require('readline');
+const zlib = require('zlib');
 
 /**
  * Service for handling security scans and related operations
@@ -12,91 +13,245 @@ const config = require('../config'); // Assume config has API endpoints and base
 const securityScanService = {
   /**
    * Run a comprehensive security scan
+   * @param {Object} logsService - Instance of LogsService
    * @returns {Promise<Object>} Security scan results
    */
-  async runSecurityScan() {
+  async runSecurityScan(logsService) {
     try {
-      logger.info('Starting comprehensive security scan');
+      logger.info('Running security scan');
+      const vulnerabilities = await this.checkLogsForIssues(logsService);
+      const failedLogins = await this.checkFailedLogins(logsService);
+      const suspiciousActivities = await this.checkSuspiciousActivities(logsService);
 
-      // Store the start time for performance metrics
-      const startTime = Date.now();
-
-      // Run security checks
-      const loginIssues = await this.checkFailedLogins();
-      const suspiciousActivities = await this.checkSuspiciousActivities();
-      const vulnerabilityDetails = await this.scanForVulnerabilities();
-
-      // Run new security checks for HTTP headers and info leakage
-      const missingHeaders = await this.checkSecurityHeaders();
-      const serverLeakageIssues = await this.checkServerLeakage();
-      const timestampIssues = await this.checkTimestampDisclosure();
-      const corsIssues = await this.checkCorsConfiguration();
-      const hiddenFiles = await this.checkHiddenFiles();
-
-      // Add new findings to vulnerabilities
-      missingHeaders.forEach(issue => {
-        if (issue.severity === 'medium') vulnerabilityDetails.medium.push(issue);
-        else vulnerabilityDetails.low.push(issue);
-      });
-
-      serverLeakageIssues.forEach(issue => {
-        vulnerabilityDetails.medium.push(issue);
-      });
-
-      timestampIssues.forEach(issue => {
-        vulnerabilityDetails.medium.push(issue);
-      });
-
-      corsIssues.forEach(issue => {
-        vulnerabilityDetails.medium.push(issue);
-      });
-
-      hiddenFiles.forEach(issue => {
-        vulnerabilityDetails.medium.push(issue);
-      });
-
-      // Calculate scan duration
-      const scanDuration = ((Date.now() - startTime) / 1000).toFixed(2);
-
-      // Create scan summary with detailed findings
-      const scanResults = {
-        timestamp: new Date().toISOString(),
-        duration: `${scanDuration} seconds`,
-        failedLoginAttempts: loginIssues.count,
-        failedLoginDetails: loginIssues.details,
-        suspiciousActivities: suspiciousActivities.count,
-        suspiciousDetails: suspiciousActivities.details,
+      const scanResult = {
+        scanTime: new Date().toISOString(),
         vulnerabilities: {
-          critical: vulnerabilityDetails.critical.length,
-          medium: vulnerabilityDetails.medium.length,
-          low: vulnerabilityDetails.low.length
+          critical: vulnerabilities.critical.length,
+          medium: vulnerabilities.medium.length,
+          low: vulnerabilities.low.length,
+          details: [...vulnerabilities.critical, ...vulnerabilities.medium, ...vulnerabilities.low]
         },
-        vulnerabilityDetails: {
-          critical: vulnerabilityDetails.critical,
-          medium: vulnerabilityDetails.medium,
-          low: vulnerabilityDetails.low
-        },
-        recommendations: this.generateRecommendations(
-          loginIssues,
-          suspiciousActivities,
-          vulnerabilityDetails
-        )
+        vulnerabilityDetails: vulnerabilities,
+        failedLoginDetails: failedLogins,
+        suspiciousDetails: suspiciousActivities,
+        status: 'completed',
+        message: 'Security scan completed successfully'
       };
 
-      // Save scan results
-      await this.saveScanResults(scanResults);
-
-      logger.info(`Security scan completed in ${scanDuration} seconds`);
-      return {
-        success: true,
-        data: scanResults
-      };
+      await fs.promises.writeFile('/app/data/security/last-scan-results.json', JSON.stringify(scanResult));
+      logger.info('Security scan completed successfully');
+      return scanResult;
     } catch (error) {
-      logger.error(`Error during security scan: ${error.message}`, { stack: error.stack });
-      return {
-        success: false,
-        error: error.message
-      };
+      logger.error(`Error in runSecurityScan: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  },
+
+  /**
+   * Deduplicate vulnerabilities across all checks
+   * @param {Object} vulnerabilities - Object with critical, medium, low arrays
+   * @returns {Object} Deduplicated vulnerabilities
+   */
+  deduplicateVulnerabilities(vulnerabilities) {
+    const deduplicated = { critical: [], medium: [], low: [] };
+    const seen = new Set();
+
+    for (const severity of ['critical', 'medium', 'low']) {
+      for (const vuln of vulnerabilities[severity]) {
+        // Include timestamp in key to avoid merging distinct events
+        const key = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}_${vuln.firstSeen}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduplicated[severity].push(vuln);
+        }
+      }
+    }
+
+    return deduplicated;
+  },
+
+  /**
+   * Consolidated log search for failed logins and suspicious activities
+   * @param {Object} logsService - Instance of LogsService
+   * @returns {Promise<Object>} Login issues and suspicious activities
+   */
+  async checkLogsForIssues(logsService) {
+    if (!logsService) {
+      throw new Error('LogsService is required for checkLogsForIssues');
+    }
+
+    const today = DateTime.now();
+    const startDate = today.minus({ days: 2 }).toFormat('yyyy-MM-dd');
+    const endDate = today.toFormat('yyyy-MM-dd');
+    const vulnerabilities = { critical: [], medium: [], low: [] };
+    const issueMap = new Map();
+    const maxVulnerabilitiesPerSeverity = 50;
+    const maxFiles = 5;
+    const maxLinesPerFile = 50000; // Increased to reduce skipped lines
+    const maxFileSizeBytes = 50 * 1024 * 1024;
+    const vulnerabilityPatterns = [
+      { type: 'token_issue', severity: 'critical', regex: /invalid token/i, description: 'Invalid or expired token usage detected', recommendation: 'Review token expiration policies.', service: 'auth' },
+      { type: 'attack_attempt', severity: 'critical', regex: /SQL injection|XSS|CSRF/i, description: 'Potential attack attempt detected', recommendation: 'Implement WAF and input sanitization.', service: 'http' },
+      { type: 'sensitive_file_access', severity: 'critical', regex: /SECURITY: Blocked access to sensitive path.*\.env/i, description: 'Attempt to access .env file detected', recommendation: 'Ensure sensitive files are not web-accessible.', service: 'http' },
+      { type: 'sensitive_file_access', severity: 'medium', regex: /SECURITY: Blocked access to sensitive path.*\.git/i, description: 'Attempt to access .git directory detected', recommendation: 'Secure .git directories from web access.', service: 'http' },
+      { type: 'sensitive_file_access', severity: 'medium', regex: /SECURITY: Blocked access to sensitive path/i, description: 'Attempt to access sensitive path detected', recommendation: 'Review server configuration to block sensitive paths.', service: 'http' },
+      { type: 'unauthorized_access', severity: 'medium', regex: /not authorized/i, description: 'Unauthorized access attempt detected', recommendation: 'Check access control policies.', service: 'auth' },
+      { type: 'brute_force', severity: 'medium', regex: /brute force/i, description: 'Brute force attempt detected', recommendation: 'Implement rate limiting.', service: 'auth' },
+      { type: 'failed_login', severity: 'low', regex: /Invalid credentials|failed login/i, description: 'Failed login attempt detected', recommendation: 'Monitor for suspicious activity.', service: 'auth' },
+    ];
+
+    const invalidLogFile = path.join('/app/logs', `invalid-log-formats-${DateTime.now().toFormat('yyyy-MM-dd-HH-mm-ss')}.log`);
+    const invalidLogStream = fs.createWriteStream(invalidLogFile, { flags: 'a' });
+
+    try {
+      logger.info(`Starting log scan for period ${startDate} to ${endDate}`);
+      const logFiles = (await logsService.getLogFilesInRange(startDate, endDate, true)).slice(0, maxFiles);
+      logger.info(`Found ${logFiles.length} log files to scan`);
+
+      let totalLinesProcessed = 0;
+      let totalLinesSkipped = 0;
+
+      for (const file of logFiles) {
+        if (vulnerabilities.critical.length >= maxVulnerabilitiesPerSeverity &&
+          vulnerabilities.medium.length >= maxVulnerabilitiesPerSeverity &&
+          vulnerabilities.low.length >= maxVulnerabilitiesPerSeverity) {
+          logger.warn(`Reached max vulnerabilities limit, stopping scan`);
+          break;
+        }
+
+        const stats = fs.statSync(file);
+        logger.debug(`File ${file} size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+        if (stats.size > maxFileSizeBytes) {
+          logger.warn(`Skipping ${file}: File size (${stats.size} bytes) exceeds limit (${maxFileSizeBytes} bytes)`);
+          continue;
+        }
+
+        logger.debug(`Processing file: ${file}`);
+        let stream;
+        try {
+          stream = fs.createReadStream(file);
+          if (file.endsWith('.gz')) {
+            const gunzip = zlib.createGunzip();
+            stream.pipe(gunzip);
+            stream = gunzip;
+            stream.on('error', (err) => {
+              logger.warn(`Error decompressing ${file}: ${err.message}`);
+              invalidLogStream.write(`[${DateTime.now().toISO()}] Error decompressing ${file}: ${err.message}\n`);
+            });
+          }
+        } catch (err) {
+          logger.warn(`Error opening ${file}: ${err.message}`);
+          invalidLogStream.write(`[${DateTime.now().toISO()}] Error opening ${file}: ${err.message}\n`);
+          continue;
+        }
+
+        const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+        rl.on('error', (err) => {
+          logger.warn(`Error reading ${file}: ${err.message}`);
+          invalidLogStream.write(`[${DateTime.now().toISO()}] Error reading ${file}: ${err.message}\n`);
+        });
+
+        let lineNumber = 0;
+        try {
+          for await (const line of rl) {
+            lineNumber++;
+            totalLinesProcessed++;
+            if (lineNumber > maxLinesPerFile) {
+              logger.warn(`Reached line limit (${maxLinesPerFile}) for ${file}, stopping processing`);
+              totalLinesSkipped += 1; // Avoid hardcoded assumption
+              break;
+            }
+
+            // Primary log format: 2023-06-15 12:34:56 [LEVEL] message
+            let match = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\](?::\s*|\s+)(.+)$/);
+            let timestamp, message, date, time;
+
+            if (!match) {
+              // Fallback parser for morgan format: GET /path 404 12.34 ms - Headers: ...
+              const morganMatch = line.match(/^(GET|POST|PUT|DELETE|OPTIONS)\s+([^\s]+)\s+(\d{3})\s+([\d.]+)\s+ms\s+-\s+Headers:\s+([^\s]+)\s+(.+)$/i);
+              if (morganMatch) {
+                const [, method, path, status, responseTime, contentType, userAgent] = morganMatch;
+                date = today.toFormat('yyyy-MM-dd');
+                time = today.toFormat('HH:mm:ss');
+                timestamp = DateTime.now().toISO(); // Approximate timestamp
+                message = `${method} ${path} ${status} ${responseTime}ms Headers: ${contentType} ${userAgent}`;
+              } else {
+                // Log invalid format with full line for debugging
+                invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid log format in ${file} at line ${lineNumber}: ${line}\n`);
+                totalLinesSkipped++;
+                continue;
+              }
+            } else {
+              [, date, time, , message] = match;
+              timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss').toISO() || DateTime.now().toISO();
+            }
+
+            const urlMatch = message.match(/https?:\/\/[^\s]+|(GET|POST|PUT|DELETE) ([^\s]+)/i);
+            const url = urlMatch ? (urlMatch[2] || urlMatch[0]) : 'N/A';
+
+            if (/Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(message)) {
+              totalLinesSkipped++;
+              continue;
+            }
+
+            vulnerabilityPatterns.forEach(pattern => {
+              if (vulnerabilities[pattern.severity].length >= maxVulnerabilitiesPerSeverity) return;
+
+              const match = message.match(pattern.regex);
+              if (match) {
+                const matchedTerm = match[0] || 'unknown';
+                const key = `${pattern.type}_${date}_${pattern.service}_${matchedTerm}`;
+                if (issueMap.has(key)) {
+                  const issue = issueMap.get(key);
+                  issue.instanceCount++;
+                  issue.lastSeen = timestamp; // Update to log timestamp
+                  issue.lineNumbers.push(lineNumber);
+                } else {
+                  const issue = {
+                    type: pattern.type,
+                    severity: pattern.severity,
+                    description: pattern.description,
+                    recommendation: pattern.recommendation,
+                    matchedTerm,
+                    timestamp,
+                    service: pattern.service,
+                    url,
+                    firstSeen: timestamp, // Set to log timestamp
+                    lastSeen: timestamp, // Set to log timestamp
+                    instanceCount: 1,
+                    lineNumbers: [lineNumber],
+                  };
+                  issueMap.set(key, issue);
+                  vulnerabilities[pattern.severity].push(issue);
+                }
+              }
+            });
+
+            if (lineNumber % 1000 === 0) {
+              const mem = process.memoryUsage();
+              logger.debug(`Memory usage for ${file} at line ${lineNumber}: RSS=${(mem.rss / 1024 / 1024).toFixed(2)}MB, Heap=${(mem.heapUsed / 1024 / 1024).toFixed(2)}MB`);
+            }
+          }
+        } catch (err) {
+          logger.warn(`Error processing ${file}: ${err.message}`);
+          invalidLogStream.write(`[${DateTime.now().toISO()}] Error processing ${file}: ${err.message}\n`);
+        } finally {
+          rl.close();
+          issueMap.clear();
+          global.gc && global.gc();
+        }
+        logger.info(`Finished processing ${file}: ${lineNumber} lines processed, ${totalLinesSkipped} lines skipped`);
+      }
+
+      logger.info(`Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}`);
+      const deduplicated = this.deduplicateVulnerabilities(vulnerabilities);
+      logger.info(`Detected vulnerabilities: Critical=${deduplicated.critical.length}, Medium=${deduplicated.medium.length}, Low=${deduplicated.low.length}`);
+      return deduplicated;
+    } catch (error) {
+      logger.error(`Error in checkLogsForIssues: ${error.message}`, { stack: error.stack });
+      throw error;
+    } finally {
+      invalidLogStream.end();
     }
   },
 
@@ -106,218 +261,167 @@ const securityScanService = {
    */
   async getLastScanDetails() {
     try {
-      // Load the last scan results from storage
-      const resultsPath = path.join(__dirname, '../data/security/last-scan-results.json');
-      let lastScan;
+      logger.info('Fetching last scan details');
+      const scanResultsFile = '/app/data/security/last-scan-results.json';
+      let scanDetails = {
+        lastScan: 'Never',
+        vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        failedLoginDetails: [],
+        suspiciousDetails: []
+      };
 
       try {
-        const data = await fs.readFile(resultsPath, 'utf8');
-        lastScan = JSON.parse(data);
-      } catch (err) {
-        // If file doesn't exist or is invalid, return default values
-        if (err.code === 'ENOENT' || err instanceof SyntaxError) {
-          return {
-            lastScan: 'Never',
-            vulnerabilities: {
-              critical: 0,
-              medium: 0,
-              low: 0
-            },
-            vulnerabilityDetails: {
-              critical: [],
-              medium: [],
-              low: []
-            }
-          };
-        }
-        throw err;
+        const data = await fs.promises.readFile(scanResultsFile, 'utf8');
+        scanDetails = JSON.parse(data);
+      } catch (error) {
+        logger.warn(`No previous scan results found: ${error.message}`);
       }
 
-      // Format the timestamp as a human-readable date
-      const scanDate = new Date(lastScan.timestamp);
-      const now = new Date();
-
-      // Calculate time difference
-      const diffMs = now - scanDate;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
-      let lastScanFormatted;
-      if (diffDays > 0) {
-        lastScanFormatted = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-      } else if (diffHours > 0) {
-        lastScanFormatted = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-      } else {
-        lastScanFormatted = 'Just now';
-      }
-
-      return {
-        lastScan: lastScanFormatted,
-        vulnerabilities: lastScan.vulnerabilities,
-        vulnerabilityDetails: lastScan.vulnerabilityDetails || {
-          critical: [],
-          medium: [],
-          low: []
-        },
-        failedLoginDetails: lastScan.failedLoginDetails || [],
-        suspiciousDetails: lastScan.suspiciousDetails || []
-      };
+      return scanDetails;
     } catch (error) {
-      logger.error(`Error getting last scan details: ${error.message}`);
+      logger.error(`Error in getLastScanDetails: ${error.message}`, { stack: error.stack });
       throw error;
     }
   },
 
   /**
    * Check for failed login attempts in the logs
+   * @param {Object} logsService - Instance of LogsService
    * @returns {Promise<Object>} Count and details of failed login attempts
    */
-  async checkFailedLogins() {
+  async checkFailedLogins(logsService) {
+    if (!logsService) {
+      throw new Error('LogsService is required for checkFailedLogins');
+    }
+
+    const today = DateTime.now();
+    const startDate = today.minus({ days: 2 }).toFormat('yyyy-MM-dd');
+    const endDate = today.toFormat('yyyy-MM-dd');
+    const failedLogins = [];
+    const maxFiles = 5;
+    const maxLinesPerFile = 50000;
+    const maxFileSizeBytes = 50 * 1024 * 1024;
+
     try {
-      // Keywords that indicate login failures or account issues
-      const loginKeywords = [
-        "login",
-        "failed",
-        "unauthorized",
-        "disabled",
-        "expired",
-        "invalid",
-        "access denied",
-        "account"
-      ];
+      logger.info(`Checking failed logins for period ${startDate} to ${endDate}`);
+      const logFiles = (await logsService.getLogFilesInRange(startDate, endDate, true)).slice(0, maxFiles);
+      logger.info(`Found ${logFiles.length} log files for failed logins`);
 
-      let loginIssues = [];
+      for (const file of logFiles) {
+        const stats = fs.statSync(file);
+        if (stats.size > maxFileSizeBytes) {
+          logger.warn(`Skipping ${file}: File size (${stats.size} bytes) exceeds limit (${maxFileSizeBytes} bytes)`);
+          continue;
+        }
 
-      // Batch search for all keywords in ERROR and WARN logs
-      const logLevels = ["ERROR", "WARN"];
-      const today = new Date();
-      const threeDaysAgo = new Date(today);
-      threeDaysAgo.setDate(today.getDate() - 3);
+        let stream = fs.createReadStream(file);
+        if (file.endsWith('.gz')) {
+          const gunzip = zlib.createGunzip();
+          stream.pipe(gunzip);
+          stream = gunzip;
+        }
 
-      for (const level of logLevels) {
+        const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+        let lineNumber = 0;
+
         try {
-          // Search for all keywords in a single query using OR logic
-          const results = await logsService.searchLogs({
-            term: loginKeywords.join('|'), // Combine keywords with OR
-            level: level,
-            dateRange: 'custom',
-            startDate: threeDaysAgo.toISOString().split('T')[0],
-            endDate: today.toISOString().split('T')[0],
-            includeArchived: true
-          });
+          for await (const line of rl) {
+            lineNumber++;
+            if (lineNumber > maxLinesPerFile) {
+              logger.warn(`Reached line limit (${maxLinesPerFile}) for ${file}`);
+              break;
+            }
 
-          if (results.logs && results.logs.length > 0) {
-            for (const log of results.logs) {
-              // Determine which keyword matched
-              const matchedTerm = loginKeywords.find(keyword =>
-                log.message.toLowerCase().includes(keyword.toLowerCase())
-              ) || 'unknown';
+            const match = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\](?::\s*|\s+)(.+)$/);
+            if (!match) continue;
 
-              loginIssues.push({
-                timestamp: `${log.date} ${log.time}`,
-                level: log.level,
-                message: log.message,
-                service: log.service,
-                type: 'Authentication Issue',
-                matchedTerm
-              });
+            const [, date, time, , message] = match;
+            const timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss').toISO();
+            if (/Invalid credentials|failed login/i.test(message)) {
+              failedLogins.push({ timestamp, message });
             }
           }
-        } catch (error) {
-          logger.error(`Error searching for login-related logs in ${level} logs: ${error.message}`);
+        } finally {
+          rl.close();
         }
       }
 
-      // Remove duplicate entries
-      const uniqueIssues = this.removeDuplicateLogEntries(loginIssues);
-
-      return {
-        count: uniqueIssues.length,
-        details: uniqueIssues
-      };
+      logger.info(`Found ${failedLogins.length} failed login attempts`);
+      return failedLogins;
     } catch (error) {
-      logger.error(`Error checking failed logins: ${error.message}`);
-      return {
-        count: 0,
-        details: []
-      };
+      logger.error(`Error in checkFailedLogins: ${error.message}`, { stack: error.stack });
+      return [];
     }
   },
 
   /**
    * Check for suspicious activities in the logs
+   * @param {Object} logsService - Instance of LogsService
    * @returns {Promise<Object>} Count and details of suspicious activities
    */
-  async checkSuspiciousActivities() {
+  async checkSuspiciousActivities(logsService) {
+    if (!logsService) {
+      throw new Error('LogsService is required for checkSuspiciousActivities');
+    }
+
+    const today = DateTime.now();
+    const startDate = today.minus({ days: 2 }).toFormat('yyyy-MM-dd');
+    const endDate = today.toFormat('yyyy-MM-dd');
+    const suspiciousActivities = [];
+    const maxFiles = 5;
+    const maxLinesPerFile = 50000;
+    const maxFileSizeBytes = 50 * 1024 * 1024;
+
     try {
-      // Keywords that indicate suspicious activity
-      const suspiciousKeywords = [
-        "suspicious",
-        "brute force",
-        "injection",
-        "unauthorized",
-        "attack",
-        "breach",
-        "security",
-        "vulnerability",
-        "exploit"
-      ];
+      logger.info(`Checking suspicious activities for period ${startDate} to ${endDate}`);
+      const logFiles = (await logsService.getLogFilesInRange(startDate, endDate, true)).slice(0, maxFiles);
+      logger.info(`Found ${logFiles.length} log files for suspicious activities`);
 
-      let suspiciousIssues = [];
+      for (const file of logFiles) {
+        const stats = fs.statSync(file);
+        if (stats.size > maxFileSizeBytes) {
+          logger.warn(`Skipping ${file}: File size (${stats.size} bytes) exceeds limit (${maxFileSizeBytes} bytes)`);
+          continue;
+        }
 
-      // Batch search for all keywords in ERROR and WARN logs
-      const logLevels = ["ERROR", "WARN"];
-      const today = new Date();
-      const threeDaysAgo = new Date(today);
-      threeDaysAgo.setDate(today.getDate() - 3);
+        let stream = fs.createReadStream(file);
+        if (file.endsWith('.gz')) {
+          const gunzip = zlib.createGunzip();
+          stream.pipe(gunzip);
+          stream = gunzip;
+        }
 
-      for (const level of logLevels) {
+        const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+        let lineNumber = 0;
+
         try {
-          // Search for all keywords in a single query using OR logic
-          const results = await logsService.searchLogs({
-            term: suspiciousKeywords.join('|'), // Combine keywords with OR
-            level: level,
-            dateRange: 'custom',
-            startDate: threeDaysAgo.toISOString().split('T')[0],
-            endDate: today.toISOString().split('T')[0],
-            includeArchived: true
-          });
+          for await (const line of rl) {
+            lineNumber++;
+            if (lineNumber > maxLinesPerFile) {
+              logger.warn(`Reached line limit (${maxLinesPerFile}) for ${file}`);
+              break;
+            }
 
-          if (results.logs && results.logs.length > 0) {
-            for (const log of results.logs) {
-              // Determine which keyword matched
-              const matchedTerm = suspiciousKeywords.find(keyword =>
-                log.message.toLowerCase().includes(keyword.toLowerCase())
-              ) || 'unknown';
+            const match = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\](?::\s*|\s+)(.+)$/);
+            if (!match) continue;
 
-              suspiciousIssues.push({
-                timestamp: `${log.date} ${log.time}`,
-                level: log.level,
-                message: log.message,
-                service: log.service,
-                type: 'Suspicious Activity',
-                matchedTerm
-              });
+            const [, date, time, , message] = match;
+            const timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss').toISO();
+            if (/SQL injection|XSS|CSRF|brute force/i.test(message)) {
+              suspiciousActivities.push({ timestamp, message });
             }
           }
-        } catch (error) {
-          logger.error(`Error searching for suspicious activities in ${level} logs: ${error.message}`);
+        } finally {
+          rl.close();
         }
       }
 
-      // Remove duplicate entries
-      const uniqueIssues = this.removeDuplicateLogEntries(suspiciousIssues);
-
-      return {
-        count: uniqueIssues.length,
-        details: uniqueIssues
-      };
+      logger.info(`Found ${suspiciousActivities.length} suspicious activities`);
+      return suspiciousActivities;
     } catch (error) {
-      logger.error(`Error checking suspicious activities: ${error.message}`);
-      return {
-        count: 0,
-        details: []
-      };
+      logger.error(`Error in checkSuspiciousActivities: ${error.message}`, { stack: error.stack });
+      return [];
     }
   },
 
@@ -326,796 +430,63 @@ const securityScanService = {
    * @returns {Promise<Object>} Detailed vulnerability findings by severity
    */
   async scanForVulnerabilities() {
+    const vulnerabilities = { critical: [], medium: [], low: [] };
+
     try {
-      // Track vulnerability findings by severity
-      const criticalVulnerabilities = [];
-      const mediumVulnerabilities = [];
-      const lowVulnerabilities = [];
+      logger.info('Starting HTTP header vulnerability scan');
+      const response = await axios.get('http://localhost:3000', { validateStatus: () => true });
 
-      /**
-       * Helper function to compare timestamps
-       * @param {string} timestamp1 - First timestamp in format "YYYY-MM-DD HH:MM:SS"
-       * @param {string} timestamp2 - Second timestamp in format "YYYY-MM-DD HH:MM:SS"
-       * @returns {number} -1 if timestamp1 is earlier, 1 if timestamp1 is later, 0 if equal
-       */
-      function compareTimestamps(timestamp1, timestamp2) {
-        // Convert to Date objects for proper comparison
-        const date1 = new Date(timestamp1);
-        const date2 = new Date(timestamp2);
-
-        // Return comparison result
-        if (date1 < date2) return -1;  // timestamp1 is earlier
-        if (date1 > date2) return 1;   // timestamp1 is later
-        return 0;  // timestamps are equal
-      }
-
-      // Modified to scan last 3 days instead of 7
-      const today = new Date();
-      const dates = [];
-
-      // Generate list of dates to search (today and 2 days back)
-      for (let i = 0; i <= 2; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        dates.push(date.toISOString().split('T')[0]);
-      }
-
-      logger.debug(`Security scan will examine these dates individually: ${dates.join(', ')}`);
-
-      // Master collection for security probes found across all dates
-      const securityProbesMaster = {};
-
-      // Process each date individually
-      for (const date of dates) {
-        logger.debug(`Processing security events for date: ${date}`);
-
-        // Search for security-related logs with this specific date
-        try {
-          // Look for "SECURITY" keyword
-          const securityResults = await logsService.searchLogs({
-            term: "SECURITY",
-            dateRange: 'custom',
-            startDate: date,
-            endDate: date,
-            includeArchived: true
-          });
-
-          if (securityResults.logs && securityResults.logs.length > 0) {
-            logger.debug(`Found ${securityResults.logs.length} logs with term 'SECURITY' on ${date}`);
-
-            // Process these logs to extract security probe attempts
-            for (const log of securityResults.logs) {
-              const timestamp = `${log.date} ${log.time}`;
-              let probeUrl = null;
-
-              // Check for "SECURITY: Blocked access to sensitive path: /path" format
-              const blockedPathMatch = log.message.match(/Blocked access to sensitive path: ([^\s]+)/);
-              if (blockedPathMatch && blockedPathMatch[1]) {
-                probeUrl = blockedPathMatch[1];
-                logger.debug(`Found blocked path: ${probeUrl} at ${timestamp}`);
-              }
-
-              // If we found a probe URL, track it in master collection
-              if (probeUrl) {
-                if (!securityProbesMaster[probeUrl]) {
-                  securityProbesMaster[probeUrl] = {
-                    count: 1,
-                    firstSeen: timestamp,
-                    lastSeen: timestamp
-                  };
-                } else {
-                  // Update existing entry
-                  securityProbesMaster[probeUrl].count++;
-
-                  // Update timestamps
-                  if (compareTimestamps(timestamp, securityProbesMaster[probeUrl].firstSeen) < 0) {
-                    securityProbesMaster[probeUrl].firstSeen = timestamp;
-                    logger.debug(`Updated firstSeen for ${probeUrl} to ${timestamp}`);
-                  }
-                  if (compareTimestamps(timestamp, securityProbesMaster[probeUrl].lastSeen) > 0) {
-                    securityProbesMaster[probeUrl].lastSeen = timestamp;
-                    logger.debug(`Updated lastSeen for ${probeUrl} to ${timestamp}`);
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logger.error(`Error processing SECURITY logs for date ${date}: ${error.message}`);
-        }
-
-        // Look for 404 errors on this specific date
-        try {
-          const notFoundResults = await logsService.searchLogs({
-            term: "404",
-            dateRange: 'custom',
-            startDate: date,
-            endDate: date,
-            includeArchived: true
-          });
-
-          if (notFoundResults.logs && notFoundResults.logs.length > 0) {
-            logger.debug(`Found ${notFoundResults.logs.length} logs with 404 errors on ${date}`);
-
-            for (const log of notFoundResults.logs) {
-              const timestamp = `${log.date} ${log.time}`;
-              let probeUrl = null;
-
-              // Check multiple patterns to extract the URL
-              // Pattern 1: Standard format with GET or POST
-              const standardMatch = log.message.match(/\[0m(GET|POST|PUT|DELETE) ([^ ]+) \[33m404/);
-              if (standardMatch && standardMatch[2]) {
-                probeUrl = standardMatch[2];
-              }
-
-              // Pattern 2: Simple format without color codes
-              if (!probeUrl) {
-                const simpleMatch = log.message.match(/(GET|POST|PUT|DELETE) ([^ ]+) 404/);
-                if (simpleMatch && simpleMatch[2]) {
-                  probeUrl = simpleMatch[2];
-                }
-              }
-
-              // Pattern 3: "404 Not Found: GET /path" format
-              if (!probeUrl) {
-                const notFoundMatch = log.message.match(/404 Not Found: (GET|POST|PUT|DELETE) ([^\s]+)/);
-                if (notFoundMatch && notFoundMatch[2]) {
-                  probeUrl = notFoundMatch[2];
-                }
-              }
-
-              // Pattern 4: Extract from URL pattern
-              if (!probeUrl && log.message.includes('404')) {
-                const urlMatch = log.message.match(/\/api\/([^\s\?]+)(\?[^\s]+)?/);
-                if (urlMatch) {
-                  probeUrl = `/api/${urlMatch[1]}`;
-                  if (urlMatch[2]) {
-                    probeUrl += urlMatch[2];
-                  }
-                }
-              }
-
-              // Check if this is a security-relevant URL
-              if (probeUrl) {
-                const isSecurityProbe =
-                  probeUrl.includes('.env') ||
-                  probeUrl.includes('.git') ||
-                  probeUrl.includes('wp-') ||
-                  probeUrl.includes('/admin') ||
-                  probeUrl.includes('/config') ||
-                  probeUrl.includes('/install') ||
-                  probeUrl.includes('/backup') ||
-                  probeUrl.includes('/phpMyAdmin') ||
-                  probeUrl.includes('/client/update') ||
-                  probeUrl.includes('security') ||
-                  probeUrl.includes('.npmrc') ||
-                  probeUrl.includes('node_modules');
-
-                if (isSecurityProbe) {
-                  // Add to master collection
-                  if (!securityProbesMaster[probeUrl]) {
-                    securityProbesMaster[probeUrl] = {
-                      count: 1,
-                      firstSeen: timestamp,
-                      lastSeen: timestamp
-                    };
-                    logger.debug(`Found new security probe: ${probeUrl} at ${timestamp}`);
-                  } else {
-                    // Update existing entry
-                    securityProbesMaster[probeUrl].count++;
-
-                    // Update timestamps
-                    if (compareTimestamps(timestamp, securityProbesMaster[probeUrl].firstSeen) < 0) {
-                      securityProbesMaster[probeUrl].firstSeen = timestamp;
-                      logger.debug(`Updated firstSeen for ${probeUrl} to ${timestamp}`);
-                    }
-                    if (compareTimestamps(timestamp, securityProbesMaster[probeUrl].lastSeen) > 0) {
-                      securityProbesMaster[probeUrl].lastSeen = timestamp;
-                      logger.debug(`Updated lastSeen for ${probeUrl} to ${timestamp}`);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logger.error(`Error processing 404 logs for date ${date}: ${error.message}`);
-        }
-
-        // Look for other keywords on this date
-        for (const term of ['.env', '.git', 'admin', 'probe', 'attack']) {
-          try {
-            const termResults = await logsService.searchLogs({
-              term: term,
-              dateRange: 'custom',
-              startDate: date,
-              endDate: date,
-              includeArchived: true
-            });
-
-            if (termResults.logs && termResults.logs.length > 0) {
-              logger.debug(`Found ${termResults.logs.length} logs with term '${term}' on ${date}`);
-
-              for (const log of termResults.logs) {
-                // Skip logs we've already processed via other searches
-                if (log.message.includes('SECURITY:') || log.message.includes('404')) {
-                  continue;
-                }
-
-                const timestamp = `${log.date} ${log.time}`;
-                let probeUrl = null;
-
-                // Extract URLs from message
-                const urlMatch = log.message.match(/\/api\/([^\s\?]+)(\?[^\s]+)?/);
-                if (urlMatch) {
-                  probeUrl = `/api/${urlMatch[1]}`;
-                  if (urlMatch[2]) {
-                    probeUrl += urlMatch[2];
-                  }
-
-                  // Check if security-related
-                  const isSecurityProbe =
-                    probeUrl.includes('.env') ||
-                    probeUrl.includes('.git') ||
-                    probeUrl.includes('wp-') ||
-                    probeUrl.includes('/admin') ||
-                    probeUrl.includes('/config') ||
-                    probeUrl.includes('/install') ||
-                    probeUrl.includes('/backup') ||
-                    probeUrl.includes('/phpMyAdmin') ||
-                    probeUrl.includes('/client/update') ||
-                    probeUrl.includes('security') ||
-                    probeUrl.includes('.npmrc') ||
-                    probeUrl.includes('node_modules');
-
-                  if (isSecurityProbe) {
-                    // Add to master collection
-                    if (!securityProbesMaster[probeUrl]) {
-                      securityProbesMaster[probeUrl] = {
-                        count: 1,
-                        firstSeen: timestamp,
-                        lastSeen: timestamp
-                      };
-                    } else {
-                      // Update existing entry
-                      securityProbesMaster[probeUrl].count++;
-
-                      // Update timestamps
-                      if (compareTimestamps(timestamp, securityProbesMaster[probeUrl].firstSeen) < 0) {
-                        securityProbesMaster[probeUrl].firstSeen = timestamp;
-                      }
-                      if (compareTimestamps(timestamp, securityProbesMaster[probeUrl].lastSeen) > 0) {
-                        securityProbesMaster[probeUrl].lastSeen = timestamp;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            logger.error(`Error processing ${term} logs for date ${date}: ${error.message}`);
-          }
-        }
-      }
-
-      // Convert the master collection to medium vulnerabilities
-      logger.debug(`Found ${Object.keys(securityProbesMaster).length} unique security probes across all dates`);
-
-      for (const [url, data] of Object.entries(securityProbesMaster)) {
-        mediumVulnerabilities.push({
-          type: 'Security Probe Attempt',
+      const headers = response.headers;
+      const headerChecks = [
+        {
+          header: 'content-security-policy',
+          type: 'missing_csp',
           severity: 'medium',
-          description: `Security probe detected: ${url}`,
-          occurrences: data.count,
-          firstSeen: data.firstSeen,
-          lastSeen: data.lastSeen,
-          recommendation: 'Monitor these attempts for patterns. Consider implementing rate limiting or blocking persistent offenders.'
-        });
-      }
-
-      // Check for auth failures in the last 3 days
-      const startDate = dates[dates.length - 1]; // Oldest date (3 days ago)
-      const endDate = dates[0]; // Most recent date (today)
-
-      // Check for auth failures
-      try {
-        const authFailures = await logsService.searchLogs({
-          term: "Invalid password",
-          level: "ERROR",
-          dateRange: 'custom',
-          startDate: startDate,
-          endDate: endDate,
-          includeArchived: true
-        });
-
-        if (authFailures.logs && authFailures.logs.length > 0) {
-          // Sort logs chronologically
-          authFailures.logs.sort((a, b) => {
-            const timestampA = a.date + ' ' + a.time;
-            const timestampB = b.date + ' ' + b.time;
-            return compareTimestamps(timestampA, timestampB);
-          });
-
-          // First element is the earliest, last element is the latest
-          const firstLog = authFailures.logs[0];
-          const lastLog = authFailures.logs[authFailures.logs.length - 1];
-
-          criticalVulnerabilities.push({
-            type: 'Authentication Security Issue',
-            severity: 'critical',
-            description: 'Multiple invalid password attempts detected',
-            occurrences: authFailures.logs.length,
-            firstSeen: firstLog.date + ' ' + firstLog.time,
-            lastSeen: lastLog.date + ' ' + lastLog.time,
-            recommendation: 'Implement account lockout policies and monitor for brute force attempts'
-          });
+          description: 'Missing Content-Security-Policy header',
+          recommendation: 'Implement a strict CSP to prevent XSS attacks.'
+        },
+        {
+          header: 'strict-transport-security',
+          type: 'missing_hsts',
+          severity: 'medium',
+          description: 'Missing Strict-Transport-Security header',
+          recommendation: 'Enable HSTS to enforce HTTPS.'
+        },
+        {
+          header: 'x-frame-options',
+          type: 'missing_frame_options',
+          severity: 'medium',
+          description: 'Missing X-Frame-Options header',
+          recommendation: 'Set X-Frame-Options to prevent clickjacking.'
         }
-      } catch (error) {
-        logger.error(`Error checking for auth failures: ${error.message}`);
-      }
+      ];
 
-      // Add token expiration errors as critical
-      try {
-        const tokenErrors = await logsService.searchLogs({
-          term: "jwt expired",
-          level: "ERROR",
-          dateRange: 'custom',
-          startDate: startDate,
-          endDate: endDate,
-          includeArchived: true
-        });
-
-        if (tokenErrors.logs && tokenErrors.logs.length > 0) {
-          // Sort logs chronologically
-          tokenErrors.logs.sort((a, b) => {
-            const timestampA = a.date + ' ' + a.time;
-            const timestampB = b.date + ' ' + b.time;
-            return compareTimestamps(timestampA, timestampB);
+      const now = DateTime.now().toISO();
+      headerChecks.forEach(check => {
+        if (!headers[check.header]) {
+          vulnerabilities[check.severity].push({
+            type: check.type,
+            severity: check.severity,
+            description: check.description,
+            recommendation: check.recommendation,
+            matchedTerm: check.header,
+            timestamp: now,
+            service: 'http',
+            lineNumber: 0,
+            url: 'http://localhost:3000',
+            firstSeen: now,
+            lastSeen: now,
+            instanceCount: 1,
+            lineNumbers: [0]
           });
-
-          // First element is the earliest, last element is the latest
-          const firstLog = tokenErrors.logs[0];
-          const lastLog = tokenErrors.logs[tokenErrors.logs.length - 1];
-
-          criticalVulnerabilities.push({
-            type: 'JWT Token Security Issue',
-            severity: 'critical',
-            description: 'Token verification errors detected',
-            occurrences: tokenErrors.logs.length,
-            firstSeen: firstLog.date + ' ' + firstLog.time,
-            lastSeen: lastLog.date + ' ' + lastLog.time,
-            recommendation: 'Review token expiration settings and implement proper token refresh mechanism'
-          });
-        }
-      } catch (error) {
-        logger.error(`Error checking for token errors: ${error.message}`);
-      }
-
-      // Add login errors as critical
-      try {
-        const loginErrors = await logsService.searchLogs({
-          term: "Login error",
-          level: "ERROR",
-          dateRange: 'custom',
-          startDate: startDate,
-          endDate: endDate,
-          includeArchived: true
-        });
-
-        if (loginErrors.logs && loginErrors.logs.length > 0) {
-          // Sort logs chronologically
-          loginErrors.logs.sort((a, b) => {
-            const timestampA = a.date + ' ' + a.time;
-            const timestampB = b.date + ' ' + b.time;
-            return compareTimestamps(timestampA, timestampB);
-          });
-
-          // First element is the earliest, last element is the latest
-          const firstLog = loginErrors.logs[0];
-          const lastLog = loginErrors.logs[loginErrors.logs.length - 1];
-
-          criticalVulnerabilities.push({
-            type: 'Authentication Security Issue',
-            severity: 'critical',
-            description: 'Multiple login failures detected',
-            occurrences: loginErrors.logs.length,
-            firstSeen: firstLog.date + ' ' + firstLog.time,
-            lastSeen: lastLog.date + ' ' + lastLog.time,
-            recommendation: 'Review authentication logs and implement additional security measures'
-          });
-        }
-      } catch (error) {
-        logger.error(`Error checking for login errors: ${error.message}`);
-      }
-
-      // Check for server errors (500 level)
-      try {
-        const serverErrorResults = await logsService.searchLogs({
-          term: "500",
-          level: "INFO",
-          dateRange: 'custom',
-          startDate: startDate,
-          endDate: endDate,
-          includeArchived: true
-        });
-
-        if (serverErrorResults.logs && serverErrorResults.logs.length > 0) {
-          const endpoints = {};
-
-          for (const log of serverErrorResults.logs) {
-            // Extract endpoint from log message using regex
-            let endpoint = null;
-
-            // Try different patterns to match the endpoint
-            const postMatch = log.message.match(/\[0mPOST ([^ ]+) \[31m500\]/);
-            if (postMatch && postMatch[1]) {
-              endpoint = postMatch[1];
-            } else {
-              const getMatch = log.message.match(/\[0mGET ([^ ]+) \[31m500\]/);
-              if (getMatch && getMatch[1]) {
-                endpoint = getMatch[1];
-              } else {
-                // Simple format without color codes
-                const simpleMatch = log.message.match(/(GET|POST|PUT|DELETE) ([^ ]+) 500/);
-                if (simpleMatch && simpleMatch[2]) {
-                  endpoint = simpleMatch[2];
-                }
-              }
-            }
-
-            if (endpoint) {
-              const timestamp = log.date + ' ' + log.time;
-
-              if (!endpoints[endpoint]) {
-                endpoints[endpoint] = {
-                  count: 0,
-                  firstSeen: timestamp,
-                  lastSeen: timestamp
-                };
-              }
-
-              endpoints[endpoint].count++;
-
-              // Update timestamps using proper comparison
-              if (compareTimestamps(timestamp, endpoints[endpoint].firstSeen) < 0) {
-                endpoints[endpoint].firstSeen = timestamp;
-              }
-              if (compareTimestamps(timestamp, endpoints[endpoint].lastSeen) > 0) {
-                endpoints[endpoint].lastSeen = timestamp;
-              }
-            }
-          }
-
-          // Convert grouped endpoints to vulnerability entries
-          for (const [endpoint, data] of Object.entries(endpoints)) {
-            criticalVulnerabilities.push({
-              type: 'Server Error',
-              severity: 'critical',
-              description: `Server error on endpoint: ${endpoint}`,
-              occurrences: data.count,
-              firstSeen: data.firstSeen,
-              lastSeen: data.lastSeen,
-              recommendation: 'Investigate and fix server errors to prevent service disruption'
-            });
-          }
-        }
-      } catch (error) {
-        logger.error(`Error checking for server errors: ${error.message}`);
-      }
-
-      // Check for JWT token issues
-      try {
-        const tokenResults = await logsService.searchLogs({
-          term: "jwt",
-          level: "ERROR",
-          dateRange: 'custom',
-          startDate: startDate,
-          endDate: endDate,
-          includeArchived: true
-        });
-
-        if (tokenResults.logs && tokenResults.logs.length > 0) {
-          const uniqueErrors = new Set();
-
-          // Sort logs chronologically
-          tokenResults.logs.sort((a, b) => {
-            const timestampA = a.date + ' ' + a.time;
-            const timestampB = b.date + ' ' + b.time;
-            return compareTimestamps(timestampA, timestampB);
-          });
-
-          // First element is the earliest, last element is the latest
-          const firstLog = tokenResults.logs[0];
-          const lastLog = tokenResults.logs[tokenResults.logs.length - 1];
-
-          let firstSeen = firstLog.date + ' ' + firstLog.time;
-          let lastSeen = lastLog.date + ' ' + lastLog.time;
-
-          for (const log of tokenResults.logs) {
-            uniqueErrors.add(log.message);
-          }
-
-          if (uniqueErrors.size > 0) {
-            mediumVulnerabilities.push({
-              type: 'JWT Token Issues',
-              severity: 'medium',
-              description: 'Problems with authentication tokens detected',
-              occurrences: tokenResults.logs.length,
-              firstSeen: firstSeen,
-              lastSeen: lastSeen,
-              examples: Array.from(uniqueErrors),
-              recommendation: 'Review token expiration settings and authentication flow'
-            });
-          }
-        }
-      } catch (error) {
-        logger.error(`Error checking for JWT token issues: ${error.message}`);
-      }
-
-      // Check for missing security headers
-      try {
-        // Get API base URL from config
-        const apiUrl = config.api.baseUrl || config.services.api.url;
-        const endpoint = config.api.healthEndpoint || '/api/health';
-        const fullUrl = `${apiUrl}${endpoint}`;
-
-        const response = await axios.get(fullUrl);
-
-        const headers = response.headers;
-        const missingHeaders = [];
-
-        // Check for critical security headers
-        if (!headers['content-security-policy'])
-          missingHeaders.push({
-            type: 'Content Security Policy Header Missing',
-            severity: 'medium',
-            description: 'CSP header not set, increasing risk of XSS attacks',
-            recommendation: 'Implement CSP header with appropriate directives'
-          });
-
-        if (!headers['strict-transport-security'])
-          missingHeaders.push({
-            type: 'Strict-Transport-Security Header Missing',
-            severity: 'medium',
-            description: 'HSTS header not set, increasing risk of protocol downgrade attacks',
-            recommendation: 'Add Strict-Transport-Security header with appropriate max-age'
-          });
-
-        if (!headers['x-content-type-options'])
-          missingHeaders.push({
-            type: 'X-Content-Type-Options Header Missing',
-            severity: 'medium',
-            description: 'X-Content-Type-Options header not set, increasing risk of MIME type confusion attacks',
-            recommendation: 'Add X-Content-Type-Options: nosniff header'
-          });
-
-        if (!headers['x-frame-options'])
-          missingHeaders.push({
-            type: 'X-Frame-Options Header Missing',
-            severity: 'medium',
-            description: 'X-Frame-Options header not set, increasing risk of clickjacking attacks',
-            recommendation: 'Add X-Frame-Options: SAMEORIGIN header'
-          });
-
-        if (!headers['referrer-policy'])
-          missingHeaders.push({
-            type: 'Referrer-Policy Header Missing',
-            severity: 'low',
-            description: 'Referrer-Policy header not set, potentially leaking referrer information',
-            recommendation: 'Add Referrer-Policy: no-referrer-when-downgrade header'
-          });
-
-        // Add missing headers to vulnerability list  
-        missingHeaders.forEach(issue => {
-          if (issue.severity === 'medium') {
-            mediumVulnerabilities.push(issue);
-          } else {
-            lowVulnerabilities.push(issue);
-          }
-        });
-      } catch (error) {
-        logger.error(`Error checking security headers: ${error.message}`);
-      }
-
-      // Check for server information leakage
-      try {
-        // Get API base URL from config
-        const apiUrl = config.api.baseUrl || config.services.api.url;
-        const endpoint = config.api.healthEndpoint || '/api/health';
-        const fullUrl = `${apiUrl}${endpoint}`;
-
-        const response = await axios.get(fullUrl);
-
-        const headers = response.headers;
-        const leakageIssues = [];
-
-        if (headers['x-powered-by'])
-          leakageIssues.push({
-            type: 'Server Leaks Information via X-Powered-By',
-            severity: 'medium',
-            description: `X-Powered-By header reveals server technology: ${headers['x-powered-by']}`,
-            recommendation: 'Remove X-Powered-By header in server configuration'
-          });
-
-        if (headers['server'] && headers['server'].includes('/'))
-          leakageIssues.push({
-            type: 'Server Leaks Version Information',
-            severity: 'medium',
-            description: `Server header reveals version information: ${headers['server']}`,
-            recommendation: 'Configure server to remove version information from Server header'
-          });
-
-        // Add server leakage issues to medium vulnerabilities  
-        leakageIssues.forEach(issue => {
-          mediumVulnerabilities.push(issue);
-        });
-      } catch (error) {
-        logger.error(`Error checking server information leakage: ${error.message}`);
-      }
-
-      // Check for timestamp disclosure in API responses
-      try {
-        // Get list of endpoints to check from config
-        const apiUrl = config.api.baseUrl || config.services.api.url;
-        const endpointsToCheck = config.api.endpoints || [
-          '/api/users',
-          '/api/logs',
-          '/api/status'
-        ];
-
-        const disclosureIssues = [];
-
-        for (const endpoint of endpointsToCheck) {
-          try {
-            const response = await axios.get(`${apiUrl}${endpoint}`);
-
-            // Check for Unix timestamps in the response
-            const responseText = JSON.stringify(response.data);
-            const timestampRegex = /\b\d{10}\b/g; // Basic Unix timestamp regex
-
-            const matches = responseText.match(timestampRegex);
-            if (matches && matches.length > 0) {
-              disclosureIssues.push({
-                type: 'Timestamp Disclosure',
-                severity: 'medium',
-                description: `Unix timestamps exposed in ${endpoint} response`,
-                count: matches.length,
-                recommendation: 'Format timestamps as ISO strings or human-readable dates before sending to client'
-              });
-            }
-          } catch (err) {
-            // Skip failed requests
-            logger.debug(`Skipping timestamp check for ${endpoint}: ${err.message}`);
-            continue;
-          }
-        }
-
-        // Add timestamp disclosure issues to medium vulnerabilities
-        disclosureIssues.forEach(issue => {
-          mediumVulnerabilities.push(issue);
-        });
-      } catch (error) {
-        logger.error(`Error checking timestamp disclosure: ${error.message}`);
-      }
-
-      // Check for CORS misconfiguration
-      try {
-        // Get API base URL from config
-        const apiUrl = config.api.baseUrl || config.services.api.url;
-        const endpoint = config.api.healthEndpoint || '/api/health';
-        const fullUrl = `${apiUrl}${endpoint}`;
-
-        // Test with a preflight OPTIONS request
-        const response = await axios({
-          method: 'options',
-          url: fullUrl,
-          headers: {
-            'Origin': 'https://example.com',
-            'Access-Control-Request-Method': 'GET'
-          }
-        });
-
-        const headers = response.headers;
-        const corsIssues = [];
-
-        // Check if CORS is too permissive
-        if (headers['access-control-allow-origin'] === '*') {
-          corsIssues.push({
-            type: 'Cross-Domain Misconfiguration',
-            severity: 'medium',
-            description: 'CORS allows requests from any origin (*)',
-            recommendation: 'Configure CORS to allow only specific trusted domains'
-          });
-        }
-
-        // Add CORS issues to medium vulnerabilities  
-        corsIssues.forEach(issue => {
-          mediumVulnerabilities.push(issue);
-        });
-      } catch (error) {
-        logger.error(`Error checking CORS configuration: ${error.message}`);
-      }
-
-      // Check for accessible hidden files
-      try {
-        // Get API base URL from config
-        const apiUrl = config.api.baseUrl || config.services.api.url;
-        const hiddenFiles = [
-          '/.env',
-          '/.git/config',
-          '/.gitignore',
-          '/.npmrc',
-          '/node_modules/.package-lock.json'
-        ];
-
-        const foundFiles = [];
-
-        for (const file of hiddenFiles) {
-          try {
-            const response = await axios.get(`${apiUrl}${file}`);
-            if (response.status !== 404) {
-              foundFiles.push({
-                type: 'Hidden File Found',
-                severity: 'medium',
-                description: `Hidden file accessible: ${file}`,
-                recommendation: 'Block access to hidden files and development artifacts'
-              });
-            }
-          } catch (err) {
-            // 404 errors are expected and good
-            if (err.response && err.response.status !== 404) {
-              // Non-404 errors might indicate the file exists but with access issues
-              foundFiles.push({
-                type: 'Potential Hidden File',
-                severity: 'low',
-                description: `Unusual response for hidden file: ${file} (${err.response?.status})`,
-                recommendation: 'Verify server configuration for handling hidden files'
-              });
-            }
-          }
-        }
-
-        // Add found files to vulnerabilities  
-        foundFiles.forEach(issue => {
-          if (issue.severity === 'medium') {
-            mediumVulnerabilities.push(issue);
-          } else {
-            lowVulnerabilities.push(issue);
-          }
-        });
-      } catch (error) {
-        logger.error(`Error checking hidden files: ${error.message}`);
-      }
-
-      // VALIDATION - Log the date ranges of found vulnerabilities for debugging
-      logger.debug(`--- Vulnerability Date Ranges ---`);
-      logger.debug(`Critical vulnerabilities: ${criticalVulnerabilities.length}`);
-      criticalVulnerabilities.forEach((v, i) => {
-        logger.debug(`Critical #${i + 1}: ${v.description} - First: ${v.firstSeen}, Last: ${v.lastSeen}`);
-      });
-
-      logger.debug(`Medium vulnerabilities: ${mediumVulnerabilities.length}`);
-      mediumVulnerabilities.forEach((v, i) => {
-        if (v.firstSeen && v.lastSeen) {
-          logger.debug(`Medium #${i + 1}: ${v.description} - First: ${v.firstSeen}, Last: ${v.lastSeen}`);
-        } else {
-          logger.debug(`Medium #${i + 1}: ${v.description} (no date range)`);
         }
       });
 
-      // Return all vulnerability findings
-      return {
-        critical: criticalVulnerabilities,
-        medium: mediumVulnerabilities,
-        low: lowVulnerabilities
-      };
+      logger.info(`Detected header vulnerabilities: Critical=${vulnerabilities.critical.length}, Medium=${vulnerabilities.medium.length}, Low=${vulnerabilities.low.length}`);
+      return vulnerabilities;
     } catch (error) {
-      logger.error(`Error scanning for vulnerabilities: ${error.message}`);
-      return {
-        critical: [],
-        medium: [],
-        low: []
-      };
+      logger.error(`Error in scanForVulnerabilities: ${error.message}`, { stack: error.stack });
+      return vulnerabilities;
     }
   },
 
@@ -1125,20 +496,16 @@ const securityScanService = {
    */
   async checkSecurityHeaders() {
     try {
-      // Get API base URL from config
       const apiUrl = config.api.baseUrl || config.services.api.url;
       const endpoint = config.api.healthEndpoint || '/api/health';
       const fullUrl = `${apiUrl}${endpoint}`;
-
       const response = await axios.get(fullUrl);
-
       const headers = response.headers;
       const missingHeaders = [];
 
-      // Check for critical security headers
       if (!headers['content-security-policy'])
         missingHeaders.push({
-          type: 'Content Security Policy Header Missing',
+          type: 'content_security_policy_header_missing',
           severity: 'medium',
           description: 'CSP header not set, increasing risk of XSS attacks',
           recommendation: 'Implement CSP header with appropriate directives'
@@ -1146,7 +513,7 @@ const securityScanService = {
 
       if (!headers['strict-transport-security'])
         missingHeaders.push({
-          type: 'Strict-Transport-Security Header Missing',
+          type: 'strict_transport_security_header_missing',
           severity: 'medium',
           description: 'HSTS header not set, increasing risk of protocol downgrade attacks',
           recommendation: 'Add Strict-Transport-Security header with appropriate max-age'
@@ -1154,7 +521,7 @@ const securityScanService = {
 
       if (!headers['x-content-type-options'])
         missingHeaders.push({
-          type: 'X-Content-Type-Options Header Missing',
+          type: 'x_content_type_options_header_missing',
           severity: 'medium',
           description: 'X-Content-Type-Options header not set, increasing risk of MIME type confusion attacks',
           recommendation: 'Add X-Content-Type-Options: nosniff header'
@@ -1162,7 +529,7 @@ const securityScanService = {
 
       if (!headers['x-frame-options'])
         missingHeaders.push({
-          type: 'X-Frame-Options Header Missing',
+          type: 'x_frame_options_header_missing',
           severity: 'medium',
           description: 'X-Frame-Options header not set, increasing risk of clickjacking attacks',
           recommendation: 'Add X-Frame-Options: SAMEORIGIN header'
@@ -1170,12 +537,13 @@ const securityScanService = {
 
       if (!headers['referrer-policy'])
         missingHeaders.push({
-          type: 'Referrer-Policy Header Missing',
+          type: 'referrer_policy_header_missing',
           severity: 'low',
           description: 'Referrer-Policy header not set, potentially leaking referrer information',
           recommendation: 'Add Referrer-Policy: no-referrer-when-downgrade header'
         });
 
+      logger.debug(`Missing headers found: ${missingHeaders.length}`);
       return missingHeaders;
     } catch (error) {
       logger.error(`Error checking security headers: ${error.message}`);
@@ -1189,19 +557,16 @@ const securityScanService = {
    */
   async checkServerLeakage() {
     try {
-      // Get API base URL from config
       const apiUrl = config.api.baseUrl || config.services.api.url;
       const endpoint = config.api.healthEndpoint || '/api/health';
       const fullUrl = `${apiUrl}${endpoint}`;
-
       const response = await axios.get(fullUrl);
-
       const headers = response.headers;
       const leakageIssues = [];
 
       if (headers['x-powered-by'])
         leakageIssues.push({
-          type: 'Server Leaks Information via X-Powered-By',
+          type: 'server_leaks_x_powered_by',
           severity: 'medium',
           description: `X-Powered-By header reveals server technology: ${headers['x-powered-by']}`,
           recommendation: 'Remove X-Powered-By header in server configuration'
@@ -1209,12 +574,13 @@ const securityScanService = {
 
       if (headers['server'] && headers['server'].includes('/'))
         leakageIssues.push({
-          type: 'Server Leaks Version Information',
+          type: 'server_leaks_version',
           severity: 'medium',
           description: `Server header reveals version information: ${headers['server']}`,
           recommendation: 'Configure server to remove version information from Server header'
         });
 
+      logger.debug(`Server leakage issues found: ${leakageIssues.length}`);
       return leakageIssues;
     } catch (error) {
       logger.error(`Error checking server information leakage: ${error.message}`);
@@ -1228,28 +594,19 @@ const securityScanService = {
    */
   async checkTimestampDisclosure() {
     try {
-      // Get list of endpoints to check from config
       const apiUrl = config.api.baseUrl || config.services.api.url;
-      const endpointsToCheck = config.api.endpoints || [
-        '/api/users',
-        '/api/logs',
-        '/api/status'
-      ];
-
+      const endpointsToCheck = config.api.endpoints || ['/api/users', '/api/logs', '/api/status'];
       const disclosureIssues = [];
 
       for (const endpoint of endpointsToCheck) {
         try {
           const response = await axios.get(`${apiUrl}${endpoint}`);
-
-          // Check for Unix timestamps in the response
           const responseText = JSON.stringify(response.data);
-          const timestampRegex = /\b\d{10}\b/g; // Basic Unix timestamp regex
-
+          const timestampRegex = /\b\d{10}\b/g;
           const matches = responseText.match(timestampRegex);
           if (matches && matches.length > 0) {
             disclosureIssues.push({
-              type: 'Timestamp Disclosure',
+              type: 'timestamp_disclosure',
               severity: 'medium',
               description: `Unix timestamps exposed in ${endpoint} response`,
               count: matches.length,
@@ -1257,12 +614,12 @@ const securityScanService = {
             });
           }
         } catch (err) {
-          // Skip failed requests
           logger.debug(`Skipping timestamp check for ${endpoint}: ${err.message}`);
           continue;
         }
       }
 
+      logger.debug(`Timestamp disclosure issues found: ${disclosureIssues.length}`);
       return disclosureIssues;
     } catch (error) {
       logger.error(`Error checking timestamp disclosure: ${error.message}`);
@@ -1276,12 +633,9 @@ const securityScanService = {
    */
   async checkCorsConfiguration() {
     try {
-      // Get API base URL from config
       const apiUrl = config.api.baseUrl || config.services.api.url;
       const endpoint = config.api.healthEndpoint || '/api/health';
       const fullUrl = `${apiUrl}${endpoint}`;
-
-      // Test with a preflight OPTIONS request
       const response = await axios({
         method: 'options',
         url: fullUrl,
@@ -1294,16 +648,16 @@ const securityScanService = {
       const headers = response.headers;
       const corsIssues = [];
 
-      // Check if CORS is too permissive
       if (headers['access-control-allow-origin'] === '*') {
         corsIssues.push({
-          type: 'Cross-Domain Misconfiguration',
+          type: 'cross_domain_misconfiguration',
           severity: 'medium',
           description: 'CORS allows requests from any origin (*)',
           recommendation: 'Configure CORS to allow only specific trusted domains'
         });
       }
 
+      logger.debug(`CORS issues found: ${corsIssues.length}`);
       return corsIssues;
     } catch (error) {
       logger.error(`Error checking CORS configuration: ${error.message}`);
@@ -1317,16 +671,8 @@ const securityScanService = {
    */
   async checkHiddenFiles() {
     try {
-      // Get API base URL from config
       const apiUrl = config.api.baseUrl || config.services.api.url;
-      const hiddenFiles = [
-        '/.env',
-        '/.git/config',
-        '/.gitignore',
-        '/.npmrc',
-        '/node_modules/.package-lock.json'
-      ];
-
+      const hiddenFiles = ['/.env', '/.git/config', '/.gitignore', '/.npmrc', '/node_modules/.package-lock.json'];
       const foundFiles = [];
 
       for (const file of hiddenFiles) {
@@ -1334,18 +680,16 @@ const securityScanService = {
           const response = await axios.get(`${apiUrl}${file}`);
           if (response.status !== 404) {
             foundFiles.push({
-              type: 'Hidden File Found',
+              type: 'hidden_file_found',
               severity: 'medium',
               description: `Hidden file accessible: ${file}`,
               recommendation: 'Block access to hidden files and development artifacts'
             });
           }
         } catch (err) {
-          // 404 errors are expected and good
           if (err.response && err.response.status !== 404) {
-            // Non-404 errors might indicate the file exists but with access issues
             foundFiles.push({
-              type: 'Potential Hidden File',
+              type: 'potential_hidden_file',
               severity: 'low',
               description: `Unusual response for hidden file: ${file} (${err.response?.status})`,
               recommendation: 'Verify server configuration for handling hidden files'
@@ -1354,6 +698,7 @@ const securityScanService = {
         }
       }
 
+      logger.debug(`Hidden file issues found: ${foundFiles.length}`);
       return foundFiles;
     } catch (error) {
       logger.error(`Error checking hidden files: ${error.message}`);
@@ -1368,24 +713,109 @@ const securityScanService = {
    */
   removeDuplicateLogEntries(logEntries) {
     const seen = new Set();
-
-    // Sort entries by timestamp to ensure chronological order
-    // This helps get the correct first/last seen dates
-    logEntries.sort((a, b) => {
-      return a.timestamp.localeCompare(b.timestamp);
-    });
-
+    logEntries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     return logEntries.filter(entry => {
-      // Create a unique key based on timestamp and message
       const key = `${entry.timestamp}|${entry.message}`;
-
-      if (seen.has(key)) {
-        return false;
-      }
-
+      if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+  },
+
+  /**
+   * Consolidated log search for failed logins and suspicious activities
+   * @param {Object} logsService - Instance of LogsService
+   * @returns {Promise<Object>} Login issues array
+   */
+  async loginIssues(logsService) {
+    if (!logsService) {
+      throw new Error('LogsService is required for loginIssues');
+    }
+    try {
+      const loginKeywords = [
+        'login', 'failed', 'unauthorized', 'disabled', 'expired', 'invalid', 'access denied', 'account'
+      ];
+      const suspiciousKeywords = [
+        'suspicious', 'brute force', 'injection', 'attack', 'breach', 'security', 'vulnerability', 'exploit'
+      ];
+      const allKeywords = [...new Set([...loginKeywords, ...suspiciousKeywords])];
+      logger.debug(`Checking logs with keywords: ${allKeywords.join(', ')}`);
+
+      let loginIssues = [];
+      let suspiciousIssues = [];
+
+      const today = new Date();
+      const threeDaysAgo = new Date(today);
+      threeDaysAgo.setDate(today.getDate() - 3);
+
+      try {
+        const results = await logsService.searchLogs({
+          term: allKeywords.join('|'),
+          dateRange: 'custom',
+          startDate: threeDaysAgo.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0],
+          includeArchived: true
+        });
+        logger.debug(`Found ${results.logs?.length || 0} logs matching keywords`);
+
+        if (results.logs && results.logs.length > 0) {
+          for (const log of results.logs) {
+            const messageLower = log.message.toLowerCase();
+            const timestamp = `${log.date} ${log.time}`;
+            const loginMatch = loginKeywords.find(keyword => messageLower.includes(keyword.toLowerCase()));
+            const suspiciousMatch = suspiciousKeywords.find(keyword => messageLower.includes(keyword.toLowerCase()));
+
+            if (loginMatch) {
+              loginIssues.push({
+                timestamp,
+                level: log.level,
+                message: log.message,
+                service: log.service,
+                type: 'authentication_issue',
+                matchedTerm: loginMatch
+              });
+              logger.debug(`Added login issue: ${log.message}`);
+            }
+
+            if (suspiciousMatch && !loginMatch) {
+              suspiciousIssues.push({
+                timestamp,
+                level: log.level,
+                message: log.message,
+                service: log.service,
+                type: 'suspicious',
+                matchedTerm: suspiciousMatch
+              });
+              logger.debug(`Added suspicious issue: ${log.message}`);
+            }
+          }
+        }
+      } catch (error) {
+        logger.error(`Error searching logs: ${error.message}`, { stack: error.stack });
+      }
+
+      const uniqueLoginIssues = this.removeDuplicateLogEntries(loginIssues);
+      const uniqueSuspiciousIssues = this.removeDuplicateLogEntries(suspiciousIssues);
+      logger.debug(`Unique login issues: ${uniqueLoginIssues.length}`, JSON.stringify(uniqueLoginIssues, null, 2));
+      logger.debug(`Unique suspicious activities: ${uniqueSuspiciousIssues.length}`, JSON.stringify(uniqueSuspiciousIssues, null, 2));
+
+      return {
+        loginIssues: {
+          count: uniqueLoginIssues.length,
+          details: uniqueLoginIssues
+        },
+        suspiciousActivities: {
+          count: uniqueSuspiciousIssues.length,
+          details: uniqueSuspiciousIssues
+        }
+      };
+    } catch (error) {
+      logger.error(`Error checking logs: ${error.message}`, { stack: error.stack });
+      return {
+        loginIssues: { count: 0, details: [] },
+        suspiciousActivities: { count: 0, details: [] }
+      };
+    }
   },
 
   /**
@@ -1398,7 +828,6 @@ const securityScanService = {
   generateRecommendations(loginIssues, suspiciousActivities, vulnerabilities) {
     const recommendations = [];
 
-    // Login-related recommendations
     if (loginIssues.count > 0) {
       const disabledAccountCount = loginIssues.details.filter(
         issue => issue.message.includes('disabled')
@@ -1421,7 +850,6 @@ const securityScanService = {
       });
     }
 
-    // Recommendations based on vulnerabilities
     if (vulnerabilities.critical.length > 0) {
       recommendations.push({
         severity: 'critical',
@@ -1432,11 +860,7 @@ const securityScanService = {
     }
 
     if (vulnerabilities.medium.length > 0) {
-      // Database-specific recommendations
-      const dbIssues = vulnerabilities.medium.filter(
-        v => v.type.includes('Database')
-      );
-
+      const dbIssues = vulnerabilities.medium.filter(v => v.type.includes('database'));
       if (dbIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -1446,11 +870,7 @@ const securityScanService = {
         });
       }
 
-      // JWT-specific recommendations
-      const jwtIssues = vulnerabilities.medium.filter(
-        v => v.type.includes('JWT')
-      );
-
+      const jwtIssues = vulnerabilities.medium.filter(v => v.type.includes('jwt'));
       if (jwtIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -1460,11 +880,7 @@ const securityScanService = {
         });
       }
 
-      // Header-specific recommendations
-      const headerIssues = vulnerabilities.medium.filter(
-        v => v.type.includes('Header')
-      );
-
+      const headerIssues = vulnerabilities.medium.filter(v => v.type.includes('header'));
       if (headerIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -1474,11 +890,7 @@ const securityScanService = {
         });
       }
 
-      // Information leakage recommendations
-      const leakageIssues = vulnerabilities.medium.filter(
-        v => v.type.includes('Leaks') || v.type.includes('Disclosure')
-      );
-
+      const leakageIssues = vulnerabilities.medium.filter(v => v.type.includes('leaks') || v.type.includes('disclosure'));
       if (leakageIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -1488,11 +900,7 @@ const securityScanService = {
         });
       }
 
-      // CORS recommendations
-      const corsIssues = vulnerabilities.medium.filter(
-        v => v.type.includes('Cross-Domain')
-      );
-
+      const corsIssues = vulnerabilities.medium.filter(v => v.type.includes('cross_domain'));
       if (corsIssues.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -1502,11 +910,7 @@ const securityScanService = {
         });
       }
 
-      // Security probe recommendations
-      const securityProbes = vulnerabilities.medium.filter(
-        v => v.type === 'Security Probe Attempt'
-      );
-
+      const securityProbes = vulnerabilities.medium.filter(v => v.type === 'security_probe_attempt');
       if (securityProbes.length > 0) {
         recommendations.push({
           severity: 'medium',
@@ -1515,11 +919,8 @@ const securityScanService = {
           action: 'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place'
         });
 
-        // If we have multiple types of probes, add more specific recommendations
         const envProbes = securityProbes.filter(p => p.description.includes('.env'));
         const gitProbes = securityProbes.filter(p => p.description.includes('.git'));
-        const clientProbes = securityProbes.filter(p => p.description.includes('client/update'));
-
         if (envProbes.length > 0) {
           recommendations.push({
             severity: 'medium',
@@ -1528,7 +929,6 @@ const securityScanService = {
             action: 'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files'
           });
         }
-
         if (gitProbes.length > 0) {
           recommendations.push({
             severity: 'medium',
@@ -1541,11 +941,7 @@ const securityScanService = {
     }
 
     if (vulnerabilities.low.length > 0) {
-      // 404-specific recommendations
-      const missingResources = vulnerabilities.low.filter(
-        v => v.type === 'Missing Resource'
-      );
-
+      const missingResources = vulnerabilities.low.filter(v => v.type === 'missing_resource');
       if (missingResources.length > 0) {
         recommendations.push({
           severity: 'low',
@@ -1556,7 +952,6 @@ const securityScanService = {
       }
     }
 
-    // Add general recommendations
     recommendations.push({
       severity: 'low',
       title: 'Regular Security Maintenance',
@@ -1564,6 +959,7 @@ const securityScanService = {
       action: 'Implement regular security audits, keep dependencies updated, and consider penetration testing'
     });
 
+    logger.debug(`Generated recommendations: ${recommendations.length}`);
     return recommendations;
   },
 
@@ -1573,29 +969,17 @@ const securityScanService = {
    * @returns {Promise<void>}
    */
   async saveScanResults(results) {
+    console.log('*** SAVE_SCAN_RESULTS_CALLED ***');
+    logger.info('*** SAVE_SCAN_RESULTS_START ***');
     try {
-      // Ensure directory exists
-      const dataDir = path.join(__dirname, '../data/security');
+      const dataDir = '/app/data/security';
+      const resultsPath = '/app/data/security/last-scan-results.json';
+      logger.info(`Saving scan results to directory: ${dataDir}, file: ${resultsPath}`);
       await fs.mkdir(dataDir, { recursive: true });
-
-      // Clear old results file if it exists
-      const resultsPath = path.join(dataDir, 'last-scan-results.json');
-      try {
-        await fs.unlink(resultsPath);
-        logger.debug(`Cleared old scan results at ${resultsPath}`);
-      } catch (err) {
-        if (err.code !== 'ENOENT') {
-          logger.warn(`Error clearing old scan results: ${err.message}`);
-        }
-      }
-
-      // Save the new results
-      await fs.writeFile(resultsPath, JSON.stringify(results, null, 2));
-
-      // Log the successful save
+      await fs.writeFile(resultsPath, JSON.stringify(results, null, 2), { mode: 0o666 });
       logger.info(`Security scan results saved to ${resultsPath}`);
     } catch (error) {
-      logger.error(`Error saving scan results: ${error.message}`);
+      logger.error(`Error saving scan results: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }

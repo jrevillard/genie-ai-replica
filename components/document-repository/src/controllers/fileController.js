@@ -35,9 +35,10 @@ const searchSchema = Joi.object({
 const getFilesSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
-  category: Joi.string().valid('general', 'data', 'reports', 'documents').optional(),
+  language: Joi.string().valid('en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
   mimeType: Joi.string().optional(),
-  search: Joi.string().max(100).optional()
+  search: Joi.string().max(100).optional(),
+  dataprepStatus: Joi.string().valid('pending', 'ingested', 'retracted').optional(),
 });
 
 const updateFileSchema = Joi.object({

@@ -176,7 +176,7 @@ class FileService {
    */
   async getFiles(options = {}) {
     try {
-      const { page = 1, limit = 10, category, mimeType, search } = options;
+      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus} = options;
       const offset = (page - 1) * limit;
 
       // Build query
@@ -185,17 +185,22 @@ class FileService {
 
       // Add filters
       const filters = [];
-      if (category) {
-        filters.push('file.category == @category');
+      if (language) {
+        filters.push('file.language == @language');
         bindVars.category = category;
       }
       if (mimeType) {
-        filters.push('file.mimeType == @mimeType');
+        filters.push('file.file_type == @mimeType');
         bindVars.mimeType = mimeType;
       }
       if (search) {
-        filters.push('CONTAINS(LOWER(file.originalName), LOWER(@search)) OR CONTAINS(LOWER(file.description), LOWER(@search))');
+        filters.push('CONTAINS(LOWER(file.file_name), LOWER(@search))');
         bindVars.search = search;
+      }
+      if (dataprepStatus) {
+        const status = dataprepStatus.toLowerCase();
+        filters.push('file.dataprep.status == @status');
+        bindVars.status = status;
       }
 
       if (filters.length > 0) {

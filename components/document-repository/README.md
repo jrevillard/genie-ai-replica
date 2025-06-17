@@ -326,6 +326,57 @@ curl -X DELETE http://localhost:3000/api/files/1750172521893-9274c986
 
 ---
 
+### Get Files (by common metadata fields for simple, fast filtering)
+
+💚 Default to return the first 10 files, sorted by `upload_date` in descending order.
+
+```bash
+curl "http://localhost:3000/api/files"
+```
+
+💚 Get files with pagination and limit:
+```bash
+curl "http://localhost:3000/api/files?page=2&limit=5"
+```
+
+💚 Get files by mimetype:
+```bash
+curl "http://localhost:3000/api/files?mimeType=application/pdf"
+```
+
+💚 Search by file name (case insensitive):
+```bash
+curl "http://localhost:3000/api/files?search=immunization"
+```
+
+💚 Filter by dataprep status:
+
+```bash
+curl "http://localhost:3000/api/files?dataprepStatus=pending"
+```
+
+💚 Combine filters (e.g., PDF files with 'example' in the name)
+
+```bash
+curl "http://localhost:3000/api/files?mimeType=application/pdf&search=example"
+```
+
+**Response (for the combine filters)**
+
+```json
+{"success":true,
+ "message":"Files retrieved successfully",
+ "data":[{"_key":"2665","_id":"files/2665","_rev":"_j1S7H16---","file_id":"1750018631535-79b1bc54","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/app/uploads/1750018631535-79b1bc54.pdf","labels":[],"uploaded_date":"2025-06-15T20:17:11.545Z","created_date":"2025-06-15T20:17:11.536Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
+         {"_key":"3132","_id":"files/3132","_rev":"_j1TKMHO---","file_id":"1750019618934-ce1317a4","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/app/uploads/1750019618934-ce1317a4.pdf","labels":[],"uploaded_date":"2025-06-15T20:33:38.961Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
+         {"_key":"3663","_id":"files/3663","_rev":"_j1TbepG---","file_id":"1750020752005-1ba26d2d","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/app/uploads/1750020752005-1ba26d2d.pdf","labels":[],"uploaded_date":"2025-06-15T20:52:32.048Z","created_date":"1970-01-01T00:00:00.000Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}}]
+ "pagination":{"currentPage":1,
+               "totalPages":3,
+               "totalFiles":28,
+               "limit":10}}
+```
+
+---
+
 ## Security for Access Control
 
 - Common users authenticated as citizens can only read files.

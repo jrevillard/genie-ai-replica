@@ -31,9 +31,11 @@ async function extractMetadata(filePath, fileInfo = {}) {
         source_url: fileInfo.source_url || '',
         language: 'unknown',
         chunk_count: 0,
-        status: 'pending',
-        ingest_date: '',
-        retract_date: ''
+        dataprep: {
+            status: 'pending',
+            ingest_date: '',
+            retract_date: ''
+        }
     };
 
     // File-type-specific metadata extraction
@@ -76,7 +78,7 @@ class MetadataService {
     }
 
     // 2. Search/query metadata (by filename, MIME type, date range, etc.) by scanning all *_metadata.json files in uploads directory
-    async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author) {
+    async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author, status) {
         try {
             const db = await this.getDb();
             let query = `FOR m IN metadata`;
@@ -115,6 +117,10 @@ class MetadataService {
                 filters.push('m.author == @author');
                 bindVars.author = author;
             }
+            if (status) {
+                filters.push('m.dataprep.status == @status');
+                bindVars.status = status;
+            }
 
             if (filters.length > 0) { // Only add FILTER clause if there are filters
                 query += ' FILTER ' + filters.join(' AND ');
@@ -136,7 +142,7 @@ class MetadataService {
         try {
             const db = await this.getDb();
             const cursor = await db.query(
-                `FOR m IN metadata FILTER m.file_id == @file_id LIMIT 1 RETURN m`,
+                `FOR file IN files FILTER file.file_id == @file_id LIMIT 1 RETURN file`,
                 { file_id }
             );
             return await cursor.next() || null; // Return the first matching metadata
@@ -152,7 +158,7 @@ class MetadataService {
             const db = await this.getDb();
             // Find the metadata by file_id
             const cursor = await db.query(
-                `FOR m IN metadata FILTER m.file_id == @file_id LIMIT 1 RETURN m`,
+                `FOR file IN files FILTER file.file_id == @file_id LIMIT 1 RETURN file`,
                 { file_id }
             );
             const metadata = await cursor.next();

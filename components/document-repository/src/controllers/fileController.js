@@ -5,6 +5,7 @@ const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../shared-lib/logger');
+const { log } = require('console');
 
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
@@ -53,6 +54,7 @@ class FileController {
     // Bind methods to preserve 'this' context
     this.downloadFile = this.downloadFile.bind(this);
     this.viewFile = this.viewFile.bind(this);
+    this.viewFileInBrowser = this.viewFileInBrowser.bind(this);
     this.uploadFile = this.uploadFile.bind(this);
     this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
     this.getFiles = this.getFiles.bind(this);
@@ -197,17 +199,21 @@ class FileController {
       file_name: fileRecord.file_name,
       file_size: fileRecord.file_size,
       file_type: fileRecord.file_type,
+      storage_path: fileRecord.storage_path,
+      file_hash: fileRecord.file_hash,
       labels: fileRecord.labels,
       author: fileRecord.author,
-      uploade_date: fileRecord.uploade_date,
+      upload_date: fileRecord.uploade_date,
       create_date: fileRecord.create_date,
       crawl_date: fileRecord.crawl_date,
       source_url: fileRecord.source_url,
       language: fileRecord.language,
       chunk_count: fileRecord.chunk_count,
-      // dataprep_status: fileRecord.dataprep.status,
-      // dataprep_ingested_date: fileRecord.dataprep.ingested_date,
-      // dataprep_retracted_date: fileRecord.dataprep.retracted_date,
+      dataprep : {
+        status: fileRecord.dataprep.status,
+        ingest_date: fileRecord.dataprep.ingest_date,
+        retract_date: fileRecord.dataprep.retract_date,
+      }
     };
   }
 
@@ -228,11 +234,13 @@ class FileController {
     }
 
     // retrieve file from database and search actual file on disk
-    const file = await fileService.getFileById(fileId);
+    const file = await metadataService.getMetadataById(fileId);
+    logger.debug(`🧪 [FILE-CONTROLLER] Retrieved file: ${JSON.stringify(file, null, 2)}`);
     const fileExtension = path.extname(file.file_name).slice(1);
+    logger.debug(`🧪 [FILE-CONTROLLER] File extension: ${fileExtension}`);
     const fileNameOnDisk = file.file_id + '.' + fileExtension;
-    const filePath = path.join(__dirname, '..', '..', 'uploads', fileNameOnDisk);
-    logger.debug(`[FILE-CONTROLLER] filePath: ${filePath}`);
+    const filePath = file.storage_path || path.join(config.upload.uploadDir, fileNameOnDisk);
+    logger.debug(`🧪 [FILE-CONTROLLER] filePath: ${filePath}`);
 
     // Check if file exists
     try {
@@ -478,6 +486,36 @@ class FileController {
     }
   }
 
+  async viewFileInBrowser(req, res) {
+    try {
+      const { fileId } = req.params;
+      const { file, filePath } = await this._getFileAndPath(fileId);
+
+      // Set appropriate headers for viewing in browser
+      res.setHeader('Content-Disposition', `inline; filename="${file.file_name}"`);
+      res.setHeader('Content-Type', file.file_type);
+
+      // Send file
+      res.sendFile(path.resolve(filePath));
+    } catch (error) {
+      logger.error('View file in browser error:', error);
+      
+      if (error.status) {
+        return res.status(error.status).json({
+          success: false,
+          error: error.error,
+          message: error.message
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve file',
+        message: 'An error occurred while retrieving the file'
+      });
+    }
+  }
+
   /**
    * Delete file by ID
    * @param {Object} req - Express request object
@@ -495,12 +533,15 @@ class FileController {
         });
       }
 
-      const deletedFile = await fileService.deleteFile(fileId);
+      fileService.deleteFile(fileId);
 
       res.json({
         success: true,
         message: 'File deleted successfully',
-        data: this._formatFileRecord(deletedFile)
+        // TODO: [LOW] return deleted file information
+        // data: this._formatFileRecord(deletedFile)
+        // Currently page count or word count is also part of metadata for certain file types. 
+        // We need to fix the metadata schema so that the deleted metadata can be checked and returned here.
       });
     } catch (error) {
       logger.error('Delete file error:', error);
@@ -530,7 +571,7 @@ class FileController {
     try {
       const { fileId } = req.params;
 
-      logger.debug(`[FILE-CONTROLLER] Update File Request: ${JSON.stringify(req.body, null, 2)}`);
+      logger.debug(`[FILE-CONTROLLER] Update File Request: ${JSON.stringify(req.body, null, 2)}`); // Log the request body for debugging
 
       if (!fileId) {
         return res.status(400).json({

@@ -37,9 +37,12 @@ components:
             file_type:
               type: string
               example: "application/pdf"
-            file_path:
+            storage_path:
               type: string
               example: "/uploads/document.pdf"
+            file_hash:
+              type: string
+              example: "d41d8cd98f00b204e9800998ecf8427e"
             labels:
               type: array
               items:
@@ -48,11 +51,11 @@ components:
             author:
               type: string
               example: "John Doe"
-            uploaded_date:
+            upload_date:
               type: string
               format: date-time
               example: "2024-03-20T10:30:00Z"
-            created_date:
+            create_date:
               type: string
               format: date-time
               example: "2024-03-20T10:30:00Z"
@@ -77,11 +80,11 @@ components:
                   type: string
                   enum: [pending, processing, completed, failed]
                   example: "pending"
-                ingested_date:
+                ingest_date:
                   type: string
                   format: date-time
                   example: ""
-                retracted_date:
+                retract_date:
                   type: string
                   format: date-time
                   example: ""
@@ -112,9 +115,12 @@ components:
               file_type:
                 type: string
                 example: "application/pdf"
-              file_path:
+              storage_path:
                 type: string
                 example: "/uploads/document1.pdf"
+              file_hash:
+                type: string
+                example: "d41d8cd98f00b204e9800998ecf8427e"
               labels:
                 type: array
                 items:
@@ -123,11 +129,11 @@ components:
               author:
                 type: string
                 example: "John Doe"
-              uploaded_date:
+              upload_date:
                 type: string
                 format: date-time
                 example: "2024-03-20T10:30:00Z"
-              created_date:
+              creat_date:
                 type: string
                 format: date-time
                 example: "2024-03-20T10:30:00Z"
@@ -152,14 +158,15 @@ components:
                     type: string
                     enum: [pending, processing, completed, failed]
                     example: "pending"
-                  ingested_date:
+                  ingest_date:
                     type: string
                     format: date-time
                     example: ""
-                  retracted_date:
+                  retract_date:
                     type: string
                     format: date-time
                     example: ""
+
     GetFilesResponse:
       type: object
       properties:
@@ -220,6 +227,7 @@ components:
             limit:
               type: integer
               example: 10
+  
     GetFileByIdResponse:
       type: object
       properties:
@@ -318,7 +326,7 @@ paths:
             default: 10
         - name: category
           in: query
-          description: Filter files by category (optional, one of: general, data, reports, documents)
+          description: Filter files by category (optional, e.g., general, data, reports, documents)
           required: false
           schema:
             type: string
@@ -694,7 +702,7 @@ paths:
       security:
         - bearerAuth: []
 
-components:
+# components:
   securitySchemes:
     bearerAuth:
       type: http

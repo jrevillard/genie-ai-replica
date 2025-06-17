@@ -164,7 +164,7 @@ document-repository/
 * Indexing & storing in DB
 * ...
 
-## Routes Overview
+## Routes Overview (to be updated)
 
 | Method | Route                       | Description                         |
 | ------ | --------------------------- | ----------------------------------- |
@@ -222,7 +222,7 @@ Use the following `curl` commands to interact with the file system backend servi
 
 ```bash
 curl -X POST http://localhost:3000/api/files/upload \
-  -F "file=@/Users/scarlettsun/Desktop/ITU/Urban Immunization Toolkit.pdf"
+  -F "file=@/Users/scarlettsun/Desktop/ITU/ExamplePDF.pdf"
 ```
 
 **Response**
@@ -230,20 +230,18 @@ curl -X POST http://localhost:3000/api/files/upload \
 ```json
 {"success":true,
  "message":"File uploaded successfully",
- "data":{"file_id":"1750013946938-cfb114ab",
-         "file_name":"Urban Immunization Toolkit.pdf",
-         "file_size":2770818,
+ "data":{"file_id":"1750164284119-30f48760",
+         "file_name":"ExamplePDF.pdf",
+         "file_size":4577594,
          "file_type":"application/pdf",
-         "labels":[],
-         "uploaded_date":"2025-06-15T18:59:06.955Z",
-         "created_date":"2025-06-15T18:59:06.941Z",
+         "storage_path":"/Users/scarlettsun/Desktop/ITU/genie-ai/components/document-repository/uploads/1750164284119-30f48760.pdf","file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892","labels":[],
          "crawl_date":null,
          "source_url":"",
          "language":"",
          "chunk_count":0,
-         "dataprep_status":"pending",
-         "dataprep_ingested_date":"",
-         "dataprep_retracted_date":""}}
+         "dataprep":{"status":"pending",
+                     "ingest_date":"",
+                     "retract_date":""}}}
 ```
 
 ---
@@ -264,19 +262,33 @@ curl -X POST http://localhost:3000/api/files/uploads \
 ```json
 {"success":true,
  "message":"Files uploaded successfully",
- "data":[{"file_id":"1750019618932-e7f71c5b","file_name":"txtai.txt", "file_size":210930, "file_type":"text/plain", "labels":[], "uploaded_date":"2025-06-15T20:33:38.942Z","created_date":"2025-06-15T20:33:38.936Z", "crawl_date":null, "source_url":"", "language":"", "chunk_count":0, "dataprep_status":"pending", "dataprep_ingested_date":"", "dataprep_retracted_date":""},
-         {"file_id":"1750019618934-16fd7f0c","file_name":"Sample_criteria.xlsx","file_size":13004,"file_type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","labels":[],"uploaded_date":"2025-06-15T20:33:38.938Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep_status":"pending","dataprep_ingested_date":"","dataprep_retracted_date":""},{"file_id":"1750019618934-30adc14b","file_name":"EMBEDDING MODEL TESTS.docx","file_size":31880,"file_type":"application/vnd.openxmlformats-officedocument.wordprocessingml.document","labels":[],"uploaded_date":"2025-06-15T20:33:38.937Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep_status":"pending","dataprep_ingested_date":"","dataprep_retracted_date":""},
-         "..."]
-}
+ "data":[{"file_id":"1750164437466-b51fa7c5", "file_name":"txtai.txt", "file_size":210930, "file_type":"text/plain", "storage_path":"/Users/scarlettsun/Desktop/ITU/genie-ai/components/document-repository/uploads/1750164437466-b51fa7c5.txt","file_hash":"60a92fa3b2ce3bd8039702806ffdf65250ddfcab59cca1ed6cbd0f60cf23beff","labels":[], "crawl_date":null, "source_url":"","language":"","chunk_count":0, "dataprep":{"status":"pending","ingest_date":"","retract_date":""}},
+         {"file_id":"1750164437466-1c31ed4c","file_name":"Sample_criteria.xlsx", "..."},{"file_id":"1750164437467-42b326a7", "..."},
+         {"..."}]}
 ```
 
 ---
 
 ### View a File
 
-View a file in the browser (for supported file types):
+**View a file in base64** (for future API integration)
+
 ```bash
-curl http://localhost:3000/api/files/1750018387796-c50dfdf0/view
+curl http://localhost:3000/api/files/1750172535368-a0de31df/view
+```
+
+**Response**
+
+```base64
+IGl0LiBUaGlzIHdpbGwgZGVwZW5kIG9uIGhvdyB0aGUgCnRhb
+```
+
+**View a file in browser** (for supported file types. For example, PDF, HTML, etc. Files in other types will be downloaded instead.)
+
+```
+Open your browser and navigate to:
+
+http://localhost:3000/api/files/1750172535368-a0de31df/viewbrowser
 ```
 
 ---
@@ -284,13 +296,17 @@ curl http://localhost:3000/api/files/1750018387796-c50dfdf0/view
 ### Download a File
 
 Download from the backend server:
+
 ```bash
-curl http://localhost:9981/api/files/1748521446956-129192260-AAA-testing.txt --output downloaded.txt
+curl http://localhost:3000/api/files/1750172521893-9274c986/download --output /Users/scarlettsun/Desktop/ITU/test-download-3.pdf
 ```
 
-Download from the remote file system to your local computer:
+**Response**
+
 ```bash
-curl http://<remote-node-ip>:9981/api/files/1748524213244-962969549-ExamplePDF.pdf --output /path/to/local/destination/<filename>
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 4470k  100 4470k    0     0   148M      0 --:--:-- --:--:-- --:--:--  174M
 ```
 
 ---
@@ -299,13 +315,16 @@ curl http://<remote-node-ip>:9981/api/files/1748524213244-962969549-ExamplePDF.p
 
 Delete from the backend server:
 ```bash
-curl -X DELETE http://localhost:9981/api/files/1748521446956-129192260-AAA-testing.txt
+curl -X DELETE http://localhost:3000/api/files/1750172521893-9274c986
 ```
 
-Delete from your local computer (remotely):
-```bash
-curl -X DELETE http://<remote-node-ip>:9981/api/files/1748524213244-962969549-ExamplePDF.pdf
+**Response**
+
+```json
+{"success":true, "message":"File deleted successfully"}
 ```
+
+---
 
 ## Security for Access Control
 

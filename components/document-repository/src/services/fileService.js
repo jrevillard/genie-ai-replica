@@ -104,7 +104,7 @@ class FileService {
         file_size: fileData.size,
         file_type: mimeType,
         storage_path : filePath,
-        file_hash: fileUtils.calculateFileHash(filePath), // Optional: calculate hash if needed
+        file_hash: await fileUtils.getFileHash(filePath), // Optional: calculate hash if needed
         labels: fileInfo.labels,
         author: fileInfo.author,
         uploaded_date: new Date().toISOString(),
@@ -113,9 +113,11 @@ class FileService {
         source_url: fileInfo.sourceUrl || '',
         language: '',
         chunk_count: 0,
-        status: 'pending',
-        ingest_date: '',
-        retract_date: ''
+        dataprep: {
+          status: 'pending',
+          ingest_date: '',
+          retract_date: ''
+        }
       };
 
       try {
@@ -143,29 +145,29 @@ class FileService {
     }
   }
 
-  /**
-   * Get file by ID
-   * @param {string} fileId - File ID
-   * @returns {Object} File record
-   */
-  async getFileById(fileId) {
-    logger.debug(`[FILE-SERVICE] Getting file by ID: ${fileId}`);
-    try {
-      const db = await this.getDb();
-      // const file = await db.collection('files').document(fileId);
-      const file = await db.query(`
-        FOR file IN files
-        FILTER file.file_id == @fileId
-        RETURN file
-      `, { fileId }).then(cursor => cursor.next()); 
-      return file;
-    } catch (error) {
-      if (error.code === 404) {
-        throw new Error('File not found');
-      }
-      throw error;
-    }
-  }
+  // /**
+  //  * Get file by ID
+  //  * @param {string} fileId - File ID
+  //  * @returns {Object} File record
+  //  */
+  // async getFileById(fileId) {
+  //   logger.debug(`[FILE-SERVICE] Getting file by ID: ${fileId}`);
+  //   try {
+  //     const db = await this.getDb();
+  //     // const file = await db.collection('files').document(fileId);
+  //     const file = await db.query(`
+  //       FOR file IN files
+  //       FILTER file.file_id == @fileId
+  //       RETURN file
+  //     `, { fileId }).then(cursor => cursor.next()); 
+  //     return file;
+  //   } catch (error) {
+  //     if (error.code === 404) {
+  //       throw new Error('File not found');
+  //     }
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Get all files with pagination
@@ -236,27 +238,55 @@ class FileService {
   async deleteFile(fileId) {
     try {
       // Get file record
-      const file = await this.getFileById(fileId);
+      const file = await metadataService.getMetadataById(fileId);
+      if (!file) {
+        throw new Error(`File record not found in database: ${fileId}`);
+      }
       
-      // Delete physical file
+      // prepare file path for deletion
       const fileExtension = path.extname(file.file_name).slice(1);
       const fileNameOnDisk = file.file_id + '.' + fileExtension;
       const filePath = path.join(this.uploadDir, fileNameOnDisk);
-      try {
-        await fs.unlink(filePath);
-      } catch (error) {
-        logger.warn(`Physical file not found or already deleted: ${filePath}`);
-      }
 
-      // Delete from database using file_id and return the deleted record
+      // Check if file exists on disk
       try {
-        await metadataService.deleteMetadata(fileId);
+        await fs.access(filePath);
+        logger.info(`🗂️ File found on disk: ${filePath}`);
+      } catch (error) {
+        logger.warn(`🗂️ File not found on disk: ${filePath}`);
+        throw new Error(`File not found on disk: ${filePath}`);
+      }
+      
+      // Delete metadata first and keep a backup
+      let deletedMetadata = false;
+      let metadataBackup = null;
+      try {
+        metadataBackup = { ...file }; // Create a backup of the metadata
+        deletedMetadata = await metadataService.deleteMetadata(fileId);
+        logger.info(`🧪 Metadata deleted for file ${fileId}`);
       } catch (error) {
         logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
+        throw new Error(`File deleted but failed to delete metadata for file ${fileId}`);
       }
 
-      return deletedFile;
-      
+      // Delete the physical file from disk
+      try {
+        await fs.unlink(filePath);
+        logger.info(`🗑️ File deleted from disk: ${filePath}`);
+        return true;
+      } catch (error) {
+        logger.error(`File deleted from metadata but failed to delete physical file: ${error.message}`);
+        // attempt to restore metadata if file deletion fails
+        if (deletedMetadata && metadataBackup) {
+          try {
+            await metadataService.addMetadata(filePath, metadataBackup);
+            logger.info(`🔄 Metadata restored for file ${fileId}`);
+          } catch (restoreError) {
+            logger.error(`Failed to restore metadata for file ${fileId}: ${restoreError.message}`);
+          }
+        }
+      }
+      throw new Error('Metadata deleted but failed to delete file on disk: ${filePath}');
     } catch (error) {
       logger.error(`Error deleting file: ${error}`);
       throw error;

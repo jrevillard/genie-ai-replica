@@ -20,12 +20,12 @@ Extracted *immediately after upload* and stored **in ArangoDB document-repositor
 * `create_date` 🔍 ✍️ (if extractable from file or user-provided. For example, a PDF created at 2023-10-01T12:00:00Z; a html webpage published at 2023-10-01T12:00:00Z)
 * `crawl_date` ✍️ (if applicable, when the file was crawled)
 * `source_url` ✍️ (only if the file is a webpage, e.g. `https://example.com/page`)
-* `language` (set as `unknown` at this stage, to be detected later)
+* `language` 🔍 ✍️ (set as `unknown` at this stage, to be detected later)
 * `chunk_count` (number of text chunks. Set to `0` at this stage, to be updated later)
-* `status` (initially set to `pending`, updated to `ingested` after successful ingestion, or `retracted` if the file is retracted)
-* `ingest_date` (timestamp of when the file was successfully ingested, initially empty)
-* `retract_date` (timestamp of when the file was retracted, initially empty)
-
+* dataprep
+    * `status` (initially set to `pending`, updated to `ingested` after successful ingestion, or `retracted` if the file is retracted)
+    * `ingest_date` (timestamp of when the file was successfully ingested, initially empty)
+    * `retract_date` (timestamp of when the file was retracted, initially empty)
 
 🔍 means the user can search by this metadata field;
 

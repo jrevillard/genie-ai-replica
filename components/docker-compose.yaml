@@ -19,10 +19,6 @@ services:
       context: .
       dockerfile: gov-chat-backend/Dockerfile
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1024M 
     ports:
       - "3000:3000"
     volumes:

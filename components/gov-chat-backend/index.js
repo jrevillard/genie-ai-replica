@@ -10,37 +10,6 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 
-// Import services
-const authService = require('./services/auth-service');
-const UserProfileService = require('./services/user-profile-service');
-const AdminDashboardService = require('./services/admin-dashboard-service');
-const AnalyticsService = require('./services/analytics-service');
-const QueryService = require('./services/query-service');
-const chatHistoryService = require('./services/chat-history-service');
-const ServiceCategoryService = require('./services/service-category-service');
-const SessionService = require('./services/session-service');
-const logsService = require('./services/logs-service');
-const DatabaseOperationsService = require('./services/database-operations-service');
-const WeatherService = require('./services/weather-service');
-
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
-try {
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    logger.info(`Created uploads directory: ${uploadsDir}`);
-  } else {
-    logger.debug(`Uploads directory already exists: ${uploadsDir}`);
-  }
-} catch (error) {
-  logger.error('Failed to create uploads directory:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
-  });
-}
-
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,6 +43,24 @@ app.use(securityHeaders);
 
 // Enable trust proxy with specific setting
 app.set('trust proxy', 1); // Trust the first proxy (Kong)
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    logger.info(`Created uploads directory: ${uploadsDir}`);
+  } else {
+    logger.debug(`Uploads directory already exists: ${uploadsDir}`);
+  }
+} catch (error) {
+  logger.error('Failed to create uploads directory:', {
+    error: error.message,
+    stack: error.stack,
+    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+    errorType: error?.constructor?.name || 'Unknown'
+  });
+}
 
 // CORS middleware with explicit origin
 app.use((req, res, next) => {
@@ -459,10 +446,10 @@ const cspOptions = {
   directives: {
     defaultSrc: ["'self'"],
     scriptSrc: ["'self'", "cdn.jsdelivr.net"],
-    styleSrc: ["'self'", "'unsafe-inline'"],
+    styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'", "data:"],
-    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org"],
+    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net:*", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org"],
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -667,121 +654,188 @@ async function initializeServices() {
 
   const services = {};
 
-  // Import SecurityScanService
-  const SecurityScanService = require('./services/security-scan-service');
+  // Import services individually with error handling
+  let authService, userProfileService, adminDashboardService, analyticsService, queryService;
+  let chatHistoryService, serviceCategoryService, sessionService, logsService;
+  let databaseOperationsService, weatherService, securityScanService;
 
-  // Use singletons and validate
-  const serviceMap = {
-    authService: { instance: authService, name: 'AuthService' },
-    serviceCategoryService: { instance: ServiceCategoryService, name: 'ServiceCategoryService' },
-    userProfileService: { instance: UserProfileService, name: 'UserProfileService' },
-    adminDashboardService: { instance: AdminDashboardService, name: 'AdminDashboardService' },
-    analyticsService: { instance: AnalyticsService, name: 'AnalyticsService' },
-    databaseOperationsService: { instance: DatabaseOperationsService, name: 'DatabaseOperationsService' },
-    sessionService: { instance: SessionService, name: 'SessionService' },
-    queryService: { instance: QueryService, name: 'QueryService' },
-    chatHistoryService: { instance: chatHistoryService, name: 'ChatHistoryService' },
-    logsService: { instance: logsService, name: 'LogsService' },
-    weatherService: { instance: WeatherService, name: 'WeatherService' },
-    securityScanService: { instance: SecurityScanService, name: 'SecurityScanService' }
+  const importService = async (name, path) => {
+    logger.info(`Importing service: ${name}`);
+    try {
+      const module = require(path);
+      logger.debug(`Service ${name} imported successfully`);
+      return module;
+    } catch (error) {
+      logger.error(`Failed to import service ${name}:`, {
+        error: error.message || 'Unknown error',
+        stack: error.stack || 'No stack trace',
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      throw error;
+    }
   };
 
-  for (const [key, { instance, name }] of Object.entries(serviceMap)) {
-    if (!instance) {
-      logger.error(`Service ${name} is undefined`);
-      throw new Error(`Service ${name} is undefined`);
-    }
-    services[key] = instance;
-    logger.debug(`${name} singleton loaded`, {
-      methods: Object.getOwnPropertyNames(instance.__proto__).filter(m => m !== 'constructor')
-    });
-  }
-
-  // Validate AdminDashboardService specifically
-  if (services.adminDashboardService && typeof services.adminDashboardService.getSystemHealth !== 'function') {
-    logger.warn('AdminDashboardService missing getSystemHealth method');
-  }
-
-  // Initialize services
   try {
-    await services.sessionService.init();
-    logger.info('SessionService initialized');
-    await services.authService.setSessionService(services.sessionService);
-    await services.authService.init();
-    logger.info('AuthService initialized');
-    await services.serviceCategoryService.init();
-    logger.info('ServiceCategoryService initialized');
-    await services.userProfileService.init();
-    logger.info('UserProfileService initialized');
-    await services.adminDashboardService.init();
-    logger.info('AdminDashboardService initialized');
-    await services.analyticsService.init();
-    logger.info('AnalyticsService initialized');
-    await services.databaseOperationsService.init();
-    logger.info('DatabaseOperationsService initialized');
-    await services.queryService.init();
-    logger.info('QueryService initialized');
-    await services.chatHistoryService.init();
-    logger.info('ChatHistoryService initialized');
-    await services.logsService.init();
-    logger.info('LogsService initialized');
-    await services.weatherService.init();
-    logger.info('WeatherService initialized');
-    services.userProfileService.setSessionService(services.sessionService);
-    logger.info('UserProfileService.setSessionService completed');
+    authService = await importService('AuthService', './services/auth-service');
+    userProfileService = await importService('UserProfileService', './services/user-profile-service');
+    adminDashboardService = await importService('AdminDashboardService', './services/admin-dashboard-service');
+    analyticsService = await importService('AnalyticsService', './services/analytics-service');
+    queryService = await importService('QueryService', './services/query-service');
+    chatHistoryService = await importService('ChatHistoryService', './services/chat-history-service');
+    serviceCategoryService = await importService('ServiceCategoryService', './services/service-category-service');
+    sessionService = await importService('SessionService', './services/session-service');
+    logsService = await importService('LogsService', './services/logs-service');
+    databaseOperationsService = await importService('DatabaseOperationsService', './services/database-operations-service');
+    weatherService = await importService('WeatherService', './services/weather-service');
+    securityScanService = await importService('SecurityScanService', './services/security-scan-service');
+
+    logger.info('Constructing service map');
+    const serviceMap = {
+      authService: { instance: authService, name: 'AuthService' },
+      serviceCategoryService: { instance: serviceCategoryService, name: 'ServiceCategoryService' },
+      userProfileService: { instance: userProfileService, name: 'UserProfileService' },
+      adminDashboardService: { instance: adminDashboardService, name: 'AdminDashboardService' },
+      analyticsService: { instance: analyticsService, name: 'AnalyticsService' },
+      databaseOperationsService: { instance: databaseOperationsService, name: 'DatabaseOperationsService' },
+      sessionService: { instance: sessionService, name: 'SessionService' },
+      queryService: { instance: queryService, name: 'QueryService' },
+      chatHistoryService: { instance: chatHistoryService, name: 'ChatHistoryService' },
+      logsService: { instance: logsService, name: 'LogsService' },
+      weatherService: { instance: weatherService, name: 'WeatherService' },
+      securityScanService: { instance: securityScanService, name: 'SecurityScanService' }
+    };
+
+    // Validate services
+    logger.info('Validating services');
+    for (const [key, { instance, name }] of Object.entries(serviceMap)) {
+      try {
+        if (!instance) {
+          logger.error(`Service ${name} is undefined`);
+          throw new Error(`Service ${name} is undefined`);
+        }
+        services[key] = instance;
+        logger.debug(`${name} singleton loaded`, {
+          methods: Object.getOwnPropertyNames(instance.__proto__).filter(m => m !== 'constructor')
+        });
+      } catch (validationError) {
+        logger.error(`Failed to validate service ${name}:`, {
+          error: validationError.message || 'Unknown error',
+          stack: validationError.stack || 'No stack trace',
+          rawError: JSON.stringify(validationError, Object.getOwnPropertyNames(validationError)),
+          errorType: validationError?.constructor?.name || 'Unknown'
+        });
+        throw validationError;
+      }
+    }
+
+    // Add delay to capture async rejections
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Validate AdminDashboardService specifically
+    if (services.adminDashboardService && typeof services.adminDashboardService.getSystemHealth !== 'function') {
+      logger.warn('AdminDashboardService missing getSystemHealth method');
+    }
+
+    // Initialize services with detailed error logging
+    logger.info('Initializing services');
+    const initPromises = [
+      { service: services.sessionService, name: 'SessionService' },
+      { service: services.authService, name: 'AuthService', preInit: () => services.authService.setSessionService(services.sessionService) },
+      { service: services.serviceCategoryService, name: 'ServiceCategoryService' },
+      { service: services.userProfileService, name: 'UserProfileService' },
+      { service: services.adminDashboardService, name: 'AdminDashboardService' },
+      { service: services.analyticsService, name: 'AnalyticsService' },
+      { service: services.databaseOperationsService, name: 'DatabaseOperationsService' },
+      { service: services.queryService, name: 'QueryService' },
+      { service: services.chatHistoryService, name: 'ChatHistoryService' },
+      { service: services.logsService, name: 'LogsService' },
+      { service: services.weatherService, name: 'WeatherService' }
+    ];
+
+    for (const { service, name, preInit } of initPromises) {
+      logger.info(`Initializing ${name}`);
+      try {
+        if (preInit) await preInit();
+        if (typeof service.init === 'function') await service.init();
+        logger.info(`${name} initialized successfully`);
+      } catch (initError) {
+        logger.error(`Failed to initialize ${name}:`, {
+          error: initError.message || 'Unknown error',
+          stack: initError.stack || 'No stack trace',
+          rawError: JSON.stringify(initError, Object.getOwnPropertyNames(initError)),
+          errorType: initError?.constructor?.name || 'Unknown'
+        });
+        throw initError;
+      }
+    }
+
+    logger.info('Setting UserProfileService.setSessionService');
+    try {
+      services.userProfileService.setSessionService(services.sessionService);
+      logger.debug('UserProfileService.setSessionService completed');
+    } catch (error) {
+      logger.error('Failed to set UserProfileService.setSessionService:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      throw error;
+    }
+
+    // Set dependencies
+    logger.info('Setting service dependencies');
+    try {
+      if (services.queryService && services.analyticsService) {
+        services.queryService.setAnalyticsService(services.analyticsService);
+        logger.debug('QueryService.setAnalyticsService completed');
+      }
+      if (services.queryService && services.chatHistoryService) {
+        services.queryService.setChatHistoryService(services.chatHistoryService);
+        logger.debug('QueryService.setChatHistoryService completed');
+      }
+      if (services.chatHistoryService && services.analyticsService) {
+        services.chatHistoryService.setAnalyticsService(services.analyticsService);
+        logger.debug('ChatHistoryService.setAnalyticsService completed');
+      }
+      if (services.adminDashboardService && services.logsService) {
+        services.adminDashboardService.setLogsService(services.logsService);
+        logger.debug('AdminDashboardService.setLogsService completed');
+      }
+      if (services.adminDashboardService && services.securityScanService) {
+        services.adminDashboardService.setSecurityScanService(services.securityScanService);
+        logger.debug('AdminDashboardService.setSecurityScanService completed');
+      }
+      if (services.weatherService && services.analyticsService) {
+        services.weatherService.setAnalyticsService(services.analyticsService);
+        logger.debug('WeatherService.setAnalyticsService completed');
+      }
+    } catch (error) {
+      logger.error('Failed to set service dependencies:', {
+        error: error.message,
+        stack: error.stack,
+        rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        errorType: error?.constructor?.name || 'Unknown'
+      });
+      throw error;
+    }
+
+    logger.info('Service initialization completed', {
+      initialized: Object.keys(services).filter(key => services[key]).length,
+      failed: Object.keys(services).filter(key => !services[key]).length
+    });
+
+    return services;
   } catch (error) {
-    logger.error('Service initialization failed:', {
-      error: error.message,
-      stack: error.stack,
+    logger.error('Service initialization process failed:', {
+      error: error.message || 'Unknown error',
+      stack: error.stack || 'No stack trace',
       rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
       errorType: error?.constructor?.name || 'Unknown'
     });
     throw error;
   }
-
-  // Set dependencies
-  logger.info('Setting service dependencies');
-  try {
-    if (services.queryService && services.analyticsService) {
-      services.queryService.setAnalyticsService(services.analyticsService);
-      logger.debug('QueryService.setAnalyticsService completed');
-    }
-    if (services.queryService && services.chatHistoryService) {
-      services.queryService.setChatHistoryService(services.chatHistoryService);
-      logger.debug('QueryService.setChatHistoryService completed');
-    }
-    if (services.chatHistoryService && services.analyticsService) {
-      services.chatHistoryService.setAnalyticsService(services.analyticsService);
-      logger.debug('ChatHistoryService.setAnalyticsService completed');
-    }
-    if (services.adminDashboardService && services.logsService) {
-      services.adminDashboardService.setLogsService(services.logsService);
-      logger.debug('AdminDashboardService.setLogsService completed');
-    }
-    if (services.adminDashboardService && services.securityScanService) {
-      services.adminDashboardService.setSecurityScanService(services.securityScanService);
-      logger.debug('AdminDashboardService.setSecurityScanService completed');
-    }
-    if (services.weatherService && services.analyticsService) {
-      services.weatherService.setAnalyticsService(services.analyticsService);
-      logger.debug('WeatherService.setAnalyticsService completed');
-    }
-  } catch (error) {
-    logger.error('Failed to set service dependencies:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    throw error;
-  }
-
-  logger.info('Service initialization completed', {
-    initialized: Object.keys(services).filter(key => services[key]).length,
-    failed: Object.keys(services).filter(key => !services[key]).length
-  });
-
-  return services;
 }
 
 // Health check endpoint
@@ -846,8 +900,8 @@ async function startApp() {
     logger.info('Services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize services:', {
-      error: error.message,
-      stack: error.stack,
+      error: error.message || 'Unknown error',
+      stack: error.stack || 'No stack trace',
       rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
       errorType: error?.constructor?.name || 'Unknown'
     });
@@ -1068,10 +1122,13 @@ async function startApp() {
 
   // Start the server
   try {
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });
+    // Set server timeout to 300 seconds (300,000 ms)
+    server.setTimeout(300000);
+    logger.info(`Server timeout set to 300 seconds`);
   } catch (error) {
     logger.error('Failed to start server:', {
       error: error.message,
@@ -1092,6 +1149,7 @@ process.on('unhandledRejection', (reason, promise) => {
     rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
     errorType: reason?.constructor?.name || 'Unknown'
   });
+  process.exit(1);
 });
 
 // Start the application

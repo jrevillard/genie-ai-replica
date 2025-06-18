@@ -78,7 +78,7 @@ class MetadataService {
     }
 
     // 2. Search/query metadata (by filename, MIME type, date range, etc.) by scanning all *_metadata.json files in uploads directory
-    async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author, status) {
+    async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author, status, language) {
         try {
             const db = await this.getDb();
             let query = `FOR file IN files`;
@@ -90,7 +90,7 @@ class MetadataService {
                 bindVars.file_name = file_name;
             }
             if (file_type) {
-                filters.push('file.mime_type == @file_type');
+                filters.push('file.file_type == @file_type');
                 bindVars.file_type = file_type;
             }
             if (upload_date_from) {
@@ -120,6 +120,10 @@ class MetadataService {
             if (status) {
                 filters.push('file.dataprep.status == @status');
                 bindVars.status = status;
+            }
+            if (language) {
+                filters.push('file.language == @language');
+                bindVars.language = language;
             }
 
             if (filters.length > 0) { // Only add FILTER clause if there are filters
@@ -174,44 +178,44 @@ class MetadataService {
     }
 
     // 5. Manually update existing metadata
-    async updateMetadata(file_id, updates= {}) {
-        try {
-            const db = await this.getDb();
-            const cursor = await db.query(
-                `FOR m IN metadata FILTER m.file_id == @file_id LIMIT 1 RETURN m`,
-                { file_id }
-            );
-            const metadata = await cursor.next();
-            if (!metadata) {
-                throw new Error(`Metadata not found for file_id: ${file_id}`);
-            }
+    // async updateMetadata(file_id, updates= {}) {
+    //     try {
+    //         const db = await this.getDb();
+    //         const cursor = await db.query(
+    //             `FOR file IN files FILTER file.file_id == @file_id LIMIT 1 RETURN file`,
+    //             { file_id }
+    //         );
+    //         const metadata = await cursor.next();
+    //         if (!metadata) {
+    //             throw new Error(`Metadata not found for file_id: ${file_id}`);
+    //         }
 
-            // Update metadata with provided updates. Only update allowed fields.
-            const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url'];
-            const updateObj = {};
-            for (const key of Object.keys(updates)) {
-                if (allowedFields.includes(key)) {
-                    // Special handling for labels: allow adding/removing labels
-                    if (key === 'labels' && Array.isArray(updates[key])) {
-                        updateObj.labels = updates.labels;
-                    } else {
-                        updateObj[key] = updates[key];
-                    }
-                }
-            }
-            if (Object.keys(updateObj).length === 0) {
-                throw new Error('No valid fields to update');
-            }
-            // Update the metadata in the database
-            await db.collection('files').update(metadata._key, updateObj);
-            const updated = await db.collection('files').document(metadata._key);
-            console.log(`Metadata for file_id ${file_id} updated successfully.`);
-            return updated
-        } catch (error) {
-            console.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
-            throw error;
-        }
-    }
+    //         // Update metadata with provided updates. Only update allowed fields.
+    //         const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url', 'language'];
+    //         const updateObj = {};
+    //         for (const key of Object.keys(updates)) {
+    //             if (allowedFields.includes(key)) {
+    //                 // Special handling for labels: allow adding/removing labels
+    //                 if (key === 'labels' && Array.isArray(updates[key])) {
+    //                     updateObj.labels = updates.labels;
+    //                 } else {
+    //                     updateObj[key] = updates[key];
+    //                 }
+    //             }
+    //         }
+    //         if (Object.keys(updateObj).length === 0) {
+    //             throw new Error('No valid fields to update');
+    //         }
+    //         // Update the metadata in the database
+    //         await db.collection('files').update(metadata._key, updateObj);
+    //         const updated = await db.collection('files').document(metadata._key);
+    //         console.log(`Metadata for file_id ${file_id} updated successfully.`);
+    //         return updated
+    //     } catch (error) {
+    //         console.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
+    //         throw error;
+    //     }
+    // }
 }
 
 module.exports = new MetadataService(); // Export an instance of MetadataService for use in other modules

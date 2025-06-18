@@ -12,7 +12,7 @@ Extracted *immediately after upload* and stored **in ArangoDB document-repositor
 * `file_name` 🔍 ✍️ (e.g. `abc123.pdf`. If the file is a webpage, the user can edit to use the content title as the name.)
 * `file_size`
 * `file_type` 🔍 (MIME type)
-* `file_hash` 🔍 (SHA256 hash of the file, for integrity check)
+* `file_hash` (SHA256 hash of the file, for integrity check)
 * `storage_path` (local relevant path, e.g. `/uploads/abc123.pdf`)
 * `labels` 🔍 ✍️ (No labels at the beginning, but users can add/edit labels before ingest.)
 * `author` 🔍 ✍️

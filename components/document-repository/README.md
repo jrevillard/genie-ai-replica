@@ -397,10 +397,75 @@ curl "http://localhost:3000/api/files?mimeType=application/pdf&search=example"
 
 ---
 
+### Update File Metadata
+
+```bash
+curl -X PATCH http://localhost:3000/api/files/1750239680874-54bf35bf \
+  -H "Content-Type: application/json" \
+  -d '{"language":"sw", "labels":["seven", "purple"], "author":"New Author"}'
+```
+
+**Response**
+
+```json
+{"success":true,
+ "message":"File updated successfully",
+ "data":{"file_id":"1750239680874-54bf35bf",
+         "file_name":"ExamplePDF.pdf",
+         "file_size":4577594,
+         "file_type":"application/pdf",
+         "storage_path":"/Users/scarlettsun/Desktop/ITU/genie-ai/components/document-repository/uploads/1750239680874-54bf35bf.pdf",
+         "file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892",
+         "labels":["seven","purple"],
+         "author":"New Author",
+         "create_date":"2025-06-18T09:41:20.876Z",
+         "crawl_date":"",
+         "source_url":"",
+         "language":"sw",
+         "chunk_count":0,
+         "dataprep":{"status":"pending","ingest_date":"","retract_date":""}}}
+```
+
+---
+
 ### Search Files by Filtering Metadata
 
 ```bash
-curl "http://localhost:3000/api/files/search?file_name=immunization&file_type=application/pdf"
+curl "http://localhost:3000/api/files/search?file_type=application/pdf"
+
+curl "http://localhost:3000/api/files/search?file_name=example"
+
+curl "http://localhost:3000/api/files/search?upload_date_from=2025-06-18T14:30:00.092Z&upload_date_to=2025-06-18T14:40:07.092Z"
+
+curl "http://localhost:3000/api/files/search?labels=one,orange"
+
+curl "http://localhost:3000/api/files/search?author=Summer"
+
+curl "http://localhost:3000/api/files/search?status=pending"
+
+curl "http://localhost:3000/api/files/search?language=sw"
+
+curl "http://localhost:3000/api/files/search?file_type=application/pdf&labels=orange"
+
+curl "http://localhost:3000/api/files/search?file_name=budget&file_type=application/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en"
+```
+
+**Response**
+
+```json
+{"success":true,
+ "message":"Metadata search completed successfully",
+ "data":[{"_key":"42503","_id":"files/42503","_rev":"_j2IEPHa---","file_id":"1750239869811-68b40128","file_name":"Urban Immunization Toolkit.pdf","file_size":2770818,"file_type":"application/pdf","storage_path":"/Users/scarlettsun/Desktop/ITU/genie-ai/components/document-repository/uploads/1750239869811-68b40128.pdf","file_hash":"3456a1eef50facf4d1b70768ee904f91dd057c6f702f55923243fbe20b5c1131","labels":["two","orange"],"author":"NewAuthor","upload_date":"2025-06-18T09:44:29.852Z","create_date":"2025-06-18T09:44:29.813Z","crawl_date":"","source_url":"","language":"sw","chunk_count":0,"dataprep":{"status":"pending","ingest_date":"","retract_date":""},"page_count":69}],
+ "query":{"file_type":"application/pdf","labels":"orange"},
+ "resultCount":1}
+```
+
+```json
+{"success":true,
+ "message":"Metadata search completed successfully",
+ "data":[],
+ "query":{"file_name":"budget","file_type":"application/html","upload_date_from":"2024-06-01T00:00:00Z","upload_date_to":"2024-06-30T23:59:59Z","labels":"finance,orange","author":"Anonymous","status":"pending","language":"en"},
+ "resultCount":0}
 ```
 
 ---

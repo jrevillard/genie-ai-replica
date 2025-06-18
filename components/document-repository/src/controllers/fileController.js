@@ -47,7 +47,8 @@ const updateFileSchema = Joi.object({
   author: Joi.string().max(200).optional(),
   create_date: Joi.date().optional(),
   crawl_date: Joi.date().optional(),
-  source_url: Joi.string().uri().optional()
+  source_url: Joi.string().uri().optional(),
+  language: Joi.string().valid('sw', 'en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
 });
 
 class FileController {
@@ -66,7 +67,7 @@ class FileController {
     this.updateFile = this.updateFile.bind(this);
     this.searchMetadata = this.searchMetadata.bind(this);
     this.getMetadata = this.getMetadata.bind(this);
-    this.updateMetadataController = this.updateMetadataController.bind(this);
+    // this.updateMetadataController = this.updateMetadataController.bind(this);
   }
 
   /**
@@ -643,7 +644,7 @@ class FileController {
       }
 
       // Get current file record
-      const currentFile = await fileService.getFileById(fileId);
+      const currentFile = await metadataService.getMetadataById(fileId);
       if (!currentFile) {
         return res.status(404).json({
           success: false,
@@ -792,7 +793,63 @@ class FileController {
    */
   async searchMetadata(req, res) {
     try {
-      const results = await metadataService.searchMetadata(req.query);
+      const {
+          file_name,
+          file_type,
+          upload_date_from,
+          upload_date_to,
+          create_date_from,
+          create_date_to,
+          labels,
+          author,
+          status,
+          language
+        } = req.query;
+      
+      const allowedFields = [
+        'file_name',
+        'file_type',
+        'upload_date_from',
+        'upload_date_to',
+        'create_date_from',
+        'create_date_to',
+        'labels',
+        'author',
+        'status',
+        'language'
+      ];
+
+      const invalidFields = Object.keys(req.query).filter(
+        key => !allowedFields.includes(key)
+      );
+      if (invalidFields.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid query parameters',
+          message: `Invalid query parameters: ${invalidFields.join(', ')}`
+        });
+      }
+
+      // Parse labels if present (comma-separated string to array)
+      const labelsArray = labels
+        ? Array.isArray(labels)
+          ? labels
+          : labels.split(',').map(l => l.trim())
+        : [];
+
+      const results = await metadataService.searchMetadata(
+        file_name,
+        file_type,
+        upload_date_from,
+        upload_date_to,
+        create_date_from,
+        create_date_to,
+        labelsArray,
+        author,
+        status,
+        language
+      );
+
       res.json({
         success: true,
         message: 'Metadata search completed successfully',
@@ -847,36 +904,36 @@ class FileController {
     }
   }
 
-  /**
-   * Update file metadata
-   */
-  async updateMetadataController(req, res) {
-    try {
-      const { file_id } = req.params;
+//   /**
+//    * Update file metadata
+//    */
+//   async updateMetadataController(req, res) {
+//     try {
+//       const { fileId } = req.params;
 
-      if (!file_id) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing file ID',
-          message: 'File ID is required'
-        });
-      }
+//       if (!fileId) {
+//         return res.status(400).json({
+//           success: false,
+//           error: 'Missing file ID',
+//           message: 'File ID is required'
+//         });
+//       }
 
-      const updatedMetadata = await metadataService.updateMetadata(file_id, req.body);
+//       const updatedMetadata = await metadataService.updateMetadata(fileId, req.body);
 
-      res.json({
-        success: true,
-        message: 'Metadata updated successfully',
-        data: updatedMetadata
-      });
-    } catch (error) {
-      logger.error('Update metadata error:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message || 'Failed to update metadata',
-      });
-    }
-  }
+//       res.json({
+//         success: true,
+//         message: 'Metadata updated successfully',
+//         data: updatedMetadata
+//       });
+//     } catch (error) {
+//       logger.error('Update metadata error:', error);
+//       res.status(500).json({
+//         success: false,
+//         error: error.message || 'Failed to update metadata',
+//       });
+//     }
+//   }
 }
 
 

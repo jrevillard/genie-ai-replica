@@ -18,10 +18,10 @@ async function extractMetadata(filePath, fileInfo = {}) {
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';
     const baseMeta = {
         file_id: fileInfo.file_id || uuidv4(),
-        file_name: fileInfo.filename || path.basename(filePath),
-        file_size: stats.size,
-        file_type: mimeType,
-        storage_path: filePath,
+        file_name: fileInfo.file_name || path.basename(filePath),
+        file_size: fileInfo.file_size || stats.size,
+        file_type: fileInfo.file_type || mimeType,
+        storage_path: fileInfo.storage_path || filePath,
         file_hash: fileInfo.file_hash || await getFileHash(filePath),
         labels: fileInfo.labels || [],
         author: fileInfo.author || '',
@@ -81,51 +81,51 @@ class MetadataService {
     async searchMetadata(file_name, file_type, upload_date_from, upload_date_to, create_date_from, create_date_to, labels, author, status) {
         try {
             const db = await this.getDb();
-            let query = `FOR m IN metadata`;
+            let query = `FOR file IN files`;
             const filters = [];
             const bindVars = {};
 
             if (file_name) {
-                filters.push('CONTAINS(LOWER(m.filename), LOWER(@file_name))');
+                filters.push('CONTAINS(LOWER(file.file_name), LOWER(@file_name))');
                 bindVars.file_name = file_name;
             }
             if (file_type) {
-                filters.push('m.mime_type == @file_type');
+                filters.push('file.mime_type == @file_type');
                 bindVars.file_type = file_type;
             }
             if (upload_date_from) {
-                filters.push('m.upload_date >= @upload_date_from');
+                filters.push('file.upload_date >= @upload_date_from');
                 bindVars.upload_date_from = upload_date_from;
             }
             if (upload_date_to) {
-                filters.push('m.upload_date <= @upload_date_to');
+                filters.push('file.upload_date <= @upload_date_to');
                 bindVars.upload_date_to = upload_date_to;
             }
             if (create_date_from) {
-                filters.push('m.create_date >= @create_date_from');
+                filters.push('file.create_date >= @create_date_from');
                 bindVars.create_date_from = create_date_from;
             }
             if (create_date_to) {
-                filters.push('m.create_date <= @create_date_to');
+                filters.push('file.create_date <= @create_date_to');
                 bindVars.create_date_to = create_date_to;
             }
             if (labels && Array.isArray(labels) && labels.length > 0) {
-                filters.push('LENGTH(INTERSECTION(m.labels, @labels)) > 0');
+                filters.push('LENGTH(INTERSECTION(file.labels, @labels)) > 0');
                 bindVars.labels = labels;
             }
             if (author) {
-                filters.push('m.author == @author');
+                filters.push('file.author == @author');
                 bindVars.author = author;
             }
             if (status) {
-                filters.push('m.dataprep.status == @status');
+                filters.push('file.dataprep.status == @status');
                 bindVars.status = status;
             }
 
             if (filters.length > 0) { // Only add FILTER clause if there are filters
                 query += ' FILTER ' + filters.join(' AND ');
             }
-            query += ' SORT m.upload_date DESC RETURN m';
+            query += ' SORT file.upload_date DESC RETURN file';
 
             logger.debug(`🧪Searching metadata with query: ${query} and bindVars: ${JSON.stringify(bindVars)}`);
 

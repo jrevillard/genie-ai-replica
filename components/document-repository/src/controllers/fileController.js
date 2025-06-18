@@ -5,7 +5,7 @@ const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../shared-lib/logger');
-const { log } = require('console');
+const { log, error } = require('console');
 
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
@@ -534,31 +534,75 @@ class FileController {
         });
       }
 
-      fileService.deleteFile(fileId);
-
-      res.json({
-        success: true,
-        message: 'File deleted successfully',
-        // TODO: [LOW] return deleted file information
-        // data: this._formatFileRecord(deletedFile)
-        // Currently page count or word count is also part of metadata for certain file types. 
-        // We need to fix the metadata schema so that the deleted metadata can be checked and returned here.
-      });
+      const deleted = await fileService.deleteFile(fileId);
+      if (deleted) {
+        res.json({
+          success: true,
+          message: 'File deleted successfully',
+          // TODO: [LOW] return deleted file information
+          // data: this._formatFileRecord(deletedFile)
+          // Currently page count or word count is also part of metadata for certain file types. 
+          // We need to fix the metadata schema so that the deleted metadata can be checked and returned here.
+        });
+      } else {
+        return res.status(404).json({
+          success: false,
+          error: error.message || 'An error occurred',
+        });
+      }
     } catch (error) {
       logger.error('Delete file error:', error);
-      
+    
       if (error.message === 'File not found') {
         return res.status(404).json({
           success: false,
           error: 'File not found',
           message: 'The requested file does not exist'
         });
-      }
+      };
 
       res.status(500).json({
         success: false,
         error: 'Delete failed',
         message: 'An error occurred while deleting the file'
+      })
+    }
+  }
+
+  /**
+   * Delete multiple files
+   */
+  async deleteMultipleFiles(req, res) {
+    try {
+      const { fileIds } = req.body;
+      if (!Array.isArray(fileIds) || fileIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No file IDs provided',
+          message: 'Please provide an array of file IDs to delete'
+        });
+      }
+
+      const results = [];
+      for (const fileId of fileIds) {
+        try {
+          const deleted = await fileService.deleteFile(fileId);
+          results.push({ fileId, success: !!deleted });
+        } catch (error) {
+          results.push({ fileId, success: false, error: error.message });
+        }
+      }
+
+      res.json({
+        message: 'Batch delete completed',
+        results
+      });
+    } catch (error) {
+      logger.error('Delete multiple files error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Batch delete failed',
+        message: 'An error occurred while deleting multiple files'
       });
     }
   }

@@ -2,7 +2,7 @@
  * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
  * @Date: 2025-06-16 11:46:56
  * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @LastEditTime: 2025-06-17 16:35:56
+ * @LastEditTime: 2025-06-18 11:09:07
  * @FilePath: /genie-ai/components/document-repository/src/routes/fileRoutes.js
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -100,6 +100,14 @@ router.get('/:fileId/download', fileController.downloadFile);
  * @param {string} id - File ID
  */
 router.delete('/:fileId', fileController.deleteFile);
+
+/**
+ * @route DELETE /api/files
+ * @desc Delete multiple files by IDs
+ * @access Public
+ * @body {string[]} fileIds - Array of file IDs to delete
+ */
+router.delete('/', fileController.deleteMultipleFiles);
 
 /**
  * Update file metadata

@@ -326,6 +326,26 @@ curl -X DELETE http://localhost:3000/api/files/1750172521893-9274c986
 
 ---
 
+### Delete Multiple Files
+
+```bash
+curl -X DELETE http://localhost:3000/api/files \
+  -H "Content-Type: application/json" \
+  -d '{"fileIds":["76d74b7c-b3e5-4162-b4ca-6ba09809515a", "1750163480096-19d9304a", "1750164437466-b51fa7c5"]}'
+```
+
+**Response**
+
+```json
+{"message":"Batch delete completed",
+ "results":[{"fileId":"76d74b7c-b3e5-4162-b4ca-6ba09809515a",
+             "success":false,
+             "error":"File record not found in database: 76d74b7c-b3e5-4162-b4ca-6ba09809515a"},
+            {"fileId":"1750163480096-19d9304a","success":true},{"fileId":"1750164437466-b51fa7c5","success":true}]}
+```
+
+---
+
 ### Get Files (by common metadata fields for simple, fast filtering)
 
 💚 Default to return the first 10 files, sorted by `upload_date` in descending order.
@@ -373,6 +393,14 @@ curl "http://localhost:3000/api/files?mimeType=application/pdf&search=example"
                "totalPages":3,
                "totalFiles":28,
                "limit":10}}
+```
+
+---
+
+### Search Files by Filtering Metadata
+
+```bash
+curl "http://localhost:3000/api/files/search?file_name=immunization&file_type=application/pdf"
 ```
 
 ---

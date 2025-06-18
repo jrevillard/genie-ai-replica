@@ -207,7 +207,7 @@ class FileService {
         query += ` FILTER ${filters.join(' AND ')}`;
       }
 
-      query += ' SORT file.uploadedAt DESC';
+      query += ' SORT file.upload_date DESC';
       query += ` LIMIT ${offset}, ${limit}`;
       query += ' RETURN file';
 
@@ -246,6 +246,7 @@ class FileService {
       const file = await metadataService.getMetadataById(fileId);
       if (!file) {
         throw new Error(`File record not found in database: ${fileId}`);
+        return false;
       }
       
       // prepare file path for deletion
@@ -260,6 +261,7 @@ class FileService {
       } catch (error) {
         logger.warn(`🗂️ File not found on disk: ${filePath}`);
         throw new Error(`File not found on disk: ${filePath}`);
+        return false;
       }
       
       // Delete metadata first and keep a backup
@@ -272,6 +274,7 @@ class FileService {
       } catch (error) {
         logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
         throw new Error(`File deleted but failed to delete metadata for file ${fileId}`);
+        return false;
       }
 
       // Delete the physical file from disk
@@ -288,13 +291,15 @@ class FileService {
             logger.info(`🔄 Metadata restored for file ${fileId}`);
           } catch (restoreError) {
             logger.error(`Failed to restore metadata for file ${fileId}: ${restoreError.message}`);
+            return false; // Return false if restoration fails
           }
         }
+        return false; // Return false if file deletion fails
       }
-      throw new Error('Metadata deleted but failed to delete file on disk: ${filePath}');
     } catch (error) {
       logger.error(`Error deleting file: ${error}`);
       throw error;
+      return false;
     }
   }
 

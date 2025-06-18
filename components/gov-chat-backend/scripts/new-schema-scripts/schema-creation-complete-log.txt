@@ -1,0 +1,3266 @@
+2025-06-18T08:39:39.825Z: LOG: Creating schema for database: node-services
+2025-06-18T08:39:39.826Z: LOG: Creating collections...
+2025-06-18T08:39:39.826Z: LOG:   No schema validation for conversationCategories
+2025-06-18T08:39:39.826Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.837Z: LOG: Created collection: conversationCategories
+2025-06-18T08:39:39.837Z: LOG:   No schema validation for userConversations
+2025-06-18T08:39:39.837Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.839Z: LOG: Created collection: userConversations
+2025-06-18T08:39:39.839Z: LOG:   Processing schema for services
+2025-06-18T08:39:39.839Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "categoryId": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string",
+      "optional": true
+    },
+    "nameSW": {
+      "type": "string",
+      "optional": true
+    },
+    "description": {
+      "type": "string",
+      "optional": true
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "categoryId",
+    "nameEN",
+    "order"
+  ]
+}
+2025-06-18T08:39:39.839Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "categoryId": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string"
+    },
+    "nameSW": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "categoryId",
+    "nameEN",
+    "order"
+  ]
+}
+2025-06-18T08:39:39.839Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "categoryId": {
+        "type": "string"
+      },
+      "nameEN": {
+        "type": "string"
+      },
+      "nameFR": {
+        "type": "string"
+      },
+      "nameSW": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "order": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "_key",
+      "categoryId",
+      "nameEN",
+      "order"
+    ]
+  },
+  "level": "moderate",
+  "message": "Service document does not match schema"
+}
+2025-06-18T08:39:39.839Z: LOG:   Adding schema validation to services
+2025-06-18T08:39:39.839Z: LOG:   Schema rule applied with 7 properties
+2025-06-18T08:39:39.839Z: LOG:   Required fields: _key, categoryId, nameEN, order
+2025-06-18T08:39:39.839Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "categoryId": {
+          "type": "string"
+        },
+        "nameEN": {
+          "type": "string"
+        },
+        "nameFR": {
+          "type": "string"
+        },
+        "nameSW": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "_key",
+        "categoryId",
+        "nameEN",
+        "order"
+      ]
+    },
+    "level": "moderate",
+    "message": "Service document does not match schema"
+  }
+}
+2025-06-18T08:39:39.840Z: LOG: Created collection: services
+2025-06-18T08:39:39.840Z: LOG:   Processing schema for categoryServices
+2025-06-18T08:39:39.840Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2025-06-18T08:39:39.840Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "order"
+  ]
+}
+2025-06-18T08:39:39.840Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_from": {
+        "type": "string"
+      },
+      "_to": {
+        "type": "string"
+      },
+      "order": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "_from",
+      "_to",
+      "order"
+    ]
+  },
+  "level": "moderate",
+  "message": "Category-Service edge does not match schema"
+}
+2025-06-18T08:39:39.840Z: LOG:   Adding schema validation to categoryServices
+2025-06-18T08:39:39.840Z: LOG:   Schema rule applied with 3 properties
+2025-06-18T08:39:39.840Z: LOG:   Required fields: _from, _to, order
+2025-06-18T08:39:39.840Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_from": {
+          "type": "string"
+        },
+        "_to": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "_from",
+        "_to",
+        "order"
+      ]
+    },
+    "level": "moderate",
+    "message": "Category-Service edge does not match schema"
+  }
+}
+2025-06-18T08:39:39.842Z: LOG: Created collection: categoryServices
+2025-06-18T08:39:39.842Z: LOG:   Processing schema for analytics
+2025-06-18T08:39:39.842Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string"
+    },
+    "endDate": {
+      "type": "string"
+    },
+    "totalQueries": {
+      "type": "number"
+    },
+    "uniqueUsers": {
+      "type": "number"
+    },
+    "averageResponseTime": {
+      "type": "number"
+    },
+    "satisfactionRate": {
+      "type": "number"
+    },
+    "queryDistribution": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "topQueries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "lastUpdated": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "period",
+    "startDate",
+    "endDate",
+    "totalQueries",
+    "lastUpdated"
+  ]
+}
+2025-06-18T08:39:39.842Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string"
+    },
+    "endDate": {
+      "type": "string"
+    },
+    "totalQueries": {
+      "type": "number"
+    },
+    "uniqueUsers": {
+      "type": "number"
+    },
+    "averageResponseTime": {
+      "type": "number"
+    },
+    "satisfactionRate": {
+      "type": "number"
+    },
+    "queryDistribution": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "categoryId",
+          "count"
+        ]
+      }
+    },
+    "topQueries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "text",
+          "count"
+        ]
+      }
+    },
+    "lastUpdated": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "period",
+    "startDate",
+    "endDate",
+    "totalQueries",
+    "lastUpdated",
+    "uniqueUsers",
+    "averageResponseTime",
+    "satisfactionRate",
+    "queryDistribution",
+    "topQueries"
+  ]
+}
+2025-06-18T08:39:39.842Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "period": {
+        "type": "string"
+      },
+      "startDate": {
+        "type": "string"
+      },
+      "endDate": {
+        "type": "string"
+      },
+      "totalQueries": {
+        "type": "number"
+      },
+      "uniqueUsers": {
+        "type": "number"
+      },
+      "averageResponseTime": {
+        "type": "number"
+      },
+      "satisfactionRate": {
+        "type": "number"
+      },
+      "queryDistribution": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "categoryId": {
+              "type": "string"
+            },
+            "count": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "categoryId",
+            "count"
+          ]
+        }
+      },
+      "topQueries": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "count": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "text",
+            "count"
+          ]
+        }
+      },
+      "lastUpdated": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "_key",
+      "period",
+      "startDate",
+      "endDate",
+      "totalQueries",
+      "lastUpdated",
+      "uniqueUsers",
+      "averageResponseTime",
+      "satisfactionRate",
+      "queryDistribution",
+      "topQueries"
+    ]
+  },
+  "level": "none",
+  "message": "Analytics document does not match schema"
+}
+2025-06-18T08:39:39.842Z: LOG:   Adding schema validation to analytics
+2025-06-18T08:39:39.842Z: LOG:   Schema rule applied with 11 properties
+2025-06-18T08:39:39.842Z: LOG:   Required fields: _key, period, startDate, endDate, totalQueries, lastUpdated, uniqueUsers, averageResponseTime, satisfactionRate, queryDistribution, topQueries
+2025-06-18T08:39:39.842Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string"
+        },
+        "startDate": {
+          "type": "string"
+        },
+        "endDate": {
+          "type": "string"
+        },
+        "totalQueries": {
+          "type": "number"
+        },
+        "uniqueUsers": {
+          "type": "number"
+        },
+        "averageResponseTime": {
+          "type": "number"
+        },
+        "satisfactionRate": {
+          "type": "number"
+        },
+        "queryDistribution": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "categoryId": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "categoryId",
+              "count"
+            ]
+          }
+        },
+        "topQueries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "count": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "text",
+              "count"
+            ]
+          }
+        },
+        "lastUpdated": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "_key",
+        "period",
+        "startDate",
+        "endDate",
+        "totalQueries",
+        "lastUpdated",
+        "uniqueUsers",
+        "averageResponseTime",
+        "satisfactionRate",
+        "queryDistribution",
+        "topQueries"
+      ]
+    },
+    "level": "none",
+    "message": "Analytics document does not match schema"
+  }
+}
+2025-06-18T08:39:39.843Z: LOG: Created collection: analytics
+2025-06-18T08:39:39.843Z: LOG:   Processing schema for folders
+2025-06-18T08:39:39.843Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number",
+      "optional": true
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "name"
+  ],
+  "additionalProperties": true
+}
+2025-06-18T08:39:39.843Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "name"
+  ],
+  "additionalProperties": true
+}
+2025-06-18T08:39:39.843Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "userId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "order": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "_key",
+      "userId",
+      "name"
+    ],
+    "additionalProperties": true
+  },
+  "level": "none",
+  "message": "Folder document does not match schema"
+}
+2025-06-18T08:39:39.843Z: LOG:   Adding schema validation to folders
+2025-06-18T08:39:39.843Z: LOG:   Schema rule applied with 4 properties
+2025-06-18T08:39:39.843Z: LOG:   Required fields: _key, userId, name
+2025-06-18T08:39:39.843Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "_key",
+        "userId",
+        "name"
+      ],
+      "additionalProperties": true
+    },
+    "level": "none",
+    "message": "Folder document does not match schema"
+  }
+}
+2025-06-18T08:39:39.844Z: LOG: Created collection: folders
+2025-06-18T08:39:39.844Z: LOG:   Processing schema for userFolders
+2025-06-18T08:39:39.844Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "sharedBy": {
+      "type": "string",
+      "optional": true
+    },
+    "sharedAt": {
+      "type": "string",
+      "optional": true
+    },
+    "lastAccessedAt": {
+      "type": "string",
+      "optional": true
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "role"
+  ]
+}
+2025-06-18T08:39:39.844Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "sharedBy": {
+      "type": "string"
+    },
+    "sharedAt": {
+      "type": "string"
+    },
+    "lastAccessedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "role"
+  ]
+}
+2025-06-18T08:39:39.844Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_from": {
+        "type": "string"
+      },
+      "_to": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "sharedBy": {
+        "type": "string"
+      },
+      "sharedAt": {
+        "type": "string"
+      },
+      "lastAccessedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "_from",
+      "_to",
+      "role"
+    ]
+  },
+  "level": "none",
+  "message": "User-Folder edge does not match schema"
+}
+2025-06-18T08:39:39.844Z: LOG:   Adding schema validation to userFolders
+2025-06-18T08:39:39.844Z: LOG:   Schema rule applied with 6 properties
+2025-06-18T08:39:39.844Z: LOG:   Required fields: _from, _to, role
+2025-06-18T08:39:39.844Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_from": {
+          "type": "string"
+        },
+        "_to": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "sharedBy": {
+          "type": "string"
+        },
+        "sharedAt": {
+          "type": "string"
+        },
+        "lastAccessedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "_from",
+        "_to",
+        "role"
+      ]
+    },
+    "level": "none",
+    "message": "User-Folder edge does not match schema"
+  }
+}
+2025-06-18T08:39:39.845Z: LOG: Created collection: userFolders
+2025-06-18T08:39:39.846Z: LOG:   Processing schema for serviceCategories
+2025-06-18T08:39:39.846Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string",
+      "optional": true
+    },
+    "nameSW": {
+      "type": "string",
+      "optional": true
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "nameEN",
+    "order"
+  ]
+}
+2025-06-18T08:39:39.846Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string"
+    },
+    "nameSW": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "nameEN",
+    "order"
+  ]
+}
+2025-06-18T08:39:39.846Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "nameEN": {
+        "type": "string"
+      },
+      "nameFR": {
+        "type": "string"
+      },
+      "nameSW": {
+        "type": "string"
+      },
+      "order": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "_key",
+      "nameEN",
+      "order"
+    ]
+  },
+  "level": "moderate",
+  "message": "Service category document does not match schema"
+}
+2025-06-18T08:39:39.846Z: LOG:   Adding schema validation to serviceCategories
+2025-06-18T08:39:39.846Z: LOG:   Schema rule applied with 5 properties
+2025-06-18T08:39:39.846Z: LOG:   Required fields: _key, nameEN, order
+2025-06-18T08:39:39.846Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "nameEN": {
+          "type": "string"
+        },
+        "nameFR": {
+          "type": "string"
+        },
+        "nameSW": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "_key",
+        "nameEN",
+        "order"
+      ]
+    },
+    "level": "moderate",
+    "message": "Service category document does not match schema"
+  }
+}
+2025-06-18T08:39:39.847Z: LOG: Created collection: serviceCategories
+2025-06-18T08:39:39.847Z: LOG:   No schema validation for verificationTokens
+2025-06-18T08:39:39.847Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.848Z: LOG: Created collection: verificationTokens
+2025-06-18T08:39:39.848Z: LOG:   Processing schema for events
+2025-06-18T08:39:39.848Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "eventType": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object",
+      "optional": true
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "eventType",
+    "timestamp"
+  ]
+}
+2025-06-18T08:39:39.848Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "eventType": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "eventType",
+    "timestamp"
+  ]
+}
+2025-06-18T08:39:39.848Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "userId": {
+        "type": "string"
+      },
+      "eventType": {
+        "type": "string"
+      },
+      "timestamp": {
+        "type": "string"
+      },
+      "details": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "_key",
+      "userId",
+      "eventType",
+      "timestamp"
+    ]
+  },
+  "level": "moderate",
+  "message": "Event document does not match schema"
+}
+2025-06-18T08:39:39.849Z: LOG:   Adding schema validation to events
+2025-06-18T08:39:39.849Z: LOG:   Schema rule applied with 5 properties
+2025-06-18T08:39:39.849Z: LOG:   Required fields: _key, userId, eventType, timestamp
+2025-06-18T08:39:39.849Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "eventType": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "_key",
+        "userId",
+        "eventType",
+        "timestamp"
+      ]
+    },
+    "level": "moderate",
+    "message": "Event document does not match schema"
+  }
+}
+2025-06-18T08:39:39.850Z: LOG: Created collection: events
+2025-06-18T08:39:39.850Z: LOG:   Processing schema for messages
+2025-06-18T08:39:39.850Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "conversationId": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "sender": {
+      "type": "string"
+    },
+    "sequence": {
+      "type": "number"
+    },
+    "readStatus": {
+      "type": "boolean"
+    },
+    "metadata": {
+      "type": "object",
+      "optional": true
+    }
+  },
+  "required": [
+    "_key",
+    "conversationId",
+    "content",
+    "timestamp",
+    "sender",
+    "sequence"
+  ]
+}
+2025-06-18T08:39:39.850Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "conversationId": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "sender": {
+      "type": "string"
+    },
+    "sequence": {
+      "type": "number"
+    },
+    "readStatus": {
+      "type": "boolean"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "_key",
+    "conversationId",
+    "content",
+    "timestamp",
+    "sender",
+    "sequence",
+    "readStatus"
+  ]
+}
+2025-06-18T08:39:39.850Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "conversationId": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      },
+      "timestamp": {
+        "type": "string"
+      },
+      "sender": {
+        "type": "string"
+      },
+      "sequence": {
+        "type": "number"
+      },
+      "readStatus": {
+        "type": "boolean"
+      },
+      "metadata": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "_key",
+      "conversationId",
+      "content",
+      "timestamp",
+      "sender",
+      "sequence",
+      "readStatus"
+    ]
+  },
+  "level": "none",
+  "message": "Message document does not match schema"
+}
+2025-06-18T08:39:39.850Z: LOG:   Adding schema validation to messages
+2025-06-18T08:39:39.850Z: LOG:   Schema rule applied with 8 properties
+2025-06-18T08:39:39.850Z: LOG:   Required fields: _key, conversationId, content, timestamp, sender, sequence, readStatus
+2025-06-18T08:39:39.850Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "number"
+        },
+        "readStatus": {
+          "type": "boolean"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "_key",
+        "conversationId",
+        "content",
+        "timestamp",
+        "sender",
+        "sequence",
+        "readStatus"
+      ]
+    },
+    "level": "none",
+    "message": "Message document does not match schema"
+  }
+}
+2025-06-18T08:39:39.851Z: LOG: Created collection: messages
+2025-06-18T08:39:39.851Z: LOG:   No schema validation for queryCategories
+2025-06-18T08:39:39.851Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.852Z: LOG: Created collection: queryCategories
+2025-06-18T08:39:39.852Z: LOG:   No schema validation for sessionQueries
+2025-06-18T08:39:39.852Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.853Z: LOG: Created collection: sessionQueries
+2025-06-18T08:39:39.853Z: LOG:   Processing schema for queryMessages
+2025-06-18T08:39:39.853Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "responseType": {
+      "type": "string"
+    },
+    "confidenceScore": {
+      "type": "number",
+      "optional": true
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "responseType",
+    "createdAt"
+  ]
+}
+2025-06-18T08:39:39.853Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "responseType": {
+      "type": "string"
+    },
+    "confidenceScore": {
+      "type": "number"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "responseType",
+    "createdAt"
+  ]
+}
+2025-06-18T08:39:39.853Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_from": {
+        "type": "string"
+      },
+      "_to": {
+        "type": "string"
+      },
+      "responseType": {
+        "type": "string"
+      },
+      "confidenceScore": {
+        "type": "number"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "_from",
+      "_to",
+      "responseType",
+      "createdAt"
+    ]
+  },
+  "level": "none",
+  "message": "Query-Message edge does not match schema"
+}
+2025-06-18T08:39:39.853Z: LOG:   Adding schema validation to queryMessages
+2025-06-18T08:39:39.853Z: LOG:   Schema rule applied with 5 properties
+2025-06-18T08:39:39.853Z: LOG:   Required fields: _from, _to, responseType, createdAt
+2025-06-18T08:39:39.853Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_from": {
+          "type": "string"
+        },
+        "_to": {
+          "type": "string"
+        },
+        "responseType": {
+          "type": "string"
+        },
+        "confidenceScore": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "_from",
+        "_to",
+        "responseType",
+        "createdAt"
+      ]
+    },
+    "level": "none",
+    "message": "Query-Message edge does not match schema"
+  }
+}
+2025-06-18T08:39:39.854Z: LOG: Created collection: queryMessages
+2025-06-18T08:39:39.854Z: LOG:   No schema validation for graphql_appearsIn
+2025-06-18T08:39:39.854Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.855Z: LOG: Created collection: graphql_appearsIn
+2025-06-18T08:39:39.855Z: LOG:   No schema validation for queries
+2025-06-18T08:39:39.855Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.856Z: LOG: Created collection: queries
+2025-06-18T08:39:39.856Z: LOG:   Processing schema for folderConversations
+2025-06-18T08:39:39.856Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2025-06-18T08:39:39.856Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2025-06-18T08:39:39.856Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_from": {
+        "type": "string"
+      },
+      "_to": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "_from",
+      "_to"
+    ]
+  },
+  "level": "none",
+  "message": "Folder-Conversation edge does not match schema"
+}
+2025-06-18T08:39:39.856Z: LOG:   Adding schema validation to folderConversations
+2025-06-18T08:39:39.856Z: LOG:   Schema rule applied with 2 properties
+2025-06-18T08:39:39.856Z: LOG:   Required fields: _from, _to
+2025-06-18T08:39:39.856Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_from": {
+          "type": "string"
+        },
+        "_to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "_from",
+        "_to"
+      ]
+    },
+    "level": "none",
+    "message": "Folder-Conversation edge does not match schema"
+  }
+}
+2025-06-18T08:39:39.857Z: LOG: Created collection: folderConversations
+2025-06-18T08:39:39.857Z: LOG:   Processing schema for users
+2025-06-18T08:39:39.857Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "loginName": {
+      "type": "string"
+    },
+    "accessToken": {
+      "type": "string",
+      "optional": true
+    },
+    "encPassword": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "emailVerified": {
+      "type": "boolean",
+      "default": true
+    },
+    "personalIdentification": {
+      "type": "object",
+      "properties": {
+        "fullName": {
+          "type": "string"
+        },
+        "dob": {
+          "type": "string"
+        },
+        "gender": {
+          "type": "string"
+        },
+        "nationality": {
+          "type": "string"
+        },
+        "maritalStatus": {
+          "type": "string"
+        },
+        "photoUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "biometricUrl": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "civilRegistration": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "birthCertUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "deathCertUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "marriageDivorceUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "adoptionUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "citizenshipUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "immigrationUrl": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "addressResidency": {
+      "type": "object",
+      "properties": {
+        "currentAddress": {
+          "type": "string"
+        },
+        "previousAddresses": {
+          "type": "string",
+          "optional": true
+        },
+        "homeOrRental": {
+          "type": "string",
+          "optional": true
+        },
+        "utilityBillsUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "landRecordsUrl": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "identityTravel": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "idCard": {
+          "type": "string",
+          "optional": true
+        },
+        "passport": {
+          "type": "string",
+          "optional": true
+        },
+        "driversLicense": {
+          "type": "string",
+          "optional": true
+        },
+        "voterId": {
+          "type": "string",
+          "optional": true
+        },
+        "ssn": {
+          "type": "string",
+          "optional": true
+        },
+        "militaryRecordsUrl": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "healthMedical": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "medicalHistory": {
+          "type": "string",
+          "optional": true
+        },
+        "vaccinationsUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "insuranceDetails": {
+          "type": "string",
+          "optional": true
+        },
+        "disability": {
+          "type": "string",
+          "optional": true
+        },
+        "organDonor": {
+          "type": "string",
+          "optional": true
+        },
+        "prescriptions": {
+          "type": "string",
+          "optional": true
+        },
+        "mentalHealth": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "employment": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "eHistory": {
+          "type": "string",
+          "optional": true
+        },
+        "currentEmployer": {
+          "type": "string",
+          "optional": true
+        },
+        "workPermitsUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "certificationsUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "unemployment": {
+          "type": "string",
+          "optional": true
+        },
+        "tin": {
+          "type": "string",
+          "optional": true
+        },
+        "businessAffiliations": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "education": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "schools": {
+          "type": "string",
+          "optional": true
+        },
+        "diplomas": {
+          "type": "string",
+          "optional": true
+        },
+        "performance": {
+          "type": "string",
+          "optional": true
+        },
+        "scholarships": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "financialTax": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "incomeTaxUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "bankAccounts": {
+          "type": "string",
+          "optional": true
+        },
+        "propertyTaxUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "businessTaxUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "pensionContribUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "loanAidUrl": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "socialSecurity": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "pensionStatus": {
+          "type": "string",
+          "optional": true
+        },
+        "unemployment": {
+          "type": "string",
+          "optional": true
+        },
+        "disability": {
+          "type": "string",
+          "optional": true
+        },
+        "childcare": {
+          "type": "string",
+          "optional": true
+        },
+        "foodAssistance": {
+          "type": "string",
+          "optional": true
+        },
+        "housingAssistance": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "criminalLegal": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "policeRecordsUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "courtCasesUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "finesPenaltiesUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "paroleProbation": {
+          "type": "string",
+          "optional": true
+        },
+        "citizenshipRevocation": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "transportation": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "vehicleReg": {
+          "type": "string",
+          "optional": true
+        },
+        "trafficViolationsUrl": {
+          "type": "string",
+          "optional": true
+        },
+        "licenseHistory": {
+          "type": "string",
+          "optional": true
+        },
+        "publicTransportCard": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "civicParticipation": {
+      "type": "object",
+      "optional": true,
+      "properties": {
+        "voterRegistration": {
+          "type": "string",
+          "optional": true
+        },
+        "electionHistory": {
+          "type": "string",
+          "optional": true
+        },
+        "partyMembership": {
+          "type": "string",
+          "optional": true
+        },
+        "militaryStatus": {
+          "type": "string",
+          "optional": true
+        },
+        "publicServiceRoles": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "loginName",
+    "email",
+    "encPassword"
+  ]
+}
+2025-06-18T08:39:39.858Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "loginName": {
+      "type": "string"
+    },
+    "accessToken": {
+      "type": "string"
+    },
+    "encPassword": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "emailVerified": {
+      "type": "boolean"
+    },
+    "personalIdentification": {
+      "type": "object",
+      "properties": {
+        "fullName": {
+          "type": "string"
+        },
+        "dob": {
+          "type": "string"
+        },
+        "gender": {
+          "type": "string"
+        },
+        "nationality": {
+          "type": "string"
+        },
+        "maritalStatus": {
+          "type": "string"
+        },
+        "photoUrl": {
+          "type": "string"
+        },
+        "biometricUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fullName",
+        "dob",
+        "gender",
+        "nationality",
+        "maritalStatus"
+      ]
+    },
+    "civilRegistration": {
+      "type": "object",
+      "properties": {
+        "birthCertUrl": {
+          "type": "string"
+        },
+        "deathCertUrl": {
+          "type": "string"
+        },
+        "marriageDivorceUrl": {
+          "type": "string"
+        },
+        "adoptionUrl": {
+          "type": "string"
+        },
+        "citizenshipUrl": {
+          "type": "string"
+        },
+        "immigrationUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "addressResidency": {
+      "type": "object",
+      "properties": {
+        "currentAddress": {
+          "type": "string"
+        },
+        "previousAddresses": {
+          "type": "string"
+        },
+        "homeOrRental": {
+          "type": "string"
+        },
+        "utilityBillsUrl": {
+          "type": "string"
+        },
+        "landRecordsUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "currentAddress"
+      ]
+    },
+    "identityTravel": {
+      "type": "object",
+      "properties": {
+        "idCard": {
+          "type": "string"
+        },
+        "passport": {
+          "type": "string"
+        },
+        "driversLicense": {
+          "type": "string"
+        },
+        "voterId": {
+          "type": "string"
+        },
+        "ssn": {
+          "type": "string"
+        },
+        "militaryRecordsUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "healthMedical": {
+      "type": "object",
+      "properties": {
+        "medicalHistory": {
+          "type": "string"
+        },
+        "vaccinationsUrl": {
+          "type": "string"
+        },
+        "insuranceDetails": {
+          "type": "string"
+        },
+        "disability": {
+          "type": "string"
+        },
+        "organDonor": {
+          "type": "string"
+        },
+        "prescriptions": {
+          "type": "string"
+        },
+        "mentalHealth": {
+          "type": "string"
+        }
+      }
+    },
+    "employment": {
+      "type": "object",
+      "properties": {
+        "eHistory": {
+          "type": "string"
+        },
+        "currentEmployer": {
+          "type": "string"
+        },
+        "workPermitsUrl": {
+          "type": "string"
+        },
+        "certificationsUrl": {
+          "type": "string"
+        },
+        "unemployment": {
+          "type": "string"
+        },
+        "tin": {
+          "type": "string"
+        },
+        "businessAffiliations": {
+          "type": "string"
+        }
+      }
+    },
+    "education": {
+      "type": "object",
+      "properties": {
+        "schools": {
+          "type": "string"
+        },
+        "diplomas": {
+          "type": "string"
+        },
+        "performance": {
+          "type": "string"
+        },
+        "scholarships": {
+          "type": "string"
+        }
+      }
+    },
+    "financialTax": {
+      "type": "object",
+      "properties": {
+        "incomeTaxUrl": {
+          "type": "string"
+        },
+        "bankAccounts": {
+          "type": "string"
+        },
+        "propertyTaxUrl": {
+          "type": "string"
+        },
+        "businessTaxUrl": {
+          "type": "string"
+        },
+        "pensionContribUrl": {
+          "type": "string"
+        },
+        "loanAidUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "socialSecurity": {
+      "type": "object",
+      "properties": {
+        "pensionStatus": {
+          "type": "string"
+        },
+        "unemployment": {
+          "type": "string"
+        },
+        "disability": {
+          "type": "string"
+        },
+        "childcare": {
+          "type": "string"
+        },
+        "foodAssistance": {
+          "type": "string"
+        },
+        "housingAssistance": {
+          "type": "string"
+        }
+      }
+    },
+    "criminalLegal": {
+      "type": "object",
+      "properties": {
+        "policeRecordsUrl": {
+          "type": "string"
+        },
+        "courtCasesUrl": {
+          "type": "string"
+        },
+        "finesPenaltiesUrl": {
+          "type": "string"
+        },
+        "paroleProbation": {
+          "type": "string"
+        },
+        "citizenshipRevocation": {
+          "type": "string"
+        }
+      }
+    },
+    "transportation": {
+      "type": "object",
+      "properties": {
+        "vehicleReg": {
+          "type": "string"
+        },
+        "trafficViolationsUrl": {
+          "type": "string"
+        },
+        "licenseHistory": {
+          "type": "string"
+        },
+        "publicTransportCard": {
+          "type": "string"
+        }
+      }
+    },
+    "civicParticipation": {
+      "type": "object",
+      "properties": {
+        "voterRegistration": {
+          "type": "string"
+        },
+        "electionHistory": {
+          "type": "string"
+        },
+        "partyMembership": {
+          "type": "string"
+        },
+        "militaryStatus": {
+          "type": "string"
+        },
+        "publicServiceRoles": {
+          "type": "string"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "loginName",
+    "email",
+    "encPassword",
+    "_key",
+    "emailVerified",
+    "personalIdentification",
+    "addressResidency",
+    "createdAt",
+    "updatedAt"
+  ]
+}
+2025-06-18T08:39:39.858Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "loginName": {
+        "type": "string"
+      },
+      "accessToken": {
+        "type": "string"
+      },
+      "encPassword": {
+        "type": "string"
+      },
+      "email": {
+        "type": "string"
+      },
+      "emailVerified": {
+        "type": "boolean"
+      },
+      "personalIdentification": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string"
+          },
+          "dob": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "nationality": {
+            "type": "string"
+          },
+          "maritalStatus": {
+            "type": "string"
+          },
+          "photoUrl": {
+            "type": "string"
+          },
+          "biometricUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fullName",
+          "dob",
+          "gender",
+          "nationality",
+          "maritalStatus"
+        ]
+      },
+      "civilRegistration": {
+        "type": "object",
+        "properties": {
+          "birthCertUrl": {
+            "type": "string"
+          },
+          "deathCertUrl": {
+            "type": "string"
+          },
+          "marriageDivorceUrl": {
+            "type": "string"
+          },
+          "adoptionUrl": {
+            "type": "string"
+          },
+          "citizenshipUrl": {
+            "type": "string"
+          },
+          "immigrationUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "addressResidency": {
+        "type": "object",
+        "properties": {
+          "currentAddress": {
+            "type": "string"
+          },
+          "previousAddresses": {
+            "type": "string"
+          },
+          "homeOrRental": {
+            "type": "string"
+          },
+          "utilityBillsUrl": {
+            "type": "string"
+          },
+          "landRecordsUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentAddress"
+        ]
+      },
+      "identityTravel": {
+        "type": "object",
+        "properties": {
+          "idCard": {
+            "type": "string"
+          },
+          "passport": {
+            "type": "string"
+          },
+          "driversLicense": {
+            "type": "string"
+          },
+          "voterId": {
+            "type": "string"
+          },
+          "ssn": {
+            "type": "string"
+          },
+          "militaryRecordsUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "healthMedical": {
+        "type": "object",
+        "properties": {
+          "medicalHistory": {
+            "type": "string"
+          },
+          "vaccinationsUrl": {
+            "type": "string"
+          },
+          "insuranceDetails": {
+            "type": "string"
+          },
+          "disability": {
+            "type": "string"
+          },
+          "organDonor": {
+            "type": "string"
+          },
+          "prescriptions": {
+            "type": "string"
+          },
+          "mentalHealth": {
+            "type": "string"
+          }
+        }
+      },
+      "employment": {
+        "type": "object",
+        "properties": {
+          "eHistory": {
+            "type": "string"
+          },
+          "currentEmployer": {
+            "type": "string"
+          },
+          "workPermitsUrl": {
+            "type": "string"
+          },
+          "certificationsUrl": {
+            "type": "string"
+          },
+          "unemployment": {
+            "type": "string"
+          },
+          "tin": {
+            "type": "string"
+          },
+          "businessAffiliations": {
+            "type": "string"
+          }
+        }
+      },
+      "education": {
+        "type": "object",
+        "properties": {
+          "schools": {
+            "type": "string"
+          },
+          "diplomas": {
+            "type": "string"
+          },
+          "performance": {
+            "type": "string"
+          },
+          "scholarships": {
+            "type": "string"
+          }
+        }
+      },
+      "financialTax": {
+        "type": "object",
+        "properties": {
+          "incomeTaxUrl": {
+            "type": "string"
+          },
+          "bankAccounts": {
+            "type": "string"
+          },
+          "propertyTaxUrl": {
+            "type": "string"
+          },
+          "businessTaxUrl": {
+            "type": "string"
+          },
+          "pensionContribUrl": {
+            "type": "string"
+          },
+          "loanAidUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "socialSecurity": {
+        "type": "object",
+        "properties": {
+          "pensionStatus": {
+            "type": "string"
+          },
+          "unemployment": {
+            "type": "string"
+          },
+          "disability": {
+            "type": "string"
+          },
+          "childcare": {
+            "type": "string"
+          },
+          "foodAssistance": {
+            "type": "string"
+          },
+          "housingAssistance": {
+            "type": "string"
+          }
+        }
+      },
+      "criminalLegal": {
+        "type": "object",
+        "properties": {
+          "policeRecordsUrl": {
+            "type": "string"
+          },
+          "courtCasesUrl": {
+            "type": "string"
+          },
+          "finesPenaltiesUrl": {
+            "type": "string"
+          },
+          "paroleProbation": {
+            "type": "string"
+          },
+          "citizenshipRevocation": {
+            "type": "string"
+          }
+        }
+      },
+      "transportation": {
+        "type": "object",
+        "properties": {
+          "vehicleReg": {
+            "type": "string"
+          },
+          "trafficViolationsUrl": {
+            "type": "string"
+          },
+          "licenseHistory": {
+            "type": "string"
+          },
+          "publicTransportCard": {
+            "type": "string"
+          }
+        }
+      },
+      "civicParticipation": {
+        "type": "object",
+        "properties": {
+          "voterRegistration": {
+            "type": "string"
+          },
+          "electionHistory": {
+            "type": "string"
+          },
+          "partyMembership": {
+            "type": "string"
+          },
+          "militaryStatus": {
+            "type": "string"
+          },
+          "publicServiceRoles": {
+            "type": "string"
+          }
+        }
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "loginName",
+      "email",
+      "encPassword",
+      "_key",
+      "emailVerified",
+      "personalIdentification",
+      "addressResidency",
+      "createdAt",
+      "updatedAt"
+    ]
+  },
+  "level": "none",
+  "message": "User profile document does not match schema"
+}
+2025-06-18T08:39:39.858Z: LOG:   Adding schema validation to users
+2025-06-18T08:39:39.858Z: LOG:   Schema rule applied with 20 properties
+2025-06-18T08:39:39.858Z: LOG:   Required fields: loginName, email, encPassword, _key, emailVerified, personalIdentification, addressResidency, createdAt, updatedAt
+2025-06-18T08:39:39.858Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "loginName": {
+          "type": "string"
+        },
+        "accessToken": {
+          "type": "string"
+        },
+        "encPassword": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "emailVerified": {
+          "type": "boolean"
+        },
+        "personalIdentification": {
+          "type": "object",
+          "properties": {
+            "fullName": {
+              "type": "string"
+            },
+            "dob": {
+              "type": "string"
+            },
+            "gender": {
+              "type": "string"
+            },
+            "nationality": {
+              "type": "string"
+            },
+            "maritalStatus": {
+              "type": "string"
+            },
+            "photoUrl": {
+              "type": "string"
+            },
+            "biometricUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fullName",
+            "dob",
+            "gender",
+            "nationality",
+            "maritalStatus"
+          ]
+        },
+        "civilRegistration": {
+          "type": "object",
+          "properties": {
+            "birthCertUrl": {
+              "type": "string"
+            },
+            "deathCertUrl": {
+              "type": "string"
+            },
+            "marriageDivorceUrl": {
+              "type": "string"
+            },
+            "adoptionUrl": {
+              "type": "string"
+            },
+            "citizenshipUrl": {
+              "type": "string"
+            },
+            "immigrationUrl": {
+              "type": "string"
+            }
+          }
+        },
+        "addressResidency": {
+          "type": "object",
+          "properties": {
+            "currentAddress": {
+              "type": "string"
+            },
+            "previousAddresses": {
+              "type": "string"
+            },
+            "homeOrRental": {
+              "type": "string"
+            },
+            "utilityBillsUrl": {
+              "type": "string"
+            },
+            "landRecordsUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "currentAddress"
+          ]
+        },
+        "identityTravel": {
+          "type": "object",
+          "properties": {
+            "idCard": {
+              "type": "string"
+            },
+            "passport": {
+              "type": "string"
+            },
+            "driversLicense": {
+              "type": "string"
+            },
+            "voterId": {
+              "type": "string"
+            },
+            "ssn": {
+              "type": "string"
+            },
+            "militaryRecordsUrl": {
+              "type": "string"
+            }
+          }
+        },
+        "healthMedical": {
+          "type": "object",
+          "properties": {
+            "medicalHistory": {
+              "type": "string"
+            },
+            "vaccinationsUrl": {
+              "type": "string"
+            },
+            "insuranceDetails": {
+              "type": "string"
+            },
+            "disability": {
+              "type": "string"
+            },
+            "organDonor": {
+              "type": "string"
+            },
+            "prescriptions": {
+              "type": "string"
+            },
+            "mentalHealth": {
+              "type": "string"
+            }
+          }
+        },
+        "employment": {
+          "type": "object",
+          "properties": {
+            "eHistory": {
+              "type": "string"
+            },
+            "currentEmployer": {
+              "type": "string"
+            },
+            "workPermitsUrl": {
+              "type": "string"
+            },
+            "certificationsUrl": {
+              "type": "string"
+            },
+            "unemployment": {
+              "type": "string"
+            },
+            "tin": {
+              "type": "string"
+            },
+            "businessAffiliations": {
+              "type": "string"
+            }
+          }
+        },
+        "education": {
+          "type": "object",
+          "properties": {
+            "schools": {
+              "type": "string"
+            },
+            "diplomas": {
+              "type": "string"
+            },
+            "performance": {
+              "type": "string"
+            },
+            "scholarships": {
+              "type": "string"
+            }
+          }
+        },
+        "financialTax": {
+          "type": "object",
+          "properties": {
+            "incomeTaxUrl": {
+              "type": "string"
+            },
+            "bankAccounts": {
+              "type": "string"
+            },
+            "propertyTaxUrl": {
+              "type": "string"
+            },
+            "businessTaxUrl": {
+              "type": "string"
+            },
+            "pensionContribUrl": {
+              "type": "string"
+            },
+            "loanAidUrl": {
+              "type": "string"
+            }
+          }
+        },
+        "socialSecurity": {
+          "type": "object",
+          "properties": {
+            "pensionStatus": {
+              "type": "string"
+            },
+            "unemployment": {
+              "type": "string"
+            },
+            "disability": {
+              "type": "string"
+            },
+            "childcare": {
+              "type": "string"
+            },
+            "foodAssistance": {
+              "type": "string"
+            },
+            "housingAssistance": {
+              "type": "string"
+            }
+          }
+        },
+        "criminalLegal": {
+          "type": "object",
+          "properties": {
+            "policeRecordsUrl": {
+              "type": "string"
+            },
+            "courtCasesUrl": {
+              "type": "string"
+            },
+            "finesPenaltiesUrl": {
+              "type": "string"
+            },
+            "paroleProbation": {
+              "type": "string"
+            },
+            "citizenshipRevocation": {
+              "type": "string"
+            }
+          }
+        },
+        "transportation": {
+          "type": "object",
+          "properties": {
+            "vehicleReg": {
+              "type": "string"
+            },
+            "trafficViolationsUrl": {
+              "type": "string"
+            },
+            "licenseHistory": {
+              "type": "string"
+            },
+            "publicTransportCard": {
+              "type": "string"
+            }
+          }
+        },
+        "civicParticipation": {
+          "type": "object",
+          "properties": {
+            "voterRegistration": {
+              "type": "string"
+            },
+            "electionHistory": {
+              "type": "string"
+            },
+            "partyMembership": {
+              "type": "string"
+            },
+            "militaryStatus": {
+              "type": "string"
+            },
+            "publicServiceRoles": {
+              "type": "string"
+            }
+          }
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "loginName",
+        "email",
+        "encPassword",
+        "_key",
+        "emailVerified",
+        "personalIdentification",
+        "addressResidency",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "level": "none",
+    "message": "User profile document does not match schema"
+  }
+}
+2025-06-18T08:39:39.860Z: LOG: Created collection: users
+2025-06-18T08:39:39.860Z: LOG:   Processing schema for conversations
+2025-06-18T08:39:39.860Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "lastMessage": {
+      "type": "string"
+    },
+    "created": {
+      "type": "string"
+    },
+    "updated": {
+      "type": "string"
+    },
+    "messageCount": {
+      "type": "number"
+    },
+    "isStarred": {
+      "type": "boolean"
+    },
+    "isArchived": {
+      "type": "boolean"
+    },
+    "category": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "_key",
+    "title",
+    "created",
+    "updated",
+    "messageCount",
+    "isStarred",
+    "isArchived"
+  ]
+}
+2025-06-18T08:39:39.860Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "lastMessage": {
+      "type": "string"
+    },
+    "created": {
+      "type": "string"
+    },
+    "updated": {
+      "type": "string"
+    },
+    "messageCount": {
+      "type": "number"
+    },
+    "isStarred": {
+      "type": "boolean"
+    },
+    "isArchived": {
+      "type": "boolean"
+    },
+    "category": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "_key",
+    "title",
+    "created",
+    "updated",
+    "messageCount",
+    "isStarred",
+    "isArchived",
+    "lastMessage",
+    "category",
+    "tags"
+  ]
+}
+2025-06-18T08:39:39.860Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "lastMessage": {
+        "type": "string"
+      },
+      "created": {
+        "type": "string"
+      },
+      "updated": {
+        "type": "string"
+      },
+      "messageCount": {
+        "type": "number"
+      },
+      "isStarred": {
+        "type": "boolean"
+      },
+      "isArchived": {
+        "type": "boolean"
+      },
+      "category": {
+        "type": "string"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "_key",
+      "title",
+      "created",
+      "updated",
+      "messageCount",
+      "isStarred",
+      "isArchived",
+      "lastMessage",
+      "category",
+      "tags"
+    ]
+  },
+  "level": "none",
+  "message": "Conversation document does not match schema"
+}
+2025-06-18T08:39:39.860Z: LOG:   Adding schema validation to conversations
+2025-06-18T08:39:39.860Z: LOG:   Schema rule applied with 10 properties
+2025-06-18T08:39:39.860Z: LOG:   Required fields: _key, title, created, updated, messageCount, isStarred, isArchived, lastMessage, category, tags
+2025-06-18T08:39:39.860Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "lastMessage": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "updated": {
+          "type": "string"
+        },
+        "messageCount": {
+          "type": "number"
+        },
+        "isStarred": {
+          "type": "boolean"
+        },
+        "isArchived": {
+          "type": "boolean"
+        },
+        "category": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "_key",
+        "title",
+        "created",
+        "updated",
+        "messageCount",
+        "isStarred",
+        "isArchived",
+        "lastMessage",
+        "category",
+        "tags"
+      ]
+    },
+    "level": "none",
+    "message": "Conversation document does not match schema"
+  }
+}
+2025-06-18T08:39:39.861Z: LOG: Created collection: conversations
+2025-06-18T08:39:39.861Z: LOG:   No schema validation for graphql_friends
+2025-06-18T08:39:39.861Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.861Z: LOG: Created collection: graphql_friends
+2025-06-18T08:39:39.861Z: LOG:   No schema validation for graphql_episodes
+2025-06-18T08:39:39.861Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.862Z: LOG: Created collection: graphql_episodes
+2025-06-18T08:39:39.862Z: LOG:   No schema validation for weatherRequests
+2025-06-18T08:39:39.862Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.863Z: LOG: Created collection: weatherRequests
+2025-06-18T08:39:39.863Z: LOG:   Processing schema for passwordResetTokens
+2025-06-18T08:39:39.863Z: LOG:   Original schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "type": "string"
+    },
+    "used": {
+      "type": "boolean",
+      "default": false
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "token",
+    "expiresAt",
+    "createdAt"
+  ]
+}
+2025-06-18T08:39:39.863Z: LOG:   Converted schema: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "type": "string"
+    },
+    "used": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "userId",
+    "token",
+    "expiresAt",
+    "createdAt",
+    "used"
+  ]
+}
+2025-06-18T08:39:39.863Z: LOG:   Final schema options: {
+  "rule": {
+    "type": "object",
+    "properties": {
+      "_key": {
+        "type": "string"
+      },
+      "userId": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "expiresAt": {
+        "type": "string"
+      },
+      "used": {
+        "type": "boolean"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "_key",
+      "userId",
+      "token",
+      "expiresAt",
+      "createdAt",
+      "used"
+    ]
+  },
+  "level": "none",
+  "message": "Password reset token document does not match schema"
+}
+2025-06-18T08:39:39.863Z: LOG:   Adding schema validation to passwordResetTokens
+2025-06-18T08:39:39.863Z: LOG:   Schema rule applied with 6 properties
+2025-06-18T08:39:39.863Z: LOG:   Required fields: _key, userId, token, expiresAt, createdAt, used
+2025-06-18T08:39:39.863Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {},
+  "schema": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "_key": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "_key",
+        "userId",
+        "token",
+        "expiresAt",
+        "createdAt",
+        "used"
+      ]
+    },
+    "level": "none",
+    "message": "Password reset token document does not match schema"
+  }
+}
+2025-06-18T08:39:39.864Z: LOG: Created collection: passwordResetTokens
+2025-06-18T08:39:39.864Z: LOG:   No schema validation for userSessions
+2025-06-18T08:39:39.864Z: LOG:   Creating collection with options: {
+  "type": 3,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.865Z: LOG: Created collection: userSessions
+2025-06-18T08:39:39.865Z: LOG:   No schema validation for sessions
+2025-06-18T08:39:39.865Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.865Z: LOG: Created collection: sessions
+2025-06-18T08:39:39.865Z: LOG:   No schema validation for analyticsMetrics
+2025-06-18T08:39:39.865Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.866Z: LOG: Created collection: analyticsMetrics
+2025-06-18T08:39:39.866Z: LOG:   No schema validation for graphql_characters
+2025-06-18T08:39:39.866Z: LOG:   Creating collection with options: {
+  "type": 2,
+  "waitForSync": false,
+  "keyOptions": {}
+}
+2025-06-18T08:39:39.867Z: LOG: Created collection: graphql_characters
+2025-06-18T08:39:39.867Z: LOG: Creating indexes...
+2025-06-18T08:39:39.869Z: ERROR: Error creating index on conversationCategories: forbidden
+2025-06-18T08:39:39.871Z: LOG: Created index on conversationCategories: createdAt
+2025-06-18T08:39:39.872Z: ERROR: Error creating index on userConversations: forbidden
+2025-06-18T08:39:39.874Z: LOG: Created index on userConversations: createdAt
+2025-06-18T08:39:39.875Z: LOG: Created index on services: categoryId, order
+2025-06-18T08:39:39.876Z: ERROR: Error creating index on categoryServices: forbidden
+2025-06-18T08:39:39.878Z: LOG: Created index on categoryServices: createdAt
+2025-06-18T08:39:39.879Z: LOG: Created index on analytics: createdAt
+2025-06-18T08:39:39.880Z: LOG: Created index on folders: createdAt
+2025-06-18T08:39:39.881Z: ERROR: Error creating index on userFolders: forbidden
+2025-06-18T08:39:39.882Z: LOG: Created index on userFolders: createdAt
+2025-06-18T08:39:39.884Z: LOG: Created index on serviceCategories: catCode, order
+2025-06-18T08:39:39.884Z: LOG: Created index on verificationTokens: createdAt
+2025-06-18T08:39:39.885Z: LOG: Created index on events: createdAt
+2025-06-18T08:39:39.886Z: LOG: Created index on messages: createdAt
+2025-06-18T08:39:39.887Z: ERROR: Error creating index on queryCategories: forbidden
+2025-06-18T08:39:39.888Z: LOG: Created index on queryCategories: createdAt
+2025-06-18T08:39:39.889Z: ERROR: Error creating index on sessionQueries: forbidden
+2025-06-18T08:39:39.890Z: LOG: Created index on sessionQueries: createdAt
+2025-06-18T08:39:39.890Z: ERROR: Error creating index on queryMessages: forbidden
+2025-06-18T08:39:39.891Z: LOG: Created index on queryMessages: createdAt
+2025-06-18T08:39:39.892Z: ERROR: Error creating index on graphql_appearsIn: forbidden
+2025-06-18T08:39:39.893Z: LOG: Created index on graphql_appearsIn: createdAt
+2025-06-18T08:39:39.894Z: LOG: Created index on queries: createdAt
+2025-06-18T08:39:39.895Z: ERROR: Error creating index on folderConversations: forbidden
+2025-06-18T08:39:39.896Z: LOG: Created index on folderConversations: createdAt
+2025-06-18T08:39:39.896Z: LOG: Created index on users: email
+2025-06-18T08:39:39.897Z: LOG: Created index on users: createdAt
+2025-06-18T08:39:39.898Z: LOG: Created index on users: loginName
+2025-06-18T08:39:39.899Z: LOG: Created index on users: email
+2025-06-18T08:39:39.900Z: LOG: Created index on conversations: createdAt
+2025-06-18T08:39:39.900Z: ERROR: Error creating index on graphql_friends: forbidden
+2025-06-18T08:39:39.901Z: LOG: Created index on graphql_friends: createdAt
+2025-06-18T08:39:39.902Z: LOG: Created index on graphql_episodes: createdAt
+2025-06-18T08:39:39.903Z: LOG: Created index on weatherRequests: createdAt
+2025-06-18T08:39:39.904Z: LOG: Created index on passwordResetTokens: createdAt
+2025-06-18T08:39:39.905Z: ERROR: Error creating index on userSessions: forbidden
+2025-06-18T08:39:39.905Z: LOG: Created index on userSessions: userId, createdAt
+2025-06-18T08:39:39.906Z: LOG: Created index on sessions: userId, createdAt
+2025-06-18T08:39:39.907Z: LOG: Created index on analyticsMetrics: createdAt
+2025-06-18T08:39:39.908Z: LOG: Created index on graphql_characters: createdAt
+2025-06-18T08:39:39.908Z: LOG: Creating graphs...
+2025-06-18T08:39:39.908Z: ERROR: Error creating graph Graph: edgeDefinitions.map is not a function
+2025-06-18T08:39:39.908Z: LOG: Creating views...
+2025-06-18T08:39:39.909Z: LOG: Creating analyzers...
+2025-06-18T08:39:39.909Z: LOG: Creating AQL functions...
+2025-06-18T08:39:39.909Z: LOG: Schema creation completed successfully

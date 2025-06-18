@@ -2,12 +2,34 @@
   "database": "node-services",
   "collections": [
     {
-      "name": "conversationCategories",
+      "name": "categoryServices",
       "type": "edge",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
-        "schema": null,
+        "schema": {
+          "message": "Category-Service edge does not match schema",
+          "level": "moderate",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_from": {
+                "type": "string"
+              },
+              "_to": {
+                "type": "string"
+              },
+              "order": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "_from",
+              "_to"
+            ]
+          }
+        },
         "computedValues": []
       },
       "indexes": [
@@ -21,7 +43,7 @@
           "sparse": false,
           "deduplicate": false,
           "name": "edge",
-          "selectivityEstimate": 0.5196374622356495,
+          "selectivityEstimate": 0.6226415094339622,
           "estimates": false,
           "geoJson": false,
           "constraint": false,
@@ -37,55 +59,8 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190032454909952",
-          "selectivityEstimate": 0.0030211480362537764,
-          "estimates": true,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        }
-      ]
-    },
-    {
-      "name": "userConversations",
-      "type": "edge",
-      "properties": {
-        "waitForSync": false,
-        "keyOptions": {},
-        "schema": null,
-        "computedValues": []
-      },
-      "indexes": [
-        {
-          "type": "edge",
-          "fields": [
-            "_from",
-            "_to"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": false,
-          "name": "edge",
-          "selectivityEstimate": 0.5103550295857988,
-          "estimates": false,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        },
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190032463298560",
-          "selectivityEstimate": 0.0029585798816568047,
+          "name": "idx_1835190032469590016",
+          "selectivityEstimate": 0.018867924528301886,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -165,14 +140,61 @@
       ]
     },
     {
-      "name": "categoryServices",
+      "name": "userConversations",
+      "type": "edge",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "edge",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": false,
+          "name": "edge",
+          "selectivityEstimate": 0.5103244837758112,
+          "estimates": false,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190032463298560",
+          "selectivityEstimate": 0.0029498525073746312,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "userFolders",
       "type": "edge",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
         "schema": {
-          "message": "Category-Service edge does not match schema",
-          "level": "moderate",
+          "message": "User-Folder edge does not match schema",
+          "level": "none",
           "type": "json",
           "rule": {
             "type": "object",
@@ -183,13 +205,26 @@
               "_to": {
                 "type": "string"
               },
-              "order": {
-                "type": "number"
+              "role": {
+                "type": "string"
+              },
+              "sharedBy": {
+                "type": "string",
+                "optional": true
+              },
+              "sharedAt": {
+                "type": "string",
+                "optional": true
+              },
+              "lastAccessedAt": {
+                "type": "string",
+                "optional": true
               }
             },
             "required": [
               "_from",
-              "_to"
+              "_to",
+              "role"
             ]
           }
         },
@@ -206,7 +241,7 @@
           "sparse": false,
           "deduplicate": false,
           "name": "edge",
-          "selectivityEstimate": 0.6226415094339622,
+          "selectivityEstimate": 0.6388888888888888,
           "estimates": false,
           "geoJson": false,
           "constraint": false,
@@ -222,8 +257,65 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190032469590016",
-          "selectivityEstimate": 0.018867924528301886,
+          "name": "idx_1835190032704471040",
+          "selectivityEstimate": 0.05555555555555555,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "folders",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": {
+          "message": "Folder document does not match schema",
+          "level": "none",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_key": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "order": {
+                "type": "number",
+                "optional": true
+              }
+            },
+            "required": [
+              "_key",
+              "userId",
+              "name"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190032701325312",
+          "selectivityEstimate": 0.05555555555555555,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -324,7 +416,7 @@
           "sparse": false,
           "deduplicate": true,
           "name": "idx_1835190032471687168",
-          "selectivityEstimate": 0.0000023205355796117743,
+          "selectivityEstimate": 0.0000023204817320075647,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -335,40 +427,12 @@
       ]
     },
     {
-      "name": "folders",
+      "name": "verificationTokens",
       "type": "document",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
-        "schema": {
-          "message": "Folder document does not match schema",
-          "level": "none",
-          "type": "json",
-          "rule": {
-            "type": "object",
-            "properties": {
-              "_key": {
-                "type": "string"
-              },
-              "userId": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "order": {
-                "type": "number",
-                "optional": true
-              }
-            },
-            "required": [
-              "_key",
-              "userId",
-              "name"
-            ],
-            "additionalProperties": true
-          }
-        },
+        "schema": null,
         "computedValues": []
       },
       "indexes": [
@@ -380,90 +444,8 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190032701325312",
-          "selectivityEstimate": 0.05555555555555555,
-          "estimates": true,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        }
-      ]
-    },
-    {
-      "name": "userFolders",
-      "type": "edge",
-      "properties": {
-        "waitForSync": false,
-        "keyOptions": {},
-        "schema": {
-          "message": "User-Folder edge does not match schema",
-          "level": "none",
-          "type": "json",
-          "rule": {
-            "type": "object",
-            "properties": {
-              "_from": {
-                "type": "string"
-              },
-              "_to": {
-                "type": "string"
-              },
-              "role": {
-                "type": "string"
-              },
-              "sharedBy": {
-                "type": "string",
-                "optional": true
-              },
-              "sharedAt": {
-                "type": "string",
-                "optional": true
-              },
-              "lastAccessedAt": {
-                "type": "string",
-                "optional": true
-              }
-            },
-            "required": [
-              "_from",
-              "_to",
-              "role"
-            ]
-          }
-        },
-        "computedValues": []
-      },
-      "indexes": [
-        {
-          "type": "edge",
-          "fields": [
-            "_from",
-            "_to"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": false,
-          "name": "edge",
-          "selectivityEstimate": 0.6388888888888888,
-          "estimates": false,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        },
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190032704471040",
-          "selectivityEstimate": 0.05555555555555555,
+          "name": "idx_1835190032709713920",
+          "selectivityEstimate": 1,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -535,166 +517,6 @@
       ]
     },
     {
-      "name": "verificationTokens",
-      "type": "document",
-      "properties": {
-        "waitForSync": false,
-        "keyOptions": {},
-        "schema": null,
-        "computedValues": []
-      },
-      "indexes": [
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190032709713920",
-          "selectivityEstimate": 1,
-          "estimates": true,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        }
-      ]
-    },
-    {
-      "name": "events",
-      "type": "document",
-      "properties": {
-        "waitForSync": false,
-        "keyOptions": {},
-        "schema": {
-          "message": "Event document does not match schema",
-          "level": "moderate",
-          "type": "json",
-          "rule": {
-            "type": "object",
-            "properties": {
-              "_key": {
-                "type": "string"
-              },
-              "userId": {
-                "type": "string"
-              },
-              "eventType": {
-                "type": "string"
-              },
-              "timestamp": {
-                "type": "string"
-              },
-              "details": {
-                "type": "object",
-                "optional": true
-              }
-            },
-            "required": [
-              "_key",
-              "userId",
-              "eventType",
-              "timestamp"
-            ]
-          }
-        },
-        "computedValues": []
-      },
-      "indexes": [
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190032712859648",
-          "selectivityEstimate": 1,
-          "estimates": true,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        }
-      ]
-    },
-    {
-      "name": "messages",
-      "type": "document",
-      "properties": {
-        "waitForSync": false,
-        "keyOptions": {},
-        "schema": {
-          "message": "Message document does not match schema",
-          "level": "none",
-          "type": "json",
-          "rule": {
-            "type": "object",
-            "properties": {
-              "_key": {
-                "type": "string"
-              },
-              "conversationId": {
-                "type": "string"
-              },
-              "content": {
-                "type": "string"
-              },
-              "timestamp": {
-                "type": "string"
-              },
-              "sender": {
-                "type": "string"
-              },
-              "sequence": {
-                "type": "number"
-              },
-              "readStatus": {
-                "type": "boolean"
-              },
-              "metadata": {
-                "type": "object",
-                "optional": true
-              }
-            },
-            "required": [
-              "_key",
-              "conversationId",
-              "content",
-              "timestamp",
-              "sender",
-              "sequence"
-            ]
-          }
-        },
-        "computedValues": []
-      },
-      "indexes": [
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190032727539712",
-          "selectivityEstimate": 0.0001631321370309951,
-          "estimates": true,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        }
-      ]
-    },
-    {
       "name": "queryCategories",
       "type": "edge",
       "properties": {
@@ -742,27 +564,98 @@
       ]
     },
     {
-      "name": "sessionQueries",
-      "type": "edge",
+      "name": "serviceCategoryTranslations",
+      "type": "document",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
-        "schema": null,
+        "schema": {
+          "message": "Service category translation document does not match schema",
+          "level": "none",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_key": {
+                "type": "string"
+              },
+              "serviceCategoryId": {
+                "type": "string"
+              },
+              "languageCode": {
+                "type": "string"
+              },
+              "translation": {
+                "type": "string"
+              },
+              "isActive": {
+                "type": "boolean",
+                "default": true
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_key",
+              "serviceCategoryId",
+              "languageCode",
+              "translation"
+            ]
+          }
+        },
         "computedValues": []
       },
       "indexes": [
         {
-          "type": "edge",
+          "type": "hash",
           "fields": [
-            "_from",
-            "_to"
+            "serviceCategoryId",
+            "languageCode"
+          ],
+          "unique": true,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_serviceCategory_language",
+          "selectivityEstimate": 1,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "serviceCategoryId"
           ],
           "unique": false,
           "sparse": false,
-          "deduplicate": false,
-          "name": "edge",
-          "selectivityEstimate": 0.5592369768316316,
-          "estimates": false,
+          "deduplicate": true,
+          "name": "idx_serviceCategoryId",
+          "selectivityEstimate": 0.3333333333333333,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "languageCode"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_languageCode",
+          "selectivityEstimate": 0.07692307692307693,
+          "estimates": true,
           "geoJson": false,
           "constraint": false,
           "cacheEnabled": false,
@@ -777,8 +670,8 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190033020092416",
-          "selectivityEstimate": 0.8236476975668611,
+          "name": "idx_createdAt",
+          "selectivityEstimate": 0.02564102564102564,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -856,7 +749,7 @@
           "sparse": false,
           "deduplicate": true,
           "name": "idx_1835190034012045312",
-          "selectivityEstimate": 0.9846431797651309,
+          "selectivityEstimate": 0.9842057761732852,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -867,7 +760,78 @@
       ]
     },
     {
-      "name": "graphql_appearsIn",
+      "name": "messages",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": {
+          "message": "Message document does not match schema",
+          "level": "none",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_key": {
+                "type": "string"
+              },
+              "conversationId": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string"
+              },
+              "sender": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "number"
+              },
+              "readStatus": {
+                "type": "boolean"
+              },
+              "metadata": {
+                "type": "object",
+                "optional": true
+              }
+            },
+            "required": [
+              "_key",
+              "conversationId",
+              "content",
+              "timestamp",
+              "sender",
+              "sequence"
+            ]
+          }
+        },
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190032727539712",
+          "selectivityEstimate": 0.00016302575806977502,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "sessionQueries",
       "type": "edge",
       "properties": {
         "waitForSync": false,
@@ -886,7 +850,7 @@
           "sparse": false,
           "deduplicate": false,
           "name": "edge",
-          "selectivityEstimate": 0.2586206896551724,
+          "selectivityEstimate": 0.5592369768316316,
           "estimates": false,
           "geoJson": false,
           "constraint": false,
@@ -902,8 +866,8 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190034021482496",
-          "selectivityEstimate": 0.034482758620689655,
+          "name": "idx_1835190033020092416",
+          "selectivityEstimate": 0.8236476975668611,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -914,12 +878,43 @@
       ]
     },
     {
-      "name": "queries",
+      "name": "events",
       "type": "document",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
-        "schema": null,
+        "schema": {
+          "message": "Event document does not match schema",
+          "level": "moderate",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_key": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "eventType": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object",
+                "optional": true
+              }
+            },
+            "required": [
+              "_key",
+              "userId",
+              "eventType",
+              "timestamp"
+            ]
+          }
+        },
         "computedValues": []
       },
       "indexes": [
@@ -931,8 +926,8 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190034023579648",
-          "selectivityEstimate": 0.0000028933510792199526,
+          "name": "idx_1835190032712859648",
+          "selectivityEstimate": 1,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -943,13 +938,13 @@
       ]
     },
     {
-      "name": "folderConversations",
+      "name": "serviceTranslationsEdge",
       "type": "edge",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
         "schema": {
-          "message": "Folder-Conversation edge does not match schema",
+          "message": "Service translation edge does not match schema",
           "level": "none",
           "type": "json",
           "rule": {
@@ -959,6 +954,9 @@
                 "type": "string"
               },
               "_to": {
+                "type": "string"
+              },
+              "createdAt": {
                 "type": "string"
               }
             },
@@ -981,25 +979,8 @@
           "sparse": false,
           "deduplicate": false,
           "name": "edge",
-          "selectivityEstimate": 0.639344262295082,
+          "selectivityEstimate": 0.6666666666666666,
           "estimates": false,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        },
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190034202886144",
-          "selectivityEstimate": 0.01639344262295082,
-          "estimates": true,
           "geoJson": false,
           "constraint": false,
           "cacheEnabled": false,
@@ -1465,6 +1446,206 @@
       ]
     },
     {
+      "name": "queries",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190034023579648",
+          "selectivityEstimate": 0.0000028933343363559033,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "folderConversations",
+      "type": "edge",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": {
+          "message": "Folder-Conversation edge does not match schema",
+          "level": "none",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_from": {
+                "type": "string"
+              },
+              "_to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_from",
+              "_to"
+            ]
+          }
+        },
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "edge",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": false,
+          "name": "edge",
+          "selectivityEstimate": 0.6451612903225806,
+          "estimates": false,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190034202886144",
+          "selectivityEstimate": 0.016129032258064516,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "graphql_appearsIn",
+      "type": "edge",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "edge",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": false,
+          "name": "edge",
+          "selectivityEstimate": 0.2586206896551724,
+          "estimates": false,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190034021482496",
+          "selectivityEstimate": 0.034482758620689655,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "weatherRequests",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190034221760512",
+          "selectivityEstimate": 0.007936507936507936,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "graphql_episodes",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190034219663360",
+          "selectivityEstimate": 0.25,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
       "name": "conversations",
       "type": "document",
       "properties": {
@@ -1534,7 +1715,7 @@
           "sparse": false,
           "deduplicate": true,
           "name": "idx_1835190034213371904",
-          "selectivityEstimate": 0.0030120481927710845,
+          "selectivityEstimate": 0.003003003003003003,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -1592,7 +1773,7 @@
       ]
     },
     {
-      "name": "graphql_episodes",
+      "name": "sessions",
       "type": "document",
       "properties": {
         "waitForSync": false,
@@ -1602,44 +1783,16 @@
       },
       "indexes": [
         {
-          "type": "skiplist",
+          "type": "hash",
           "fields": [
+            "userId",
             "createdAt"
           ],
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190034219663360",
-          "selectivityEstimate": 0.25,
-          "estimates": true,
-          "geoJson": false,
-          "constraint": false,
-          "cacheEnabled": false,
-          "storedValues": [],
-          "inBackground": false
-        }
-      ]
-    },
-    {
-      "name": "weatherRequests",
-      "type": "document",
-      "properties": {
-        "waitForSync": false,
-        "keyOptions": {},
-        "schema": null,
-        "computedValues": []
-      },
-      "indexes": [
-        {
-          "type": "skiplist",
-          "fields": [
-            "createdAt"
-          ],
-          "unique": false,
-          "sparse": false,
-          "deduplicate": true,
-          "name": "idx_1835190034221760512",
-          "selectivityEstimate": 0.008333333333333333,
+          "name": "idx_1835190034383241216",
+          "selectivityEstimate": 0.9024014100022031,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -1762,8 +1915,60 @@
       ]
     },
     {
-      "name": "sessions",
-      "type": "document",
+      "name": "serviceCategoryTranslationsEdge",
+      "type": "edge",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": {
+          "message": "Service category translation edge does not match schema",
+          "level": "none",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_from": {
+                "type": "string"
+              },
+              "_to": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_from",
+              "_to"
+            ]
+          }
+        },
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "edge",
+          "fields": [
+            "_from",
+            "_to"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": false,
+          "name": "edge",
+          "selectivityEstimate": 0.6666666666666666,
+          "estimates": false,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "conversationCategories",
+      "type": "edge",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
@@ -1772,16 +1977,33 @@
       },
       "indexes": [
         {
-          "type": "hash",
+          "type": "edge",
           "fields": [
-            "userId",
+            "_from",
+            "_to"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": false,
+          "name": "edge",
+          "selectivityEstimate": 0.5195783132530121,
+          "estimates": false,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
             "createdAt"
           ],
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190034383241216",
-          "selectivityEstimate": 0.9024014100022031,
+          "name": "idx_1835190032454909952",
+          "selectivityEstimate": 0.0030120481927710845,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -1792,15 +2014,104 @@
       ]
     },
     {
-      "name": "analyticsMetrics",
+      "name": "serviceTranslations",
       "type": "document",
       "properties": {
         "waitForSync": false,
         "keyOptions": {},
-        "schema": null,
+        "schema": {
+          "message": "Service translation document does not match schema",
+          "level": "none",
+          "type": "json",
+          "rule": {
+            "type": "object",
+            "properties": {
+              "_key": {
+                "type": "string"
+              },
+              "serviceId": {
+                "type": "string"
+              },
+              "languageCode": {
+                "type": "string"
+              },
+              "translation": {
+                "type": "string"
+              },
+              "isActive": {
+                "type": "boolean",
+                "default": true
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "_key",
+              "serviceId",
+              "languageCode",
+              "translation"
+            ]
+          }
+        },
         "computedValues": []
       },
       "indexes": [
+        {
+          "type": "hash",
+          "fields": [
+            "serviceId",
+            "languageCode"
+          ],
+          "unique": true,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_service_language",
+          "selectivityEstimate": 1,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "serviceId"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_serviceId",
+          "selectivityEstimate": 0.3333333333333333,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
+        {
+          "type": "skiplist",
+          "fields": [
+            "languageCode"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_languageCode",
+          "selectivityEstimate": 0.018867924528301886,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        },
         {
           "type": "skiplist",
           "fields": [
@@ -1809,8 +2120,8 @@
           "unique": false,
           "sparse": false,
           "deduplicate": true,
-          "name": "idx_1835190034499633152",
-          "selectivityEstimate": 0.0008710801393728223,
+          "name": "idx_createdAt",
+          "selectivityEstimate": 0.006289308176100629,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -1840,6 +2151,35 @@
           "deduplicate": true,
           "name": "idx_1835190034512216064",
           "selectivityEstimate": 0.09090909090909091,
+          "estimates": true,
+          "geoJson": false,
+          "constraint": false,
+          "cacheEnabled": false,
+          "storedValues": [],
+          "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "analyticsMetrics",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "skiplist",
+          "fields": [
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "deduplicate": true,
+          "name": "idx_1835190034499633152",
+          "selectivityEstimate": 0.0008710801393728223,
           "estimates": true,
           "geoJson": false,
           "constraint": false,

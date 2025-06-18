@@ -362,7 +362,7 @@ async function main() {
   
   const config = {
     url: 'http://localhost:8529',
-    database: 'new-node-services',
+    database: 'test-node-services',
     auth: {
       username: 'root',
       password: 'test'

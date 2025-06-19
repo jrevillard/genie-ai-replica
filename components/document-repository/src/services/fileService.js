@@ -127,14 +127,14 @@ class FileService {
       logger.error(`Error uploading file: ${error}`);
       
       // Cleanup file if it exists
-      if (filePath) {
+      if (filePath && await fs.access(filePath).then(() => true).catch(() => false)) {
         try {
           await fs.unlink(filePath);
         } catch (cleanupError) {
           logger.error(`Error cleaning up file: ${cleanupError}`);
         }
       }
-      
+
       throw error;
     }
   }

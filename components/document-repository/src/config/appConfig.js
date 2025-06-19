@@ -50,14 +50,21 @@ const config = {
     }
   },
 
-  virusScanning: process.env.VIRUS_SCANNING === 'true' || false,
+  virusScanning: process.env.VIRUS_SCANNING === 'true' || true,
 
-  // ClamAV configuration
-  antivirus: {
-    enabled: process.env.ANTIVIRUS_ENABLED === 'true' || true,
-    host: process.env.CLAMAV_HOST || 'localhost',
-    port: parseInt(process.env.CLAMAV_PORT) || 3310,
-    timeout: parseInt(process.env.CLAMAV_TIMEOUT) || 30000
+  // ClamAV configuration using clamscan library
+  clamscan: {
+    removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false, // If true, removes infected files
+    quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED || false, // False: Don't quarantine, Path: Moves files to this place.
+    scanLog: process.env.CLAMSCAN_SCAN_LOG || null, // Path to a writeable log file to write scan results into
+    debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false, // Whether or not to log info/debug/error msgs to the console
+    socket: process.env.CLAMSCAN_SOCKET || false, // Socket file for connecting via TCP
+    host: process.env.CLAMSCAN_HOST || 'localhost', // IP of host to connect to TCP interface
+    port: process.env.CLAMSCAN_PORT || 3310, // Port of host to use when connecting via TCP interface
+    timeout: process.env.CLAMSCAN_TIMEOUT || 60000, // Timeout for scanning files
+    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true, // Use local preferred binary to scan if socket/tcp fails
+    path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan', // Path to the clamdscan binary on your server
+    active: process.env.CLAMSCAN_ACTIVE === 'true' || true, // If true, this module will consider using the clamdscan binary
   },
 
   // Logging configuration

@@ -2,7 +2,7 @@
  * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
  * @Date: 2025-06-16 11:46:56
  * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @LastEditTime: 2025-06-19 13:40:36
+ * @LastEditTime: 2025-06-19 15:22:46
  * @FilePath: /genie-ai/components/document-repository/src/routes/fileRoutes.js
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -131,5 +131,8 @@ router.patch('/:fileId', fileController.updateFile);
 // This endpoint has similar functionality to the one above (PATCH /:fileId)
 // So this one and related functionalities are commented out and can be modified later if needed
 // router.patch('/metadata/:fileId', fileController.updateMetadataController);
+
+router.post('/:fileId/ingest', fileController.ingestFile);
+router.post('/:fileId/retract', fileController.retractFile);
 
 module.exports = router;

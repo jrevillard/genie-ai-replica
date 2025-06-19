@@ -2,7 +2,7 @@
  * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
  * @Date: 2025-06-15 19:41:49
  * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @LastEditTime: 2025-06-15 22:08:02
+ * @LastEditTime: 2025-06-19 17:27:33
  * @FilePath: /genie-ai/components/document-repository/src/config/appConfig.js
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -18,6 +18,13 @@ const config = {
     username: process.env.ARANGO_USERNAME || 'root',
     password: process.env.ARANGO_PASSWORD || 'test',
     databaseName: process.env.ARANGO_DB_NAME || 'document_repository'
+  },
+
+  dataprep: {
+    host: process.env.DATAPREP_HOST || 'http://e2e-gpu', // to be replaced with the actual host
+    port: process.env.DATAPREP_PORT || '5000', // to be replaced with the actual port
+    ingestPath: '/ingest',
+    retractPath: '/retract'
   },
 
   // File upload configuration

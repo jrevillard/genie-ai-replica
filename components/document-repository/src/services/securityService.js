@@ -1,81 +1,82 @@
 const { logger } = require('../shared-lib/logger');
-const net = require('net');
+const NodeClam = require('clamscan');
+const { Readable } = require('stream');
 
 
 class SecurityService {
   constructor() {
-    this.maxBufferSize = 1024 * 1024 * 10; // 10MB
-  }
-
-  /**
-  * Creates a connection to ClamAV daemon
-  * @returns {Promise<net.Socket>} Connected socket
-  */
-  async createConnection() {
-    return new Promise((resolve, reject) => {
-      const socket = new net.Socket();
-      
-      socket.setTimeout(60000);
-      
-      socket.on('timeout', () => {
-        socket.destroy();
-        reject(new Error('Connection timeout'));
-      });
-
-      socket.on('error', (error) => {
-        reject(new Error(`ClamAV connection error: ${error.message}`));
-      });
-
-      socket.connect('3310', 'localhost', () => {
-        resolve(socket);
-      });
-    });
-  }
-
-  /**
-   * Sends command to ClamAV and receives response
-   * @param {string} command - Command to send
-   * @param {Buffer} data - Optional data to send
-   * @returns {Promise<string>} Response from ClamAV
-   */
-  async sendCommand(command, data = null) {
-    const socket = await this.createConnection();
+    this.clamAVOptions = {
+      removeInfected: false,
+      quarantineInfected: false,
+      scanLog: null,
+      debugMode: true,
+      fileList: null,
+      scanRecursively: true,
+      clamdscan: {
+        socket: false,
+        host: 'localhost',
+        port: 3310,
+        timeout: 60000,
+        localFallback: true,
+        path: '/usr/bin/clamdscan',
+        configFile: null,
+        multiscan: true,
+        reloadDb: false,
+        active: true,
+        bypassTest: false,
+      },
+      clamscan: {
+        path: '/usr/bin/clamscan',
+        db: null,
+        scanArchives: true,
+        active: false,
+      },
+      preference: 'clamdscan'
+    };
     
-    return new Promise((resolve, reject) => {
-      let response = '';
-      
-      socket.on('data', (chunk) => {
-        response += chunk.toString();
-      });
+    this.clamscan = null;
+    this.isInitialized = false;
+    this.maxBufferSize = 100 * 1024 * 1024; // 100MB
+  }
 
-      socket.on('end', () => {
-        resolve(response.trim());
-      });
+  /*
+   * Converts a buffer to a stream
+   * @param {Buffer} buffer - Buffer to convert
+   * @returns {Readable} Stream
+   */
+  _convertToStream(buffer) {
+    const bufferStream = new Readable();
+    bufferStream.push(buffer);
+    bufferStream.push(null);
+    return bufferStream;
+  }
 
-      socket.on('error', (error) => {
-        reject(new Error(`ClamAV communication error: ${error.message}`));
-      });
+  /**
+   * Initialize the ClamAV scanner
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    logger.debug(`[SECURITY-SERVICE] Initializing ClamAV scanner`);
+    if (this.isInitialized && this.clamscan) {
+      return;
+    }
 
-      // Send command
-      if (data) {
-        // For INSTREAM command, send command + data length + data
-        const dataLength = Buffer.alloc(4);
-        dataLength.writeUInt32BE(data.length, 0);
-        
-        socket.write(command);
-        socket.write(dataLength);
-        socket.write(data);
-        
-        // Send zero-length chunk to indicate end of data
-        const endChunk = Buffer.alloc(4);
-        endChunk.writeUInt32BE(0, 0);
-        socket.write(endChunk);
-      } else {
-        socket.write(command);
-      }
-      
-      socket.end();
-    });
+    try {
+      this.clamscan = await new NodeClam().init(this.clamAVOptions);
+      this.isInitialized = true;
+    } catch (error) {
+      throw new Error(`Failed to initialize ClamAV: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ensures the scanner is initialized before use
+   * @returns {Promise<void>}
+   */
+  async ensureInitialized() {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
   }
 
   /**
@@ -84,6 +85,7 @@ class SecurityService {
    * @returns {Promise<Object>} Scan result
    */
   async scanBuffer(buffer) {
+    logger.debug(`[SECURITY-SERVICE] Scanning buffer of size ${buffer.length} bytes`);
     try {
       // Validate input
       if (!Buffer.isBuffer(buffer)) {
@@ -97,76 +99,26 @@ class SecurityService {
       if (buffer.length > this.maxBufferSize) {
         throw new Error(`Buffer size exceeds maximum allowed size of ${this.maxBufferSize} bytes`);
       }
+      logger.debug(`[SECURITY-SERVICE] Ensuring ClamAV is initialized`);
+      await this.ensureInitialized();
 
-      // Use INSTREAM command to scan buffer
-      logger.debug(`[SECURITY-SERVICE] Scanning buffer of size ${buffer.length} bytes`);
-      const response = await this.sendCommand('zINSTREAM\0', buffer);
-      
-      // Parse response
-      if (response.includes('OK')) {
-        return {
-          isInfected: false,
-          virus: null,
-          message: 'File is clean'
-        };
-      } else if (response.includes('FOUND')) {
-        const virusMatch = response.match(/stream: (.+) FOUND/);
-        const virusName = virusMatch ? virusMatch[1] : 'Unknown virus';
-        
-        return {
-          isInfected: true,
-          virus: virusName,
-          message: `Virus detected: ${virusName}`
-        };
-      } else {
-        throw new Error(`Unexpected ClamAV response: ${response}`);
-      }
+      // Scan the buffer using stream scanning
+      logger.debug(`[SECURITY-SERVICE] Scanning buffer using stream scanning`);
+      const result = await this.clamscan.scanStream(this._convertToStream(buffer));
+      logger.debug(`[SECURITY-SERVICE] Scan result: ${JSON.stringify(result, null, 2)}`);
+
+      return {
+        isInfected: result.isInfected,
+        viruses: result.viruses,
+        message: result.isInfected 
+          ? `Virus detected: ${result.viruses.join(', ')}` 
+          : 'File is clean',
+        file: null
+      };
     } catch (error) {
       throw new Error(`Buffer scan failed: ${error.message}`);
     }
   }
-
-  /**
-   * Performs health check on ClamAV connection and status
-   * @returns {Promise<Object>} Health check result
-   */
-  async healthCheck() {
-    try {
-      const startTime = Date.now();
-      
-      // Test basic connectivity with PING command
-      const pingResponse = await this.sendCommand('zPING\0');
-      
-      if (!pingResponse.includes('PONG')) {
-        throw new Error(`Unexpected ping response: ${pingResponse}`);
-      }
-
-      // Get ClamAV version
-      const versionResponse = await this.sendCommand('zVERSION\0');
-      
-      // Get stats
-      const statsResponse = await this.sendCommand('zSTATS\0');
-      
-      const responseTime = Date.now() - startTime;
-
-      return {
-        status: 'healthy',
-        connected: true,
-        responseTime: responseTime,
-        version: versionResponse.trim(),
-        stats: this.parseStats(statsResponse),
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      return {
-        status: 'unhealthy',
-        connected: false,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-    }
-  }
-
 }
 
 module.exports = new SecurityService();

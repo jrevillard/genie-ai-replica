@@ -68,27 +68,16 @@ class FileService {
       // Perform virus scan if enabled
       if (appConfig.virusScanning) {
         logger.debug(`[FILE-SERVICE] Performing virus scan`);
-        // Health check
-        const health = await securityService.healthCheck();
-        logger.debug(`ClamAV Status: ${JSON.stringify(health, null, 2)}`);
-
-        // const scanResult = await securityService.scanBuffer(fileData.buffer, originalFileName);
         const scanResult = await securityService.scanBuffer(fileData.buffer);
-        logger.debug(`[FILE-SERVICE] Scan result: ${JSON.stringify(scanResult, null, 2)}`);
 
         if (scanResult.isInfected) {
-          // Delete infected file
-          await fs.unlink(filePath);
-          throw new Error(`File contains virus: ${scanResult.virus}`);
+          throw new Error(`File contains virus: ${scanResult.viruses}`);
         }
       }
-
 
       // Write file to disk (using buffer from memory storage)
       logger.debug(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
       await fs.writeFile(filePath, fileData.buffer);
-
-      
 
       // TODO: Review Fix createdDate
       // - the date is not correct, it's the date when the file was written to the disk in the server

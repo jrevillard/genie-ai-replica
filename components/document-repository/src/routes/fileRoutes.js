@@ -2,7 +2,7 @@
  * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
  * @Date: 2025-06-16 11:46:56
  * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @LastEditTime: 2025-06-18 14:45:35
+ * @LastEditTime: 2025-06-19 13:40:36
  * @FilePath: /genie-ai/components/document-repository/src/routes/fileRoutes.js
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -92,6 +92,14 @@ router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
  * @param {string} fileId - File ID
  */
 router.get('/:fileId/download', fileController.downloadFile);
+
+/**
+ * @route POST /api/files/downloads
+ * @desc Download multiple files as a ZIP archive
+ * @access Public
+ * @body {string[]} fileIds - Array of file IDs to download
+ */
+router.post('/downloads', fileController.downloadMultipleFiles);
 
 /**
  * @route DELETE /api/files/:id

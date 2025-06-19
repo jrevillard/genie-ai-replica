@@ -311,6 +311,21 @@ curl http://localhost:3000/api/files/1750172521893-9274c986/download --output /U
 
 ---
 
+### Download Multiple Files in a ZIP Archive
+
+```bash
+curl -X POST http://localhost:3000/api/files/downloads \
+  -H "Content-Type: application/json" \
+  -o /Users/scarlettsun/Desktop/ITU/download-files.zip \
+  -d '{"fileIds":["1750257427086-20e00cd5","1750239680874-9e3b765d","1750239680874-c3e26421"]}'
+```
+
+**Response**
+
+
+
+---
+
 ### Delete a File
 
 Delete from the backend server:

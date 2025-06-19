@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('../shared-lib/logger');
 const { log, error } = require('console');
+const archiver = require('archiver');
 
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
@@ -55,12 +56,13 @@ class FileController {
   constructor() {
     // Bind methods to preserve 'this' context
     this.downloadFile = this.downloadFile.bind(this);
+    this.downloadMultipleFiles = this.downloadMultipleFiles.bind(this);
     this.viewFile = this.viewFile.bind(this);
     this.viewFileInBrowser = this.viewFileInBrowser.bind(this);
     this.uploadFile = this.uploadFile.bind(this);
     this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
     this.getFiles = this.getFiles.bind(this);
-    this.getFileById = this.getFileById.bind(this);
+    // this.getFileById = this.getFileById.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
     this.processFile = this.processFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
@@ -365,48 +367,48 @@ class FileController {
     }
   }
 
-  /**
-   * Get file by ID
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async getFileById(req, res) {
-    try {
-      const { id } = req.params;
+  // /**
+  //  * Get file by ID
+  //  * @param {Object} req - Express request object
+  //  * @param {Object} res - Express response object
+  //  */
+  // async getFileById(req, res) {
+  //   try {
+  //     const { id } = req.params;
 
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing file ID',
-          message: 'File ID is required'
-        });
-      }
+  //     if (!id) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         error: 'Missing file ID',
+  //         message: 'File ID is required'
+  //       });
+  //     }
 
-      const file = await fileService.getFileById(id);
+  //     const file = await fileService.getFileById(id);
 
-      res.json({
-        success: true,
-        message: 'File retrieved successfully',
-        data: file
-      });
-    } catch (error) {
-      logger.error('Get file by ID error:', error);
+  //     res.json({
+  //       success: true,
+  //       message: 'File retrieved successfully',
+  //       data: file
+  //     });
+  //   } catch (error) {
+  //     logger.error('Get file by ID error:', error);
       
-      if (error.message === 'File not found') {
-        return res.status(404).json({
-          success: false,
-          error: 'File not found',
-          message: 'The requested file does not exist'
-        });
-      }
+  //     if (error.message === 'File not found') {
+  //       return res.status(404).json({
+  //         success: false,
+  //         error: 'File not found',
+  //         message: 'The requested file does not exist'
+  //       });
+  //     }
 
-      res.status(500).json({
-        success: false,
-        error: 'Failed to retrieve file',
-        message: 'An error occurred while retrieving the file'
-      });
-    }
-  }
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to retrieve file',
+  //       message: 'An error occurred while retrieving the file'
+  //     });
+  //   }
+  // }
 
   /**
    * Download file
@@ -439,6 +441,45 @@ class FileController {
         success: false,
         error: 'Download failed',
         message: 'An error occurred while downloading the file'
+      });
+    }
+  }
+
+  async downloadMultipleFiles(req, res) {
+    try {
+    const { fileIds } = req.body;
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file IDs provided',
+        message: 'Please provide an array of file IDs to download'
+      });
+    }
+
+    // Set response headers for ZIP
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="files.zip"');
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(res);
+
+    for (const fileId of fileIds) {
+      try {
+        const { file, filePath } = await this._getFileAndPath(fileId);
+        archive.file(filePath, { name: file.file_name });
+      } catch (error) {
+        // Optionally, add a text file with error info for missing files
+        archive.append(`Error: Could not find file with ID ${fileId}\n`, { name: `ERROR_${fileId}.txt` });
+      }
+    }
+
+    archive.finalize();
+    } catch (error) {
+      logger.error('Download multiple files error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Batch download failed',
+        message: 'An error occurred while downloading multiple files'
       });
     }
   }

@@ -1,35 +1,23 @@
 const { logger } = require('../shared-lib/logger');
 const NodeClam = require('clamscan');
 const { Readable } = require('stream');
+const appConfig= require('../config/appConfig');
 
 
 class SecurityService {
   constructor() {
     this.clamAVOptions = {
-      removeInfected: false,
-      quarantineInfected: false,
-      scanLog: null,
-      debugMode: true,
-      fileList: null,
-      scanRecursively: true,
+      removeInfected: appConfig.clamscan.removeInfected,
+      quarantineInfected: appConfig.clamscan.quarantineInfected,
+      scanLog: appConfig.clamscan.scanLog,
+      debugMode: appConfig.clamscan.debugMode,
       clamdscan: {
-        socket: false,
-        host: 'localhost',
-        port: 3310,
-        timeout: 60000,
-        localFallback: true,
-        path: '/usr/bin/clamdscan',
-        configFile: null,
-        multiscan: true,
-        reloadDb: false,
-        active: true,
-        bypassTest: false,
-      },
-      clamscan: {
-        path: '/usr/bin/clamscan',
-        db: null,
-        scanArchives: true,
-        active: false,
+        socket: appConfig.clamscan.socket,
+        port: appConfig.clamscan.port,
+        timeout: appConfig.clamscan.timeout,
+        localFallback: appConfig.clamscan.localFallback,
+        path: appConfig.clamscan.path,
+        active: appConfig.clamscan.active
       },
       preference: 'clamdscan'
     };

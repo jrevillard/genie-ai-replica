@@ -1,6 +1,3 @@
-// ArangoDB ServiceCategories, Services & CategoryServices Edge Data Export Script
-// This script exports serviceCategories, services, and categoryServices edge collections to JSON file
-
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const path = require('path');
@@ -55,55 +52,131 @@ async function validateCollections() {
   try {
     console.log('Validating collections...');
     
-    const serviceCategoriesCollection = db.collection('serviceCategories');
-    const servicesCollection = db.collection('services');
-    const categoryServicesCollection = db.collection('categoryServices');
+    const collections = {
+      serviceCategories: db.collection('serviceCategories'),
+      services: db.collection('services'),
+      categoryServices: db.collection('categoryServices'),
+      serviceCategoryTranslations: db.collection('serviceCategoryTranslations'),
+      serviceCategoryTranslationsEdge: db.collection('serviceCategoryTranslationsEdge'),
+      serviceTranslations: db.collection('serviceTranslations'),
+      serviceTranslationsEdge: db.collection('serviceTranslationsEdge')
+    };
     
-    const categoriesExists = await serviceCategoriesCollection.exists();
-    const servicesExists = await servicesCollection.exists();
-    const categoryServicesExists = await categoryServicesCollection.exists();
+    const existence = await Promise.all([
+      collections.serviceCategories.exists(),
+      collections.services.exists(),
+      collections.categoryServices.exists(),
+      collections.serviceCategoryTranslations.exists(),
+      collections.serviceCategoryTranslationsEdge.exists(),
+      collections.serviceTranslations.exists(),
+      collections.serviceTranslationsEdge.exists()
+    ]);
     
     console.log(`Collection existence check:`);
-    console.log(`  - serviceCategories: ${categoriesExists ? 'EXISTS' : 'MISSING'}`);
-    console.log(`  - services: ${servicesExists ? 'EXISTS' : 'MISSING'}`);
-    console.log(`  - categoryServices: ${categoryServicesExists ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - serviceCategories: ${existence[0] ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - services: ${existence[1] ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - categoryServices: ${existence[2] ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - serviceCategoryTranslations: ${existence[3] ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - serviceCategoryTranslationsEdge: ${existence[4] ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - serviceTranslations: ${existence[5] ? 'EXISTS' : 'MISSING'}`);
+    console.log(`  - serviceTranslationsEdge: ${existence[6] ? 'EXISTS' : 'MISSING'}`);
     
-    if (!categoriesExists) {
+    if (!existence[0]) {
       throw new Error('serviceCategories collection does not exist');
     }
     
-    if (!servicesExists) {
+    if (!existence[1]) {
       throw new Error('services collection does not exist');
     }
     
-    if (!categoryServicesExists) {
+    if (!existence[2]) {
       console.log('⚠ Warning: categoryServices edge collection does not exist - will export without edges');
     }
     
-    const categoriesInfo = await serviceCategoriesCollection.get();
-    const servicesInfo = await servicesCollection.get();
-    const categoriesCount = await serviceCategoriesCollection.count();
-    const servicesCount = await servicesCollection.count();
+    if (!existence[3]) {
+      console.log('⚠ Warning: serviceCategoryTranslations collection does not exist - will export without category translations');
+    }
     
-    let categoryServicesInfo = null;
-    let categoryServicesCount = { count: 0 };
+    if (!existence[4]) {
+      console.log('⚠ Warning: serviceCategoryTranslationsEdge collection does not exist - will export without category translation edges');
+    }
     
-    if (categoryServicesExists) {
-      categoryServicesInfo = await categoryServicesCollection.get();
-      categoryServicesCount = await categoryServicesCollection.count();
+    if (!existence[5]) {
+      console.log('⚠ Warning: serviceTranslations collection does not exist - will export without service translations');
+    }
+    
+    if (!existence[6]) {
+      console.log('⚠ Warning: serviceTranslationsEdge collection does not exist - will export without service translation edges');
+    }
+    
+    const [categoriesInfo, servicesInfo] = await Promise.all([
+      collections.serviceCategories.get(),
+      collections.services.get()
+    ]);
+    
+    const [categoriesCount, servicesCount] = await Promise.all([
+      collections.serviceCategories.count(),
+      collections.services.count()
+    ]);
+    
+    let categoryServicesInfo = null, categoryServicesCount = { count: 0 };
+    let serviceCategoryTranslationsInfo = null, serviceCategoryTranslationsCount = { count: 0 };
+    let serviceCategoryTranslationsEdgeInfo = null, serviceCategoryTranslationsEdgeCount = { count: 0 };
+    let serviceTranslationsInfo = null, serviceTranslationsCount = { count: 0 };
+    let serviceTranslationsEdgeInfo = null, serviceTranslationsEdgeCount = { count: 0 };
+    
+    if (existence[2]) {
+      [categoryServicesInfo, categoryServicesCount] = await Promise.all([
+        collections.categoryServices.get(),
+        collections.categoryServices.count()
+      ]);
+    }
+    
+    if (existence[3]) {
+      [serviceCategoryTranslationsInfo, serviceCategoryTranslationsCount] = await Promise.all([
+        collections.serviceCategoryTranslations.get(),
+        collections.serviceCategoryTranslations.count()
+      ]);
+    }
+    
+    if (existence[4]) {
+      [serviceCategoryTranslationsEdgeInfo, serviceCategoryTranslationsEdgeCount] = await Promise.all([
+        collections.serviceCategoryTranslationsEdge.get(),
+        collections.serviceCategoryTranslationsEdge.count()
+      ]);
+    }
+    
+    if (existence[5]) {
+      [serviceTranslationsInfo, serviceTranslationsCount] = await Promise.all([
+        collections.serviceTranslations.get(),
+        collections.serviceTranslations.count()
+      ]);
+    }
+    
+    if (existence[6]) {
+      [serviceTranslationsEdgeInfo, serviceTranslationsEdgeCount] = await Promise.all([
+        collections.serviceTranslationsEdge.get(),
+        collections.serviceTranslationsEdge.count()
+      ]);
     }
     
     console.log(`✓ Collections validated:`);
     console.log(`  - serviceCategories: ${categoriesInfo.type === 2 ? 'Document' : 'Edge'} collection with ${categoriesCount.count} documents`);
     console.log(`  - services: ${servicesInfo.type === 2 ? 'Document' : 'Edge'} collection with ${servicesCount.count} documents`);
-    if (categoryServicesExists) {
-      console.log(`  - categoryServices: ${categoryServicesInfo.type === 3 ? 'Edge' : 'Document'} collection with ${categoryServicesCount.count} edges`);
-    }
+    console.log(`  - categoryServices: ${categoryServicesInfo ? (categoryServicesInfo.type === 3 ? 'Edge' : 'Document') : 'Not Present'} collection with ${categoryServicesCount.count} edges`);
+    console.log(`  - serviceCategoryTranslations: ${serviceCategoryTranslationsInfo ? (serviceCategoryTranslationsInfo.type === 2 ? 'Document' : 'Edge') : 'Not Present'} collection with ${serviceCategoryTranslationsCount.count} documents`);
+    console.log(`  - serviceCategoryTranslationsEdge: ${serviceCategoryTranslationsEdgeInfo ? (serviceCategoryTranslationsEdgeInfo.type === 3 ? 'Edge' : 'Document') : 'Not Present'} collection with ${serviceCategoryTranslationsEdgeCount.count} edges`);
+    console.log(`  - serviceTranslations: ${serviceTranslationsInfo ? (serviceTranslationsInfo.type === 2 ? 'Document' : 'Edge') : 'Not Present'} collection with ${serviceTranslationsCount.count} documents`);
+    console.log(`  - serviceTranslationsEdge: ${serviceTranslationsEdgeInfo ? (serviceTranslationsEdgeInfo.type === 3 ? 'Edge' : 'Document') : 'Not Present'} collection with ${serviceTranslationsEdgeCount.count} edges`);
     
-    return { 
-      serviceCategories: { collection: serviceCategoriesCollection, count: categoriesCount.count },
-      services: { collection: servicesCollection, count: servicesCount.count },
-      categoryServices: categoryServicesExists ? { collection: categoryServicesCollection, count: categoryServicesCount.count } : null
+    return {
+      serviceCategories: { collection: collections.serviceCategories, count: categoriesCount.count },
+      services: { collection: collections.services, count: servicesCount.count },
+      categoryServices: existence[2] ? { collection: collections.categoryServices, count: categoryServicesCount.count } : null,
+      serviceCategoryTranslations: existence[3] ? { collection: collections.serviceCategoryTranslations, count: serviceCategoryTranslationsCount.count } : null,
+      serviceCategoryTranslationsEdge: existence[4] ? { collection: collections.serviceCategoryTranslationsEdge, count: serviceCategoryTranslationsEdgeCount.count } : null,
+      serviceTranslations: existence[5] ? { collection: collections.serviceTranslations, count: serviceTranslationsCount.count } : null,
+      serviceTranslationsEdge: existence[6] ? { collection: collections.serviceTranslationsEdge, count: serviceTranslationsEdgeCount.count } : null
     };
   } catch (error) {
     console.error('✗ Error validating collections:', error.message);
@@ -125,10 +198,12 @@ async function ensureExportDirectory() {
 // Export all collections data
 async function exportServiceCategoriesAndServices() {
   try {
-    console.log('Starting export of serviceCategories, services, and categoryServices collections...');
+    console.log('Starting export of all collections...');
     
     // Build AQL queries for all collections based on configuration
-    let serviceCategoriesQuery, servicesQuery, categoryServicesQuery;
+    let serviceCategoriesQuery, servicesQuery, categoryServicesQuery,
+        serviceCategoryTranslationsQuery, serviceCategoryTranslationsEdgeQuery,
+        serviceTranslationsQuery, serviceTranslationsEdgeQuery;
     
     if (!EXPORT_CONFIG.includeSystemFields) {
       serviceCategoriesQuery = `
@@ -169,6 +244,52 @@ async function exportServiceCategoriesAndServices() {
             order: doc.order,
             createdAt: doc.createdAt
           }`;
+      
+      serviceCategoryTranslationsQuery = `
+        FOR doc IN serviceCategoryTranslations
+          SORT doc.serviceCategoryId ASC, doc.languageCode ASC
+          RETURN {
+            _key: doc._key,
+            serviceCategoryId: doc.serviceCategoryId,
+            languageCode: doc.languageCode,
+            translation: doc.translation,
+            isActive: doc.isActive,
+            createdAt: doc.createdAt,
+            updatedAt: doc.updatedAt
+          }`;
+      
+      serviceCategoryTranslationsEdgeQuery = `
+        FOR doc IN serviceCategoryTranslationsEdge
+          SORT doc._from ASC
+          RETURN {
+            _key: doc._key,
+            _from: doc._from,
+            _to: doc._to,
+            createdAt: doc.createdAt
+          }`;
+      
+      serviceTranslationsQuery = `
+        FOR doc IN serviceTranslations
+          SORT doc.serviceId ASC, doc.languageCode ASC
+          RETURN {
+            _key: doc._key,
+            serviceId: doc.serviceId,
+            languageCode: doc.languageCode,
+            translation: doc.translation,
+            isActive: doc.isActive,
+            createdAt: doc.createdAt,
+            updatedAt: doc.updatedAt
+          }`;
+      
+      serviceTranslationsEdgeQuery = `
+        FOR doc IN serviceTranslationsEdge
+          SORT doc._from ASC
+          RETURN {
+            _key: doc._key,
+            _from: doc._from,
+            _to: doc._to,
+            createdAt: doc.createdAt
+          }`;
     } else {
       serviceCategoriesQuery = `
         FOR doc IN serviceCategories
@@ -184,37 +305,121 @@ async function exportServiceCategoriesAndServices() {
         FOR doc IN categoryServices
           SORT doc._from ASC, doc.order ASC
           RETURN doc`;
+      
+      serviceCategoryTranslationsQuery = `
+        FOR doc IN serviceCategoryTranslations
+          SORT doc.serviceCategoryId ASC, doc.languageCode ASC
+          RETURN doc`;
+      
+      serviceCategoryTranslationsEdgeQuery = `
+        FOR doc IN serviceCategoryTranslationsEdge
+          SORT doc._from ASC
+          RETURN doc`;
+      
+      serviceTranslationsQuery = `
+        FOR doc IN serviceTranslations
+          SORT doc.serviceId ASC, doc.languageCode ASC
+          RETURN doc`;
+      
+      serviceTranslationsEdgeQuery = `
+        FOR doc IN serviceTranslationsEdge
+          SORT doc._from ASC
+          RETURN doc`;
     }
     
     console.log('Executing export queries...');
-    console.log('  - Executing serviceCategories query...');
-    const serviceCategoriesCursor = await db.query(serviceCategoriesQuery);
-    const serviceCategoriesDocuments = await serviceCategoriesCursor.all();
-    console.log(`  ✓ Retrieved ${serviceCategoriesDocuments.length} serviceCategories documents`);
     
-    console.log('  - Executing services query...');
-    const servicesCursor = await db.query(servicesQuery);
-    const servicesDocuments = await servicesCursor.all();
+    // Execute queries
+    const [
+      serviceCategoriesCursor,
+      servicesCursor,
+      categoryServicesExists,
+      serviceCategoryTranslationsExists,
+      serviceCategoryTranslationsEdgeExists,
+      serviceTranslationsExists,
+      serviceTranslationsEdgeExists
+    ] = await Promise.all([
+      db.query(serviceCategoriesQuery),
+      db.query(servicesQuery),
+      db.collection('categoryServices').exists(),
+      db.collection('serviceCategoryTranslations').exists(),
+      db.collection('serviceCategoryTranslationsEdge').exists(),
+      db.collection('serviceTranslations').exists(),
+      db.collection('serviceTranslationsEdge').exists()
+    ]);
+    
+    const [
+      serviceCategoriesDocuments,
+      servicesDocuments
+    ] = await Promise.all([
+      serviceCategoriesCursor.all(),
+      servicesCursor.all()
+    ]);
+    
+    console.log(`  ✓ Retrieved ${serviceCategoriesDocuments.length} serviceCategories documents`);
     console.log(`  ✓ Retrieved ${servicesDocuments.length} services documents`);
     
-    // Handle categoryServices edge collection
+    // Handle optional collections
     let categoryServicesDocuments = [];
-    const categoryServicesExists = await db.collection('categoryServices').exists();
+    let serviceCategoryTranslationsDocuments = [];
+    let serviceCategoryTranslationsEdgeDocuments = [];
+    let serviceTranslationsDocuments = [];
+    let serviceTranslationsEdgeDocuments = [];
     
     if (categoryServicesExists) {
       console.log('  - Executing categoryServices query...');
-      const categoryServicesCursor = await db.query(categoryServicesQuery);
-      categoryServicesDocuments = await categoryServicesCursor.all();
+      const cursor = await db.query(categoryServicesQuery);
+      categoryServicesDocuments = await cursor.all();
       console.log(`  ✓ Retrieved ${categoryServicesDocuments.length} categoryServices edges`);
     } else {
       console.log('  ⚠ Skipping categoryServices - collection does not exist');
+    }
+    
+    if (serviceCategoryTranslationsExists) {
+      console.log('  - Executing serviceCategoryTranslations query...');
+      const cursor = await db.query(serviceCategoryTranslationsQuery);
+      serviceCategoryTranslationsDocuments = await cursor.all();
+      console.log(`  ✓ Retrieved ${serviceCategoryTranslationsDocuments.length} serviceCategoryTranslations documents`);
+    } else {
+      console.log('  ⚠ Skipping serviceCategoryTranslations - collection does not exist');
+    }
+    
+    if (serviceCategoryTranslationsEdgeExists) {
+      console.log('  - Executing serviceCategoryTranslationsEdge query...');
+      const cursor = await db.query(serviceCategoryTranslationsEdgeQuery);
+      serviceCategoryTranslationsEdgeDocuments = await cursor.all();
+      console.log(`  ✓ Retrieved ${serviceCategoryTranslationsEdgeDocuments.length} serviceCategoryTranslationsEdge edges`);
+    } else {
+      console.log('  ⚠ Skipping serviceCategoryTranslationsEdge - collection does not exist');
+    }
+    
+    if (serviceTranslationsExists) {
+      console.log('  - Executing serviceTranslations query...');
+      const cursor = await db.query(serviceTranslationsQuery);
+      serviceTranslationsDocuments = await cursor.all();
+      console.log(`  ✓ Retrieved ${serviceTranslationsDocuments.length} serviceTranslations documents`);
+    } else {
+      console.log('  ⚠ Skipping serviceTranslations - collection does not exist');
+    }
+    
+    if (serviceTranslationsEdgeExists) {
+      console.log('  - Executing serviceTranslationsEdge query...');
+      const cursor = await db.query(serviceTranslationsEdgeQuery);
+      serviceTranslationsEdgeDocuments = await cursor.all();
+      console.log(`  ✓ Retrieved ${serviceTranslationsEdgeDocuments.length} serviceTranslationsEdge edges`);
+    } else {
+      console.log('  ⚠ Skipping serviceTranslationsEdge - collection does not exist');
     }
     
     console.log(`Export data summary:`);
     console.log(`  - ServiceCategories: ${serviceCategoriesDocuments.length} documents`);
     console.log(`  - Services: ${servicesDocuments.length} documents`);
     console.log(`  - CategoryServices: ${categoryServicesDocuments.length} edges`);
-    console.log(`  - Total: ${serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length} items`);
+    console.log(`  - ServiceCategoryTranslations: ${serviceCategoryTranslationsDocuments.length} documents`);
+    console.log(`  - ServiceCategoryTranslationsEdge: ${serviceCategoryTranslationsEdgeDocuments.length} edges`);
+    console.log(`  - ServiceTranslations: ${serviceTranslationsDocuments.length} documents`);
+    console.log(`  - ServiceTranslationsEdge: ${serviceTranslationsEdgeDocuments.length} edges`);
+    console.log(`  - Total: ${serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length + serviceCategoryTranslationsDocuments.length + serviceCategoryTranslationsEdgeDocuments.length + serviceTranslationsDocuments.length + serviceTranslationsEdgeDocuments.length} items`);
     
     // Show sample data for verification
     if (serviceCategoriesDocuments.length > 0) {
@@ -226,6 +431,18 @@ async function exportServiceCategoriesAndServices() {
     if (categoryServicesDocuments.length > 0) {
       console.log('Sample categoryServices edge:', JSON.stringify(categoryServicesDocuments[0], null, 2));
     }
+    if (serviceCategoryTranslationsDocuments.length > 0) {
+      console.log('Sample serviceCategoryTranslations:', JSON.stringify(serviceCategoryTranslationsDocuments[0], null, 2));
+    }
+    if (serviceCategoryTranslationsEdgeDocuments.length > 0) {
+      console.log('Sample serviceCategoryTranslationsEdge:', JSON.stringify(serviceCategoryTranslationsEdgeDocuments[0], null, 2));
+    }
+    if (serviceTranslationsDocuments.length > 0) {
+      console.log('Sample serviceTranslations:', JSON.stringify(serviceTranslationsDocuments[0], null, 2));
+    }
+    if (serviceTranslationsEdgeDocuments.length > 0) {
+      console.log('Sample serviceTranslationsEdge:', JSON.stringify(serviceTranslationsEdgeDocuments[0], null, 2));
+    }
     
     // Prepare export data with metadata for all collections
     const exportData = {
@@ -233,15 +450,29 @@ async function exportServiceCategoriesAndServices() {
         exportDate: new Date().toISOString(),
         sourceDatabase: DB_CONFIG.databaseName,
         sourceUrl: DB_CONFIG.url,
-        collections: ['serviceCategories', 'services', 'categoryServices'],
+        collections: [
+          'serviceCategories',
+          'services',
+          'categoryServices',
+          'serviceCategoryTranslations',
+          'serviceCategoryTranslationsEdge',
+          'serviceTranslations',
+          'serviceTranslationsEdge'
+        ],
         documentCounts: {
           serviceCategories: serviceCategoriesDocuments.length,
           services: servicesDocuments.length,
-          categoryServices: categoryServicesDocuments.length
+          categoryServices: categoryServicesDocuments.length,
+          serviceCategoryTranslations: serviceCategoryTranslationsDocuments.length,
+          serviceCategoryTranslationsEdge: serviceCategoryTranslationsEdgeDocuments.length,
+          serviceTranslations: serviceTranslationsDocuments.length,
+          serviceTranslationsEdge: serviceTranslationsEdgeDocuments.length
         },
-        totalDocuments: serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length,
+        totalDocuments: serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length + 
+                        serviceCategoryTranslationsDocuments.length + serviceCategoryTranslationsEdgeDocuments.length + 
+                        serviceTranslationsDocuments.length + serviceTranslationsEdgeDocuments.length,
         includeSystemFields: EXPORT_CONFIG.includeSystemFields,
-        exportVersion: '3.0' // Updated version to indicate categoryServices support
+        exportVersion: '4.0' // Updated version to indicate translation collections support
       },
       schemas: {
         serviceCategories: {
@@ -276,12 +507,62 @@ async function exportServiceCategoriesAndServices() {
             "order": { type: "number", optional: true }
           },
           required: ["_from", "_to"]
+        },
+        serviceCategoryTranslations: {
+          type: "object",
+          properties: {
+            "_key": { type: "string" },
+            "serviceCategoryId": { type: "string" },
+            "languageCode": { type: "string" },
+            "translation": { type: "string" },
+            "isActive": { type: "boolean" },
+            "createdAt": { type: "string", optional: true },
+            "updatedAt": { type: "string", optional: true }
+          },
+          required: ["_key", "serviceCategoryId", "languageCode", "translation"]
+        },
+        serviceCategoryTranslationsEdge: {
+          type: "object",
+          properties: {
+            "_key": { type: "string" },
+            "_from": { type: "string" },
+            "_to": { type: "string" },
+            "createdAt": { type: "string", optional: true }
+          },
+          required: ["_key", "_from", "_to"]
+        },
+        serviceTranslations: {
+          type: "object",
+          properties: {
+            "_key": { type: "string" },
+            "serviceId": { type: "string" },
+            "languageCode": { type: "string" },
+            "translation": { type: "string" },
+            "isActive": { type: "boolean" },
+            "createdAt": { type: "string", optional: true },
+            "updatedAt": { type: "string", optional: true }
+          },
+          required: ["_key", "serviceId", "languageCode", "translation"]
+        },
+        serviceTranslationsEdge: {
+          type: "object",
+          properties: {
+            "_key": { type: "string" },
+            "_from": { type: "string" },
+            "_to": { type: "string" },
+            "createdAt": { type: "string", optional: true }
+          },
+          required: ["_key", "_from", "_to"]
         }
       },
       data: {
         serviceCategories: serviceCategoriesDocuments,
         services: servicesDocuments,
-        categoryServices: categoryServicesDocuments
+        categoryServices: categoryServicesDocuments,
+        serviceCategoryTranslations: serviceCategoryTranslationsDocuments,
+        serviceCategoryTranslationsEdge: serviceCategoryTranslationsEdgeDocuments,
+        serviceTranslations: serviceTranslationsDocuments,
+        serviceTranslationsEdge: serviceTranslationsEdgeDocuments
       }
     };
     
@@ -300,16 +581,26 @@ async function exportServiceCategoriesAndServices() {
     console.log(`  - ServiceCategories: ${serviceCategoriesDocuments.length} documents`);
     console.log(`  - Services: ${servicesDocuments.length} documents`);
     console.log(`  - CategoryServices: ${categoryServicesDocuments.length} edges`);
-    console.log(`  - Total items: ${serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length}`);
+    console.log(`  - ServiceCategoryTranslations: ${serviceCategoryTranslationsDocuments.length} documents`);
+    console.log(`  - ServiceCategoryTranslationsEdge: ${serviceCategoryTranslationsEdgeDocuments.length} edges`);
+    console.log(`  - ServiceTranslations: ${serviceTranslationsDocuments.length} documents`);
+    console.log(`  - ServiceTranslationsEdge: ${serviceTranslationsEdgeDocuments.length} edges`);
+    console.log(`  - Total items: ${serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length + serviceCategoryTranslationsDocuments.length + serviceCategoryTranslationsEdgeDocuments.length + serviceTranslationsDocuments.length + serviceTranslationsEdgeDocuments.length}`);
     
     return {
       filePath,
       documentCounts: {
         serviceCategories: serviceCategoriesDocuments.length,
         services: servicesDocuments.length,
-        categoryServices: categoryServicesDocuments.length
+        categoryServices: categoryServicesDocuments.length,
+        serviceCategoryTranslations: serviceCategoryTranslationsDocuments.length,
+        serviceCategoryTranslationsEdge: serviceCategoryTranslationsEdgeDocuments.length,
+        serviceTranslations: serviceTranslationsDocuments.length,
+        serviceTranslationsEdge: serviceTranslationsEdgeDocuments.length
       },
-      totalDocuments: serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length,
+      totalDocuments: serviceCategoriesDocuments.length + servicesDocuments.length + categoryServicesDocuments.length + 
+                      serviceCategoryTranslationsDocuments.length + serviceCategoryTranslationsEdgeDocuments.length + 
+                      serviceTranslationsDocuments.length + serviceTranslationsEdgeDocuments.length,
       fileSize: jsonData.length
     };
     
@@ -366,17 +657,42 @@ async function validateExportedData(filePath) {
       throw new Error('Missing serviceCategories or services data in export file');
     }
     
-    // categoryServices is optional (might not exist in source)
+    // Optional collections
     if (!exportData.data.categoryServices) {
       console.log('⚠ categoryServices data not present in export (collection may not exist in source)');
+    }
+    if (!exportData.data.serviceCategoryTranslations) {
+      console.log('⚠ serviceCategoryTranslations data not present in export (collection may not exist in source)');
+    }
+    if (!exportData.data.serviceCategoryTranslationsEdge) {
+      console.log('⚠ serviceCategoryTranslationsEdge data not present in export (collection may not exist in source)');
+    }
+    if (!exportData.data.serviceTranslations) {
+      console.log('⚠ serviceTranslations data not present in export (collection may not exist in source)');
+    }
+    if (!exportData.data.serviceTranslationsEdge) {
+      console.log('⚠ serviceTranslationsEdge data not present in export (collection may not exist in source)');
     }
     
     if (!Array.isArray(exportData.data.serviceCategories) || !Array.isArray(exportData.data.services)) {
       throw new Error('Export data collections are not arrays');
     }
     
+    // Validate array structure for optional collections
     if (exportData.data.categoryServices && !Array.isArray(exportData.data.categoryServices)) {
       throw new Error('categoryServices data is not an array');
+    }
+    if (exportData.data.serviceCategoryTranslations && !Array.isArray(exportData.data.serviceCategoryTranslations)) {
+      throw new Error('serviceCategoryTranslations data is not an array');
+    }
+    if (exportData.data.serviceCategoryTranslationsEdge && !Array.isArray(exportData.data.serviceCategoryTranslationsEdge)) {
+      throw new Error('serviceCategoryTranslationsEdge data is not an array');
+    }
+    if (exportData.data.serviceTranslations && !Array.isArray(exportData.data.serviceTranslations)) {
+      throw new Error('serviceTranslations data is not an array');
+    }
+    if (exportData.data.serviceTranslationsEdge && !Array.isArray(exportData.data.serviceTranslationsEdge)) {
+      throw new Error('serviceTranslationsEdge data is not an array');
     }
     
     console.log('Validating document structure...');
@@ -416,6 +732,56 @@ async function validateExportedData(filePath) {
       });
     }
     
+    // Validate serviceCategoryTranslations documents if present
+    const categoryTranslationRequiredFields = ['_key', 'serviceCategoryId', 'languageCode', 'translation'];
+    const invalidCategoryTranslations = [];
+    
+    if (exportData.data.serviceCategoryTranslations) {
+      exportData.data.serviceCategoryTranslations.forEach((doc, index) => {
+        const missingFields = categoryTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        if (missingFields.length > 0) {
+          invalidCategoryTranslations.push({ index, missingFields });
+        }
+      });
+    }
+    
+    // Validate serviceCategoryTranslationsEdge edges if present
+    const invalidCategoryTranslationEdges = [];
+    
+    if (exportData.data.serviceCategoryTranslationsEdge) {
+      exportData.data.serviceCategoryTranslationsEdge.forEach((doc, index) => {
+        const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        if (missingFields.length > 0) {
+          invalidCategoryTranslationEdges.push({ index, missingFields });
+        }
+      });
+    }
+    
+    // Validate serviceTranslations documents if present
+    const serviceTranslationRequiredFields = ['_key', 'serviceId', 'languageCode', 'translation'];
+    const invalidServiceTranslations = [];
+    
+    if (exportData.data.serviceTranslations) {
+      exportData.data.serviceTranslations.forEach((doc, index) => {
+        const missingFields = serviceTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        if (missingFields.length > 0) {
+          invalidServiceTranslations.push({ index, missingFields });
+        }
+      });
+    }
+    
+    // Validate serviceTranslationsEdge edges if present
+    const invalidServiceTranslationEdges = [];
+    
+    if (exportData.data.serviceTranslationsEdge) {
+      exportData.data.serviceTranslationsEdge.forEach((doc, index) => {
+        const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field));
+        if (missingFields.length > 0) {
+          invalidServiceTranslationEdges.push({ index, missingFields });
+        }
+      });
+    }
+    
     if (invalidCategories.length > 0) {
       console.error(`✗ Found ${invalidCategories.length} invalid serviceCategory documents:`, invalidCategories.slice(0, 5));
       return false;
@@ -431,10 +797,34 @@ async function validateExportedData(filePath) {
       return false;
     }
     
+    if (invalidCategoryTranslations.length > 0) {
+      console.error(`✗ Found ${invalidCategoryTranslations.length} invalid serviceCategoryTranslations documents:`, invalidCategoryTranslations.slice(0, 5));
+      return false;
+    }
+    
+    if (invalidCategoryTranslationEdges.length > 0) {
+      console.error(`✗ Found ${invalidCategoryTranslationEdges.length} invalid serviceCategoryTranslationsEdge edges:`, invalidCategoryTranslationEdges.slice(0, 5));
+      return false;
+    }
+    
+    if (invalidServiceTranslations.length > 0) {
+      console.error(`✗ Found ${invalidServiceTranslations.length} invalid serviceTranslations documents:`, invalidServiceTranslations.slice(0, 5));
+      return false;
+    }
+    
+    if (invalidServiceTranslationEdges.length > 0) {
+      console.error(`✗ Found ${invalidServiceTranslationEdges.length} invalid serviceTranslationsEdge edges:`, invalidServiceTranslationEdges.slice(0, 5));
+      return false;
+    }
+    
     console.log(`✓ Validation passed:`);
     console.log(`  - ServiceCategories: ${exportData.data.serviceCategories.length} valid documents`);
     console.log(`  - Services: ${exportData.data.services.length} valid documents`);
     console.log(`  - CategoryServices: ${exportData.data.categoryServices ? exportData.data.categoryServices.length : 0} valid edges`);
+    console.log(`  - ServiceCategoryTranslations: ${exportData.data.serviceCategoryTranslations ? exportData.data.serviceCategoryTranslations.length : 0} valid documents`);
+    console.log(`  - ServiceCategoryTranslationsEdge: ${exportData.data.serviceCategoryTranslationsEdge ? exportData.data.serviceCategoryTranslationsEdge.length : 0} valid edges`);
+    console.log(`  - ServiceTranslations: ${exportData.data.serviceTranslations ? exportData.data.serviceTranslations.length : 0} valid documents`);
+    console.log(`  - ServiceTranslationsEdge: ${exportData.data.serviceTranslationsEdge ? exportData.data.serviceTranslationsEdge.length : 0} valid edges`);
     console.log(`  - Export date: ${exportData.metadata.exportDate}`);
     console.log(`  - Source database: ${exportData.metadata.sourceDatabase}`);
     console.log(`  - Export version: ${exportData.metadata.exportVersion}`);
@@ -449,7 +839,7 @@ async function validateExportedData(filePath) {
 
 // Main export function
 async function executeExport() {
-  console.log('=== ArangoDB ServiceCategories, Services & CategoryServices Data Export ===\n');
+  console.log('=== ArangoDB ServiceCategories, Services & Translations Data Export ===\n');
   
   try {
     // Initialize database connection
@@ -483,6 +873,10 @@ async function executeExport() {
     console.log(`✓ ServiceCategories: ${exportResult.documentCounts.serviceCategories} documents`);
     console.log(`✓ Services: ${exportResult.documentCounts.services} documents`);
     console.log(`✓ CategoryServices: ${exportResult.documentCounts.categoryServices} edges`);
+    console.log(`✓ ServiceCategoryTranslations: ${exportResult.documentCounts.serviceCategoryTranslations} documents`);
+    console.log(`✓ ServiceCategoryTranslationsEdge: ${exportResult.documentCounts.serviceCategoryTranslationsEdge} edges`);
+    console.log(`✓ ServiceTranslations: ${exportResult.documentCounts.serviceTranslations} documents`);
+    console.log(`✓ ServiceTranslationsEdge: ${exportResult.documentCounts.serviceTranslationsEdge} edges`);
     console.log(`✓ Total items: ${exportResult.totalDocuments}`);
     console.log(`✓ File size: ${Math.round(exportResult.fileSize / 1024)} KB`);
     

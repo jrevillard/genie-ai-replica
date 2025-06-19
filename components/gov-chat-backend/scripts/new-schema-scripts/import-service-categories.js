@@ -1,6 +1,3 @@
-// ArangoDB ServiceCategories, Services & CategoryServices Edge Data Import Script
-// This script imports serviceCategories, services, and categoryServices edge collections from JSON file
-
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const path = require('path');
@@ -20,7 +17,7 @@ const DB_CONFIG = {
 
 // Import configuration
 const IMPORT_CONFIG = {
-  inputFile: process.env.IMPORT_FILE || './exports/serviceCategoriesAndServices_export_2025-06-18T15-09-58.json',
+  inputFile: process.env.IMPORT_FILE || './exports/serviceCategoriesAndServices_export_2025-06-19T14-55-00.json',
   createDatabase: process.env.CREATE_DATABASE !== 'false', // default true
   createCollection: process.env.CREATE_COLLECTION !== 'false', // default true
   overwriteExisting: process.env.OVERWRITE_EXISTING === 'true' || false,
@@ -80,7 +77,7 @@ async function ensureTargetDatabase() {
       console.log(`✓ Database '${DB_CONFIG.databaseName}' already exists`);
     }
     
-    // Switch to target database by creating new connection
+    // Switch to target database
     db = new Database({
       url: DB_CONFIG.url,
       databaseName: DB_CONFIG.databaseName,
@@ -205,6 +202,176 @@ async function createCategoryServicesCollection() {
   }
 }
 
+// Create serviceCategoryTranslations collection
+async function createServiceCategoryTranslationsCollection() {
+  try {
+    const collection = db.collection('serviceCategoryTranslations');
+    const exists = await collection.exists();
+    
+    if (exists) {
+      console.log('✓ serviceCategoryTranslations collection already exists - using existing collection');
+      return collection;
+    }
+    
+    if (!IMPORT_CONFIG.createCollection) {
+      throw new Error('serviceCategoryTranslations collection does not exist and CREATE_COLLECTION=false');
+    }
+    
+    console.log('Creating serviceCategoryTranslations collection...');
+    
+    const newCollection = await db.createCollection('serviceCategoryTranslations', {
+      waitForSync: false,
+      keyOptions: {}
+    });
+    
+    // Create indexes for serviceCategoryTranslations
+    await newCollection.ensureIndex({
+      type: "hash",
+      fields: ["serviceCategoryId", "languageCode"],
+      unique: true,
+      name: "idx_serviceCategory_language"
+    });
+    
+    await newCollection.ensureIndex({
+      type: "skiplist",
+      fields: ["serviceCategoryId"],
+      unique: false,
+      name: "idx_serviceCategoryId"
+    });
+    
+    await newCollection.ensureIndex({
+      type: "skiplist",
+      fields: ["languageCode"],
+      unique: false,
+      name: "idx_languageCode"
+    });
+    
+    console.log('✓ serviceCategoryTranslations collection created with indexes');
+    return newCollection;
+    
+  } catch (error) {
+    console.error('✗ Error with serviceCategoryTranslations collection:', error.message);
+    throw error;
+  }
+}
+
+// Create serviceCategoryTranslationsEdge collection
+async function createServiceCategoryTranslationsEdgeCollection() {
+  try {
+    const collection = db.collection('serviceCategoryTranslationsEdge');
+    const exists = await collection.exists();
+    
+    if (exists) {
+      console.log('✓ serviceCategoryTranslationsEdge collection already exists - using existing collection');
+      return collection;
+    }
+    
+    if (!IMPORT_CONFIG.createCollection) {
+      throw new Error('serviceCategoryTranslationsEdge collection does not exist and CREATE_COLLECTION=false');
+    }
+    
+    console.log('Creating serviceCategoryTranslationsEdge collection...');
+    
+    const newCollection = await db.createCollection('serviceCategoryTranslationsEdge', {
+      type: 3, // Edge collection type
+      waitForSync: false,
+      keyOptions: {}
+    });
+    
+    console.log('✓ serviceCategoryTranslationsEdge collection created');
+    return newCollection;
+    
+  } catch (error) {
+    console.error('✗ Error with serviceCategoryTranslationsEdge collection:', error.message);
+    throw error;
+  }
+}
+
+// Create serviceTranslations collection
+async function createServiceTranslationsCollection() {
+  try {
+    const collection = db.collection('serviceTranslations');
+    const exists = await collection.exists();
+    
+    if (exists) {
+      console.log('✓ serviceTranslations collection already exists - using existing collection');
+      return collection;
+    }
+    
+    if (!IMPORT_CONFIG.createCollection) {
+      throw new Error('serviceTranslations collection does not exist and CREATE_COLLECTION=false');
+    }
+    
+    console.log('Creating serviceTranslations collection...');
+    
+    const newCollection = await db.createCollection('serviceTranslations', {
+      waitForSync: false,
+      keyOptions: {}
+    });
+    
+    // Create indexes for serviceTranslations
+    await newCollection.ensureIndex({
+      type: "hash",
+      fields: ["serviceId", "languageCode"],
+      unique: true,
+      name: "idx_service_language"
+    });
+    
+    await newCollection.ensureIndex({
+      type: "skiplist",
+      fields: ["serviceId"],
+      unique: false,
+      name: "idx_serviceId"
+    });
+    
+    await newCollection.ensureIndex({
+      type: "skiplist",
+      fields: ["languageCode"],
+      unique: false,
+      name: "idx_languageCode"
+    });
+    
+    console.log('✓ serviceTranslations collection created with indexes');
+    return newCollection;
+    
+  } catch (error) {
+    console.error('✗ Error with serviceTranslations collection:', error.message);
+    throw error;
+  }
+}
+
+// Create serviceTranslationsEdge collection
+async function createServiceTranslationsEdgeCollection() {
+  try {
+    const collection = db.collection('serviceTranslationsEdge');
+    const exists = await collection.exists();
+    
+    if (exists) {
+      console.log('✓ serviceTranslationsEdge collection already exists - using existing collection');
+      return collection;
+    }
+    
+    if (!IMPORT_CONFIG.createCollection) {
+      throw new Error('serviceTranslationsEdge collection does not exist and CREATE_COLLECTION=false');
+    }
+    
+    console.log('Creating serviceTranslationsEdge collection...');
+    
+    const newCollection = await db.createCollection('serviceTranslationsEdge', {
+      type: 3, // Edge collection type
+      waitForSync: false,
+      keyOptions: {}
+    });
+    
+    console.log('✓ serviceTranslationsEdge collection created');
+    return newCollection;
+    
+  } catch (error) {
+    console.error('✗ Error with serviceTranslationsEdge collection:', error.message);
+    throw error;
+  }
+}
+
 // Read and validate import file
 async function readImportFile() {
   try {
@@ -229,31 +396,58 @@ async function readImportFile() {
     }
     
     // Handle different format versions
-    let serviceCategoriesData, servicesData, categoryServicesData;
+    let serviceCategoriesData, servicesData, categoryServicesData,
+        serviceCategoryTranslationsData, serviceCategoryTranslationsEdgeData,
+        serviceTranslationsData, serviceTranslationsEdgeData;
     
-    if (importData.metadata.exportVersion === '3.0' && importData.data.categoryServices) {
-      // New format with edge collection
+    if (importData.metadata.exportVersion === '4.0') {
+      // New format with translation collections
+      serviceCategoriesData = importData.data.serviceCategories || [];
+      servicesData = importData.data.services || [];
+      categoryServicesData = importData.data.categoryServices || [];
+      serviceCategoryTranslationsData = importData.data.serviceCategoryTranslations || [];
+      serviceCategoryTranslationsEdgeData = importData.data.serviceCategoryTranslationsEdge || [];
+      serviceTranslationsData = importData.data.serviceTranslations || [];
+      serviceTranslationsEdgeData = importData.data.serviceTranslationsEdge || [];
+      console.log('✓ Format v4.0 detected - importing all collections including translations');
+    } else if (importData.metadata.exportVersion === '3.0' && importData.data.categoryServices) {
+      // Format v3.0 with edge collection
       serviceCategoriesData = importData.data.serviceCategories;
       servicesData = importData.data.services || [];
       categoryServicesData = importData.data.categoryServices || [];
+      serviceCategoryTranslationsData = [];
+      serviceCategoryTranslationsEdgeData = [];
+      serviceTranslationsData = [];
+      serviceTranslationsEdgeData = [];
       console.log('✓ Format v3.0 detected - importing serviceCategories, services, and categoryServices edges');
     } else if (importData.metadata.exportVersion === '2.0' && importData.data.serviceCategories) {
       // Format v2.0 without edge collection
       serviceCategoriesData = importData.data.serviceCategories;
       servicesData = importData.data.services || [];
       categoryServicesData = [];
+      serviceCategoryTranslationsData = [];
+      serviceCategoryTranslationsEdgeData = [];
+      serviceTranslationsData = [];
+      serviceTranslationsEdgeData = [];
       console.log('✓ Format v2.0 detected - importing serviceCategories and services (no edges)');
     } else if (Array.isArray(importData.data)) {
       // Old format - assume it's serviceCategories only
       serviceCategoriesData = importData.data;
       servicesData = [];
       categoryServicesData = [];
+      serviceCategoryTranslationsData = [];
+      serviceCategoryTranslationsEdgeData = [];
+      serviceTranslationsData = [];
+      serviceTranslationsEdgeData = [];
       console.log('⚠ Old format (v1.0) detected - importing serviceCategories only');
     } else {
       throw new Error('Invalid import file data structure - cannot determine format');
     }
     
-    if (!Array.isArray(serviceCategoriesData) || !Array.isArray(servicesData) || !Array.isArray(categoryServicesData)) {
+    if (!Array.isArray(serviceCategoriesData) || !Array.isArray(servicesData) || 
+        !Array.isArray(categoryServicesData) || !Array.isArray(serviceCategoryTranslationsData) ||
+        !Array.isArray(serviceCategoryTranslationsEdgeData) || !Array.isArray(serviceTranslationsData) ||
+        !Array.isArray(serviceTranslationsEdgeData)) {
       throw new Error('Import data collections are not arrays');
     }
     
@@ -264,13 +458,23 @@ async function readImportFile() {
     console.log(`  - ServiceCategories: ${serviceCategoriesData.length} documents`);
     console.log(`  - Services: ${servicesData.length} documents`);
     console.log(`  - CategoryServices: ${categoryServicesData.length} edges`);
-    console.log(`  - Total: ${serviceCategoriesData.length + servicesData.length + categoryServicesData.length} items`);
+    console.log(`  - ServiceCategoryTranslations: ${serviceCategoryTranslationsData.length} documents`);
+    console.log(`  - ServiceCategoryTranslationsEdge: ${serviceCategoryTranslationsEdgeData.length} edges`);
+    console.log(`  - ServiceTranslations: ${serviceTranslationsData.length} documents`);
+    console.log(`  - ServiceTranslationsEdge: ${serviceTranslationsEdgeData.length} edges`);
+    console.log(`  - Total: ${serviceCategoriesData.length + servicesData.length + categoryServicesData.length + 
+        serviceCategoryTranslationsData.length + serviceCategoryTranslationsEdgeData.length + 
+        serviceTranslationsData.length + serviceTranslationsEdgeData.length} items`);
     
     return {
       metadata: importData.metadata,
       serviceCategories: serviceCategoriesData,
       services: servicesData,
-      categoryServices: categoryServicesData
+      categoryServices: categoryServicesData,
+      serviceCategoryTranslations: serviceCategoryTranslationsData,
+      serviceCategoryTranslationsEdge: serviceCategoryTranslationsEdgeData,
+      serviceTranslations: serviceTranslationsData,
+      serviceTranslationsEdge: serviceTranslationsEdgeData
     };
     
   } catch (error) {
@@ -339,10 +543,9 @@ async function validateImportData(importData) {
         warnings.push(`Service ${index}: order field should be a number, got: ${typeof doc.order}`);
       }
       
-      // Check if categoryId references exist - handle both formats
+      // Check if categoryId references exist
       if (doc.categoryId) {
         let categoryRef = doc.categoryId;
-        // Handle "serviceCategories/1" format by extracting just the key part
         if (categoryRef.includes('/')) {
           categoryRef = categoryRef.split('/')[1];
         }
@@ -364,7 +567,6 @@ async function validateImportData(importData) {
         errors.push(`CategoryServices edge ${index}: Missing required fields: ${missingFields.join(', ')}`);
       }
       
-      // Validate _from points to a serviceCategory
       if (doc._from) {
         const fromKey = doc._from.split('/')[1];
         if (!categoryKeySet.has(fromKey)) {
@@ -372,7 +574,6 @@ async function validateImportData(importData) {
         }
       }
       
-      // Validate _to points to a service
       if (doc._to) {
         const toKey = doc._to.split('/')[1];
         if (!serviceKeySet.has(toKey)) {
@@ -380,12 +581,123 @@ async function validateImportData(importData) {
         }
       }
       
-      // Check for duplicate edges
       const edgeKey = `${doc._from}-${doc._to}`;
       if (edgeKeySet.has(edgeKey)) {
         warnings.push(`CategoryServices edge ${index}: Duplicate edge from ${doc._from} to ${doc._to}`);
       } else {
         edgeKeySet.add(edgeKey);
+      }
+    });
+    
+    // Validate serviceCategoryTranslations
+    console.log('Validating serviceCategoryTranslations...');
+    const categoryTranslationRequiredFields = ['_key', 'serviceCategoryId', 'languageCode', 'translation'];
+    const categoryTranslationKeySet = new Set();
+    
+    importData.serviceCategoryTranslations.forEach((doc, index) => {
+      const missingFields = categoryTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      if (missingFields.length > 0) {
+        errors.push(`ServiceCategoryTranslation ${index}: Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      if (doc._key) {
+        if (categoryTranslationKeySet.has(doc._key)) {
+          errors.push(`ServiceCategoryTranslation ${index}: Duplicate _key: ${doc._key}`);
+        } else {
+          categoryTranslationKeySet.add(doc._key);
+        }
+      }
+      
+      if (doc.serviceCategoryId && !categoryKeySet.has(doc.serviceCategoryId)) {
+        warnings.push(`ServiceCategoryTranslation ${index}: serviceCategoryId '${doc.serviceCategoryId}' not found in serviceCategories`);
+      }
+    });
+    
+    // Validate serviceCategoryTranslationsEdge
+    console.log('Validating serviceCategoryTranslationsEdge...');
+    const categoryTranslationEdgeKeySet = new Set();
+    
+    importData.serviceCategoryTranslationsEdge.forEach((doc, index) => {
+      const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      if (missingFields.length > 0) {
+        errors.push(`ServiceCategoryTranslationsEdge ${index}: Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      if (doc._from) {
+        const fromKey = doc._from.split('/')[1];
+        if (!categoryKeySet.has(fromKey)) {
+          warnings.push(`ServiceCategoryTranslationsEdge ${index}: _from '${doc._from}' references non-existent serviceCategory`);
+        }
+      }
+      
+      if (doc._to) {
+        const toKey = doc._to.split('/')[1];
+        if (!categoryTranslationKeySet.has(toKey)) {
+          warnings.push(`ServiceCategoryTranslationsEdge ${index}: _to '${doc._to}' references non-existent serviceCategoryTranslation`);
+        }
+      }
+      
+      const edgeKey = `${doc._from}-${doc._to}`;
+      if (categoryTranslationEdgeKeySet.has(edgeKey)) {
+        warnings.push(`ServiceCategoryTranslationsEdge ${index}: Duplicate edge from ${doc._from} to ${doc._to}`);
+      } else {
+        categoryTranslationEdgeKeySet.add(edgeKey);
+      }
+    });
+    
+    // Validate serviceTranslations
+    console.log('Validating serviceTranslations...');
+    const serviceTranslationRequiredFields = ['_key', 'serviceId', 'languageCode', 'translation'];
+    const serviceTranslationKeySet = new Set();
+    
+    importData.serviceTranslations.forEach((doc, index) => {
+      const missingFields = serviceTranslationRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      if (missingFields.length > 0) {
+        errors.push(`ServiceTranslation ${index}: Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      if (doc._key) {
+        if (serviceTranslationKeySet.has(doc._key)) {
+          errors.push(`ServiceTranslation ${index}: Duplicate _key: ${doc._key}`);
+        } else {
+          serviceTranslationKeySet.add(doc._key);
+        }
+      }
+      
+      if (doc.serviceId && !serviceKeySet.has(doc.serviceId)) {
+        warnings.push(`ServiceTranslation ${index}: serviceId '${doc.serviceId}' not found in services`);
+      }
+    });
+    
+    // Validate serviceTranslationsEdge
+    console.log('Validating serviceTranslationsEdge...');
+    const serviceTranslationEdgeKeySet = new Set();
+    
+    importData.serviceTranslationsEdge.forEach((doc, index) => {
+      const missingFields = edgeRequiredFields.filter(field => !doc.hasOwnProperty(field) || doc[field] === null || doc[field] === undefined);
+      if (missingFields.length > 0) {
+        errors.push(`ServiceTranslationsEdge ${index}: Missing required fields: ${missingFields.join(', ')}`);
+      }
+      
+      if (doc._from) {
+        const fromKey = doc._from.split('/')[1];
+        if (!serviceKeySet.has(fromKey)) {
+          warnings.push(`ServiceTranslationsEdge ${index}: _from '${doc._from}' references non-existent service`);
+        }
+      }
+      
+      if (doc._to) {
+        const toKey = doc._to.split('/')[1];
+        if (!serviceTranslationKeySet.has(toKey)) {
+          warnings.push(`ServiceTranslationsEdge ${index}: _to '${doc._to}' references non-existent serviceTranslation`);
+        }
+      }
+      
+      const edgeKey = `${doc._from}-${doc._to}`;
+      if (serviceTranslationEdgeKeySet.has(edgeKey)) {
+        warnings.push(`ServiceTranslationsEdge ${index}: Duplicate edge from ${doc._from} to ${doc._to}`);
+      } else {
+        serviceTranslationEdgeKeySet.add(edgeKey);
       }
     });
     
@@ -409,6 +721,10 @@ async function validateImportData(importData) {
       console.log(`  - ServiceCategories: ${importData.serviceCategories.length} valid documents`);
       console.log(`  - Services: ${importData.services.length} valid documents`);
       console.log(`  - CategoryServices: ${importData.categoryServices.length} valid edges`);
+      console.log(`  - ServiceCategoryTranslations: ${importData.serviceCategoryTranslations.length} valid documents`);
+      console.log(`  - ServiceCategoryTranslationsEdge: ${importData.serviceCategoryTranslationsEdge.length} valid edges`);
+      console.log(`  - ServiceTranslations: ${importData.serviceTranslations.length} valid documents`);
+      console.log(`  - ServiceTranslationsEdge: ${importData.serviceTranslationsEdge.length} valid edges`);
     }
     
     return true;
@@ -424,16 +740,25 @@ async function checkExistingData(collections, importData) {
   try {
     console.log('Checking existing data status...');
     
-    const categoriesCount = await collections.serviceCategories.count();
-    const servicesCount = await collections.services.count();
-    const edgesCount = await collections.categoryServices.count();
+    const counts = await Promise.all([
+      collections.serviceCategories.count(),
+      collections.services.count(),
+      collections.categoryServices.count(),
+      collections.serviceCategoryTranslations.count(),
+      collections.serviceCategoryTranslationsEdge.count(),
+      collections.serviceTranslations.count(),
+      collections.serviceTranslationsEdge.count()
+    ]);
     
     console.log(`Target collections currently have:`);
-    console.log(`  - serviceCategories: ${categoriesCount.count} existing documents`);
-    console.log(`  - services: ${servicesCount.count} existing documents`);
-    console.log(`  - categoryServices: ${edgesCount.count} existing edges`);
+    console.log(`  - serviceCategories: ${counts[0].count} existing documents`);
+    console.log(`  - services: ${counts[1].count} existing documents`);
+    console.log(`  - categoryServices: ${counts[2].count} existing edges`);
+    console.log(`  - serviceCategoryTranslations: ${counts[3].count} existing documents`);
+    console.log(`  - serviceCategoryTranslationsEdge: ${counts[4].count} existing edges`);
+    console.log(`  - serviceTranslations: ${counts[5].count} existing documents`);
+    console.log(`  - serviceTranslationsEdge: ${counts[6].count} existing edges`);
     
-    // Since we're now skipping duplicates instead of overwriting, we can always proceed
     console.log('✓ Import will skip any existing documents and only add new ones');
     
     return { conflicts: [], canProceed: true };
@@ -447,7 +772,6 @@ async function checkExistingData(collections, importData) {
 // Clean document based on schema requirements
 function cleanDocument(doc, collectionName) {
   if (IMPORT_CONFIG.schemaStrict) {
-    // Only include original schema fields for serviceCategories
     if (collectionName === 'serviceCategories') {
       const cleaned = {
         _key: doc._key,
@@ -455,7 +779,6 @@ function cleanDocument(doc, collectionName) {
         order: doc.order
       };
       
-      // Add optional fields if they exist and are not null
       if (doc.nameFR !== null && doc.nameFR !== undefined) {
         cleaned.nameFR = doc.nameFR;
       }
@@ -465,7 +788,6 @@ function cleanDocument(doc, collectionName) {
       
       return cleaned;
     } else if (collectionName === 'services') {
-      // Only include original schema fields for services
       const cleaned = {
         _key: doc._key,
         categoryId: doc.categoryId,
@@ -473,7 +795,6 @@ function cleanDocument(doc, collectionName) {
         order: doc.order
       };
       
-      // Add optional fields if they exist and are not null
       if (doc.nameFR !== null && doc.nameFR !== undefined) {
         cleaned.nameFR = doc.nameFR;
       }
@@ -486,18 +807,74 @@ function cleanDocument(doc, collectionName) {
       
       return cleaned;
     } else if (collectionName === 'categoryServices') {
-      // Only include required edge fields
       const cleaned = {
         _from: doc._from,
         _to: doc._to
       };
       
-      // Add optional fields if they exist
       if (doc.order !== null && doc.order !== undefined) {
         cleaned.order = doc.order;
       }
       if (doc._key !== null && doc._key !== undefined) {
         cleaned._key = doc._key;
+      }
+      
+      return cleaned;
+    } else if (collectionName === 'serviceCategoryTranslations') {
+      const cleaned = {
+        _key: doc._key,
+        serviceCategoryId: doc.serviceCategoryId,
+        languageCode: doc.languageCode,
+        translation: doc.translation,
+        isActive: doc.isActive
+      };
+      
+      if (doc.createdAt !== null && doc.createdAt !== undefined) {
+        cleaned.createdAt = doc.createdAt;
+      }
+      if (doc.updatedAt !== null && doc.updatedAt !== undefined) {
+        cleaned.updatedAt = doc.updatedAt;
+      }
+      
+      return cleaned;
+    } else if (collectionName === 'serviceCategoryTranslationsEdge') {
+      const cleaned = {
+        _key: doc._key,
+        _from: doc._from,
+        _to: doc._to
+      };
+      
+      if (doc.createdAt !== null && doc.createdAt !== undefined) {
+        cleaned.createdAt = doc.createdAt;
+      }
+      
+      return cleaned;
+    } else if (collectionName === 'serviceTranslations') {
+      const cleaned = {
+        _key: doc._key,
+        serviceId: doc.serviceId,
+        languageCode: doc.languageCode,
+        translation: doc.translation,
+        isActive: doc.isActive
+      };
+      
+      if (doc.createdAt !== null && doc.createdAt !== undefined) {
+        cleaned.createdAt = doc.createdAt;
+      }
+      if (doc.updatedAt !== null && doc.updatedAt !== undefined) {
+        cleaned.updatedAt = doc.updatedAt;
+      }
+      
+      return cleaned;
+    } else if (collectionName === 'serviceTranslationsEdge') {
+      const cleaned = {
+        _key: doc._key,
+        _from: doc._from,
+        _to: doc._to
+      };
+      
+      if (doc.createdAt !== null && doc.createdAt !== undefined) {
+        cleaned.createdAt = doc.createdAt;
       }
       
       return cleaned;
@@ -514,7 +891,7 @@ function cleanDocument(doc, collectionName) {
     });
     
     // Add timestamps if missing (not for edges)
-    if (collectionName !== 'categoryServices') {
+    if (!['categoryServices', 'serviceCategoryTranslationsEdge', 'serviceTranslationsEdge'].includes(collectionName)) {
       const now = new Date().toISOString();
       if (!cleanDoc.createdAt) {
         cleanDoc.createdAt = now;
@@ -554,8 +931,7 @@ async function importDocumentsForCollection(collection, documents, collectionNam
     console.log(`Checking for existing ${collectionName} documents...`);
     const existingKeys = new Set();
     
-    // For edges, we need to check unique combinations of _from and _to
-    if (collectionName === 'categoryServices') {
+    if (['categoryServices', 'serviceCategoryTranslationsEdge', 'serviceTranslationsEdge'].includes(collectionName)) {
       try {
         const existingCursor = await collection.all();
         const existingDocs = await existingCursor.all();
@@ -580,7 +956,7 @@ async function importDocumentsForCollection(collection, documents, collectionNam
     
     // Filter out documents that already exist
     const documentsToImport = documents.filter(doc => {
-      if (collectionName === 'categoryServices') {
+      if (['categoryServices', 'serviceCategoryTranslationsEdge', 'serviceTranslationsEdge'].includes(collectionName)) {
         const edgeKey = `${doc._from}-${doc._to}`;
         if (existingKeys.has(edgeKey)) {
           console.log(`  - Skipping existing edge from ${doc._from} to ${doc._to}`);
@@ -589,7 +965,7 @@ async function importDocumentsForCollection(collection, documents, collectionNam
         }
       } else {
         if (existingKeys.has(doc._key)) {
-          console.log(`  - Skipping existing ${collectionName} ${doc._key}: ${doc.nameEN || 'document already exists'}`);
+          console.log(`  - Skipping existing ${collectionName} ${doc._key}: ${doc.nameEN || doc.translation || 'document already exists'}`);
           skippedCount++;
           return false;
         }
@@ -628,15 +1004,15 @@ async function importDocumentsForCollection(collection, documents, collectionNam
               waitForSync: true
             });
             
-            if (collectionName === 'categoryServices') {
+            if (['categoryServices', 'serviceCategoryTranslationsEdge', 'serviceTranslationsEdge'].includes(collectionName)) {
               console.log(`    ✓ Edge ${batch[j]._from} → ${batch[j]._to} imported`);
             } else {
-              console.log(`    ✓ ${collectionName} ${batch[j]._key}: ${batch[j].nameEN || 'imported'}`);
+              console.log(`    ✓ ${collectionName} ${batch[j]._key}: ${batch[j].nameEN || batch[j].translation || 'imported'}`);
             }
             importedCount++;
             
           } catch (docError) {
-            if (collectionName === 'categoryServices') {
+            if (['categoryServices', 'serviceCategoryTranslationsEdge', 'serviceTranslationsEdge'].includes(collectionName)) {
               console.error(`    ✗ Failed edge ${batch[j]._from} → ${batch[j]._to}:`, docError.message);
             } else {
               console.error(`    ✗ Failed ${collectionName} ${batch[j]._key}:`, docError.message);
@@ -674,44 +1050,91 @@ async function importDocumentsForCollection(collection, documents, collectionNam
   }
 }
 
-// Import all data (serviceCategories first, then services, then edges)
+// Import all data
 async function importAllDocuments(collections, importData) {
   try {
     console.log('\n=== Starting import of all collections ===');
     
-    // Import serviceCategories first (since services depend on them)
+    // Import in dependency order
     const categoriesResult = await importDocumentsForCollection(
       collections.serviceCategories, 
       importData.serviceCategories, 
       'serviceCategories'
     );
     
-    // Import services (which reference serviceCategories)
     const servicesResult = await importDocumentsForCollection(
       collections.services, 
       importData.services, 
       'services'
     );
     
-    // Import categoryServices edges (which reference both categories and services)
-    const edgesResult = await importDocumentsForCollection(
+    const categoryServicesResult = await importDocumentsForCollection(
       collections.categoryServices,
       importData.categoryServices,
       'categoryServices'
     );
     
-    const totalImported = categoriesResult.importedCount + servicesResult.importedCount + edgesResult.importedCount;
-    const totalSkipped = categoriesResult.skippedCount + servicesResult.skippedCount + edgesResult.skippedCount;
-    const totalErrors = categoriesResult.errorCount + servicesResult.errorCount + edgesResult.errorCount;
-    const allErrors = [...categoriesResult.errors, ...servicesResult.errors, ...edgesResult.errors];
+    const serviceCategoryTranslationsResult = await importDocumentsForCollection(
+      collections.serviceCategoryTranslations,
+      importData.serviceCategoryTranslations,
+      'serviceCategoryTranslations'
+    );
+    
+    const serviceCategoryTranslationsEdgeResult = await importDocumentsForCollection(
+      collections.serviceCategoryTranslationsEdge,
+      importData.serviceCategoryTranslationsEdge,
+      'serviceCategoryTranslationsEdge'
+    );
+    
+    const serviceTranslationsResult = await importDocumentsForCollection(
+      collections.serviceTranslations,
+      importData.serviceTranslations,
+      'serviceTranslations'
+    );
+    
+    const serviceTranslationsEdgeResult = await importDocumentsForCollection(
+      collections.serviceTranslationsEdge,
+      importData.serviceTranslationsEdge,
+      'serviceTranslationsEdge'
+    );
+    
+    const totalImported = categoriesResult.importedCount + servicesResult.importedCount + 
+        categoryServicesResult.importedCount + serviceCategoryTranslationsResult.importedCount + 
+        serviceCategoryTranslationsEdgeResult.importedCount + serviceTranslationsResult.importedCount + 
+        serviceTranslationsEdgeResult.importedCount;
+    const totalSkipped = categoriesResult.skippedCount + servicesResult.skippedCount + 
+        categoryServicesResult.skippedCount + serviceCategoryTranslationsResult.skippedCount + 
+        serviceCategoryTranslationsEdgeResult.skippedCount + serviceTranslationsResult.skippedCount + 
+        serviceTranslationsEdgeResult.skippedCount;
+    const totalErrors = categoriesResult.errorCount + servicesResult.errorCount + 
+        categoryServicesResult.errorCount + serviceCategoryTranslationsResult.errorCount + 
+        serviceCategoryTranslationsEdgeResult.errorCount + serviceTranslationsResult.errorCount + 
+        serviceTranslationsEdgeResult.errorCount;
+    const allErrors = [
+      ...categoriesResult.errors,
+      ...servicesResult.errors,
+      ...categoryServicesResult.errors,
+      ...serviceCategoryTranslationsResult.errors,
+      ...serviceCategoryTranslationsEdgeResult.errors,
+      ...serviceTranslationsResult.errors,
+      ...serviceTranslationsEdgeResult.errors
+    ];
     
     console.log(`\n=== Combined Import Results ===`);
     console.log(`✓ ServiceCategories imported: ${categoriesResult.importedCount}`);
     console.log(`✓ ServiceCategories skipped: ${categoriesResult.skippedCount}`);
     console.log(`✓ Services imported: ${servicesResult.importedCount}`);
     console.log(`✓ Services skipped: ${servicesResult.skippedCount}`);
-    console.log(`✓ CategoryServices edges imported: ${edgesResult.importedCount}`);
-    console.log(`✓ CategoryServices edges skipped: ${edgesResult.skippedCount}`);
+    console.log(`✓ CategoryServices edges imported: ${categoryServicesResult.importedCount}`);
+    console.log(`✓ CategoryServices edges skipped: ${categoryServicesResult.skippedCount}`);
+    console.log(`✓ ServiceCategoryTranslations imported: ${serviceCategoryTranslationsResult.importedCount}`);
+    console.log(`✓ ServiceCategoryTranslations skipped: ${serviceCategoryTranslationsResult.skippedCount}`);
+    console.log(`✓ ServiceCategoryTranslationsEdge imported: ${serviceCategoryTranslationsEdgeResult.importedCount}`);
+    console.log(`✓ ServiceCategoryTranslationsEdge skipped: ${serviceCategoryTranslationsEdgeResult.skippedCount}`);
+    console.log(`✓ ServiceTranslations imported: ${serviceTranslationsResult.importedCount}`);
+    console.log(`✓ ServiceTranslations skipped: ${serviceTranslationsResult.skippedCount}`);
+    console.log(`✓ ServiceTranslationsEdge imported: ${serviceTranslationsEdgeResult.importedCount}`);
+    console.log(`✓ ServiceTranslationsEdge skipped: ${serviceTranslationsEdgeResult.skippedCount}`);
     console.log(`✓ Total items imported: ${totalImported}`);
     console.log(`✓ Total items skipped: ${totalSkipped}`);
     console.log(`${totalErrors > 0 ? '⚠' : '✓'} Total errors: ${totalErrors}`);
@@ -728,7 +1151,11 @@ async function importAllDocuments(collections, importData) {
     return {
       serviceCategories: categoriesResult,
       services: servicesResult,
-      categoryServices: edgesResult,
+      categoryServices: categoryServicesResult,
+      serviceCategoryTranslations: serviceCategoryTranslationsResult,
+      serviceCategoryTranslationsEdge: serviceCategoryTranslationsEdgeResult,
+      serviceTranslations: serviceTranslationsResult,
+      serviceTranslationsEdge: serviceTranslationsEdgeResult,
       totals: {
         importedCount: totalImported,
         skippedCount: totalSkipped,
@@ -748,17 +1175,31 @@ async function verifyImport(collections, originalData) {
   try {
     console.log('\n=== Verifying imported data ===');
     
-    const categoriesFinalCount = await collections.serviceCategories.count();
-    const servicesFinalCount = await collections.services.count();
-    const edgesFinalCount = await collections.categoryServices.count();
+    const counts = await Promise.all([
+      collections.serviceCategories.count(),
+      collections.services.count(),
+      collections.categoryServices.count(),
+      collections.serviceCategoryTranslations.count(),
+      collections.serviceCategoryTranslationsEdge.count(),
+      collections.serviceTranslations.count(),
+      collections.serviceTranslationsEdge.count()
+    ]);
     
     console.log(`Document counts:`);
     console.log(`  - Expected serviceCategories: ${originalData.serviceCategories.length}`);
-    console.log(`  - Actual serviceCategories: ${categoriesFinalCount.count}`);
+    console.log(`  - Actual serviceCategories: ${counts[0].count}`);
     console.log(`  - Expected services: ${originalData.services.length}`);
-    console.log(`  - Actual services: ${servicesFinalCount.count}`);
+    console.log(`  - Actual services: ${counts[1].count}`);
     console.log(`  - Expected categoryServices edges: ${originalData.categoryServices.length}`);
-    console.log(`  - Actual categoryServices edges: ${edgesFinalCount.count}`);
+    console.log(`  - Actual categoryServices edges: ${counts[2].count}`);
+    console.log(`  - Expected serviceCategoryTranslations: ${originalData.serviceCategoryTranslations.length}`);
+    console.log(`  - Actual serviceCategoryTranslations: ${counts[3].count}`);
+    console.log(`  - Expected serviceCategoryTranslationsEdge: ${originalData.serviceCategoryTranslationsEdge.length}`);
+    console.log(`  - Actual serviceCategoryTranslationsEdge: ${counts[4].count}`);
+    console.log(`  - Expected serviceTranslations: ${originalData.serviceTranslations.length}`);
+    console.log(`  - Actual serviceTranslations: ${counts[5].count}`);
+    console.log(`  - Expected serviceTranslationsEdge: ${originalData.serviceTranslationsEdge.length}`);
+    console.log(`  - Actual serviceTranslationsEdge: ${counts[6].count}`);
     
     // Sample verification for serviceCategories
     const categorySampleSize = Math.min(3, originalData.serviceCategories.length);
@@ -805,7 +1246,6 @@ async function verifyImport(collections, originalData) {
     console.log(`\nVerifying ${edgeSampleSize} sample categoryServices edges...`);
     let edgeVerifiedCount = 0;
     
-    // Query to verify edges
     for (const edgeSample of edgeSamples) {
       try {
         const query = `
@@ -827,8 +1267,102 @@ async function verifyImport(collections, originalData) {
       }
     }
     
-    // Verify relationships with a sample query
-    console.log('\nVerifying category-service relationships...');
+    // Sample verification for serviceCategoryTranslations
+    const categoryTranslationSampleSize = Math.min(3, originalData.serviceCategoryTranslations.length);
+    const categoryTranslationSampleKeys = originalData.serviceCategoryTranslations.slice(0, categoryTranslationSampleSize).map(doc => doc._key);
+    
+    console.log(`\nVerifying ${categoryTranslationSampleSize} sample serviceCategoryTranslations...`);
+    let categoryTranslationVerifiedCount = 0;
+    
+    for (const key of categoryTranslationSampleKeys) {
+      try {
+        const doc = await collections.serviceCategoryTranslations.document(key);
+        if (doc) {
+          categoryTranslationVerifiedCount++;
+          console.log(`  ✓ serviceCategoryTranslation ${key}: ${doc.translation} (${doc.languageCode})`);
+        }
+      } catch (error) {
+        console.log(`  ✗ serviceCategoryTranslation ${key}: not found`);
+      }
+    }
+    
+    // Sample verification for serviceCategoryTranslationsEdge
+    const categoryTranslationEdgeSampleSize = Math.min(3, originalData.serviceCategoryTranslationsEdge.length);
+    const categoryTranslationEdgeSamples = originalData.serviceCategoryTranslationsEdge.slice(0, categoryTranslationEdgeSampleSize);
+    
+    console.log(`\nVerifying ${categoryTranslationEdgeSampleSize} sample serviceCategoryTranslationsEdge...`);
+    let categoryTranslationEdgeVerifiedCount = 0;
+    
+    for (const edgeSample of categoryTranslationEdgeSamples) {
+      try {
+        const query = `
+          FOR edge IN serviceCategoryTranslationsEdge
+            FILTER edge._from == @from AND edge._to == @to
+            RETURN edge
+        `;
+        const cursor = await db.query(query, { from: edgeSample._from, to: edgeSample._to });
+        const results = await cursor.all();
+        
+        if (results.length > 0) {
+          categoryTranslationEdgeVerifiedCount++;
+          console.log(`  ✓ edge ${edgeSample._from} → ${edgeSample._to} found`);
+        } else {
+          console.log(`  ✗ edge ${edgeSample._from} → ${edgeSample._to} not found`);
+        }
+      } catch (error) {
+        console.log(`  ✗ edge ${edgeSample._from} → ${edgeSample._to} verification failed: ${error.message}`);
+      }
+    }
+    
+    // Sample verification for serviceTranslations
+    const serviceTranslationSampleSize = Math.min(3, originalData.serviceTranslations.length);
+    const serviceTranslationSampleKeys = originalData.serviceTranslations.slice(0, serviceTranslationSampleSize).map(doc => doc._key);
+    
+    console.log(`\nVerifying ${serviceTranslationSampleSize} sample serviceTranslations...`);
+    let serviceTranslationVerifiedCount = 0;
+    
+    for (const key of serviceTranslationSampleKeys) {
+      try {
+        const doc = await collections.serviceTranslations.document(key);
+        if (doc) {
+          serviceTranslationVerifiedCount++;
+          console.log(`  ✓ serviceTranslation ${key}: ${doc.translation} (${doc.languageCode})`);
+        }
+      } catch (error) {
+        console.log(`  ✗ serviceTranslation ${key}: not found`);
+      }
+    }
+    
+    // Sample verification for serviceTranslationsEdge
+    const serviceTranslationEdgeSampleSize = Math.min(3, originalData.serviceTranslationsEdge.length);
+    const serviceTranslationEdgeSamples = originalData.serviceTranslationsEdge.slice(0, serviceTranslationEdgeSampleSize);
+    
+    console.log(`\nVerifying ${serviceTranslationEdgeSampleSize} sample serviceTranslationsEdge...`);
+    let serviceTranslationEdgeVerifiedCount = 0;
+    
+    for (const edgeSample of serviceTranslationEdgeSamples) {
+      try {
+        const query = `
+          FOR edge IN serviceTranslationsEdge
+            FILTER edge._from == @from AND edge._to == @to
+            RETURN edge
+        `;
+        const cursor = await db.query(query, { from: edgeSample._from, to: edgeSample._to });
+        const results = await cursor.all();
+        
+        if (results.length > 0) {
+          serviceTranslationEdgeVerifiedCount++;
+          console.log(`  ✓ edge ${edgeSample._from} → ${edgeSample._to} found`);
+        } else {
+          console.log(`  ✗ edge ${edgeSample._from} → ${edgeSample._to} not found`);
+        }
+      } catch (error) {
+        console.log(`  ✗ edge ${edgeSample._from} → ${edgeSample._to} verification failed: ${error.message}`);
+      }
+    }
+    
+    // Verify relationships
+    console.log('\nVerifying relationships...');
     const relationshipQuery = `
       FOR cat IN serviceCategories
         LIMIT 2
@@ -839,10 +1373,18 @@ async function verifyImport(collections, originalData) {
               FILTER svc._id == edge._to
               RETURN svc.nameEN
         )
+        LET categoryTranslations = (
+          FOR edge IN serviceCategoryTranslationsEdge
+            FILTER edge._from == CONCAT('serviceCategories/', cat._key)
+            FOR trans IN serviceCategoryTranslations
+              FILTER trans._id == edge._to
+              RETURN { language: trans.languageCode, translation: trans.translation }
+        )
         RETURN {
           category: cat.nameEN,
           serviceCount: LENGTH(services),
-          sampleServices: services[* LIMIT 3]
+          sampleServices: services[* LIMIT 3],
+          translations: categoryTranslations
         }
     `;
     
@@ -856,6 +1398,9 @@ async function verifyImport(collections, originalData) {
         if (result.sampleServices.length > 0) {
           console.log(`    Services: ${result.sampleServices.join(', ')}`);
         }
+        if (result.translations.length > 0) {
+          console.log(`    Translations: ${result.translations.map(t => `${t.language}: ${t.translation}`).join(', ')}`);
+        }
       });
     } catch (error) {
       console.log(`  ⚠ Could not verify relationships: ${error.message}`);
@@ -864,12 +1409,22 @@ async function verifyImport(collections, originalData) {
     const categorySuccess = categorySampleSize === 0 || categoryVerifiedCount === categorySampleSize;
     const serviceSuccess = serviceSampleSize === 0 || serviceVerifiedCount === serviceSampleSize;
     const edgeSuccess = edgeSampleSize === 0 || edgeVerifiedCount === edgeSampleSize;
-    const overallSuccess = categorySuccess && serviceSuccess && edgeSuccess;
+    const categoryTranslationSuccess = categoryTranslationSampleSize === 0 || categoryTranslationVerifiedCount === categoryTranslationSampleSize;
+    const categoryTranslationEdgeSuccess = categoryTranslationEdgeSampleSize === 0 || categoryTranslationEdgeVerifiedCount === categoryTranslationEdgeSampleSize;
+    const serviceTranslationSuccess = serviceTranslationSampleSize === 0 || serviceTranslationVerifiedCount === serviceTranslationSampleSize;
+    const serviceTranslationEdgeSuccess = serviceTranslationEdgeSampleSize === 0 || serviceTranslationEdgeVerifiedCount === serviceTranslationEdgeSampleSize;
+    const overallSuccess = categorySuccess && serviceSuccess && edgeSuccess && 
+        categoryTranslationSuccess && categoryTranslationEdgeSuccess && 
+        serviceTranslationSuccess && serviceTranslationEdgeSuccess;
     
     console.log(`\n${overallSuccess ? '✓' : '✗'} Verification ${overallSuccess ? 'passed' : 'failed'}`);
     console.log(`  - ServiceCategories: ${categoryVerifiedCount}/${categorySampleSize} samples found`);
     console.log(`  - Services: ${serviceVerifiedCount}/${serviceSampleSize} samples found`);
     console.log(`  - CategoryServices edges: ${edgeVerifiedCount}/${edgeSampleSize} samples found`);
+    console.log(`  - ServiceCategoryTranslations: ${categoryTranslationVerifiedCount}/${categoryTranslationSampleSize} samples found`);
+    console.log(`  - ServiceCategoryTranslationsEdge: ${categoryTranslationEdgeVerifiedCount}/${categoryTranslationEdgeSampleSize} samples found`);
+    console.log(`  - ServiceTranslations: ${serviceTranslationVerifiedCount}/${serviceTranslationSampleSize} samples found`);
+    console.log(`  - ServiceTranslationsEdge: ${serviceTranslationEdgeVerifiedCount}/${serviceTranslationEdgeSampleSize} samples found`);
     
     return overallSuccess;
     
@@ -881,7 +1436,7 @@ async function verifyImport(collections, originalData) {
 
 // Main import function
 async function executeImport() {
-  console.log('=== ArangoDB ServiceCategories, Services & CategoryServices Data Import ===\n');
+  console.log('=== ArangoDB ServiceCategories, Services & Translations Data Import ===\n');
   
   try {
     // Initialize database connection
@@ -890,7 +1445,10 @@ async function executeImport() {
     // Read and validate import file
     const importData = await readImportFile();
     
-    if (importData.serviceCategories.length === 0 && importData.services.length === 0 && importData.categoryServices.length === 0) {
+    if (importData.serviceCategories.length === 0 && importData.services.length === 0 && 
+        importData.categoryServices.length === 0 && importData.serviceCategoryTranslations.length === 0 &&
+        importData.serviceCategoryTranslationsEdge.length === 0 && importData.serviceTranslations.length === 0 &&
+        importData.serviceTranslationsEdge.length === 0) {
       console.log('⚠ No data to import');
       return false;
     }
@@ -909,7 +1467,11 @@ async function executeImport() {
     const collections = {
       serviceCategories: await createServiceCategoriesCollection(),
       services: await createServicesCollection(),
-      categoryServices: await createCategoryServicesCollection()
+      categoryServices: await createCategoryServicesCollection(),
+      serviceCategoryTranslations: await createServiceCategoryTranslationsCollection(),
+      serviceCategoryTranslationsEdge: await createServiceCategoryTranslationsEdgeCollection(),
+      serviceTranslations: await createServiceTranslationsCollection(),
+      serviceTranslationsEdge: await createServiceTranslationsEdgeCollection()
     };
     
     // Check for existing data conflicts
@@ -933,20 +1495,30 @@ async function executeImport() {
     console.log(`✓ Services skipped: ${importResult.services.skippedCount}`);
     console.log(`✓ CategoryServices edges imported: ${importResult.categoryServices.importedCount}`);
     console.log(`✓ CategoryServices edges skipped: ${importResult.categoryServices.skippedCount}`);
+    console.log(`✓ ServiceCategoryTranslations imported: ${importResult.serviceCategoryTranslations.importedCount}`);
+    console.log(`✓ ServiceCategoryTranslations skipped: ${importResult.serviceCategoryTranslations.skippedCount}`);
+    console.log(`✓ ServiceCategoryTranslationsEdge imported: ${importResult.serviceCategoryTranslationsEdge.importedCount}`);
+    console.log(`✓ ServiceCategoryTranslationsEdge skipped: ${importResult.serviceCategoryTranslationsEdge.skippedCount}`);
+    console.log(`✓ ServiceTranslations imported: ${importResult.serviceTranslations.importedCount}`);
+    console.log(`✓ ServiceTranslations skipped: ${importResult.serviceTranslations.skippedCount}`);
+    console.log(`✓ ServiceTranslationsEdge imported: ${importResult.serviceTranslationsEdge.importedCount}`);
+    console.log(`✓ ServiceTranslationsEdge skipped: ${importResult.serviceTranslationsEdge.skippedCount}`);
     console.log(`✓ Total items imported: ${importResult.totals.importedCount}`);
     console.log(`✓ Total items skipped: ${importResult.totals.skippedCount}`);
     console.log(`${importResult.totals.errorCount > 0 ? '⚠' : '✓'} Total errors: ${importResult.totals.errorCount}`);
     console.log(`${verificationSuccess ? '✓' : '✗'} Verification: ${verificationSuccess ? 'passed' : 'failed'}`);
     
-    const success = (importResult.totals.importedCount > 0 || importResult.totals.skippedCount > 0) && importResult.totals.errorCount === 0 && verificationSuccess;
+    const success = (importResult.totals.importedCount > 0 || importResult.totals.skippedCount > 0) && 
+        importResult.totals.errorCount === 0 && verificationSuccess;
     
     console.log('\n=== Next Steps ===');
     if (success) {
       console.log('1. Run your application tests against the new database');
-      console.log('2. Consider running the translation migration script to add flexible translation support');
-      console.log('3. Update your application configuration to use the new database');
-      console.log('4. Verify the parent-child relationships between serviceCategories and services work correctly');
-      console.log('5. Test that categoryServices edges properly link categories to their services');
+      console.log('2. Update your application configuration to use the new database');
+      console.log('3. Verify the parent-child relationships between serviceCategories and services work correctly');
+      console.log('4. Test that categoryServices edges properly link categories to their services');
+      console.log('5. Verify translation data is accessible in all supported languages');
+      console.log('6. Test translation edges for proper connectivity');
     } else {
       console.log('1. Review the errors above');
       console.log('2. Fix the import file or configuration');
@@ -978,5 +1550,9 @@ module.exports = {
   initializeDatabase,
   createServiceCategoriesCollection,
   createServicesCollection,
-  createCategoryServicesCollection
+  createCategoryServicesCollection,
+  createServiceCategoryTranslationsCollection,
+  createServiceCategoryTranslationsEdgeCollection,
+  createServiceTranslationsCollection,
+  createServiceTranslationsEdgeCollection
 };

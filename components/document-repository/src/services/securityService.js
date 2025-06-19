@@ -1,323 +1,172 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const config = require('../config/appConfig');
 const { logger } = require('../shared-lib/logger');
-const fs = require('fs').promises;
-const { scanFile, scanBuffer } = require('../utils/virusScanner');
+const net = require('net');
+
 
 class SecurityService {
   constructor() {
-    this.jwtSecret = config.security.jwtSecret;
-    this.jwtExpiration = config.security.jwtExpiration;
-    this.bcryptRounds = config.security.bcryptRounds;
+    this.maxBufferSize = 1024 * 1024 * 10; // 10MB
   }
 
   /**
-   * Hash password using bcrypt
-   */
-  async hashPassword(password) {
-    try {
-      const salt = await bcrypt.genSalt(this.bcryptRounds);
-      return await bcrypt.hash(password, salt);
-    } catch (error) {
-      logger.error('Password hashing failed:', error);
-      throw new Error('Password hashing failed');
-    }
+  * Creates a connection to ClamAV daemon
+  * @returns {Promise<net.Socket>} Connected socket
+  */
+  async createConnection() {
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      
+      socket.setTimeout(60000);
+      
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error('Connection timeout'));
+      });
+
+      socket.on('error', (error) => {
+        reject(new Error(`ClamAV connection error: ${error.message}`));
+      });
+
+      socket.connect('3310', 'localhost', () => {
+        resolve(socket);
+      });
+    });
   }
 
   /**
-   * Verify password against hash
+   * Sends command to ClamAV and receives response
+   * @param {string} command - Command to send
+   * @param {Buffer} data - Optional data to send
+   * @returns {Promise<string>} Response from ClamAV
    */
-  async verifyPassword(password, hash) {
-    try {
-      return await bcrypt.compare(password, hash);
-    } catch (error) {
-      logger.error('Password verification failed:', error);
-      return false;
-    }
-  }
+  async sendCommand(command, data = null) {
+    const socket = await this.createConnection();
+    
+    return new Promise((resolve, reject) => {
+      let response = '';
+      
+      socket.on('data', (chunk) => {
+        response += chunk.toString();
+      });
 
-  /**
-   * Generate JWT token
-   */
-  generateToken(payload, options = {}) {
-    try {
-      const tokenOptions = {
-        expiresIn: options.expiresIn || this.jwtExpiration,
-        issuer: 'document-repository',
-        ...options
-      };
+      socket.on('end', () => {
+        resolve(response.trim());
+      });
 
-      return jwt.sign(payload, this.jwtSecret, tokenOptions);
-    } catch (error) {
-      logger.error('Token generation failed:', error);
-      throw new Error('Token generation failed');
-    }
-  }
+      socket.on('error', (error) => {
+        reject(new Error(`ClamAV communication error: ${error.message}`));
+      });
 
-  /**
-   * Verify JWT token
-   */
-  verifyToken(token) {
-    try {
-      return jwt.verify(token, this.jwtSecret);
-    } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        throw new Error('Token expired');
-      } else if (error.name === 'JsonWebTokenError') {
-        throw new Error('Invalid token');
+      // Send command
+      if (data) {
+        // For INSTREAM command, send command + data length + data
+        const dataLength = Buffer.alloc(4);
+        dataLength.writeUInt32BE(data.length, 0);
+        
+        socket.write(command);
+        socket.write(dataLength);
+        socket.write(data);
+        
+        // Send zero-length chunk to indicate end of data
+        const endChunk = Buffer.alloc(4);
+        endChunk.writeUInt32BE(0, 0);
+        socket.write(endChunk);
+      } else {
+        socket.write(command);
       }
-      logger.error('Token verification failed:', error);
-      throw new Error('Token verification failed');
-    }
-  }
-
-  /**
-   * Generate API key
-   */
-  generateApiKey(length = 32) {
-    return crypto.randomBytes(length).toString('hex');
-  }
-
-  /**
-   * Generate secure random string
-   */
-  generateSecureRandom(length = 16) {
-    return crypto.randomBytes(length).toString('base64url');
-  }
-
-  /**
-   * Hash API key for storage
-   */
-  async hashApiKey(apiKey) {
-    try {
-      return crypto.createHash('sha256').update(apiKey).digest('hex');
-    } catch (error) {
-      logger.error('API key hashing failed:', error);
-      throw new Error('API key hashing failed');
-    }
-  }
-
-  /**
-   * Verify API key
-   */
-  async verifyApiKey(apiKey, hashedKey) {
-    try {
-      const hash = crypto.createHash('sha256').update(apiKey).digest('hex');
-      return hash === hashedKey;
-    } catch (error) {
-      logger.error('API key verification failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Sanitize filename to prevent path traversal
-   */
-  sanitizeFilename(filename) {
-    // Remove path components and dangerous characters
-    return filename
-      .replace(/[\/\\]/g, '') // Remove path separators
-      .replace(/[<>:"|?*]/g, '') // Remove Windows forbidden characters
-      .replace(/^\./g, '') // Remove leading dots
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .substring(0, 255); // Limit length
-  }
-
-  /**
-   * Validate file path to prevent directory traversal
-   */
-  validateFilePath(filePath, allowedDirectory) {
-    try {
-      const path = require('path');
-      const normalizedPath = path.normalize(filePath);
-      const resolvedPath = path.resolve(normalizedPath);
-      const allowedPath = path.resolve(allowedDirectory);
-
-      // Check if the resolved path starts with the allowed directory
-      return resolvedPath.startsWith(allowedPath);
-    } catch (error) {
-      logger.error('File path validation failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Generate file checksum
-   */
-  generateFileChecksum(buffer, algorithm = 'sha256') {
-    try {
-      return crypto.createHash(algorithm).update(buffer).digest('hex');
-    } catch (error) {
-      logger.error('Checksum generation failed:', error);
-      throw new Error('Checksum generation failed');
-    }
-  }
-
-  /**
-   * Verify file integrity using checksum
-   */
-  verifyFileIntegrity(buffer, expectedChecksum, algorithm = 'sha256') {
-    try {
-      const actualChecksum = this.generateFileChecksum(buffer, algorithm);
-      return actualChecksum === expectedChecksum;
-    } catch (error) {
-      logger.error('File integrity verification failed:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Rate limiting key generator
-   */
-  generateRateLimitKey(req, identifier = 'ip') {
-    switch (identifier) {
-      case 'ip':
-        return `rate_limit:${req.ip}`;
-      case 'user':
-        return `rate_limit:user:${req.user?.id || 'anonymous'}`;
-      case 'api_key':
-        return `rate_limit:api:${req.apiKey || 'unknown'}`;
-      default:
-        return `rate_limit:${req.ip}`;
-    }
-  }
-
-  /**
-   * Encrypt sensitive data
-   */
-  encrypt(text, key = this.jwtSecret) {
-    try {
-      const algorithm = 'aes-256-gcm';
-      const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipher(algorithm, key);
       
-      let encrypted = cipher.update(text, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-      
-      const authTag = cipher.getAuthTag();
-      
-      return {
-        encrypted,
-        iv: iv.toString('hex'),
-        authTag: authTag.toString('hex')
-      };
-    } catch (error) {
-      logger.error('Encryption failed:', error);
-      throw new Error('Encryption failed');
-    }
+      socket.end();
+    });
   }
 
   /**
-   * Decrypt sensitive data
-   */
-  decrypt(encryptedData, key = this.jwtSecret) {
-    try {
-      const algorithm = 'aes-256-gcm';
-      const decipher = crypto.createDecipher(algorithm, key);
-      
-      decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
-      
-      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      
-      return decrypted;
-    } catch (error) {
-      logger.error('Decryption failed:', error);
-      throw new Error('Decryption failed');
-    }
-  }
-
-  /**
-   * Generate session token
-   */
-  generateSessionToken() {
-    return {
-      token: this.generateSecureRandom(32),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-    };
-  }
-
-  /**
-   * Validate input against common injection patterns
-   */
-  validateInput(input, type = 'general') {
-    const patterns = {
-      general: /[<>\"'%;()&+]/,
-      filename: /[\/\\<>:"|?*\x00-\x1f]/,
-      query: /[';\\-\\/\\*]/,
-      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    };
-
-    if (type === 'email') {
-      return patterns.email.test(input);
-    }
-
-    return !patterns[type]?.test(input);
-  }
-
-  /**
-   * Generate CSRF token
-   */
-  generateCSRFToken() {
-    return crypto.randomBytes(32).toString('hex');
-  }
-
-  /**
-   * Verify CSRF token
-   */
-  verifyCSRFToken(token, sessionToken) {
-    try {
-      return crypto.timingSafeEqual(
-        Buffer.from(token, 'hex'),
-        Buffer.from(sessionToken, 'hex')
-      );
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Scan a file for viruses
-   * @param {string} filePath - Path to the file to scan
+   * Scans a buffer for viruses using ClamAV
+   * @param {Buffer} buffer - File buffer to scan
    * @returns {Promise<Object>} Scan result
    */
-  async scanFile(filePath) {
+  async scanBuffer(buffer) {
     try {
-      const result = await scanFile(filePath);
+      // Validate input
+      if (!Buffer.isBuffer(buffer)) {
+        throw new Error('Input must be a Buffer');
+      }
+
+      if (buffer.length === 0) {
+        throw new Error('Buffer is empty');
+      }
+
+      if (buffer.length > this.maxBufferSize) {
+        throw new Error(`Buffer size exceeds maximum allowed size of ${this.maxBufferSize} bytes`);
+      }
+
+      // Use INSTREAM command to scan buffer
+      logger.debug(`[SECURITY-SERVICE] Scanning buffer of size ${buffer.length} bytes`);
+      const response = await this.sendCommand('zINSTREAM\0', buffer);
+      
+      // Parse response
+      if (response.includes('OK')) {
+        return {
+          isInfected: false,
+          virus: null,
+          message: 'File is clean'
+        };
+      } else if (response.includes('FOUND')) {
+        const virusMatch = response.match(/stream: (.+) FOUND/);
+        const virusName = virusMatch ? virusMatch[1] : 'Unknown virus';
+        
+        return {
+          isInfected: true,
+          virus: virusName,
+          message: `Virus detected: ${virusName}`
+        };
+      } else {
+        throw new Error(`Unexpected ClamAV response: ${response}`);
+      }
+    } catch (error) {
+      throw new Error(`Buffer scan failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Performs health check on ClamAV connection and status
+   * @returns {Promise<Object>} Health check result
+   */
+  async healthCheck() {
+    try {
+      const startTime = Date.now();
+      
+      // Test basic connectivity with PING command
+      const pingResponse = await this.sendCommand('zPING\0');
+      
+      if (!pingResponse.includes('PONG')) {
+        throw new Error(`Unexpected ping response: ${pingResponse}`);
+      }
+
+      // Get ClamAV version
+      const versionResponse = await this.sendCommand('zVERSION\0');
+      
+      // Get stats
+      const statsResponse = await this.sendCommand('zSTATS\0');
+      
+      const responseTime = Date.now() - startTime;
+
       return {
-        clean: result.isClean,
-        scanned: true,
-        virus: result.viruses ? result.viruses.join(', ') : null,
+        status: 'healthy',
+        connected: true,
+        responseTime: responseTime,
+        version: versionResponse.trim(),
+        stats: this.parseStats(statsResponse),
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      logger.error(`Error scanning file: ${error.message}`);
-      throw new Error(`Virus scan failed: ${error.message}`);
+      return {
+        status: 'unhealthy',
+        connected: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
     }
   }
 
-  /**
-   * Scan a buffer for viruses
-   * @param {Buffer} buffer - Buffer to scan
-   * @param {string} filename - Name of the file (for logging)
-   * @returns {Promise<Object>} Scan result
-   */
-  async scanBuffer(buffer, filename) {
-    try {
-      const result = await scanBuffer(buffer, filename);
-      return {
-        clean: result.isClean,
-        scanned: true,
-        virus: result.viruses ? result.viruses.join(', ') : null,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error(`Error scanning buffer: ${error.message}`);
-      throw new Error(`Virus scan failed: ${error.message}`);
-    }
-  }
 }
 
 module.exports = new SecurityService();

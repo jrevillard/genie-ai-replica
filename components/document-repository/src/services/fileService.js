@@ -7,14 +7,9 @@ const dbService = require('../shared-lib/db-connection-service');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 
-// NOTE: securityService is not implemented yet
-// - securityService is not implemented yet
-// - dataprepClient is not implemented yet
-// - securityService is not implemented yet
 
 // Import services
-// const securityService = require('./securityService');
-// const dataprepClient = require('./dataprepClient');
+const securityService = require('./securityService');
 
 // Import utils
 const appConfig = require('../config/appConfig');
@@ -70,20 +65,30 @@ class FileService {
       logger.debug(`[FILE-SERVICE]  Ensure upload directory exists: ${this.uploadDir}`);
       await fileUtils.ensureDirectoryExists(this.uploadDir);
 
+      // Perform virus scan if enabled
+      if (appConfig.virusScanning) {
+        logger.debug(`[FILE-SERVICE] Performing virus scan`);
+        // Health check
+        const health = await securityService.healthCheck();
+        logger.debug(`ClamAV Status: ${JSON.stringify(health, null, 2)}`);
+
+        // const scanResult = await securityService.scanBuffer(fileData.buffer, originalFileName);
+        const scanResult = await securityService.scanBuffer(fileData.buffer);
+        logger.debug(`[FILE-SERVICE] Scan result: ${JSON.stringify(scanResult, null, 2)}`);
+
+        if (scanResult.isInfected) {
+          // Delete infected file
+          await fs.unlink(filePath);
+          throw new Error(`File contains virus: ${scanResult.virus}`);
+        }
+      }
+
+
       // Write file to disk (using buffer from memory storage)
       logger.debug(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
       await fs.writeFile(filePath, fileData.buffer);
 
-      // TODO: [HIGH] Implement virus scan
-      // Perform virus scan if enabled
-      // if (appConfig.virusScanning) {
-      //   const scanResult = await securityService.scanFile(filePath);
-      //   if (!scanResult.clean) {
-      //     // Delete infected file
-      //     await fs.unlink(filePath);
-      //     throw new Error(`File contains virus: ${scanResult.virus}`);
-      //   }
-      // }
+      
 
       // TODO: Review Fix createdDate
       // - the date is not correct, it's the date when the file was written to the disk in the server

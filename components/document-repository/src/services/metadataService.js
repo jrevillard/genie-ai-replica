@@ -177,45 +177,56 @@ class MetadataService {
         }
     }
 
-    // 5. Manually update existing metadata
-    // async updateMetadata(file_id, updates= {}) {
-    //     try {
-    //         const db = await this.getDb();
-    //         const cursor = await db.query(
-    //             `FOR file IN files FILTER file.file_id == @file_id LIMIT 1 RETURN file`,
-    //             { file_id }
-    //         );
-    //         const metadata = await cursor.next();
-    //         if (!metadata) {
-    //             throw new Error(`Metadata not found for file_id: ${file_id}`);
-    //         }
+    // 5. update metadata after ingestion or retraction
+    // This method can also be used to update metadata manually by the user.
+    async updateMetadata(file_id, updates= {}) {
+        try {
+            const db = await this.getDb();
+            const cursor = await db.query(
+                `FOR file IN files FILTER file.file_id == @file_id LIMIT 1 RETURN file`,
+                { file_id }
+            );
+            const metadata = await cursor.next();
+            if (!metadata) {
+                throw new Error(`Metadata not found for file_id: ${file_id}`);
+            }
 
-    //         // Update metadata with provided updates. Only update allowed fields.
-    //         const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url', 'language'];
-    //         const updateObj = {};
-    //         for (const key of Object.keys(updates)) {
-    //             if (allowedFields.includes(key)) {
-    //                 // Special handling for labels: allow adding/removing labels
-    //                 if (key === 'labels' && Array.isArray(updates[key])) {
-    //                     updateObj.labels = updates.labels;
-    //                 } else {
-    //                     updateObj[key] = updates[key];
-    //                 }
-    //             }
-    //         }
-    //         if (Object.keys(updateObj).length === 0) {
-    //             throw new Error('No valid fields to update');
-    //         }
-    //         // Update the metadata in the database
-    //         await db.collection('files').update(metadata._key, updateObj);
-    //         const updated = await db.collection('files').document(metadata._key);
-    //         console.log(`Metadata for file_id ${file_id} updated successfully.`);
-    //         return updated
-    //     } catch (error) {
-    //         console.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
-    //         throw error;
-    //     }
-    // }
+            // Update metadata with provided updates. Only update allowed fields.
+            // const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url', 'language', 'dataprep'];
+            const allowedFields = ['dataprep'];
+
+            const updateObj = {};
+            for (const key of Object.keys(updates)) {
+                if (allowedFields.includes(key)) {
+                    // Special handling for labels: allow adding/removing labels
+                    if (key === 'labels' && Array.isArray(updates[key])) {
+                        updateObj.labels = updates.labels;
+                    } 
+                    else if (key === 'dataprep' && typeof updates.dataprep === 'object') {
+                        // Special handling for dataprep: allow updating status, ingest_date, retract_date
+                        updateObj.dataprep = {
+                            ...metadata.dataprep,
+                            ...updates[key]
+                        };
+                    }
+                    else {
+                        updateObj[key] = updates[key];
+                    }
+                }
+            }
+            if (Object.keys(updateObj).length === 0) {
+                throw new Error('No valid fields to update');
+            }
+            // Update the metadata in the database
+            await db.collection('files').update(metadata._key, updateObj);
+            const updated = await db.collection('files').document(metadata._key);
+            console.log(`Metadata (dataprep part) for file_id ${file_id} updated successfully.`);
+            return updated;
+        } catch (error) {
+            console.error(`Failed to update metadata for file_id ${file_id}: ${error.message}`);
+            throw error;
+        }
+    }
 }
 
 module.exports = new MetadataService(); // Export an instance of MetadataService for use in other modules

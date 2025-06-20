@@ -1,9 +1,5 @@
-
-# This file contains code derived from the OPEA project by Intel Corporation
-# available at https://github.com/opea-project
-
-# Copyright 2024 Intel Corporation;
-# Licensed under the Apache License, Version 2.0;
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
 
 
 import os
@@ -35,6 +31,11 @@ class OpeaDataprepLoader(OpeaComponentLoader):
         if logflag:
             logger.info("[ dataprep loader ] delete files")
         return await self.component.delete_files(*args, **kwargs)
+
+    async def get_list_of_indices(self, *args, **kwargs):
+        if logflag:
+            logger.info("[ dataprep loader ] get indices")
+        return self.component.get_list_of_indices(*args, **kwargs)
 
 
 class OpeaDataprepMultiModalLoader(OpeaComponentLoader):

@@ -322,7 +322,11 @@ curl -X POST http://localhost:3000/api/files/downloads \
 
 **Response**
 
-
+```bash
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  101k    0  101k  100    88  1161k   1009 --:--:-- --:--:-- --:--:-- 1220k
+```
 
 ---
 

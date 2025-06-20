@@ -7,6 +7,7 @@ const fs = require('fs').promises;
 const { logger } = require('../shared-lib/logger');
 const { log, error } = require('console');
 const archiver = require('archiver');
+const axios = require('axios');
 
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
@@ -975,6 +976,78 @@ class FileController {
 //       });
 //     }
 //   }
+
+  /**
+   * Ingest file into dataprep service
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async ingestFile(req, res) {
+  try {
+    const { fileId } = req.params;
+    const file = await metadataService.getMetadataById(fileId);
+    if (!file) return res.status(404).json({ success: false, error: 'File not found' });
+
+    // Send file info to dataprep microservice
+    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+    const response = await axios.post(dataprepUrl, {
+      fileId: file.file_id,
+      filePath: file.storage_path,
+      // or provide a download URL if needed
+    });
+
+    if (response.data.success) {
+      // Update metadata
+      await metadataService.updateMetadata(fileId, {
+        dataprep: {
+          status: 'ingested',
+          ingest_date: new Date().toISOString(),
+          retract_date: file.dataprep.retract_date || null // Preserve existing retract date if any
+        }
+      });
+      return res.json({ success: true, message: 'File ingested successfully' });
+    } else {
+      return res.status(500).json({ success: false, error: 'Data prep failed.', details: response.data });
+    }
+  } catch (error) {
+    logger.error('Ingest file error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+  }
+  
+  /**
+   * Retract file from dataprep service
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async retractFile(req, res) {
+  try {
+    const { fileId } = req.params;
+    const file = await metadataService.getMetadataById(fileId);
+    if (!file) return res.status(404).json({ success: false, error: 'File not found' });
+
+    // Send retract request to dataprep microservice
+    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`; // Replace with actual URL/port
+    const response = await axios.post(dataprepUrl, { fileId: file.file_id });
+
+    if (response.data.success) {
+      // Update metadata
+      await metadataService.updateMetadata(fileId, {
+        dataprep: {
+          status: 'retracted',
+          ingest_date: file.dataprep.ingest_date || null, // Preserve existing ingest date if any
+          retract_date: new Date().toISOString()
+        }
+      });
+      return res.json({ success: true, message: 'File retracted successfully' });
+    } else {
+      return res.status(500).json({ success: false, error: 'Dataprep retract failed', details: response.data });
+    }
+  } catch (error) {
+    logger.error('Retract file error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+  }
 }
 
 

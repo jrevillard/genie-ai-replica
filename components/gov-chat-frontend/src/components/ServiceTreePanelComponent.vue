@@ -418,7 +418,7 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  font-size: 0.625rem; /* Changed from 10pt */
+  font-size: inherit; /* CHANGED from 0.625rem */
   overflow-y: auto;
   position: relative;
   z-index: 10;
@@ -428,7 +428,7 @@ export default {
   margin-bottom: 8px;
   font-weight: 600;
   color: #333;
-  font-size: 0.75rem; /* Changed from 12pt */
+  font-size: 0.75rem; /* This can remain as it's a title */
   flex-shrink: 0;
 }
 
@@ -447,7 +447,7 @@ export default {
 .search-box {
   flex: 1;
   padding: 6px;
-  font-size: 0.625rem; /* Changed from 10pt */
+  font-size: inherit; /* CHANGED from 0.625rem */
   border: 1px solid #ccc;
   border-radius: 4px;
   outline: none;
@@ -514,7 +514,7 @@ export default {
   text-align: center;
   margin-right: 4px;
   color: #666;
-  font-size: 0.625rem; /* Changed from 10pt */
+  font-size: inherit; /* CHANGED from 0.625rem */
 }
 
 .toggle-icon.placeholder {
@@ -524,7 +524,7 @@ export default {
 .node-name {
   flex: 1;
   color: #333;
-  font-size: 0.625rem; /* Explicitly set, was inherited as 10pt */
+  font-size: inherit; /* CHANGED from 0.625rem */
 }
 
 .child-list {

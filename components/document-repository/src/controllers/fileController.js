@@ -177,7 +177,7 @@ class FileController {
         response: {
           success: false,
           error: 'Security threat detected',
-          message: 'File failed security scan'
+          message: `File failed security scan. ${error.message}`
         }
       };
     }

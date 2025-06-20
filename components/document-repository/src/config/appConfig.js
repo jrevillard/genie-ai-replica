@@ -63,7 +63,6 @@ const config = {
   clamscan: {
     removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false, // If true, removes infected files
     quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED || false, // False: Don't quarantine, Path: Moves files to this place.
-    scanLog: process.env.CLAMSCAN_SCAN_LOG || null, // Path to a writeable log file to write scan results into
     debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false, // Whether or not to log info/debug/error msgs to the console
     socket: process.env.CLAMSCAN_SOCKET || false, // Socket file for connecting via TCP
     host: process.env.CLAMSCAN_HOST || 'localhost', // IP of host to connect to TCP interface

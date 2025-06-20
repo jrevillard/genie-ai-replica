@@ -69,6 +69,7 @@ class FileService {
       if (appConfig.virusScanning) {
         logger.debug(`[FILE-SERVICE] Performing virus scan`);
         const scanResult = await securityService.scanBuffer(fileData.buffer);
+        logger.info(`[FILE-SERVICE] VIRUS SCAN result for ${originalFileName}: ${JSON.stringify(scanResult, null, 2)}`);
 
         if (scanResult.isInfected) {
           throw new Error(`File contains virus: ${scanResult.viruses}`);
@@ -124,7 +125,7 @@ class FileService {
 
       return fileRecord;
     } catch (error) {
-      logger.error(`Error uploading file: ${error}`);
+      logger.error(`Upload file FAILED. ${error}`);
       
       // Cleanup file if it exists
       if (filePath && await fs.access(filePath).then(() => true).catch(() => false)) {

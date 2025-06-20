@@ -9,7 +9,6 @@ class SecurityService {
     this.clamAVOptions = {
       removeInfected: appConfig.clamscan.removeInfected,
       quarantineInfected: appConfig.clamscan.quarantineInfected,
-      scanLog: appConfig.clamscan.scanLog,
       debugMode: appConfig.clamscan.debugMode,
       clamdscan: {
         socket: appConfig.clamscan.socket,
@@ -87,22 +86,11 @@ class SecurityService {
       if (buffer.length > this.maxBufferSize) {
         throw new Error(`Buffer size exceeds maximum allowed size of ${this.maxBufferSize} bytes`);
       }
-      logger.debug(`[SECURITY-SERVICE] Ensuring ClamAV is initialized`);
       await this.ensureInitialized();
 
       // Scan the buffer using stream scanning
-      logger.debug(`[SECURITY-SERVICE] Scanning buffer using stream scanning`);
-      const result = await this.clamscan.scanStream(this._convertToStream(buffer));
-      logger.debug(`[SECURITY-SERVICE] Scan result: ${JSON.stringify(result, null, 2)}`);
+      return await this.clamscan.scanStream(this._convertToStream(buffer));
 
-      return {
-        isInfected: result.isInfected,
-        viruses: result.viruses,
-        message: result.isInfected 
-          ? `Virus detected: ${result.viruses.join(', ')}` 
-          : 'File is clean',
-        file: null
-      };
     } catch (error) {
       throw new Error(`Buffer scan failed: ${error.message}`);
     }

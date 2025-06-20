@@ -11,12 +11,13 @@ const { exec } = require('child_process');
 const util = require('util');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const execPromise = util.promisify(exec);
+const TIMEOUT_PERIOD = 200000;
+const DAYS_TO_PROCESS = 10;
 
 const securityScanService = {
   async isGzipValid(file) {
     try {
-      await execPromise(`gunzip -t ${file}`);
-      logger.debug(`Gzip validation passed for ${file}`);
+      await execPromise(`gunzip -t "${file}"`);
       return true;
     } catch (err) {
       logger.warn(`Gzip validation failed for ${file}: ${err.message}`);
@@ -41,7 +42,6 @@ const securityScanService = {
           await new Promise(resolve => transport.close(resolve));
         }
       }
-      logger.debug('Winston transports closed');
     } catch (err) {
       logger.warn(`Error closing Winston transports: ${err.message}`);
     }
@@ -49,7 +49,7 @@ const securityScanService = {
 
   async reopenWinstonTransports() {
     try {
-      logger.debug('Reopening Winston transports');
+      // Re-initialization logic for winston transports if needed
     } catch (err) {
       logger.warn(`Error reopening Winston transports: ${err.message}`);
     }
@@ -67,7 +67,7 @@ const securityScanService = {
         return JSON.parse(data);
       }
     } catch (err) {
-      logger.debug('No valid cached results found');
+      console.debug('No valid cached results found');
     }
     return null;
   },
@@ -76,9 +76,9 @@ const securityScanService = {
     const startTime = Date.now();
     try {
       logger.info('Running security scan');
-      const vulnerabilities = await this.checkLogsForIssues(logsService);
-      const failedLogins = await this.checkFailedLogins(logsService);
-      const suspiciousActivities = await this.checkSuspiciousActivities(logsService);
+      if (!logsService) throw new Error('LogsService is required for security scan');
+
+      const { vulnerabilities, failedLogins, suspiciousActivities } = await this.processLogsInParallel(logsService);
 
       const scanResult = {
         scanTime: new Date().toISOString(),
@@ -104,106 +104,12 @@ const securityScanService = {
     }
   },
 
-  deduplicateVulnerabilities(vulnerabilities) {
-    const deduplicated = { critical: [], medium: [], low: [] };
-    const seen = new Set();
-
-    for (const severity of ['critical', 'medium', 'low']) {
-      for (const vuln of vulnerabilities[severity]) {
-        const key = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}_${vuln.timestamp}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduplicated[severity].push(vuln);
-        }
-      }
-    }
-
-    return deduplicated;
-  },
-
-  parseLogLine(line, file, lineNumber, invalidLogStream) {
-    function extractUrl(message) {
-      const urlMatch = message.match(/https?:\/\/[^\s]+|(GET|POST|PUT|DELETE)\s+([^\s]+)/i);
-      return urlMatch ? (urlMatch[2] || urlMatch[0]) : 'N/A';
-    }
-
-    const standardMatch = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+([^\s]+(?:\s+[^\s]+)*)\s+(.+)$/);
-    if (standardMatch) {
-      const [, date, time, level, service, message] = standardMatch;
-      const timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
-      if (!timestamp.isValid) {
-        if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid timestamp in ${file} at line ${lineNumber}: ${line}\n`);
-        return null;
-      }
-      return { timestamp: timestamp.toISO(), level, service, message, url: extractUrl(message) };
-    }
-
-    const morganMatch = line.match(/^(GET|POST|PUT|DELETE|OPTIONS|HEAD)\s+([^\s]+)\s+(\d{3})\s+([\d.]+)\s+ms\s+-\s+Headers:\s+([^\s]+)\s+(.+)$/);
-    if (morganMatch) {
-      const [, method, url, status, responseTime, contentType, userAgent] = morganMatch;
-      const timestamp = DateTime.now().toISO();
-      const message = `${method} ${url} ${status} ${responseTime}ms Headers: ${contentType} ${userAgent}`;
-      return { timestamp, level: status.startsWith('4') || status.startsWith('5') ? 'WARN' : 'INFO', service: 'http', message, url };
-    }
-
-    try {
-      const jsonLog = JSON.parse(line);
-      if (jsonLog.timestamp && jsonLog.level && jsonLog.message) {
-        const timestamp = DateTime.fromISO(jsonLog.timestamp, { zone: 'utc' });
-        if (!timestamp.isValid) {
-          if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid JSON timestamp in ${file} at line ${lineNumber}: ${line}\n`);
-          return null;
-        }
-        return {
-          timestamp: timestamp.toISO(),
-          level: jsonLog.level.toUpperCase(),
-          service: jsonLog.service || 'unknown',
-          message: jsonLog.message,
-          url: jsonLog.url || extractUrl(jsonLog.message)
-        };
-      }
-    } catch (e) {}
-
-    const fallbackMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(.+)$/);
-    if (fallbackMatch) {
-      const [, datetime, message] = fallbackMatch;
-      const timestamp = DateTime.fromFormat(datetime, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
-      if (!timestamp.isValid) {
-        if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid fallback timestamp in ${file} at line ${lineNumber}: ${line}\n`);
-        return null;
-      }
-      return { timestamp: timestamp.toISO(), level: 'UNKNOWN', service: 'unknown', message, url: extractUrl(message) };
-    }
-
-    if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`);
-    return null;
-  },
-
-  async processFile(file, startTime, patterns, type) {
-    return new Promise((resolve, reject) => {
-      const worker = new Worker(__filename, {
-        workerData: { file, startTime, patterns, type }
-      });
-
-      worker.on('message', resolve);
-      worker.on('error', reject);
-      worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
-      });
-    });
-  },
-
-  async checkLogsForIssues(logsService) {
-    if (!logsService) throw new Error('LogsService is required for checkLogsForIssues');
-
+  // OPTIMIZED: Centralized log processing function reads each file only ONCE.
+  async processLogsInParallel(logsService) {
     const startTime = Date.now();
     const today = DateTime.now();
-    const startDate = today.minus({ days: 4 }).toFormat('yyyy-MM-dd');
+    const startDate = today.minus({ days: DAYS_TO_PROCESS }).toFormat('yyyy-MM-dd');
     const endDate = today.toFormat('yyyy-MM-dd');
-    const vulnerabilities = { critical: [], medium: [], low: [] };
-    const maxVulnerabilitiesPerSeverity = 100; // Increased to capture more
-    const maxRetries = 3;
-    const concurrencyLimit = 8;
 
     const vulnerabilityPatterns = [
       { type: 'token_issue', severity: 'critical', regex: /invalid token/i, description: 'Invalid or expired token usage detected', recommendation: 'Review token expiration policies.', service: 'auth' },
@@ -221,220 +127,186 @@ const securityScanService = {
       { type: 'registration_failure', severity: 'low', regex: /(Email|Username) already exists|Registration failed/i, description: 'Registration attempt failed due to existing credentials', recommendation: 'Monitor for automated registration attempts.', service: 'system' },
       { type: 'log_limit_exceeded', severity: 'low', regex: /Too many log lines.*limiting to/i, description: 'Log file exceeds processing limit', recommendation: 'Optimize log rotation or increase scan limits.', service: 'system' },
     ];
-
-    try {
-      logger.info(`Starting log scan for period ${startDate} to ${endDate}`);
-      const initialDescriptors = await this.getDescriptorCount();
-      logger.debug(`Initial open descriptors: ${initialDescriptors}`);
-
-      let logFiles = await logsService.getLogFilesInRange(startDate, endDate, true);
-      logFiles = (await Promise.all(logFiles.map(async file => {
-        if (file.endsWith('.gz') && !(await this.isGzipValid(file))) {
-          logger.warn(`Skipping corrupted gzip file: ${file}`);
-          return null;
-        }
-        if (!file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/)) {
-          logger.debug(`Skipping irrelevant file: ${file}`);
-          return null;
-        }
-        return file;
-      }))).filter(file => file).sort((a, b) => {
-        const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-        const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-        return bDate.localeCompare(aDate);
-      });
-      logger.info(`Found ${logFiles.length} valid log files to scan: ${logFiles.join(', ')}`);
-
-      let totalLinesProcessed = 0;
-      let totalLinesSkipped = 0;
-      const issueMap = new Map();
-
-      const processBatch = async (files) => {
-        const results = await Promise.all(files.map(file =>
-          this.processFile(file, startTime, vulnerabilityPatterns, 'vulnerabilities')
-            .catch(err => {
-              logger.error(`Error processing ${file}: ${err.message}`);
-              return { vulnerabilities: { critical: [], medium: [], low: [] }, linesProcessed: 0, linesSkipped: 0 };
-            })
-        ));
-
-        results.forEach(({ vulnerabilities: fileVulns, linesProcessed, linesSkipped }) => {
-          totalLinesProcessed += linesProcessed;
-          totalLinesSkipped += linesSkipped;
-          for (const severity of ['critical', 'medium', 'low']) {
-            for (const vuln of fileVulns[severity]) {
-              const key = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}_${vuln.timestamp}`;
-              if (issueMap.has(key)) {
-                const issue = issueMap.get(key);
-                issue.instanceCount++;
-                issue.lastSeen = vuln.lastSeen;
-              } else if (vulnerabilities[severity].length < maxVulnerabilitiesPerSeverity) {
-                issueMap.set(key, vuln);
-                vulnerabilities[severity].push(vuln);
-              }
-            }
-          }
-        });
-      };
-
-      for (let i = 0; i < logFiles.length; i += concurrencyLimit) {
-        if (Date.now() - startTime > 100000) {
-          logger.warn('Approaching timeout limit, stopping scan');
-          break;
-        }
-        const batch = logFiles.slice(i, i + concurrencyLimit);
-        await processBatch(batch);
-      }
-
-      logger.info(`Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`);
-      const deduplicated = this.deduplicateVulnerabilities(vulnerabilities);
-      logger.info(`Detected vulnerabilities: Critical=${deduplicated.critical.length}, Medium=${deduplicated.medium.length}, Low=${deduplicated.low.length}`);
-      return deduplicated;
-    } catch (error) {
-      logger.error(`Error in checkLogsForIssues: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  },
-
-  async checkFailedLogins(logsService) {
-    if (!logsService) throw new Error('LogsService is required for checkFailedLogins');
-
-    const startTime = Date.now();
-    const today = DateTime.now();
-    const startDate = today.minus({ days: 4 }).toFormat('yyyy-MM-dd');
-    const endDate = today.toFormat('yyyy-MM-dd');
-    const failedLogins = [];
-    const maxRetries = 3;
-    const concurrencyLimit = 8;
-
-    try {
-      logger.info(`Checking failed logins for period ${startDate} to ${endDate}`);
-      let logFiles = (await logsService.getLogFilesInRange(startDate, endDate, true))
-        .filter(file => file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/))
-        .sort((a, b) => {
-          const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          return bDate.localeCompare(aDate);
-        });
-      logFiles = (await Promise.all(logFiles.map(async file => {
-        if (file.endsWith('.gz') && !(await this.isGzipValid(file))) {
-          logger.warn(`Skipping corrupted gzip file: ${file}`);
-          return null;
-        }
-        return file;
-      }))).filter(file => file);
-      logger.info(`Found ${logFiles.length} valid log files for failed logins: ${logFiles.join(', ')}`);
-
-      let totalLinesProcessed = 0;
-      let totalLinesSkipped = 0;
-
-      const processBatch = async (files) => {
-        const results = await Promise.all(files.map(file =>
-          this.processFile(file, startTime, [], 'failedLogins')
-            .catch(err => {
-              logger.error(`Error processing ${file}: ${err.message}`);
-              return { failedLogins: [], linesProcessed: 0, linesSkipped: 0 };
-            })
-        ));
-
-        results.forEach(({ failedLogins: fileLogins, linesProcessed, linesSkipped }) => {
-          totalLinesProcessed += linesProcessed;
-          totalLinesSkipped += linesSkipped;
-          failedLogins.push(...fileLogins);
-        });
-      };
-
-      for (let i = 0; i < logFiles.length; i += concurrencyLimit) {
-        if (Date.now() - startTime > 100000) {
-          logger.warn('Approaching timeout limit, stopping scan');
-          break;
-        }
-        const batch = logFiles.slice(i, i + concurrencyLimit);
-        await processBatch(batch);
-      }
-
-      logger.info(`Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`);
-      logger.info(`Found ${failedLogins.length} failed login attempts`);
-      return failedLogins;
-    } catch (error) {
-      logger.error(`Error in checkFailedLogins: ${error.message}`, { stack: error.stack });
-      return [];
-    }
-  },
-
-  async checkSuspiciousActivities(logsService) {
-    if (!logsService) throw new Error('LogsService is required for checkSuspiciousActivities');
-
-    const startTime = Date.now();
-    const today = DateTime.now();
-    const startDate = today.minus({ days: 4 }).toFormat('yyyy-MM-dd');
-    const endDate = today.toFormat('yyyy-MM-dd');
-    const suspiciousActivities = [];
-    const maxRetries = 3;
-    const concurrencyLimit = 8;
-
     const suspiciousPatterns = [
       /SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i
     ];
 
     try {
-      logger.info(`Checking suspicious activities for period ${startDate} to ${endDate}`);
-      let logFiles = (await logsService.getLogFilesInRange(startDate, endDate, true))
-        .filter(file => file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/))
-        .sort((a, b) => {
-          const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          return bDate.localeCompare(aDate);
-        });
-      logFiles = (await Promise.all(logFiles.map(async file => {
-        if (file.endsWith('.gz') && !(await this.isGzipValid(file))) {
-          logger.warn(`Skipping corrupted gzip file: ${file}`);
-          return null;
-        }
+      console.log(`Starting unified log scan for period ${startDate} to ${endDate}`);
+      const allLogFiles = await logsService.getLogFilesInRange(startDate, endDate, true);
+      const validLogFiles = (await Promise.all(allLogFiles.map(async file => {
+        if (file.endsWith('.gz') && !(await this.isGzipValid(file))) return null;
+        if (!file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/)) return null;
         return file;
-      }))).filter(file => file);
-      logger.info(`Found ${logFiles.length} valid log files for suspicious activities: ${logFiles.join(', ')}`);
+      }))).filter(Boolean).sort((a, b) => {
+        const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
+        const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
+        return bDate.localeCompare(aDate);
+      });
 
+      console.log(`Found ${validLogFiles.length} valid log files to scan.`);
+      const concurrencyLimit = require('os').cpus().length;
       let totalLinesProcessed = 0;
       let totalLinesSkipped = 0;
+      const finalIssueMap = new Map();
+      let failedLogins = [];
+      let suspiciousActivities = [];
 
-      const processBatch = async (files) => {
-        const results = await Promise.all(files.map(file =>
-          this.processFile(file, startTime, suspiciousPatterns, 'suspiciousActivities')
-            .catch(err => {
-              logger.error(`Error processing ${file}: ${err.message}`);
-              return { suspiciousActivities: [], linesProcessed: 0, linesSkipped: 0 };
-            })
-        ));
-
-        results.forEach(({ suspiciousActivities: fileActivities, linesProcessed, linesSkipped }) => {
-          totalLinesProcessed += linesProcessed;
-          totalLinesSkipped += linesSkipped;
-          suspiciousActivities.push(...fileActivities);
-        });
-      };
-
-      for (let i = 0; i < logFiles.length; i += concurrencyLimit) {
-        if (Date.now() - startTime > 100000) {
+      for (let i = 0; i < validLogFiles.length; i += concurrencyLimit) {
+        if (Date.now() - startTime > TIMEOUT_PERIOD) {
           logger.warn('Approaching timeout limit, stopping scan');
           break;
         }
-        const batch = logFiles.slice(i, i + concurrencyLimit);
-        await processBatch(batch);
+        const batch = validLogFiles.slice(i, i + concurrencyLimit);
+        const batchPromises = batch.map(file =>
+          this.processFile(file, startTime, { vulnerabilityPatterns, suspiciousPatterns })
+            .catch(err => {
+              logger.error(`Error processing file ${file} in worker: ${err.message}`);
+              return { vulnerabilities: { critical: [], medium: [], low: [] }, failedLogins: [], suspiciousActivities: [], linesProcessed: 0, linesSkipped: 0 };
+            })
+        );
+
+        const results = await Promise.all(batchPromises);
+
+        for (const result of results) {
+          totalLinesProcessed += result.linesProcessed;
+          totalLinesSkipped += result.linesSkipped;
+          failedLogins.push(...result.failedLogins);
+          suspiciousActivities.push(...result.suspiciousActivities);
+          for (const severity of ['critical', 'medium', 'low']) {
+            for (const vuln of result.vulnerabilities[severity]) {
+              const aggregationKey = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}`;
+              if (finalIssueMap.has(aggregationKey)) {
+                const existingIssue = finalIssueMap.get(aggregationKey);
+                existingIssue.instanceCount += vuln.instanceCount;
+                if (vuln.lastSeen > existingIssue.lastSeen) existingIssue.lastSeen = vuln.lastSeen;
+              } else {
+                finalIssueMap.set(aggregationKey, { ...vuln });
+              }
+            }
+          }
+        }
+        console.debug(`Batch processed. Total lines so far: ${totalLinesProcessed}`);
       }
 
-      logger.info(`Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`);
-      logger.info(`Found ${suspiciousActivities.length} suspicious activities`);
-      return suspiciousActivities;
+      console.log(`Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`);
+      const vulnerabilities = { critical: [], medium: [], low: [] };
+      for (const issue of finalIssueMap.values()) {
+        if (vulnerabilities[issue.severity]) {
+          vulnerabilities[issue.severity].push(issue);
+        }
+      }
+
+      failedLogins = this.removeDuplicateLogEntries(failedLogins);
+      suspiciousActivities = this.removeDuplicateLogEntries(suspiciousActivities);
+
+      return { vulnerabilities, failedLogins, suspiciousActivities };
     } catch (error) {
-      logger.error(`Error in checkSuspiciousActivities: ${error.message}`, { stack: error.stack });
-      return [];
+      logger.error(`Error in processLogsInParallel: ${error.message}`, { stack: error.stack });
+      throw error;
     }
+  },
+
+  // CORRECTED: Restored original functions for backward compatibility, now implemented efficiently.
+  async checkLogsForIssues(logsService) {
+    logger.info('Legacy checkLogsForIssues called. Checking cache or running full scan.');
+    const cached = await this.checkCachedResults();
+    if (cached) return cached.vulnerabilityDetails;
+    const results = await this.runSecurityScan(logsService);
+    return results.vulnerabilityDetails;
+  },
+  async checkFailedLogins(logsService) {
+    logger.info('Legacy checkFailedLogins called. Checking cache or running full scan.');
+    const cached = await this.checkCachedResults();
+    if (cached) return cached.failedLoginDetails;
+    const results = await this.runSecurityScan(logsService);
+    return results.failedLoginDetails;
+  },
+  async checkSuspiciousActivities(logsService) {
+    logger.info('Legacy checkSuspiciousActivities called. Checking cache or running full scan.');
+    const cached = await this.checkCachedResults();
+    if (cached) return cached.suspiciousDetails;
+    const results = await this.runSecurityScan(logsService);
+    return results.suspiciousDetails;
+  },
+
+  deduplicateVulnerabilities(vulnerabilities) {
+    const deduplicated = { critical: [], medium: [], low: [] };
+    const seen = new Set();
+    for (const severity of ['critical', 'medium', 'low']) {
+      for (const vuln of vulnerabilities[severity]) {
+        const key = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}_${vuln.timestamp}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduplicated[severity].push(vuln);
+        }
+      }
+    }
+    return deduplicated;
+  },
+
+  parseLogLine(line, file, lineNumber, invalidLogStream) {
+    function extractUrl(message) {
+      const urlMatch = message.match(/https?:\/\/[^\s]+|(GET|POST|PUT|DELETE)\s+([^\s]+)/i);
+      return urlMatch ? (urlMatch[2] || urlMatch[0]) : 'N/A';
+    }
+    const standardMatch = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+([^\s]+(?:\s+[^\s]+)*)\s+(.+)$/);
+    if (standardMatch) {
+      const [, date, time, level, service, message] = standardMatch;
+      const timestamp = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
+      if (!timestamp.isValid) {
+        if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid timestamp in ${file} at line ${lineNumber}: ${line}\n`);
+        return null;
+      }
+      return { timestamp: timestamp.toISO(), level, service, message, url: extractUrl(message) };
+    }
+    try {
+      const jsonLog = JSON.parse(line);
+      if (jsonLog.timestamp && jsonLog.level && jsonLog.message) {
+        const timestamp = DateTime.fromISO(jsonLog.timestamp, { zone: 'utc' });
+        if (!timestamp.isValid) {
+          if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid JSON timestamp in ${file} at line ${lineNumber}: ${line}\n`);
+          return null;
+        }
+        return {
+          timestamp: timestamp.toISO(),
+          level: jsonLog.level.toUpperCase(),
+          service: jsonLog.service || 'unknown',
+          message: jsonLog.message,
+          url: jsonLog.url || extractUrl(jsonLog.message)
+        };
+      }
+    } catch (e) { }
+    const fallbackMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(.+)$/);
+    if (fallbackMatch) {
+      const [, datetime, message] = fallbackMatch;
+      const timestamp = DateTime.fromFormat(datetime, 'yyyy-MM-dd HH:mm:ss', { zone: 'utc' });
+      if (!timestamp.isValid) {
+        if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Invalid fallback timestamp in ${file} at line ${lineNumber}: ${line}\n`);
+        return null;
+      }
+      return { timestamp: timestamp.toISO(), level: 'UNKNOWN', service: 'unknown', message, url: extractUrl(message) };
+    }
+    if (invalidLogStream) invalidLogStream.write(`[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`);
+    return null;
+  },
+
+  async processFile(file, startTime, patterns) {
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(__filename, {
+        workerData: { file, startTime, patterns }
+      });
+      worker.on('message', resolve);
+      worker.on('error', reject);
+      worker.on('exit', (code) => {
+        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
+      });
+    });
   },
 
   async getLastScanDetails() {
     try {
-      logger.info('Fetching last scan details');
+      console.log('Fetching last scan details');
       const scanResultsFile = '/app/data/security/last-scan-results.json';
       let scanDetails = {
         lastScan: 'Never',
@@ -461,7 +333,7 @@ const securityScanService = {
   async scanForVulnerabilities() {
     const vulnerabilities = { critical: [], medium: [], low: [] };
     try {
-      logger.info('Starting HTTP header vulnerability scan');
+      console.log('Starting HTTP header vulnerability scan');
       const response = await axios.get('http://localhost:3000', { validateStatus: () => true });
       const headers = response.headers;
       const headerChecks = [
@@ -491,7 +363,7 @@ const securityScanService = {
         }
       });
 
-      logger.info(`Detected header vulnerabilities: Critical=${vulnerabilities.critical.length}, Medium=${vulnerabilities.medium.length}, Low=${vulnerabilities.low.length}`);
+      console.log(`Detected header vulnerabilities: Critical=${vulnerabilities.critical.length}, Medium=${vulnerabilities.medium.length}, Low=${vulnerabilities.low.length}`);
       return vulnerabilities;
     } catch (error) {
       logger.error(`Error in scanForVulnerabilities: ${error.message}`, { stack: error.stack });
@@ -548,7 +420,7 @@ const securityScanService = {
           recommendation: 'Add Referrer-Policy: no-referrer-when-downgrade header'
         });
 
-      logger.debug(`Missing headers found: ${missingHeaders.length}`);
+      console.debug(`Missing headers found: ${missingHeaders.length}`);
       return missingHeaders;
     } catch (error) {
       logger.error(`Error checking security headers: ${error.message}`);
@@ -581,7 +453,7 @@ const securityScanService = {
           recommendation: 'Configure server to remove version information from Server header'
         });
 
-      logger.debug(`Server leakage issues found: ${leakageIssues.length}`);
+      console.debug(`Server leakage issues found: ${leakageIssues.length}`);
       return leakageIssues;
     } catch (error) {
       logger.error(`Error checking server information leakage: ${error.message}`);
@@ -611,12 +483,12 @@ const securityScanService = {
             });
           }
         } catch (err) {
-          logger.debug(`Skipping timestamp check for ${endpoint}: ${err.message}`);
+          console.debug(`Skipping timestamp check for ${endpoint}: ${err.message}`);
           continue;
         }
       }
 
-      logger.debug(`Timestamp disclosure issues found: ${disclosureIssues.length}`);
+      console.debug(`Timestamp disclosure issues found: ${disclosureIssues.length}`);
       return disclosureIssues;
     } catch (error) {
       logger.error(`Error checking timestamp disclosure: ${error.message}`);
@@ -650,7 +522,7 @@ const securityScanService = {
         });
       }
 
-      logger.debug(`CORS issues found: ${corsIssues.length}`);
+      console.debug(`CORS issues found: ${corsIssues.length}`);
       return corsIssues;
     } catch (error) {
       logger.error(`Error checking CORS configuration: ${error.message}`);
@@ -687,7 +559,7 @@ const securityScanService = {
         }
       }
 
-      logger.debug(`Hidden file issues found: ${foundFiles.length}`);
+      console.debug(`Hidden file issues found: ${foundFiles.length}`);
       return foundFiles;
     } catch (error) {
       logger.error(`Error checking hidden files: ${error.message}`);
@@ -712,24 +584,24 @@ const securityScanService = {
       const loginKeywords = ['login', 'failed', 'unauthorized', 'disabled', 'expired', 'invalid', 'access denied', 'account'];
       const suspiciousKeywords = ['suspicious', 'brute force', 'injection', 'attack', 'breach', 'security', 'vulnerability', 'exploit', 'ip blocked', 'threat detection'];
       const allKeywords = [...new Set([...loginKeywords, ...suspiciousKeywords])];
-      logger.debug(`Checking logs with keywords: ${allKeywords.join(', ')}`);
+      console.debug(`Checking logs with keywords: ${allKeywords.join(', ')}`);
 
       let loginIssues = [];
       let suspiciousIssues = [];
 
       const today = new Date();
-      const threeDaysAgo = new Date(today);
-      threeDaysAgo.setDate(today.getDate() - 3);
+      const daysAgo = new Date(today);
+      daysAgo.setDate(today.getDate() - DAYS_TO_PROCESS);
 
       try {
         const results = await logsService.searchLogs({
           term: allKeywords.join('|'),
           dateRange: 'custom',
-          startDate: threeDaysAgo.toISOString().split('T')[0],
+          startDate: daysAgo.toISOString().split('T')[0],
           endDate: today.toISOString().split('T')[0],
           includeArchived: true
         });
-        logger.debug(`Found ${results.logs?.length || 0} logs matching keywords`);
+        console.debug(`Found ${results.logs?.length || 0} logs matching keywords`);
 
         if (results.logs && results.logs.length > 0) {
           for (const log of results.logs) {
@@ -747,7 +619,6 @@ const securityScanService = {
                 type: 'authentication_issue',
                 matchedTerm: loginMatch
               });
-              logger.debug(`Added login issue: ${log.message}`);
             }
 
             if (suspiciousMatch && !loginMatch) {
@@ -759,7 +630,6 @@ const securityScanService = {
                 type: 'suspicious',
                 matchedTerm: suspiciousMatch
               });
-              logger.debug(`Added suspicious issue: ${log.message}`);
             }
           }
         }
@@ -769,8 +639,6 @@ const securityScanService = {
 
       const uniqueLoginIssues = this.removeDuplicateLogEntries(loginIssues);
       const uniqueSuspiciousIssues = this.removeDuplicateLogEntries(suspiciousIssues);
-      logger.debug(`Unique login issues: ${uniqueLoginIssues.length}`, JSON.stringify(uniqueLoginIssues, null, 2));
-      logger.debug(`Unique suspicious activities: ${uniqueSuspiciousIssues.length}`, JSON.stringify(uniqueSuspiciousIssues, null, 2));
 
       return {
         loginIssues: { count: uniqueLoginIssues.length, details: uniqueLoginIssues },
@@ -946,7 +814,7 @@ const securityScanService = {
       action: 'Implement regular security audits, keep dependencies updated, and consider penetration testing'
     });
 
-    logger.debug(`Generated recommendations: ${recommendations.length}`);
+    console.debug(`Generated recommendations: ${recommendations.length}`);
     return recommendations;
   },
 
@@ -954,8 +822,8 @@ const securityScanService = {
     logger.info('*** SAVE_SCAN_RESULTS_START ***');
     try {
       const dataDir = '/app/data/security';
-      const resultsPath = '/app/data/security/last-scan-results.json';
-      logger.info(`Saving scan results to directory: ${dataDir}, file: ${resultsPath}`);
+      const resultsPath = path.join(dataDir, 'last-scan-results.json');
+      console.log(`Saving scan results to directory: ${dataDir}, file: ${resultsPath}`);
       await fsPromises.mkdir(dataDir, { recursive: true });
       await fsPromises.writeFile(resultsPath, JSON.stringify(results, null, 2), { mode: 0o666 });
       logger.info(`Security scan results saved successfully to ${resultsPath}`);
@@ -966,15 +834,17 @@ const securityScanService = {
   }
 };
 
+// --- WORKER THREAD LOGIC ---
 if (!isMainThread) {
-  const { file, startTime, patterns, type } = workerData;
+  const { file, startTime, patterns } = workerData;
   const fs = require('fs');
   const readline = require('readline');
   const zlib = require('zlib');
   const { DateTime } = require('luxon');
 
   const parseLogLine = securityScanService.parseLogLine;
-  let results = {
+
+  const results = {
     vulnerabilities: { critical: [], medium: [], low: [] },
     failedLogins: [],
     suspiciousActivities: [],
@@ -983,16 +853,15 @@ if (!isMainThread) {
   };
   const issueMap = new Map();
   let invalidLogStream = null;
-  let streamClosed = false;
 
   try {
-    invalidLogStream = fs.createWriteStream(`/app/logs/invalid-log-formats-${DateTime.now().toFormat('yyyy-MM-dd-HH-mm-ss')}-${process.pid}.log`, { flags: 'a' });
+    // This stream is for debugging parsing issues, and can be created if needed
   } catch (err) {
     console.error(`Error creating invalid log stream for ${file}: ${err.message}`);
   }
 
   const processLine = (line, lineNumber) => {
-    if (Date.now() - startTime > 100000) return false;
+    if (Date.now() - startTime > TIMEOUT_PERIOD) return false;
     results.linesProcessed++;
     const parsedLog = parseLogLine(line, file, lineNumber, invalidLogStream);
     if (!parsedLog) {
@@ -1000,102 +869,77 @@ if (!isMainThread) {
       return true;
     }
 
-    const { timestamp, message, url } = parsedLog;
+    const { timestamp, message, url, level } = parsedLog;
 
     if (/Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(message)) {
       results.linesSkipped++;
       return true;
     }
 
-    if (type === 'vulnerabilities') {
-      patterns.forEach(pattern => {
-        const match = message.match(pattern.regex);
-        if (match) {
-          const matchedTerm = match[1] || match[0];
-          const date = DateTime.fromISO(timestamp).toFormat('yyyy-MM-dd');
-          const key = `${pattern.type}_${date}_${pattern.service}_${matchedTerm}`;
-          if (issueMap.has(key)) {
-            const issue = issueMap.get(key);
-            issue.instanceCount++;
-            issue.lastSeen = timestamp;
-          } else {
-            issueMap.set(key, {
-              type: pattern.type,
-              severity: pattern.severity,
-              description: pattern.description,
-              recommendation: pattern.recommendation,
-              matchedTerm,
-              timestamp,
-              service: pattern.service,
-              url,
-              firstSeen: timestamp,
-              lastSeen: timestamp,
-              instanceCount: 1,
-            });
-            results.vulnerabilities[pattern.severity].push(issueMap.get(key));
-          }
+    patterns.vulnerabilityPatterns.forEach(pattern => {
+      const match = message.match(pattern.regex);
+      if (match) {
+        const matchedTerm = match[1] || match[0];
+        const aggregationKey = `${pattern.type}_${pattern.service}_${matchedTerm}`;
+
+        if (!issueMap.has(aggregationKey)) {
+          const newVuln = {
+            type: pattern.type,
+            severity: pattern.severity,
+            description: pattern.description,
+            recommendation: pattern.recommendation,
+            matchedTerm,
+            timestamp,
+            service: pattern.service,
+            url,
+            firstSeen: timestamp,
+            lastSeen: timestamp,
+            instanceCount: 1,
+          };
+          issueMap.set(aggregationKey, newVuln);
+          results.vulnerabilities[pattern.severity].push(newVuln);
+        } else {
+          const issue = issueMap.get(aggregationKey);
+          issue.instanceCount++;
+          issue.lastSeen = timestamp;
         }
-      });
-    } else if (type === 'failedLogins' && /Invalid credentials|failed login/i.test(message)) {
-      results.failedLogins.push({ timestamp, message });
-    } else if (type === 'suspiciousActivities') {
-      if (patterns.some(pattern => pattern.test(message))) {
-        results.suspiciousActivities.push({ timestamp, message });
       }
+    });
+
+    if (/Invalid credentials|failed login/i.test(message)) {
+      results.failedLogins.push({ timestamp, level, message });
+    }
+
+    if (patterns.suspiciousPatterns.some(pattern => pattern.test(message))) {
+      results.suspiciousActivities.push({ timestamp, level, message });
     }
 
     return true;
   };
 
   const stream = fs.createReadStream(file);
-  let gunzip;
-  if (file.endsWith('.gz')) {
-    gunzip = zlib.createGunzip();
-    stream.pipe(gunzip);
-    stream.on('error', (err) => console.error(`Error decompressing ${file}: ${err.message}`));
-  }
+  const rl = readline.createInterface({
+    input: file.endsWith('.gz') ? stream.pipe(zlib.createGunzip()) : stream,
+    crlfDelay: Infinity
+  });
 
-  const rl = readline.createInterface({ input: file.endsWith('.gz') ? gunzip : stream, crlfDelay: Infinity });
   let lineNumber = 0;
-
   rl.on('line', (line) => {
     lineNumber++;
-    if (!processLine(line, lineNumber)) rl.close();
+    if (!processLine(line, lineNumber)) {
+      rl.close();
+    }
   });
 
   rl.on('close', () => {
-    if (!streamClosed) {
-      streamClosed = true;
-      rl.close();
-      stream.destroy();
-      gunzip?.destroy();
-      if (invalidLogStream) {
-        invalidLogStream.end(() => {
-          invalidLogStream.destroy();
-          parentPort.postMessage(results);
-        });
-      } else {
-        parentPort.postMessage(results);
-      }
-    }
+    parentPort.postMessage(results);
+    if (invalidLogStream) invalidLogStream.end();
   });
 
   rl.on('error', (err) => {
-    console.error(`Error reading ${file}: ${err.message}`);
-    if (!streamClosed) {
-      streamClosed = true;
-      rl.close();
-      stream.destroy();
-      gunzip?.destroy();
-      if (invalidLogStream) {
-        invalidLogStream.end(() => {
-          invalidLogStream.destroy();
-          parentPort.postMessage(results);
-        });
-      } else {
-        parentPort.postMessage(results);
-      }
-    }
+    console.error(`Error reading ${file} in worker: ${err.message}`);
+    parentPort.postMessage(results);
+    if (invalidLogStream) invalidLogStream.end();
   });
 }
 

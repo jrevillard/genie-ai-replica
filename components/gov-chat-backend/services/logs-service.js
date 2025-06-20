@@ -8,9 +8,9 @@ const util = require('util');
 const gunzip = util.promisify(zlib.gunzip);
 
 // Set maximum log file size to prevent stack overflow
-const MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_LOG_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 // Set maximum number of lines to process at once
-const MAX_LINES_TO_PROCESS = 100000;
+const MAX_LINES_TO_PROCESS = 200000;
 
 /**
  * Service for managing system logs

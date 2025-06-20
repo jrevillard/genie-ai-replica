@@ -146,12 +146,26 @@ export default {
         state.folderChats.default.push(chatId);
       }
     },
+
+    CLEAR_FOLDERS(state) {
+      state.folders = [
+        {
+          id: 'default',
+          name: 'All Chats',
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      state.folderChats = { default: [] };
+      console.log('CLEAR_FOLDERS mutation: Reset folders and folderChats');
+    },
   },
 
   actions: {
     setFolders({ commit }, folders) {
-      console.log("setFolders action dispatching:", folders);
+      console.log('setFolders action: Dispatching folders:', folders);
       commit('setFolders', folders);
+      console.log('setFolders action: Completed');
     },
 
     createFolder({ commit }, name) {
@@ -190,13 +204,13 @@ export default {
     async moveChat({ commit, state }, { chatId, fromFolderId, toFolderId }) {
       console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
       try {
-        // Call backend service to move conversation
-        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, '2133'); // Hardcoded userId
-        // Refresh folder chats from backend
+        const user = userService.getCurrentUser();
+        const userId = user?._key || user?.id;
+        if (!userId) throw new Error('User ID is missing');
+        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, userId);
         const folder = await chatHistoryService.getFolder(toFolderId);
         const chatIds = folder.conversations.map(conv => conv._key);
         commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
-        // Update local move (optional, for immediate feedback)
         commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
         console.log(`Chat ${chatId} moved successfully to ${toFolderId}`);
       } catch (error) {
@@ -222,6 +236,10 @@ export default {
         console.error(`Error removing chat ${chatId} from folder ${folderId}:`, error);
         throw error;
       }
+    },
+
+    async clearFolders({ commit }) {
+      commit('CLEAR_FOLDERS');
     }
   },
 };

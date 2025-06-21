@@ -512,22 +512,38 @@ export default {
         (rawOption.service !== this.$t("quickhelp.justChat")
           ? "general"
           : null);
-      this.selectedContextItems = [
-        {
+
+      // Check if the context item already exists to avoid duplicates
+      const contextExists = this.selectedContextItems.some(
+        (item) =>
+          item.service === rawOption.service && item.category === category
+      );
+
+      if (!contextExists) {
+        // Append the new context item to the existing list
+        this.selectedContextItems.push({
           service: rawOption.service,
           category: category,
           selected: true,
-        },
-      ];
+        });
+        console.log(
+          `Added new context item: ${rawOption.service} with category ${category}`
+        );
+      } else {
+        console.log(
+          `Context item ${rawOption.service} with category ${category} already exists`
+        );
+      }
+
       if (rawOption.service !== this.$t("quickhelp.justChat")) {
         this.conversationCategory = category;
         console.log(
-          `Set conversation category to ${category} for quick help option ${rawOption.service}, overriding any sidebar context`
+          `Set conversation category to ${category} for quick help option ${rawOption.service}`
         );
       } else {
         this.conversationCategory = this.conversationCategory || null;
         console.log(
-          "Just Chat selected, retaining sidebar category:",
+          "Just Chat selected, retaining existing category:",
           this.conversationCategory
         );
       }
@@ -544,47 +560,72 @@ export default {
     },
 
     handleTreeNodeSelected(item) {
-      if (!item || typeof item !== "object") return;
+      if (!item || typeof item !== "object" || !item.service) {
+        console.warn("Invalid tree node selected:", item);
+        return;
+      }
+
       if (item.selected) {
+        // Check if the context item already exists to avoid duplicates
         const exists = this.selectedContextItems.some(
           (existing) =>
-            existing.category === item.category &&
-            existing.service === item.service
+            existing.service === item.service &&
+            existing.category === item.category
         );
         if (!exists) {
-          this.selectedContextItems.push(item);
+          this.selectedContextItems.push({
+            service: item.service,
+            category: item.category || "general",
+            selected: true,
+          });
+          console.log(
+            `Added sidebar context item: ${item.service} with category ${
+              item.category || "general"
+            }`
+          );
           notificationService.info(
             this.translate("chatbot.contextAdded"),
             1500
           );
+          // Update conversation category if not set or is general
           if (
             !this.conversationCategory ||
             this.conversationCategory === "general"
           ) {
             this.conversationCategory = item.category || "general";
             console.log(
-              `Set conversation category to ${this.conversationCategory} from sidebar tree node ${item.service}`
+              `Set conversation category to ${this.conversationCategory} from sidebar node ${item.service}`
             );
           }
+        } else {
+          console.log(
+            `Context item ${item.service} with category ${item.category} already exists`
+          );
         }
       } else {
-        this.selectedContextItems = this.selectedContextItems.filter(
+        // Remove the context item if deselected
+        const index = this.selectedContextItems.findIndex(
           (existing) =>
-            !(
-              existing.category === item.category &&
-              existing.service === item.service
-            )
+            existing.service === item.service &&
+            existing.category === item.category
         );
-        eventBus.$emit("contextItemRemoved", item);
-        notificationService.info(
-          this.translate("chatbot.contextRemoved"),
-          1500
-        );
-        if (this.selectedContextItems.length === 0 && !this.newMessage) {
-          this.conversationCategory = null;
+        if (index !== -1) {
+          const removedItem = this.selectedContextItems.splice(index, 1)[0];
           console.log(
-            "Cleared conversation category after removing sidebar context"
+            `Removed sidebar context item: ${removedItem.service} with category ${removedItem.category}`
           );
+          notificationService.info(
+            this.translate("chatbot.contextRemoved"),
+            1500
+          );
+          eventBus.$emit("contextItemRemoved", removedItem);
+          // Clear conversation category if no context items remain
+          if (this.selectedContextItems.length === 0) {
+            this.conversationCategory = null;
+            console.log(
+              "Cleared conversation category as no context items remain"
+            );
+          }
         }
       }
     },

@@ -674,6 +674,8 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Summary data
    */
   async getLogsSummary(options = {}) {
+    return this.logsService.getLogsSummary(options);
+    // Note I am just leaving this dead code here in case something comes up
     const { date = new Date().toISOString().split('T')[0], level } = options;
     logger.info(`Getting logs summary for date: ${date}, level: ${level}`);
 

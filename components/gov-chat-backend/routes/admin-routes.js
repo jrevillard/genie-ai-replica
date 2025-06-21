@@ -8,8 +8,8 @@ const { logger } = require('../shared-lib');
 /**
  * @swagger
  * tags:
- *   name: Admin
- *   description: Admin dashboard API endpoints
+ *   - name: Admin
+ *     description: Admin dashboard API endpoints
  */
 module.exports = (adminService, logsService) => {
   // Debug: Log adminService initialization
@@ -203,7 +203,7 @@ module.exports = (adminService, logsService) => {
     }
   });
 
-    /**
+  /**
    * @swagger
    * /admin/security-metrics:
    *   get:
@@ -221,28 +221,28 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-    router.get('/security-metrics', async (req, res, next) => {
-      try {
-        logger.info(`[ADMIN-ROUTES] Fetching security metrics for user: ${req.user?.email || 'unknown'}`);
-        const failedLogins = await securityScanService.checkFailedLogins(logsService);
-        const suspiciousActivities = await securityScanService.checkSuspiciousActivities(logsService);
-        const lastScanDetails = await adminService.getSecurityMetrics();
-        logger.debug(`[ADMIN-ROUTES] Security metrics response: ${JSON.stringify({ failedLogins, suspiciousActivities, lastScanDetails }, null, 2)}`);
-        res.status(200).json({
-          success: true,
-          data: {
-            failedLoginAttempts: failedLogins,
-            suspiciousActivities: suspiciousActivities,
-            lastSecurityScan: lastScanDetails.lastScan,
-            vulnerabilities: lastScanDetails.vulnerabilities
-          }
-        });
-        logger.info(`[ADMIN-ROUTES] Security metrics retrieved successfully for user: ${req.user?.email || 'unknown'}`);
-      } catch (error) {
-        logger.error(`[ADMIN-ROUTES] Error fetching security metrics: ${error.message}`, { stack: error.stack });
-        res.status(500).json({ message: 'Failed to fetch security metrics' });
-      }
-    });
+  router.get('/security-metrics', async (req, res, next) => {
+    try {
+      logger.info(`[ADMIN-ROUTES] Fetching security metrics for user: ${req.user?.email || 'unknown'}`);
+      const lastScan = await securityScanService.getLastScanDetails();
+
+      const metrics = {
+        failedLoginAttempts: lastScan.failedLoginDetails?.length || 0,
+        suspiciousActivities: lastScan.suspiciousDetails?.length || 0,
+        lastSecurityScan: lastScan.scanTime || "Never",
+        vulnerabilities: lastScan.vulnerabilities || { critical: 0, medium: 0, low: 0 }
+      };
+
+      res.status(200).json({
+        success: true,
+        data: metrics
+      });
+      logger.info(`[ADMIN-ROUTES] Security metrics retrieved successfully for user: ${req.user?.email || 'unknown'}`);
+    } catch (error) {
+      logger.error(`[ADMIN-ROUTES] Error fetching security metrics: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: 'Failed to fetch security metrics' });
+    }
+  });
 
   /**
    * @swagger
@@ -278,7 +278,7 @@ module.exports = (adminService, logsService) => {
     }
   });
 
-    /**
+  /**
    * @swagger
    * /admin/security/last-scan:
    *   get:
@@ -296,21 +296,20 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-    router.get('/security/last-scan', async (req, res, next) => {
-      logger.info('[ADMIN-ROUTES] Entering /admin/security/last-scan route', {
-        user: req.user ? req.user._key : 'unknown'
-      });
-      try {
-        logger.info(`[ADMIN-ROUTES] Fetching last security scan details for user: ${req.user?.email || 'unknown'}`);
-        const scanDetails = await securityScanService.getLastScanDetails();
-        logger.info('[ADMIN-ROUTES] Last scan details retrieved successfully');
-        res.status(200).json(scanDetails);
-      } catch (error) {
-        logger.error(`[ADMIN-ROUTES] Error fetching last scan details: ${error.message}`, { stack: error.stack });
-        res.status(500).json({ error: 'Failed to fetch last scan details', message: error.message });
-      }
+  router.get('/security/last-scan', async (req, res, next) => {
+    logger.info('[ADMIN-ROUTES] Entering /admin/security/last-scan route', {
+      user: req.user ? req.user._key : 'unknown'
     });
-  
+    try {
+      logger.info(`[ADMIN-ROUTES] Fetching last security scan details for user: ${req.user?.email || 'unknown'}`);
+      const scanDetails = await securityScanService.getLastScanDetails();
+      logger.info('[ADMIN-ROUTES] Last scan details retrieved successfully');
+      res.status(200).json(scanDetails);
+    } catch (error) {
+      logger.error(`[ADMIN-ROUTES] Error fetching last scan details: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ error: 'Failed to fetch last scan details', message: error.message });
+    }
+  });
 
   /**
    * @swagger
@@ -372,8 +371,8 @@ module.exports = (adminService, logsService) => {
   router.get('/logs/summary', async (req, res, next) => {
     try {
       const { date, level } = req.query;
-      const result = await adminService.getLogsSummary({ date, level });
-      res.json(result);
+      const result = await logsService.getLogsSummary({ date, level }); // Changed to logsService
+      res.json({ data: result }); // Wrap result in { data: ... } for frontend consistency
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error getting logs summary: ${error.message}`, { stack: error.stack });
       next(error);

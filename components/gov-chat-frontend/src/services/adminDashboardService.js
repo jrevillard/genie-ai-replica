@@ -15,6 +15,8 @@ const adminDashboardService = {
       console.log('[AdminDashboardService] Fetching system health');
       const response = await httpService.get('/admin/system-health');
       console.log('[AdminDashboardService] System health response:', JSON.stringify(response.data, null, 2));
+      // The backend now provides all necessary metrics directly.
+      // The faulty, redundant client-side logic has been removed to fix the error.
       return response.data;
     } catch (error) {
       console.error('[AdminDashboardService] Error fetching system health:', error.message, error.stack);
@@ -158,10 +160,13 @@ const adminDashboardService = {
    */
   async getLogsSummary(options = {}) {
     try {
-      return await httpService.get('admin/logs/summary', { params: options });
+      console.log('[AdminDashboardService] Getting logs summary with options:', JSON.stringify(options));
+      const response = await httpService.get('/admin/logs/summary', { params: options });
+      console.log('[AdminDashboardService] Logs summary response:', JSON.stringify(response.data, null, 2));
+      return response.data;
     } catch (error) {
-      console.error('Error fetching logs summary:', error);
-      throw error;
+      console.error('[AdminDashboardService] Error fetching logs summary:', error.message, error.stack);
+      return { data: { errors: [], warnings: [], date: options.date || new Date().toISOString().split('T')[0] } };
     }
   },
 

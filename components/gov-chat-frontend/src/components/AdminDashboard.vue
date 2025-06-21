@@ -1770,75 +1770,14 @@ export default {
         { id: "network", label: "Network Bandwidth", value: 35 },
       ],
 
-      // Logs data
-      logs: [
-        {
-          time: "10:42:15",
-          level: "ERROR",
-          service: "API Gateway",
-          message: "Connection timeout to external provider",
-          messageKey: "connectionTimeout",
-        },
-        {
-          time: "10:38:22",
-          level: "WARNING",
-          service: "Storage",
-          message: "Disk space below 10% threshold",
-          messageKey: "lowDiskSpace",
-        },
-        {
-          time: "10:35:47",
-          level: "INFO",
-          service: "Auth Service",
-          message: "User role updated for admin@huduma.ai",
-          messageKey: "userRoleUpdated",
-        },
-      ],
+      logs: [],
 
-      // Add these to the data object
-      errorLogsSummary: [
-        {
-          typeKey: "connectionTimeout",
-          type: "Connection timeout",
-          service: "API Gateway",
-          count: 5,
-        },
-        {
-          typeKey: "databaseFailed",
-          type: "Database query failed",
-          service: "Data Service",
-          count: 3,
-        },
-        {
-          typeKey: "authFailed",
-          type: "Authentication failure",
-          service: "Auth Service",
-          count: 2,
-        },
-      ],
-      warningLogsSummary: [
-        {
-          typeKey: "lowDiskSpace",
-          type: "Disk space below threshold",
-          service: "Storage",
-          count: 1,
-        },
-        {
-          typeKey: "slowQuery",
-          type: "Slow query performance",
-          service: "Database",
-          count: 8,
-        },
-        {
-          typeKey: "rateLimit",
-          type: "Rate limit approaching",
-          service: "External API",
-          count: 4,
-        },
-      ],
+      // CORRECTED: Hardcoded data removed. Initialized as empty arrays.
+      errorLogsSummary: [],
+      warningLogsSummary: [],
+
       showLogSearchDialog: false,
 
-      // Feature flags
       featureFlags: [
         {
           id: "enhancedSearch",
@@ -1860,7 +1799,6 @@ export default {
         },
       ],
 
-      // Alert configurations
       alertConfigs: [
         {
           id: "cpuUsage",
@@ -1882,16 +1820,10 @@ export default {
         },
       ],
 
-      // Maintenance mode toggle
       maintenanceMode: false,
-
-      // Alert configuration modal
       showAlertsConfig: false,
-
-      // Show operation results modal
       showOperationResults: false,
 
-      // System metrics
       metrics: {
         systemUptime: 99.98,
         avgResponseTime: 245,
@@ -1899,16 +1831,13 @@ export default {
         monthlyActiveUsers: 0,
       },
 
-      // Log filter options
       logFilter: {
         level: "",
         service: "",
       },
 
-      // Total log count
       logsTotal: 1284,
 
-      // Security metrics
       securityMetrics: {
         failedLoginAttempts: 23,
         suspiciousActivities: 5,
@@ -1920,7 +1849,6 @@ export default {
         },
       },
 
-      // User statistics
       userStats: {
         totalUsers: 0,
         activeUsers: 0,
@@ -1928,15 +1856,12 @@ export default {
         users: [],
       },
 
-      // User edit dialog
       showUserEditDialog: false,
       selectedUserId: null,
-      currentUser: {}, // Will hold the current logged-in user's information
+      currentUser: {},
 
-      // For search functionality
       searchResults: [],
 
-      // Status indicator styling for info logs
       status: {
         info: {
           color: "#3b82f6",
@@ -1944,9 +1869,8 @@ export default {
         },
       },
 
-      // User Search Properties - NEW
       userSearchTerm: "",
-      userSearchField: "all", // Default to search all fields
+      userSearchField: "all",
       isSearchingUsers: false,
       userSearchResults: null,
       userSearchTotal: 0,
@@ -2218,16 +2142,60 @@ export default {
       try {
         this.isLoading = true;
         const response = await adminDashboardService.getLogsSummary({
-          date: new Date().toISOString().split("T")[0], // Today's date in<x_bin_342>-MM-DD format
+          date: new Date().toISOString().split("T")[0],
         });
+        console.log(
+          "[AdminDashboard] Logs summary response:",
+          JSON.stringify(response, null, 2)
+        );
 
-        if (response && response.data && response.data.data) {
-          this.errorLogsSummary = response.data.data.errors || [];
-          this.warningLogsSummary = response.data.data.warnings || [];
+        if (
+          response &&
+          response.data &&
+          Array.isArray(response.data.errors) &&
+          Array.isArray(response.data.warnings)
+        ) {
+          this.errorLogsSummary = response.data.errors || [];
+          this.warningLogsSummary = response.data.warnings || [];
+          if (
+            this.errorLogsSummary.length === 0 &&
+            this.warningLogsSummary.length === 0
+          ) {
+            this.showNotification(
+              this.translate("admin.noLogsFound", "No logs found for today"),
+              "info"
+            );
+          }
+        } else {
+          console.error(
+            "[AdminDashboard] Invalid logs summary response structure:",
+            response
+          );
+          this.showNotification(
+            this.translate(
+              "admin.invalidLogsResponse",
+              "Invalid logs summary response structure"
+            ),
+            "error"
+          );
+          this.errorLogsSummary = [];
+          this.warningLogsSummary = [];
         }
       } catch (error) {
-        console.error("Error loading logs summary:", error);
-        this.showNotification("Failed to load logs summary", "error");
+        console.error(
+          "[AdminDashboard] Error loading logs summary:",
+          error.message,
+          error.stack
+        );
+        this.showNotification(
+          this.translate(
+            "admin.logsSummaryError",
+            "Failed to load logs summary"
+          ),
+          "error"
+        );
+        this.errorLogsSummary = [];
+        this.warningLogsSummary = [];
       } finally {
         this.isLoading = false;
       }

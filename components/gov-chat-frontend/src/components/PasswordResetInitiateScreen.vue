@@ -96,11 +96,7 @@
       <div class="password-reset-initiate-footer">
         <p class="support-message">{{ $t("passwordReset.supportMessage") }}</p>
         <div class="language-selector">
-          <select v-model="selectedLocale" @change="changeLocale">
-            <option value="en">{{ $t("settings.languages.english") }}</option>
-            <option value="fr">{{ $t("settings.languages.french") }}</option>
-            <option value="sw">{{ $t("settings.languages.swahili") }}</option>
-          </select>
+          <language-selector />
         </div>
       </div>
 
@@ -117,9 +113,13 @@
 <script>
 import passwordService from "@/services/passwordService";
 import userService from "@/services/userService";
+import LanguageSelector from "@/components/LanguageSelector.vue";
 
 export default {
   name: "PasswordResetInitiateScreen",
+  components: {
+    LanguageSelector,
+  },
   props: {
     isEmbedded: {
       type: Boolean,
@@ -140,7 +140,6 @@ export default {
       emailError: "",
       isSubmitting: false,
       resetRequested: false,
-      selectedLocale: this.$i18n ? this.$i18n.locale : "en",
     };
   },
   computed: {
@@ -269,18 +268,6 @@ export default {
     },
     cancelReset() {
       this.$emit("cancel");
-    },
-    changeLocale() {
-      if (this.$i18n) {
-        this.$i18n.locale = this.selectedLocale;
-        try {
-          localStorage.setItem("userLocale", this.selectedLocale);
-        } catch (e) {
-          console.warn("[RESET] Error saving language preference:", e);
-        }
-      } else if (typeof this.$setLocale === "function") {
-        this.$setLocale(this.selectedLocale);
-      }
     },
     setMobileHeight() {
       const vh = window.innerHeight * 0.01;
@@ -652,7 +639,7 @@ export default {
   margin-top: 8px;
 }
 
-.language-selector select {
+.language-selector ::v-deep select {
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -665,19 +652,19 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector select {
+[data-theme="light"] .language-selector ::v-deep select {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector select {
+[data-theme="dark"] .language-selector ::v-deep select {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);
 }
 
-.language-selector select:focus {
+.language-selector ::v-deep select:focus {
   outline: none;
   border-color: var(--bg-button-primary, #2a9d8f);
 }

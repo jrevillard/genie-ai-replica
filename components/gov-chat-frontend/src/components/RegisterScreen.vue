@@ -123,11 +123,7 @@
       <div class="register-footer">
         <p class="terms-policy">{{ $t("register.privacyNotice") }}</p>
         <div class="language-selector">
-          <select v-model="selectedLocale" @change="changeLocale">
-            <option value="en">English</option>
-            <option value="fr">Français</option>
-            <option value="sw">Kiswahili</option>
-          </select>
+          <language-selector />
         </div>
       </div>
     </div>
@@ -136,9 +132,13 @@
 
 <script>
 import authService from "@/services/authService";
+import LanguageSelector from "@/components/LanguageSelector.vue";
 
 export default {
   name: "RegisterScreen",
+  components: {
+    LanguageSelector,
+  },
   props: {
     theme: {
       type: String,
@@ -152,7 +152,6 @@ export default {
       password: "",
       confirmPassword: "",
       acceptTerms: false,
-      selectedLocale: this.$i18n ? this.$i18n.locale : "en",
       isSubmitting: false,
       usernameError: "",
       emailError: "",
@@ -282,7 +281,7 @@ export default {
   methods: {
     setMobileHeight() {
       const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
+      document.documentElement.setProperty("--vh", `${vh}px`);
     },
     ensureViewportMeta() {
       if (!document.querySelector('meta[name="viewport"]')) {
@@ -397,18 +396,6 @@ export default {
         }
       } finally {
         this.isSubmitting = false;
-      }
-    },
-    changeLocale() {
-      if (this.$i18n) {
-        this.$i18n.locale = this.selectedLocale;
-        try {
-          localStorage.setItem("userLocale", this.selectedLocale);
-        } catch (e) {
-          console.warn("[REGISTER] Error saving language preference:", e);
-        }
-      } else if (typeof this.$setLocale === "function") {
-        this.$setLocale(this.selectedLocale);
       }
     },
     applyTheme() {
@@ -772,7 +759,7 @@ export default {
   margin-top: 8px;
 }
 
-.language-selector select {
+.language-selector ::v-deep select {
   padding: 6px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -785,19 +772,19 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector select {
+[data-theme="light"] .language-selector ::v-deep select {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector select {
+[data-theme="dark"] .language-selector ::v-deep select {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);
 }
 
-.language-selector select:focus {
+.language-selector ::v-deep select:focus {
   outline: none;
   border-color: var(--bg-button-primary, #2a9d8f);
 }

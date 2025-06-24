@@ -18,7 +18,7 @@
           <div class="app-logo-fallback" v-else></div>
         </div>
         <h1 class="app-name">
-          {{ $config && $config.app ? $config.app.title : $t("login.title") }}
+          {{ $config && $config.app ? $config.app.title : $t('login.title') }}
         </h1>
       </div>
 
@@ -61,32 +61,32 @@
         <div class="remember-forgot">
           <label class="remember-me">
             <input type="checkbox" v-model="rememberMe" />
-            <span>{{ $t("login.rememberMe") }}</span>
+            <span>{{ $t('login.rememberMe') }}</span>
           </label>
           <a href="#" @click.prevent="goToForgotPassword" class="forgot-link">
-            {{ $t("login.forgotPassword") }}
+            {{ $t('login.forgotPassword') }}
           </a>
         </div>
 
         <button type="submit" class="login-button" :disabled="isLoading">
-          <span v-if="isLoading">{{ $t("login.loggingIn") }}</span>
-          <span v-else>{{ $t("login.loginButton") }}</span>
+          <span v-if="isLoading">{{ $t('login.loggingIn') }}</span>
+          <span v-else>{{ $t('login.loginButton') }}</span>
         </button>
       </form>
 
       <!-- Fixed Register Account Link using router-link -->
       <div class="register-account">
         <p>
-          {{ $t("login.noAccount") }}
+          {{ $t('login.noAccount') }}
           <router-link to="/register" class="login-link">{{
-            $t("login.registerNow")
+            $t('login.registerNow')
           }}</router-link>
         </p>
       </div>
 
       <div class="divider">
         <span class="divider-line"></span>
-        <span class="divider-text">{{ $t("login.or") }}</span>
+        <span class="divider-text">{{ $t('login.or') }}</span>
         <span class="divider-line"></span>
       </div>
 
@@ -139,7 +139,7 @@
       </div>
 
       <div v-if="savedAccounts.length > 0" class="saved-accounts">
-        <h3 style="color: #fff !important">{{ $t("login.savedAccounts") }}</h3>
+        <h3 style="color: #fff !important">{{ $t('login.savedAccounts') }}</h3>
         <div class="accounts-container">
           <div
             v-for="account in savedAccounts"
@@ -150,7 +150,7 @@
             <div class="account-left">
               <div class="account-initials">
                 {{ account.name.charAt(0)
-                }}{{ account.name.split(" ")[1]?.charAt(0) || "" }}
+                }}{{ account.name.split(' ')[1]?.charAt(0) || '' }}
               </div>
               <span class="account-name">{{ account.name }}</span>
             </div>
@@ -211,11 +211,7 @@
           By logging in, you agree to our Terms of Service and Privacy Policy
         </p>
         <div class="language-selector">
-          <select v-model="selectedLocale" @change="changeLocale">
-            <option value="en">English</option>
-            <option value="fr">Français</option>
-            <option value="sw">Kiswahili</option>
-          </select>
+          <language-selector />
         </div>
       </div>
     </div>
@@ -223,346 +219,342 @@
 </template>
 
 <script>
-import userService from "@/services/userService";
-import { eventBus } from "@/eventBus.js";
+import userService from '@/services/userService'
+import { eventBus } from '@/eventBus.js'
+import LanguageSelector from '@/components/LanguageSelector.vue'
 
 export default {
-  name: "LoginScreen",
+  name: 'LoginScreen',
+  components: {
+    LanguageSelector
+  },
   props: {
     theme: {
       type: String,
-      default: "light",
-    },
+      default: 'light'
+    }
   },
   data() {
     return {
-      username: "",
-      password: "",
+      username: '',
+      password: '',
       rememberMe: false,
-      selectedLocale: this.$i18n.locale,
       isLoading: false,
-      error: "",
+      error: '',
       savedAccounts: [
         {
           id: 1,
-          name: "John Doe",
-          provider: "Google",
-          email: "john.doe@gmail.com",
+          name: 'John Doe',
+          provider: 'Google',
+          email: 'john.doe@gmail.com'
         },
         {
           id: 2,
-          name: "Jane Smith",
-          provider: "Facebook",
-          email: "jane.smith@facebook.com",
-        },
-      ],
-    };
+          name: 'Jane Smith',
+          provider: 'Facebook',
+          email: 'jane.smith@facebook.com'
+        }
+      ]
+    }
   },
   created() {
     // Apply theme to document element to ensure it cascades properly
-    document.documentElement.setAttribute("data-theme", this.theme);
+    document.documentElement.setAttribute('data-theme', this.theme)
 
     // Add viewport meta tag to ensure proper mobile rendering if not already present
-    this.ensureViewportMeta();
+    this.ensureViewportMeta()
 
     // Clear any previous error messages when navigating to login page
-    this.error = "";
+    this.error = ''
 
     // Check for redirect with error message
     if (this.$route.query.error) {
-      this.error = this.$route.query.error;
+      this.error = this.$route.query.error
     }
 
     // DEBUG: Attempt to read stored credentials from localStorage
     try {
-      console.log(
-        "[DEBUG] Attempting to retrieve credentials from localStorage"
-      );
-      const savedLoginName = localStorage.getItem("savedLoginName");
-      const savedPassword = localStorage.getItem("savedPassword");
+      console.log('[DEBUG] Attempting to retrieve credentials from localStorage')
+      const savedLoginName = localStorage.getItem('savedLoginName')
+      const savedPassword = localStorage.getItem('savedPassword')
       if (savedLoginName && savedPassword) {
-        console.log("[DEBUG] Retrieved credentials from localStorage:", {
-          id: savedLoginName,
-        });
-        this.username = savedLoginName;
-        this.password = savedPassword;
-        this.rememberMe = true;
+        console.log('[DEBUG] Retrieved credentials from localStorage:', {
+          id: savedLoginName
+        })
+        this.username = savedLoginName
+        this.password = savedPassword
+        this.rememberMe = true
       } else {
-        console.log("[DEBUG] No credentials found in localStorage");
+        console.log('[DEBUG] No credentials found in localStorage')
       }
     } catch (error) {
       console.error(
-        "[DEBUG] Error retrieving credentials from localStorage:",
+        '[DEBUG] Error retrieving credentials from localStorage:',
         error
-      );
+      )
     }
   },
   mounted() {
     // Fix for full-height issues on mobile browsers
-    this.setMobileHeight();
-    window.addEventListener("resize", this.setMobileHeight);
+    this.setMobileHeight()
+    window.addEventListener('resize', this.setMobileHeight)
 
     // Apply theme and observe changes
-    this.applyTheme();
-    this.observeThemeChanges();
+    this.applyTheme()
+    this.observeThemeChanges()
 
     // Debug: Log checkbox computed background color
-    const checkbox = document.querySelector(".remember-me input");
+    const checkbox = document.querySelector('.remember-me input')
     console.log(
-      "[LOGIN] Checkbox computed background color:",
-      checkbox ? window.getComputedStyle(checkbox).backgroundColor : "not found"
-    );
+      '[LOGIN] Checkbox computed background color:',
+      checkbox ? window.getComputedStyle(checkbox).backgroundColor : 'not found'
+    )
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.setMobileHeight);
+    window.removeEventListener('resize', this.setMobileHeight)
     // Observer cleanup is handled in observeThemeChanges
     if (this.themeObserver) {
-      console.log("[LOGIN] Disconnecting MutationObserver");
-      this.themeObserver.disconnect();
+      console.log('[LOGIN] Disconnecting MutationObserver')
+      this.themeObserver.disconnect()
     }
   },
   watch: {
     // Watch for theme changes from parent
     theme(newTheme) {
       console.log(
-        "[LOGIN] Theme prop updated:",
+        '[LOGIN] Theme prop updated:',
         newTheme,
-        "source: prop change",
+        'source: prop change',
         new Date().toISOString()
-      );
-      this.applyTheme();
-    },
+      )
+      this.applyTheme()
+    }
   },
   methods: {
     // Fix for mobile viewport height issues (esp. on iOS)
     setMobileHeight() {
       // First we get the viewport height and multiply it by 1% to get a value for a vh unit
-      const vh = window.innerHeight * 0.01;
+      const vh = window.innerHeight * 0.01
       // Then we set the value in the --vh custom property to the root of the document
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
     },
 
     // Ensure the viewport meta tag exists
     ensureViewportMeta() {
       if (!document.querySelector('meta[name="viewport"]')) {
-        const meta = document.createElement("meta");
-        meta.name = "viewport";
+        const meta = document.createElement('meta')
+        meta.name = 'viewport'
         meta.content =
-          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
-        document.getElementsByTagName("head")[0].appendChild(meta);
+          'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+        document.getElementsByTagName('head')[0].appendChild(meta)
       }
     },
 
     // Navigate to forgot password page
     goToForgotPassword() {
-      this.$router.push("/forgot-password");
+      this.$router.push('/forgot-password')
     },
 
     async handleLogin() {
       try {
         // Clear any previous errors
-        this.error = "";
-        this.isLoading = true;
+        this.error = ''
+        this.isLoading = true
 
         // Validate inputs
         if (!this.username || !this.password) {
-          this.error = this.$t("login.fieldsRequired");
-          return;
+          this.error = this.$t('login.fieldsRequired')
+          return
         }
 
         // Call userService to authenticate
-        const result = await userService.login(this.username, this.password);
+        const result = await userService.login(this.username, this.password)
 
         // Verify we got a valid response with access token
         if (!result || !result.accessToken) {
-          this.error = this.$t("login.invalidCredentials");
-          return;
+          this.error = this.$t('login.invalidCredentials')
+          return
         }
 
         // Store credentials in localStorage if rememberMe is checked
         if (this.rememberMe) {
           try {
             console.log(
-              "[DEBUG] Attempting to store credentials in localStorage for username:",
+              '[DEBUG] Attempting to store credentials in localStorage for username:',
               result.loginName
-            );
-            localStorage.setItem("savedLoginName", result.loginName);
-            localStorage.setItem("savedPassword", this.password); // Insecure, development only
+            )
+            localStorage.setItem('savedLoginName', result.loginName)
+            localStorage.setItem('savedPassword', this.password) // Insecure, development only
             console.log(
-              "[DEBUG] Credentials stored successfully in localStorage"
-            );
+              '[DEBUG] Credentials stored successfully in localStorage'
+            )
           } catch (error) {
             console.error(
-              "[DEBUG] Error storing credentials from localStorage:",
+              '[DEBUG] Error storing credentials from localStorage:',
               error
-            );
+            )
           }
         } else {
           // Clear stored credentials
           try {
-            console.log("[DEBUG] Clearing credentials from localStorage");
-            localStorage.removeItem("savedLoginName");
-            localStorage.removeItem("savedPassword");
-            console.log("[DEBUG] Credentials cleared from localStorage");
+            console.log('[DEBUG] Clearing credentials from localStorage')
+            localStorage.removeItem('savedLoginName')
+            localStorage.removeItem('savedPassword')
+            console.log('[DEBUG] Credentials cleared from localStorage')
           } catch (error) {
             console.error(
-              "[DEBUG] Error clearing credentials from localStorage:",
+              '[DEBUG] Error clearing credentials from localStorage:',
               error
-            );
+            )
           }
         }
 
         // Dispatch auth action to store
-        this.$store.dispatch("initAuth");
-        this.$store.commit("setUser", result);
+        this.$store.dispatch('initAuth')
+        this.$store.commit('setUser', result)
 
         // Emit login success event
-        this.$emit("login-success", result);
+        this.$emit('login-success', result)
 
         // Show welcome toast on every login
         if (this.$config?.features?.chat?.welcomeMessage) {
-          eventBus.$emit("notification:show", {
+          eventBus.$emit('notification:show', {
             message: this.$config.features.chat.welcomeMessage,
-            type: "success",
-            duration: 5000,
-          });
-          console.log("[DEBUG] Welcome toast shown");
+            type: 'success',
+            duration: 5000
+          })
+          console.log('[DEBUG] Welcome toast shown')
         }
 
         // Navigate to home or dashboard or redirect URL if it exists
-        const redirectPath = this.$route.query.redirect || "/";
-        this.$router.push(redirectPath);
+        const redirectPath = this.$route.query.redirect || '/'
+        this.$router.push(redirectPath)
       } catch (error) {
-        console.error("Login error:", error);
+        console.error('Login error:', error)
 
         // Handle specific error cases
         if (error.status === 401) {
-          this.error = this.$t("login.invalidCredentials");
+          this.error = this.$t('login.invalidCredentials')
         } else if (error.status === 429) {
-          this.error = this.$t("login.tooManyAttempts");
+          this.error = this.$t('login.tooManyAttempts')
         } else {
-          this.error = this.$t("login.loginFailed");
+          this.error = this.$t('login.loginFailed')
         }
       } finally {
-        this.isLoading = false;
+        this.isLoading = false
       }
     },
 
     async handleGoogleLogin() {
       try {
-        this.error = "";
-        this.isLoading = true;
+        this.error = ''
+        this.isLoading = true
 
         // This would normally call your OAuth implementation
         // For now, we'll just show a message that it’s not implemented
-        this.error = this.$t("login.oauthNotImplemented");
+        this.error = this.$t('login.oauthNotImplemented')
       } catch (error) {
-        console.error("Google login error:", error);
-        this.error = this.$t("login.loginFailed");
+        console.error('Google login error:', error)
+        this.error = this.$t('login.loginFailed')
       } finally {
-        this.isLoading = false;
+        this.isLoading = false
       }
     },
 
     async handleFacebookLogin() {
       try {
-        this.error = "";
-        this.isLoading = true;
+        this.error = ''
+        this.isLoading = true
 
         // This would normally call your OAuth implementation
         // For now, we'll just show a message that it’s not implemented
-        this.error = this.$t("login.oauthNotImplemented");
+        this.error = this.$t('login.oauthNotImplemented')
       } catch (error) {
-        console.error("Facebook login error:", error);
-        this.error = this.$t("login.loginFailed");
+        console.error('Facebook login error:', error)
+        this.error = this.$t('login.loginFailed')
       } finally {
-        this.isLoading = false;
+        this.isLoading = false
       }
     },
 
     async loginWithSavedAccount(account) {
       try {
-        this.error = "";
-        this.isLoading = true;
+        this.error = ''
+        this.isLoading = true
 
         // In a real implementation, you would:
         // 1. Look up the saved credentials securely
         // 2. Use them to authenticate
 
         // For now, we'll just show a message that it’s not implemented
-        this.error = this.$t("login.savedLoginNotImplemented");
+        this.error = this.$t('login.savedLoginNotImplemented')
       } catch (error) {
-        console.error("Saved account login error:", error);
-        this.error = this.$t("login.loginFailed");
+        console.error('Saved account login error:', error)
+        this.error = this.$t('login.loginFailed')
       } finally {
-        this.isLoading = false;
+        this.isLoading = false
       }
-    },
-
-    changeLocale() {
-      // Update locale using your global method
-      this.$setLocale(this.selectedLocale);
     },
 
     // Apply theme to document
     applyTheme() {
       console.log(
-        "[LOGIN] Applying theme:",
+        '[LOGIN] Applying theme:',
         this.theme,
         new Date().toISOString()
-      );
-      const currentTheme = document.documentElement.getAttribute("data-theme");
+      )
+      const currentTheme = document.documentElement.getAttribute('data-theme')
       if (currentTheme !== this.theme) {
         console.warn(
-          "[LOGIN] Theme mismatch: component theme=",
+          '[LOGIN] Theme mismatch: component theme=',
           this.theme,
-          "vs DOM theme=",
+          'vs DOM theme=',
           currentTheme
-        );
+        )
       }
-      document.documentElement.setAttribute("data-theme", this.theme);
-      const title = document.querySelector(".login-card .app-name");
+      document.documentElement.setAttribute('data-theme', this.theme)
+      const title = document.querySelector('.login-card .app-name')
       console.log(
-        "[LOGIN] Title computed color:",
-        title ? window.getComputedStyle(title).color : "not found"
-      );
+        '[LOGIN] Title computed color:',
+        title ? window.getComputedStyle(title).color : 'not found'
+      )
     },
 
     // Observe external theme changes
     observeThemeChanges() {
       console.log(
-        "[LOGIN] Setting up MutationObserver, initial theme:",
+        '[LOGIN] Setting up MutationObserver, initial theme:',
         this.theme,
         new Date().toISOString()
-      );
+      )
       const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
-          if (mutation.attributeName === "data-theme") {
+          if (mutation.attributeName === 'data-theme') {
             const newTheme =
-              document.documentElement.getAttribute("data-theme");
+              document.documentElement.getAttribute('data-theme')
             console.log(
-              "[LOGIN] Detected theme change via MutationObserver:",
+              '[LOGIN] Detected theme change via MutationObserver:',
               newTheme,
               new Date().toISOString()
-            );
+            )
             if (newTheme !== this.theme) {
-              console.log("[LOGIN] Updating component theme to:", newTheme);
-              this.theme = newTheme;
-              const title = document.querySelector(".login-card .app-name");
+              console.log('[LOGIN] Updating component theme to:', newTheme)
+              this.theme = newTheme
+              const title = document.querySelector('.login-card .app-name')
               console.log(
-                "[LOGIN] Title computed color after change:",
-                title ? window.getComputedStyle(title).color : "not found"
-              );
+                '[LOGIN] Title computed color after change:',
+                title ? window.getComputedStyle(title).color : 'not found'
+              )
             }
           }
-        });
-      });
-      observer.observe(document.documentElement, { attributes: true });
+        })
+      })
+      observer.observe(document.documentElement, { attributes: true })
       // Store observer for cleanup
-      this.themeObserver = observer;
-    },
-  },
-};
+      this.themeObserver = observer
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -579,11 +571,11 @@ export default {
   box-sizing: border-box;
 }
 
-[data-theme="light"] .login-container {
+[data-theme='light'] .login-container {
   background-color: var(--bg-primary, #f5f7fa);
 }
 
-[data-theme="dark"] .login-container {
+[data-theme='dark'] .login-container {
   background-color: var(--bg-primary, #1e1e1e);
 }
 
@@ -599,12 +591,12 @@ export default {
   flex-direction: column;
 }
 
-[data-theme="light"] .login-card {
+[data-theme='light'] .login-card {
   background-color: var(--bg-secondary, #ffffff);
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .login-card {
+[data-theme='dark'] .login-card {
   background-color: var(--bg-secondary, #252525);
   color: var(--text-primary, #f0f0f0);
 }
@@ -636,7 +628,7 @@ export default {
   margin-bottom: 10px; /* Reduced margin */
 }
 
-/* Add after .app-logo rule (around line 50) */
+/* Add after .app-logo rule */
 .app-logo:has(.ui-icon) {
   background-color: transparent;
 }
@@ -661,11 +653,11 @@ export default {
   font-weight: bold;
 }
 
-[data-theme="light"] .login-card .app-name {
+[data-theme='light'] .login-card .app-name {
   color: #000000 !important;
 }
 
-[data-theme="dark"] .login-card .app-name {
+[data-theme='dark'] .login-card .app-name {
   color: var(--text-primary, #f0f0f0) !important;
 }
 
@@ -686,12 +678,12 @@ export default {
   transition: background-color 0.2s;
 }
 
-[data-theme="light"] .form-control {
+[data-theme='light'] .form-control {
   background-color: var(--bg-tertiary, #f0f2f5) !important;
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .form-control {
+[data-theme='dark'] .form-control {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
 }
@@ -700,11 +692,11 @@ export default {
   outline: none;
 }
 
-[data-theme="light"] .form-control:focus {
+[data-theme='light'] .form-control:focus {
   background-color: var(--bg-primary, #f5f7fa) !important;
 }
 
-[data-theme="dark"] .form-control:focus {
+[data-theme='dark'] .form-control:focus {
   background-color: var(--bg-input, #2a2a2a);
 }
 
@@ -733,7 +725,7 @@ export default {
 }
 
 .remember-me input:checked::after {
-  content: "\2713";
+  content: '\2713';
   color: #ffffff;
   position: absolute;
   top: 50%;
@@ -742,11 +734,11 @@ export default {
   font-size: 12px;
 }
 
-[data-theme="light"] .remember-me span {
+[data-theme='light'] .remember-me span {
   color: var(--text-secondary, #4d4d4d);
 }
 
-[data-theme="dark"] .remember-me span {
+[data-theme='dark'] .remember-me span {
   color: var(--text-secondary, #b3b3b3);
 }
 
@@ -772,7 +764,7 @@ export default {
   transition: background-color 0.2s;
 }
 
-[data-theme="dark"] .login-button {
+[data-theme='dark'] .login-button {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -815,11 +807,11 @@ export default {
   height: 1px;
 }
 
-[data-theme="light"] .divider-line {
+[data-theme='light'] .divider-line {
   background-color: var(--border-light, #e5e7eb);
 }
 
-[data-theme="dark"] .divider-line {
+[data-theme='dark'] .divider-line {
   background-color: var(--border-light, #333333);
 }
 
@@ -828,11 +820,11 @@ export default {
   font-size: 13px; /* Smaller font */
 }
 
-[data-theme="light"] .divider-text {
+[data-theme='light'] .divider-text {
   color: var(--text-tertiary, #767676);
 }
 
-[data-theme="dark"] .divider-text {
+[data-theme='dark'] .divider-text {
   color: var(--text-tertiary, #8c8c8c);
 }
 
@@ -883,8 +875,8 @@ export default {
   color: var(--text-button-primary, #ffffff);
 }
 
-[data-theme="dark"] .google-button,
-[data-theme="dark"] .facebook-button {
+[data-theme='dark'] .google-button,
+[data-theme='dark'] .facebook-button {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -899,12 +891,12 @@ export default {
   padding-top: 14px;
 }
 
-[data-theme="light"] .saved-accounts {
+[data-theme='light'] .saved-accounts {
   background-color: var(--bg-secondary, #ffffff);
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .saved-accounts {
+[data-theme='dark'] .saved-accounts {
   background-color: var(--bg-secondary, #252525);
   color: var(--text-primary, #f0f0f0);
 }
@@ -915,11 +907,11 @@ export default {
   font-weight: 500;
 }
 
-[data-theme="light"] .saved-accounts h3 {
+[data-theme='light'] .saved-accounts h3 {
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .saved-accounts h3 {
+[data-theme='dark'] .saved-accounts h3 {
   color: var(--text-primary, #f0f0f0);
 }
 
@@ -929,11 +921,11 @@ export default {
   gap: 8px; /* Reduced gap */
 }
 
-[data-theme="light"] .accounts-container {
+[data-theme='light'] .accounts-container {
   background-color: var(--bg-secondary, #ffffff);
 }
 
-[data-theme="dark"] .accounts-container {
+[data-theme='dark'] .accounts-container {
   background-color: var(--bg-secondary, #252525);
 }
 
@@ -949,7 +941,7 @@ export default {
   background-color: var(--bg-button-primary, #2a9d8f);
 }
 
-[data-theme="dark"] .account-item {
+[data-theme='dark'] .account-item {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -981,11 +973,11 @@ export default {
   font-size: 14px; /* Smaller font */
 }
 
-[data-theme="light"] .account-name {
+[data-theme='light'] .account-name {
   color: var(--text-primary, #333333);
 }
 
-[data-theme="dark"] .account-name {
+[data-theme='dark'] .account-name {
   color: var(--text-primary, #f0f0f0);
 }
 
@@ -997,12 +989,12 @@ export default {
   font-size: 11px; /* Smaller font */
 }
 
-[data-theme="light"] .account-provider {
+[data-theme='light'] .account-provider {
   background-color: var(--bg-tertiary, #f0f2f5);
   color: var(--text-muted, #6c757d);
 }
 
-[data-theme="dark"] .account-provider {
+[data-theme='dark'] .account-provider {
   background-color: var(--bg-tertiary, #2a2a2a);
   color: var(--text-muted, #9ca3af);
 }
@@ -1024,11 +1016,11 @@ export default {
   margin-bottom: 10px; /* Reduced margin */
 }
 
-[data-theme="light"] .terms-policy {
+[data-theme='light'] .terms-policy {
   color: var(--text-muted, #6c757d);
 }
 
-[data-theme="dark"] .terms-policy {
+[data-theme='dark'] .terms-policy {
   color: var(--text-muted, #9ca3af);
 }
 
@@ -1036,10 +1028,11 @@ export default {
   margin-top: 8px; /* Reduced margin */
 }
 
-.language-selector select {
-  padding: 6px 12px; /* Reduced padding */
+/* Style LanguageSelector.vue's select to match original */
+.language-selector ::v-deep select {
+  padding: 6px 12px; /* Match original padding */
   border-radius: 8px;
-  font-size: 13px; /* Smaller font */
+  font-size: 13px; /* Match original font size */
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
@@ -1049,19 +1042,19 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector select {
+[data-theme='light'] .language-selector ::v-deep select {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector select {
+[data-theme='dark'] .language-selector ::v-deep select {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);
 }
 
-.language-selector select:focus {
+.language-selector ::v-deep select:focus {
   outline: none;
   border-color: var(--bg-button-primary, #2a9d8f);
 }

@@ -8,16 +8,16 @@ from typing import Annotated, List, Optional, Union
 
 from fastapi import Body, Depends, File, Form, HTTPException, Request, UploadFile
 from integrations.arangodb import OpeaArangoDataprep
-from integrations.elasticsearch import OpeaElasticSearchDataprep
-from integrations.milvus import OpeaMilvusDataprep
-from integrations.neo4j_llamaindex import OpeaNeo4jLlamaIndexDataprep
-from integrations.opensearch import OpeaOpenSearchDataprep
-from integrations.pgvect import OpeaPgvectorDataprep
-from integrations.pipecone import OpeaPineConeDataprep
-from integrations.qdrant import OpeaQdrantDataprep
-from integrations.redis import OpeaRedisDataprep
-from integrations.redis_finance import OpeaRedisDataprepFinance
-from integrations.vdms import OpeaVdmsDataprep
+# from integrations.elasticsearch import OpeaElasticSearchDataprep
+# from integrations.milvus import OpeaMilvusDataprep
+# from integrations.neo4j_llamaindex import OpeaNeo4jLlamaIndexDataprep
+# from integrations.opensearch import OpeaOpenSearchDataprep
+# from integrations.pgvect import OpeaPgvectorDataprep
+# from integrations.pipecone import OpeaPineConeDataprep
+# from integrations.qdrant import OpeaQdrantDataprep
+# from integrations.redis import OpeaRedisDataprep
+# from integrations.redis_finance import OpeaRedisDataprepFinance
+# from integrations.vdms import OpeaVdmsDataprep
 from opea_dataprep_loader import OpeaDataprepLoader
 
 from comps import (
@@ -60,17 +60,17 @@ async def resolve_dataprep_request(request: Request):
         "table_strategy": form.get("table_strategy", "fast"),
     }
 
-    if "index_name" in form:
-        return RedisDataprepRequest(
-            **common_args,
-            index_name=form.get("index_name"),
-        )
+    # if "index_name" in form:
+    #     return RedisDataprepRequest(
+    #         **common_args,
+    #         index_name=form.get("index_name"),
+    #     )
 
-    if "ingest_from_graphDB" in form:
-        return Neo4jDataprepRequest(
-            **common_args,
-            ingest_from_graphDB=form.get("ingest_from_graphDB"),
-        )
+    # if "ingest_from_graphDB" in form:
+    #     return Neo4jDataprepRequest(
+    #         **common_args,
+    #         ingest_from_graphDB=form.get("ingest_from_graphDB"),
+    #     )
 
     if "graph_name" in form:
         return ArangoDBDataprepRequest(
@@ -105,11 +105,11 @@ async def ingest_files(
         resolve_dataprep_request
     ),
 ):
-    if isinstance(input, RedisDataprepRequest):
-        logger.info(f"[ ingest ] Redis mode: index_name={input.index_name}")
-    elif isinstance(input, Neo4jDataprepRequest):
-        logger.info(f"[ ingest ] Neo4j mode: ingest_from_graphDB={input.ingest_from_graphDB}")
-    elif isinstance(input, ArangoDBDataprepRequest):
+    # if isinstance(input, RedisDataprepRequest):
+    #     logger.info(f"[ ingest ] Redis mode: index_name={input.index_name}")
+    # elif isinstance(input, Neo4jDataprepRequest):
+    #     logger.info(f"[ ingest ] Neo4j mode: ingest_from_graphDB={input.ingest_from_graphDB}")
+    if isinstance(input, ArangoDBDataprepRequest):
         logger.info(f"[ ingest ] ArangoDB mode: graph_name={input.graph_name}, ...")
     # elif ...
     else:
@@ -136,6 +136,46 @@ async def ingest_files(
     except Exception as e:
         logger.error(f"Error during dataprep ingest invocation: {e}")
         raise
+
+
+
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/ingest_file",
+    host="0.0.0.0",
+    port=5000,
+)
+@register_statistics(names=["opea_service@dataprep"])
+async def ingest_file_from_repo(input: Request):
+    """
+    Accepts JSON: { "fileId": "...", "filePath": "..." }
+    """
+
+    start = time.time()
+
+    data = await input.json()
+    file_id = data.get("fileId")
+    file_path = data.get("filePath")
+    if not file_id or not file_path:
+        raise HTTPException(status_code=400, detail="fileId and filePath are required.")
+    
+    if logflag:
+        logger.info(f"[ ingest ] files:{file_id}")
+        logger.info(f"[ ingest ] file path:{file_path}")
+
+    # Call the new ingest_files_with_guardrail method
+    try:
+        response = await loader.ingest_file_with_guardrail(file_id, file_path)
+        # Log the result if logging is enabled
+        if logflag:
+            logger.info(f"[ ingest ] Output generated: {response}")
+        statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
+        return response
+    except Exception as e:
+        logger.error(f"Error during dataprep ingest invocation from document repository: {e}")
+        raise
+
 
 
 @register_microservice(

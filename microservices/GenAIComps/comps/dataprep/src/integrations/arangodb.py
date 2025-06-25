@@ -4,6 +4,7 @@
 import json
 import os
 from typing import List, Optional, Union
+import aiohttp
 
 import openai
 from arango import ArangoClient
@@ -62,6 +63,10 @@ HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 EMBED_NODES = os.getenv("EMBED_NODES", "true").lower() == "true"
 EMBED_EDGES = os.getenv("EMBED_EDGES", "true").lower() == "true"
 EMBED_CHUNKS = os.getenv("EMBED_CHUNKS", "true").lower() == "true"
+
+# Guardrail configuration
+GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guard/check")
+GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "true").lower() == "true"
 
 # OpenAI configuration (alternative to TEI/VLLM)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -294,6 +299,44 @@ class OpeaArangoDataprep(OpeaComponent):
             logger.info(f"Created {len(chunks)} chunks of the original file")
 
         ################################
+        # Guardrail check for chunks   #
+        ################################
+
+        guardrail_url = GUARDRAIL_URL
+        if GUARDRAIL_ENABLED and guardrail_url:
+            if logflag:
+                logger.info("Guardrail service is enabled, checking chunks for harmful content.")
+
+            # Ensure the guardrail URL is valid
+            if not guardrail_url.startswith("http://") and not guardrail_url.startswith("https://"):
+                raise HTTPException(status_code=400, detail="Invalid Guardrail URL.")
+
+            # Check each chunk for harmful content
+            if logflag:
+                logger.info(f"Sending {len(chunks)} chunks to Guardrail service at {guardrail_url}")
+                
+            async with aiohttp.ClientSession() as session:
+                for i, text in enumerate(chunks):
+                    payload = {"text": text}
+                    async with session.post(guardrail_url, json=payload) as resp:
+                        if resp.status != 200:
+                            logger.error(f"Guardrail service error on chunk {i}")
+                            return {
+                                "success": False,
+                                "message": f"Guardrail service error on chunk {i}",
+                                "chunk_index": i,
+                            }
+                        result = await resp.json()
+                        if result.get("harmful", False):
+                            logger.error(f"Harmful content detected in chunk {i}")
+                            return {
+                                "success": False,
+                                "message": f"Harmful content detected in chunk {i}",
+                                "chunk_index": i,
+                            }
+
+
+        ################################
         # Graph generation & insertion #
         ################################
 
@@ -478,6 +521,156 @@ class OpeaArangoDataprep(OpeaComponent):
             logger.info(result)
 
         return result
+    
+
+
+
+
+    async def ingest_file_with_guardrail(self, input: Union[DataprepRequest, ArangoDBDataprepRequest]):
+        """Ingest files/links content into ArangoDB database.
+
+        Save in the format of vector[768].
+        Returns '{"status": 200, "message": "Data preparation succeeded"}' if successful.
+        Args:
+            input (DataprepRequest | ArangoDBDataprepRequest): Model containing the following parameters:
+                files (Union[UploadFile, List[UploadFile]], optional): A file or a list of files to be ingested. Defaults to File(None).
+                link_list (str, optional): A list of links to be ingested. Defaults to Form(None).
+                chunk_size (int, optional): The size of the chunks to be split. Defaults to Form(500).
+                chunk_overlap (int, optional): The overlap between chunks. Defaults to Form(100).
+                process_table (bool, optional): Whether to process tables in PDFs. Defaults to Form(False).
+                table_strategy (str, optional): The strategy to process tables in PDFs. Defaults to Form("fast").
+                graph_name (str, optional): The name of the graph to be created. Defaults to "GRAPH".
+                insert_async (bool, optional): Whether to insert data asynchronously. Defaults to False.
+                insert_batch_size (int, optional): The batch size for insertion. Defaults to 1000.
+                embed_nodes (bool, optional): Whether to embed nodes. Defaults to True.
+                embed_edges (bool, optional): Whether to embed edges. Defaults to True.
+                embed_chunks (bool, optional): Whether to embed chunks. Defaults to True.
+                allowed_node_types (List[str], optional): The allowed node types. Defaults to [].
+                allowed_edge_types (List[str], optional): The allowed edge types. Defaults to [].
+                node_properties (List[str], optional): The node properties to be used. Defaults to ["description"].
+                edge_properties (List[str], optional): The edge properties to be used. Defaults to ["description"].
+                text_capitalization_strategy (str, optional): The text capitalization strategy. Defaults to "upper".
+                include_chunks (bool, optional): Whether to include chunks in the graph. Defaults to True.
+        """
+
+        files = input.files
+        link_list = input.link_list
+        chunk_size = input.chunk_size
+        chunk_overlap = input.chunk_overlap
+        process_table = input.process_table
+        table_strategy = input.table_strategy
+        graph_name = getattr(input, "graph_name", ARANGO_GRAPH_NAME)
+        insert_async = getattr(input, "insert_async", ARANGO_INSERT_ASYNC)
+        insert_batch_size = getattr(input, "insert_batch_size", ARANGO_BATCH_SIZE)
+        embed_nodes = getattr(input, "embed_nodes", EMBED_NODES)
+        embed_edges = getattr(input, "embed_edges", EMBED_EDGES)
+        embed_chunks = getattr(input, "embed_chunks", EMBED_CHUNKS)
+        allowed_node_types = getattr(input, "allowed_node_types", ALLOWED_NODE_TYPES)
+        allowed_edge_types = getattr(input, "allowed_edge_types", ALLOWED_EDGE_TYPES)
+        node_properties = getattr(input, "node_properties", NODE_PROPERTIES)
+        edge_properties = getattr(input, "edge_properties", EDGE_PROPERTIES)
+        text_capitalization_strategy = getattr(input, "text_capitalization_strategy", TEXT_CAPITALIZATION_STRATEGY)
+        include_chunks = getattr(input, "include_chunks", INCLUDE_CHUNKS)
+
+        self._initialize_llm(
+            allowed_node_types=allowed_node_types,
+            allowed_edge_types=allowed_edge_types,
+            node_properties=node_properties,
+            edge_properties=edge_properties,
+        )
+
+        if logflag:
+            logger.info(f"files:{files}")
+            logger.info(f"link_list:{link_list}")
+
+        if not files and not link_list:
+            raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
+
+        graph_names_created = set()
+
+        if files:
+            if not isinstance(files, list):
+                files = [files]
+            uploaded_files = []
+            for file in files:
+                encode_file = encode_filename(file.filename)
+                save_path = self.upload_folder + encode_file
+                await save_content_to_local_disk(save_path, file)
+                try:
+                    graph_name = await self.ingest_data_to_arango(
+                        DocPath(
+                            path=save_path,
+                            chunk_size=chunk_size,
+                            chunk_overlap=chunk_overlap,
+                            process_table=process_table,
+                            table_strategy=table_strategy,
+                        ),
+                        graph_name=graph_name,
+                        insert_async=insert_async,
+                        insert_batch_size=insert_batch_size,
+                        embed_nodes=embed_nodes,
+                        embed_edges=embed_edges,
+                        embed_chunks=embed_chunks,
+                        text_capitalization_strategy=text_capitalization_strategy,
+                        include_chunks=include_chunks,
+                    )
+
+                    uploaded_files.append(save_path)
+                    graph_names_created.add(graph_name)
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
+
+                if logflag:
+                    logger.info(f"Successfully saved file {save_path}")
+
+        if link_list:
+            link_list = json.loads(link_list)  # Parse JSON string to list
+            if not isinstance(link_list, list):
+                raise HTTPException(status_code=400, detail="link_list should be a list.")
+            for link in link_list:
+                encoded_link = encode_filename(link)
+                save_path = self.upload_folder + encoded_link + ".txt"
+                content = parse_html([link])[0][0]
+                await save_content_to_local_disk(save_path, content)
+                try:
+                    graph_name = await self.ingest_data_to_arango(
+                        DocPath(
+                            path=save_path,
+                            chunk_size=chunk_size,
+                            chunk_overlap=chunk_overlap,
+                            process_table=process_table,
+                            table_strategy=table_strategy,
+                        ),
+                        graph_name=graph_name,
+                        insert_async=insert_async,
+                        insert_batch_size=insert_batch_size,
+                        embed_nodes=embed_nodes,
+                        embed_edges=embed_edges,
+                        embed_chunks=embed_chunks,
+                        text_capitalization_strategy=text_capitalization_strategy,
+                        include_chunks=include_chunks,
+                    )
+                    graph_names_created.add(graph_name)
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
+
+                if logflag:
+                    logger.info(f"Successfully saved link {link}")
+
+        result = {
+            "status": 200,
+            "message": f"Data preparation succeeded: {graph_names_created}",
+            "graph_names": list(graph_names_created),
+        }
+
+        if logflag:
+            logger.info(result)
+
+        return result
+
+
+
+
 
     def invoke(self, *args, **kwargs):
         pass

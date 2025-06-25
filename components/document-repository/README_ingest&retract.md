@@ -27,12 +27,11 @@ Expose an endpoint (e.g. `POST /api/files/:fileId/retract`) that:
 **Ingest**
 
 * Receives the file (or file path/URL) and metadata.
-* Performs text extraction, chunking, 
-* (Embed each chunk, instead of the whole file? Or both?)
-* Call guardrail microservices for content checking
+* Performs text extraction and chunking of the file content.
+* Call guardrail microservices for content checking for each chunk
     * If fails, return an error response.
     * If successful:
-        * Performs embedding, entity and relation extraction. 
+        * Performs embedding, entity and relation extraction for each chunk.
         * Stores results in its own collections (chunks, embeddings, entities, relations).
         * Returns a success/failure response.
 

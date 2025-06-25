@@ -20,6 +20,11 @@ export default {
       }
     }
   },
+  watch: {
+    '$i18n.locale'(newLocale) {
+      this.currentLocale = newLocale
+    }
+  },
   methods: {
     changeLanguage() {
       this.$i18n.locale = this.currentLocale

@@ -15,6 +15,7 @@ export default {
       localeNames: {
         en: 'English',
         fr: 'Français',
+        id: 'Indonesian',
         sw: 'Kiswahili'
       }
     }

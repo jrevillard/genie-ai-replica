@@ -17,7 +17,7 @@ export default {
     'BH': 'Bahareni',
     'BD': 'Bangladeshi',
     'BB': 'Barbados',
-    'BY': 'Belarus',
+    'BY': 'Belarusi',
     'BE': 'Ubelgiji',
     'BZ': 'Belize',
     'BJ': 'Benini',
@@ -211,7 +211,6 @@ export default {
     backToLogin: 'Rudi kwa Kuingia'
   },
   admin: {
-    // Lebo za jumla za dashibodi
     huduma: 'Huduma AI',
     dashboard: 'Dashibodi',
     system: 'Mfumo',
@@ -225,15 +224,13 @@ export default {
     loading: 'Inapakia...',
     close: 'Funga dashibodi',
     edit: 'Hariri',
-
-    // Takwimu na vipimo
     systemUptime: 'Muda wa Uendeshaji wa Mfumo',
     avgResponseTime: 'Wastani wa Muda wa Majibu',
     errorRate: 'Kiwango cha Hitilafu',
     activeUsers: 'Watumiaji Hai',
+    monthlyActiveUsers: 'Watumiaji Hai wa Kila Mwezi (WAM)',
     fromLastMonth: 'kutoka mwezi uliopita',
-
-    // Lebo za tabo
+    today: 'Leo',
     tabs: {
       overview: 'Afya ya Mfumo',
       database: 'Hifadhidata',
@@ -241,13 +238,9 @@ export default {
       security: 'Usalama',
       users: 'Watumiaji'
     },
-
-    // Afya ya mfumo
     systemHealthStatus: 'Hali ya Afya ya Mfumo',
     runDiagnostics: 'Endesha Uchunguzi',
     resourceUsage: 'Matumizi ya Rasilimali',
-
-    // Majina ya huduma
     services: {
       apiServices: 'Huduma za API',
       database: 'Hifadhidata',
@@ -256,23 +249,17 @@ export default {
       messageQueue: 'Foleni ya Ujumbe',
       externalApi: 'API ya Nje'
     },
-
-    // Aina za rasilimali
     resources: {
       cpu: 'Matumizi ya CPU',
       memory: 'Matumizi ya Kumbukumbu',
       storage: 'Matumizi ya Hifadhi',
       network: 'Upeo wa Mtandao'
     },
-
-    // Usimamizi wa hifadhidata
     databaseManagement: 'Usimamizi wa Hifadhidata',
     reindexDatabase: 'Faharisi Hifadhidata',
     lastReindex: 'Faharisi ya Mwisho',
     databaseSize: 'Ukubwa wa Hifadhidata',
     totalTables: 'Jumla ya Jedwali',
-
-    // Usimamizi wa kumbukumbu
     logManagement: 'Usimamizi wa Kumbukumbu',
     rolloverLogs: 'Badilisha Kumbukumbu',
     searchLogs: 'Tafuta Kumbukumbu',
@@ -281,35 +268,17 @@ export default {
     logService: 'Huduma',
     logMessage: 'Ujumbe',
     showingEntries: 'Inaonyesha {start}-{end} kati ya {total} viingizo',
-
-    // Viwango vya kumbukumbu
     logLevels: {
       error: 'HITILAFU',
       warn: 'ONYO',
       info: 'TAARIFA',
       debug: 'UTATUZI'
     },
-
-    // Ujumbe wa kumbukumbu
     logMessages: {
       connectionTimeout: 'Muda wa kuunganisha umekwisha kwa mtoa huduma wa nje',
       lowDiskSpace: 'Nafasi ya diski chini ya kiwango cha 10%',
       userRoleUpdated: 'Wajibu wa mtumiaji umesasishwa kwa admin@huduma.ai'
     },
-
-    // Ufuatiliaji wa usalama
-    securityMonitoring: 'Ufuatiliaji wa Usalama',
-    securityScan: 'Ukaguzi wa Usalama',
-    failedLoginAttempts: 'Majaribio ya Kuingia Yaliyoshindwa (24h)',
-    suspiciousActivities: 'Shughuli za Kushuku (24h)',
-    lastSecurityScan: 'Ukaguzi wa Mwisho wa Usalama',
-    vulnerabilitiesFound: 'Mapungufu Yaliyopatikana',
-    daysAgo: 'siku zilizopita',
-    critical: 'hatari',
-    medium: 'wastani',
-    low: 'ndogo',
-
-    // Usimamizi wa watumiaji
     userName: 'Jina',
     userEmail: 'Barua pepe',
     userRole: 'Wajibu',
@@ -318,8 +287,6 @@ export default {
     roleAdministrator: 'Msimamizi',
     roleUser: 'Mtumiaji',
     statusActive: 'Hai',
-
-    // Vitendo vya hifadhidata
     dbActions: {
       reindex: 'Faharisi Upya',
       backup: 'Hifadhi Nakala',
@@ -328,7 +295,6 @@ export default {
       backupDesc: 'Tengeneza nakala ya hifadhidata',
       optimizeDesc: 'Boresha utendaji wa utafutaji'
     },
-
     operations: {
       reindexTitle: 'Matokeo ya Kurekebisha Faharasa ya Hifadhidata',
       backupTitle: 'Matokeo ya Nakala Rudufu ya Hifadhidata',
@@ -345,54 +311,43 @@ export default {
       errorDetails: 'Maelezo ya Hitilafu',
       close: 'Funga',
       resultsTitle: 'Matokeo ya Operesheni',
-      reindexDatabase: 'Rekebisha Faharasa ya Hifadhidata',
-      backupDatabase: 'Tengeneza Nakala Rudufu ya Hifadhidata',
-      optimizeDatabase: 'Boresha Hifadhidata',
-      dbActions: {
-        reindex: 'Rekebisha Faharasa',
-        backup: 'Nakala Rudufu',
-        optimize: 'Boresha',
-        reindexDesc: 'Jenga upya faharasa za hifadhidata',
-        backupDesc: 'Tengeneza nakala rudufu ya hifadhidata',
-        optimizeDesc: 'Boresha utendaji wa utafutaji'
+      reindexDatabase: {
+        success: 'Urekebishaji wa faharasa ya hifadhidata umekamilika',
+        error: 'Hitilafu wakati wa kurekebishwa faharasa ya hifadhidata',
+        loading: 'Inarekebisha faharasa ya hifadhidata...'
       },
-      lastReindex: 'Urekebishaji wa Mwisho',
-      databaseSize: 'Ukubwa wa Hifadhidata',
-      totalTables: 'Jumla ya Jedwali',
-      operations: {
-        reindexDatabase: {
-          success: 'Urekebishaji wa faharasa ya hifadhidata umekamilika',
-          error: 'Hitilafu wakati wa kurekebishwa faharasa ya hifadhidata',
-          loading: 'Inarekebisha faharasa ya hifadhidata...'
-        },
-        backupDatabase: {
-          success: 'Nakala rudufu ya hifadhidata imekamilika',
-          error: 'Hitilafu wakati wa kufanya nakala rudufu ya hifadhidata',
-          loading: 'Inatengeneza nakala rudufu ya hifadhidata...'
-        },
-        optimizeDatabase: {
-          success: 'Uboreshaji wa hifadhidata umekamilika',
-          error: 'Hitilafu wakati wa kuboresha hifadhidata',
-          loading: 'Inaboresha hifadhidata...'
-        },
-        rolloverLogs: {
-          success: 'Upitishaji wa kumbukumbu umekamilika',
-          loading: 'Inapitisha kumbukumbu...'
-        },
-        searchLogs: {
-          success: 'Utafutaji wa kumbukumbu umekamilika',
-          loading: 'Inatafuta kumbukumbu...'
-        },
-        runDiagnostics: {
-          success: 'Uchunguzi umekamilika',
-          loading: 'Inafanya uchunguzi...'
-        },
-        runSecurityScan: {
-          success: 'Ukaguzi wa usalama umekamilika',
-          loading: 'Inafanya ukaguzi wa usalama...'
-        }
+      backupDatabase: {
+        success: 'Nakala rudufu ya hifadhidata imekamilika',
+        error: 'Hitilafu wakati wa kufanya nakala rudufu ya hifadhidata',
+        loading: 'Inatengeneza nakala rudufu ya hifadhidata...'
       },
-      monthlyActiveUsers: 'Watumiaji Hai wa Kila Mwezi (WAM)',
+      optimizeDatabase: {
+        success: 'Uboreshaji wa hifadhidata umekamilika',
+        error: 'Hitilafu wakati wa kuboresha hifadhidata',
+        loading: 'Inaboresha hifadhidata...'
+      },
+      rolloverLogs: {
+        success: 'Upitishaji wa kumbukumbu umekamilika',
+        loading: 'Inapitisha kumbukumbu...'
+      },
+      searchLogs: {
+        success: 'Utafutaji wa kumbukumbu umekamilika',
+        loading: 'Inatafuta kumbukumbu...'
+      },
+      runDiagnostics: {
+        success: 'Uchunguzi umekamilika',
+        loading: 'Inafanya uchunguzi...'
+      },
+      runSecurityScan: {
+        success: 'Ukaguzi wa usalama umekamilika',
+        loading: 'Inafanya ukaguzi wa usalama...'
+      },
+      cancel: 'Ghairi',
+      save: 'Hifadhi Mabadiliko'
+    },
+    userManagementSection: {
+      totalUsers: 'Jumla ya Watumiaji',
+      newUsers: 'Watumiaji Wapya (Mwezi)',
       searchUsers: 'Tafuta watumiaji...',
       clearSearch: 'Futa utafutaji',
       search: 'Tafuta',
@@ -406,11 +361,18 @@ export default {
       of: 'kati ya',
       previous: 'Iliyotangulia',
       next: 'Inayofuata',
-      runningSecurityScan: 'Uchunguzi Unaendelea...',
-      securityRecommendations: 'Mapendekezo ya Usalama',
-      totalUsers: 'Jumla ya Watumiaji',
-      newUsers: 'Watumiaji Wapya (Mwezi)',
-      today: 'Leo',
+      searchFields: {
+        all: 'Sehemu Zote',
+        name: 'Jina',
+        email: 'Barua pepe',
+        role: 'Wajibu'
+      },
+      userSearch: {
+        resultsFound: 'Imepatikana {total} watumiaji wanaofanana na "{term}"',
+        error: 'Hitilafu katika kutafuta watumiaji'
+      }
+    },
+    logsSection: {
       errorLogs: 'Kumbukumbu za Hitilafu',
       warningLogs: 'Kumbukumbu za Tahadhari',
       noErrorLogs: 'Hakuna kumbukumbu za hitilafu zilizorekodiwa leo.',
@@ -421,8 +383,6 @@ export default {
       viewAllResults: 'Ona Matokeo Yote',
       logType: 'Aina',
       logCount: 'Idadi',
-
-      // Log types
       logTypes: {
         connectionTimeout: 'Muda wa muunganisho umekwisha',
         databaseFailed: 'Hoja ya hifadhidata imeshindwa',
@@ -431,42 +391,56 @@ export default {
         slowQuery: 'Utendaji wa polepole wa hoja',
         rateLimit: 'Kikomo cha kiwango kinakaribia'
       },
-
-      // Security section
-      security: {
-        criticalVulnerabilities: 'Udhaifu Mkubwa',
-        authenticationIssues: 'Masuala ya Uthibitishaji',
-        occurrences: 'Matukio',
-        firstSeen: 'Ilionekana Kwanza',
-        lastSeen: 'Ilionekana Mwisho',
-        timestamp: 'Muhuri wa Wakati',
-        message: 'Ujumbe',
-        service: 'Huduma',
-        showLess: 'Onyesha Kidogo',
-        showMore: 'Onyesha Masuala Yote ya Uthibitishaji',
-        recommendedAction: 'Hatua Inayopendekezwa',
-        noVulnerabilitiesFound: 'Hakuna Udhaifu Uliopatikana',
-        systemSecure: 'Mfumo wako unaonekana kuwa salama. Endelea kufuatilia mara kwa mara.'
-      },
-
-      // Search fields
-      searchFields: {
-        all: 'Sehemu Zote',
-        name: 'Jina',
-        email: 'Barua pepe',
-        role: 'Wajibu'
-      },
-
-      // User search
-      userSearch: {
-        resultsFound: 'Imepatikana {total} watumiaji wanaofanana na "{term}"',
-        error: 'Hitilafu katika kutafuta watumiaji'
-      },
-
       logSearch: {
         noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
         resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu'
       }
+    },
+    security: {
+      title: 'Ufuatiliaji wa Usalama',
+      securityScan: 'Ukaguzi wa Usalama',
+      runningSecurityScan: 'Uchunguzi Unaendelea...',
+      lastSecurityScan: 'Ukaguzi wa Mwisho wa Usalama',
+      vulnerabilitiesFound: 'Mapungufu Yaliyopatikana',
+      daysAgo: 'siku zilizopita',
+      critical: 'hatari',
+      medium: 'wastani',
+      low: 'ndogo',
+      failedLoginAttempts: 'Majaribio ya Kuingia Yaliyoshindwa (24h)',
+      suspiciousActivities: 'Shughuli za Kushuku (24h)',
+      securityRecommendations: 'Mapendekezo ya Usalama',
+      criticalVulnerabilities: 'Udhaifu Mkubwa',
+      mediumVulnerabilities: 'Udhaifu wa Wastani',
+      lowVulnerabilities: 'Udhaifu Mdogo',
+      authenticationIssues: 'Masuala ya Uthibitishaji',
+      suspiciousActivityLogs: 'Kumbukumbu za Shughuli za Kushuku',
+      securityProbeAttempts: 'Majaribio ya Uchunguzi wa Usalama Yamegunduliwa',
+      sensitiveFileAccess: 'majaribio ya kufikia faili nyeti au anwani za mwisho yamegunduliwa',
+      envFileAccess: 'Majaribio ya Ufikiaji wa Faili za Mazingira',
+      envFileAccessDesc: 'majaribio ya kufikia faili za .env yamegunduliwa',
+      gitRepoAccess: 'Majaribio ya Ufikiaji wa Hifadhi ya Git',
+      gitRepoAccessDesc: 'majaribio ya kufikia faili za hifadhi ya .git yamegunduliwa',
+      recommendedAction: 'Hatua Inayopendekezwa',
+      rateLimitRecommendation: 'Fikiria kutekeleza ukomo wa viwango, kuzuia IP kwa wakosaji wa kudumu, na hakikisha uimarishaji sahihi wa seva umewekwa.',
+      envFileRecommendation: 'Hakikisha faili za mazingira hazipatikani kutoka kwa saraka za wavuti na usanidi wa seva unazuia ipasavyo ufikiaji wa faili nyeti.',
+      gitRepoRecommendation: 'Hakikisha saraka za .git zimelindwa ipasavyo na hazipatikani kutoka kwa wavuti.',
+      noVulnerabilitiesFound: 'Hakuna Udhaifu Uliopatikana',
+      systemSecure: 'Mfumo wako unaonekana kuwa salama. Endelea kufuatilia mara kwa mara.',
+      loadingScan: 'Inapakia matokeo ya ukaguzi...',
+      occurrences: 'Matukio',
+      firstSeen: 'Ilionekana Kwanza',
+      lastSeen: 'Ilionekana Mwisho',
+      timestamp: 'Muhuri wa Wakati',
+      message: 'Ujumbe',
+      service: 'Huduma',
+      type: 'Aina',
+      severity: 'Ukali',
+      url: 'URL',
+      matchedTerm: 'Neno Lililolingana',
+      lineNumber: 'Nambari ya Mstari',
+      lineNumbers: 'Nambari za Mistari',
+      showLess: 'Onyesha Kidogo',
+      showMore: 'Onyesha Masuala Yote'
     },
     userEdit: {
       title: 'Hariri Mtumiaji',
@@ -507,10 +481,6 @@ export default {
       logoutForced: 'Mtumiaji ameondolewa',
       logoutFailed: 'Imeshindwa kumtoa mtumiaji',
       errorForcingLogout: 'Hitilafu katika kutoa mtumiaji kwa lazima'
-    },
-    operations: {
-      cancel: 'Ghairi',
-      save: 'Hifadhi Mabadiliko'
     }
   },
   passwordResetConfirm: {
@@ -602,13 +572,8 @@ export default {
     resendVerification: "Tuma tena barua pepe ya uthibitisho",
     verificationResent: "Barua pepe ya uthibitisho imetumwa tena",
     verificationResendFailed: "Imeshindwa kutuma tena barua pepe ya uthibitisho. Tafadhali jaribu tena.",
-    usernameExists: "Jina la mtumiaji tayari lipo",
-    emailExists: "Barua pepe tayari ipo",
     usernameInvalidChars: 'Jina la mtumiaji linaweza kuwa na herufi, nambari, alama za chini, madoti na hyphen pekee',
-    networkError: 'Hitilafu ya mtandao. Tafadhali angalia muunganisho wako na ujaribu tena.',
-    registrationFailed: 'Usajili umeshindwa. Tafadhali jaribu tena.',
-    usernameExists: 'Jina la mtumiaji lipo tayari',
-    emailExists: 'Barua pepe ipo tayari'
+    networkError: 'Hitilafu ya mtandao. Tafadhali angalia muunganisho wako na ujaribu tena.'
   },
   login: {
     appTitle: 'Huduma AI',
@@ -625,9 +590,8 @@ export default {
     forgotPassword: 'Umesahau nywila?',
     noAccount: 'Huna akaunti?',
     createAccount: 'Fungua akaunti',
-    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha',
-    noAccount: "Huna akaunti?",
     registerNow: "Jiandikishe sasa",
+    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha',
     loggingIn: "Inaingia...",
     fieldsRequired: "Jina la mtumiaji na nenosiri zinahitajika",
     invalidCredentials: "Jina la mtumiaji au nenosiri batili",
@@ -650,15 +614,13 @@ export default {
     usageTrend: 'Mwelekeo wa Matumizi'
   },
   analytics: {
-    // Dashboard header and controls
     title: 'Data za Uchanganuzi & Maoni',
+    loading: 'Inapakia data za uchanganuzi...',
     period: 'Kipindi cha Muda',
-
     charts: {
       satisfactionHeatmap: "Kuridhika kwa Eneo la Maarifa",
       satisfactionSubtitle: "Alama za asilimia kwa wakati"
     },
-
     timePeriods: {
       week4: "Wiki 4 iliyopita",
       week3: "Wiki 3 iliyopita",
@@ -666,11 +628,9 @@ export default {
       week1: "Wiki iliyopita",
       current: "Sasa"
     },
-
     errors: {
       loading: "Imeshindwa kupakia data ya kuridhika. Tafadhali jaribu tena.",
     },
-
     status: {
       loading: "Inapakia...",
       noData: "Hakuna data inayopatikana",
@@ -679,77 +639,53 @@ export default {
       responseTime: "Wastani wa Muda wa Kumudu",
       queueLength: "Foleni",
       uptime: "Muda wa Kuendelea",
+      error: 'Imeshindwa kupakia data za uchanganuzi'
     },
-
-    // Period dropdown options
     periods: {
       daily: 'Kila Siku',
       weekly: 'Kila Wiki',
       monthly: 'Kila Mwezi',
       allTime: 'Wakati Wote'
     },
-
-    // Metrics section titles and values
     metrics: {
       totalQueries: 'Jumla ya Maswali',
       uniqueUsers: 'Watumiaji wa Kipekee',
       avgResponseTime: 'Wastani wa Muda wa Majibu',
       satisfaction: 'Kuridhika kwa Watumiaji'
     },
-
-    // Table headers and labels
     table: {
       rank: 'Nafasi',
       query: 'Swali',
       count: 'Idadi',
       avgTime: 'Wastani wa Muda'
     },
-
-    // Chart labels and legends
     chartLabels: {
-      categories: 'Maeneo',  // Changed from 'Vikundi'
-      serviceCategories: 'Maeneo ya Maarifa',  // Changed from 'Vikundi vya Huduma'
-      byUsage: 'kwa Matumizi',  // No change
-      category: 'Eneo'  // Changed from 'Kikundi'
+      categories: 'Maeneo',
+      serviceCategories: 'Maeneo ya Maarifa',
+      byUsage: 'kwa Matumizi',
+      category: 'Eneo'
     },
-
-    // Tooltips and hints
     tooltips: {
       selectPeriod: 'Chagua kipindi',
       selectDate: 'Chagua tarehe',
       exportData: 'Toa data'
     },
-
-    // Status messages
-    status: {
-      loading: 'Inapakia data za uchanganuzi...',
-      noData: 'Hakuna data inayopatikana kwa kipindi hiki',
-      error: 'Imeshindwa kupakia data za uchanganuzi'
-    },
-
     gauge: {
       historical: 'Mwenendo wa Kihistoria',
       vsPrevious: 'dhidi ya kipindi cha awali',
       target: 'Lengo'
     },
-
     ratings: {
       poor: "Dhaifu",
       average: "Wastani",
       good: "Nzuri",
       excellent: "Bora"
     },
-
-    // Trend indicators
     slower: 'polepole zaidi',
     faster: 'haraka zaidi',
     percentage: 'Asilimia',
-
-    // Additional analytics fields
     note: 'Dashibodi hii inaonyesha takwimu za matumizi na maoni ya watumiaji wa mfumo wa mazungumzo.',
     usageStats: 'Takwimu za Matumizi',
-    totalQueries: 'Jumla ya Maswali',
-    avgResponseTime: 'Wastani wa Muda wa Majibu',
     peakUsers: 'Watumiaji wa Juu Zaidi',
     activeChats: 'Mazungumzo Yanayoendelea',
     usageTrend: 'Mwelekeo wa Matumizi',
@@ -757,22 +693,17 @@ export default {
     feedbackSamples: 'Maoni ya Watumiaji',
     close: 'Funga',
     chartComingSoon: 'Uonyeshaji wa chati unakuja hivi karibuni...',
-    error: 'Imeshindwa kupakia data za uchambuzi',
     retry: 'Jaribu tena',
     dailyQueries: 'Maswali ya Kila Siku',
     export: 'Toa Data',
     dateRange: 'Kipindi cha Tarehe',
     startDate: 'Tarehe ya Kuanza',
     endDate: 'Tarehe ya Mwisho',
-
-    // Added for AnalyticsComponent.vue
     rank: 'Nafasi',
     query: 'Ombi',
     count: 'Idadi',
     avgTime: 'Wastani wa Muda',
-    serviceUsage: 'Matumizi ya Maeneo ya Maarifa',  // Changed from 'Matumizi ya Vikundi vya Huduma'
-
-    // Added for UsageTrendChart.vue
+    serviceUsage: 'Matumizi ya Maeneo ya Maarifa',
     usageTrends: 'Mienendo ya Matumizi',
     week: 'Wiki Iliyopita',
     month: 'Mwezi Uliopita',
@@ -814,7 +745,6 @@ export default {
     days: 'siku',
     viewDetails: 'Angalia Maelezo Zaidi'
   },
-  // Service names
   services: {
     eCitizen: 'Tovuti ya eCitizen',
     taxFiling: 'Mfumo wa Kutuma Kodi',
@@ -822,8 +752,6 @@ export default {
     businessReg: 'Usajili wa Biashara',
     drivingLicense: 'Leseni ya Udereva'
   },
-
-  // Deadline titles
   deadlines: {
     taxFiling: 'Tarehe ya Mwisho ya Kutuma Kodi',
     businessRenewal: 'Kuhuisha Leseni ya Biashara',
@@ -831,9 +759,9 @@ export default {
     vehicleRegistration: 'Tarehe ya Mwisho ya Usajili wa Gari'
   },
   sidebar: {
-    governmentServices: 'Maeneo ya Maarifa', // Changed from 'Huduma za Serikali'
+    governmentServices: 'Maeneo ya Maarifa',
     chatHistory: 'Historia ya Gumzo',
-    searchPlaceholder: 'Tafuta maeneo ya maarifa...', // Changed from 'Tafuta huduma...'
+    searchPlaceholder: 'Tafuta maeneo ya maarifa...',
     createFolder: 'Unda Folda',
     editFolder: 'Hariri Folda',
     folderName: 'Jina la Folda',
@@ -853,26 +781,24 @@ export default {
     weatherTitle: "Utabiri wa Hali ya Hewa",
     weatherLoading: "Inapakia data ya hali ya hewa...",
     weatherError: "Imeshindwa kupakia data ya hali ya hewa. Tafadhali jaribu tena.",
-    folders: "Folda",
-    emptyFolder: "Hakuna mazungumzo katika folda hii",
     title: 'Taarifa na Rasilimali',
-    chatHistory: 'Mazungumzo ya Hivi Karibuni',
     noChats: 'Hakuna mazungumzo ya hivi karibuni',
     relatedDocs: 'Nyaraka Zinazohusiana',
     noDocuments: 'Hakuna nyaraka zinazohusiana',
     faq: 'Maswali Yanayoulizwa Mara kwa Mara',
     tab: {
-      all: 'Zote',
-      folders: 'Folda',
-      starred: 'Vipendwa',
-      archived: 'Zilizohifadhiwa'
+      all: 'Mazungumzo Yote',
+      folders: 'Mafolda',
+      starred: 'Yenye Nyota',
+      archived: 'Yaliyohifadhiwa'
     },
     savedChats: 'Mazungumzo Yaliyohifadhiwa',
-    folders: "Folda",
+    chats: 'Mazungumzo',
     allChats: "Mazungumzo Yote",
-    noFolder: "Mazungumzo Yote",
-    starredChats: "Yaliyowekwa Nyota",
+    folders: "Mafolda",
+    starredChats: "Yenye Nyota",
     archivedChats: "Yaliyohifadhiwa",
+    noFolder: "Hakuna Folda",
     emptyFolder: "Folda hii ni tupu. Hamisha mazungumzo hapa kutoka kwa menyu ya mazungumzo.",
     noStarredChats: "Bado hakuna mazungumzo yaliyowekwa nyota. Weka nyota kwenye mazungumzo ili kuyaongeza hapa.",
     noArchivedChats: "Bado hakuna mazungumzo yaliyohifadhiwa.",
@@ -901,149 +827,83 @@ export default {
     chatMoved: "Mazungumzo yamehamishwa kwa mafanikio",
     errorMovingChat: "Imeshindwa kuhamisha mazungumzo",
     noPreview: "Hakuna hakikisho linalopatikana",
-    searchConversations: 'Tafuta mazungumzo...'
+    searchConversations: 'Tafuta mazungumzo...',
+    selectFolderInstruction: "Chagua folda ili kuona mazungumzo yake",
+    folderCreated: "Folda imeundwa kwa mafanikio",
+    errorCreatingFolder: "Imeshindwa kuunda folda",
+    errorLoadingFolders: "Imeshindwa kupakia folda",
+    folderUpdated: "Folda imesasishwa kwa mafanikio",
+    errorUpdatingFolder: "Imeshindwa kusasisha folda",
+    folderDeleted: "Folda imefutwa kwa mafanikio",
+    errorDeletingFolder: "Imeshindwa kufuta folda",
+    chatRemovedFromFolders: "Mazungumzo yameondolewa kwenye folda",
+    errorRemovingChat: "Imeshindwa kuondoa mazungumzo kwenye folda"
   },
   leftPanel: {
     cat1: {
       name: '1. Utambulisho & Usajili wa Kiraia',
-      children: [
-        'Vyeti vya kuzaliwa',
-        'Vitambulisho vya Taifa',
-        'Pasi za kusafiria',
-        'Vyeti vya ndoa na vifo',
-        'Usajili wa wapiga kura'
-      ]
+      children: ['Vyeti vya kuzaliwa', 'Vitambulisho vya Taifa', 'Pasi za kusafiria', 'Vyeti vya ndoa na vifo', 'Usajili wa wapiga kura']
     },
     cat2: {
       name: '2. Huduma za Afya & Ustawi wa Jamii',
-      children: [
-        'Upatikanaji wa huduma za afya',
-        'Mikakati ya chanjo',
-        'Bima ya afya',
-        'Huduma za walemavu',
-        'Msaada wa ustawi na chakula'
-      ]
+      children: ['Upatikanaji wa huduma za afya', 'Mikakati ya chanjo', 'Bima ya afya', 'Huduma za walemavu', 'Msaada wa ustawi na chakula']
     },
     cat3: {
       name: '3. Elimu & Kujifunza',
-      children: [
-        'Shule za umma na vyuo vikuu',
-        'Mikopo na ufadhili wa wanafunzi',
-        'Programu za elimu ya watu wazima',
-        'Rasilimali za kujifunza mtandaoni'
-      ]
+      children: ['Shule za umma na vyuo vikuu', 'Mikopo na ufadhili wa wanafunzi', 'Programu za elimu ya watu wazima', 'Rasilimali za kujifunza mtandaoni']
     },
     cat4: {
       name: '4. Ajira & Huduma za Kazi',
-      children: [
-        'Utafutaji wa kazi na malipo ya ukosefu wa ajira',
-        'Haki na ulinzi wa wafanyakazi',
-        'Kanuni za usalama kazini',
-        'Mafunzo ya stadi na uanagenzi'
-      ]
+      children: ['Utafutaji wa kazi na malipo ya ukosefu wa ajira', 'Haki na ulinzi wa wafanyakazi', 'Kanuni za usalama kazini', 'Mafunzo ya stadi na uanagenzi']
     },
     cat5: {
       name: '5. Ushuru & Mapato',
-      children: [
-        'Kuwasilisha kodi ya mapato na marejesho',
-        'Malipo ya kodi ya mali',
-        'Uz compliance kodi za biashara',
-        'Ushuru wa forodha na uingizaji'
-      ]
+      children: ['Kuwasilisha kodi ya mapato na marejesho', 'Malipo ya kodi ya mali', 'Uzingatiaji kodi za biashara', 'Ushuru wa forodha na uingizaji']
     },
     cat6: {
       name: '6. Usalama wa Umma & Sheria',
-      children: [
-        'Polisi na huduma za dharura',
-        'Mahakama na msaada wa kisheria',
-        'Kuripoti uhalifu',
-        'Sheria za ulinzi wa watumiaji'
-      ]
+      children: ['Polisi na huduma za dharura', 'Mahakama na msaada wa kisheria', 'Kuripoti uhalifu', 'Sheria za ulinzi wa watumiaji']
     },
     cat7: {
       name: '7. Usafiri & Uhamaji',
-      children: [
-        'Leseni za udereva na usajili wa magari',
-        'Usafiri wa umma na miundombinu',
-        'Makosa ya trafiki na faini',
-        'Programu za usalama barabarani'
-      ]
+      children: ['Leseni za udereva na usajili wa magari', 'Usafiri wa umma na miundombinu', 'Makosa ya trafiki na faini', 'Programu za usalama barabarani']
     },
     cat8: {
       name: '8. Makazi & Maendeleo ya Miji',
-      children: [
-        'Msaada wa makazi ya umma',
-        'Usajili wa ardhi na mali',
-        'Mikopo na ruzuku za makazi',
-        'Kibali cha ujenzi na upangaji'
-      ]
+      children: ['Msaada wa makazi ya umma', 'Usajili wa ardhi na mali', 'Mikopo na ruzuku za makazi', 'Vibali vya ujenzi na upangaji']
     },
     cat9: {
       name: '9. Huduma za Umma & Mazingira',
-      children: [
-        'Huduma za maji na umeme',
-        'Usimamizi wa taka na urejelezaji',
-        'Kanuni za mazingira',
-        'Miradi ya nishati mbadala'
-      ]
+      children: ['Huduma za maji na umeme', 'Usimamizi wa taka na urejelezaji', 'Kanuni za mazingira', 'Miradi ya nishati mbadala']
     },
     cat10: {
       name: '10. Biashara & Biashara',
-      children: [
-        'Usajili wa biashara na leseni',
-        'Kanuni na vibali vya biashara',
-        'Misaada na motisha kwa biashara ndogo',
-        'Msaada wa biashara za mtandaoni'
-      ]
+      children: ['Usajili wa biashara na leseni', 'Kanuni na vibali vya biashara', 'Misaada na motisha kwa biashara ndogo', 'Msaada wa biashara za mtandaoni']
     },
     cat11: {
       name: '11. Hifadhi ya Jamii & Pensheni',
-      children: [
-        'Manufaa ya kustaafu',
-        'Usimamizi wa mfuko wa pensheni',
-        'Manufaa ya warithi',
-        'Pensheni za ulemavu'
-      ]
+      children: ['Manufaa ya kustaafu', 'Usimamizi wa mfuko wa pensheni', 'Manufaa ya warithi', 'Pensheni za ulemavu']
     },
     cat12: {
       name: '12. Jamii & Ushiriki wa Kiraia',
-      children: [
-        'Kupiga kura na uchaguzi',
-        'Maoni ya umma na malalamiko ya raia',
-        'Kujitolea na programu za jamii',
-        'Ushiriki katika serikali za mitaa'
-      ]
+      children: ['Kupiga kura na uchaguzi', 'Maoni ya umma na malalamiko ya raia', 'Kujitolea na programu za jamii', 'Ushiriki katika serikali za mitaa']
     }
   },
   settings: {
     title: 'Mipangilio',
     save: 'Hifadhi',
-    saveSuccess: 'Mipangilio imehifadhiwa kwa mafanikio',
-    saveError: 'Hitilafu katika kuhifadhi mipangilio',
     close: 'Funga',
     saveSettings: 'Hifadhi Mipangilio',
-    cancel: 'Ghairi',
-    edit: 'Hariri',
-
-    language: {
-      title: 'Lugha',
-      selectLabel: 'Lugha ya Onyesho'
-    },
+    savingSettings: "Inahifadhi mipangilio yako...",
+    settingsSaved: "Mipangilio imehifadhiwa!",
+    saveSuccess: 'Mipangilio imehifadhiwa kwa mafanikio',
+    saveError: 'Hitilafu katika kuhifadhi mipangilio',
     display: 'Onyesho',
     displayLanguage: 'Lugha ya Onyesho',
     languages: {
       english: 'Kiingereza',
       french: 'Kifaransa',
       swahili: 'Kiswahili'
-    },
-
-    appearance: {
-      title: 'Muonekano',
-      theme: 'Mandhari',
-      lightTheme: 'Angavu',
-      darkTheme: 'Giza',
-      systemTheme: 'Mfumo',
-      fontSize: 'Ukubwa wa Fonti'
     },
     theme: 'Mandhari',
     themes: {
@@ -1052,23 +912,9 @@ export default {
       system: 'Mfumo'
     },
     fontSize: 'Ukubwa wa Fonti',
-
-    notifications: {
-      title: 'Arifa',
-      emailUpdates: 'Arifa za barua pepe',
-      soundEnabled: 'Arifa za sauti'
-    },
     notifications: 'Arifa',
     emailUpdates: 'Arifa za barua pepe',
     soundNotifications: 'Arifa za sauti',
-
-    account: {
-      title: 'Akaunti',
-      resetUserData: 'Rudisha Data za Mtumiaji',
-      resetDescription: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
-      confirmReset: 'Je, una uhakika unataka kufuta data zako zote? Hili halitaweza kutendeka tena.',
-      resetComplete: 'Data zako zimerudishwa.'
-    },
     accountManagement: 'Usimamizi wa Akaunti',
     emailAddress: 'Anwani ya Barua Pepe',
     emailAddressPlaceholder: 'Anwani yako ya barua pepe',
@@ -1078,11 +924,27 @@ export default {
     resetUserDataDesc: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
     deleteAccount: 'Futa Akaunti',
     deleteAccountDesc: 'Hii itafuta kabisa akaunti yako na data zote zinazohusiana.',
-
-    // Additional entries for modals and confirmations
+    edit: 'Hariri',
     standardAccount: 'Akaunti ya Kawaida',
     confirmEmailChange: 'Thibitisha Mabadiliko ya Barua Pepe',
     pleaseEnterPassword: 'Tafadhali ingiza nenosiri lako',
+    cancel: 'Ghairi',
+    account: {
+      title: 'Akaunti',
+      resetDescription: 'Hii itafuta data zote za wasifu wako na historia ya mazungumzo.',
+      confirmReset: 'Je, una uhakika unataka kufuta data zako zote? Hili halitaweza kutendeka tena.',
+      resetComplete: 'Data zako zimerudishwa.'
+    },
+    language: {
+      title: 'Lugha',
+      selectLabel: 'Lugha ya Onyesho'
+    },
+    appearance: {
+      title: 'Muonekano',
+      lightTheme: 'Angavu',
+      darkTheme: 'Giza',
+      systemTheme: 'Mfumo'
+    },
     confirmDeleteAccount: 'Je, una uhakika unataka kufuta akaunti yako? Kitendo hiki hakiwezi kutenduliwa.',
     confirmAccountDeletion: 'Thibitisha Kufuta Akaunti',
     accountDeletionWarning: 'Onyo: Kitendo hiki ni cha kudumu na hakiwezi kutenduliwa. Data zako zote zitafutwa kabisa.',
@@ -1095,12 +957,58 @@ export default {
     accountDeletedSuccess: 'Akaunti yako imefutwa kikamilifu.',
     incorrectPassword: 'Nenosiri lisilo sahihi',
     accountDeletionFailed: 'Imeshindwa kufuta akaunti. Tafadhali jaribu tena baadaye.',
+    confirmChange: 'Thibitisha Mabadiliko',
+    processing: 'Inachakata...',
+    userDataReset: 'Data yako ya wasifu imewekwa upya kwa mafanikio.',
+    failedToResetUserData: 'Imeshindwa kuweka upya data yako ya wasifu. Tafadhali jaribu tena.',
+    changingEmailTo: 'Kubadilisha barua pepe yako kuwa',
+    will: 'kutasababisha',
+    logOutSystem: 'Uondolewe kwenye mfumo',
+    sendVerificationLink: 'Kutuma kiungo cha uthibitisho kwa barua pepe yako mpya',
+    requireVerification: 'Kuhitaji uthibitisho kabla ya kuingia tena',
+    checkNewEmailVerification: 'Tafadhali angalia barua pepe yako mpya kwa maagizo ya uthibitisho.',
+    unableToVerifyEmail: 'Imeshindwa kuthibitisha barua pepe. Tafadhali jaribu tena.',
+    emailAlreadyInUse: 'Barua pepe tayari inatumika',
+    enterValidEmail: 'Tafadhali ingiza anwani halali ya barua pepe',
+    failedToUpdateEmail: 'Imeshindwa kusasisha barua pepe. Tafadhali jaribu tena.',
+    passwordResetInitiated: 'Kiungo cha kuweka upya nenosiri kimetumwa kwa anwani yako ya barua pepe.',
+    unableToLoadUser: 'Imeshindwa kupakia taarifa za mtumiaji. Tafadhali jaribu tena.',
+    retry: 'Jaribu tena',
+    user: 'Mtumiaji',
+    loadingUserInfo: 'Inapakia taarifa za mtumiaji...',
+    resetUserDataTitle: "Weka Upya Data ya Mtumiaji",
+    confirmResetUserData: "Una uhakika unataka kuweka upya data yako yote ya wasifu? Hii itafuta taarifa zako zote za wasifu na historia ya mazungumzo, lakini itaweka stakabadhi zako za akaunti.",
+    reset: "Weka Upya",
+    deleteAccountTitle: "Futa Akaunti"
   },
   userProfile: {
     title: 'Wasifu wa Mtumiaji',
-    privacyInfo:
-      'Kwa kutoa taarifa zaidi, utapata majibu sahihi na muhimu. Tafadhali soma',
+    privacyInfo: 'Kwa kutoa taarifa zaidi, utapata majibu sahihi na muhimu. Tafadhali soma',
     privacyPolicyLink: 'Sera ya Faragha',
+    tabComingSoon: 'Kichupo hiki kipo katika maendeleo na kitapatikana hivi karibuni.',
+    saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
+    loadError: 'Hitilafu katika kupakia data ya wasifu',
+    saveError: 'Hitilafu katika kuhifadhi wasifu',
+    confirmSaveTitle: "Hifadhi Wasifu",
+    confirmSave: "Una uhakika unataka kuhifadhi mabadiliko haya?",
+    confirmCancel: 'Una mabadiliko ambayo hayajahifadhiwa. Je, una uhakika unataka kughairi?',
+    confirmLeave: 'Je, una uhakika unataka kuondoka? Mabadiliko yoyote ambayo hayajahifadhiwa yatapotea.',
+    confirmDiscardChanges: 'Tupa mabadiliko ambayo hayajahifadhiwa?',
+    uploadPhoto: 'Pakia Picha',
+    uploadFile: 'Pakia Faili',
+    photoRequirements: 'Picha lazima iwe wazi, ya hivi karibuni, na ionyeshe uso wako kamili',
+    biometricRequirements: 'Ni faili rasmi za data za bayometriki pekee zinazokubaliwa',
+    documentUpload: 'Kupakia Nyaraka',
+    validationTitle: 'Tafadhali sahihisha makosa yafuatayo:',
+    profileIcon: 'Aikoni ya Wasifu',
+    change: 'Badilisha',
+    chooseProfileIcon: 'Chagua Aikoni ya Wasifu',
+    presetIcons: 'Aikoni Zilizowekwa',
+    upload: 'Pakia',
+    initials: 'Herufi za Kwanza',
+    clickToUpload: 'Bofya kupakia',
+    useThisImage: 'Tumia Picha Hii',
+    useInitials: 'Tumia Herufi za Kwanza',
     tabs: {
       tab1: 'Taarifa za Utambulisho',
       tab2: 'Usajili wa Kiraia & Nyaraka',
@@ -1115,192 +1023,6 @@ export default {
       tab11: 'Usafiri & Uhamaji',
       tab12: 'Ushiriki wa Kiraia & Kisiasa'
     },
-    residencyStatuses: {
-      citizen: 'Raia',
-      permanentResident: 'Makazi wa Kudumu',
-      temporaryResident: 'Makazi ya Muda',
-      other: 'Nyingine'
-    },
-    yesNo: {
-      yes: 'Ndiyo',
-      no: 'Hapana'
-    },
-    fields: {
-      // Tab 1
-      fullName: 'Jina Kamili',
-      dob: 'Tarehe ya Kuzaliwa',
-      gender: 'Jinsia',
-      nationality: 'Uraia',
-      maritalStatus: 'Hali ya Ndoa',
-      photograph: 'Picha',
-      biometric: 'Alama za Vidole / Data za Kibayometriki',
-
-      // Tab 2
-      birthCert: 'Cheti cha Kuzaliwa',
-      deathCert: 'Cheti cha Kifo',
-      marriageDivorce: 'Rekodi za Ndoa / Talaka',
-      adoption: 'Rekodi za Kuasili',
-      citizenship: 'Nyaraka za Uraia / Uhamiaji',
-      immigration: 'Historia ya Uhamiaji na Visa',
-
-      // Tab 3
-      currentAddress: 'Anwani ya Sasa ya Makazi',
-      previousAddresses: 'Anwani za Awali',
-      homeOrRental: 'Maelezo ya Umiliki au Upangaji',
-      utilityBills: 'Bili za Huduma Zinazohusiana na Anwani',
-      landRecords: 'Rekodi za Umiliki wa Ardhi na Mali',
-
-      // Tab 4
-      idCard: 'Nambari ya Kitambulisho cha Taifa',
-      passport: 'Maelezo ya Pasipoti',
-      driversLicense: 'Leseni ya Udereva',
-      voterId: 'Kitambulisho cha Mpiga Kura',
-      ssn: 'Nambari ya Hifadhi ya Jamii / Bima ya Taifa',
-      militaryRecords: 'Rekodi za Huduma ya Jeshi',
-
-      // Tab 5
-      medicalHistory: 'Historia ya Matibabu na Hali za Afya',
-      vaccinations: 'Rekodi za Chanjo',
-      insuranceDetails: 'Maelezo ya Bima ya Afya',
-      disability: 'Hali ya Ulemavu',
-      organDonor: 'Hali ya Mchango wa Viungo',
-      prescriptions: 'Maagizo ya Dawa na Matibabu Yaliyopokelewa',
-      mentalHealth: 'Historia ya Afya ya Akili',
-
-      // Tab 6
-      eHistory: 'Historia ya Ajira',
-      currentEmployer: 'Maelezo ya Mwajiri wa Sasa',
-      workPermits: 'Vibali vya Kazi na Mikataba',
-      certifications: 'Vyeti na Leseni za Kitaaluma',
-      unemployment: 'Hali ya Ukosefu wa Ajira na Manufaa Yaliyopokelewa',
-      tin: 'Nambari ya Utambulisho wa Mlipa Kodi (TIN)',
-      businessAffiliations: 'Umiliki wa Biashara na Ushirikiano wa Kampuni',
-
-      // Tab 7
-      schools: 'Shule na Vyuo Vilivyohudhiriwa',
-      diplomas: 'Diploma, Shahada, na Vyeti',
-      performance: 'Utendaji wa Kitaaluma na Alama za Mitihani',
-      scholarships: 'Ufadhili na Msaada wa Kifedha Uliopokelewa',
-
-      // Tab 8
-      incomeTax: 'Rekodi za Kodi ya Mapato',
-      bankAccounts: 'Akaunti za Benki na Fedha',
-      propertyTax: 'Malipo ya Kodi ya Mali',
-      businessTax: 'Maelezo ya Kodi ya Biashara',
-      pensionContrib: 'Michango na Uondoaji wa Pensheni',
-      loanAid: 'Rekodi za Mikopo na Misaada ya Serikali',
-
-      // Tab 9
-      pensionStatus: 'Hali ya Pensheni na Michango',
-      childcare: 'Msaada wa Utunzaji wa Watoto',
-      foodAssistance: 'Programu za Msaada wa Chakula / Ustawi',
-      housingAssistance: 'Msaada wa Nyumba',
-
-      // Tab 10
-      policeRecords: 'Rekodi za Polisi (historia ya uhalifu, kukamatwa, mashtaka)',
-      courtCases: 'Historia ya Kesi za Mahakama',
-      finesPenalties: 'Faini na Adhabu',
-      paroleProbation: 'Hali ya Parole au Probesheni',
-      citizenshipRevocation: 'Kufutwa kwa Uraia (kama inatumika)',
-
-      // Tab 11
-      vehicleReg: 'Maelezo ya Usajili wa Gari',
-      trafficViolations: 'Ukiukaji wa Sheria za Trafiki na Faini',
-      licenseHistory: 'Historia ya Leseni ya Udereva na Vidokezo',
-      publicTransportCard: 'Matumizi ya Kadi ya Usafiri wa Umma',
-
-      // Tab 12
-      voterRegistration: 'Maelezo ya Usajili wa Mpiga Kura',
-      electionHistory: 'Historia ya Ushiriki wa Uchaguzi',
-      partyMembership: 'Uanachama wa Chama cha Kisiasa',
-      militaryStatus: 'Huduma ya Jeshi au Hali ya Utii',
-      publicServiceRoles: 'Majukumu ya Huduma za Umma',
-
-      //New fields
-      postalCode: 'Nambari ya Posta',
-      country: 'Nchi',
-      residencyStatus: 'Hali ya Makazi',
-      bloodType: 'Aina ya Damu',
-      education: "Elimu",
-      degrees: "Shahada",
-      academicRecords: "Rekodi za Kitaaluma",
-      // Most of the core fields are already translated
-      dateOfBirth: 'Tarehe ya Kuzaliwa',
-      profilePhoto: 'Picha ya Wasifu',
-      phoneNumber: 'Nambari ya Simu',
-      emailAddress: 'Anwani ya Barua Pepe',
-      preferredLanguage: 'Lugha Inayopendelewa',
-
-      // Tab 2 - Civil Registration & Documentation
-      // Some of these fields are already translated
-      deathCertificate: 'Cheti cha Kifo',
-      marriageRecords: 'Rekodi za Ndoa',
-      divorceRecords: 'Rekodi za Talaka',
-      adoptionRecords: 'Rekodi za Kuasili',
-      citizenshipDocuments: 'Nyaraka za Uraia',
-      naturalizationDocuments: 'Nyaraka za Uraia wa Kujiandikisha',
-      visaHistory: 'Historia ya Visa',
-
-      // Tab 3 - Address & Residency
-      // Some of these fields are already translated
-      previousAddresses: 'Anwani za Awali',
-      homeOwnership: 'Umiliki wa Nyumba',
-      rentalDetails: 'Maelezo ya Upangaji',
-      utilityBills: 'Bili za Huduma',
-      propertyRecords: 'Rekodi za Mali',
-      residencyDuration: 'Muda wa Makazi',
-
-      // Tab 4 - Identity & Travel Documents
-      // Some of these fields are already translated
-      nationalIDNumber: 'Nambari ya Kitambulisho cha Taifa',
-      passportNumber: 'Nambari ya Pasipoti',
-      passportExpiry: 'Mwisho wa Pasipoti',
-      visaType: 'Aina ya Visa',
-      visaNumber: 'Nambari ya Visa',
-      visaExpiry: 'Mwisho wa Visa',
-
-      // Tab 5 - Health & Medical Records
-      medicalHistory: 'Historia ya Matibabu',
-      vaccinations: 'Chanjo',
-      healthInsurance: 'Bima ya Afya',
-      bloodType: 'Aina ya Damu',
-      organDonor: 'Hali ya Mchango wa Viungo',
-      allergies: 'Mzio',
-      currentMedications: 'Dawa za Sasa',
-      chronicConditions: 'Magonjwa ya Muda Mrefu',
-
-      // Tab 6 - Employment & Economic Data
-      // Some of these fields are already translated
-      employmentStatus: 'Hali ya Ajira',
-      occupation: 'Kazi',
-      employerName: 'Jina la Mwajiri',
-      employerAddress: 'Anwani ya Mwajiri',
-      employmentHistory: 'Historia ya Ajira',
-      annualIncome: 'Mapato ya Mwaka',
-      workPermitNumber: 'Nambari ya Kibali cha Kazi',
-      workPermitExpiry: 'Mwisho wa Kibali cha Kazi',
-
-      // Tab 7 - Education & Academic Records
-      // Some of these fields are already translated
-      highestEducation: 'Kiwango cha Juu cha Elimu',
-      institutionName: 'Jina la Taasisi',
-      graduationYear: 'Mwaka wa Kuhitimu',
-      fieldOfStudy: 'Fani ya Masomo',
-      additionalCertifications: 'Vyeti vya Ziada',
-      languages: 'Lugha Zinazozungumzwa',
-      academicAchievements: 'Mafanikio ya Kitaaluma',
-
-      // Tab 8 - Financial & Tax Data
-      // Some of these fields are already translated
-      accountNumber: 'Nambari ya Akaunti',
-      bankName: 'Jina la Benki',
-      financialAssets: 'Mali za Kifedha',
-      liabilities: 'Madeni',
-      creditScore: 'Alama ya Mikopo',
-      taxIdentificationNumber: 'Nambari ya Utambulisho wa Kodi',
-      lastTaxReturn: 'Kurudisha Kodi ya Mwisho',
-      taxExemptions: 'Misamaha ya Kodi'
-    },
     actions: {
       cancel: 'Ghairi',
       save: 'Hifadhi Profaili',
@@ -1308,64 +1030,144 @@ export default {
       next: 'Inayofuata',
       saving: 'Inahifadhi...'
     },
-    tabComingSoon: 'Kichupo hiki kipo katika maendeleo na kitapatikana hivi karibuni.',
-    saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
-    loadError: 'Hitilafu katika kupakia data ya wasifu',
-    saveError: 'Hitilafu katika kuhifadhi wasifu',
-    confirmCancel: 'Una mabadiliko ambayo hayajahifadhiwa. Je, una uhakika unataka kughairi?',
-    uploadPhoto: 'Pakia Picha',
-    uploadFile: 'Pakia Faili',
-    photoRequirements: 'Picha lazima iwe wazi, ya hivi karibuni, na ionyeshe uso wako kamili',
-    biometricRequirements: 'Ni faili rasmi za data za bayometriki pekee zinazokubaliwa',
-    requiredFields: 'Sehemu zinazohitajika',
-    documentUpload: 'Kupakia Nyaraka',
-    validationTitle: 'Tafadhali sahihisha makosa yafuatayo:',
-    completionStatus: 'Imekamilika {percent}%',
-    validation: {
-      nameRequired: 'Jina kamili linahitajika',
-      dobRequired: 'Tarehe ya kuzaliwa inahitajika',
-      dobFuture: 'Tarehe ya kuzaliwa haiwezi kuwa wakati ujao'
+    fields: {
+      fullName: 'Jina Kamili',
+      dob: 'Tarehe ya Kuzaliwa',
+      gender: 'Jinsia',
+      nationality: 'Uraia',
+      maritalStatus: 'Hali ya Ndoa',
+      photograph: 'Picha',
+      biometric: 'Alama za Vidole / Data za Kibayometriki',
+      birthCert: 'Cheti cha Kuzaliwa',
+      deathCert: 'Cheti cha Kifo',
+      marriageDivorce: 'Rekodi za Ndoa / Talaka',
+      adoption: 'Rekodi za Kuasili',
+      citizenship: 'Nyaraka za Uraia / Uhamiaji',
+      immigration: 'Historia ya Uhamiaji na Visa',
+      currentAddress: 'Anwani ya Sasa ya Makazi',
+      previousAddresses: 'Anwani za Awali',
+      postalCode: 'Nambari ya Posta',
+      country: 'Nchi',
+      residencyStatus: 'Hali ya Makazi',
+      homeOrRental: 'Maelezo ya Umiliki au Upangaji',
+      utilityBills: 'Bili za Huduma Zinazohusiana na Anwani',
+      landRecords: 'Rekodi za Umiliki wa Ardhi na Mali',
+      idCard: 'Nambari ya Kitambulisho cha Taifa',
+      passport: 'Maelezo ya Pasipoti',
+      driversLicense: 'Leseni ya Udereva',
+      voterId: 'Kitambulisho cha Mpiga Kura',
+      ssn: 'Nambari ya Hifadhi ya Jamii / Bima ya Taifa',
+      militaryRecords: 'Rekodi za Huduma ya Jeshi',
+      medicalHistory: 'Historia ya Matibabu na Hali za Afya',
+      vaccinations: 'Rekodi za Chanjo',
+      insuranceDetails: 'Maelezo ya Bima ya Afya',
+      disability: 'Hali ya Ulemavu',
+      bloodType: 'Aina ya Damu',
+      organDonor: 'Hali ya Mchango wa Viungo',
+      prescriptions: 'Maagizo ya Dawa na Matibabu Yaliyopokelewa',
+      mentalHealth: 'Historia ya Afya ya Akili',
+      eHistory: 'Historia ya Ajira',
+      currentEmployer: 'Maelezo ya Mwajiri wa Sasa',
+      workPermits: 'Vibali vya Kazi na Mikataba',
+      certifications: 'Vyeti na Leseni za Kitaaluma',
+      unemployment: 'Hali ya Ukosefu wa Ajira na Manufaa Yaliyopokelewa',
+      tin: 'Nambari ya Utambulisho wa Mlipa Kodi (TIN)',
+      businessAffiliations: 'Umiliki wa Biashara na Ushirikiano wa Kampuni',
+      schools: 'Shule na Vyuo Vilivyohudhiriwa',
+      education: 'Elimu',
+      degrees: 'Stashahada, Shahada, na Vyeti',
+      performance: 'Utendaji wa Kitaaluma na Alama za Mitihani',
+      academicRecords: "Rekodi za Kitaaluma",
+      scholarships: 'Ufadhili na Msaada wa Kifedha Uliopokelewa',
+      incomeTax: 'Rekodi za Kodi ya Mapato',
+      bankAccounts: 'Akaunti za Benki na Fedha',
+      propertyTax: 'Malipo ya Kodi ya Mali',
+      businessTax: 'Maelezo ya Kodi ya Biashara',
+      pensionContrib: 'Michango na Uondoaji wa Pensheni',
+      loanAid: 'Rekodi za Mikopo na Misaada ya Serikali',
+      pensionStatus: 'Hali ya Pensheni na Michango',
+      childcare: 'Msaada wa Utunzaji wa Watoto',
+      foodAssistance: 'Programu za Msaada wa Chakula / Ustawi',
+      housingAssistance: 'Msaada wa Nyumba',
+      policeRecords: 'Rekodi za Polisi (historia ya uhalifu, kukamatwa, mashtaka)',
+      courtCases: 'Historia ya Kesi za Mahakama',
+      finesPenalties: 'Faini na Adhabu',
+      paroleProbation: 'Hali ya Parole au Probesheni',
+      citizenshipRevocation: 'Kufutwa kwa Uraia (kama inatumika)',
+      vehicleReg: 'Maelezo ya Usajili wa Gari',
+      trafficViolations: 'Ukiukaji wa Sheria za Trafiki na Faini',
+      licenseHistory: 'Historia ya Leseni ya Udereva na Vidokezo',
+      publicTransportCard: 'Matumizi ya Kadi ya Usafiri wa Umma',
+      voterRegistration: 'Maelezo ya Usajili wa Mpiga Kura',
+      electionHistory: 'Historia ya Ushiriki wa Uchaguzi',
+      partyMembership: 'Uanachama wa Chama cha Kisiasa',
+      militaryStatus: 'Huduma ya Jeshi au Hali ya Utii',
+      publicServiceRoles: 'Majukumu ya Huduma za Umma'
     },
     placeholders: {
       fullName: 'Ingiza jina lako kamili la kisheria',
       nationality: 'Ingiza uraia wako',
+      searchCountries: 'Tafuta nchi...',
+      selectCountry: 'Chagua nchi',
       searchDisciplines: "Tafuta fani...",
       selectDiscipline: "Chagua fani",
       searchDegrees: "Tafuta shahada...",
       selectDegree: "Chagua shahada"
     },
-
-    noMatchingDegrees: "Hakuna shahada zinazofanana zilizopatikana",
-    degreeOptions: [
-      "Stashahada ya Uhusiano",
-      "Shahada ya Sanaa (BA)",
-      "Shahada ya Sayansi (BS)",
-      "Shahada ya Uhandisi (BEng)",
-      "Shahada ya Utawala wa Biashara (BBA)",
-      "Shahada ya Sanaa Nzuri (BFA)",
-      "Shahada ya Elimu (BEd)",
-      "Shahada ya Udaktari (MBBS)",
-      "Shahada ya Sheria (LLB)",
-      "Uzamili wa Sanaa (MA)",
-      "Uzamili wa Sayansi (MS)",
-      "Uzamili wa Utawala wa Biashara (MBA)",
-      "Uzamili wa Uhandisi (MEng)",
-      "Uzamili wa Sanaa Nzuri (MFA)",
-      "Uzamili wa Elimu (MEd)",
-      "Uzamili wa Sheria (LLM)",
-      "Uzamili wa Afya ya Umma (MPH)",
-      "Uzamivu wa Falsafa (PhD)",
-      "Uzamivu wa Udaktari (MD)",
-      "Uzamivu wa Elimu (EdD)",
-      "Uzamivu wa Utawala wa Biashara (DBA)",
-      "Uzamivu wa Sheria (JD)",
-      "Diploma ya Kitaaluma",
-      "Diploma ya Kiufundi",
-      "Cheti cha Ufundi",
-      "Cheti cha Uzamili",
-      "Diploma ya Baada ya Shahada",
-      "Baada ya Uzamivu"
-    ],
+    validation: {
+      nameRequired: 'Jina kamili linahitajika',
+      dobRequired: 'Tarehe ya kuzaliwa inahitajika',
+      dobFuture: 'Tarehe ya kuzaliwa haiwezi kuwa wakati ujao',
+      requiredField: '{field} inahitajika',
+      invalidFormat: 'Muundo batili wa {field}',
+      futureDate: 'Tarehe haiwezi kuwa katika siku zijazo',
+      invalidSelection: 'Tafadhali fanya uchaguzi halali',
+      passwordLength: 'Nenosiri lazima liwe na angalau herufi 8',
+      matchError: 'Sehemu hazilingani'
+    },
+    errors: {
+      savingFailed: 'Imeshindwa kuhifadhi wasifu',
+      loadingFailed: 'Imeshindwa kupakia data ya wasifu',
+      invalidForm: 'Tafadhali jaza sehemu zote zinazohitajika',
+      invalidFileType: 'Aina ya faili batili',
+      fileTooLarge: 'Faili ni kubwa sana',
+      countryLoadError: 'Hitilafu katika kupakia nchi',
+      countryUpdateError: 'Hitilafu katika kusasisha nchi'
+    },
+    notifications: {
+      saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
+      saveFailed: 'Imeshindwa kuhifadhi wasifu',
+      loadSuccess: 'Wasifu umepakiwa kwa mafanikio',
+      loadFailed: 'Imeshindwa kupakia wasifu',
+      fieldRequired: 'Sehemu hii inahitajika',
+      uploadSuccess: 'Faili imepakiwa kwa mafanikio',
+      uploadFailed: 'Imeshindwa kupakia faili',
+      formChanged: 'Una mabadiliko ambayo hayajahifadhiwa',
+      sessionExpired: 'Kipindi chako kimeisha, tafadhali ingia tena',
+      profileUpdated: 'Wasifu wako umesasishwa',
+      profileIncomplete: 'Wasifu wako haujakamilika'
+    },
+    instructions: {
+      fullNameHelp: 'Ingiza jina lako kamili la kisheria kama linavyoonekana kwenye nyaraka zako rasmi',
+      dobHelp: 'Ingiza tarehe yako ya kuzaliwa kwa muundo wa DD/MM/YYYY',
+      uploadPhotoHelp: 'Pakia picha ya hivi karibuni. Faili lazima iwe JPG, PNG, au GIF na chini ya 2MB',
+      passwordHelp: 'Nenosiri lazima liwe na angalau herufi 8 zenye herufi kubwa moja, namba moja, na herufi maalum moja',
+      documentHelp: 'Muundo unaokubaliwa: PDF, JPG, PNG (max 5MB)',
+      requiredFields: 'Sehemu zilizowekwa alama ya * zinahitajika',
+      selectFromList: 'Tafadhali chagua chaguo kutoka kwa orodha',
+      nextTab: 'Endelea kwa sehemu inayofuata',
+      previousTab: 'Rudi kwa sehemu iliyotangulia',
+      saveInstructions: 'Bofya Hifadhi ili kuhifadhi maelezo yako',
+      cancelInstructions: 'Bofya Ghairi ili kutupilia mbali mabadiliko'
+    },
+    completionStatus: {
+      notStarted: 'Haijaanza',
+      inProgress: 'Inaendelea',
+      complete: 'Imekamilika',
+      percentComplete: 'Imekamilika {percent}%',
+      tabsCompleted: 'Sehemu {completed} kati ya {total} zimekamilika',
+      tabComplete: 'Kichupo kimekamilika!'
+    },
     gender: {
       male: 'Mwanaume',
       female: 'Mwanamke',
@@ -1379,189 +1181,12 @@ export default {
       widowed: 'Mjane',
       other: 'Nyingine'
     },
-    select: 'Tafadhali chagua',
-    existingFile: 'Faili iliyopo',
-    noMatchingDisciplines: "Hakuna fani zinazofanana zilizopatikana",
-    educationOptions: [
-      "Uhasibu",
-      "Uhandisi wa Anga",
-      "Sayansi ya Kilimo",
-      "Anthropolojia",
-      "Ujenzi",
-      "Historia ya Sanaa",
-      "Akili Bandia",
-      "Astronomia",
-      "Astrofizikia",
-      "Biokemia",
-      "Uhandisi wa Biomedikal",
-      "Bioteknolojia",
-      "Utawala wa Biashara",
-      "Uhandisi wa Kemikali",
-      "Kemia",
-      "Uhandisi wa Ujenzi",
-      "Mawasiliano",
-      "Uhandisi wa Kompyuta",
-      "Sayansi ya Kompyuta",
-      "Usimamizi wa Ujenzi",
-      "Haki za Jinai",
-      "Usalama wa Mtandao",
-      "Sayansi ya Data",
-      "Udaktari wa Meno",
-      "Uchumi",
-      "Elimu",
-      "Uhandisi wa Umeme",
-      "Elimu ya Msingi",
-      "Fasihi ya Kiingereza",
-      "Uhandisi wa Mazingira",
-      "Sayansi ya Mazingira",
-      "Ubunifu wa Mitindo",
-      "Masomo ya Filamu",
-      "Fedha",
-      "Sanaa",
-      "Sayansi ya Chakula",
-      "Sayansi ya Uchunguzi",
-      "Ubunifu wa Michezo",
-      "Jiografia",
-      "Jiolojia",
-      "Ubunifu wa Grafiki",
-      "Utawala wa Afya",
-      "Historia",
-      "Usimamizi wa Ukarimu",
-      "Rasilimali Watu",
-      "Ubunifu wa Viwanda",
-      "Uhandisi wa Viwanda",
-      "Mifumo ya Habari",
-      "Teknolojia ya Habari",
-      "Ubunifu wa Ndani",
-      "Biashara ya Kimataifa",
-      "Mahusiano ya Kimataifa",
-      "Uandishi wa Habari",
-      "Sheria",
-      "Sayansi ya Maktaba",
-      "Isimu",
-      "Usimamizi",
-      "Masoko",
-      "Sayansi ya Vifaa",
-      "Hisabati",
-      "Uhandisi wa Mitambo",
-      "Masomo ya Vyombo vya Habari",
-      "Tiba",
-      "Meteorolojia",
-      "Mikrobaiolojia",
-      "Muziki",
-      "Nanoteknolojia",
-      "Uuguzi",
-      "Lishe",
-      "Tiba ya Kazi",
-      "Oseanografia",
-      "Uhandisi wa Mafuta",
-      "Famasia",
-      "Falsafa",
-      "Upigaji Picha",
-      "Elimu ya Mazoezi",
-      "Tiba ya Viungo",
-      "Fizikia",
-      "Sayansi ya Siasa",
-      "Saikolojia",
-      "Utawala wa Umma",
-      "Afya ya Umma",
-      "Uhusiano wa Umma",
-      "Robotiki",
-      "Elimu ya Sekondari",
-      "Kazi ya Jamii",
-      "Sosiolojia",
-      "Uhandisi wa Programu",
-      "Elimu Maalum",
-      "Usimamizi wa Michezo",
-      "Takwimu",
-      "Uhandisi wa Mifumo",
-      "Sanaa za Maigizo",
-      "Utalii",
-      "Mipango ya Miji",
-      "Udaktari wa Mifugo",
-      "Utengenezaji wa Tovuti",
-      "Biolojia ya Wanyama Pori",
-      "Zoolojia"
-    ],
-    confirmSaveTitle: "Hifadhi Wasifu",
-    confirmSave: "Una uhakika unataka kuhifadhi mabadiliko haya?",
-    placeholders: {
-      searchCountries: 'Tafuta nchi...',
-      selectCountry: 'Chagua nchi'
+    residencyStatuses: {
+      citizen: 'Raia',
+      permanentResident: 'Makazi wa Kudumu',
+      temporaryResident: 'Makazi ya Muda',
+      other: 'Nyingine'
     },
-    noMatchingCountries: 'Hakuna nchi zinazofanana zilizopatikana',
-    fields: {
-      nationality: 'Uraia',
-      country: 'Nchi'
-    },
-    // Profile Icon Section
-    profileIcon: 'Aikoni ya Wasifu',
-    change: 'Badilisha',
-    chooseProfileIcon: 'Chagua Aikoni ya Wasifu',
-    presetIcons: 'Aikoni Zilizowekwa',
-    upload: 'Pakia',
-    initials: 'Herufi za Kwanza',
-    clickToUpload: 'Bofya kupakia',
-    useThisImage: 'Tumia Picha Hii',
-    useInitials: 'Tumia Herufi za Kwanza',
-
-    // Country Selection
-    countryLoadError: 'Hitilafu katika kupakia nchi',
-    countryUpdateError: 'Hitilafu katika kusasisha nchi',
-
-    // Education Section
-    searchResults: 'Matokeo ya Utafutaji',
-    noResults: 'Hakuna Matokeo',
-    searchingFor: 'Inatafuta',
-
-    // Loading States
-    retryLoading: 'Jaribu tena',
-    loadingProfile: 'Inapakia wasifu wa mtumiaji...',
-    savingProfile: 'Inahifadhi wasifu...',
-
-    // Error Messages
-    errors: {
-      savingFailed: 'Imeshindwa kuhifadhi wasifu',
-      loadingFailed: 'Imeshindwa kupakia data ya wasifu',
-      invalidForm: 'Tafadhali jaza sehemu zote zinazohitajika',
-      invalidFileType: 'Aina ya faili batili',
-      fileTooLarge: 'Faili ni kubwa sana'
-    },
-
-    // Confirmation & Success
-    tabComplete: 'Kichupo kimekamilika!',
-    confirmDiscardChanges: 'Tupa mabadiliko ambayo hayajahifadhiwa?',
-    // For consistency and completeness
-    confirmLeave: 'Je, una uhakika unataka kuondoka? Mabadiliko yoyote ambayo hayajahifadhiwa yatapotea.',
-    profileComplete: 'Wasifu umekamilishwa kwa mafanikio',
-    fieldUpdated: 'Sehemu imesasishwa kwa mafanikio',
-    nextSection: 'Sehemu inayofuata',
-    previousSection: 'Sehemu iliyotangulia',
-    uploadProgress: 'Maendeleo ya kupakia: {percent}%',
-    navigationWarning: 'Tafadhali kamilisha sehemu hii kabla ya kuendelea',
-
-    // For form validation
-    validation: {
-      // Add to existing validation object
-      requiredField: '{field} inahitajika',
-      invalidFormat: 'Muundo batili wa {field}',
-      futureDate: 'Tarehe haiwezi kuwa katika siku zijazo',
-      invalidSelection: 'Tafadhali fanya uchaguzi halali',
-      passwordLength: 'Nenosiri lazima liwe na angalau herufi 8',
-      matchError: 'Sehemu hazilingani'
-    },
-
-    // For accessibility
-    aria: {
-      tabList: 'Sehemu za fomu ya wasifu',
-      nextButton: 'Nenda kwenye sehemu inayofuata',
-      prevButton: 'Nenda kwenye sehemu iliyotangulia',
-      closeButton: 'Funga fomu ya wasifu',
-      saveButton: 'Hifadhi data ya wasifu',
-      requiredField: 'Sehemu inayohitajika',
-      dropdownSelect: 'Chagua chaguo'
-    },
-    // Employment status options
     employmentStatuses: {
       employed: 'Ameajiriwa',
       selfEmployed: 'Ajira Binafsi',
@@ -1571,8 +1196,6 @@ export default {
       homemaker: 'Mama wa Nyumbani',
       other: 'Nyingine'
     },
-
-    // Education level options
     educationLevels: {
       primary: 'Elimu ya Msingi',
       secondary: 'Elimu ya Sekondari',
@@ -1585,8 +1208,6 @@ export default {
       professional: 'Shahada ya Kitaaluma',
       other: 'Nyingine'
     },
-
-    // Language proficiency levels
     proficiencyLevels: {
       native: 'Lugha ya Asili',
       fluent: 'Anazungumza kwa Ufasaha',
@@ -1594,8 +1215,6 @@ export default {
       intermediate: 'Ya Kati',
       basic: 'Msingi'
     },
-
-    // Blood type options (shown in dropdown)
     bloodTypes: {
       aPositive: 'A+',
       aNegative: 'A-',
@@ -1607,8 +1226,6 @@ export default {
       oNegative: 'O-',
       unknown: 'Haijulikani'
     },
-
-    // Languages spoken
     languages: {
       english: 'Kiingereza',
       french: 'Kifaransa',
@@ -1624,43 +1241,55 @@ export default {
       urdu: 'Kiurdu',
       other: 'Nyingine'
     },
-    // Notification messages
-    notifications: {
-      saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
-      saveFailed: 'Imeshindwa kuhifadhi wasifu',
-      loadSuccess: 'Wasifu umepakiwa kwa mafanikio',
-      loadFailed: 'Imeshindwa kupakia wasifu',
-      fieldRequired: 'Sehemu hii inahitajika',
-      uploadSuccess: 'Faili imepakiwa kwa mafanikio',
-      uploadFailed: 'Imeshindwa kupakia faili',
-      formChanged: 'Una mabadiliko ambayo hayajahifadhiwa',
-      sessionExpired: 'Kipindi chako kimeisha, tafadhali ingia tena',
-      profileUpdated: 'Wasifu wako umesasishwa',
-      profileIncomplete: 'Wasifu wako haujakamilika'
+    yesNo: {
+      yes: 'Ndiyo',
+      no: 'Hapana'
     },
-
-    // Form instructions and help text
-    instructions: {
-      fullNameHelp: 'Ingiza jina lako kamili la kisheria kama linavyoonekana kwenye nyaraka zako rasmi',
-      dobHelp: 'Ingiza tarehe yako ya kuzaliwa kwa muundo wa DD/MM/YYYY',
-      uploadPhotoHelp: 'Pakia picha ya hivi karibuni. Faili lazima iwe JPG, PNG, au GIF na chini ya 2MB',
-      passwordHelp: 'Nenosiri lazima liwe na angalau herufi 8 zenye herufi kubwa moja, namba moja, na herufi maalum moja',
-      documentHelp: 'Muundo unaokubaliwa: PDF, JPG, PNG (max 5MB)',
-      requiredFields: 'Sehemu zilizowekwa alama ya * zinahitajika',
-      selectFromList: 'Tafadhali chagua chaguo kutoka kwa orodha',
-      nextTab: 'Endelea kwa sehemu inayofuata',
-      previousTab: 'Rudi kwa sehemu iliyotangulia',
-      saveInstructions: 'Bofya Hifadhi ili kuhifadhi maelezo yako',
-      cancelInstructions: 'Bofya Ghairi ili kutupilia mbali mabadiliko'
-    },
-
-    // Section completion status
-    completionStatus: {
-      notStarted: 'Haijaanza',
-      inProgress: 'Inaendelea',
-      complete: 'Imekamilika',
-      percentComplete: 'Imekamilika {percent}%',
-      tabsCompleted: 'Sehemu {completed} kati ya {total} zimekamilika'
+    select: 'Tafadhali chagua',
+    existingFile: 'Faili iliyopo',
+    noMatchingCountries: 'Hakuna nchi zinazofanana zilizopatikana',
+    noMatchingDisciplines: "Hakuna fani zinazofanana zilizopatikana",
+    noMatchingDegrees: "Hakuna shahada zinazofanana zilizopatikana",
+    educationOptions: [
+      "Uhasibu", "Uhandisi wa Anga", "Sayansi ya Kilimo", "Anthropolojia", "Ujenzi",
+      "Historia ya Sanaa", "Akili Bandia", "Astronomia", "Astrofizikia", "Biokemia",
+      "Uhandisi wa Biomedikal", "Bioteknolojia", "Utawala wa Biashara", "Uhandisi wa Kemikali",
+      "Kemia", "Uhandisi wa Ujenzi", "Mawasiliano", "Uhandisi wa Kompyuta", "Sayansi ya Kompyuta",
+      "Usimamizi wa Ujenzi", "Haki za Jinai", "Usalama wa Mtandao", "Sayansi ya Data", "Udaktari wa Meno",
+      "Uchumi", "Elimu", "Uhandisi wa Umeme", "Elimu ya Msingi", "Fasihi ya Kiingereza",
+      "Uhandisi wa Mazingira", "Sayansi ya Mazingira", "Ubunifu wa Mitindo", "Masomo ya Filamu",
+      "Fedha", "Sanaa", "Sayansi ya Chakula", "Sayansi ya Uchunguzi", "Ubunifu wa Michezo", "Jiografia",
+      "Jiolojia", "Ubunifu wa Grafiki", "Utawala wa Afya", "Historia", "Usimamizi wa Ukarimu",
+      "Rasilimali Watu", "Ubunifu wa Viwanda", "Uhandisi wa Viwanda", "Mifumo ya Habari",
+      "Teknolojia ya Habari", "Ubunifu wa Ndani", "Biashara ya Kimataifa", "Mahusiano ya Kimataifa",
+      "Uandishi wa Habari", "Sheria", "Sayansi ya Maktaba", "Isimu", "Usimamizi", "Masoko",
+      "Sayansi ya Vifaa", "Hisabati", "Uhandisi wa Mitambo", "Masomo ya Vyombo vya Habari", "Tiba",
+      "Meteorolojia", "Mikrobaiolojia", "Muziki", "Nanoteknolojia", "Uuguzi", "Lishe",
+      "Tiba ya Kazi", "Oseanografia", "Uhandisi wa Mafuta", "Famasia", "Falsafa", "Upigaji Picha",
+      "Elimu ya Mazoezi", "Tiba ya Viungo", "Fizikia", "Sayansi ya Siasa", "Saikolojia",
+      "Utawala wa Umma", "Afya ya Umma", "Uhusiano wa Umma", "Robotiki", "Elimu ya Sekondari",
+      "Kazi ya Jamii", "Sosiolojia", "Uhandisi wa Programu", "Elimu Maalum", "Usimamizi wa Michezo",
+      "Takwimu", "Uhandisi wa Mifumo", "Sanaa za Maigizo", "Utalii", "Mipango ya Miji",
+      "Udaktari wa Mifugo", "Utengenezaji wa Tovuti", "Biolojia ya Wanyama Pori", "Zoolojia"
+    ],
+    degreeOptions: [
+      "Stashahada ya Uhusiano", "Shahada ya Sanaa (BA)", "Shahada ya Sayansi (BS)", "Shahada ya Uhandisi (BEng)",
+      "Shahada ya Utawala wa Biashara (BBA)", "Shahada ya Sanaa Nzuri (BFA)", "Shahada ya Elimu (BEd)",
+      "Shahada ya Udaktari (MBBS)", "Shahada ya Sheria (LLB)", "Uzamili wa Sanaa (MA)", "Uzamili wa Sayansi (MS)",
+      "Uzamili wa Utawala wa Biashara (MBA)", "Uzamili wa Uhandisi (MEng)", "Uzamili wa Sanaa Nzuri (MFA)",
+      "Uzamili wa Elimu (MEd)", "Uzamili wa Sheria (LLM)", "Uzamili wa Afya ya Umma (MPH)",
+      "Uzamivu wa Falsafa (PhD)", "Uzamivu wa Udaktari (MD)", "Uzamivu wa Elimu (EdD)",
+      "Uzamivu wa Utawala wa Biashara (DBA)", "Uzamivu wa Sheria (JD)", "Diploma ya Kitaaluma",
+      "Diploma ya Kiufundi", "Cheti cha Ufundi", "Cheti cha Uzamili", "Diploma ya Baada ya Shahada", "Baada ya Uzamivu"
+    ],
+    aria: {
+      tabList: 'Sehemu za fomu ya wasifu',
+      nextButton: 'Nenda kwenye sehemu inayofuata',
+      prevButton: 'Nenda kwenye sehemu iliyotangulia',
+      closeButton: 'Funga fomu ya wasifu',
+      saveButton: 'Hifadhi data ya wasifu',
+      requiredField: 'Sehemu inayohitajika',
+      dropdownSelect: 'Chagua chaguo'
     }
   },
   chatbot: {
@@ -1673,6 +1302,7 @@ export default {
     attachFile: 'Ambatisha Faili',
     fileTooLarge: 'Faili ni kubwa sana. Ukubwa wa juu ni {maxSize}.',
     saveChat: 'Hifadhi Mazungumzo',
+    chatSaved: 'Mazungumzo Yamehifadhiwa',
     chatTitle: 'Kichwa cha Mazungumzo',
     chatTitlePlaceholder: 'Ingiza kichwa cha mazungumzo haya',
     selectFolder: 'Chagua Folda',
@@ -1681,6 +1311,7 @@ export default {
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
     whatCanIHelp: "Naweza kukusaidia vipi leo?",
     justChat: "Ongea tu",
+    queryContext: "Muktadha wa Hoja",
     contextAdded: 'Muktadha umeongezwa kwenye swali lako',
     contextRemoved: 'Muktadha umeondolewa kutoka kwenye swali lako',
     sessionUpdated: 'Kikao kimesasishwa',
@@ -1688,10 +1319,7 @@ export default {
     loadError: 'Imeshindwa kupakia historia ya mazungumzo',
     responsePrefix: "Nimepokea ujumbe wako",
     withContext: "na muktadha",
-    sessionUpdated: "Kikao kimesasishwa.",
-    newChatStarted: "Mazungumzo mapya yameanzishwa.",
     conversationLoaded: "Mazungumzo yamepakiwa kwa mafanikio!",
-    loadError: "Imeshindwa kupakia mazungumzo.",
     saveConfirmTitle: "Hifadhi Mazungumzo Yaliyopo",
     saveConfirmMessage: "Hifadhi mazungumzo yaliyopo?",
     loadConfirmTitle: "Pakia Mazungumzo Yaliyopo",
@@ -1712,7 +1340,6 @@ export default {
     housingPrograms: "Programu za nyumba",
     findJobs: "Tafuta kazi",
     justChat: "Ongea tu",
-    // Prompts as separate keys with a clear naming pattern
     justChatPrompt: "Ningependa kuzungumza kuhusu huduma za serikali",
     applyForIDPrompt: "Ninahitaji maelezo kuhusu jinsi ya kuomba kitambulisho cha kitaifa",
     payTaxesPrompt: "Je, ni mchakato gani wa kulipa kodi zangu mtandaoni?",
@@ -1732,6 +1359,7 @@ export default {
   },
   feedback: {
     title: 'Maoni',
+    button: 'Maoni',
     positive: 'Maoni mazuri',
     negative: 'Maoni hasi',
     promptText: 'Je, jibu hili lilikuwa la msaada?',
@@ -1740,8 +1368,8 @@ export default {
     close: 'Ghairi',
     thankYouMessage: 'Asante kwa maoni yako!',
     submitting: 'Inawasilisha...',
+    error: 'Imeshindwa kuwasilisha maoni. Tafadhali jaribu tena.',
     success: 'Asante kwa maoni yako!',
-    error: 'Imeshindwa kuwasilisha maoni. Tafadhali jaribu tena.'
   },
   responseRating: {
     title: 'Tusaidie Kuboresha',

@@ -1,7 +1,7 @@
-2025-06-19T15:22:42.377Z: LOG: Creating schema for database: node-services
-2025-06-19T15:22:42.378Z: LOG: Creating collections...
-2025-06-19T15:22:42.378Z: LOG:   Processing schema for categoryServices
-2025-06-19T15:22:42.378Z: LOG:   Original schema: {
+2025-06-24T12:16:41.339Z: LOG: Creating schema for database: node-services
+2025-06-24T12:16:41.339Z: LOG: Creating collections...
+2025-06-24T12:16:41.339Z: LOG:   Processing schema for categoryServices
+2025-06-24T12:16:41.339Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -19,7 +19,7 @@
     "_to"
   ]
 }
-2025-06-19T15:22:42.378Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.339Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -38,7 +38,7 @@
     "order"
   ]
 }
-2025-06-19T15:22:42.378Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.339Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -61,10 +61,10 @@
   "level": "moderate",
   "message": "Category-Service edge does not match schema"
 }
-2025-06-19T15:22:42.378Z: LOG:   Adding schema validation to categoryServices
-2025-06-19T15:22:42.378Z: LOG:   Schema rule applied with 3 properties
-2025-06-19T15:22:42.379Z: LOG:   Required fields: _from, _to, order
-2025-06-19T15:22:42.379Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.339Z: LOG:   Adding schema validation to categoryServices
+2025-06-24T12:16:41.339Z: LOG:   Schema rule applied with 3 properties
+2025-06-24T12:16:41.340Z: LOG:   Required fields: _from, _to, order
+2025-06-24T12:16:41.340Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {},
@@ -92,9 +92,9 @@
     "message": "Category-Service edge does not match schema"
   }
 }
-2025-06-19T15:22:42.390Z: LOG: Created collection: categoryServices
-2025-06-19T15:22:42.390Z: LOG:   Processing schema for services
-2025-06-19T15:22:42.390Z: LOG:   Original schema: {
+2025-06-24T12:16:41.351Z: LOG: Created collection: categoryServices
+2025-06-24T12:16:41.351Z: LOG:   Processing schema for services
+2025-06-24T12:16:41.351Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -129,7 +129,7 @@
     "order"
   ]
 }
-2025-06-19T15:22:42.391Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.351Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -161,7 +161,7 @@
     "order"
   ]
 }
-2025-06-19T15:22:42.391Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.351Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -197,10 +197,10 @@
   "level": "moderate",
   "message": "Service document does not match schema"
 }
-2025-06-19T15:22:42.391Z: LOG:   Adding schema validation to services
-2025-06-19T15:22:42.391Z: LOG:   Schema rule applied with 7 properties
-2025-06-19T15:22:42.391Z: LOG:   Required fields: _key, categoryId, nameEN, order
-2025-06-19T15:22:42.391Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.351Z: LOG:   Adding schema validation to services
+2025-06-24T12:16:41.351Z: LOG:   Schema rule applied with 7 properties
+2025-06-24T12:16:41.351Z: LOG:   Required fields: _key, categoryId, nameEN, order
+2025-06-24T12:16:41.351Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -241,16 +241,16 @@
     "message": "Service document does not match schema"
   }
 }
-2025-06-19T15:22:42.392Z: LOG: Created collection: services
-2025-06-19T15:22:42.392Z: LOG:   No schema validation for userConversations
-2025-06-19T15:22:42.392Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.353Z: LOG: Created collection: services
+2025-06-24T12:16:41.353Z: LOG:   No schema validation for userConversations
+2025-06-24T12:16:41.353Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.394Z: LOG: Created collection: userConversations
-2025-06-19T15:22:42.394Z: LOG:   Processing schema for userFolders
-2025-06-19T15:22:42.394Z: LOG:   Original schema: {
+2025-06-24T12:16:41.354Z: LOG: Created collection: userConversations
+2025-06-24T12:16:41.354Z: LOG:   Processing schema for userFolders
+2025-06-24T12:16:41.354Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -281,7 +281,7 @@
     "role"
   ]
 }
-2025-06-19T15:22:42.394Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.354Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -309,7 +309,7 @@
     "role"
   ]
 }
-2025-06-19T15:22:42.394Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.354Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -341,10 +341,10 @@
   "level": "none",
   "message": "User-Folder edge does not match schema"
 }
-2025-06-19T15:22:42.394Z: LOG:   Adding schema validation to userFolders
-2025-06-19T15:22:42.394Z: LOG:   Schema rule applied with 6 properties
-2025-06-19T15:22:42.394Z: LOG:   Required fields: _from, _to, role
-2025-06-19T15:22:42.394Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.354Z: LOG:   Adding schema validation to userFolders
+2025-06-24T12:16:41.354Z: LOG:   Schema rule applied with 6 properties
+2025-06-24T12:16:41.354Z: LOG:   Required fields: _from, _to, role
+2025-06-24T12:16:41.354Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {},
@@ -381,9 +381,9 @@
     "message": "User-Folder edge does not match schema"
   }
 }
-2025-06-19T15:22:42.395Z: LOG: Created collection: userFolders
-2025-06-19T15:22:42.395Z: LOG:   Processing schema for folders
-2025-06-19T15:22:42.395Z: LOG:   Original schema: {
+2025-06-24T12:16:41.355Z: LOG: Created collection: userFolders
+2025-06-24T12:16:41.355Z: LOG:   Processing schema for folders
+2025-06-24T12:16:41.355Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -407,7 +407,7 @@
   ],
   "additionalProperties": true
 }
-2025-06-19T15:22:42.395Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.355Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -430,7 +430,7 @@
   ],
   "additionalProperties": true
 }
-2025-06-19T15:22:42.395Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.355Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -457,10 +457,10 @@
   "level": "none",
   "message": "Folder document does not match schema"
 }
-2025-06-19T15:22:42.395Z: LOG:   Adding schema validation to folders
-2025-06-19T15:22:42.395Z: LOG:   Schema rule applied with 4 properties
-2025-06-19T15:22:42.395Z: LOG:   Required fields: _key, userId, name
-2025-06-19T15:22:42.395Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.355Z: LOG:   Adding schema validation to folders
+2025-06-24T12:16:41.355Z: LOG:   Schema rule applied with 4 properties
+2025-06-24T12:16:41.355Z: LOG:   Required fields: _key, userId, name
+2025-06-24T12:16:41.355Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -492,9 +492,9 @@
     "message": "Folder document does not match schema"
   }
 }
-2025-06-19T15:22:42.396Z: LOG: Created collection: folders
-2025-06-19T15:22:42.396Z: LOG:   Processing schema for analytics
-2025-06-19T15:22:42.397Z: LOG:   Original schema: {
+2025-06-24T12:16:41.357Z: LOG: Created collection: folders
+2025-06-24T12:16:41.357Z: LOG:   Processing schema for analytics
+2025-06-24T12:16:41.357Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -562,7 +562,7 @@
     "lastUpdated"
   ]
 }
-2025-06-19T15:22:42.397Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.357Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -643,7 +643,7 @@
     "topQueries"
   ]
 }
-2025-06-19T15:22:42.397Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.357Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -728,10 +728,10 @@
   "level": "none",
   "message": "Analytics document does not match schema"
 }
-2025-06-19T15:22:42.397Z: LOG:   Adding schema validation to analytics
-2025-06-19T15:22:42.397Z: LOG:   Schema rule applied with 11 properties
-2025-06-19T15:22:42.397Z: LOG:   Required fields: _key, period, startDate, endDate, totalQueries, lastUpdated, uniqueUsers, averageResponseTime, satisfactionRate, queryDistribution, topQueries
-2025-06-19T15:22:42.397Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.357Z: LOG:   Adding schema validation to analytics
+2025-06-24T12:16:41.357Z: LOG:   Schema rule applied with 11 properties
+2025-06-24T12:16:41.357Z: LOG:   Required fields: _key, period, startDate, endDate, totalQueries, lastUpdated, uniqueUsers, averageResponseTime, satisfactionRate, queryDistribution, topQueries
+2025-06-24T12:16:41.357Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -821,16 +821,16 @@
     "message": "Analytics document does not match schema"
   }
 }
-2025-06-19T15:22:42.398Z: LOG: Created collection: analytics
-2025-06-19T15:22:42.399Z: LOG:   No schema validation for verificationTokens
-2025-06-19T15:22:42.399Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.358Z: LOG: Created collection: analytics
+2025-06-24T12:16:41.358Z: LOG:   No schema validation for verificationTokens
+2025-06-24T12:16:41.358Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.400Z: LOG: Created collection: verificationTokens
-2025-06-19T15:22:42.400Z: LOG:   Processing schema for serviceCategories
-2025-06-19T15:22:42.400Z: LOG:   Original schema: {
+2025-06-24T12:16:41.359Z: LOG: Created collection: verificationTokens
+2025-06-24T12:16:41.359Z: LOG:   Processing schema for serviceCategories
+2025-06-24T12:16:41.359Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -857,7 +857,7 @@
     "order"
   ]
 }
-2025-06-19T15:22:42.400Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.359Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -882,7 +882,7 @@
     "order"
   ]
 }
-2025-06-19T15:22:42.400Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.359Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -911,10 +911,10 @@
   "level": "moderate",
   "message": "Service category document does not match schema"
 }
-2025-06-19T15:22:42.400Z: LOG:   Adding schema validation to serviceCategories
-2025-06-19T15:22:42.400Z: LOG:   Schema rule applied with 5 properties
-2025-06-19T15:22:42.400Z: LOG:   Required fields: _key, nameEN, order
-2025-06-19T15:22:42.400Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.359Z: LOG:   Adding schema validation to serviceCategories
+2025-06-24T12:16:41.359Z: LOG:   Schema rule applied with 5 properties
+2025-06-24T12:16:41.359Z: LOG:   Required fields: _key, nameEN, order
+2025-06-24T12:16:41.359Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -948,16 +948,16 @@
     "message": "Service category document does not match schema"
   }
 }
-2025-06-19T15:22:42.401Z: LOG: Created collection: serviceCategories
-2025-06-19T15:22:42.401Z: LOG:   No schema validation for queryCategories
-2025-06-19T15:22:42.401Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.360Z: LOG: Created collection: serviceCategories
+2025-06-24T12:16:41.361Z: LOG:   No schema validation for queryCategories
+2025-06-24T12:16:41.361Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.403Z: LOG: Created collection: queryCategories
-2025-06-19T15:22:42.403Z: LOG:   Processing schema for serviceCategoryTranslations
-2025-06-19T15:22:42.403Z: LOG:   Original schema: {
+2025-06-24T12:16:41.362Z: LOG: Created collection: queryCategories
+2025-06-24T12:16:41.362Z: LOG:   Processing schema for serviceCategoryTranslations
+2025-06-24T12:16:41.362Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -990,7 +990,7 @@
     "translation"
   ]
 }
-2025-06-19T15:22:42.403Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.362Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -1025,7 +1025,7 @@
     "updatedAt"
   ]
 }
-2025-06-19T15:22:42.403Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.362Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -1064,10 +1064,10 @@
   "level": "none",
   "message": "Service category translation document does not match schema"
 }
-2025-06-19T15:22:42.403Z: LOG:   Adding schema validation to serviceCategoryTranslations
-2025-06-19T15:22:42.403Z: LOG:   Schema rule applied with 7 properties
-2025-06-19T15:22:42.403Z: LOG:   Required fields: _key, serviceCategoryId, languageCode, translation, isActive, createdAt, updatedAt
-2025-06-19T15:22:42.403Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.362Z: LOG:   Adding schema validation to serviceCategoryTranslations
+2025-06-24T12:16:41.362Z: LOG:   Schema rule applied with 7 properties
+2025-06-24T12:16:41.362Z: LOG:   Required fields: _key, serviceCategoryId, languageCode, translation, isActive, createdAt, updatedAt
+2025-06-24T12:16:41.362Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -1111,9 +1111,9 @@
     "message": "Service category translation document does not match schema"
   }
 }
-2025-06-19T15:22:42.405Z: LOG: Created collection: serviceCategoryTranslations
-2025-06-19T15:22:42.405Z: LOG:   Processing schema for queryMessages
-2025-06-19T15:22:42.405Z: LOG:   Original schema: {
+2025-06-24T12:16:41.363Z: LOG: Created collection: serviceCategoryTranslations
+2025-06-24T12:16:41.363Z: LOG:   Processing schema for queryMessages
+2025-06-24T12:16:41.363Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -1140,7 +1140,7 @@
     "createdAt"
   ]
 }
-2025-06-19T15:22:42.405Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.363Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -1166,7 +1166,7 @@
     "createdAt"
   ]
 }
-2025-06-19T15:22:42.405Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.363Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -1196,10 +1196,10 @@
   "level": "none",
   "message": "Query-Message edge does not match schema"
 }
-2025-06-19T15:22:42.405Z: LOG:   Adding schema validation to queryMessages
-2025-06-19T15:22:42.405Z: LOG:   Schema rule applied with 5 properties
-2025-06-19T15:22:42.405Z: LOG:   Required fields: _from, _to, responseType, createdAt
-2025-06-19T15:22:42.405Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.363Z: LOG:   Adding schema validation to queryMessages
+2025-06-24T12:16:41.363Z: LOG:   Schema rule applied with 5 properties
+2025-06-24T12:16:41.363Z: LOG:   Required fields: _from, _to, responseType, createdAt
+2025-06-24T12:16:41.364Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {},
@@ -1234,9 +1234,9 @@
     "message": "Query-Message edge does not match schema"
   }
 }
-2025-06-19T15:22:42.406Z: LOG: Created collection: queryMessages
-2025-06-19T15:22:42.406Z: LOG:   Processing schema for messages
-2025-06-19T15:22:42.406Z: LOG:   Original schema: {
+2025-06-24T12:16:41.365Z: LOG: Created collection: queryMessages
+2025-06-24T12:16:41.365Z: LOG:   Processing schema for messages
+2025-06-24T12:16:41.365Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -1274,7 +1274,7 @@
     "sequence"
   ]
 }
-2025-06-19T15:22:42.406Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.365Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -1312,7 +1312,7 @@
     "readStatus"
   ]
 }
-2025-06-19T15:22:42.406Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.365Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -1354,10 +1354,10 @@
   "level": "none",
   "message": "Message document does not match schema"
 }
-2025-06-19T15:22:42.406Z: LOG:   Adding schema validation to messages
-2025-06-19T15:22:42.406Z: LOG:   Schema rule applied with 8 properties
-2025-06-19T15:22:42.406Z: LOG:   Required fields: _key, conversationId, content, timestamp, sender, sequence, readStatus
-2025-06-19T15:22:42.407Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.365Z: LOG:   Adding schema validation to messages
+2025-06-24T12:16:41.365Z: LOG:   Schema rule applied with 8 properties
+2025-06-24T12:16:41.365Z: LOG:   Required fields: _key, conversationId, content, timestamp, sender, sequence, readStatus
+2025-06-24T12:16:41.365Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -1404,16 +1404,16 @@
     "message": "Message document does not match schema"
   }
 }
-2025-06-19T15:22:42.407Z: LOG: Created collection: messages
-2025-06-19T15:22:42.407Z: LOG:   No schema validation for sessionQueries
-2025-06-19T15:22:42.407Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.366Z: LOG: Created collection: messages
+2025-06-24T12:16:41.366Z: LOG:   No schema validation for sessionQueries
+2025-06-24T12:16:41.366Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.409Z: LOG: Created collection: sessionQueries
-2025-06-19T15:22:42.409Z: LOG:   Processing schema for events
-2025-06-19T15:22:42.409Z: LOG:   Original schema: {
+2025-06-24T12:16:41.367Z: LOG: Created collection: sessionQueries
+2025-06-24T12:16:41.367Z: LOG:   Processing schema for events
+2025-06-24T12:16:41.367Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -1440,7 +1440,7 @@
     "timestamp"
   ]
 }
-2025-06-19T15:22:42.409Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.367Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -1466,7 +1466,7 @@
     "timestamp"
   ]
 }
-2025-06-19T15:22:42.409Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.367Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -1496,10 +1496,10 @@
   "level": "moderate",
   "message": "Event document does not match schema"
 }
-2025-06-19T15:22:42.409Z: LOG:   Adding schema validation to events
-2025-06-19T15:22:42.409Z: LOG:   Schema rule applied with 5 properties
-2025-06-19T15:22:42.409Z: LOG:   Required fields: _key, userId, eventType, timestamp
-2025-06-19T15:22:42.409Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.367Z: LOG:   Adding schema validation to events
+2025-06-24T12:16:41.367Z: LOG:   Schema rule applied with 5 properties
+2025-06-24T12:16:41.367Z: LOG:   Required fields: _key, userId, eventType, timestamp
+2025-06-24T12:16:41.367Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -1534,9 +1534,9 @@
     "message": "Event document does not match schema"
   }
 }
-2025-06-19T15:22:42.410Z: LOG: Created collection: events
-2025-06-19T15:22:42.410Z: LOG:   Processing schema for serviceTranslationsEdge
-2025-06-19T15:22:42.410Z: LOG:   Original schema: {
+2025-06-24T12:16:41.368Z: LOG: Created collection: events
+2025-06-24T12:16:41.368Z: LOG:   Processing schema for serviceTranslationsEdge
+2025-06-24T12:16:41.368Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -1554,7 +1554,7 @@
     "_to"
   ]
 }
-2025-06-19T15:22:42.410Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.368Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -1573,7 +1573,7 @@
     "createdAt"
   ]
 }
-2025-06-19T15:22:42.410Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.368Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -1596,10 +1596,10 @@
   "level": "none",
   "message": "Service translation edge does not match schema"
 }
-2025-06-19T15:22:42.410Z: LOG:   Adding schema validation to serviceTranslationsEdge
-2025-06-19T15:22:42.410Z: LOG:   Schema rule applied with 3 properties
-2025-06-19T15:22:42.410Z: LOG:   Required fields: _from, _to, createdAt
-2025-06-19T15:22:42.410Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.368Z: LOG:   Adding schema validation to serviceTranslationsEdge
+2025-06-24T12:16:41.368Z: LOG:   Schema rule applied with 3 properties
+2025-06-24T12:16:41.368Z: LOG:   Required fields: _from, _to, createdAt
+2025-06-24T12:16:41.368Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {},
@@ -1627,9 +1627,9 @@
     "message": "Service translation edge does not match schema"
   }
 }
-2025-06-19T15:22:42.411Z: LOG: Created collection: serviceTranslationsEdge
-2025-06-19T15:22:42.411Z: LOG:   Processing schema for users
-2025-06-19T15:22:42.411Z: LOG:   Original schema: {
+2025-06-24T12:16:41.369Z: LOG: Created collection: serviceTranslationsEdge
+2025-06-24T12:16:41.369Z: LOG:   Processing schema for users
+2025-06-24T12:16:41.369Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -2001,7 +2001,7 @@
     "encPassword"
   ]
 }
-2025-06-19T15:22:42.411Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.369Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -2315,7 +2315,7 @@
     "updatedAt"
   ]
 }
-2025-06-19T15:22:42.412Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.369Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -2633,10 +2633,10 @@
   "level": "none",
   "message": "User profile document does not match schema"
 }
-2025-06-19T15:22:42.412Z: LOG:   Adding schema validation to users
-2025-06-19T15:22:42.412Z: LOG:   Schema rule applied with 20 properties
-2025-06-19T15:22:42.412Z: LOG:   Required fields: loginName, email, encPassword, _key, emailVerified, personalIdentification, addressResidency, createdAt, updatedAt
-2025-06-19T15:22:42.412Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.369Z: LOG:   Adding schema validation to users
+2025-06-24T12:16:41.369Z: LOG:   Schema rule applied with 20 properties
+2025-06-24T12:16:41.369Z: LOG:   Required fields: loginName, email, encPassword, _key, emailVerified, personalIdentification, addressResidency, createdAt, updatedAt
+2025-06-24T12:16:41.370Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -2959,16 +2959,16 @@
     "message": "User profile document does not match schema"
   }
 }
-2025-06-19T15:22:42.414Z: LOG: Created collection: users
-2025-06-19T15:22:42.414Z: LOG:   No schema validation for queries
-2025-06-19T15:22:42.414Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.375Z: LOG: Created collection: users
+2025-06-24T12:16:41.375Z: LOG:   No schema validation for queries
+2025-06-24T12:16:41.375Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.415Z: LOG: Created collection: queries
-2025-06-19T15:22:42.415Z: LOG:   Processing schema for folderConversations
-2025-06-19T15:22:42.415Z: LOG:   Original schema: {
+2025-06-24T12:16:41.380Z: LOG: Created collection: queries
+2025-06-24T12:16:41.380Z: LOG:   Processing schema for folderConversations
+2025-06-24T12:16:41.380Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -2983,7 +2983,7 @@
     "_to"
   ]
 }
-2025-06-19T15:22:42.415Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.380Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -2998,7 +2998,7 @@
     "_to"
   ]
 }
-2025-06-19T15:22:42.415Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.380Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -3017,10 +3017,10 @@
   "level": "none",
   "message": "Folder-Conversation edge does not match schema"
 }
-2025-06-19T15:22:42.415Z: LOG:   Adding schema validation to folderConversations
-2025-06-19T15:22:42.415Z: LOG:   Schema rule applied with 2 properties
-2025-06-19T15:22:42.415Z: LOG:   Required fields: _from, _to
-2025-06-19T15:22:42.415Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.380Z: LOG:   Adding schema validation to folderConversations
+2025-06-24T12:16:41.380Z: LOG:   Schema rule applied with 2 properties
+2025-06-24T12:16:41.380Z: LOG:   Required fields: _from, _to
+2025-06-24T12:16:41.380Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {},
@@ -3044,30 +3044,30 @@
     "message": "Folder-Conversation edge does not match schema"
   }
 }
-2025-06-19T15:22:42.416Z: LOG: Created collection: folderConversations
-2025-06-19T15:22:42.416Z: LOG:   No schema validation for graphql_appearsIn
-2025-06-19T15:22:42.416Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.382Z: LOG: Created collection: folderConversations
+2025-06-24T12:16:41.383Z: LOG:   No schema validation for graphql_appearsIn
+2025-06-24T12:16:41.383Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.416Z: LOG: Created collection: graphql_appearsIn
-2025-06-19T15:22:42.416Z: LOG:   No schema validation for weatherRequests
-2025-06-19T15:22:42.416Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.386Z: LOG: Created collection: graphql_appearsIn
+2025-06-24T12:16:41.386Z: LOG:   No schema validation for weatherRequests
+2025-06-24T12:16:41.387Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.417Z: LOG: Created collection: weatherRequests
-2025-06-19T15:22:42.417Z: LOG:   No schema validation for graphql_episodes
-2025-06-19T15:22:42.417Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.389Z: LOG: Created collection: weatherRequests
+2025-06-24T12:16:41.389Z: LOG:   No schema validation for graphql_episodes
+2025-06-24T12:16:41.389Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.418Z: LOG: Created collection: graphql_episodes
-2025-06-19T15:22:42.418Z: LOG:   Processing schema for conversations
-2025-06-19T15:22:42.418Z: LOG:   Original schema: {
+2025-06-24T12:16:41.390Z: LOG: Created collection: graphql_episodes
+2025-06-24T12:16:41.390Z: LOG:   Processing schema for conversations
+2025-06-24T12:16:41.390Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -3114,7 +3114,7 @@
     "isArchived"
   ]
 }
-2025-06-19T15:22:42.418Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.390Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -3164,7 +3164,7 @@
     "tags"
   ]
 }
-2025-06-19T15:22:42.418Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.390Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -3218,10 +3218,10 @@
   "level": "none",
   "message": "Conversation document does not match schema"
 }
-2025-06-19T15:22:42.418Z: LOG:   Adding schema validation to conversations
-2025-06-19T15:22:42.418Z: LOG:   Schema rule applied with 10 properties
-2025-06-19T15:22:42.418Z: LOG:   Required fields: _key, title, created, updated, messageCount, isStarred, isArchived, lastMessage, category, tags
-2025-06-19T15:22:42.418Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.390Z: LOG:   Adding schema validation to conversations
+2025-06-24T12:16:41.390Z: LOG:   Schema rule applied with 10 properties
+2025-06-24T12:16:41.390Z: LOG:   Required fields: _key, title, created, updated, messageCount, isStarred, isArchived, lastMessage, category, tags
+2025-06-24T12:16:41.390Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -3280,23 +3280,23 @@
     "message": "Conversation document does not match schema"
   }
 }
-2025-06-19T15:22:42.419Z: LOG: Created collection: conversations
-2025-06-19T15:22:42.419Z: LOG:   No schema validation for graphql_friends
-2025-06-19T15:22:42.419Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.394Z: LOG: Created collection: conversations
+2025-06-24T12:16:41.394Z: LOG:   No schema validation for graphql_friends
+2025-06-24T12:16:41.394Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.420Z: LOG: Created collection: graphql_friends
-2025-06-19T15:22:42.420Z: LOG:   No schema validation for sessions
-2025-06-19T15:22:42.420Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.399Z: LOG: Created collection: graphql_friends
+2025-06-24T12:16:41.399Z: LOG:   No schema validation for sessions
+2025-06-24T12:16:41.399Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.420Z: LOG: Created collection: sessions
-2025-06-19T15:22:42.420Z: LOG:   Processing schema for passwordResetTokens
-2025-06-19T15:22:42.420Z: LOG:   Original schema: {
+2025-06-24T12:16:41.402Z: LOG: Created collection: sessions
+2025-06-24T12:16:41.403Z: LOG:   Processing schema for passwordResetTokens
+2025-06-24T12:16:41.403Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -3327,7 +3327,7 @@
     "createdAt"
   ]
 }
-2025-06-19T15:22:42.420Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.403Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -3358,7 +3358,7 @@
     "used"
   ]
 }
-2025-06-19T15:22:42.420Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.403Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -3393,10 +3393,10 @@
   "level": "none",
   "message": "Password reset token document does not match schema"
 }
-2025-06-19T15:22:42.420Z: LOG:   Adding schema validation to passwordResetTokens
-2025-06-19T15:22:42.420Z: LOG:   Schema rule applied with 6 properties
-2025-06-19T15:22:42.420Z: LOG:   Required fields: _key, userId, token, expiresAt, createdAt, used
-2025-06-19T15:22:42.420Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.403Z: LOG:   Adding schema validation to passwordResetTokens
+2025-06-24T12:16:41.403Z: LOG:   Schema rule applied with 6 properties
+2025-06-24T12:16:41.403Z: LOG:   Required fields: _key, userId, token, expiresAt, createdAt, used
+2025-06-24T12:16:41.403Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -3436,16 +3436,16 @@
     "message": "Password reset token document does not match schema"
   }
 }
-2025-06-19T15:22:42.421Z: LOG: Created collection: passwordResetTokens
-2025-06-19T15:22:42.421Z: LOG:   No schema validation for userSessions
-2025-06-19T15:22:42.421Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.405Z: LOG: Created collection: passwordResetTokens
+2025-06-24T12:16:41.405Z: LOG:   No schema validation for userSessions
+2025-06-24T12:16:41.405Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.422Z: LOG: Created collection: userSessions
-2025-06-19T15:22:42.422Z: LOG:   Processing schema for serviceCategoryTranslationsEdge
-2025-06-19T15:22:42.422Z: LOG:   Original schema: {
+2025-06-24T12:16:41.407Z: LOG: Created collection: userSessions
+2025-06-24T12:16:41.407Z: LOG:   Processing schema for serviceCategoryTranslationsEdge
+2025-06-24T12:16:41.408Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -3463,7 +3463,7 @@
     "_to"
   ]
 }
-2025-06-19T15:22:42.422Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.408Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_from": {
@@ -3482,7 +3482,7 @@
     "createdAt"
   ]
 }
-2025-06-19T15:22:42.422Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.408Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -3505,10 +3505,10 @@
   "level": "none",
   "message": "Service category translation edge does not match schema"
 }
-2025-06-19T15:22:42.422Z: LOG:   Adding schema validation to serviceCategoryTranslationsEdge
-2025-06-19T15:22:42.422Z: LOG:   Schema rule applied with 3 properties
-2025-06-19T15:22:42.422Z: LOG:   Required fields: _from, _to, createdAt
-2025-06-19T15:22:42.422Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.408Z: LOG:   Adding schema validation to serviceCategoryTranslationsEdge
+2025-06-24T12:16:41.408Z: LOG:   Schema rule applied with 3 properties
+2025-06-24T12:16:41.408Z: LOG:   Required fields: _from, _to, createdAt
+2025-06-24T12:16:41.408Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {},
@@ -3536,16 +3536,16 @@
     "message": "Service category translation edge does not match schema"
   }
 }
-2025-06-19T15:22:42.423Z: LOG: Created collection: serviceCategoryTranslationsEdge
-2025-06-19T15:22:42.423Z: LOG:   No schema validation for conversationCategories
-2025-06-19T15:22:42.423Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.411Z: LOG: Created collection: serviceCategoryTranslationsEdge
+2025-06-24T12:16:41.411Z: LOG:   No schema validation for conversationCategories
+2025-06-24T12:16:41.411Z: LOG:   Creating collection with options: {
   "type": 3,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.424Z: LOG: Created collection: conversationCategories
-2025-06-19T15:22:42.424Z: LOG:   Processing schema for serviceTranslations
-2025-06-19T15:22:42.424Z: LOG:   Original schema: {
+2025-06-24T12:16:41.412Z: LOG: Created collection: conversationCategories
+2025-06-24T12:16:41.412Z: LOG:   Processing schema for serviceTranslations
+2025-06-24T12:16:41.412Z: LOG:   Original schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -3578,7 +3578,7 @@
     "translation"
   ]
 }
-2025-06-19T15:22:42.424Z: LOG:   Converted schema: {
+2025-06-24T12:16:41.412Z: LOG:   Converted schema: {
   "type": "object",
   "properties": {
     "_key": {
@@ -3613,7 +3613,7 @@
     "updatedAt"
   ]
 }
-2025-06-19T15:22:42.424Z: LOG:   Final schema options: {
+2025-06-24T12:16:41.412Z: LOG:   Final schema options: {
   "rule": {
     "type": "object",
     "properties": {
@@ -3652,10 +3652,10 @@
   "level": "none",
   "message": "Service translation document does not match schema"
 }
-2025-06-19T15:22:42.424Z: LOG:   Adding schema validation to serviceTranslations
-2025-06-19T15:22:42.424Z: LOG:   Schema rule applied with 7 properties
-2025-06-19T15:22:42.424Z: LOG:   Required fields: _key, serviceId, languageCode, translation, isActive, createdAt, updatedAt
-2025-06-19T15:22:42.424Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.412Z: LOG:   Adding schema validation to serviceTranslations
+2025-06-24T12:16:41.412Z: LOG:   Schema rule applied with 7 properties
+2025-06-24T12:16:41.412Z: LOG:   Required fields: _key, serviceId, languageCode, translation, isActive, createdAt, updatedAt
+2025-06-24T12:16:41.413Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {},
@@ -3699,76 +3699,76 @@
     "message": "Service translation document does not match schema"
   }
 }
-2025-06-19T15:22:42.425Z: LOG: Created collection: serviceTranslations
-2025-06-19T15:22:42.425Z: LOG:   No schema validation for graphql_characters
-2025-06-19T15:22:42.425Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.413Z: LOG: Created collection: serviceTranslations
+2025-06-24T12:16:41.413Z: LOG:   No schema validation for graphql_characters
+2025-06-24T12:16:41.413Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.425Z: LOG: Created collection: graphql_characters
-2025-06-19T15:22:42.425Z: LOG:   No schema validation for analyticsMetrics
-2025-06-19T15:22:42.425Z: LOG:   Creating collection with options: {
+2025-06-24T12:16:41.414Z: LOG: Created collection: graphql_characters
+2025-06-24T12:16:41.414Z: LOG:   No schema validation for analyticsMetrics
+2025-06-24T12:16:41.414Z: LOG:   Creating collection with options: {
   "type": 2,
   "waitForSync": false,
   "keyOptions": {}
 }
-2025-06-19T15:22:42.426Z: LOG: Created collection: analyticsMetrics
-2025-06-19T15:22:42.426Z: LOG: Creating indexes...
-2025-06-19T15:22:42.428Z: ERROR: Error creating index on categoryServices: forbidden
-2025-06-19T15:22:42.429Z: LOG: Created index on categoryServices: createdAt
-2025-06-19T15:22:42.430Z: LOG: Created index on services: categoryId, order
-2025-06-19T15:22:42.431Z: ERROR: Error creating index on userConversations: forbidden
-2025-06-19T15:22:42.432Z: LOG: Created index on userConversations: createdAt
-2025-06-19T15:22:42.433Z: ERROR: Error creating index on userFolders: forbidden
-2025-06-19T15:22:42.434Z: LOG: Created index on userFolders: createdAt
-2025-06-19T15:22:42.434Z: LOG: Created index on folders: createdAt
-2025-06-19T15:22:42.435Z: LOG: Created index on analytics: createdAt
-2025-06-19T15:22:42.436Z: LOG: Created index on verificationTokens: createdAt
-2025-06-19T15:22:42.437Z: LOG: Created index on serviceCategories: catCode, order
-2025-06-19T15:22:42.437Z: ERROR: Error creating index on queryCategories: forbidden
-2025-06-19T15:22:42.438Z: LOG: Created index on queryCategories: createdAt
-2025-06-19T15:22:42.438Z: LOG: Created index on serviceCategoryTranslations: serviceCategoryId, languageCode
-2025-06-19T15:22:42.439Z: LOG: Created index on serviceCategoryTranslations: serviceCategoryId
-2025-06-19T15:22:42.440Z: LOG: Created index on serviceCategoryTranslations: languageCode
-2025-06-19T15:22:42.441Z: LOG: Created index on serviceCategoryTranslations: createdAt
-2025-06-19T15:22:42.441Z: ERROR: Error creating index on queryMessages: forbidden
-2025-06-19T15:22:42.442Z: LOG: Created index on queryMessages: createdAt
-2025-06-19T15:22:42.443Z: LOG: Created index on messages: createdAt
-2025-06-19T15:22:42.443Z: ERROR: Error creating index on sessionQueries: forbidden
-2025-06-19T15:22:42.444Z: LOG: Created index on sessionQueries: createdAt
-2025-06-19T15:22:42.445Z: LOG: Created index on events: createdAt
-2025-06-19T15:22:42.445Z: ERROR: Error creating index on serviceTranslationsEdge: forbidden
-2025-06-19T15:22:42.446Z: LOG: Created index on users: email
-2025-06-19T15:22:42.447Z: LOG: Created index on users: createdAt
-2025-06-19T15:22:42.447Z: LOG: Created index on users: loginName
-2025-06-19T15:22:42.448Z: LOG: Created index on users: email
-2025-06-19T15:22:42.449Z: LOG: Created index on queries: createdAt
-2025-06-19T15:22:42.449Z: ERROR: Error creating index on folderConversations: forbidden
-2025-06-19T15:22:42.450Z: LOG: Created index on folderConversations: createdAt
-2025-06-19T15:22:42.450Z: ERROR: Error creating index on graphql_appearsIn: forbidden
-2025-06-19T15:22:42.451Z: LOG: Created index on graphql_appearsIn: createdAt
-2025-06-19T15:22:42.452Z: LOG: Created index on weatherRequests: createdAt
-2025-06-19T15:22:42.452Z: LOG: Created index on graphql_episodes: createdAt
-2025-06-19T15:22:42.453Z: LOG: Created index on conversations: createdAt
-2025-06-19T15:22:42.454Z: ERROR: Error creating index on graphql_friends: forbidden
-2025-06-19T15:22:42.454Z: LOG: Created index on graphql_friends: createdAt
-2025-06-19T15:22:42.455Z: LOG: Created index on sessions: userId, createdAt
-2025-06-19T15:22:42.456Z: LOG: Created index on passwordResetTokens: createdAt
-2025-06-19T15:22:42.457Z: ERROR: Error creating index on userSessions: forbidden
-2025-06-19T15:22:42.458Z: LOG: Created index on userSessions: userId, createdAt
-2025-06-19T15:22:42.458Z: ERROR: Error creating index on serviceCategoryTranslationsEdge: forbidden
-2025-06-19T15:22:42.459Z: ERROR: Error creating index on conversationCategories: forbidden
-2025-06-19T15:22:42.460Z: LOG: Created index on conversationCategories: createdAt
-2025-06-19T15:22:42.460Z: LOG: Created index on serviceTranslations: serviceId, languageCode
-2025-06-19T15:22:42.461Z: LOG: Created index on serviceTranslations: serviceId
-2025-06-19T15:22:42.462Z: LOG: Created index on serviceTranslations: languageCode
-2025-06-19T15:22:42.462Z: LOG: Created index on serviceTranslations: createdAt
-2025-06-19T15:22:42.463Z: LOG: Created index on graphql_characters: createdAt
-2025-06-19T15:22:42.464Z: LOG: Created index on analyticsMetrics: createdAt
-2025-06-19T15:22:42.464Z: LOG: Creating graphs...
-2025-06-19T15:22:42.464Z: ERROR: Error creating graph Graph: edgeDefinitions.map is not a function
-2025-06-19T15:22:42.464Z: LOG: Creating views...
-2025-06-19T15:22:42.464Z: LOG: Creating analyzers...
-2025-06-19T15:22:42.464Z: LOG: Creating AQL functions...
-2025-06-19T15:22:42.464Z: LOG: Schema creation completed successfully
+2025-06-24T12:16:41.415Z: LOG: Created collection: analyticsMetrics
+2025-06-24T12:16:41.415Z: LOG: Creating indexes...
+2025-06-24T12:16:41.417Z: ERROR: Error creating index on categoryServices: forbidden
+2025-06-24T12:16:41.418Z: LOG: Created index on categoryServices: createdAt
+2025-06-24T12:16:41.419Z: LOG: Created index on services: categoryId, order
+2025-06-24T12:16:41.420Z: ERROR: Error creating index on userConversations: forbidden
+2025-06-24T12:16:41.421Z: LOG: Created index on userConversations: createdAt
+2025-06-24T12:16:41.422Z: ERROR: Error creating index on userFolders: forbidden
+2025-06-24T12:16:41.423Z: LOG: Created index on userFolders: createdAt
+2025-06-24T12:16:41.424Z: LOG: Created index on folders: createdAt
+2025-06-24T12:16:41.425Z: LOG: Created index on analytics: createdAt
+2025-06-24T12:16:41.426Z: LOG: Created index on verificationTokens: createdAt
+2025-06-24T12:16:41.427Z: LOG: Created index on serviceCategories: catCode, order
+2025-06-24T12:16:41.428Z: ERROR: Error creating index on queryCategories: forbidden
+2025-06-24T12:16:41.429Z: LOG: Created index on queryCategories: createdAt
+2025-06-24T12:16:41.429Z: LOG: Created index on serviceCategoryTranslations: serviceCategoryId, languageCode
+2025-06-24T12:16:41.430Z: LOG: Created index on serviceCategoryTranslations: serviceCategoryId
+2025-06-24T12:16:41.431Z: LOG: Created index on serviceCategoryTranslations: languageCode
+2025-06-24T12:16:41.432Z: LOG: Created index on serviceCategoryTranslations: createdAt
+2025-06-24T12:16:41.433Z: ERROR: Error creating index on queryMessages: forbidden
+2025-06-24T12:16:41.434Z: LOG: Created index on queryMessages: createdAt
+2025-06-24T12:16:41.434Z: LOG: Created index on messages: createdAt
+2025-06-24T12:16:41.435Z: ERROR: Error creating index on sessionQueries: forbidden
+2025-06-24T12:16:41.436Z: LOG: Created index on sessionQueries: createdAt
+2025-06-24T12:16:41.437Z: LOG: Created index on events: createdAt
+2025-06-24T12:16:41.438Z: ERROR: Error creating index on serviceTranslationsEdge: forbidden
+2025-06-24T12:16:41.439Z: LOG: Created index on users: email
+2025-06-24T12:16:41.440Z: LOG: Created index on users: createdAt
+2025-06-24T12:16:41.441Z: LOG: Created index on users: loginName
+2025-06-24T12:16:41.441Z: LOG: Created index on users: email
+2025-06-24T12:16:41.443Z: LOG: Created index on queries: createdAt
+2025-06-24T12:16:41.443Z: ERROR: Error creating index on folderConversations: forbidden
+2025-06-24T12:16:41.444Z: LOG: Created index on folderConversations: createdAt
+2025-06-24T12:16:41.445Z: ERROR: Error creating index on graphql_appearsIn: forbidden
+2025-06-24T12:16:41.446Z: LOG: Created index on graphql_appearsIn: createdAt
+2025-06-24T12:16:41.447Z: LOG: Created index on weatherRequests: createdAt
+2025-06-24T12:16:41.448Z: LOG: Created index on graphql_episodes: createdAt
+2025-06-24T12:16:41.448Z: LOG: Created index on conversations: createdAt
+2025-06-24T12:16:41.449Z: ERROR: Error creating index on graphql_friends: forbidden
+2025-06-24T12:16:41.450Z: LOG: Created index on graphql_friends: createdAt
+2025-06-24T12:16:41.451Z: LOG: Created index on sessions: userId, createdAt
+2025-06-24T12:16:41.452Z: LOG: Created index on passwordResetTokens: createdAt
+2025-06-24T12:16:41.452Z: ERROR: Error creating index on userSessions: forbidden
+2025-06-24T12:16:41.453Z: LOG: Created index on userSessions: userId, createdAt
+2025-06-24T12:16:41.454Z: ERROR: Error creating index on serviceCategoryTranslationsEdge: forbidden
+2025-06-24T12:16:41.454Z: ERROR: Error creating index on conversationCategories: forbidden
+2025-06-24T12:16:41.455Z: LOG: Created index on conversationCategories: createdAt
+2025-06-24T12:16:41.456Z: LOG: Created index on serviceTranslations: serviceId, languageCode
+2025-06-24T12:16:41.463Z: LOG: Created index on serviceTranslations: serviceId
+2025-06-24T12:16:41.464Z: LOG: Created index on serviceTranslations: languageCode
+2025-06-24T12:16:41.465Z: LOG: Created index on serviceTranslations: createdAt
+2025-06-24T12:16:41.466Z: LOG: Created index on graphql_characters: createdAt
+2025-06-24T12:16:41.467Z: LOG: Created index on analyticsMetrics: createdAt
+2025-06-24T12:16:41.467Z: LOG: Creating graphs...
+2025-06-24T12:16:41.467Z: ERROR: Error creating graph Graph: edgeDefinitions.map is not a function
+2025-06-24T12:16:41.467Z: LOG: Creating views...
+2025-06-24T12:16:41.467Z: LOG: Creating analyzers...
+2025-06-24T12:16:41.467Z: LOG: Creating AQL functions...
+2025-06-24T12:16:41.467Z: LOG: Schema creation completed successfully

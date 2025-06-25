@@ -90,7 +90,7 @@
         </div>
       </div>
       <!-- The scrollable chat window -->
-      <div class="chat-window" ref="chatWindow">
+      <div class="chat-window" ref="chatWindow" aria-live="polite">
         <div
           v-for="(msg, index) in chatMessages"
           :key="index"
@@ -98,7 +98,9 @@
           :class="msg.sender"
         >
           <div class="message-bubble">
-            <span>{{ msg.content }}</span>
+            <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
+            <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
+            <div v-else v-html="renderMarkdown(msg.content)"></div>
           </div>
           <!-- Feedback for bot messages -->
           <div v-if="msg.sender === 'bot'" class="feedback-trigger">
@@ -109,6 +111,11 @@
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
+      </div>
+      <!-- Loading spinner with "Thinking..." text -->
+      <div v-if="isLoading" class="loading-spinner" aria-label="Processing your request">
+        <i class="fas fa-spinner fa-spin"></i>
+        <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
       <div
@@ -247,6 +254,8 @@ import chatbotService from "../services/chatbotService";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import chatHistoryService from "../services/chatHistoryService";
 import analyticsService from "../services/analyticsService";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 export default {
   name: "ChatBotComponent",
@@ -307,6 +316,7 @@ export default {
         secondaryText: "",
       },
       pendingConversationId: null,
+      isLoading: false, // Loading state for spinner
     };
   },
 
@@ -330,7 +340,7 @@ export default {
           contextItems: [],
         };
         console.log(
-          `Reset conversationId after deletion of chat ${deletedChatId}`
+          `Reset conversation ID after deletion of chat ${deletedChatId}`
         );
       }
     });
@@ -344,7 +354,7 @@ export default {
         this.pendingConversationId = conversationId;
         this.showLoadConfirm = true;
       } else {
-        this.chatMessages = []; // Clear messages to avoid carryover
+        this.chatMessages = []; // Clear previous messages
         this.selectedContextItems = [];
         this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
         this.loadExistingConversation(conversationId);
@@ -382,9 +392,17 @@ export default {
 
     if (this.$root.$i18n) {
       this.currentLocale = this.$root.$i18n.locale;
-      this.$watch("$root.$i18n.locale", (newLocale) => {
-        this.currentLocale = newLocale;
-      });
+      this.$watch(
+        () => this.$root.$i18n.locale,
+        (newLocale) => {
+          this.currentLocale = newLocale;
+          // Update context labels when locale changes
+          this.selectedContextItems = this.selectedContextItems.map((item) => ({
+            ...item,
+            service: this.safeTranslate(item.serviceKey || item.service),
+          }));
+        }
+      );
     }
 
     eventBus.$on("treeNodeSelected", this.handleTreeNodeSelected);
@@ -427,6 +445,46 @@ export default {
 
   methods: {
     ...mapActions("chatHistory", ["createChat", "updateChat"]),
+
+    // Safely translate a key, with mapping for static strings
+    safeTranslate(key) {
+      try {
+        const serviceKeyMap = {
+          "Layanan Pelanggan": "context.customerService",
+          "Pembayaran": "context.payment",
+          "Pengiriman": "context.shipping",
+          "Layanan Kesehatan": "context.healthService",
+          "Perumahan": "context.housing",
+          "Imigrasi": "context.immigration",
+          "Pendidikan": "context.education",
+          "Pajak": "context.tax",
+          "Pensiun": "context.retirement",
+          "Lainnya - Pribadi": "context.personalOther",
+          // Add more mappings as needed
+        };
+        const translationKey = serviceKeyMap[key] || key;
+        if (typeof translationKey === 'string' && translationKey.trim()) {
+          const translated = this.$t(translationKey);
+          return translated !== translationKey ? translated : key; // Fallback to original if untranslated
+        }
+        console.warn(`Invalid translation key: ${key}`);
+        return this.$t('context.fallback') || key || 'Unknown'; // Default fallback
+      } catch (error) {
+        console.error(`Translation error for key ${key}:`, error);
+        return this.$t('context.fallback') || key || 'Unknown';
+      }
+    },
+
+    // Render Markdown safely
+    renderMarkdown(content) {
+      try {
+        const html = marked.parse(content);
+        return DOMPurify.sanitize(html);
+      } catch (error) {
+        console.error("Error rendering Markdown:", error);
+        return DOMPurify.sanitize(content); // Fallback to plain text, sanitized
+      }
+    },
 
     async loadQuickHelpButtons() {
       console.log("[ChatBotComponent] Loading Quick Help buttons from config");
@@ -523,6 +581,7 @@ export default {
         // Append the new context item to the existing list
         this.selectedContextItems.push({
           service: rawOption.service,
+          serviceKey: rawOption.textKey, // Store translation key
           category: category,
           selected: true,
         });
@@ -569,19 +628,20 @@ export default {
         // Check if the context item already exists to avoid duplicates
         const exists = this.selectedContextItems.some(
           (existing) =>
-            existing.service === item.service &&
+            existing.service === this.safeTranslate(item.service) &&
             existing.category === item.category
         );
         if (!exists) {
           this.selectedContextItems.push({
-            service: item.service,
+            service: this.safeTranslate(item.service), // Translate service
+            serviceKey: item.service, // Store original key
             category: item.category || "general",
             selected: true,
           });
           console.log(
-            `Added sidebar context item: ${item.service} with category ${
-              item.category || "general"
-            }`
+            `Added sidebar context item: ${this.safeTranslate(
+              item.service
+            )} with category ${item.category || "general"}`
           );
           notificationService.info(
             this.translate("chatbot.contextAdded"),
@@ -594,19 +654,23 @@ export default {
           ) {
             this.conversationCategory = item.category || "general";
             console.log(
-              `Set conversation category to ${this.conversationCategory} from sidebar node ${item.service}`
+              `Set conversation category to ${this.conversationCategory} from sidebar node ${this.safeTranslate(
+                item.service
+              )}`
             );
           }
         } else {
           console.log(
-            `Context item ${item.service} with category ${item.category} already exists`
+            `Context item ${this.safeTranslate(item.service)} with category ${
+              item.category
+            } already exists`
           );
         }
       } else {
         // Remove the context item if deselected
         const index = this.selectedContextItems.findIndex(
           (existing) =>
-            existing.service === item.service &&
+            existing.service === this.safeTranslate(item.service) &&
             existing.category === item.category
         );
         if (index !== -1) {
@@ -644,24 +708,30 @@ export default {
         if (quickHelpOption) {
           this.selectedContextItems = [
             {
-              service: quickHelpOption.service,
+              service: this.safeTranslate(quickHelpOption.textKey), // Use translated service
+              serviceKey: quickHelpOption.textKey, // Store translation key
               category: this.conversationCategory,
               selected: true,
             },
           ];
           console.log(
-            `Restored context item for category ${this.conversationCategory}: ${quickHelpOption.service}`
+            `Restored context item for category ${this.conversationCategory}: ${this.safeTranslate(
+              quickHelpOption.textKey
+            )}`
           );
         } else {
           this.selectedContextItems = [
             {
-              service: `Category ${this.conversationCategory}`,
+              service: this.safeTranslate(`category.${this.conversationCategory}`), // Translate category
+              serviceKey: `category.${this.conversationCategory}`,
               category: this.conversationCategory,
               selected: true,
             },
           ];
           console.log(
-            `Restored sidebar context item for category ${this.conversationCategory}`
+            `Restored sidebar context item for category ${this.conversationCategory}: ${this.safeTranslate(
+              `category.${this.conversationCategory}`
+            )}`
           );
         }
       }
@@ -682,6 +752,7 @@ export default {
           ? this.selectedContextItems.map((item) => item.service).join(", ")
           : null;
       this.showQuickHelp = false;
+      this.isLoading = true; // Show spinner
       try {
         const queryData = {
           userId: this.$store.getters.currentUser?._key || "anonymous",
@@ -737,6 +808,8 @@ export default {
           isSaved: false,
         });
         notificationService.error(this.translate("chatbot.processingError"));
+      } finally {
+        this.isLoading = false; // Hide spinner
       }
       this.scrollToBottom();
       if (this.currentChatId) {
@@ -830,13 +903,27 @@ export default {
 
         this.selectedContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
+          console.log(`Conversation tags:`, conversation.tags);
           conversation.tags.forEach((tag) => {
+            // Include all tags, using fallback for empty/invalid
             this.selectedContextItems.push({
-              service: tag,
+              service: this.safeTranslate(tag || `category.${this.conversationCategory || 'general'}`), // Fallback to category
+              serviceKey: tag || `category.${this.conversationCategory || 'general'}`, // Store original or fallback
               category: this.conversationCategory || "general",
               selected: true,
             });
           });
+        } else if (this.conversationCategory) {
+          // Fallback if no tags
+          this.selectedContextItems.push({
+            service: this.safeTranslate(`category.${this.conversationCategory}`),
+            serviceKey: `category.${this.conversationCategory}`,
+            category: this.conversationCategory,
+            selected: true,
+          });
+          console.log(
+            `No tags, using fallback category: ${this.conversationCategory}`
+          );
         }
 
         this.lastSavedState = {
@@ -949,7 +1036,7 @@ export default {
 
     getContextTags() {
       return this.selectedContextItems
-        .map((item) => item.service)
+        .map((item) => item.serviceKey || item.service) // Use serviceKey if available
         .filter((tag) => tag);
     },
 
@@ -1094,7 +1181,7 @@ export default {
         notificationService.success(this.translate("chatbot.chatSaved"));
         this.saveChatDialog.visible = false;
 
-        // Emit event to notify ChatFolders.vue of new conversation (moved after Vuex updates)
+        // Emit event to notify ChatFolders.vue of new conversation
         console.log(
           `Emitting conversation-saved event for conversation ${conversation._key}`
         );
@@ -1494,6 +1581,176 @@ export default {
 .chat-message.user .message-bubble {
   background: var(--accent-color, #4e97d1);
   color: var(--text-button-primary, #fff);
+}
+
+/* Markdown Styles within Message Bubble */
+.message-bubble :deep(h1),
+.message-bubble :deep(h2),
+.message-bubble :deep(h3),
+.message-bubble :deep(h4),
+.message-bubble :deep(h5),
+.message-bubble :deep(h6) {
+  font-weight: 600;
+  margin: 0.5em 0;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(h1) { font-size: 1.5em; }
+.message-bubble :deep(h2) { font-size: 1.3em; }
+.message-bubble :deep(h3) { font-size: 1.2em; }
+.message-bubble :deep(h4) { font-size: 1.1em; }
+.message-bubble :deep(h5) { font-size: 1em; }
+.message-bubble :deep(h6) { font-size: 0.9em; }
+
+.message-bubble :deep(p) {
+  margin: 0.5em 0;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(ul),
+.message-bubble :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.message-bubble :deep(li) {
+  margin-bottom: 0.3em;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(a) {
+  color: var(--accent-color, #4e97d1);
+  text-decoration: underline;
+}
+
+.message-bubble :deep(a:hover) {
+  color: var(--accent-hover, #3a7da0);
+}
+
+.message-bubble :deep(code) {
+  background: var(--bg-tertiary, #f5f5f5);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: monospace;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(pre) {
+  background: var(--bg-tertiary, #f5f5f5);
+  padding: 0.8em;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: monospace;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(blockquote) {
+  border-left: 3px solid var(--border-color, #ddd);
+  padding-left: 0.8em;
+  margin: 0.5em 0;
+  color: var(--text-secondary, #666);
+}
+
+.message-bubble :deep(table) {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+
+.message-bubble :deep(th),
+.message-bubble :deep(td) {
+  border: 1px solid var(--border-color, #ddd);
+  padding: 0.4em 0.8em;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(th) {
+  background: var(--bg-tertiary, #f5f5f5);
+  font-weight: 600;
+}
+
+.message-bubble :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Dark Theme Adjustments for Markdown */
+[data-theme="dark"] .message-bubble :deep(h1),
+[data-theme="dark"] .message-bubble :deep(h2),
+[data-theme="dark"] .message-bubble :deep(h3),
+[data-theme="dark"] .message-bubble :deep(h4),
+[data-theme="dark"] .message-bubble :deep(h5),
+[data-theme="dark"] .message-bubble :deep(h6),
+[data-theme="dark"] .message-bubble :deep(p),
+[data-theme="dark"] .message-bubble :deep(li),
+[data-theme="dark"] .message-bubble :deep(th),
+[data-theme="dark"] .message-bubble :deep(td),
+[data-theme="dark"] .message-bubble :deep(code),
+[data-theme="dark"] .message-bubble :deep(pre) {
+  color: var(--text-primary, #ffffff);
+}
+
+[data-theme="dark"] .message-bubble :deep(code),
+[data-theme="dark"] .message-bubble :deep(pre),
+[data-theme="dark"] .message-bubble :deep(th) {
+  background: var(--bg-tertiary, #2d2d2d);
+}
+
+[data-theme="dark"] .message-bubble :deep(blockquote) {
+  color: var(--text-secondary, #cccccc);
+  border-left-color: var(--border-color, #555);
+}
+
+[data-theme="dark"] .message-bubble :deep(a) {
+  color: var(--accent-color, #4e97d1);
+}
+
+[data-theme="dark"] .message-bubble :deep(a:hover) {
+  color: var(--accent-hover, #3a7da0);
+}
+
+/* Loading Spinner Styles */
+.loading-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.8); /* Semi-transparent background for visibility */
+  padding: 10px 20px;
+  border-radius: 8px;
+  z-index: 100; /* Ensure it overlays other content */
+}
+
+.loading-spinner i {
+  font-size: 1.2rem;
+  color: var(--accent-color, #4e97d1); /* Match button colors */
+}
+
+.loading-spinner .loading-text {
+  font-size: 0.95rem;
+  color: var(--text-primary, #333);
+  font-weight: 500;
+}
+
+/* Dark Theme Adjustments for Spinner */
+[data-theme="dark"] .loading-spinner,
+html[data-theme="dark"] .loading-spinner {
+  background: rgba(30, 30, 30, 0.8); /* Darker background for dark mode */
+}
+
+[data-theme="dark"] .loading-spinner i,
+html[data-theme="dark"] .loading-spinner i {
+  color: var(--accent-color, #4e97d1);
+}
+
+[data-theme="dark"] .loading-spinner .loading-text,
+html[data-theme="dark"] .loading-spinner .loading-text {
+  color: var(--text-primary, #ffffff);
 }
 
 .feedback-trigger {

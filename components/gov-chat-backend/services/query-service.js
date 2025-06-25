@@ -1,4 +1,5 @@
 require('dotenv').config();
+const axios = require('axios');
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
@@ -65,18 +66,18 @@ class QueryService {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start', { dataLength: JSON.stringify(queryData).length });
-
-      // Ensure minimum required data
+  
+      // Validate required fields
       let missingFields = [];
       if (!queryData.userId) missingFields.push('userId');
       if (!queryData.sessionId) missingFields.push('sessionId');
       if (!queryData.text) missingFields.push('text');
-
+  
       if (missingFields.length > 0) {
         logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
         throw new Error('Missing required query data');
       }
-
+  
       // Create query document
       const basicQueryDoc = {
         userId: queryData.userId,
@@ -88,16 +89,64 @@ class QueryService {
         serviceId: queryData.serviceId || null,
         responseTime: queryData.responseTime || 0
       };
-
+  
       // Save query document
       logger.debug('QueryService.saving_query_document', { basicQueryDoc });
       const query = await this.queries.save(basicQueryDoc);
       const queryId = query._key;
       logger.info('QueryService.query_created', { queryId });
-
-      // Record query in analytics if service is set
+  
+      // Call OPEA service
+      const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+      const opeaPort = process.env.OPEA_PORT || '8888';
+      const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+      const opeaPayload = {
+        messages: queryData.text,
+        stream: false
+      };
+  
+      // Log OPEA configuration
+      logger.info('QueryService.opea_config', { opeaHost, opeaPort, url: opeaUrl });
+      logger.info('QueryService.preparing_opea_call', { queryId, payload: JSON.stringify(opeaPayload) });
+  
+      let opeaResponseContent = null;
+      let opeaResponseTime = 0;
+      const opeaStartTime = Date.now();
+      try {
+        logger.info('QueryService.calling_opea_service', { queryId });
+        const opeaResponse = await axios.post(opeaUrl, opeaPayload);
+        opeaResponseTime = Date.now() - opeaStartTime;
+        opeaResponseContent = opeaResponse.data.choices[0].message.content; // Extract the response content
+        logger.info(`QueryService.opea_response_received for query ${queryId}: status=${opeaResponse.status}, data=${JSON.stringify(opeaResponse.data)}, duration=${opeaResponseTime}ms`);
+        
+        // Update query document with response content and time
+        await this.queries.update(queryId, {
+          response: opeaResponseContent,
+          responseTime: opeaResponseTime,
+          isAnswered: true
+        });
+      } catch (error) {
+        opeaResponseTime = Date.now() - opeaStartTime;
+        logger.error(`QueryService.opea_service_error for query ${queryId}: ${error.message} (Status: ${error.response ? error.response.status : 'N/A'}, Duration: ${opeaResponseTime}ms)`);
+        if (error.response) {
+          logger.error(`OPEA service response details: ${JSON.stringify(error.response.data)}`);
+        } else if (error.request) {
+          logger.error('No response received from OPEA service - possible network or timeout issue');
+        } else {
+          logger.error('Error setting up OPEA service request - check configuration');
+        }
+        // Optionally set a default response or handle the error gracefully
+        await this.queries.update(queryId, {
+          response: 'Error: Unable to retrieve response from OPEA service',
+          responseTime: opeaResponseTime,
+          isAnswered: false
+        });
+      }
+  
+      // Record analytics if available
       if (this.analyticsService) {
         try {
+          logger.debug('QueryService.recording_analytics', { queryId });
           await this.analyticsService.recordQuery({
             _key: queryId,
             userId: queryData.userId,
@@ -105,17 +154,16 @@ class QueryService {
             text: queryData.text,
             categoryId: queryData.categoryId || null,
             serviceId: queryData.serviceId || null,
-            responseTime: queryData.responseTime || 0,
-            isAnswered: queryData.isAnswered || false
+            responseTime: opeaResponseTime,
+            isAnswered: opeaResponseContent !== null
           });
           logger.info('QueryService.analytics_recorded', { queryId });
         } catch (error) {
           logger.error('QueryService.record_analytics_failed', { queryId, error: error.message });
-          // Continue even if analytics recording fails
         }
       }
-
-      // Return the document
+  
+      // Return the final query document
       const finalQuery = await this.queries.document(queryId);
       logger.info('QueryService.query_created_success', {
         queryId,
@@ -128,8 +176,8 @@ class QueryService {
         stack: error.stack,
         durationMs: Date.now() - startTime
       });
-
-      // Log collection properties for debugging if save fails
+  
+      // Debug collection properties if schema error occurs
       if (error.message.includes('schema')) {
         try {
           const collProperties = await this.queries.properties();

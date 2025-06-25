@@ -3,27 +3,80 @@
 export default {
   countries: {
     'AF': 'Afghanistan',
+    'AL': 'Albanie',
     'DZ': 'Algérie',
+    'AD': 'Andorre',
     'AO': 'Angola',
+    'AG': 'Antigua-et-Barbuda',
     'AR': 'Argentine',
+    'AM': 'Arménie',
     'AU': 'Australie',
     'AT': 'Autriche',
+    'AZ': 'Azerbaïdjan',
+    'BS': 'Bahamas',
+    'BH': 'Bahreïn',
     'BD': 'Bangladesh',
+    'BB': 'Barbade',
+    'BY': 'Biélorussie',
     'BE': 'Belgique',
+    'BZ': 'Belize',
+    'BJ': 'Bénin',
+    'BT': 'Bhoutan',
+    'BO': 'Bolivie',
+    'BA': 'Bosnie-Herzégovine',
+    'BW': 'Botswana',
     'BR': 'Brésil',
+    'BN': 'Brunei',
+    'BG': 'Bulgarie',
+    'BF': 'Burkina Faso',
+    'BI': 'Burundi',
+    'CV': 'Cap-Vert',
+    'KH': 'Cambodge',
     'CM': 'Cameroun',
     'CA': 'Canada',
+    'CF': 'République centrafricaine',
+    'TD': 'Tchad',
     'CL': 'Chili',
     'CN': 'Chine',
     'CO': 'Colombie',
-    'CD': 'République démocratique du Congo',
+    'KM': 'Comores',
+    'CG': 'Congo',
+    'CD': 'Congo, République démocratique du',
+    'CR': 'Costa Rica',
+    'CI': 'Côte d\'Ivoire',
+    'HR': 'Croatie',
+    'CU': 'Cuba',
+    'CY': 'Chypre',
+    'CZ': 'Tchéquie',
     'DK': 'Danemark',
+    'DJ': 'Djibouti',
+    'DM': 'Dominique',
+    'DO': 'République dominicaine',
+    'EC': 'Équateur',
     'EG': 'Égypte',
+    'SV': 'Salvador',
+    'GQ': 'Guinée équatoriale',
+    'ER': 'Érythrée',
+    'EE': 'Estonie',
     'ET': 'Éthiopie',
+    'FJ': 'Fidji',
     'FI': 'Finlande',
     'FR': 'France',
+    'GA': 'Gabon',
+    'GM': 'Gambie',
+    'GE': 'Géorgie',
     'DE': 'Allemagne',
     'GH': 'Ghana',
+    'GR': 'Grèce',
+    'GD': 'Grenade',
+    'GT': 'Guatemala',
+    'GN': 'Guinée',
+    'GW': 'Guinée-Bissau',
+    'GY': 'Guyana',
+    'HT': 'Haïti',
+    'HN': 'Honduras',
+    'HU': 'Hongrie',
+    'IS': 'Islande',
     'IN': 'Inde',
     'ID': 'Indonésie',
     'IR': 'Iran',
@@ -31,22 +84,60 @@ export default {
     'IE': 'Irlande',
     'IL': 'Israël',
     'IT': 'Italie',
+    'JM': 'Jamaïque',
     'JP': 'Japon',
     'JO': 'Jordanie',
+    'KZ': 'Kazakhstan',
     'KE': 'Kenya',
+    'KI': 'Kiribati',
+    'KP': 'Corée du Nord',
+    'KR': 'Corée du Sud',
     'KW': 'Koweït',
+    'KG': 'Kirghizistan',
+    'LA': 'Laos',
+    'LV': 'Lettonie',
     'LB': 'Liban',
+    'LS': 'Lesotho',
+    'LR': 'Libéria',
+    'LY': 'Libye',
+    'LI': 'Liechtenstein',
+    'LT': 'Lituanie',
+    'LU': 'Luxembourg',
     'MG': 'Madagascar',
+    'MW': 'Malawi',
     'MY': 'Malaisie',
+    'MV': 'Maldives',
+    'ML': 'Mali',
+    'MT': 'Malte',
+    'MH': 'Îles Marshall',
+    'MR': 'Mauritanie',
+    'MU': 'Maurice',
     'MX': 'Mexique',
+    'FM': 'Micronésie',
+    'MD': 'Moldavie',
+    'MC': 'Monaco',
+    'MN': 'Mongolie',
+    'ME': 'Monténégro',
     'MA': 'Maroc',
     'MZ': 'Mozambique',
+    'MM': 'Myanmar',
+    'NA': 'Namibie',
+    'NR': 'Nauru',
+    'NP': 'Népal',
     'NL': 'Pays-Bas',
     'NZ': 'Nouvelle-Zélande',
-    'NG': 'Nigeria',
+    'NI': 'Nicaragua',
+    'NE': 'Niger',
+    'NG': 'Nigéria',
+    'MK': 'Macédoine du Nord',
     'NO': 'Norvège',
+    'OM': 'Oman',
     'PK': 'Pakistan',
+    'PW': 'Palaos',
     'PS': 'Palestine',
+    'PA': 'Panama',
+    'PG': 'Papouasie-Nouvelle-Guinée',
+    'PY': 'Paraguay',
     'PE': 'Pérou',
     'PH': 'Philippines',
     'PL': 'Pologne',
@@ -54,24 +145,54 @@ export default {
     'QA': 'Qatar',
     'RO': 'Roumanie',
     'RU': 'Russie',
+    'RW': 'Rwanda',
+    'KN': 'Saint-Kitts-et-Nevis',
+    'LC': 'Sainte-Lucie',
+    'VC': 'Saint-Vincent-et-les-Grenadines',
+    'WS': 'Samoa',
+    'SM': 'Saint-Marin',
+    'ST': 'Sao Tomé-et-Principe',
     'SA': 'Arabie Saoudite',
     'SN': 'Sénégal',
+    'RS': 'Serbie',
+    'SC': 'Seychelles',
+    'SL': 'Sierra Leone',
     'SG': 'Singapour',
+    'SK': 'Slovaquie',
+    'SI': 'Slovénie',
+    'SB': 'Îles Salomon',
+    'SO': 'Somalie',
     'ZA': 'Afrique du Sud',
+    'SS': 'Soudan du Sud',
     'ES': 'Espagne',
+    'LK': 'Sri Lanka',
     'SD': 'Soudan',
+    'SR': 'Suriname',
+    'SZ': 'Eswatini',
     'SE': 'Suède',
     'CH': 'Suisse',
     'SY': 'Syrie',
+    'TW': 'Taïwan',
+    'TJ': 'Tadjikistan',
     'TZ': 'Tanzanie',
     'TH': 'Thaïlande',
+    'TL': 'Timor oriental',
+    'TG': 'Togo',
+    'TO': 'Tonga',
+    'TT': 'Trinité-et-Tobago',
     'TN': 'Tunisie',
     'TR': 'Turquie',
+    'TM': 'Turkménistan',
+    'TV': 'Tuvalu',
     'UG': 'Ouganda',
     'UA': 'Ukraine',
     'AE': 'Émirats Arabes Unis',
     'GB': 'Royaume-Uni',
     'US': 'États-Unis',
+    'UY': 'Uruguay',
+    'UZ': 'Ouzbékistan',
+    'VU': 'Vanuatu',
+    'VA': 'Cité du Vatican',
     'VE': 'Venezuela',
     'VN': 'Vietnam',
     'YE': 'Yémen',
@@ -90,7 +211,6 @@ export default {
     backToLogin: 'Retour à la connexion'
   },
   admin: {
-    // Libellés généraux du tableau de bord
     huduma: 'Huduma AI',
     dashboard: 'Tableau de bord',
     system: 'Système',
@@ -104,15 +224,13 @@ export default {
     loading: 'Chargement...',
     close: 'Fermer le tableau de bord',
     edit: 'Modifier',
-
-    // Statistiques et métriques
-    systemUptime: 'Temps de fonctionnement',
+    systemUptime: 'Temps de fonctionnement du système',
     avgResponseTime: 'Temps de réponse moyen',
     errorRate: 'Taux d\'erreur',
     activeUsers: 'Utilisateurs actifs',
-    fromLastMonth: 'par rapport au mois dernier',
-
-    // Étiquettes des onglets
+    monthlyActiveUsers: 'Utilisateurs Actifs Mensuels (UAM)',
+    fromLastMonth: 'depuis le mois dernier',
+    today: 'Aujourd\'hui',
     tabs: {
       overview: 'État du système',
       database: 'Base de données',
@@ -120,13 +238,9 @@ export default {
       security: 'Sécurité',
       users: 'Utilisateurs'
     },
-
-    // Santé du système
     systemHealthStatus: 'État de santé du système',
     runDiagnostics: 'Exécuter les diagnostics',
     resourceUsage: 'Utilisation des ressources',
-
-    // Noms des services
     services: {
       apiServices: 'Services API',
       database: 'Base de données',
@@ -135,60 +249,36 @@ export default {
       messageQueue: 'File d\'attente de messages',
       externalApi: 'API externe'
     },
-
-    // Types de ressources
     resources: {
       cpu: 'Utilisation CPU',
       memory: 'Utilisation mémoire',
       storage: 'Utilisation stockage',
       network: 'Bande passante réseau'
     },
-
-    // Gestion de la base de données
     databaseManagement: 'Gestion de la base de données',
-    reindexDatabase: 'Réindexer la base',
+    reindexDatabase: 'Réindexer la base de données',
     lastReindex: 'Dernière réindexation',
-    databaseSize: 'Taille de la base',
-    totalTables: 'Nombre de tables',
-
-    // Gestion des journaux
+    databaseSize: 'Taille de la base de données',
+    totalTables: 'Nombre total de tables',
     logManagement: 'Gestion des journaux',
     rolloverLogs: 'Rotation des journaux',
-    searchLogs: 'Rechercher les journaux',
+    searchLogs: 'Rechercher dans les journaux',
     logTime: 'Heure',
     logLevel: 'Niveau',
     logService: 'Service',
     logMessage: 'Message',
     showingEntries: 'Affichage de {start} à {end} sur {total} entrées',
-
-    // Niveaux de journaux
     logLevels: {
       error: 'ERREUR',
       warn: 'AVERTISSEMENT',
       info: 'INFO',
-      debug: 'DEBUG'
+      debug: 'DÉBOGAGE'
     },
-
-    // Messages de journaux
     logMessages: {
       connectionTimeout: 'Délai de connexion dépassé pour le fournisseur externe',
       lowDiskSpace: 'Espace disque inférieur au seuil de 10%',
-      userRoleUpdated: 'Rôle d\'utilisateur mis à jour pour admin@huduma.ai'
+      userRoleUpdated: 'Rôle de l\'utilisateur mis à jour pour admin@huduma.ai'
     },
-
-    // Surveillance de la sécurité
-    securityMonitoring: 'Surveillance de la sécurité',
-    securityScan: 'Analyse de sécurité',
-    failedLoginAttempts: 'Tentatives de connexion échouées (24h)',
-    suspiciousActivities: 'Activités suspectes (24h)',
-    lastSecurityScan: 'Dernière analyse de sécurité',
-    vulnerabilitiesFound: 'Vulnérabilités trouvées',
-    daysAgo: 'jours',
-    critical: 'critiques',
-    medium: 'moyennes',
-    low: 'faibles',
-
-    // Gestion des utilisateurs
     userName: 'Nom',
     userEmail: 'Email',
     userRole: 'Rôle',
@@ -197,81 +287,67 @@ export default {
     roleAdministrator: 'Administrateur',
     roleUser: 'Utilisateur',
     statusActive: 'Actif',
-
-    // Actions sur la base de données
     dbActions: {
       reindex: 'Réindexer',
       backup: 'Sauvegarder',
       optimize: 'Optimiser',
-      reindexDesc: 'Reconstruire les index de la base',
-      backupDesc: 'Créer une sauvegarde de la base',
+      reindexDesc: 'Reconstruire les index de la base de données',
+      backupDesc: 'Créer une sauvegarde de la base de données',
       optimizeDesc: 'Optimiser les performances des requêtes'
     },
-
     operations: {
-      reindexTitle: 'Résultats de la Réindexation de Base de Données',
-      backupTitle: 'Résultats de la Sauvegarde de Base de Données',
-      optimizeTitle: 'Résultats de l\'Optimisation de Base de Données',
-      reindexResults: 'Résultats de Réindexation',
-      optimizeResults: 'Résultats d\'Optimisation',
+      reindexTitle: 'Résultats de la réindexation de la base de données',
+      backupTitle: 'Résultats de la sauvegarde de la base de données',
+      optimizeTitle: 'Résultats de l\'optimisation de la base de données',
+      reindexResults: 'Résultats de réindexation',
+      optimizeResults: 'Résultats d\'optimisation',
       collection: 'Collection',
       status: 'Statut',
-      indexSuggestions: 'Suggestions d\'Index',
-      backupDetails: 'Détails de Sauvegarde',
-      backupFile: 'Fichier de Sauvegarde',
+      indexSuggestions: 'Suggestions d\'index',
+      backupDetails: 'Détails de la sauvegarde',
+      backupFile: 'Fichier de sauvegarde',
       backupLocation: 'Emplacement',
       backupSize: 'Taille',
-      errorDetails: 'Détails de l\'Erreur',
+      errorDetails: 'Détails de l\'erreur',
       close: 'Fermer',
-      resultsTitle: 'Résultats de l\'Opération',
-      reindexDatabase: 'Réindexer la Base de Données',
-      backupDatabase: 'Sauvegarder la Base de Données',
-      optimizeDatabase: 'Optimiser la Base de Données',
-      dbActions: {
-        reindex: 'Réindexer',
-        backup: 'Sauvegarder',
-        optimize: 'Optimiser',
-        reindexDesc: 'Reconstruire les index de la base de données',
-        backupDesc: 'Créer une sauvegarde de la base de données',
-        optimizeDesc: 'Optimiser les performances de requête'
+      resultsTitle: 'Résultats de l\'opération',
+      reindexDatabase: {
+        success: 'Réindexation de la base de données terminée avec succès',
+        error: 'Erreur lors de la réindexation de la base de données',
+        loading: 'Réindexation de la base de données...'
       },
-      lastReindex: 'Dernière Réindexation',
-      databaseSize: 'Taille de la Base de Données',
-      totalTables: 'Nombre Total de Tables',
-      operations: {
-        reindexDatabase: {
-          success: 'Réindexation de la base de données terminée avec succès',
-          error: 'Erreur lors de la réindexation de la base de données',
-          loading: 'Réindexation de la base de données...'
-        },
-        backupDatabase: {
-          success: 'Sauvegarde de la base de données terminée avec succès',
-          error: 'Erreur lors de la sauvegarde de la base de données',
-          loading: 'Sauvegarde de la base de données...'
-        },
-        optimizeDatabase: {
-          success: 'Optimisation de la base de données terminée avec succès',
-          error: 'Erreur lors de l\'optimisation de la base de données',
-          loading: 'Optimisation de la base de données...'
-        },
-        rolloverLogs: {
-          success: 'Rotation des journaux terminée avec succès',
-          loading: 'Rotation des journaux...'
-        },
-        searchLogs: {
-          success: 'Recherche dans les journaux terminée',
-          loading: 'Recherche dans les journaux...'
-        },
-        runDiagnostics: {
-          success: 'Diagnostics terminés avec succès',
-          loading: 'Exécution des diagnostics...'
-        },
-        runSecurityScan: {
-          success: 'Analyse de sécurité terminée avec succès',
-          loading: 'Exécution de l\'analyse de sécurité...'
-        }
+      backupDatabase: {
+        success: 'Sauvegarde de la base de données terminée avec succès',
+        error: 'Erreur lors de la sauvegarde de la base de données',
+        loading: 'Sauvegarde de la base de données...'
       },
-      monthlyActiveUsers: 'Utilisateurs Actifs Mensuels (UAM)',
+      optimizeDatabase: {
+        success: 'Optimisation de la base de données terminée avec succès',
+        error: 'Erreur lors de l\'optimisation de la base de données',
+        loading: 'Optimisation de la base de données...'
+      },
+      rolloverLogs: {
+        success: 'Rotation des journaux terminée avec succès',
+        loading: 'Rotation des journaux en cours...'
+      },
+      searchLogs: {
+        success: 'Recherche dans les journaux terminée',
+        loading: 'Recherche dans les journaux en cours...'
+      },
+      runDiagnostics: {
+        success: 'Diagnostics terminés avec succès',
+        loading: 'Exécution des diagnostics...'
+      },
+      runSecurityScan: {
+        success: 'Analyse de sécurité terminée avec succès',
+        loading: 'Exécution de l\'analyse de sécurité...'
+      },
+      cancel: 'Annuler',
+      save: 'Enregistrer les modifications'
+    },
+    userManagementSection: {
+      totalUsers: 'Total des utilisateurs',
+      newUsers: 'Nouveaux utilisateurs (Mois)',
       searchUsers: 'Rechercher des utilisateurs...',
       clearSearch: 'Effacer la recherche',
       search: 'Rechercher',
@@ -285,11 +361,18 @@ export default {
       of: 'sur',
       previous: 'Précédent',
       next: 'Suivant',
-      runningSecurityScan: 'Analyse en cours...',
-      securityRecommendations: 'Recommandations de sécurité',
-      totalUsers: 'Total des utilisateurs',
-      newUsers: 'Nouveaux utilisateurs (Mois)',
-      today: 'Aujourd\'hui',
+      searchFields: {
+        all: 'Tous les champs',
+        name: 'Nom',
+        email: 'Email',
+        role: 'Rôle'
+      },
+      userSearch: {
+        resultsFound: '{total} utilisateurs trouvés correspondant à "{term}"',
+        error: 'Erreur lors de la recherche d\'utilisateurs'
+      }
+    },
+    logsSection: {
       errorLogs: 'Journaux d\'erreurs',
       warningLogs: 'Journaux d\'avertissements',
       noErrorLogs: 'Aucun journal d\'erreur enregistré aujourd\'hui.',
@@ -300,96 +383,104 @@ export default {
       viewAllResults: 'Voir tous les résultats',
       logType: 'Type',
       logCount: 'Nombre',
-
-      // Log types
       logTypes: {
         connectionTimeout: 'Délai de connexion dépassé',
-        databaseFailed: 'Échec de requête de base de données',
+        databaseFailed: 'Échec de la requête de base de données',
         authFailed: 'Échec d\'authentification',
-        lowDiskSpace: 'Espace disque en dessous du seuil',
-        slowQuery: 'Performance lente de requête',
-        rateLimit: 'Limite de taux proche'
+        lowDiskSpace: 'Espace disque faible',
+        slowQuery: 'Requête lente',
+        rateLimit: 'Limite de débit atteinte'
       },
-
-      // Security section
-      security: {
-        criticalVulnerabilities: 'Vulnérabilités critiques',
-        authenticationIssues: 'Problèmes d\'authentification',
-        occurrences: 'Occurrences',
-        firstSeen: 'Première apparition',
-        lastSeen: 'Dernière apparition',
-        timestamp: 'Horodatage',
-        message: 'Message',
-        service: 'Service',
-        showLess: 'Afficher moins',
-        showMore: 'Afficher tous les problèmes d\'authentification',
-        recommendedAction: 'Action recommandée',
-        noVulnerabilitiesFound: 'Aucune vulnérabilité trouvée',
-        systemSecure: 'Votre système semble être sécurisé. Continuez à le surveiller régulièrement.'
-      },
-
-      // Search fields
-      searchFields: {
-        all: 'Tous les champs',
-        name: 'Nom',
-        email: 'Email',
-        role: 'Rôle'
-      },
-
-      // User search
-      userSearch: {
-        resultsFound: 'Trouvé {total} utilisateurs correspondant à "{term}"',
-        error: 'Erreur lors de la recherche d\'utilisateurs'
-      },
-
       logSearch: {
         noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
-        resultsFound: 'Trouvé {count} entrées de journal'
+        resultsFound: '{count} entrées de journal trouvées'
       }
     },
+    security: {
+      title: 'Surveillance de la sécurité',
+      securityScan: 'Analyse de sécurité',
+      runningSecurityScan: 'Analyse en cours...',
+      lastSecurityScan: 'Dernière analyse de sécurité',
+      vulnerabilitiesFound: 'Vulnérabilités trouvées',
+      daysAgo: 'jours',
+      critical: 'critiques',
+      medium: 'moyennes',
+      low: 'faibles',
+      failedLoginAttempts: 'Tentatives de connexion échouées (24h)',
+      suspiciousActivities: 'Activités suspectes (24h)',
+      securityRecommendations: 'Recommandations de sécurité',
+      criticalVulnerabilities: 'Vulnérabilités critiques',
+      mediumVulnerabilities: 'Vulnérabilités moyennes',
+      lowVulnerabilities: 'Vulnérabilités faibles',
+      authenticationIssues: 'Problèmes d\'authentification',
+      suspiciousActivityLogs: 'Journaux d\'activités suspectes',
+      securityProbeAttempts: 'Tentatives de sonde de sécurité détectées',
+      sensitiveFileAccess: 'tentatives d\'accès à des fichiers ou points de terminaison sensibles détectées',
+      envFileAccess: 'Tentatives d\'accès aux fichiers d\'environnement',
+      envFileAccessDesc: 'tentatives d\'accès aux fichiers .env détectées',
+      gitRepoAccess: 'Tentatives d\'accès au dépôt Git',
+      gitRepoAccessDesc: 'tentatives d\'accès aux fichiers du dépôt .git détectées',
+      recommendedAction: 'Action recommandée',
+      rateLimitRecommendation: 'Envisagez de mettre en place une limitation de débit, un blocage d\'IP pour les contrevenants persistants et assurez-vous que le durcissement du serveur est correctement en place.',
+      envFileRecommendation: 'Assurez-vous que les fichiers d\'environnement ne sont pas accessibles depuis les répertoires web et que les configurations du serveur bloquent correctement l\'accès aux fichiers sensibles.',
+      gitRepoRecommendation: 'Assurez-vous que les répertoires .git sont correctement sécurisés et non accessibles depuis le web.',
+      noVulnerabilitiesFound: 'Aucune vulnérabilité trouvée',
+      systemSecure: 'Votre système semble être sécurisé. Continuez à le surveiller régulièrement.',
+      loadingScan: 'Chargement des résultats de l\'analyse...',
+      occurrences: 'Occurrences',
+      firstSeen: 'Première apparition',
+      lastSeen: 'Dernière apparition',
+      timestamp: 'Horodatage',
+      message: 'Message',
+      service: 'Service',
+      type: 'Type',
+      severity: 'Sévérité',
+      url: 'URL',
+      matchedTerm: 'Terme correspondant',
+      lineNumber: 'Numéro de ligne',
+      lineNumbers: 'Numéros de ligne',
+      showLess: 'Afficher moins',
+      showMore: 'Afficher tous les problèmes'
+    },
     userEdit: {
-      title: 'Modifier l\'Utilisateur',
-      loading: 'Chargement des données utilisateur...',
-      userInfo: 'Informations de l\'Utilisateur',
+      title: 'Modifier l\'utilisateur',
+      loading: 'Chargement des données de l\'utilisateur...',
+      userInfo: 'Informations de l\'utilisateur',
       userId: 'ID Utilisateur',
-      loginName: 'Nom d\'Utilisateur',
-      fullName: 'Nom Complet',
-      dob: 'Date de Naissance',
-      email: 'E-mail',
-      emailVerified: 'E-mail Vérifié',
+      loginName: 'Nom de connexion',
+      fullName: 'Nom complet',
+      dob: 'Date de naissance',
+      email: 'Email',
+      emailVerified: 'Email vérifié',
       verified: 'Vérifié',
-      notVerified: 'Non Vérifié',
+      notVerified: 'Non vérifié',
       createdAt: 'Créé le',
-      lastLogin: 'Dernière Connexion',
+      lastLogin: 'Dernière connexion',
       never: 'Jamais',
-      accountSettings: 'Paramètres du Compte',
-      accountStatus: 'Statut du Compte',
-      accountEnabled: 'Compte Activé',
+      accountSettings: 'Paramètres du compte',
+      accountStatus: 'Statut du compte',
+      accountEnabled: 'Compte activé',
       cannotDisableSelf: 'Vous ne pouvez pas désactiver votre propre compte',
-      accountRole: 'Rôle du Compte',
-      adminRole: 'Rôle Administrateur',
+      accountRole: 'Rôle du compte',
+      adminRole: 'Rôle administrateur',
       cannotChangeOwnRole: 'Vous ne pouvez pas modifier votre propre rôle',
-      adminActions: 'Actions d\'Administration',
-      verifyEmail: 'Vérifier l\'E-mail',
-      resetPassword: 'Envoyer Réinitialisation de Mot de Passe',
-      forceLogout: 'Forcer la Déconnexion',
-      failedToLoad: 'Échec du chargement des données utilisateur',
-      errorLoading: 'Erreur lors du chargement des données utilisateur',
+      adminActions: 'Actions d\'administration',
+      verifyEmail: 'Vérifier l\'email',
+      resetPassword: 'Envoyer la réinitialisation du mot de passe',
+      forceLogout: 'Forcer la déconnexion',
+      failedToLoad: 'Échec du chargement des données de l\'utilisateur',
+      errorLoading: 'Erreur lors du chargement des données de l\'utilisateur',
       saveSuccess: 'Paramètres utilisateur mis à jour avec succès',
       errorSaving: 'Erreur lors de l\'enregistrement des paramètres utilisateur',
-      verifyEmailSuccess: 'E-mail de vérification envoyé avec succès',
-      emailVerificationFailed: 'Échec de l\'envoi de l\'e-mail de vérification',
-      errorVerifyingEmail: 'Erreur lors de l\'envoi de l\'e-mail de vérification',
-      passwordResetSent: 'E-mail de réinitialisation de mot de passe envoyé',
+      verifyEmailSuccess: 'Email de vérification envoyé avec succès',
+      emailVerificationFailed: 'Échec de l\'envoi de l\'email de vérification',
+      errorVerifyingEmail: 'Erreur lors de l\'envoi de l\'email de vérification',
+      passwordResetSent: 'Email de réinitialisation de mot de passe envoyé',
       passwordResetFailed: 'Échec de l\'envoi de la réinitialisation du mot de passe',
       errorSendingReset: 'Erreur lors de l\'envoi de la réinitialisation du mot de passe',
       logoutForced: 'L\'utilisateur a été déconnecté',
-      logoutFailed: 'Échec de la déconnexion forcée',
-      errorForcingLogout: 'Erreur lors de la déconnexion forcée'
-    },
-    operations: {
-      cancel: 'Annuler',
-      save: 'Enregistrer les Modifications'
+      logoutFailed: 'Échec de la déconnexion forcée de l\'utilisateur',
+      errorForcingLogout: 'Erreur lors de la déconnexion forcée de l\'utilisateur'
     }
   },
   passwordResetConfirm: {
@@ -403,11 +494,11 @@ export default {
     confirmNewPasswordLabel: 'Confirmez le nouveau mot de passe',
     confirmNewPasswordPlaceholder: 'Confirmez votre nouveau mot de passe',
     resetButton: 'Réinitialiser le mot de passe',
-    processing: 'Réinitialisation...',
-    rememberedPassword: 'Vous rappelez-vous de votre mot de passe ?',
+    processing: 'Réinitialisation en cours...',
+    rememberedPassword: 'Vous vous souvenez de votre mot de passe ?',
     backToLogin: 'Retour à la connexion',
     supportMessage: 'Besoin d\'aide ? Contactez notre équipe de support',
-    passwordRequirements: 'Le mot de passe doit comporter au moins 8 caractères avec au moins 1 chiffre, 1 lettre majuscule et 1 caractère spécial',
+    passwordRequirements: 'Le mot de passe doit comporter au moins 8 caractères avec au moins 1 chiffre, 1 lettre majuscule et 1 caractère spécial.',
     passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
     resetSuccess: 'Votre mot de passe a été réinitialisé avec succès',
     resetFailed: 'Impossible de réinitialiser le mot de passe. Veuillez réessayer.',
@@ -438,16 +529,15 @@ export default {
     emailLabel: 'Adresse email',
     emailPlaceholder: 'Entrez votre email',
     resetButton: 'Envoyer le lien de réinitialisation',
-    processing: 'Envoi...',
-    rememberPassword: 'Vous vous souvenez de votre mot de passe?',
+    processing: 'Envoi en cours...',
+    rememberPassword: 'Vous vous souvenez de votre mot de passe ?',
     backToLogin: 'Retour à la connexion',
-    supportMessage: 'Besoin d\'aide? Contactez notre équipe de support',
+    supportMessage: 'Besoin d\'aide ? Contactez notre équipe de support',
     invalidEmail: 'Veuillez entrer une adresse email valide',
-    resetRequestSuccess: 'Un lien de réinitialisation de mot de passe a été envoyé à votre email',
+    resetRequestSuccess: 'Un lien de réinitialisation de mot de passe a été envoyé à votre adresse email',
     resetRequestFailed: 'Impossible d\'envoyer le lien de réinitialisation. Veuillez réessayer.',
-    checkEmail: 'Veuillez vérifier votre email pour les instructions à suivre.'
+    checkEmail: 'Veuillez vérifier votre email pour les instructions.'
   },
-
   register: {
     appTitle: "Huduma AI",
     createAccount: "Créer un nouveau compte",
@@ -464,8 +554,8 @@ export default {
     registerButton: "Créer un compte",
     processing: "Traitement en cours...",
     alreadyHaveAccount: "Vous avez déjà un compte?",
-    loginNow: "Connectez-vous",
-    privacyNotice: "En vous inscrivant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité",
+    loginNow: "Se connecter",
+    privacyNotice: "En vous inscrivant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité.",
     usernameMinLength: "Le nom d'utilisateur doit comporter au moins 3 caractères",
     invalidEmail: "Veuillez entrer une adresse email valide",
     passwordRequirements: "Le mot de passe doit comporter au moins 8 caractères avec au moins 1 chiffre et 1 lettre majuscule",
@@ -473,7 +563,7 @@ export default {
     mustAcceptTerms: "Vous devez accepter les conditions d'utilisation",
     registrationFailed: "L'inscription a échoué. Veuillez réessayer.",
     usernameExists: "Ce nom d'utilisateur existe déjà",
-    emailExists: "Cette adresse email existe déjà",
+    emailExists: "Cet email existe déjà",
     registrationSuccess: "Inscription réussie !",
     verificationEmailSent: "Un email de vérification a été envoyé à {email}",
     checkEmailInstructions: "Veuillez vérifier votre email et suivre les instructions pour valider votre compte avant de vous connecter.",
@@ -482,15 +572,9 @@ export default {
     resendVerification: "Renvoyer l'email de vérification",
     verificationResent: "L'email de vérification a été renvoyé",
     verificationResendFailed: "Échec du renvoi de l'email de vérification. Veuillez réessayer.",
-    usernameExists: "Ce nom d'utilisateur existe déjà",
-    emailExists: "Cette adresse email existe déjà",
     usernameInvalidChars: 'Le nom d\'utilisateur ne peut contenir que des lettres, des chiffres, des traits de soulignement, des points et des traits d\'union',
-    networkError: 'Erreur réseau. Veuillez vérifier votre connexion et réessayer.',
-    registrationFailed: 'L\'inscription a échoué. Veuillez réessayer.',
-    usernameExists: 'Ce nom d\'utilisateur existe déjà',
-    emailExists: 'Cet email existe déjà'
+    networkError: 'Erreur réseau. Veuillez vérifier votre connexion et réessayer.'
   },
-  // Login section
   login: {
     appTitle: 'Huduma AI',
     username: 'Nom d\'utilisateur',
@@ -503,109 +587,88 @@ export default {
     googleLogin: 'Continuer avec Google',
     facebookLogin: 'Continuer avec Facebook',
     rememberMe: 'Se souvenir de moi',
-    forgotPassword: 'Mot de passe oublié?',
-    noAccount: 'Vous n\'avez pas de compte?',
+    forgotPassword: 'Mot de passe oublié ?',
+    noAccount: 'Vous n\'avez pas de compte ?',
     createAccount: 'Créer un compte',
+    registerNow: "S'inscrire maintenant",
     termsAndPolicy: 'En vous connectant, vous acceptez nos Conditions d\'Utilisation et notre Politique de Confidentialité',
-    noAccount: "Vous n'avez pas de compte?",
-    registerNow: "Inscrivez-vous",
     loggingIn: "Connexion en cours...",
     fieldsRequired: "Nom d'utilisateur et mot de passe requis",
     invalidCredentials: "Nom d'utilisateur ou mot de passe invalide",
     tooManyAttempts: "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
     loginFailed: "Échec de la connexion. Veuillez réessayer.",
-    oauthNotImplemented: "La connexion sociale n'est pas encore implémentée",
-    savedLoginNotImplemented: "La connexion avec compte enregistré n'est pas encore implémentée"
+    oauthNotImplemented: "La connexion via les réseaux sociaux n'est pas encore implémentée",
+    savedLoginNotImplemented: "La connexion avec un compte enregistré n'est pas encore implémentée"
   },
   charts: {
     tooltip: {
       title: 'Date',
-      totalQueries: 'Requêtes Totales',
-      uniqueUsers: 'Utilisateurs Uniques'
+      totalQueries: 'Requêtes totales',
+      uniqueUsers: 'Utilisateurs uniques'
     },
     day: 'Jour',
-    noData: 'Aucune Donnée',
-    notAvailable: 'N/D',
-    topQueries: 'Principales Requêtes',
-    categoryDistribution: 'Utilisation des Domaines de Connaissance',
-    usageTrend: 'Tendance d\'Utilisation'
+    noData: 'Aucune donnée',
+    notAvailable: 'N/A',
+    topQueries: 'Principales requêtes',
+    categoryDistribution: 'Utilisation par domaine de connaissance',
+    usageTrend: 'Tendance d\'utilisation'
   },
   analytics: {
-    // Dashboard header and controls
-    title: 'Données Analytiques & Aperçus',
+    title: 'Analytique des données & Aperçus',
+    loading: 'Chargement des données analytiques...',
     period: 'Période',
-
     charts: {
       satisfactionHeatmap: "Satisfaction par domaine de connaissance",
-      satisfactionSubtitle: "Pourcentages au fil du temps"
+      satisfactionSubtitle: "Scores en pourcentage au fil du temps"
     },
-
     timePeriods: {
       week4: "Il y a 4 semaines",
       week3: "Il y a 3 semaines",
       week2: "Il y a 2 semaines",
-      week1: "Semaine dernière",
+      week1: "La semaine dernière",
       current: "Actuel"
     },
-
     errors: {
-      loading: "Échec du chargement des données de satisfaction. Veuillez réessayer.",
+      loading: "Échec du chargement des données analytiques. Veuillez réessayer.",
     },
-
     status: {
       loading: "Chargement...",
       noData: "Aucune donnée disponible",
-      online: "Système en Ligne",
-      offline: "Système Hors Ligne",
-      responseTime: "Temps de Réponse Moyen",
-      queueLength: "File d'Attente",
-      uptime: "Temps de Fonctionnement"
+      online: "Système en ligne",
+      offline: "Système hors ligne",
+      responseTime: "Temps de réponse moyen",
+      queueLength: "File d'attente",
+      uptime: "Disponibilité",
+      error: 'Échec du chargement des données analytiques'
     },
-
-    // Period dropdown options
     periods: {
       daily: 'Quotidien',
       weekly: 'Hebdomadaire',
       monthly: 'Mensuel',
-      allTime: 'Tout Temps'
+      allTime: 'Depuis le début'
     },
-
-    // Metrics section titles and values
     metrics: {
-      totalQueries: 'Requêtes Totales',
-      uniqueUsers: 'Utilisateurs Uniques',
-      avgResponseTime: 'Temps de Réponse Moyen',
-      satisfaction: 'Satisfaction des Utilisateurs'
+      totalQueries: 'Requêtes totales',
+      uniqueUsers: 'Utilisateurs uniques',
+      avgResponseTime: 'Temps de réponse moyen',
+      satisfaction: 'Satisfaction des utilisateurs'
     },
-
-    // Table headers and labels
     table: {
       rank: 'Rang',
       query: 'Requête',
       count: 'Nombre',
-      avgTime: 'Temps Moyen'
+      avgTime: 'Temps moyen'
     },
-
-    // Chart labels and legends
     chartLabels: {
-      categories: 'Domaines',  // Changed from 'Catégories'
-      serviceCategories: 'Domaines de Connaissance',  // Changed from 'Catégories de Service'
-      byUsage: 'par Utilisation',  // No change
-      category: 'Domaine'  // Changed from 'Catégorie'
+      categories: 'Domaines',
+      serviceCategories: 'Domaines de connaissance',
+      byUsage: 'par utilisation',
+      category: 'Domaine'
     },
-
-    // Tooltips and hints
     tooltips: {
       selectPeriod: 'Sélectionner la période',
       selectDate: 'Sélectionner la date',
       exportData: 'Exporter les données'
-    },
-
-    // Status messages
-    status: {
-      loading: 'Chargement des données analytiques...',
-      noData: 'Aucune donnée disponible pour cette période',
-      error: 'Échec du chargement des données analytiques'
     },
     gauge: {
       historical: 'Tendances historiques',
@@ -618,57 +681,47 @@ export default {
       good: "Bon",
       excellent: "Excellent"
     },
-    // Trend indicators
     slower: 'plus lent',
     faster: 'plus rapide',
     percentage: 'Pourcentage',
-
-    // Additional analytics fields
-    note: 'Ce tableau de bord présente les statistiques d\'utilisation et les commentaires des utilisateurs du système de chat.',
-    usageStats: 'Statistiques d\'Utilisation',
-    totalQueries: 'Total des Requêtes',
-    avgResponseTime: 'Temps de Réponse Moyen',
-    peakUsers: 'Utilisateurs Simultanés',
-    activeChats: 'Chats Actifs',
-    usageTrend: 'Tendance d\'Utilisation',
-    topQueries: 'Requêtes Principales',
-    feedbackSamples: 'Commentaires des Utilisateurs',
+    note: 'Ci-dessous se trouvent les statistiques d\'utilisation et les résumés des commentaires des utilisateurs.',
+    usageStats: 'Statistiques d\'utilisation',
+    peakUsers: 'Pic d\'utilisateurs simultanés',
+    activeChats: 'Discussions actives',
+    usageTrend: 'Tendance d\'utilisation',
+    topQueries: 'Principales requêtes',
+    feedbackSamples: 'Exemples de commentaires d\'utilisateurs',
     close: 'Fermer',
     chartComingSoon: 'Visualisation graphique interactive bientôt disponible...',
-    error: 'Échec du chargement des données',
     retry: 'Réessayer',
-    dailyQueries: 'Requêtes Quotidiennes',
-    export: 'Exporter les Données',
-    dateRange: 'Période',
+    dailyQueries: 'Requêtes quotidiennes',
+    export: 'Exporter les données',
+    dateRange: 'Plage de dates',
     startDate: 'Date de début',
     endDate: 'Date de fin',
-
-    // Added for AnalyticsComponent.vue
     rank: 'Rang',
     query: 'Requête',
     count: 'Nombre',
-    avgTime: 'Temps Moyen',
-    serviceUsage: 'Utilisation des Domaines de Connaissance',
-
-    // Added for UsageTrendChart.vue
-    usageTrends: 'Tendances d\'Utilisation',
-    week: 'Dernière Semaine',
-    month: 'Dernier Mois',
-    quarter: 'Dernier Trimestre',
-    year: 'Dernière Année',
-    uniqueUsers: 'Utilisateurs Uniques',
-    satisfactionRate: 'Taux de Satisfaction',
-    satisfactionAnalysis: 'Analyse de Satisfaction des Utilisateurs'
+    avgTime: 'Temps moyen',
+    serviceUsage: 'Utilisation des domaines de connaissance',
+    usageTrends: 'Tendances d\'utilisation',
+    week: 'Semaine dernière',
+    month: 'Mois dernier',
+    quarter: 'Trimestre dernier',
+    year: 'Année dernière',
+    uniqueUsers: 'Utilisateurs uniques',
+    satisfactionRate: 'Taux de satisfaction',
+    satisfactionAnalysis: 'Analyse de la satisfaction des utilisateurs'
   },
-  brandName: 'Huduma AI: Votre Assistant Gouvernemental Numérique',
+  brandName: 'Huduma AI: Votre assistant gouvernemental numérique',
   nav: {
-    systemStatus: 'État du Système',
+    systemStatus: 'État du système',
     menu: 'Menu',
     analytics: 'Analytique',
-    userProfile: 'Profil Utilisateur',
+    userProfile: 'Profil utilisateur',
     settings: 'Paramètres',
     logout: 'Déconnexion',
-    profile: 'Mon Profil',
+    profile: 'Mon profil',
     toggleSidebar: 'Basculer la barre latérale',
     changeLanguage: 'Changer de langue',
     administration: "Administration",
@@ -679,249 +732,178 @@ export default {
     }
   },
   systemStatus: {
-    title: 'État des Services',
+    title: 'État des services',
     services: 'Services',
     operational: 'Opérationnel',
     degraded: 'Dégradé',
     outage: 'Panne',
-    allOperational: 'Tous les Systèmes',
-    someIssues: 'Quelques Problèmes',
-    majorIssues: 'Problèmes Majeurs',
+    allOperational: 'Tous les systèmes opérationnels',
+    someIssues: 'Quelques problèmes',
+    majorIssues: 'Problèmes majeurs',
     checking: 'Vérification...',
-    nextDeadline: 'Prochaine Échéance',
+    nextDeadline: 'Prochaine échéance',
     days: 'jours',
-    viewDetails: 'Voir les Détails'
+    viewDetails: 'Voir les détails'
   },
-  // Service names
   services: {
-    eCitizen: 'Portail eCitoyen',
-    taxFiling: 'Système de Déclaration Fiscale',
-    idApplication: 'Demande de Carte d\'Identité',
-    businessReg: 'Enregistrement d\'Entreprise',
-    drivingLicense: 'Permis de Conduire'
+    eCitizen: 'Portail eCitizen',
+    taxFiling: 'Système de déclaration fiscale',
+    idApplication: 'Demande de carte d\'identité',
+    businessReg: 'Enregistrement d\'entreprise',
+    drivingLicense: 'Permis de conduire'
   },
-  // Deadline titles
   deadlines: {
-    taxFiling: 'Date Limite de Déclaration Fiscale',
-    businessRenewal: 'Renouvellement de Licence Commerciale',
-    idRenewal: 'Renouvellement de Carte d\'Identité',
-    vehicleRegistration: 'Date Limite d\'Immatriculation de Véhicule'
+    taxFiling: 'Date limite de déclaration fiscale',
+    businessRenewal: 'Renouvellement de licence commerciale',
+    idRenewal: 'Renouvellement de carte d\'identité',
+    vehicleRegistration: 'Date limite d\'immatriculation de véhicule'
   },
   sidebar: {
-    governmentServices: 'Domaines de Connaissance', // Changed from 'Services gouvernementaux'
-    chatHistory: 'Historique de conversation',
-    searchPlaceholder: 'Rechercher des domaines de connaissance...', // Changed from 'Rechercher un service...'
-    createFolder: 'Créer un Dossier',
-    editFolder: 'Modifier le Dossier',
-    folderName: 'Nom du Dossier',
+    governmentServices: 'Domaines de connaissance',
+    chatHistory: 'Historique des discussions',
+    searchPlaceholder: 'Rechercher des domaines de connaissance...',
+    createFolder: 'Créer un dossier',
+    editFolder: 'Modifier le dossier',
+    folderName: 'Nom du dossier',
     folderNamePlaceholder: 'Entrez le nom du dossier',
-    moveChat: 'Déplacer la Conversation',
-    moveChatTo: 'Déplacer Vers',
-    selectFolder: 'Sélectionner un Dossier',
-    deleteChat: 'Supprimer la Conversation',
-    deleteChatConfirm: 'Êtes-vous sûr de vouloir supprimer cette conversation?',
-    deleteChatWarning: 'Cette action ne peut pas être annulée.',
-    renameChat: "Renommer la conversation",
-    chatTitle: "Titre de la conversation",
-    chatTitlePlaceholder: "Entrez un titre pour cette conversation",
+    moveChat: 'Déplacer la discussion',
+    moveChatTo: 'Déplacer vers',
+    selectFolder: 'Sélectionner un dossier',
+    deleteChat: 'Supprimer la discussion',
+    deleteChatConfirm: 'Êtes-vous sûr de vouloir supprimer cette discussion ?',
+    deleteChatWarning: 'Cette action est irréversible.',
+    renameChat: "Renommer la discussion",
+    chatTitle: "Titre de la discussion",
+    chatTitlePlaceholder: "Entrez un titre pour cette discussion",
     deleteFolder: "Supprimer le dossier",
     deleteFolderConfirm: "Êtes-vous sûr de vouloir supprimer le dossier '{name}' ?",
-    chatsMoveWarning: "Toutes les conversations de ce dossier seront déplacées vers le dossier par défaut.",
-    weatherTitle: "Prévisions Météo",
+    chatsMoveWarning: "Toutes les discussions de ce dossier seront déplacées vers le dossier par défaut.",
+    weatherTitle: "Prévisions météorologiques",
     weatherLoading: "Chargement des données météo...",
     weatherError: "Impossible de charger les données météo. Veuillez réessayer.",
-    folders: "Dossiers",
-    emptyFolder: "Aucune conversation dans ce dossier",
-    title: 'Infos et ressources',
-    chatHistory: 'Conversations récentes',
-    noChats: 'Aucune conversation récente',
+    title: 'Infos & Ressources',
+    noChats: 'Aucune discussion récente',
     relatedDocs: 'Documents connexes',
     noDocuments: 'Aucun document connexe',
-    faq: 'Questions fréquemment posées',
+    faq: 'Foire aux questions',
     tab: {
-      all: 'Tous',
+      all: 'Toutes les discussions',
       folders: 'Dossiers',
       starred: 'Favoris',
-      archived: 'Archivés'
+      archived: 'Archivées'
     },
-    savedChats: 'Conversations Enregistrées',
+    savedChats: 'Discussions enregistrées',
+    allChats: "Toutes les discussions",
     folders: "Dossiers",
-    allChats: "Toutes les Conversations",
-    noFolder: "Tous les chats",
-    starredChats: "Favorites",
+    starredChats: "Favoris",
     archivedChats: "Archivées",
-    emptyFolder: "Ce dossier est vide. Déplacez les conversations ici depuis le menu de conversation.",
-    noStarredChats: "Pas encore de conversations favorites. Marquez une conversation pour l'ajouter ici.",
-    noArchivedChats: "Pas encore de conversations archivées.",
-    noSearchResults: 'Aucune conversation trouvée pour "{term}"',
-    loadingChats: "Chargement des conversations...",
-    errorLoadingConversations: "Échec du chargement des conversations. Veuillez réessayer.",
-    errorLoadingUser: "Les données utilisateur sont incomplètes. Veuillez recharger la page.",
-    errorNoUser: "Les données utilisateur sont manquantes. Veuillez recharger la page.",
+    noFolder: "Pas de dossier",
+    emptyFolder: "Ce dossier est vide. Déplacez des conversations ici depuis le menu de la discussion.",
+    noStarredChats: "Aucune discussion en favori pour le moment. Mettez une discussion en favori pour l'ajouter ici.",
+    noArchivedChats: "Aucune discussion archivée pour le moment.",
+    noSearchResults: 'Aucune discussion trouvée pour "{term}"',
+    loadingChats: "Chargement des discussions...",
+    errorLoadingConversations: "Échec du chargement des discussions. Veuillez réessayer.",
+    errorLoadingUser: "Les données de l'utilisateur sont incomplètes. Veuillez recharger la page.",
+    errorNoUser: "Les données de l'utilisateur sont manquantes. Veuillez recharger la page.",
     retry: "Réessayer",
     message: "message",
     messages: "messages",
-    created: "Créé",
-    updated: "Mis à jour",
-    star: "Favoris",
+    created: "Créé le",
+    updated: "Mis à jour le",
+    star: "Mettre en favori",
     unstar: "Retirer des favoris",
     archive: "Archiver",
-    chatStarred: "La conversation a été ajoutée aux favoris",
-    chatUnstarred: "La conversation a été retirée des favoris",
-    chatArchived: "La conversation a été archivée",
-    chatUnarchived: "La conversation a été désarchivée",
-    errorUpdatingChat: "Échec de la mise à jour de la conversation",
-    chatRenamed: "Conversation renommée avec succès",
-    errorRenamingChat: "Échec du renommage de la conversation",
-    chatDeleted: "Conversation supprimée avec succès",
-    errorDeletingChat: "Échec de la suppression de la conversation",
-    chatMoved: "Conversation déplacée avec succès",
-    errorMovingChat: "Échec du déplacement de la conversation",
+    chatStarred: "La discussion a été ajoutée aux favoris",
+    chatUnstarred: "La discussion a été retirée des favoris",
+    chatArchived: "La discussion a été archivée",
+    chatUnarchived: "La discussion a été désarchivée",
+    errorUpdatingChat: "Échec de la mise à jour de la discussion",
+    chatRenamed: "Discussion renommée avec succès",
+    errorRenamingChat: "Échec du renommage de la discussion",
+    chatDeleted: "Discussion supprimée avec succès",
+    errorDeletingChat: "Échec de la suppression de la discussion",
+    chatMoved: "Discussion déplacée avec succès",
+    errorMovingChat: "Échec du déplacement de la discussion",
     noPreview: "Aucun aperçu disponible",
-    searchConversations: 'Rechercher des conversations...'
+    searchConversations: 'Rechercher dans les discussions...',
+    selectFolderInstruction: "Sélectionnez un dossier pour voir ses conversations",
+    folderCreated: "Dossier créé avec succès",
+    errorCreatingFolder: "Échec de la création du dossier",
+    errorLoadingFolders: "Échec du chargement des dossiers",
+    folderUpdated: "Dossier mis à jour avec succès",
+    errorUpdatingFolder: "Échec de la mise à jour du dossier",
+    folderDeleted: "Dossier supprimé avec succès",
+    errorDeletingFolder: "Échec de la suppression du dossier",
+    chatRemovedFromFolders: "Conversation retirée du dossier",
+    errorRemovingChat: "Échec de la suppression de la conversation du dossier"
   },
   leftPanel: {
     cat1: {
       name: '1. Identité & Enregistrement civil',
-      children: [
-        'Actes de naissance',
-        "Cartes d'identité nationale",
-        'Passeports',
-        'Actes de mariage et de décès',
-        'Inscription sur les listes électorales'
-      ]
+      children: ['Actes de naissance', "Cartes d'identité nationale", 'Passeports', 'Actes de mariage et de décès', 'Inscription sur les listes électorales']
     },
     cat2: {
       name: '2. Santé & Services sociaux',
-      children: [
-        'Accès aux soins publics',
-        'Programmes de vaccination',
-        'Assurance maladie',
-        'Allocations pour invalidité',
-        'Aide sociale et alimentaire'
-      ]
+      children: ['Accès aux soins publics', 'Programmes de vaccination', 'Assurance maladie', 'Allocations pour invalidité', 'Aide sociale et alimentaire']
     },
     cat3: {
       name: '3. Éducation & Apprentissage',
-      children: [
-        'Écoles et universités publiques',
-        'Bourses et prêts étudiants',
-        "Programmes d'éducation pour adultes",
-        "Ressources d'apprentissage en ligne"
-      ]
+      children: ['Écoles et universités publiques', 'Bourses et prêts étudiants', "Programmes d'éducation pour adultes", "Ressources d'apprentissage en ligne"]
     },
     cat4: {
       name: '4. Emploi & Services du travail',
-      children: [
-        "Recherche d'emploi et allocations chômage",
-        'Droits et protections des travailleurs',
-        'Réglementations sur la sécurité au travail',
-        'Formations et apprentissages'
-      ]
+      children: ["Recherche d'emploi et allocations chômage", 'Droits et protections des travailleurs', 'Réglementations sur la sécurité au travail', 'Formations et apprentissages']
     },
     cat5: {
       name: '5. Impôts & Recettes',
-      children: [
-        "Déclaration d'impôts et remboursements",
-        'Paiements de taxes foncières',
-        'Conformité fiscale des entreprises',
-        'Droits de douane et importation'
-      ]
+      children: ["Déclaration d'impôts et remboursements", 'Paiements de taxes foncières', 'Conformité fiscale des entreprises', 'Droits de douane et importation']
     },
     cat6: {
       name: '6. Sécurité publique & Justice',
-      children: [
-        "Police et services d'urgence",
-        'Tribunaux et aide juridique',
-        'Déclaration de crimes',
-        'Lois de protection des consommateurs'
-      ]
+      children: ["Police et services d'urgence", 'Tribunaux et aide juridique', 'Déclaration de crimes', 'Lois de protection des consommateurs']
     },
     cat7: {
       name: '7. Transport & Mobilité',
-      children: [
-        'Permis de conduire et immatriculation',
-        'Transports publics et infrastructures',
-        'Infractions routières et amendes',
-        'Programmes de sécurité routière'
-      ]
+      children: ['Permis de conduire et immatriculation', 'Transports publics et infrastructures', 'Infractions routières et amendes', 'Programmes de sécurité routière']
     },
     cat8: {
       name: '8. Logement & Aménagement urbain',
-      children: [
-        'Aide au logement social',
-        'Enregistrement des propriétés et terrains',
-        'Prêts et subventions au logement',
-        'Permis de zonage et de construction'
-      ]
+      children: ['Aide au logement social', 'Enregistrement des propriétés et terrains', 'Prêts et subventions au logement', 'Permis de zonage et de construction']
     },
     cat9: {
       name: '9. Services publics & Environnement',
-      children: [
-        "Services d'eau et d'électricité",
-        'Gestion des déchets et recyclage',
-        'Réglementations environnementales',
-        "Initiatives d'énergie renouvelable"
-      ]
+      children: ["Services d'eau et d'électricité", 'Gestion des déchets et recyclage', 'Réglementations environnementales', "Initiatives d'énergie renouvelable"]
     },
     cat10: {
       name: '10. Affaires & Commerce',
-      children: [
-        'Enregistrement et licences commerciales',
-        'Réglementations et permis de commerce',
-        'Subventions et incitations pour PME',
-        'Soutien au commerce électronique'
-      ]
+      children: ['Enregistrement et licences commerciales', 'Réglementations et permis de commerce', 'Subventions et incitations pour PME', 'Soutien au commerce électronique']
     },
     cat11: {
       name: '11. Sécurité sociale & Retraites',
-      children: [
-        'Allocations de retraite',
-        'Gestion des fonds de pension',
-        'Allocations de survivant',
-        'Pensions pour invalidité'
-      ]
+      children: ['Allocations de retraite', 'Gestion des fonds de pension', 'Allocations de survivant', 'Pensions pour invalidité']
     },
     cat12: {
       name: '12. Communauté & Participation civique',
-      children: [
-        'Élections et vote',
-        "Retour d'information et plaintes des citoyens",
-        'Bénévolat et programmes communautaires',
-        'Participation au gouvernement local'
-      ]
+      children: ['Élections et vote', "Retour d'information et plaintes des citoyens", 'Bénévolat et programmes communautaires', 'Participation au gouvernement local']
     }
   },
   settings: {
     title: 'Paramètres',
     save: 'Enregistrer',
-    edit: 'Modifier',
     close: 'Fermer',
+    saveSettings: 'Enregistrer les paramètres',
+    savingSettings: "Enregistrement de vos paramètres...",
+    settingsSaved: "Paramètres enregistrés avec succès !",
     saveSuccess: 'Paramètres enregistrés avec succès',
     saveError: 'Erreur lors de l\'enregistrement des paramètres',
-    saveSettings: 'Enregistrer',
-    cancel: 'Annuler',
-
-    language: {
-      title: 'Langue',
-      selectLabel: 'Langue d\'affichage'
-    },
+    display: 'Affichage',
     displayLanguage: 'Langue d\'affichage',
     languages: {
       english: 'Anglais',
       french: 'Français',
       swahili: 'Swahili'
     },
-
-    appearance: {
-      title: 'Apparence',
-      theme: 'Thème',
-      lightTheme: 'Clair',
-      darkTheme: 'Sombre',
-      systemTheme: 'Système',
-      fontSize: 'Taille de police'
-    },
-    display: 'Affichage',
     theme: 'Thème',
     themes: {
       light: 'Clair',
@@ -929,319 +911,262 @@ export default {
       system: 'Système'
     },
     fontSize: 'Taille de police',
-
-    notifications: {
-      title: 'Notifications',
-      emailUpdates: 'Mises à jour par email',
-      soundEnabled: 'Notifications sonores'
-    },
     notifications: 'Notifications',
     emailUpdates: 'Mises à jour par e-mail',
     soundNotifications: 'Notifications sonores',
-
-    account: {
-      title: 'Compte',
-      resetUserData: 'Réinitialiser les données',
-      resetDescription: 'Cela effacera toutes vos données de profil et votre historique de chat.',
-      confirmReset: 'Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action ne peut pas être annulée.',
-      resetComplete: 'Vos données ont été réinitialisées.'
-    },
     accountManagement: 'Gestion du compte',
     emailAddress: 'Adresse e-mail',
     emailAddressPlaceholder: 'Votre adresse e-mail',
     password: 'Mot de passe',
     changePassword: 'Changer le mot de passe',
-    resetUserData: 'Réinitialiser les données',
-    resetUserDataDesc: 'Cela effacera toutes vos données de profil et votre historique de chat.',
+    resetUserData: 'Réinitialiser les données utilisateur',
+    resetUserDataDesc: 'Cela effacera toutes vos données de profil et votre historique de discussions.',
     deleteAccount: 'Supprimer le compte',
     deleteAccountDesc: 'Cela supprimera définitivement votre compte et toutes les données associées.',
-
-    // Additional entries for modals and confirmations
+    edit: 'Modifier',
     standardAccount: 'Compte Standard',
     confirmEmailChange: 'Confirmer le changement d\'e-mail',
     pleaseEnterPassword: 'Veuillez entrer votre mot de passe',
-    confirmDeleteAccount: 'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action ne peut pas être annulée.',
-    confirmAccountDeletion: 'Confirmer la Suppression du Compte',
-    accountDeletionWarning: 'Avertissement : Cette action est permanente et ne peut pas être annulée. Toutes vos données seront définitivement supprimées.',
+    cancel: 'Annuler',
+    account: {
+      title: 'Compte',
+      resetDescription: 'Cela effacera toutes vos données de profil et votre historique de chat.',
+      confirmReset: 'Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action ne peut pas être annulée.',
+      resetComplete: 'Vos données ont été réinitialisées.'
+    },
+    language: {
+      title: 'Langue',
+      selectLabel: 'Langue d\'affichage'
+    },
+    appearance: {
+      title: 'Apparence',
+      lightTheme: 'Clair',
+      darkTheme: 'Sombre',
+      systemTheme: 'Système'
+    },
+    confirmDeleteAccount: 'Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.',
+    confirmAccountDeletion: 'Confirmer la suppression du compte',
+    accountDeletionWarning: 'Avertissement : Cette action est permanente et irréversible. Toutes vos données seront définitivement supprimées.',
     deletionReason: 'Raison de la suppression (facultatif) :',
-    deletionReasonPlaceholder: 'Qu\'est-ce qui vous a fait décider de supprimer votre compte ?',
+    deletionReasonPlaceholder: 'Pourquoi avez-vous décidé de supprimer votre compte ?',
     enterPasswordConfirm: 'Entrez votre mot de passe pour confirmer :',
     currentPasswordPlaceholder: 'Votre mot de passe actuel',
     deleting: 'Suppression en cours...',
-    permanentlyDeleteAccount: 'Supprimer le Compte',
+    permanentlyDeleteAccount: 'Supprimer le compte',
     accountDeletedSuccess: 'Votre compte a été supprimé avec succès.',
     incorrectPassword: 'Mot de passe incorrect',
     accountDeletionFailed: 'Échec de la suppression du compte. Veuillez réessayer plus tard.',
+    confirmChange: 'Confirmer le changement',
+    processing: 'Traitement en cours...',
+    userDataReset: 'Vos données de profil ont été réinitialisées avec succès.',
+    failedToResetUserData: 'Échec de la réinitialisation de vos données de profil. Veuillez réessayer plus tard.',
+    changingEmailTo: 'Changer votre e-mail pour',
+    will: 'va',
+    logOutSystem: 'Vous déconnecter du système',
+    sendVerificationLink: 'Envoyer un lien de vérification à votre nouvel e-mail',
+    requireVerification: 'Nécessiter une vérification avant de pouvoir vous reconnecter',
+    checkNewEmailVerification: 'Veuillez vérifier votre nouvelle boîte e-mail pour les instructions de vérification.',
+    unableToVerifyEmail: 'Impossible de vérifier l\'e-mail. Veuillez réessayer.',
+    emailAlreadyInUse: 'Cet e-mail est déjà utilisé',
+    enterValidEmail: 'Veuillez entrer une adresse e-mail valide',
+    failedToUpdateEmail: 'Échec de la mise à jour de l\'e-mail. Veuillez réessayer.',
+    passwordResetInitiated: 'Un lien de réinitialisation de mot de passe a été envoyé à votre adresse e-mail.',
+    unableToLoadUser: 'Impossible de charger les informations de l\'utilisateur. Veuillez réessayer.',
+    retry: 'Réessayer',
+    user: 'Utilisateur',
+    loadingUserInfo: 'Chargement des informations de l\'utilisateur...',
+    resetUserDataTitle: "Réinitialiser les données utilisateur",
+    confirmResetUserData: "Êtes-vous sûr de vouloir réinitialiser toutes vos données de profil ? Cela effacera toutes vos informations de profil et votre historique de discussions, mais conservera vos identifiants de compte.",
+    reset: "Réinitialiser",
+    deleteAccountTitle: "Supprimer le compte"
   },
   userProfile: {
-    title: 'Profil Utilisateur',
-    privacyInfo:
-      "En fournissant plus d'informations, vous obtiendrez des réponses plus précises. Veuillez consulter notre",
-    privacyPolicyLink: 'Politique de Confidentialité',
+    title: 'Profil utilisateur',
+    privacyInfo: "En fournissant plus d'informations, vous obtiendrez des réponses plus précises et pertinentes de la part du chatbot. Veuillez consulter notre",
+    privacyPolicyLink: 'Politique de confidentialité',
+    tabComingSoon: 'Cet onglet est en cours de développement et sera bientôt disponible.',
+    saveSuccess: 'Profil enregistré avec succès',
+    loadError: 'Erreur lors du chargement du profil',
+    saveError: 'Erreur lors de l\'enregistrement du profil',
+    confirmSaveTitle: "Enregistrer le profil",
+    confirmSave: "Êtes-vous sûr de vouloir enregistrer ces modifications ?",
+    confirmCancel: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir annuler ?',
+    confirmLeave: 'Êtes-vous sûr de vouloir quitter ? Les modifications non enregistrées seront perdues.',
+    confirmDiscardChanges: 'Annuler les modifications non enregistrées ?',
+    uploadPhoto: 'Télécharger une photo',
+    uploadFile: 'Télécharger un fichier',
+    photoRequirements: 'La photo doit être nette, récente et montrer votre visage complet',
+    biometricRequirements: 'Seuls les fichiers de données biométriques officiels sont acceptés',
+    documentUpload: 'Téléchargement de documents',
+    validationTitle: 'Veuillez corriger les erreurs suivantes :',
+    profileIcon: 'Icône de profil',
+    change: 'Modifier',
+    chooseProfileIcon: 'Choisir une icône de profil',
+    presetIcons: 'Icônes prédéfinies',
+    upload: 'Télécharger',
+    initials: 'Initiales',
+    clickToUpload: 'Cliquez pour télécharger',
+    useThisImage: 'Utiliser cette image',
+    useInitials: 'Utiliser les initiales',
     tabs: {
       tab1: 'Données d\'identification personnelle',
       tab2: 'Enregistrement civil & Documentation',
       tab3: 'Adresse & Résidence',
       tab4: 'Documents d\'identité & Voyage',
       tab5: 'Dossiers de santé & médicaux',
-      tab6: 'Emploi & Économie',
-      tab7: 'Éducation & Académique',
-      tab8: 'Données Financières & Impôts',
-      tab9: 'Sécurité sociale & Aide',
-      tab10: 'Casier judiciaire & Légal',
+      tab6: 'Emploi & Données économiques',
+      tab7: 'Éducation & Dossiers académiques',
+      tab8: 'Données financières & fiscales',
+      tab9: 'Sécurité sociale & Aide sociale',
+      tab10: 'Casier judiciaire & Juridique',
       tab11: 'Transport & Mobilité',
-      tab12: 'Participation Civique & Politique'
+      tab12: 'Participation civique & politique'
     },
-    residencyStatuses: {
-      citizen: 'Citoyen',
-      permanentResident: 'Résident Permanent',
-      temporaryResident: 'Résident Temporaire',
-      other: 'Autre'
-    },
-    yesNo: {
-      yes: 'Oui',
-      no: 'Non'
+    actions: {
+      cancel: 'Annuler',
+      save: 'Enregistrer le profil',
+      previous: 'Précédent',
+      next: 'Suivant',
+      saving: 'Enregistrement...'
     },
     fields: {
-      // Tab 1
-      fullName: 'Nom complet (y compris alias)',
+      fullName: 'Nom complet (y compris les alias)',
       dob: 'Date de naissance',
       gender: 'Genre',
       nationality: 'Nationalité',
       maritalStatus: 'État civil',
       photograph: 'Photographie',
-      biometric: 'Empreintes / Données biométriques',
-
-      // Tab 2
+      biometric: 'Empreintes digitales / Données biométriques',
       birthCert: 'Acte de naissance',
       deathCert: 'Acte de décès',
       marriageDivorce: 'Actes de mariage / divorce',
-      adoption: 'Documents d\'adoption',
+      adoption: 'Dossiers d\'adoption',
       citizenship: 'Documents de citoyenneté / naturalisation',
-      immigration: 'Historique d\'immigration et visas',
-
-      // Tab 3
+      immigration: 'Historique d\'immigration et de visas',
       currentAddress: 'Adresse résidentielle actuelle',
       previousAddresses: 'Adresses précédentes',
+      postalCode: 'Code postal',
+      country: 'Pays',
+      residencyStatus: 'Statut de résidence',
       homeOrRental: 'Détails de propriété ou de location',
-      utilityBills: 'Factures de services liées à l\'adresse',
-      landRecords: 'Registres de propriété foncière',
-
-      // Tab 4
+      utilityBills: 'Factures de services publics liées à l\'adresse',
+      landRecords: 'Registres fonciers et de propriété',
       idCard: 'Numéro de carte d\'identité nationale',
       passport: 'Détails du passeport',
       driversLicense: 'Permis de conduire',
       voterId: 'Carte d\'électeur',
-      ssn: 'Numéro de sécurité sociale / assurance nationale',
-      militaryRecords: 'États de service militaire',
-
-      // Tab 5
-      medicalHistory: 'Antécédents médicaux et conditions de santé',
-      vaccinations: 'Registre de vaccinations',
-      insuranceDetails: 'Détails d\'assurance santé',
+      ssn: 'Numéro de sécurité sociale',
+      militaryRecords: 'Dossiers du service militaire',
+      medicalHistory: 'Antécédents médicaux et problèmes de santé',
+      vaccinations: 'Carnet de vaccination',
+      insuranceDetails: 'Détails de l\'assurance maladie',
       disability: 'Statut d\'invalidité',
+      bloodType: 'Groupe sanguin',
       organDonor: 'Statut de donneur d\'organes',
-      prescriptions: 'Prescriptions et traitements reçus',
-      mentalHealth: 'Historique de santé mentale',
-
-      // Tab 6
+      prescriptions: 'Ordonnances et traitements reçus',
+      mentalHealth: 'Antécédents de santé mentale',
       eHistory: 'Historique d\'emploi',
       currentEmployer: 'Détails de l\'employeur actuel',
-      workPermits: 'Permis de travail et contrats',
+      workPermits: 'Permis de travail et contrats de travail',
       certifications: 'Certifications et licences professionnelles',
       unemployment: 'Statut de chômage et allocations reçues',
       tin: 'Numéro d\'identification fiscale (NIF)',
       businessAffiliations: 'Propriété d\'entreprise et affiliations',
-
-      // Tab 7
       schools: 'Écoles et universités fréquentées',
-      diplomas: 'Diplômes, grades et certifications',
-      performance: 'Performance académique et résultats de tests',
+      education: 'Éducation',
+      degrees: 'Diplômes et certifications',
+      performance: 'Performances académiques et résultats aux examens',
+      academicRecords: "Dossiers académiques",
       scholarships: 'Bourses et aides financières reçues',
-
-      // Tab 8
-      incomeTax: 'Registres d\'impôt sur le revenu',
+      incomeTax: 'Déclarations de revenus',
       bankAccounts: 'Comptes bancaires et financiers',
-      propertyTax: 'Paiements de taxe foncière',
-      businessTax: 'Déclarations fiscales d\'entreprise',
-      pensionContrib: 'Contributions et retraits de pension',
-      loanAid: 'Registres de prêts et d\'aide gouvernementale',
-
-      // Tab 9
-      pensionStatus: 'Statut de pension et contributions',
+      propertyTax: 'Paiements de la taxe foncière',
+      businessTax: 'Déclarations fiscales des entreprises',
+      pensionContrib: 'Cotisations et retraits de pension',
+      loanAid: 'Dossiers de prêts et d\'aides gouvernementales',
+      pensionStatus: 'Statut et cotisations de retraite',
       childcare: 'Aide à la garde d\'enfants',
       foodAssistance: 'Programmes d\'aide alimentaire / sociale',
       housingAssistance: 'Aide au logement',
-
-      // Tab 10
-      policeRecords: 'Casier judiciaire (historique criminel, arrestations, accusations)',
+      policeRecords: 'Casier judiciaire (antécédents criminels, arrestations, inculpations)',
       courtCases: 'Historique des affaires judiciaires',
       finesPenalties: 'Amendes et pénalités',
-      paroleProbation: 'Statut de libération conditionnelle ou probation',
-      citizenshipRevocation: 'Révocation de citoyenneté (si applicable)',
-
-      // Tab 11
-      vehicleReg: 'Détails d\'immatriculation de véhicule',
-      trafficViolations: 'Infractions routières et amendes',
-      licenseHistory: 'Historique du permis de conduire et avenants',
-      publicTransportCard: 'Utilisation de carte de transport public',
-
-      // Tab 12
-      voterRegistration: 'Détails d\'inscription électorale',
-      electionHistory: 'Historique de participation électorale',
-      partyMembership: 'Adhésion à un parti politique',
+      paroleProbation: 'Statut de libération conditionnelle ou de probation',
+      citizenshipRevocation: 'Révocation de la citoyenneté (le cas échéant)',
+      vehicleReg: 'Détails de l\'immatriculation du véhicule',
+      trafficViolations: 'Infractions au code de la route et amendes',
+      licenseHistory: 'Historique et avals du permis de conduire',
+      publicTransportCard: 'Utilisation de la carte de transport public',
+      voterRegistration: 'Détails de l\'inscription sur les listes électorales',
+      electionHistory: 'Historique de participation aux élections',
+      partyMembership: 'Appartenance à un parti politique',
       militaryStatus: 'Service militaire ou statut de conscription',
-      publicServiceRoles: 'Rôles de service public',
-      // New fields
-      postalCode: 'Code Postal',
-      country: 'Pays',
-      residencyStatus: 'Statut de Résidence',
-      bloodType: 'Groupe Sanguin',
-      education: "Éducation",
-      degrees: "Diplômes",
-      academicRecords: "Dossiers Académiques",
-      // Most of the core fields are already translated
-      dateOfBirth: 'Date de Naissance',
-      profilePhoto: 'Photo de Profil',
-      phoneNumber: 'Numéro de Téléphone',
-      emailAddress: 'Adresse Email',
-      preferredLanguage: 'Langue Préférée',
-
-      // Tab 2 - Civil Registration & Documentation
-      // Some of these fields are already translated
-      deathCertificate: 'Certificat de Décès',
-      marriageRecords: 'Actes de Mariage',
-      divorceRecords: 'Actes de Divorce',
-      adoptionRecords: 'Documents d\'Adoption',
-      citizenshipDocuments: 'Documents de Citoyenneté',
-      naturalizationDocuments: 'Documents de Naturalisation',
-      visaHistory: 'Historique des Visas',
-
-      // Tab 3 - Address & Residency
-      // Some of these fields are already translated
-      previousAddresses: 'Adresses Précédentes',
-      homeOwnership: 'Propriété du Domicile',
-      rentalDetails: 'Détails de Location',
-      utilityBills: 'Factures de Services Publics',
-      propertyRecords: 'Registres de Propriété',
-      residencyDuration: 'Durée de Résidence',
-
-      // Tab 4 - Identity & Travel Documents
-      // Some of these fields are already translated
-      nationalIDNumber: 'Numéro de Carte d\'Identité Nationale',
-      passportNumber: 'Numéro de Passeport',
-      passportExpiry: 'Date d\'Expiration du Passeport',
-      visaType: 'Type de Visa',
-      visaNumber: 'Numéro de Visa',
-      visaExpiry: 'Date d\'Expiration du Visa',
-
-      // Tab 5 - Health & Medical Records
-      medicalHistory: 'Antécédents Médicaux',
-      vaccinations: 'Vaccinations',
-      healthInsurance: 'Assurance Santé',
-      bloodType: 'Groupe Sanguin',
-      organDonor: 'Statut de Donneur d\'Organes',
-      allergies: 'Allergies',
-      currentMedications: 'Médicaments Actuels',
-      chronicConditions: 'Conditions Chroniques',
-
-      // Tab 6 - Employment & Economic Data
-      // Some of these fields are already translated
-      employmentStatus: 'Statut d\'Emploi',
-      occupation: 'Profession',
-      employerName: 'Nom de l\'Employeur',
-      employerAddress: 'Adresse de l\'Employeur',
-      employmentHistory: 'Historique d\'Emploi',
-      annualIncome: 'Revenu Annuel',
-      workPermitNumber: 'Numéro de Permis de Travail',
-      workPermitExpiry: 'Date d\'Expiration du Permis de Travail',
-
-      // Tab 7 - Education & Academic Records
-      // Some of these fields are already translated
-      highestEducation: 'Niveau d\'Éducation le Plus Élevé',
-      institutionName: 'Nom de l\'Institution',
-      graduationYear: 'Année d\'Obtention du Diplôme',
-      fieldOfStudy: 'Domaine d\'Étude',
-      additionalCertifications: 'Certifications Supplémentaires',
-      languages: 'Langues Parlées',
-      academicAchievements: 'Réalisations Académiques',
-
-      // Tab 8 - Financial & Tax Data
-      // Some of these fields are already translated
-      accountNumber: 'Numéro de Compte',
-      bankName: 'Nom de la Banque',
-      financialAssets: 'Actifs Financiers',
-      liabilities: 'Passifs',
-      creditScore: 'Score de Crédit',
-      taxIdentificationNumber: 'Numéro d\'Identification Fiscale',
-      lastTaxReturn: 'Dernière Déclaration Fiscale',
-      taxExemptions: 'Exonérations Fiscales'
-    },
-    actions: {
-      cancel: 'Annuler',
-      save: 'Enregistrer',
-      previous: 'Précédent',
-      next: 'Suivant',
-      saving: 'Enregistrement...'
-    },
-    tabComingSoon: 'Cet onglet est en cours de développement et sera bientôt disponible.',
-    saveSuccess: 'Profil enregistré avec succès',
-    loadError: 'Erreur lors du chargement du profil',
-    saveError: 'Erreur lors de l\'enregistrement du profil',
-    confirmCancel: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir annuler?',
-    uploadPhoto: 'Télécharger une photo',
-    uploadFile: 'Télécharger un fichier',
-    photoRequirements: 'La photo doit être claire, récente et montrer votre visage complet',
-    biometricRequirements: 'Seuls les fichiers de données biométriques officiels sont acceptés',
-    requiredFields: 'Champs obligatoires',
-    documentUpload: 'Téléchargement de Documents',
-    validationTitle: 'Veuillez corriger les erreurs suivantes:',
-    completionStatus: '{percent}% complété',
-    validation: {
-      nameRequired: 'Le nom complet est requis',
-      dobRequired: 'La date de naissance est requise',
-      dobFuture: 'La date de naissance ne peut pas être dans le futur'
+      publicServiceRoles: 'Rôles dans la fonction publique'
     },
     placeholders: {
       fullName: 'Entrez votre nom légal complet',
       nationality: 'Entrez votre nationalité',
+      searchCountries: 'Rechercher des pays...',
+      selectCountry: 'Sélectionnez un pays',
       searchDisciplines: "Rechercher des disciplines...",
       selectDiscipline: "Sélectionner une discipline",
       searchDegrees: "Rechercher des diplômes...",
       selectDegree: "Sélectionner un diplôme"
     },
-
-    noMatchingDegrees: "Aucun diplôme correspondant trouvé",
-    degreeOptions: [
-      "Diplôme d'associé",
-      "Licence en lettres (BA)",
-      "Licence en sciences (BS)",
-      "Licence en ingénierie (BEng)",
-      "Licence en administration des affaires (BBA)",
-      "Licence en beaux-arts (BFA)",
-      "Licence en éducation (BEd)",
-      "Licence en médecine (MBBS)",
-      "Licence en droit (LLB)",
-      "Master en lettres (MA)",
-      "Master en sciences (MS)",
-      "Master en administration des affaires (MBA)",
-      "Master en ingénierie (MEng)",
-      "Master en beaux-arts (MFA)",
-      "Master en éducation (MEd)",
-      "Master en droit (LLM)",
-      "Master en santé publique (MPH)",
-      "Doctorat en philosophie (PhD)",
-      "Doctorat en médecine (MD)",
-      "Doctorat en éducation (EdD)",
-      "Doctorat en administration des affaires (DBA)",
-      "Doctorat en jurisprudence (JD)",
-      "Diplôme professionnel",
-      "Diplôme technique",
-      "Certificat professionnel",
-      "Certificat d'études supérieures",
-      "Diplôme post-universitaire",
-      "Post-doctoral"
-    ],
+    validation: {
+      nameRequired: 'Le nom complet est requis',
+      dobRequired: 'La date de naissance est requise',
+      dobFuture: 'La date de naissance ne peut pas être dans le futur',
+      requiredField: 'Le champ {field} est requis',
+      invalidFormat: 'Format invalide pour le champ {field}',
+      futureDate: 'La date ne peut pas être dans le futur',
+      invalidSelection: 'Veuillez faire une sélection valide',
+      passwordLength: 'Le mot de passe doit comporter au moins 8 caractères',
+      matchError: 'Les champs ne correspondent pas'
+    },
+    errors: {
+      savingFailed: 'Échec de l\'enregistrement du profil',
+      loadingFailed: 'Échec du chargement des données du profil',
+      invalidForm: 'Veuillez remplir tous les champs obligatoires',
+      invalidFileType: 'Type de fichier invalide',
+      fileTooLarge: 'Le fichier est trop volumineux',
+      countryLoadError: 'Erreur lors du chargement des pays',
+      countryUpdateError: 'Erreur lors de la mise à jour du pays'
+    },
+    notifications: {
+      saveSuccess: 'Profil enregistré avec succès',
+      saveFailed: 'Échec de l\'enregistrement du profil',
+      loadSuccess: 'Profil chargé avec succès',
+      loadFailed: 'Échec du chargement du profil',
+      fieldRequired: 'Ce champ est obligatoire',
+      uploadSuccess: 'Fichier téléchargé avec succès',
+      uploadFailed: 'Échec du téléchargement du fichier',
+      formChanged: 'Vous avez des modifications non enregistrées',
+      sessionExpired: 'Votre session a expiré, veuillez vous reconnecter',
+      profileUpdated: 'Votre profil a été mis à jour',
+      profileIncomplete: 'Votre profil est incomplet'
+    },
+    instructions: {
+      fullNameHelp: 'Entrez votre nom légal complet tel qu\'il apparaît sur vos documents officiels',
+      dobHelp: 'Entrez votre date de naissance au format JJ/MM/AAAA',
+      uploadPhotoHelp: 'Téléchargez une photo récente. Le fichier doit être au format JPG, PNG ou GIF et peser moins de 2 Mo',
+      passwordHelp: 'Le mot de passe doit comporter au moins 8 caractères avec une lettre majuscule, un chiffre et un caractère spécial',
+      documentHelp: 'Formats acceptés : PDF, JPG, PNG (max 5 Mo)',
+      requiredFields: 'Les champs marqués d\'un * sont obligatoires',
+      selectFromList: 'Veuillez sélectionner une option dans la liste',
+      nextTab: 'Continuer vers la section suivante',
+      previousTab: 'Retourner à la section précédente',
+      saveInstructions: 'Cliquez sur Enregistrer pour stocker vos informations',
+      cancelInstructions: 'Cliquez sur Annuler pour abandonner les modifications'
+    },
+    completionStatus: {
+      notStarted: 'Non commencé',
+      inProgress: 'En cours',
+      complete: 'Terminé',
+      percentComplete: '{percent}% complété',
+      tabsCompleted: '{completed} sur {total} sections complétées',
+      tabComplete: 'Onglet complété !'
+    },
     gender: {
       male: 'Homme',
       female: 'Femme',
@@ -1255,223 +1180,40 @@ export default {
       widowed: 'Veuf/Veuve',
       other: 'Autre'
     },
-    select: 'Veuillez sélectionner',
-    existingFile: 'Fichier existant',
-    noMatchingDisciplines: "Aucune discipline correspondante trouvée",
-    educationOptions: [
-      "Comptabilité",
-      "Ingénierie aérospatiale",
-      "Sciences agricoles",
-      "Anthropologie",
-      "Architecture",
-      "Histoire de l'art",
-      "Intelligence artificielle",
-      "Astronomie",
-      "Astrophysique",
-      "Biochimie",
-      "Ingénierie biomédicale",
-      "Biotechnologie",
-      "Administration des affaires",
-      "Génie chimique",
-      "Chimie",
-      "Génie civil",
-      "Communications",
-      "Génie informatique",
-      "Informatique",
-      "Gestion de la construction",
-      "Justice pénale",
-      "Cybersécurité",
-      "Science des données",
-      "Dentisterie",
-      "Économie",
-      "Éducation",
-      "Génie électrique",
-      "Éducation primaire",
-      "Littérature anglaise",
-      "Génie environnemental",
-      "Sciences environnementales",
-      "Design de mode",
-      "Études cinématographiques",
-      "Finance",
-      "Beaux-arts",
-      "Science alimentaire",
-      "Science forensique",
-      "Conception de jeux",
-      "Géographie",
-      "Géologie",
-      "Design graphique",
-      "Administration de la santé",
-      "Histoire",
-      "Gestion hôtelière",
-      "Ressources humaines",
-      "Design industriel",
-      "Génie industriel",
-      "Systèmes d'information",
-      "Technologie de l'information",
-      "Design d'intérieur",
-      "Commerce international",
-      "Relations internationales",
-      "Journalisme",
-      "Droit",
-      "Bibliothéconomie",
-      "Linguistique",
-      "Gestion",
-      "Marketing",
-      "Science des matériaux",
-      "Mathématiques",
-      "Génie mécanique",
-      "Études des médias",
-      "Médecine",
-      "Météorologie",
-      "Microbiologie",
-      "Musique",
-      "Nanotechnologie",
-      "Soins infirmiers",
-      "Nutrition",
-      "Ergothérapie",
-      "Océanographie",
-      "Génie pétrolier",
-      "Pharmacie",
-      "Philosophie",
-      "Photographie",
-      "Éducation physique",
-      "Physiothérapie",
-      "Physique",
-      "Sciences politiques",
-      "Psychologie",
-      "Administration publique",
-      "Santé publique",
-      "Relations publiques",
-      "Robotique",
-      "Éducation secondaire",
-      "Travail social",
-      "Sociologie",
-      "Génie logiciel",
-      "Éducation spécialisée",
-      "Gestion sportive",
-      "Statistiques",
-      "Génie des systèmes",
-      "Arts du théâtre",
-      "Tourisme",
-      "Urbanisme",
-      "Médecine vétérinaire",
-      "Développement web",
-      "Biologie de la faune",
-      "Zoologie"
-    ],
-    confirmSaveTitle: "Enregistrer le profil",
-    confirmSave: "Êtes-vous sûr de vouloir enregistrer ces modifications ?",
-    placeholders: {
-      searchCountries: 'Rechercher des pays...',
-      selectCountry: 'Sélectionnez un pays'
-    },
-    noMatchingCountries: 'Aucun pays correspondant trouvé',
-    fields: {
-      nationality: 'Nationalité',
-      country: 'Pays'
-    },
-    // Profile Icon Section
-    profileIcon: 'Icône de Profil',
-    change: 'Modifier',
-    chooseProfileIcon: 'Choisir une Icône de Profil',
-    presetIcons: 'Icônes Prédéfinies',
-    upload: 'Télécharger',
-    initials: 'Initiales',
-    clickToUpload: 'Cliquer pour télécharger',
-    useThisImage: 'Utiliser Cette Image',
-    useInitials: 'Utiliser les Initiales',
-
-    // Country Selection
-    countryLoadError: 'Erreur lors du chargement des pays',
-    countryUpdateError: 'Erreur lors de la mise à jour du pays',
-
-    // Education Section
-    searchResults: 'Résultats de Recherche',
-    noResults: 'Aucun Résultat',
-    searchingFor: 'Recherche de',
-
-    // Loading States
-    retryLoading: 'Réessayer',
-    loadingProfile: 'Chargement du profil utilisateur...',
-    savingProfile: 'Enregistrement du profil...',
-
-    // Error Messages
-    errors: {
-      savingFailed: 'Échec de l\'enregistrement du profil',
-      loadingFailed: 'Échec du chargement des données du profil',
-      invalidForm: 'Veuillez remplir tous les champs obligatoires',
-      invalidFileType: 'Type de fichier invalide',
-      fileTooLarge: 'Le fichier est trop volumineux'
-    },
-
-    // Confirmation & Success
-    tabComplete: 'Onglet complété!',
-    confirmDiscardChanges: 'Abandonner les modifications non enregistrées?',
-    // For consistency and completeness
-    confirmLeave: 'Êtes-vous sûr de vouloir quitter? Les modifications non enregistrées seront perdues.',
-    profileComplete: 'Profil complété avec succès',
-    fieldUpdated: 'Champ mis à jour avec succès',
-    nextSection: 'Section suivante',
-    previousSection: 'Section précédente',
-    uploadProgress: 'Progression du téléchargement: {percent}%',
-    navigationWarning: 'Veuillez compléter cette section avant de continuer',
-
-    // For form validation
-    validation: {
-      // Add to existing validation object
-      requiredField: '{field} est requis',
-      invalidFormat: 'Format invalide pour {field}',
-      futureDate: 'La date ne peut pas être dans le futur',
-      invalidSelection: 'Veuillez faire une sélection valide',
-      passwordLength: 'Le mot de passe doit comporter au moins 8 caractères',
-      matchError: 'Les champs ne correspondent pas'
-    },
-
-    // For accessibility
-    aria: {
-      tabList: 'Sections du formulaire de profil',
-      nextButton: 'Aller à la section suivante',
-      prevButton: 'Aller à la section précédente',
-      closeButton: 'Fermer le formulaire de profil',
-      saveButton: 'Enregistrer les données du profil',
-      requiredField: 'Champ obligatoire',
-      dropdownSelect: 'Sélectionner une option'
-    },
-    // Employment status options
-    employmentStatuses: {
-      employed: 'Employé',
-      selfEmployed: 'Travailleur Indépendant',
-      unemployed: 'Sans Emploi',
-      student: 'Étudiant',
-      retired: 'Retraité',
-      homemaker: 'Au Foyer',
+    residencyStatuses: {
+      citizen: 'Citoyen',
+      permanentResident: 'Résident permanent',
+      temporaryResident: 'Résident temporaire',
       other: 'Autre'
     },
-
-    // Education level options
+    employmentStatuses: {
+      employed: 'Employé(e)',
+      selfEmployed: 'Indépendant(e)',
+      unemployed: 'Sans emploi',
+      student: 'Étudiant(e)',
+      retired: 'Retraité(e)',
+      homemaker: 'Au foyer',
+      other: 'Autre'
+    },
     educationLevels: {
-      primary: 'Éducation Primaire',
-      secondary: 'Éducation Secondaire',
+      primary: 'Enseignement primaire',
+      secondary: 'Enseignement secondaire',
       highSchool: 'Lycée',
-      vocational: 'Formation Professionnelle',
-      associate: 'Diplôme d\'Associé',
+      vocational: 'Formation professionnelle',
+      associate: 'Diplôme d\'associé',
       bachelor: 'Licence',
       master: 'Master',
       doctoral: 'Doctorat',
-      professional: 'Diplôme Professionnel',
+      professional: 'Diplôme professionnel',
       other: 'Autre'
     },
-
-    // Language proficiency levels
     proficiencyLevels: {
-      native: 'Langue Maternelle',
+      native: 'Natif',
       fluent: 'Courant',
       advanced: 'Avancé',
       intermediate: 'Intermédiaire',
-      basic: 'Notions de Base'
+      basic: 'Notions de base'
     },
-
-    // Blood type options (shown in dropdown)
     bloodTypes: {
       aPositive: 'A+',
       aNegative: 'A-',
@@ -1483,8 +1225,6 @@ export default {
       oNegative: 'O-',
       unknown: 'Inconnu'
     },
-
-    // Languages spoken
     languages: {
       english: 'Anglais',
       french: 'Français',
@@ -1500,43 +1240,55 @@ export default {
       urdu: 'Ourdou',
       other: 'Autre'
     },
-    // Notification messages
-    notifications: {
-      saveSuccess: 'Profil enregistré avec succès',
-      saveFailed: 'Échec de l\'enregistrement du profil',
-      loadSuccess: 'Profil chargé avec succès',
-      loadFailed: 'Échec du chargement du profil',
-      fieldRequired: 'Ce champ est obligatoire',
-      uploadSuccess: 'Fichier téléchargé avec succès',
-      uploadFailed: 'Échec du téléchargement du fichier',
-      formChanged: 'Vous avez des modifications non enregistrées',
-      sessionExpired: 'Votre session a expiré, veuillez vous reconnecter',
-      profileUpdated: 'Votre profil a été mis à jour',
-      profileIncomplete: 'Votre profil est incomplet'
+    yesNo: {
+      yes: 'Oui',
+      no: 'Non'
     },
-
-    // Form instructions and help text
-    instructions: {
-      fullNameHelp: 'Entrez votre nom complet légal tel qu\'il apparaît sur vos documents officiels',
-      dobHelp: 'Entrez votre date de naissance au format JJ/MM/AAAA',
-      uploadPhotoHelp: 'Téléchargez une photo récente. Le fichier doit être au format JPG, PNG ou GIF et inférieur à 2 Mo',
-      passwordHelp: 'Le mot de passe doit comporter au moins 8 caractères avec une lettre majuscule, un chiffre et un caractère spécial',
-      documentHelp: 'Formats acceptés : PDF, JPG, PNG (max 5 Mo)',
-      requiredFields: 'Les champs marqués d\'un * sont obligatoires',
-      selectFromList: 'Veuillez sélectionner une option dans la liste',
-      nextTab: 'Continuer vers la section suivante',
-      previousTab: 'Retourner à la section précédente',
-      saveInstructions: 'Cliquez sur Enregistrer pour stocker vos informations',
-      cancelInstructions: 'Cliquez sur Annuler pour abandonner les modifications'
-    },
-
-    // Section completion status
-    completionStatus: {
-      notStarted: 'Non Commencé',
-      inProgress: 'En Cours',
-      complete: 'Terminé',
-      percentComplete: '{percent}% Complété',
-      tabsCompleted: '{completed} sur {total} sections complétées'
+    select: 'Veuillez sélectionner',
+    existingFile: 'Fichier existant',
+    noMatchingCountries: 'Aucun pays correspondant trouvé',
+    noMatchingDisciplines: "Aucune discipline correspondante trouvée",
+    noMatchingDegrees: "Aucun diplôme correspondant trouvé",
+    educationOptions: [
+      "Comptabilité", "Ingénierie aérospatiale", "Sciences agricoles", "Anthropologie", "Architecture",
+      "Histoire de l'art", "Intelligence artificielle", "Astronomie", "Astrophysique", "Biochimie",
+      "Ingénierie biomédicale", "Biotechnologie", "Administration des affaires", "Génie chimique",
+      "Chimie", "Génie civil", "Communications", "Génie informatique", "Informatique",
+      "Gestion de la construction", "Justice pénale", "Cybersécurité", "Science des données", "Dentisterie",
+      "Économie", "Éducation", "Génie électrique", "Éducation primaire", "Littérature anglaise",
+      "Génie environnemental", "Sciences de l'environnement", "Design de mode", "Études cinématographiques",
+      "Finance", "Beaux-arts", "Science alimentaire", "Science forensique", "Conception de jeux", "Géographie",
+      "Géologie", "Design graphique", "Administration de la santé", "Histoire", "Gestion hôtelière",
+      "Ressources humaines", "Design industriel", "Génie industriel", "Systèmes d'information",
+      "Technologie de l'information", "Design d'intérieur", "Commerce international", "Relations internationales",
+      "Journalisme", "Droit", "Bibliothéconomie", "Linguistique", "Gestion", "Marketing",
+      "Science des matériaux", "Mathématiques", "Génie mécanique", "Études des médias", "Médecine",
+      "Météorologie", "Microbiologie", "Musique", "Nanotechnologie", "Soins infirmiers", "Nutrition",
+      "Ergothérapie", "Océanographie", "Génie pétrolier", "Pharmacie", "Philosophie",
+      "Photographie", "Éducation physique", "Physiothérapie", "Physique", "Sciences politiques",
+      "Psychologie", "Administration publique", "Santé publique", "Relations publiques", "Robotique",
+      "Éducation secondaire", "Travail social", "Sociologie", "Génie logiciel", "Éducation spécialisée",
+      "Gestion sportive", "Statistiques", "Génie des systèmes", "Arts du théâtre", "Tourisme",
+      "Urbanisme", "Médecine vétérinaire", "Développement web", "Biologie de la faune", "Zoologie"
+    ],
+    degreeOptions: [
+      "Diplôme d'associé", "Licence ès lettres (BA)", "Licence ès sciences (BS)", "Licence en ingénierie (BEng)",
+      "Licence en administration des affaires (BBA)", "Licence en beaux-arts (BFA)", "Licence en éducation (BEd)",
+      "Licence en médecine (MBBS)", "Licence en droit (LLB)", "Master ès lettres (MA)", "Master ès sciences (MS)",
+      "Master en administration des affaires (MBA)", "Master en ingénierie (MEng)", "Master en beaux-arts (MFA)",
+      "Master en éducation (MEd)", "Master en droit (LLM)", "Master en santé publique (MPH)",
+      "Doctorat en philosophie (PhD)", "Doctorat en médecine (MD)", "Doctorat en éducation (EdD)",
+      "Doctorat en administration des affaires (DBA)", "Doctorat en jurisprudence (JD)", "Diplôme professionnel",
+      "Diplôme technique", "Certificat professionnel", "Certificat d'études supérieures", "Diplôme post-universitaire", "Post-doctorat"
+    ],
+    aria: {
+      tabList: 'Sections du formulaire de profil',
+      nextButton: 'Aller à la section suivante',
+      prevButton: 'Aller à la section précédente',
+      closeButton: 'Fermer le formulaire de profil',
+      saveButton: 'Enregistrer les données du profil',
+      requiredField: 'Champ obligatoire',
+      dropdownSelect: 'Sélectionner une option'
     }
   },
   chatbot: {
@@ -1545,57 +1297,55 @@ export default {
     fileReceived: 'Fichier reçu avec succès.',
     fileUploadError: 'Erreur lors du téléversement du fichier.',
     processingError: 'Erreur lors du traitement de votre demande.',
-    welcomeMessage: 'Bienvenue! Comment puis-je vous aider avec les services du gouvernement kenyan aujourd\'hui?',
+    welcomeMessage: 'Bienvenue ! Comment puis-je vous aider aujourd\'hui avec les services du gouvernement kényan ?',
     attachFile: 'Joindre un fichier',
     fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de {maxSize}.',
-    saveChat: 'Enregistrer la Conversation',
-    chatTitle: 'Titre de la Conversation',
-    chatTitlePlaceholder: 'Entrez un titre pour cette conversation',
-    selectFolder: 'Sélectionner un Dossier',
-    newChat: 'Nouvelle Conversation',
-    clearContext: 'Effacer le contexte et démarrer une nouvelle conversation',
-    unsavedChanges: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle conversation?',
+    saveChat: 'Enregistrer la discussion',
+    chatSaved: 'Discussion enregistrée',
+    chatTitle: 'Titre de la discussion',
+    chatTitlePlaceholder: 'Entrez un titre pour cette discussion',
+    selectFolder: 'Sélectionner un dossier',
+    newChat: 'Nouvelle discussion',
+    clearContext: 'Effacer le contexte et démarrer une nouvelle discussion',
+    unsavedChanges: 'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle discussion ?',
     whatCanIHelp: "Comment puis-je vous aider aujourd'hui ?",
     justChat: "Simplement discuter",
+    queryContext: "Contexte de la requête",
     contextAdded: 'Contexte ajouté à votre requête',
     contextRemoved: 'Contexte supprimé de votre requête',
     sessionUpdated: 'Session mise à jour',
-    newChatStarted: 'Nouvelle conversation démarrée',
-    loadError: 'Impossible de charger l\'historique de conversation',
+    newChatStarted: 'Nouvelle discussion démarrée',
+    loadError: 'Impossible de charger l\'historique des discussions',
     responsePrefix: "J'ai reçu votre message",
     withContext: "avec le contexte",
-    sessionUpdated: "Session mise à jour.",
-    newChatStarted: "Nouvelle conversation démarrée.",
-    conversationLoaded: "Conversation chargée avec succès !",
-    loadError: "Impossible de charger la conversation.",
-    saveConfirmTitle: "Enregistrer la Conversation Existante",
-    saveConfirmMessage: "Enregistrer la conversation existante ?",
-    loadConfirmTitle: "Charger une Conversation Existante",
-    loadConfirmMessage: "Vous avez des modifications non enregistrées. Voulez-vous les abandonner et charger la conversation sélectionnée, ou enregistrer la conversation actuelle d'abord ?",
-    loadAndDiscard: "Charger et Abandonner",
-    saveAndLoad: "Enregistrer et Charger",
-    saveAndStartNew: "Enregistrer et Démarrer une Nouvelle",
-    discardAndStartNew: "Abandonner et Démarrer une Nouvelle",
-    newChatTitle: "Démarrer une Nouvelle Conversation"
+    conversationLoaded: "Discussion chargée avec succès !",
+    saveConfirmTitle: "Enregistrer la discussion existante",
+    saveConfirmMessage: "Enregistrer la discussion existante ?",
+    loadConfirmTitle: "Charger une discussion existante",
+    loadConfirmMessage: "Vous avez des modifications non enregistrées. Voulez-vous les ignorer et charger la discussion sélectionnée, ou enregistrer d'abord la discussion actuelle ?",
+    loadAndDiscard: "Charger et ignorer",
+    saveAndLoad: "Enregistrer et charger",
+    saveAndStartNew: "Enregistrer et commencer une nouvelle",
+    discardAndStartNew: "Ignorer et commencer une nouvelle",
+    newChatTitle: "Commencer une nouvelle discussion"
   },
   quickhelp: {
     applyForID: "Demander une pièce d'identité",
-    payTaxes: "Payer des impôts",
+    payTaxes: "Payer les impôts",
     startBusiness: "Créer une entreprise",
     findHealthcare: "Trouver des soins de santé",
     educationServices: "Services d'éducation",
-    transportLicenses: "Transport et permis",
+    transportLicenses: "Transports et permis",
     housingPrograms: "Programmes de logement",
     findJobs: "Trouver un emploi",
-    justChat: "Simplement discuter",
-    // Prompts as separate keys with a clear naming pattern
-    justChatPrompt: "Je voudrais discuter des services gouvernementaux",
-    applyForIDPrompt: "J'ai besoin d'informations sur la procédure de demande d'une carte d'identité nationale",
-    payTaxesPrompt: "Quelle est la procédure pour payer mes impôts en ligne ?",
+    justChat: "Discuter simplement",
+    justChatPrompt: "J'aimerais discuter des services gouvernementaux",
+    applyForIDPrompt: "J'ai besoin d'informations sur la manière de demander une carte d'identité nationale",
+    payTaxesPrompt: "Quel est le processus pour payer mes impôts en ligne ?",
     startBusinessPrompt: "Guidez-moi à travers les étapes pour enregistrer une nouvelle entreprise",
-    findHealthcarePrompt: "Où puis-je trouver des informations sur les services de santé publique ?",
+    findHealthcarePrompt: "Où puis-je trouver des informations sur les services de santé publics ?",
     educationServicesPrompt: "Quels services éducatifs sont disponibles pour mes enfants ?",
-    transportLicensesPrompt: "Comment renouveler mon permis de conduire ?",
+    transportLicensesPrompt: "Comment puis-je renouveler mon permis de conduire ?",
     housingProgramsPrompt: "Parlez-moi des programmes de logement abordable au Kenya",
     findJobsPrompt: "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles ?"
   },
@@ -1607,31 +1357,32 @@ export default {
     delete: 'Supprimer'
   },
   feedback: {
-    title: 'Retour d\'information',
+    title: 'Commentaires',
+    button: 'Commentaires',
     positive: 'Avis positif',
     negative: 'Avis négatif',
-    promptText: 'Cette réponse a-t-elle été utile?',
+    promptText: 'Cette réponse a-t-elle été utile ?',
     placeholder: 'Commentaires supplémentaires...',
-    submit: 'Soumettre',
+    submit: 'Envoyer les commentaires',
     close: 'Annuler',
-    thankYouMessage: 'Merci pour votre retour d\'information!',
+    thankYouMessage: 'Merci pour vos commentaires !',
     submitting: 'Envoi en cours...',
-    success: 'Merci pour votre avis !',
-    error: 'Impossible de soumettre votre avis. Veuillez réessayer.'
+    error: 'Une erreur s\'est produite. Veuillez réessayer.',
+    success: 'Merci pour vos commentaires !',
   },
   responseRating: {
-    title: 'Aidez-nous à Améliorer',
-    note: 'Vos commentaires seront utilisés pour mieux ajuster le chatbot et améliorer les réponses au fil du temps.',
-    chatbotResponse: 'Réponse du Chatbot:',
+    title: 'Aidez-nous à nous améliorer',
+    note: 'Vos commentaires seront utilisés pour affiner le chatbot et améliorer les réponses au fil du temps.',
+    chatbotResponse: 'Réponse du chatbot :',
     ratingLabels: {
       1: 'Inutile',
-      2: 'Légèrement Utile',
-      3: 'Modérément Utile',
-      4: 'Très Utile',
-      5: 'Révolutionnaire'
+      2: 'Peu utile',
+      3: 'Modérément utile',
+      4: 'Très utile',
+      5: 'Exceptionnel'
     },
     additionalComments: 'Commentaires supplémentaires...',
-    submit: 'Soumettre',
+    submit: 'Envoyer',
     cancel: 'Annuler'
   }
 }

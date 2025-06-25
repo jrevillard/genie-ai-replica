@@ -1563,19 +1563,22 @@ export default {
     },
 
     getTabTitle() {
-      if (this.currentSecondLevelTab === "all") {
-        return this.safeT("sidebar.allChats", "All Chats");
-      } else if (this.currentSecondLevelTab === "starred") {
-        return this.safeT("sidebar.starredChats", "Starred");
-      } else if (this.currentSecondLevelTab === "archived") {
-        return this.safeT("sidebar.archivedChats", "Archived");
-      } else if (this.currentSecondLevelTab === "folders") {
-        return this.folderSelected && this.selectedFolder
-          ? this.selectedFolder.name
-          : this.safeT("sidebar.folders", "Folders");
+      switch (this.currentSecondLevelTab) {
+        case "all":
+          return this.safeT("sidebar.allChats", "All Chats");
+        case "folders":
+          // If a specific folder is selected, show its name, otherwise show the tab title.
+          return this.folderSelected && this.selectedFolder
+            ? this.selectedFolder.name
+            : this.safeT("sidebar.tab.folders", "Folders");
+        case "starred":
+          return this.safeT("sidebar.tab.starred", "Starred");
+        case "archived":
+          return this.safeT("sidebar.tab.archived", "Archived");
+        default:
+          // Fallback to a generic title if something goes wrong
+          //return this.safeT("sidebar.chats", "Chats");
       }
-
-      return this.safeT("sidebar.chats", "Chats");
     },
 
     getEmptyStateMessage() {

@@ -2,29 +2,81 @@
 
 export default {
   countries: {
-    // Selected common countries shown here, in production you would include all countries
     'AF': 'Afghanistan',
+    'AL': 'Albania',
     'DZ': 'Algeria',
+    'AD': 'Andorra',
     'AO': 'Angola',
+    'AG': 'Antigua and Barbuda',
     'AR': 'Argentina',
+    'AM': 'Armenia',
     'AU': 'Australia',
     'AT': 'Austria',
+    'AZ': 'Azerbaijan',
+    'BS': 'Bahamas',
+    'BH': 'Bahrain',
     'BD': 'Bangladesh',
+    'BB': 'Barbados',
+    'BY': 'Belarus',
     'BE': 'Belgium',
+    'BZ': 'Belize',
+    'BJ': 'Benin',
+    'BT': 'Bhutan',
+    'BO': 'Bolivia',
+    'BA': 'Bosnia and Herzegovina',
+    'BW': 'Botswana',
     'BR': 'Brazil',
+    'BN': 'Brunei',
+    'BG': 'Bulgaria',
+    'BF': 'Burkina Faso',
+    'BI': 'Burundi',
+    'CV': 'Cabo Verde',
+    'KH': 'Cambodia',
     'CM': 'Cameroon',
     'CA': 'Canada',
+    'CF': 'Central African Republic',
+    'TD': 'Chad',
     'CL': 'Chile',
     'CN': 'China',
     'CO': 'Colombia',
-    'CD': 'Democratic Republic of the Congo',
+    'KM': 'Comoros',
+    'CG': 'Congo',
+    'CD': 'Congo, Democratic Republic of the',
+    'CR': 'Costa Rica',
+    'CI': 'Côte d\'Ivoire',
+    'HR': 'Croatia',
+    'CU': 'Cuba',
+    'CY': 'Cyprus',
+    'CZ': 'Czechia',
     'DK': 'Denmark',
+    'DJ': 'Djibouti',
+    'DM': 'Dominica',
+    'DO': 'Dominican Republic',
+    'EC': 'Ecuador',
     'EG': 'Egypt',
+    'SV': 'El Salvador',
+    'GQ': 'Equatorial Guinea',
+    'ER': 'Eritrea',
+    'EE': 'Estonia',
     'ET': 'Ethiopia',
+    'FJ': 'Fiji',
     'FI': 'Finland',
     'FR': 'France',
+    'GA': 'Gabon',
+    'GM': 'Gambia',
+    'GE': 'Georgia',
     'DE': 'Germany',
     'GH': 'Ghana',
+    'GR': 'Greece',
+    'GD': 'Grenada',
+    'GT': 'Guatemala',
+    'GN': 'Guinea',
+    'GW': 'Guinea-Bissau',
+    'GY': 'Guyana',
+    'HT': 'Haiti',
+    'HN': 'Honduras',
+    'HU': 'Hungary',
+    'IS': 'Iceland',
     'IN': 'India',
     'ID': 'Indonesia',
     'IR': 'Iran',
@@ -32,22 +84,60 @@ export default {
     'IE': 'Ireland',
     'IL': 'Israel',
     'IT': 'Italy',
+    'JM': 'Jamaica',
     'JP': 'Japan',
     'JO': 'Jordan',
+    'KZ': 'Kazakhstan',
     'KE': 'Kenya',
+    'KI': 'Kiribati',
+    'KP': 'Korea, North',
+    'KR': 'Korea, South',
     'KW': 'Kuwait',
+    'KG': 'Kyrgyzstan',
+    'LA': 'Laos',
+    'LV': 'Latvia',
     'LB': 'Lebanon',
+    'LS': 'Lesotho',
+    'LR': 'Liberia',
+    'LY': 'Libya',
+    'LI': 'Liechtenstein',
+    'LT': 'Lithuania',
+    'LU': 'Luxembourg',
     'MG': 'Madagascar',
+    'MW': 'Malawi',
     'MY': 'Malaysia',
+    'MV': 'Maldives',
+    'ML': 'Mali',
+    'MT': 'Malta',
+    'MH': 'Marshall Islands',
+    'MR': 'Mauritania',
+    'MU': 'Mauritius',
     'MX': 'Mexico',
+    'FM': 'Micronesia',
+    'MD': 'Moldova',
+    'MC': 'Monaco',
+    'MN': 'Mongolia',
+    'ME': 'Montenegro',
     'MA': 'Morocco',
     'MZ': 'Mozambique',
+    'MM': 'Myanmar',
+    'NA': 'Namibia',
+    'NR': 'Nauru',
+    'NP': 'Nepal',
     'NL': 'Netherlands',
     'NZ': 'New Zealand',
+    'NI': 'Nicaragua',
+    'NE': 'Niger',
     'NG': 'Nigeria',
+    'MK': 'North Macedonia',
     'NO': 'Norway',
+    'OM': 'Oman',
     'PK': 'Pakistan',
-    'PS': 'Palestine',
+    'PW': 'Palau',
+    'PS': 'Palestine, State of',
+    'PA': 'Panama',
+    'PG': 'Papua New Guinea',
+    'PY': 'Paraguay',
     'PE': 'Peru',
     'PH': 'Philippines',
     'PL': 'Poland',
@@ -55,24 +145,54 @@ export default {
     'QA': 'Qatar',
     'RO': 'Romania',
     'RU': 'Russia',
+    'RW': 'Rwanda',
+    'KN': 'Saint Kitts and Nevis',
+    'LC': 'Saint Lucia',
+    'VC': 'Saint Vincent and the Grenadines',
+    'WS': 'Samoa',
+    'SM': 'San Marino',
+    'ST': 'Sao Tome and Principe',
     'SA': 'Saudi Arabia',
     'SN': 'Senegal',
+    'RS': 'Serbia',
+    'SC': 'Seychelles',
+    'SL': 'Sierra Leone',
     'SG': 'Singapore',
+    'SK': 'Slovakia',
+    'SI': 'Slovenia',
+    'SB': 'Solomon Islands',
+    'SO': 'Somalia',
     'ZA': 'South Africa',
+    'SS': 'South Sudan',
     'ES': 'Spain',
+    'LK': 'Sri Lanka',
     'SD': 'Sudan',
+    'SR': 'Suriname',
+    'SZ': 'Eswatini',
     'SE': 'Sweden',
     'CH': 'Switzerland',
     'SY': 'Syria',
+    'TW': 'Taiwan',
+    'TJ': 'Tajikistan',
     'TZ': 'Tanzania',
     'TH': 'Thailand',
+    'TL': 'Timor-Leste',
+    'TG': 'Togo',
+    'TO': 'Tonga',
+    'TT': 'Trinidad and Tobago',
     'TN': 'Tunisia',
     'TR': 'Turkey',
+    'TM': 'Turkmenistan',
+    'TV': 'Tuvalu',
     'UG': 'Uganda',
     'UA': 'Ukraine',
     'AE': 'United Arab Emirates',
     'GB': 'United Kingdom',
     'US': 'United States',
+    'UY': 'Uruguay',
+    'UZ': 'Uzbekistan',
+    'VU': 'Vanuatu',
+    'VA': 'Vatican City',
     'VE': 'Venezuela',
     'VN': 'Vietnam',
     'YE': 'Yemen',
@@ -90,9 +210,7 @@ export default {
     proceedToLogin: 'Proceed to Login',
     backToLogin: 'Back to Login'
   },
-
   admin: {
-    // General dashboard labels
     huduma: 'Huduma AI',
     dashboard: 'Dashboard',
     system: 'System',
@@ -106,15 +224,13 @@ export default {
     loading: 'Loading...',
     close: 'Close dashboard',
     edit: 'Edit',
-
-    // Stats and metrics
     systemUptime: 'System Uptime',
     avgResponseTime: 'Average Response Time',
     errorRate: 'Error Rate',
     activeUsers: 'Active Users',
+    monthlyActiveUsers: 'Monthly Active Users (MAU)',
     fromLastMonth: 'from last month',
-
-    // Tab labels
+    today: 'Today',
     tabs: {
       overview: 'System Health',
       database: 'Database',
@@ -122,13 +238,9 @@ export default {
       security: 'Security',
       users: 'Users'
     },
-
-    // System health
     systemHealthStatus: 'System Health Status',
     runDiagnostics: 'Run Diagnostics',
     resourceUsage: 'Resource Usage',
-
-    // Service names
     services: {
       apiServices: 'API Services',
       database: 'Database',
@@ -137,23 +249,17 @@ export default {
       messageQueue: 'Message Queue',
       externalApi: 'External API'
     },
-
-    // Resource types
     resources: {
       cpu: 'CPU Usage',
       memory: 'Memory Usage',
       storage: 'Storage Usage',
       network: 'Network Bandwidth'
     },
-
-    // Database management
     databaseManagement: 'Database Management',
     reindexDatabase: 'Reindex Database',
     lastReindex: 'Last Reindex',
     databaseSize: 'Database Size',
     totalTables: 'Total Tables',
-
-    // Log management
     logManagement: 'Log Management',
     rolloverLogs: 'Rollover Logs',
     searchLogs: 'Search Logs',
@@ -162,35 +268,17 @@ export default {
     logService: 'Service',
     logMessage: 'Message',
     showingEntries: 'Showing {start}-{end} of {total} entries',
-
-    // Log levels
     logLevels: {
       error: 'ERROR',
       warn: 'WARN',
       info: 'INFO',
       debug: 'DEBUG'
     },
-
-    // Log messages
     logMessages: {
       connectionTimeout: 'Connection timeout to external provider',
       lowDiskSpace: 'Disk space below 10% threshold',
       userRoleUpdated: 'User role updated for admin@huduma.ai'
     },
-
-    // Security monitoring
-    securityMonitoring: 'Security Monitoring',
-    securityScan: 'Security Scan',
-    failedLoginAttempts: 'Failed Login Attempts (24h)',
-    suspiciousActivities: 'Suspicious Activities (24h)',
-    lastSecurityScan: 'Last Security Scan',
-    vulnerabilitiesFound: 'Vulnerabilities Found',
-    daysAgo: 'days ago',
-    critical: 'critical',
-    medium: 'medium',
-    low: 'low',
-
-    // User management
     userName: 'Name',
     userEmail: 'Email',
     userRole: 'Role',
@@ -199,8 +287,6 @@ export default {
     roleAdministrator: 'Administrator',
     roleUser: 'User',
     statusActive: 'Active',
-
-    // Database actions
     dbActions: {
       reindex: 'Reindex',
       backup: 'Backup',
@@ -209,7 +295,6 @@ export default {
       backupDesc: 'Create database backup',
       optimizeDesc: 'Optimize query performance'
     },
-
     operations: {
       reindexTitle: 'Database Reindex Results',
       backupTitle: 'Database Backup Results',
@@ -226,54 +311,43 @@ export default {
       errorDetails: 'Error Details',
       close: 'Close',
       resultsTitle: 'Operation Results',
-      reindexDatabase: 'Reindex Database',
-      backupDatabase: 'Backup Database',
-      optimizeDatabase: 'Optimize Database',
-      dbActions: {
-        reindex: 'Reindex',
-        backup: 'Backup',
-        optimize: 'Optimize',
-        reindexDesc: 'Rebuild database indexes',
-        backupDesc: 'Create database backup',
-        optimizeDesc: 'Optimize query performance'
+      reindexDatabase: {
+        success: 'Database reindexing completed successfully',
+        error: 'Error during database reindexing',
+        loading: 'Reindexing database...'
       },
-      lastReindex: 'Last Reindex',
-      databaseSize: 'Database Size',
-      totalTables: 'Total Tables',
-      operations: {
-        reindexDatabase: {
-          success: 'Database reindexing completed successfully',
-          error: 'Error during database reindexing',
-          loading: 'Reindexing database...'
-        },
-        backupDatabase: {
-          success: 'Database backup completed successfully',
-          error: 'Error during database backup',
-          loading: 'Backing up database...'
-        },
-        optimizeDatabase: {
-          success: 'Database optimization completed successfully',
-          error: 'Error during database optimization',
-          loading: 'Optimizing database...'
-        },
-        rolloverLogs: {
-          success: 'Log rollover completed successfully',
-          loading: 'Rolling over logs...'
-        },
-        searchLogs: {
-          success: 'Log search completed',
-          loading: 'Searching logs...'
-        },
-        runDiagnostics: {
-          success: 'Diagnostics completed successfully',
-          loading: 'Running diagnostics...'
-        },
-        runSecurityScan: {
-          success: 'Security scan completed successfully',
-          loading: 'Running security scan...'
-        }
+      backupDatabase: {
+        success: 'Database backup completed successfully',
+        error: 'Error during database backup',
+        loading: 'Backing up database...'
       },
-      monthlyActiveUsers: 'Monthly Active Users (MAU)',
+      optimizeDatabase: {
+        success: 'Database optimization completed successfully',
+        error: 'Error during database optimization',
+        loading: 'Optimizing database...'
+      },
+      rolloverLogs: {
+        success: 'Log rollover completed successfully',
+        loading: 'Rolling over logs...'
+      },
+      searchLogs: {
+        success: 'Log search completed',
+        loading: 'Searching logs...'
+      },
+      runDiagnostics: {
+        success: 'Diagnostics completed successfully',
+        loading: 'Running diagnostics...'
+      },
+      runSecurityScan: {
+        success: 'Security scan completed successfully',
+        loading: 'Running security scan...'
+      },
+      cancel: 'Cancel',
+      save: 'Save Changes'
+    },
+    userManagementSection: {
+      totalUsers: 'Total Users',
+      newUsers: 'New Users (Month)',
       searchUsers: 'Search users...',
       clearSearch: 'Clear search',
       search: 'Search',
@@ -287,11 +361,18 @@ export default {
       of: 'of',
       previous: 'Previous',
       next: 'Next',
-      runningSecurityScan: 'Running Scan...',
-      securityRecommendations: 'Security Recommendations',
-      totalUsers: 'Total Users',
-      newUsers: 'New Users (Month)',
-      today: 'Today',
+      searchFields: {
+        all: 'All Fields',
+        name: 'Name',
+        email: 'Email',
+        role: 'Role'
+      },
+      userSearch: {
+        resultsFound: 'Found {total} users matching "{term}"',
+        error: 'Error searching users'
+      }
+    },
+    logsSection: {
       errorLogs: 'Error Logs',
       warningLogs: 'Warning Logs',
       noErrorLogs: 'No error logs recorded today.',
@@ -302,8 +383,6 @@ export default {
       viewAllResults: 'View All Results',
       logType: 'Type',
       logCount: 'Count',
-
-      // Log types
       logTypes: {
         connectionTimeout: 'Connection timeout',
         databaseFailed: 'Database query failed',
@@ -312,42 +391,56 @@ export default {
         slowQuery: 'Slow query performance',
         rateLimit: 'Rate limit approaching'
       },
-
-      // Security section
-      security: {
-        criticalVulnerabilities: 'Critical Vulnerabilities',
-        authenticationIssues: 'Authentication Issues',
-        occurrences: 'Occurrences',
-        firstSeen: 'First Seen',
-        lastSeen: 'Last Seen',
-        timestamp: 'Timestamp',
-        message: 'Message',
-        service: 'Service',
-        showLess: 'Show Less',
-        showMore: 'Show All Authentication Issues',
-        recommendedAction: 'Recommended Action',
-        noVulnerabilitiesFound: 'No Vulnerabilities Found',
-        systemSecure: 'Your system appears to be secure. Continue monitoring regularly.'
-      },
-
-      // Search fields
-      searchFields: {
-        all: 'All Fields',
-        name: 'Name',
-        email: 'Email',
-        role: 'Role'
-      },
-
-      // User search
-      userSearch: {
-        resultsFound: 'Found {total} users matching "{term}"',
-        error: 'Error searching users'
-      },
-
       logSearch: {
         noResultsFound: 'No logs matched your search criteria',
         resultsFound: 'Found {count} log entries'
       }
+    },
+    security: {
+      title: 'Security Monitoring',
+      securityScan: 'Security Scan',
+      runningSecurityScan: 'Running Scan...',
+      lastSecurityScan: 'Last Security Scan',
+      vulnerabilitiesFound: 'Vulnerabilities Found',
+      daysAgo: 'days ago',
+      critical: 'critical',
+      medium: 'medium',
+      low: 'low',
+      failedLoginAttempts: 'Failed Login Attempts (24h)',
+      suspiciousActivities: 'Suspicious Activities (24h)',
+      securityRecommendations: 'Security Recommendations',
+      criticalVulnerabilities: 'Critical Vulnerabilities',
+      mediumVulnerabilities: 'Medium Vulnerabilities',
+      lowVulnerabilities: 'Low Vulnerabilities',
+      authenticationIssues: 'Authentication Issues',
+      suspiciousActivityLogs: 'Suspicious Activity Logs',
+      securityProbeAttempts: 'Security Probe Attempts Detected',
+      sensitiveFileAccess: 'attempts to access sensitive files or endpoints detected',
+      envFileAccess: 'Environment File Access Attempts',
+      envFileAccessDesc: 'attempts to access .env files detected',
+      gitRepoAccess: 'Git Repository Access Attempts',
+      gitRepoAccessDesc: 'attempts to access Git repository files detected',
+      recommendedAction: 'Recommended Action',
+      rateLimitRecommendation: 'Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place.',
+      envFileRecommendation: 'Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files.',
+      gitRepoRecommendation: 'Make sure .git directories are properly secured and not accessible from the web.',
+      noVulnerabilitiesFound: 'No Vulnerabilities Found',
+      systemSecure: 'Your system appears to be secure. Continue monitoring regularly.',
+      loadingScan: 'Loading scan results...',
+      occurrences: 'Occurrences',
+      firstSeen: 'First Seen',
+      lastSeen: 'Last Seen',
+      timestamp: 'Timestamp',
+      message: 'Message',
+      service: 'Service',
+      type: 'Type',
+      severity: 'Severity',
+      url: 'URL',
+      matchedTerm: 'Matched Term',
+      lineNumber: 'Line Number',
+      lineNumbers: 'Line Numbers',
+      showLess: 'Show Less',
+      showMore: 'Show All Issues'
     },
     userEdit: {
       title: 'Edit User',
@@ -388,10 +481,6 @@ export default {
       logoutForced: 'User has been logged out',
       logoutFailed: 'Failed to force logout',
       errorForcingLogout: 'Error forcing logout'
-    },
-    operations: {
-      cancel: 'Cancel',
-      save: 'Save Changes'
     }
   },
   passwordResetConfirm: {
@@ -449,7 +538,6 @@ export default {
     resetRequestFailed: 'Unable to send password reset link. Please try again.',
     checkEmail: 'Please check your email for further instructions.'
   },
-
   register: {
     appTitle: "Huduma AI",
     createAccount: "Create New Account",
@@ -485,12 +573,8 @@ export default {
     verificationResent: "Verification email has been resent",
     verificationResendFailed: "Failed to resend verification email. Please try again.",
     usernameInvalidChars: 'Username can only contain letters, numbers, underscores, dots and hyphens',
-    networkError: 'Network error. Please check your connection and try again.',
-    registrationFailed: 'Registration failed. Please try again.',
     networkError: 'Network error. Please check your connection and try again.'
   },
-
-  // Login section
   login: {
     appTitle: 'Huduma AI',
     username: 'Username',
@@ -506,9 +590,8 @@ export default {
     forgotPassword: 'Forgot password?',
     noAccount: 'Don\'t have an account?',
     createAccount: 'Create account',
-    termsAndPolicy: 'By logging in, you agree to our Terms of Service and Privacy Policy',
-    noAccount: "Don't have an account?",
     registerNow: "Register now",
+    termsAndPolicy: 'By logging in, you agree to our Terms of Service and Privacy Policy',
     loggingIn: "Logging in...",
     fieldsRequired: "Username and password are required",
     invalidCredentials: "Invalid username or password",
@@ -531,15 +614,13 @@ export default {
     usageTrend: 'Usage Trend'
   },
   analytics: {
-    // Dashboard header and controls
     title: 'Data Analytics & Insights',
+    loading: 'Loading analytics data...',
     period: 'Time Period',
-
     charts: {
       satisfactionHeatmap: "Satisfaction by Knowledge Area",
       satisfactionSubtitle: "Percentage scores over time"
     },
-
     timePeriods: {
       week4: "4 Weeks Ago",
       week3: "3 Weeks Ago",
@@ -547,85 +628,62 @@ export default {
       week1: "Last Week",
       current: "Current"
     },
-
     errors: {
       loading: "Failed to load satisfaction data. Please try again.",
     },
-
     status: {
-      loading: "Loading...",
-      noData: "No data available",
+      loading: 'Loading...',
+      noData: 'No data available for this period',
+      error: 'Failed to load analytics data',
       online: "System Online",
       offline: "System Offline",
       responseTime: "Avg. Response Time",
       queueLength: "Queue",
       uptime: "Uptime"
     },
-
-    // Period dropdown options
     periods: {
       daily: 'Daily',
       weekly: 'Weekly',
       monthly: 'Monthly',
       allTime: 'All Time'
     },
-
-    // Metrics section titles and values
     metrics: {
       totalQueries: 'Total Queries',
       uniqueUsers: 'Unique Users',
       avgResponseTime: 'Avg Response Time',
       satisfaction: 'User Satisfaction'
     },
-
-    // Table headers and labels
     table: {
       rank: 'Rank',
       query: 'Query',
       count: 'Count',
       avgTime: 'Avg. Time'
     },
-
-    // Chart labels and legends
     chartLabels: {
-      categories: 'Areas',  // Changed from 'Categories'
-      serviceCategories: 'Knowledge Areas',  // Changed from 'Service Categories'
-      byUsage: 'by Usage',  // No change
-      category: 'Area'  // Changed from 'Category'  
+      categories: 'Areas',
+      serviceCategories: 'Knowledge Areas',
+      byUsage: 'by Usage',
+      category: 'Area'
     },
-
-    // Tooltips and hints
     tooltips: {
       selectPeriod: 'Select time period',
       selectDate: 'Select date',
       exportData: 'Export data'
-    },
-
-    // Status messages
-    status: {
-      loading: 'Loading analytics data...',
-      noData: 'No data available for this period',
-      error: 'Failed to load analytics data'
     },
     gauge: {
       historical: 'Historical Trends',
       vsPrevious: 'vs previous period',
       target: 'Target'
     },
-
     ratings: {
       poor: "Poor",
       average: "Average",
       good: "Good",
       excellent: "Excellent"
     },
-
-    // Trend indicators
     slower: 'slower',
     faster: 'faster',
     percentage: 'Percentage',
-
-    // Additional analytics fields
     note: 'Below are usage stats and user feedback summaries.',
     usageStats: 'Usage Statistics',
     peakUsers: 'Peak Concurrent Users',
@@ -641,15 +699,11 @@ export default {
     dateRange: 'Date Range',
     startDate: 'Start Date',
     endDate: 'End Date',
-
-    // Added for AnalyticsComponent.vue
     rank: 'Rank',
     query: 'Query',
     count: 'Count',
     avgTime: 'Avg. Time',
     serviceUsage: 'Knowledge Area Usage',
-
-    // Added for UsageTrendChart.vue
     usageTrends: 'Usage Trends',
     week: 'Last Week',
     month: 'Last Month',
@@ -670,7 +724,12 @@ export default {
     profile: 'My Profile',
     toggleSidebar: 'Toggle sidebar',
     changeLanguage: 'Change language',
-    administration: "Administration"
+    administration: "Administration",
+    languages: {
+      english: 'English',
+      french: 'French',
+      swahili: 'Swahili'
+    }
   },
   systemStatus: {
     title: 'Service Status',
@@ -693,7 +752,6 @@ export default {
     businessReg: 'Business Registration',
     drivingLicense: 'Driving License'
   },
-  // Deadline titles
   deadlines: {
     taxFiling: 'Tax Filing Deadline',
     businessRenewal: 'Business License Renewal',
@@ -701,9 +759,9 @@ export default {
     vehicleRegistration: 'Vehicle Registration Deadline'
   },
   sidebar: {
-    governmentServices: 'Knowledge Areas', // Changed from 'Government Services'
+    governmentServices: 'Knowledge Areas',
     chatHistory: 'Chat History',
-    searchPlaceholder: 'Search knowledge areas...', // Changed from 'Search services...'
+    searchPlaceholder: 'Search knowledge areas...',
     createFolder: 'Create Folder',
     editFolder: 'Edit Folder',
     folderName: 'Folder Name',
@@ -724,36 +782,28 @@ export default {
     weatherLoading: "Loading weather data...",
     weatherError: "Unable to load weather data. Please try again.",
     folders: "Folders",
-    emptyFolder: "No chats in this folder",
+    emptyFolder: "This folder is empty. Move conversations here from the chat menu.",
     title: 'Info & Resources',
-    chatHistory: 'Recent Chats',
-    noChats: 'No recent chats',
-    relatedDocs: 'Related Documents',
-    noDocuments: 'No related documents',
-    faq: 'Frequently Asked Questions',
-    title: 'Info & Resources',
-    chatHistory: 'Recent Chats',
     noChats: 'No recent chats',
     relatedDocs: 'Related Documents',
     noDocuments: 'No related documents',
     faq: 'Frequently Asked Questions',
     tab: {
-      all: 'All',
+      all: 'All Chats',
       folders: 'Folders',
       starred: 'Starred',
       archived: 'Archived'
     },
     savedChats: 'Saved Chats',
-    folders: "Folders",
+    chats: "Chats",
     allChats: "All Chats",
-    noFolder: "All Chats",
-    starredChats: "Starred",
-    archivedChats: "Archived",
-    emptyFolder: "This folder is empty. Move conversations here from the chat menu.",
+    noFolder: "No Folder",
+    starredChats: "Starred Chats",
+    archivedChats: "Archived Chats",
     noStarredChats: "No starred conversations yet. Star a conversation to add it here.",
     noArchivedChats: "No archived conversations yet.",
     noSearchResults: 'No conversations found for "{term}"',
-    loadingChats: "Loading chats...",
+    loadingChats: "Loading conversations...",
     errorLoadingConversations: "Failed to load conversations. Please try again.",
     errorLoadingUser: "User data is incomplete. Please reload the page.",
     errorNoUser: "User data is missing. Please reload the page.",
@@ -778,118 +828,65 @@ export default {
     errorMovingChat: "Failed to move conversation",
     noPreview: "No preview available",
     searchConversations: 'Search conversations...',
-    title: "Info & Resources",
+    selectFolderInstruction: "Select a folder to view its conversations",
+    folderCreated: "Folder created successfully",
+    errorCreatingFolder: "Failed to create folder",
+    errorLoadingFolders: "Failed to load folders",
+    folderUpdated: "Folder updated successfully",
+    errorUpdatingFolder: "Failed to update folder",
+    folderDeleted: "Folder deleted successfully",
+    errorDeletingFolder: "Failed to delete folder",
+    chatRemovedFromFolders: "Conversation removed from folder",
+    errorRemovingChat: "Failed to remove conversation from folder"
   },
   leftPanel: {
     cat1: {
       name: '1. Identity & Civil Registration',
-      children: [
-        'Birth certificates',
-        'National ID cards',
-        'Passports',
-        'Marriage and death certificates',
-        'Voter registration'
-      ]
+      children: ['Birth certificates', 'National ID cards', 'Passports', 'Marriage and death certificates', 'Voter registration']
     },
     cat2: {
       name: '2. Healthcare & Social Services',
-      children: [
-        'Public healthcare access',
-        'Vaccination programs',
-        'Health insurance',
-        'Disability benefits',
-        'Welfare and food assistance'
-      ]
+      children: ['Public healthcare access', 'Vaccination programs', 'Health insurance', 'Disability benefits', 'Welfare and food assistance']
     },
     cat3: {
       name: '3. Education & Learning',
-      children: [
-        'Public schools and universities',
-        'Scholarships and student loans',
-        'Adult education programs',
-        'Online learning resources'
-      ]
+      children: ['Public schools and universities', 'Scholarships and student loans', 'Adult education programs', 'Online learning resources']
     },
     cat4: {
       name: '4. Employment & Labor Services',
-      children: [
-        'Job search and unemployment benefits',
-        'Worker protections and labor rights',
-        'Workplace safety regulations',
-        'Skills training and apprenticeships'
-      ]
+      children: ['Job search and unemployment benefits', 'Worker protections and labor rights', 'Workplace safety regulations', 'Skills training and apprenticeships']
     },
     cat5: {
       name: '5. Taxes & Revenue',
-      children: [
-        'Income tax filing and refunds',
-        'Property tax payments',
-        'Business tax compliance',
-        'Customs and import duties'
-      ]
+      children: ['Income tax filing and refunds', 'Property tax payments', 'Business tax compliance', 'Customs and import duties']
     },
     cat6: {
       name: '6. Public Safety & Justice',
-      children: [
-        'Police and emergency services',
-        'Court and legal aid services',
-        'Crime reporting',
-        'Consumer protection laws'
-      ]
+      children: ['Police and emergency services', 'Court and legal aid services', 'Crime reporting', 'Consumer protection laws']
     },
     cat7: {
       name: '7. Transportation & Mobility',
-      children: [
-        "Driver's licenses and vehicle registration",
-        'Public transit and infrastructure',
-        'Traffic violations and fines',
-        'Road safety programs'
-      ]
+      children: ["Driver's licenses and vehicle registration", 'Public transit and infrastructure', 'Traffic violations and fines', 'Road safety programs']
     },
     cat8: {
       name: '8. Housing & Urban Development',
-      children: [
-        'Public housing assistance',
-        'Property registration and land records',
-        'Housing loans and subsidies',
-        'Zoning and building permits'
-      ]
+      children: ['Public housing assistance', 'Property registration and land records', 'Housing loans and subsidies', 'Zoning and building permits']
     },
     cat9: {
       name: '9. Utilities & Environment',
-      children: [
-        'Water and electricity services',
-        'Waste management and recycling',
-        'Environmental regulations',
-        'Renewable energy initiatives'
-      ]
+      children: ['Water and electricity services', 'Waste management and recycling', 'Environmental regulations', 'Renewable energy initiatives']
     },
     cat10: {
       name: '10. Business & Trade',
-      children: [
-        'Business registration and licensing',
-        'Trade regulations and permits',
-        'Small business grants and incentives',
-        'E-commerce and digital business support'
-      ]
+      children: ['Business registration and licensing', 'Trade regulations and permits', 'Small business grants and incentives', 'E-commerce and digital business support']
     },
     cat11: {
       name: '11. Social Security & Pensions',
-      children: [
-        'Retirement benefits',
-        'Pension fund management',
-        'Survivor benefits',
-        'Disability pensions'
-      ]
+      children: ['Retirement benefits', 'Pension fund management', 'Survivor benefits', 'Disability pensions']
     },
     cat12: {
       name: '12. Community & Civic Engagement',
-      children: [
-        'Voting and elections',
-        'Public feedback and citizen complaints',
-        'Volunteering and community programs',
-        'Local government participation'
-      ]
+      children: ['Voting and elections', 'Public feedback and citizen complaints', 'Volunteering and community programs', 'Local government participation']
     }
   },
   settings: {
@@ -897,6 +894,8 @@ export default {
     save: 'Save',
     close: 'Close',
     saveSettings: 'Save Settings',
+    savingSettings: "Saving your settings...",
+    settingsSaved: "Settings saved successfully!",
     saveSuccess: 'Settings saved successfully',
     saveError: 'Error saving settings',
     display: 'Display',
@@ -930,35 +929,22 @@ export default {
     confirmEmailChange: 'Confirm Email Change',
     pleaseEnterPassword: 'Please enter your password',
     cancel: 'Cancel',
-    // Account section
     account: {
       title: 'Account',
-      resetUserData: 'Reset User Data',
       resetDescription: 'This will clear all your profile data and chat history.',
       confirmReset: 'Are you sure you want to reset all your data? This cannot be undone.',
       resetComplete: 'Your data has been reset.'
     },
-    // Language section
     language: {
       title: 'Language',
       selectLabel: 'Display Language'
     },
-    // Appearance section
     appearance: {
       title: 'Appearance',
-      theme: 'Theme',
       lightTheme: 'Light',
       darkTheme: 'Dark',
-      systemTheme: 'System',
-      fontSize: 'Font Size'
+      systemTheme: 'System'
     },
-    // Notifications section
-    notifications: {
-      title: 'Notifications',
-      emailUpdates: 'Email updates',
-      soundEnabled: 'Sound notifications'
-    },
-    // Added delete account translations
     confirmDeleteAccount: 'Are you sure you want to delete your account? This action cannot be undone.',
     confirmAccountDeletion: 'Confirm Account Deletion',
     accountDeletionWarning: 'Warning: This action is permanent and cannot be undone. All your data will be permanently deleted.',
@@ -989,14 +975,40 @@ export default {
     unableToLoadUser: 'Unable to load user information. Please try again.',
     retry: 'Retry',
     user: 'User',
-    account: 'Account',
-    loadingUserInfo: 'Loading user information...'
+    loadingUserInfo: 'Loading user information...',
+    resetUserDataTitle: "Reset User Data",
+    confirmResetUserData: "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.",
+    reset: "Reset",
+    deleteAccountTitle: "Delete Account"
   },
   userProfile: {
     title: 'User Profile',
-    privacyInfo:
-      "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
+    privacyInfo: "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
     privacyPolicyLink: 'Privacy Policy',
+    tabComingSoon: 'This tab is under development and will be available soon.',
+    saveSuccess: 'Profile saved successfully',
+    loadError: 'Error loading profile data',
+    saveError: 'Error saving profile',
+    confirmSaveTitle: "Save Profile",
+    confirmSave: "Are you sure you want to save these changes?",
+    confirmCancel: 'You have unsaved changes. Are you sure you want to cancel?',
+    confirmLeave: 'Are you sure you want to leave? Any unsaved changes will be lost.',
+    confirmDiscardChanges: 'Discard unsaved changes?',
+    uploadPhoto: 'Upload Photo',
+    uploadFile: 'Upload File',
+    photoRequirements: 'Photo must be clear, recent, and show your full face',
+    biometricRequirements: 'Only official biometric data files are accepted',
+    documentUpload: 'Document Upload',
+    validationTitle: 'Please correct the following errors:',
+    profileIcon: 'Profile Icon',
+    change: 'Change',
+    chooseProfileIcon: 'Choose a Profile Icon',
+    presetIcons: 'Preset Icons',
+    upload: 'Upload',
+    initials: 'Initials',
+    clickToUpload: 'Click to upload',
+    useThisImage: 'Use This Image',
+    useInitials: 'Use Initials',
     tabs: {
       tab1: 'Personal Identification Data',
       tab2: 'Civil Registration & Documentation',
@@ -1011,180 +1023,6 @@ export default {
       tab11: 'Transportation & Mobility',
       tab12: 'Civic & Political Participation'
     },
-    residencyStatuses: {
-      citizen: 'Citizen',
-      permanentResident: 'Permanent Resident',
-      temporaryResident: 'Temporary Resident',
-      other: 'Other'
-    },
-    yesNo: {
-      yes: 'Yes',
-      no: 'No'
-    },
-    fields: {
-      // Tab 1
-      fullName: 'Full name (including aliases)',
-      dob: 'Date of birth',
-      gender: 'Gender',
-      nationality: 'Nationality',
-      maritalStatus: 'Marital status',
-      photograph: 'Photograph',
-      biometric: 'Fingerprints / Biometric data',
-      // Tab 2
-      birthCert: 'Birth certificate',
-      deathCert: 'Death certificate',
-      marriageDivorce: 'Marriage / Divorce records',
-      adoption: 'Adoption records',
-      citizenship: 'Citizenship / Naturalization documents',
-      immigration: 'Immigration & visa history',
-      // Tab 3
-      currentAddress: 'Current residential address',
-      previousAddresses: 'Previous addresses',
-      homeOrRental: 'Homeownership or rental details',
-      utilityBills: 'Utility bills linked to the address',
-      landRecords: 'Land and property ownership records',
-      // Tab 4
-      idCard: 'National ID card number',
-      passport: 'Passport details',
-      driversLicense: "Driver's license",
-      voterId: 'Voter ID',
-      ssn: 'Social Security / National Insurance Number',
-      militaryRecords: 'Military service records',
-      // Tab 5
-      medicalHistory: 'Medical history and health conditions',
-      vaccinations: 'Vaccination records',
-      insuranceDetails: 'Health insurance details',
-      disability: 'Disability status',
-      organDonor: 'Organ donor status',
-      prescriptions: 'Prescriptions and treatments received',
-      mentalHealth: 'Mental health history',
-      // Tab 6
-      eHistory: 'Employment history',
-      currentEmployer: 'Current employer details',
-      workPermits: 'Work permits and labor contracts',
-      certifications: 'Professional certifications and licenses',
-      unemployment: 'Unemployment status and benefits received',
-      tin: 'Taxpayer identification number (TIN)',
-      businessAffiliations: 'Business ownership and company affiliations',
-      // Tab 7
-      schools: 'School and university attended',
-      diplomas: 'Diplomas, degrees, and certifications',
-      performance: 'Academic performance and test scores',
-      scholarships: 'Scholarships and financial aid received',
-      // Tab 8
-      incomeTax: 'Income tax records',
-      bankAccounts: 'Banking and financial accounts',
-      propertyTax: 'Property tax payments',
-      businessTax: 'Business tax filings',
-      pensionContrib: 'Pension contributions and withdrawals',
-      loanAid: 'Loan and government aid records',
-      // Tab 9
-      pensionStatus: 'Pension status and contributions',
-      childcare: 'Childcare support',
-      foodAssistance: 'Food assistance / welfare programs',
-      housingAssistance: 'Housing assistance',
-      // Tab 10
-      policeRecords: 'Police records (criminal history, arrests, charges)',
-      courtCases: 'Court case history',
-      finesPenalties: 'Fines and penalties',
-      paroleProbation: 'Parole or probation status',
-      citizenshipRevocation: 'Citizenship revocation (if applicable)',
-      // Tab 11
-      vehicleReg: 'Vehicle registration details',
-      trafficViolations: 'Traffic violations and fines',
-      licenseHistory: 'Driving license history and endorsements',
-      publicTransportCard: 'Public transport card usage',
-      // Tab 12
-      voterRegistration: 'Voter registration details',
-      electionHistory: 'Election participation history',
-      partyMembership: 'Political party membership',
-      militaryStatus: 'Military service or conscription status',
-      publicServiceRoles: 'Public service roles',
-      //Additional
-      postalCode: 'Postal Code',
-      country: 'Country',
-      residencyStatus: 'Residency Status',
-      bloodType: 'Blood Type',
-      education: "Education",
-      degrees: "Degrees",
-      academicRecords: "Academic Records",
-      // Most of the core fields are already translated
-      dateOfBirth: 'Date of Birth',
-      profilePhoto: 'Profile Photo',
-      phoneNumber: 'Phone Number',
-      emailAddress: 'Email Address',
-      preferredLanguage: 'Preferred Language',
-
-      // Tab 2 - Civil Registration & Documentation
-      // Some of these fields are already translated
-      deathCertificate: 'Death Certificate',
-      marriageRecords: 'Marriage Records',
-      divorceRecords: 'Divorce Records',
-      adoptionRecords: 'Adoption Records',
-      citizenshipDocuments: 'Citizenship Documents',
-      naturalizationDocuments: 'Naturalization Documents',
-      visaHistory: 'Visa History',
-
-      // Tab 3 - Address & Residency
-      // Some of these fields are already translated
-      previousAddresses: 'Previous Addresses',
-      homeOwnership: 'Home Ownership',
-      rentalDetails: 'Rental Details',
-      utilityBills: 'Utility Bills',
-      propertyRecords: 'Property Records',
-      residencyDuration: 'Residency Duration',
-
-      // Tab 4 - Identity & Travel Documents
-      // Some of these fields are already translated
-      nationalIDNumber: 'National ID Number',
-      passportNumber: 'Passport Number',
-      passportExpiry: 'Passport Expiry',
-      visaType: 'Visa Type',
-      visaNumber: 'Visa Number',
-      visaExpiry: 'Visa Expiry',
-
-      // Tab 5 - Health & Medical Records
-      medicalHistory: 'Medical History',
-      vaccinations: 'Vaccinations',
-      healthInsurance: 'Health Insurance',
-      bloodType: 'Blood Type',
-      organDonor: 'Organ Donor Status',
-      allergies: 'Allergies',
-      currentMedications: 'Current Medications',
-      chronicConditions: 'Chronic Conditions',
-
-      // Tab 6 - Employment & Economic Data
-      // Some of these fields are already translated
-      employmentStatus: 'Employment Status',
-      occupation: 'Occupation',
-      employerName: 'Employer Name',
-      employerAddress: 'Employer Address',
-      employmentHistory: 'Employment History',
-      annualIncome: 'Annual Income',
-      workPermitNumber: 'Work Permit Number',
-      workPermitExpiry: 'Work Permit Expiry',
-
-      // Tab 7 - Education & Academic Records
-      // Some of these fields are already translated
-      highestEducation: 'Highest Education Level',
-      institutionName: 'Institution Name',
-      graduationYear: 'Graduation Year',
-      fieldOfStudy: 'Field of Study',
-      additionalCertifications: 'Additional Certifications',
-      languages: 'Languages Spoken',
-      academicAchievements: 'Academic Achievements',
-
-      // Tab 8 - Financial & Tax Data
-      // Some of these fields are already translated
-      accountNumber: 'Account Number',
-      bankName: 'Bank Name',
-      financialAssets: 'Financial Assets',
-      liabilities: 'Liabilities',
-      creditScore: 'Credit Score',
-      taxIdentificationNumber: 'Tax Identification Number',
-      lastTaxReturn: 'Last Tax Return',
-      taxExemptions: 'Tax Exemptions'
-    },
     actions: {
       cancel: 'Cancel',
       save: 'Save Profile',
@@ -1192,65 +1030,144 @@ export default {
       next: 'Next',
       saving: 'Saving...'
     },
-    tabComingSoon: 'This tab is under development and will be available soon.',
-    saveSuccess: 'Profile saved successfully',
-    loadError: 'Error loading profile data',
-    saveError: 'Error saving profile data',
-    confirmCancel: 'You have unsaved changes. Are you sure you want to cancel?',
-    uploadPhoto: 'Upload Photo',
-    uploadFile: 'Upload File',
-    photoRequirements: 'Photo must be clear, recent, and show your full face',
-    biometricRequirements: 'Only official biometric data files are accepted',
-    requiredFields: 'Required fields',
-    documentUpload: 'Document Upload',
-    validationTitle: 'Please correct the following errors:',
-    completionStatus: '{percent}% complete',
-    validation: {
-      nameRequired: 'Full name is required',
-      dobRequired: 'Date of birth is required',
-      dobFuture: 'Date of birth cannot be in the future'
+    fields: {
+      fullName: 'Full name (including aliases)',
+      dob: 'Date of birth',
+      gender: 'Gender',
+      nationality: 'Nationality',
+      maritalStatus: 'Marital status',
+      photograph: 'Photograph',
+      biometric: 'Fingerprints / Biometric data',
+      birthCert: 'Birth certificate',
+      deathCert: 'Death certificate',
+      marriageDivorce: 'Marriage / Divorce records',
+      adoption: 'Adoption records',
+      citizenship: 'Citizenship / Naturalization documents',
+      immigration: 'Immigration & visa history',
+      currentAddress: 'Current residential address',
+      previousAddresses: 'Previous addresses',
+      postalCode: 'Postal Code',
+      country: 'Country',
+      residencyStatus: 'Residency Status',
+      homeOrRental: 'Homeownership or rental details',
+      utilityBills: 'Utility bills linked to the address',
+      landRecords: 'Land and property ownership records',
+      idCard: 'National ID card number',
+      passport: 'Passport details',
+      driversLicense: "Driver's license",
+      voterId: 'Voter ID',
+      ssn: 'Social Security / National Insurance Number',
+      militaryRecords: 'Military service records',
+      medicalHistory: 'Medical history and health conditions',
+      vaccinations: 'Vaccination records',
+      insuranceDetails: 'Health insurance details',
+      disability: 'Disability status',
+      bloodType: 'Blood Type',
+      organDonor: 'Organ donor status',
+      prescriptions: 'Prescriptions and treatments received',
+      mentalHealth: 'Mental health history',
+      eHistory: 'Employment history',
+      currentEmployer: 'Current employer details',
+      workPermits: 'Work permits and labor contracts',
+      certifications: 'Professional certifications and licenses',
+      unemployment: 'Unemployment status and benefits received',
+      tin: 'Taxpayer identification number (TIN)',
+      businessAffiliations: 'Business ownership and company affiliations',
+      schools: 'School and university attended',
+      education: 'Education',
+      degrees: 'Diplomas, degrees, and certifications',
+      performance: 'Academic performance and test scores',
+      academicRecords: "Academic Records",
+      scholarships: 'Scholarships and financial aid received',
+      incomeTax: 'Income tax records',
+      bankAccounts: 'Banking and financial accounts',
+      propertyTax: 'Property tax payments',
+      businessTax: 'Business tax filings',
+      pensionContrib: 'Pension contributions and withdrawals',
+      loanAid: 'Loan and government aid records',
+      pensionStatus: 'Pension status and contributions',
+      childcare: 'Childcare support',
+      foodAssistance: 'Food assistance / welfare programs',
+      housingAssistance: 'Housing assistance',
+      policeRecords: 'Police records (criminal history, arrests, charges)',
+      courtCases: 'Court case history',
+      finesPenalties: 'Fines and penalties',
+      paroleProbation: 'Parole or probation status',
+      citizenshipRevocation: 'Citizenship revocation (if applicable)',
+      vehicleReg: 'Vehicle registration details',
+      trafficViolations: 'Traffic violations and fines',
+      licenseHistory: 'Driving license history and endorsements',
+      publicTransportCard: 'Public transport card usage',
+      voterRegistration: 'Voter registration details',
+      electionHistory: 'Election participation history',
+      partyMembership: 'Political party membership',
+      militaryStatus: 'Military service or conscription status',
+      publicServiceRoles: 'Public service roles'
     },
     placeholders: {
       fullName: 'Enter your full legal name',
       nationality: 'Enter your nationality',
+      searchCountries: 'Search countries...',
+      selectCountry: 'Select a country',
       searchDisciplines: "Search disciplines...",
       selectDiscipline: "Select a discipline",
       searchDegrees: "Search degrees...",
       selectDegree: "Select a degree"
     },
-
-    noMatchingDegrees: "No matching degrees found",
-    degreeOptions: [
-      "Associate Degree",
-      "Bachelor of Arts (BA)",
-      "Bachelor of Science (BS)",
-      "Bachelor of Engineering (BEng)",
-      "Bachelor of Business Administration (BBA)",
-      "Bachelor of Fine Arts (BFA)",
-      "Bachelor of Education (BEd)",
-      "Bachelor of Medicine (MBBS)",
-      "Bachelor of Laws (LLB)",
-      "Master of Arts (MA)",
-      "Master of Science (MS)",
-      "Master of Business Administration (MBA)",
-      "Master of Engineering (MEng)",
-      "Master of Fine Arts (MFA)",
-      "Master of Education (MEd)",
-      "Master of Laws (LLM)",
-      "Master of Public Health (MPH)",
-      "Doctor of Philosophy (PhD)",
-      "Doctor of Medicine (MD)",
-      "Doctor of Education (EdD)",
-      "Doctor of Business Administration (DBA)",
-      "Doctor of Jurisprudence (JD)",
-      "Professional Diploma",
-      "Technical Diploma",
-      "Vocational Certificate",
-      "Graduate Certificate",
-      "Post-Graduate Diploma",
-      "Post-Doctoral"
-    ],
-
+    validation: {
+      nameRequired: 'Full name is required',
+      dobRequired: 'Date of birth is required',
+      dobFuture: 'Date of birth cannot be in the future',
+      requiredField: '{field} is required',
+      invalidFormat: 'Invalid format for {field}',
+      futureDate: 'Date cannot be in the future',
+      invalidSelection: 'Please make a valid selection',
+      passwordLength: 'Password must be at least 8 characters',
+      matchError: 'Fields do not match'
+    },
+    errors: {
+      savingFailed: 'Failed to save profile',
+      loadingFailed: 'Failed to load profile data',
+      invalidForm: 'Please fill all required fields',
+      invalidFileType: 'Invalid file type',
+      fileTooLarge: 'File is too large',
+      countryLoadError: 'Error loading countries',
+      countryUpdateError: 'Error updating country'
+    },
+    notifications: {
+      saveSuccess: 'Profile saved successfully',
+      saveFailed: 'Failed to save profile',
+      loadSuccess: 'Profile loaded successfully',
+      loadFailed: 'Failed to load profile',
+      fieldRequired: 'This field is required',
+      uploadSuccess: 'File uploaded successfully',
+      uploadFailed: 'Failed to upload file',
+      formChanged: 'You have unsaved changes',
+      sessionExpired: 'Your session has expired, please log in again',
+      profileUpdated: 'Your profile has been updated',
+      profileIncomplete: 'Your profile is incomplete'
+    },
+    instructions: {
+      fullNameHelp: 'Enter your full legal name as it appears on your official documents',
+      dobHelp: 'Enter your date of birth in MM/DD/YYYY format',
+      uploadPhotoHelp: 'Upload a recent photo. File must be JPG, PNG, or GIF and less than 2MB',
+      passwordHelp: 'Password must be at least 8 characters with one uppercase letter, one number, and one special character',
+      documentHelp: 'Accepted formats: PDF, JPG, PNG (max 5MB)',
+      requiredFields: 'Fields marked with * are required',
+      selectFromList: 'Please select an option from the list',
+      nextTab: 'Continue to next section',
+      previousTab: 'Return to previous section',
+      saveInstructions: 'Click Save to store your information',
+      cancelInstructions: 'Click Cancel to discard changes'
+    },
+    completionStatus: {
+      notStarted: 'Not Started',
+      inProgress: 'In Progress',
+      complete: 'Complete',
+      percentComplete: '{percent}% complete',
+      tabsCompleted: '{completed} of {total} sections completed',
+      tabComplete: 'Tab completed!'
+    },
     gender: {
       male: 'Male',
       female: 'Female',
@@ -1264,182 +1181,12 @@ export default {
       widowed: 'Widowed',
       other: 'Other'
     },
-    select: 'Please select',
-    existingFile: 'Existing file',
-    noMatchingDisciplines: "No matching disciplines found",
-    educationOptions: [
-      "Accounting",
-      "Aerospace Engineering",
-      "Agricultural Science",
-      "Anthropology",
-      "Architecture",
-      "Art History",
-      "Artificial Intelligence",
-      "Astronomy",
-      "Astrophysics",
-      "Biochemistry",
-      "Biomedical Engineering",
-      "Biotechnology",
-      "Business Administration",
-      "Chemical Engineering",
-      "Chemistry",
-      "Civil Engineering",
-      "Communications",
-      "Computer Engineering",
-      "Computer Science",
-      "Construction Management",
-      "Criminal Justice",
-      "Cybersecurity",
-      "Data Science",
-      "Dentistry",
-      "Economics",
-      "Education",
-      "Electrical Engineering",
-      "Elementary Education",
-      "English Literature",
-      "Environmental Engineering",
-      "Environmental Science",
-      "Fashion Design",
-      "Film Studies",
-      "Finance",
-      "Fine Arts",
-      "Food Science",
-      "Forensic Science",
-      "Game Design",
-      "Geography",
-      "Geology",
-      "Graphic Design",
-      "Health Administration",
-      "History",
-      "Hospitality Management",
-      "Human Resources",
-      "Industrial Design",
-      "Industrial Engineering",
-      "Information Systems",
-      "Information Technology",
-      "Interior Design",
-      "International Business",
-      "International Relations",
-      "Journalism",
-      "Law",
-      "Library Science",
-      "Linguistics",
-      "Management",
-      "Marketing",
-      "Materials Science",
-      "Mathematics",
-      "Mechanical Engineering",
-      "Media Studies",
-      "Medicine",
-      "Meteorology",
-      "Microbiology",
-      "Music",
-      "Nanotechnology",
-      "Nursing",
-      "Nutrition",
-      "Occupational Therapy",
-      "Oceanography",
-      "Petroleum Engineering",
-      "Pharmacy",
-      "Philosophy",
-      "Photography",
-      "Physical Education",
-      "Physical Therapy",
-      "Physics",
-      "Political Science",
-      "Psychology",
-      "Public Administration",
-      "Public Health",
-      "Public Relations",
-      "Robotics",
-      "Secondary Education",
-      "Social Work",
-      "Sociology",
-      "Software Engineering",
-      "Special Education",
-      "Sports Management",
-      "Statistics",
-      "Systems Engineering",
-      "Theatre Arts",
-      "Tourism",
-      "Urban Planning",
-      "Veterinary Medicine",
-      "Web Development",
-      "Wildlife Biology",
-      "Zoology"
-    ],
-    confirmSaveTitle: "Save Profile",
-    confirmSave: "Are you sure you want to save these changes?",
-    placeholders: {
-      searchCountries: 'Search countries...',
-      selectCountry: 'Select a country'
+    residencyStatuses: {
+      citizen: 'Citizen',
+      permanentResident: 'Permanent Resident',
+      temporaryResident: 'Temporary Resident',
+      other: 'Other'
     },
-    noMatchingCountries: 'No matching countries found',
-    profileIcon: 'Profile Icon',
-    change: 'Change',
-    chooseProfileIcon: 'Choose a Profile Icon',
-    presetIcons: 'Preset Icons',
-    upload: 'Upload',
-    initials: 'Initials',
-    clickToUpload: 'Click to upload',
-    useThisImage: 'Use This Image',
-    useInitials: 'Use Initials',
-    // Country Selection
-    countryLoadError: 'Error loading countries',
-    countryUpdateError: 'Error updating country',
-
-    // Education Section
-    searchResults: 'Search Results',
-    noResults: 'No Results',
-    searchingFor: 'Searching for',
-
-    // Loading States
-    retryLoading: 'Retry',
-    loadingProfile: 'Loading user profile...',
-    savingProfile: 'Saving profile...',
-
-    // Error Messages
-    errors: {
-      savingFailed: 'Failed to save profile',
-      loadingFailed: 'Failed to load profile data',
-      invalidForm: 'Please fill all required fields',
-      invalidFileType: 'Invalid file type',
-      fileTooLarge: 'File is too large'
-    },
-
-    // Confirmation & Success
-    tabComplete: 'Tab completed!',
-    confirmDiscardChanges: 'Discard unsaved changes?',
-    confirmLeave: 'Are you sure you want to leave? Any unsaved changes will be lost.',
-    profileComplete: 'Profile successfully completed',
-    fieldUpdated: 'Field updated successfully',
-    nextSection: 'Next section',
-    previousSection: 'Previous section',
-    uploadProgress: 'Upload progress: {percent}%',
-    navigationWarning: 'Please complete this section before proceeding',
-
-    // For form validation
-    validation: {
-      // Add to existing validation object
-      requiredField: '{field} is required',
-      invalidFormat: 'Invalid format for {field}',
-      futureDate: 'Date cannot be in the future',
-      invalidSelection: 'Please make a valid selection',
-      passwordLength: 'Password must be at least 8 characters',
-      matchError: 'Fields do not match'
-    },
-
-    // For accessibility
-    aria: {
-      tabList: 'Profile form sections',
-      nextButton: 'Go to next section',
-      prevButton: 'Go to previous section',
-      closeButton: 'Close profile form',
-      saveButton: 'Save profile data',
-      requiredField: 'Required field',
-      dropdownSelect: 'Select an option'
-    },
-    // Employment status options
     employmentStatuses: {
       employed: 'Employed',
       selfEmployed: 'Self-Employed',
@@ -1449,8 +1196,6 @@ export default {
       homemaker: 'Homemaker',
       other: 'Other'
     },
-
-    // Education level options
     educationLevels: {
       primary: 'Primary Education',
       secondary: 'Secondary Education',
@@ -1463,8 +1208,6 @@ export default {
       professional: 'Professional Degree',
       other: 'Other'
     },
-
-    // Language proficiency levels
     proficiencyLevels: {
       native: 'Native',
       fluent: 'Fluent',
@@ -1472,8 +1215,6 @@ export default {
       intermediate: 'Intermediate',
       basic: 'Basic'
     },
-
-    // Blood type options (shown in dropdown)
     bloodTypes: {
       aPositive: 'A+',
       aNegative: 'A-',
@@ -1485,8 +1226,6 @@ export default {
       oNegative: 'O-',
       unknown: 'Unknown'
     },
-
-    // Languages spoken
     languages: {
       english: 'English',
       french: 'French',
@@ -1502,43 +1241,55 @@ export default {
       urdu: 'Urdu',
       other: 'Other'
     },
-    // Notification messages
-    notifications: {
-      saveSuccess: 'Profile saved successfully',
-      saveFailed: 'Failed to save profile',
-      loadSuccess: 'Profile loaded successfully',
-      loadFailed: 'Failed to load profile',
-      fieldRequired: 'This field is required',
-      uploadSuccess: 'File uploaded successfully',
-      uploadFailed: 'Failed to upload file',
-      formChanged: 'You have unsaved changes',
-      sessionExpired: 'Your session has expired, please log in again',
-      profileUpdated: 'Your profile has been updated',
-      profileIncomplete: 'Your profile is incomplete'
+    yesNo: {
+      yes: 'Yes',
+      no: 'No'
     },
-
-    // Form instructions and help text
-    instructions: {
-      fullNameHelp: 'Enter your full legal name as it appears on your official documents',
-      dobHelp: 'Enter your date of birth in MM/DD/YYYY format',
-      uploadPhotoHelp: 'Upload a recent photo. File must be JPG, PNG, or GIF and less than 2MB',
-      passwordHelp: 'Password must be at least 8 characters with one uppercase letter, one number, and one special character',
-      documentHelp: 'Accepted formats: PDF, JPG, PNG (max 5MB)',
-      requiredFields: 'Fields marked with * are required',
-      selectFromList: 'Please select an option from the list',
-      nextTab: 'Continue to next section',
-      previousTab: 'Return to previous section',
-      saveInstructions: 'Click Save to store your information',
-      cancelInstructions: 'Click Cancel to discard changes'
-    },
-
-    // Section completion status
-    completionStatus: {
-      notStarted: 'Not Started',
-      inProgress: 'In Progress',
-      complete: 'Complete',
-      percentComplete: '{percent}% Complete',
-      tabsCompleted: '{completed} of {total} sections completed'
+    select: 'Please select',
+    existingFile: 'Existing file',
+    noMatchingCountries: 'No matching countries found',
+    noMatchingDisciplines: "No matching disciplines found",
+    noMatchingDegrees: "No matching degrees found",
+    educationOptions: [
+      "Accounting", "Aerospace Engineering", "Agricultural Science", "Anthropology", "Architecture",
+      "Art History", "Artificial Intelligence", "Astronomy", "Astrophysics", "Biochemistry",
+      "Biomedical Engineering", "Biotechnology", "Business Administration", "Chemical Engineering",
+      "Chemistry", "Civil Engineering", "Communications", "Computer Engineering", "Computer Science",
+      "Construction Management", "Criminal Justice", "Cybersecurity", "Data Science", "Dentistry",
+      "Economics", "Education", "Electrical Engineering", "Elementary Education", "English Literature",
+      "Environmental Engineering", "Environmental Science", "Fashion Design", "Film Studies",
+      "Finance", "Fine Arts", "Food Science", "Forensic Science", "Game Design", "Geography",
+      "Geology", "Graphic Design", "Health Administration", "History", "Hospitality Management",
+      "Human Resources", "Industrial Design", "Industrial Engineering", "Information Systems",
+      "Information Technology", "Interior Design", "International Business", "International Relations",
+      "Journalism", "Law", "Library Science", "Linguistics", "Management", "Marketing",
+      "Materials Science", "Mathematics", "Mechanical Engineering", "Media Studies", "Medicine",
+      "Meteorology", "Microbiology", "Music", "Nanotechnology", "Nursing", "Nutrition",
+      "Occupational Therapy", "Oceanography", "Petroleum Engineering", "Pharmacy", "Philosophy",
+      "Photography", "Physical Education", "Physical Therapy", "Physics", "Political Science",
+      "Psychology", "Public Administration", "Public Health", "Public Relations", "Robotics",
+      "Secondary Education", "Social Work", "Sociology", "Software Engineering", "Special Education",
+      "Sports Management", "Statistics", "Systems Engineering", "Theatre Arts", "Tourism",
+      "Urban Planning", "Veterinary Medicine", "Web Development", "Wildlife Biology", "Zoology"
+    ],
+    degreeOptions: [
+      "Associate Degree", "Bachelor of Arts (BA)", "Bachelor of Science (BS)", "Bachelor of Engineering (BEng)",
+      "Bachelor of Business Administration (BBA)", "Bachelor of Fine Arts (BFA)", "Bachelor of Education (BEd)",
+      "Bachelor of Medicine (MBBS)", "Bachelor of Laws (LLB)", "Master of Arts (MA)", "Master of Science (MS)",
+      "Master of Business Administration (MBA)", "Master of Engineering (MEng)", "Master of Fine Arts (MFA)",
+      "Master of Education (MEd)", "Master of Laws (LLM)", "Master of Public Health (MPH)",
+      "Doctor of Philosophy (PhD)", "Doctor of Medicine (MD)", "Doctor of Education (EdD)",
+      "Doctor of Business Administration (DBA)", "Doctor of Jurisprudence (JD)", "Professional Diploma",
+      "Technical Diploma", "Vocational Certificate", "Graduate Certificate", "Post-Graduate Diploma", "Post-Doctoral"
+    ],
+    aria: {
+      tabList: 'Profile form sections',
+      nextButton: 'Go to next section',
+      prevButton: 'Go to previous section',
+      closeButton: 'Close profile form',
+      saveButton: 'Save profile data',
+      requiredField: 'Required field',
+      dropdownSelect: 'Select an option'
     }
   },
   chatbot: {
@@ -1551,6 +1302,7 @@ export default {
     attachFile: 'Attach File',
     fileTooLarge: 'File is too large. Maximum size is {maxSize}.',
     saveChat: 'Save Chat',
+    chatSaved: 'Chat Saved',
     chatTitle: 'Chat Title',
     chatTitlePlaceholder: 'Enter a title for this chat',
     selectFolder: 'Select Folder',
@@ -1559,6 +1311,7 @@ export default {
     unsavedChanges: 'You have unsaved changes. Are you sure you want to start a new chat?',
     whatCanIHelp: "How can I help you today?",
     justChat: "Just Chat",
+    queryContext: "Query Context",
     contextAdded: 'Context added to your query',
     contextRemoved: 'Context removed from your query',
     sessionUpdated: 'Session updated',
@@ -1566,10 +1319,7 @@ export default {
     loadError: 'Unable to load chat history',
     responsePrefix: "I received your message",
     withContext: "with context",
-    sessionUpdated: "Session updated.",
-    newChatStarted: "Started a new conversation.",
     conversationLoaded: "Conversation loaded successfully!",
-    loadError: "Unable to load conversation.",
     saveConfirmTitle: "Save Existing Conversation",
     saveConfirmMessage: "Save existing conversation?",
     loadConfirmTitle: "Load Existing Conversation",
@@ -1590,7 +1340,6 @@ export default {
     housingPrograms: "Housing programs",
     findJobs: "Find jobs",
     justChat: "Just Chat",
-    // Prompts as separate keys with a clear naming pattern
     justChatPrompt: "I'd like to chat about government services",
     applyForIDPrompt: "I need information on how to apply for a national ID card",
     payTaxesPrompt: "What's the process for paying my taxes online?",
@@ -1610,6 +1359,7 @@ export default {
   },
   feedback: {
     title: 'Feedback',
+    button: 'Feedback',
     positive: 'Positive feedback',
     negative: 'Negative feedback',
     promptText: 'Was this response helpful?',

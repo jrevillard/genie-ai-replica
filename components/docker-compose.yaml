@@ -53,6 +53,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
       - JWT_EXPIRES_IN=24h
       - LOG_LEVEL=debug
+      - OPEA_HOST=e2e-109-198
+      - OPEA_PORT=8888
     env_file:
       - ./gov-chat-backend/.env
     networks:

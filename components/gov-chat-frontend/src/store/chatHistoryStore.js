@@ -1,6 +1,7 @@
 // src/store/chatHistoryStore.js
 import { v4 as uuidv4 } from 'uuid';
 import chatHistoryService from '@/services/chatHistoryService'; // Adjust path
+import userService from '@/services/userService';
 
 export default {
   namespaced: true,

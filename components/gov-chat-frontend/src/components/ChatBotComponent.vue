@@ -32,6 +32,41 @@
         @secondary="saveAndLoadConversation"
       />
 
+      <!-- Export PDF Dialog -->
+      <modal-dialog
+        v-if="exportDialog.visible"
+        @close="exportDialog.visible = false"
+      >
+        <template v-slot:header>
+          <h3>{{ translate("chatbot.exportChat") }}</h3>
+        </template>
+        <template v-slot:body>
+          <div class="form-group">
+            <label for="exportFilename">{{
+              translate("chatbot.exportFilename")
+            }}</label>
+            <input
+              type="text"
+              id="exportFilename"
+              v-model="exportDialog.filename"
+              :placeholder="translate('chatbot.exportFilenamePlaceholder')"
+            />
+          </div>
+        </template>
+        <template v-slot:footer>
+          <button @click="exportDialog.visible = false" class="cancel-btn">
+            {{ translate("common.cancel") }}
+          </button>
+          <button
+            @click="exportChatToPDF"
+            class="primary-btn"
+            :disabled="!exportDialog.filename.trim()"
+          >
+            {{ translate("chatbot.exportButton") }}
+          </button>
+        </template>
+      </modal-dialog>
+
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-indicator" :class="{ online: systemStatus.online }">
@@ -113,7 +148,11 @@
         <div ref="messagesEnd"></div>
       </div>
       <!-- Loading spinner with "Thinking..." text -->
-      <div v-if="isLoading" class="loading-spinner" aria-label="Processing your request">
+      <div
+        v-if="isLoading"
+        class="loading-spinner"
+        aria-label="Processing your request"
+      >
         <i class="fas fa-spinner fa-spin"></i>
         <span class="loading-text">Thinking...</span>
       </div>
@@ -170,6 +209,14 @@
             :title="translate('chatbot.saveChat')"
           >
             <i class="fas fa-save"></i>
+          </button>
+          <button
+            v-if="chatMessages.length > 0"
+            class="export-chat-btn"
+            @click="openExportDialog"
+            :title="translate('chatbot.exportChat')"
+          >
+            <i class="fas fa-file-pdf"></i>
           </button>
           <button class="send-btn" @click="sendMessage">
             {{ translate("chatbot.sendButton") }}
@@ -256,6 +303,7 @@ import chatHistoryService from "../services/chatHistoryService";
 import analyticsService from "../services/analyticsService";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import jsPDF from "jspdf";
 
 export default {
   name: "ChatBotComponent",
@@ -281,6 +329,10 @@ export default {
         visible: false,
         title: "",
         folderId: "default",
+      },
+      exportDialog: {
+        visible: false,
+        filename: "",
       },
       currentChatId: null,
       currentChatTitle: "",
@@ -451,27 +503,27 @@ export default {
       try {
         const serviceKeyMap = {
           "Layanan Pelanggan": "context.customerService",
-          "Pembayaran": "context.payment",
-          "Pengiriman": "context.shipping",
+          Pembayaran: "context.payment",
+          Pengiriman: "context.shipping",
           "Layanan Kesehatan": "context.healthService",
-          "Perumahan": "context.housing",
-          "Imigrasi": "context.immigration",
-          "Pendidikan": "context.education",
-          "Pajak": "context.tax",
-          "Pensiun": "context.retirement",
+          Perumahan: "context.housing",
+          Imigrasi: "context.immigration",
+          Pendidikan: "context.education",
+          Pajak: "context.tax",
+          Pensiun: "context.retirement",
           "Lainnya - Pribadi": "context.personalOther",
           // Add more mappings as needed
         };
         const translationKey = serviceKeyMap[key] || key;
-        if (typeof translationKey === 'string' && translationKey.trim()) {
+        if (typeof translationKey === "string" && translationKey.trim()) {
           const translated = this.$t(translationKey);
           return translated !== translationKey ? translated : key; // Fallback to original if untranslated
         }
         console.warn(`Invalid translation key: ${key}`);
-        return this.$t('context.fallback') || key || 'Unknown'; // Default fallback
+        return this.$t("context.fallback") || key || "Unknown"; // Default fallback
       } catch (error) {
         console.error(`Translation error for key ${key}:`, error);
-        return this.$t('context.fallback') || key || 'Unknown';
+        return this.$t("context.fallback") || key || "Unknown";
       }
     },
 
@@ -654,9 +706,9 @@ export default {
           ) {
             this.conversationCategory = item.category || "general";
             console.log(
-              `Set conversation category to ${this.conversationCategory} from sidebar node ${this.safeTranslate(
-                item.service
-              )}`
+              `Set conversation category to ${
+                this.conversationCategory
+              } from sidebar node ${this.safeTranslate(item.service)}`
             );
           }
         } else {
@@ -715,23 +767,25 @@ export default {
             },
           ];
           console.log(
-            `Restored context item for category ${this.conversationCategory}: ${this.safeTranslate(
-              quickHelpOption.textKey
-            )}`
+            `Restored context item for category ${
+              this.conversationCategory
+            }: ${this.safeTranslate(quickHelpOption.textKey)}`
           );
         } else {
           this.selectedContextItems = [
             {
-              service: this.safeTranslate(`category.${this.conversationCategory}`), // Translate category
+              service: this.safeTranslate(
+                `category.${this.conversationCategory}`
+              ), // Translate category
               serviceKey: `category.${this.conversationCategory}`,
               category: this.conversationCategory,
               selected: true,
             },
           ];
           console.log(
-            `Restored sidebar context item for category ${this.conversationCategory}: ${this.safeTranslate(
-              `category.${this.conversationCategory}`
-            )}`
+            `Restored sidebar context item for category ${
+              this.conversationCategory
+            }: ${this.safeTranslate(`category.${this.conversationCategory}`)}`
           );
         }
       }
@@ -907,8 +961,11 @@ export default {
           conversation.tags.forEach((tag) => {
             // Include all tags, using fallback for empty/invalid
             this.selectedContextItems.push({
-              service: this.safeTranslate(tag || `category.${this.conversationCategory || 'general'}`), // Fallback to category
-              serviceKey: tag || `category.${this.conversationCategory || 'general'}`, // Store original or fallback
+              service: this.safeTranslate(
+                tag || `category.${this.conversationCategory || "general"}`
+              ), // Fallback to category
+              serviceKey:
+                tag || `category.${this.conversationCategory || "general"}`, // Store original or fallback
               category: this.conversationCategory || "general",
               selected: true,
             });
@@ -916,7 +973,9 @@ export default {
         } else if (this.conversationCategory) {
           // Fallback if no tags
           this.selectedContextItems.push({
-            service: this.safeTranslate(`category.${this.conversationCategory}`),
+            service: this.safeTranslate(
+              `category.${this.conversationCategory}`
+            ),
             serviceKey: `category.${this.conversationCategory}`,
             category: this.conversationCategory,
             selected: true,
@@ -1383,6 +1442,322 @@ export default {
       this.showNewChatConfirm = false;
     },
 
+    openExportDialog() {
+      this.exportDialog = {
+        visible: true,
+        filename: this.generateChatTitle(),
+      };
+    },
+
+    /**
+     * Helper method to recursively process an array of inline markdown tokens.
+     * This is used to break down paragraphs, headings, and list items into
+     * styled text fragments.
+     * @param {Array} tokens - An array of inline tokens from the `marked` library.
+     * @returns {Array} An array of objects, e.g., [{ text: 'Hello', style: 'bold' }].
+     */
+    _processInlineTokens(tokens) {
+      const parts = [];
+      if (!tokens) {
+        return parts;
+      }
+
+      tokens.forEach((token) => {
+        switch (token.type) {
+          case "strong":
+            // A 'strong' token contains its own 'tokens' array for its content.
+            // We process them and ensure the 'bold' style is applied.
+            const boldParts = this._processInlineTokens(token.tokens);
+            boldParts.forEach((p) => (p.style = "bold"));
+            parts.push(...boldParts);
+            break;
+          case "em":
+            // Similar to 'strong', for italics.
+            const italicParts = this._processInlineTokens(token.tokens);
+            italicParts.forEach((p) => (p.style = "italic"));
+            parts.push(...italicParts);
+            break;
+          case "codespan":
+            parts.push({ text: token.text, style: "code" });
+            break;
+          case "link":
+            // Process the text within the link.
+            const linkParts = this._processInlineTokens(token.tokens);
+            linkParts.forEach((p) => (p.style = "link"));
+            parts.push(...linkParts);
+            break;
+          case "text":
+            // A plain text segment.
+            parts.push({ text: token.text, style: "normal" });
+            break;
+          default:
+            // Fallback for other potential inline token types.
+            if (token.text) {
+              parts.push({ text: token.text, style: "normal" });
+            }
+            break;
+        }
+      });
+      return parts;
+    },
+
+    /**
+     * Parses a markdown string into a structured array of blocks and lines
+     * suitable for rendering in a PDF with jsPDF.
+     * @param {string} markdown - The markdown content to parse.
+     * @returns {Array} A structured array representing the document.
+     */
+    parseMarkdownForPDF(markdown) {
+      try {
+        // Use marked.lexer to get block-level tokens.
+        const tokens = marked.lexer(markdown);
+        const result = [];
+        let listCounter = 0;
+        let listOrdered = false;
+
+        // Iterate over the top-level blocks.
+        tokens.forEach((token) => {
+          switch (token.type) {
+            case "space":
+              result.push({ type: "space" });
+              break;
+            case "hr":
+              result.push({ type: "hr" });
+              break;
+            case "heading":
+              // Process inline content of the heading.
+              const headingParts = this._processInlineTokens(token.tokens);
+              // Apply the heading style to all parts of the line.
+              headingParts.forEach((p) => (p.style = `h${token.depth}`));
+              result.push({ type: "line", indent: 0, content: headingParts });
+              break;
+            case "paragraph":
+              result.push({
+                type: "line",
+                indent: 0,
+                content: this._processInlineTokens(token.tokens),
+              });
+              break;
+            case "list":
+              listOrdered = token.ordered;
+              // `marked` provides the 'start' number for ordered lists.
+              listCounter = token.start ? token.start - 1 : 0;
+              // Process each list item.
+              token.items.forEach((item) => {
+                listCounter++;
+                const prefix = listOrdered ? `${listCounter}. ` : "- ";
+                // An item's content is in its `tokens`, usually a single 'text' block that contains further inline tokens.
+                const itemContent = this._processInlineTokens(
+                  item.tokens[0].tokens
+                );
+                // Prepend the bullet or number to the line.
+                itemContent.unshift({ text: prefix, style: "normal" });
+                result.push({ type: "line", indent: 15, content: itemContent });
+              });
+              break;
+            case "code": // Fenced code blocks
+              const codeLines = token.text.split("\n");
+              codeLines.forEach((line) => {
+                result.push({
+                  type: "line",
+                  indent: 10,
+                  content: [{ text: line, style: "code" }],
+                });
+              });
+              break;
+            case "blockquote":
+              // Recursively parse the content of the blockquote and add indentation.
+              const quoteContent = token.tokens.map((tok) =>
+                this._processInlineTokens(tok.tokens)
+              );
+              quoteContent.forEach((lineContent) => {
+                result.push({
+                  type: "line",
+                  indent: 20,
+                  isQuote: true,
+                  content: lineContent,
+                });
+              });
+              break;
+          }
+        });
+
+        return result;
+      } catch (error) {
+        console.error("Error parsing markdown for PDF:", error);
+        // Fallback to plain text on error.
+        return [
+          {
+            type: "line",
+            indent: 0,
+            content: [{ text: markdown, style: "normal" }],
+          },
+        ];
+      }
+    },
+
+    /**
+     * Exports the current chat history to a PDF file, correctly rendering markdown.
+     */
+    exportChatToPDF() {
+      try {
+        const doc = new jsPDF();
+        let yOffset = 20;
+        const pageHeight = doc.internal.pageSize.height;
+        const topMargin = 20;
+        const bottomMargin = 20;
+        const leftMargin = 15;
+        const rightMargin = doc.internal.pageSize.width - 15;
+
+        // Helper to add a new page if the content gets too close to the bottom.
+        const checkPageBreak = (neededHeight = 10) => {
+          if (yOffset + neededHeight > pageHeight - bottomMargin) {
+            doc.addPage();
+            yOffset = topMargin;
+          }
+        };
+
+        // 1. Add Document Title
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.text(
+          this.currentChatTitle || this.generateChatTitle(),
+          leftMargin,
+          yOffset
+        );
+        yOffset += 15;
+
+        // 2. Process and add each message
+        this.chatMessages.forEach((msg) => {
+          checkPageBreak(20); // Check for space before adding a new message block
+          yOffset += 5;
+
+          // Render sender and timestamp
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "bold");
+          const sender = msg.sender === "user" ? "User" : "Bot";
+          const timestamp = msg.timestamp
+            ? new Date(msg.timestamp).toLocaleString()
+            : new Date().toLocaleString();
+          doc.text(`${sender} (${timestamp}):`, leftMargin, yOffset);
+          yOffset += 6;
+
+          // Parse the content into structured blocks
+          const parsedContent =
+            msg.sender === "bot" && msg.content
+              ? this.parseMarkdownForPDF(msg.content)
+              : [
+                  {
+                    type: "line",
+                    content: [{ text: msg.content || "", style: "normal" }],
+                    indent: 0,
+                  },
+                ];
+
+          // 3. Render each block from the parsed content
+          parsedContent.forEach((block) => {
+            checkPageBreak();
+
+            // Handle special block types
+            if (block.type === "space") {
+              yOffset += 5;
+              return;
+            }
+            if (block.type === "hr") {
+              doc.setDrawColor(150);
+              doc.line(leftMargin, yOffset + 2, rightMargin, yOffset + 2);
+              yOffset += 6;
+              return;
+            }
+            if (!block.content || block.content.length === 0) {
+              yOffset += 3;
+              return;
+            }
+
+            // Set initial X position for the line, including indentation
+            let xOffset = leftMargin + (block.indent || 0);
+
+            // If it's a quote, draw a small indicator bar
+            if (block.isQuote) {
+              doc.setFillColor(230, 230, 230);
+              doc.rect(leftMargin, yOffset - 4, 3, 6, "F");
+            }
+
+            // A queue of text parts to render for the current line
+            let linePartsQueue = [...block.content];
+
+            // Process the queue, handling word wrapping
+            while (linePartsQueue.length > 0) {
+              const part = linePartsQueue.shift();
+              const availableWidth = rightMargin - xOffset;
+
+              // Set font styles for the current part
+              doc.setFontSize(12);
+              let fontStyle = "normal";
+              if (part.style === "bold") fontStyle = "bold";
+              if (part.style === "italic") fontStyle = "italic";
+              doc.setFont("helvetica", fontStyle);
+
+              if (part.style && part.style.startsWith("h")) {
+                const level = parseInt(part.style.replace("h", "")) || 1;
+                doc.setFontSize(12 + (6 - level) * 2);
+                doc.setFont("helvetica", "bold");
+              } else if (part.style === "code") {
+                doc.setFont("courier", "normal");
+                doc.setFontSize(10);
+              }
+
+              // Use jsPDF's splitTextToSize for wrapping
+              const splitText = doc.splitTextToSize(part.text, availableWidth);
+
+              // Render the first line of the potentially wrapped text
+              doc.text(splitText[0], xOffset, yOffset);
+              // Move the x-cursor by the width of the rendered text
+              xOffset +=
+                (doc.getStringUnitWidth(splitText[0]) * doc.getFontSize()) /
+                doc.internal.scaleFactor;
+
+              // If the text was wrapped...
+              if (splitText.length > 1) {
+                const remainingText = splitText.slice(1).join(" ");
+                // Add the rest of the text back to the front of the queue
+                linePartsQueue.unshift({
+                  text: remainingText,
+                  style: part.style,
+                });
+
+                // And move to the next line in the PDF for the next part
+                yOffset += 6; // Use a standard line height
+                checkPageBreak();
+                xOffset = leftMargin + (block.indent || 0);
+                if (block.isQuote) {
+                  // Redraw quote bar on new line
+                  doc.setFillColor(230, 230, 230);
+                  doc.rect(leftMargin, yOffset - 4, 3, 6, "F");
+                }
+              }
+            }
+            // After a full block is rendered, move to the next line
+            yOffset += 6;
+          });
+        });
+
+        // 4. Sanitize filename and save the document
+        let filename = this.exportDialog.filename.trim();
+        if (!filename.toLowerCase().endsWith(".pdf")) {
+          filename += ".pdf";
+        }
+        filename = filename.replace(/[^a-zA-Z0-9\-_\.]/g, "_");
+
+        doc.save(filename);
+        notificationService.success(this.translate("chatbot.exportSuccess"));
+        this.exportDialog.visible = false;
+      } catch (error) {
+        console.error("Error exporting chat to PDF:", error);
+        notificationService.error(this.translate("chatbot.exportError"));
+      }
+    },
+
     updateDialogTexts() {
       this.newChatDialog = {
         title: this.translate("chatbot.newChatTitle"),
@@ -1595,12 +1970,24 @@ export default {
   color: var(--text-primary, #000);
 }
 
-.message-bubble :deep(h1) { font-size: 1.5em; }
-.message-bubble :deep(h2) { font-size: 1.3em; }
-.message-bubble :deep(h3) { font-size: 1.2em; }
-.message-bubble :deep(h4) { font-size: 1.1em; }
-.message-bubble :deep(h5) { font-size: 1em; }
-.message-bubble :deep(h6) { font-size: 0.9em; }
+.message-bubble :deep(h1) {
+  font-size: 1.5em;
+}
+.message-bubble :deep(h2) {
+  font-size: 1.3em;
+}
+.message-bubble :deep(h3) {
+  font-size: 1.2em;
+}
+.message-bubble :deep(h4) {
+  font-size: 1.1em;
+}
+.message-bubble :deep(h5) {
+  font-size: 1em;
+}
+.message-bubble :deep(h6) {
+  font-size: 0.9em;
+}
 
 .message-bubble :deep(p) {
   margin: 0.5em 0;
@@ -1720,7 +2107,12 @@ export default {
   justify-content: center;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.8); /* Semi-transparent background for visibility */
+  background: rgba(
+    255,
+    255,
+    255,
+    0.8
+  ); /* Semi-transparent background for visibility */
   padding: 10px 20px;
   border-radius: 8px;
   z-index: 100; /* Ensure it overlays other content */
@@ -1911,6 +2303,19 @@ html[data-theme="dark"] .loading-spinner .loading-text {
 }
 
 .save-chat-btn:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+}
+
+.export-chat-btn {
+  background: var(--bg-button-secondary, #f0f0f0);
+  color: var(--text-button-secondary, #555);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.export-chat-btn:hover {
   background: var(--bg-tertiary, #e0e0e0);
 }
 

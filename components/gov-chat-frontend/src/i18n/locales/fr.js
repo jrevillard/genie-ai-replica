@@ -1327,7 +1327,13 @@ export default {
     saveAndLoad: "Enregistrer et charger",
     saveAndStartNew: "Enregistrer et commencer une nouvelle",
     discardAndStartNew: "Ignorer et commencer une nouvelle",
-    newChatTitle: "Commencer une nouvelle discussion"
+    newChatTitle: "Commencer une nouvelle discussion",
+    exportChat: 'Exporter la discussion',
+    exportFilename: 'Nom du fichier',
+    exportFilenamePlaceholder: 'Entrez le nom du fichier',
+    exportButton: 'Exporter',
+    exportSuccess: 'Discussion exportée avec succès',
+    exportError: 'Échec de l\'exportation de la discussion. Veuillez réessayer.'
   },
   quickhelp: {
     applyForID: "Demander une pièce d'identité",

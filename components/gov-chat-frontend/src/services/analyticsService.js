@@ -469,21 +469,25 @@ class AnalyticsService {
    */
   formatValue(value, format = 'number', locale = null) {
     if (value === null || value === undefined) return '—';
-
+  
     // Get current locale
     const currentLocale = locale || (this.$i18n ? this.$i18n.locale : 'en');
-
+  
     switch (format) {
       case 'number':
         return value.toLocaleString(currentLocale);
-
+  
       case 'time':
         // Format as seconds with 1 decimal place
         return `${value.toFixed(1)}s`;
-
+  
       case 'percent':
         return `${value.toFixed(1)}%`;
-
+  
+      case 'milliseconds':
+        // Format as whole milliseconds with 'ms' suffix
+        return `${Math.round(value)}ms`;
+  
       default:
         return String(value);
     }

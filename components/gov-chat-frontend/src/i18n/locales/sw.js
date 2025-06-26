@@ -1328,7 +1328,13 @@ export default {
     saveAndLoad: "Hifadhi na Pakia",
     saveAndStartNew: "Hifadhi na Anza Mazungumzo Mapya",
     discardAndStartNew: "Tupa na Anza Mazungumzo Mapya",
-    newChatTitle: "Anza Mazungumzo Mapya"
+    newChatTitle: "Anza Mazungumzo Mapya",
+    exportChat: 'Hamisha Mazungumzo',
+    exportFilename: 'Jina la Faili',
+    exportFilenamePlaceholder: 'Ingiza jina la faili',
+    exportButton: 'Hamisha',
+    exportSuccess: 'Mazungumzo yamehamishwa kwa mafanikio',
+    exportError: 'Imeshindwa kuhamisha mazungumzo. Tafadhali jaribu tena.'
   },
   quickhelp: {
     applyForID: "Omba kitambulisho",

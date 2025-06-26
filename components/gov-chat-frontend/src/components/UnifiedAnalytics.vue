@@ -107,7 +107,7 @@
             <div class="metric-card">
               <h3>{{ translate("analytics.metrics.avgResponseTime") }}</h3>
               <div class="metric-value">
-                {{ formatValue(analytics.averageResponseTime, "time") }}
+                {{ formatValue(analytics.averageResponseTime, "milliseconds") }}
               </div>
               <div
                 v-if="comparison.averageResponseTime"

@@ -1328,7 +1328,13 @@ export default {
     saveAndLoad: "Save and Load",
     saveAndStartNew: "Save and Start New",
     discardAndStartNew: "Discard and Start New",
-    newChatTitle: "Start New Chat"
+    newChatTitle: "Start New Chat",
+    exportChat: 'Export Chat',
+    exportFilename: 'File Name',
+    exportFilenamePlaceholder: 'Enter file name',
+    exportButton: 'Export',
+    exportSuccess: 'Chat exported successfully',
+    exportError: 'Failed to export chat. Please try again.'
   },
   quickhelp: {
     applyForID: "Apply for ID",

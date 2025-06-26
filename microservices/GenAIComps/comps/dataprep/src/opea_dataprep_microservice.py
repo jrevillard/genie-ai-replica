@@ -1,6 +1,7 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+from pydantic import BaseModel
 
 import os
 import time
@@ -33,6 +34,7 @@ from comps.cores.proto.api_protocol import (
     DataprepRequest,
     Neo4jDataprepRequest,
     RedisDataprepRequest,
+    ArangoDBDataprepRequestFromDocRepo,
 )
 from comps.dataprep.src.utils import create_upload_folder
 
@@ -46,6 +48,11 @@ loader = OpeaDataprepLoader(
     dataprep_component_name,
     description=f"OPEA DATAPREP Component: {dataprep_component_name}",
 )
+
+
+class DocRepoIngestPayload(BaseModel):
+    fileId: str
+    filePath: str
 
 
 async def resolve_dataprep_request(request: Request):
@@ -147,27 +154,26 @@ async def ingest_files(
     port=5000,
 )
 @register_statistics(names=["opea_service@dataprep"])
-async def ingest_file_from_repo(input: Request):
+async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     """
     Accepts JSON: { "fileId": "...", "filePath": "..." }
     """
 
     start = time.time()
 
-    data = await input.json()
-    file_id = data.get("fileId")
-    file_path = data.get("filePath")
-    if not file_id or not file_path:
-        raise HTTPException(status_code=400, detail="fileId and filePath are required.")
-    
     if logflag:
-        logger.info(f"[ ingest ] files:{file_id}")
-        logger.info(f"[ ingest ] file path:{file_path}")
+        logger.info(f"[ ingest ] file_id: {payload.fileId}")
+        logger.info(f"[ ingest ] file_path: {payload.filePath}")
 
-    # Call the new ingest_files_with_guardrail method
     try:
-        response = await loader.ingest_file_with_guardrail(file_id, file_path)
-        # Log the result if logging is enabled
+        # Construct the full request using ArangoDBDataprepRequestFromDocRepo
+        input = ArangoDBDataprepRequestFromDocRepo(
+            file_id=payload.fileId,
+            file_path=payload.filePath
+        )
+
+        response = await loader.ingest_file_with_guardrail(input)
+
         if logflag:
             logger.info(f"[ ingest ] Output generated: {response}")
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)

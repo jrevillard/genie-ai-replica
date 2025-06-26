@@ -1019,3 +1019,52 @@ class FineTuningJobCheckpoint(BaseModel):
 class TranslationRequest(BaseModel):
     text: str
     stream: Optional[bool] = False
+
+
+class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
+    def __init__(
+        self,
+        file_id: Optional[str] = None,
+        file_path: Optional[str] = None,
+        files: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
+        link_list: Optional[str] = Form(None),
+        chunk_size: Optional[int] = Form(1500),
+        chunk_overlap: Optional[int] = Form(100),
+        process_table: Optional[bool] = Form(False),
+        table_strategy: Optional[str] = Form("fast"),
+        graph_name: Optional[str] = Form(None),
+        insert_async: Optional[bool] = Form(None),
+        insert_batch_size: Optional[int] = Form(None),
+        embed_nodes: Optional[bool] = Form(None),
+        embed_edges: Optional[bool] = Form(None),
+        embed_chunks: Optional[bool] = Form(None),
+        allowed_node_types: Optional[List[str]] = Form(None),
+        allowed_edge_types: Optional[List[str]] = Form(None),
+        node_properties: Optional[List[str]] = Form(None),
+        edge_properties: Optional[List[str]] = Form(None),
+        text_capitalization_strategy: Optional[str] = Form(None),
+        include_chunks: Optional[bool] = Form(None),
+    ):
+        super().__init__(
+            files=files,
+            link_list=link_list,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            process_table=process_table,
+            table_strategy=table_strategy,
+            graph_name = graph_name,
+            insert_async = insert_async,
+            insert_batch_size = insert_batch_size,
+            embed_nodes = embed_nodes,
+            embed_edges = embed_edges,
+            embed_chunks = embed_chunks,
+            allowed_node_types = allowed_node_types,
+            allowed_edge_types = allowed_edge_types,
+            node_properties = node_properties,
+            edge_properties = edge_properties,
+            text_capitalization_strategy = text_capitalization_strategy,
+            include_chunks = include_chunks
+        )
+
+        self.file_id = file_id
+        self.file_path = file_path

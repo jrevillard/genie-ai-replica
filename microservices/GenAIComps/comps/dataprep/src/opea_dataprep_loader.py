@@ -22,10 +22,10 @@ class OpeaDataprepLoader(OpeaComponentLoader):
             logger.info("[ dataprep loader ] ingest files")
         return await self.component.ingest_files(*args, **kwargs)
 
-    async def ingest_file_with_guardrail(self, file_id: str, file_path: str):
+    async def ingest_file_with_guardrail(self, *args, **kwargs):
         if logflag:
             logger.info("[ dataprep loader ] ingest file with guardrail")
-        return await self.component.ingest_file_with_guardrail(file_id, file_path)
+        return await self.component.ingest_file_with_guardrail(*args, **kwargs)
 
     async def get_files(self, *args, **kwargs):
         if logflag:

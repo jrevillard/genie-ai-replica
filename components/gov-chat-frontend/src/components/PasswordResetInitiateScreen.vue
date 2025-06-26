@@ -639,7 +639,7 @@ export default {
   margin-top: 8px;
 }
 
-.language-selector ::v-deep select {
+.language-selector :deep(select) {
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -652,19 +652,19 @@ export default {
   cursor: pointer;
 }
 
-[data-theme="light"] .language-selector ::v-deep select {
+[data-theme="light"] .language-selector :deep(select) {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme="dark"] .language-selector ::v-deep select {
+[data-theme="dark"] .language-selector :deep(select) {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);
 }
 
-.language-selector ::v-deep select:focus {
+.language-selector :deep(select:focus) {
   outline: none;
   border-color: var(--bg-button-primary, #2a9d8f);
 }

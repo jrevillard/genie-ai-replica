@@ -1027,7 +1027,7 @@ export default {
   background: rgba(255, 255, 255, 0.25);
 }
 
-.language-select-container ::v-deep select {
+.language-select-container :deep(select) {
   width: 100%;
   padding: 8px 10px;
   padding-right: 28px;
@@ -1041,7 +1041,7 @@ export default {
   height: 36px;
 }
 
-.language-select-container ::v-deep select option {
+.language-select-container :deep(select option) {
   background: #4E97D1;
   color: white;
   padding: 8px;
@@ -1181,7 +1181,7 @@ export default {
     transform: rotate(45deg);
   }
 
-  .mobile-language-select ::v-deep select {
+  .mobile-language-select :deep(select) {
     width: 100%;
     padding: 8px 10px;
     padding-right: 28px;
@@ -1195,7 +1195,7 @@ export default {
     height: 36px;
   }
 
-  .mobile-language-select ::v-deep select option {
+  .mobile-language-select :deep(select option) {
     background: #4E97D1;
     color: white;
     padding: 8px;

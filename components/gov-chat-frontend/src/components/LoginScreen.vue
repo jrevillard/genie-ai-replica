@@ -1029,10 +1029,10 @@ export default {
 }
 
 /* Style LanguageSelector.vue's select to match original */
-.language-selector ::v-deep select {
-  padding: 6px 12px; /* Match original padding */
+.language-selector :deep(select) {
+  padding: 6px 12px;
   border-radius: 8px;
-  font-size: 13px; /* Match original font size */
+  font-size: 13px;
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
@@ -1042,19 +1042,19 @@ export default {
   cursor: pointer;
 }
 
-[data-theme='light'] .language-selector ::v-deep select {
+[data-theme='light'] .language-selector :deep(select) {
   background-color: var(--bg-input, #ffffff);
   color: var(--text-primary, #333333);
   border: 1px solid var(--border-input, #dcdfe4);
 }
 
-[data-theme='dark'] .language-selector ::v-deep select {
+[data-theme='dark'] .language-selector :deep(select) {
   background-color: var(--bg-input, #333333);
   color: var(--text-primary, #f0f0f0);
   border: 1px solid var(--border-input, #3a3a3a);
 }
 
-.language-selector ::v-deep select:focus {
+.language-selector :deep(select:focus) {
   outline: none;
   border-color: var(--bg-button-primary, #2a9d8f);
 }

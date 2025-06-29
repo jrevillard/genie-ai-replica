@@ -1,7 +1,7 @@
 const { logger } = require('../shared-lib/logger');
 const securityService = require('../services/securityService');
 
-const authenticate = async (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
 
   // Log request headers
   logger.info('[AUTH MIDDLEWARE] Request headers:');
@@ -44,19 +44,7 @@ const authenticate = async (req, res, next) => {
     if (!decoded) {
       logger.info('[AUTH DEBUG] ❌ Decoded token is null or undefined');
       return res.status(401).json({ success: false, message: 'Invalid token - could not decode' });
-    }
-    
-    // Check for userId in request body for extra validation
-    // const tokenUserId = decoded._key || decoded.id || decoded._id || decoded.userId;// Check for userId in request body for extra validation
-    // if (req.body && req.body.userId) {
-    //   logger.info(`[AUTH DEBUG] 📝 Found userId in request body: ${req.body.userId}`);
-      
-    //   if (tokenUserId && req.body.userId !== tokenUserId) {
-    //     logger.warn(`[AUTH DEBUG] ⚠️ WARNING: userId in body (${req.body.userId}) does not match token userId (${tokenUserId})`);
-    //   } else {
-    //     logger.info('[AUTH DEBUG] ✅ userId in body matches token');
-    //   }
-    // }
+    }    
     
     try {
       // Get complete user data from database to obtain role information
@@ -130,7 +118,7 @@ const authorizeRole = (allowedRoles) => {
 }
 
 module.exports = {
-    authenticate,
-    authorizeRole
+  authenticateToken,
+  authorizeRole
 }; 
 

@@ -9,14 +9,12 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
 const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
-const { authenticate, authorizeRole } = require('../middlewares/authMiddleware');
+const { authenticateToken, authorizeRole } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
 // apply authentication to all endpoints 
-router.use(authenticate);
-
-// NOTE: only file upload endpoint is implemented and tested for now
+router.use(authenticateToken);
 
 /**
  * @route POST /api/files/upload
@@ -38,7 +36,7 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  * @body {string} [category] - Category for all files (general, data, reports, documents)
  * @body {string[]} [tags] - Array of tags for all files
  */
-router.post('/uploads', uploadMultiple, fileController.uploadMultipleFiles);
+router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
 
 /**
  * @route GET /api/files
@@ -129,14 +127,14 @@ router.delete('/', fileController.deleteMultipleFiles);
  * @param {string} fileId - File ID
  * @body {Object} updates - JSON object with the fields to update
  */
-router.patch('/:fileId', fileController.updateFile);
+router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
 
 // Update file metadata by fileId
 // This endpoint has similar functionality to the one above (PATCH /:fileId)
 // So this one and related functionalities are commented out and can be modified later if needed
 // router.patch('/metadata/:fileId', fileController.updateMetadataController);
 
-router.post('/:fileId/ingest', fileController.ingestFile);
-router.post('/:fileId/retract', fileController.retractFile);
+router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
+router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
 
 module.exports = router;

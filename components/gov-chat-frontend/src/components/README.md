@@ -1,6 +1,6 @@
-# Government Services Portal - Vue.js Component Library
+# GENIE.AI - Vue.js Component Library
 
-This repository contains a comprehensive set of Vue.js components designed for a government services portal application. The application provides citizens with easy access to various government services, analytics dashboards, and user profile management.
+This repository contains a comprehensive set of Vue.js components designed for the GENIE.AI RAG framework. The framework provides users with easy access to build a RAG based chatbot with extensive capabilities including, logging, security, analytics dashboards, and user profile management.
 
 ## Table of Contents
 
@@ -14,13 +14,13 @@ This repository contains a comprehensive set of Vue.js components designed for a
 
 ## Overview
 
-The Government Services Portal is a Vue.js application designed to provide citizens with easy access to government services through a chat-based interface. The application includes:
+The GENIE.AI framework is a suite of pre-assembled Vue.js application components designed to provide users with easy access to build a RAG based chatbot with extensive capabilities including, logging, security, analytics dashboards, and user profile management through a chat-based interface. The application includes:
 
 - A chat interface for interacting with government services
 - A sidebar with a service tree for navigation
 - Analytics dashboards for tracking system usage
 - User profile management
-- Multiple language support (English, French, Swahili)
+- Multiple language support (English, French, Indonesian, Swahili... with the ability add more languages very quickly)
 
 ## Core Components
 
@@ -96,9 +96,9 @@ The chat interface allows users to:
 
 The service tree provides:
 
-- Hierarchical navigation of government service categories
-- Selection of services as context for chat
-- Searching for specific services
+- Hierarchical navigation of service categories (AKA Knowledge Areas)
+- Selection of categories/services as context for chat
+- Searching for specific categories and services
 - Expandable/collapsible sections
 
 ### Analytics Dashboard
@@ -125,7 +125,7 @@ The user profile section allows citizens to:
 
 The application supports:
 
-- English, French, and Swahili languages
+- English, French, Indonesian and Swahili languages - extensible language support
 - Language switching via the navbar
 - Consistent translations across all components
 
@@ -178,6 +178,7 @@ The application uses Vue i18n for internationalization. Translation keys are org
 
 - English (en) - Default
 - French (fr)
+- Indoneasian (id)
 - Swahili (sw)
 
 Translation files are structured as follows:

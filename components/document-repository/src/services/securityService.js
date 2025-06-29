@@ -1,7 +1,10 @@
-const { logger } = require('../shared-lib/logger');
+const jwt = require('jsonwebtoken');
 const NodeClam = require('clamscan');
 const { Readable } = require('stream');
+
+const { logger } = require('../shared-lib/logger');
 const appConfig= require('../config/appConfig');
+const dbService = require('../shared-lib/db-connection-service');
 
 
 class SecurityService {
@@ -26,6 +29,10 @@ class SecurityService {
     this.maxBufferSize = 100 * 1024 * 1024; // 100MB
   }
 
+  async getDb() {
+    return await dbService.getConnection('default');
+  }
+
   /*
    * Converts a buffer to a stream
    * @param {Buffer} buffer - Buffer to convert
@@ -43,17 +50,20 @@ class SecurityService {
    * @returns {Promise<void>}
    */
   async initialize() {
-    logger.debug(`[SECURITY-SERVICE] Initializing ClamAV scanner`);
     if (this.isInitialized && this.clamscan) {
       return;
     }
 
+    logger.debug(`[SECURITY-SERVICE] Initializing...`);
     try {
-      this.clamscan = await new NodeClam().init(this.clamAVOptions);
-      this.isInitialized = true;
+      if (appConfig.virusScanning) 
+        logger.debug(`[SECURITY-SERVICE] Initializing ClamAV scanner`);
+        this.clamscan = await new NodeClam().init(this.clamAVOptions);
     } catch (error) {
       throw new Error(`Failed to initialize ClamAV: ${error.message}`);
     }
+
+    this.isInitialized = true;
   }
 
   /**
@@ -93,6 +103,41 @@ class SecurityService {
 
     } catch (error) {
       throw new Error(`Buffer scan failed: ${error.message}`);
+    }
+  }
+
+  async verifyToken(token) {
+    await this.ensureInitialized();
+    try {
+      logger.info(`[SECURITY SERVICE] Verifying Token with value ${token.substring(0, 10)}...`);
+      const decoded = jwt.verify(token, appConfig.security.jwtSecret);
+      
+      // return toke
+      logger.debug(`[SECURITY SERVICE] ✅ Token successfully decoded ${JSON.stringify(decoded)}`)      
+      return decoded;
+    } catch (error) {
+      logger.error(`[SECURITY SERVICE] ❌ Token verification error: ${error.message}`, { stack: error.stack });
+      return null;
+    }
+  }
+
+  async getUserById(userId) {
+    await this.ensureInitialized();
+    try {
+      logger.info(`[SECURITY SERVICE] Getting user info for userId ${userId} ...`);
+      const db = await this.getDb();
+      const user = await db.collection('users').document(userId);
+      if (!user) {
+        logger.warn(`[SECURITY SERVICE] ⚠️ User not found: ${userId}`);
+        return null;
+      }
+
+      // return user
+      logger.info(`[SECURITY SERVICE] ✅ User found: ${userId}`);
+      return user;
+    } catch (error) {
+      logger.error(`[SECURITY SERVICE] ❌ Error getting user by ID: ${error.message}`, { stack: error.stack });
+      return null;
     }
   }
 }

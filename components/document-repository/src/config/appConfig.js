@@ -17,7 +17,7 @@ const config = {
     url: process.env.ARANGO_URL || 'http://localhost:8529',
     username: process.env.ARANGO_USERNAME || 'root',
     password: process.env.ARANGO_PASSWORD || 'test',
-    databaseName: process.env.ARANGO_DB_NAME || 'document_repository'
+    databaseName: process.env.ARANGO_DB_NAME || 'node-services'
   },
 
   dataprep: {
@@ -48,7 +48,7 @@ const config = {
 
   // Security configuration
   security: {
-    jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+    jwtSecret: process.env.JWT_SECRET || 'default-jwt-secret',
     jwtExpiration: process.env.JWT_EXPIRATION || '24h',
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 10,
     rateLimit: {
@@ -57,7 +57,7 @@ const config = {
     }
   },
 
-  virusScanning: process.env.VIRUS_SCANNING === 'true' || true,
+  virusScanning: process.env.VIRUS_SCANNING === 'true' || false,
 
   // ClamAV configuration using clamscan library
   clamscan: {

@@ -9,9 +9,12 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
 const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
-const { authenticate } = require('../middlewares/authMiddleware');
+const { authenticate, authorizeRole } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// apply authentication to all endpoints 
+router.use(authenticate);
 
 // NOTE: only file upload endpoint is implemented and tested for now
 
@@ -24,7 +27,7 @@ const router = express.Router();
  * @body {string} [category] - File category (general, data, reports, documents)
  * @body {string[]} [tags] - Array of tags
  */
-router.post('/upload', authenticate, uploadSingle, fileController.uploadFile);
+router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
 
 /**
  * @route POST /api/files/uploads

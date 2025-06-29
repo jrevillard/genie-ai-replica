@@ -90,14 +90,47 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-const hasRole = (requiredRole) => {
-    return async (req, res, next) => {        
+const authorizeRole = (allowedRoles) => {
+    return async (req, res, next) => {   
+      logger.info(`[AUTH MIDDLEWARE] Validating if user has allowed roles [${allowedRoles.join(', ')}] ...`)
+      
+      try {
+        // Must be used after authenticate middleware
+        if (!req.user.userId || !req.user.role) {
+          logger.info('[AUTH MIDDLEWARE] ❌ No user object found in request');
+          return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
+        
+        const userId = req.user.userId;
+        const userRole = req.user.role;
+                
+        // Check if user has any of the allowed roles
+        logger.info(`[AUTH MIDDLEWARE] Checking. UserID: ${userId} - Role: ${userRole}`);
+        const hasAllowedRole = allowedRoles.some(role => role.toLowerCase() === String(userRole).toLowerCase());
+        
+        if (!hasAllowedRole) {
+          logger.info(`[AUTH MIDDLEWARE] ❌ User role "${userRole}" not in allowed roles: [${allowedRoles.join(', ')}]`);
+          return res.status(403).json({ 
+            success: false, 
+            message: `Access denied. User does not have sufficient role}` 
+          });
+        }
+        
+        logger.info(`[AUTH MIDDLEWARE] ✅ Role check passed for any of: [${allowedRoles.join(', ')}]`);
         next();
+      } catch (error) {
+        logger.error(`[AUTH MIDDLEWARE] ❌ ROLE CHECK ERROR: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ 
+          success: false, 
+          message: 'Error checking role permissions', 
+          error: error.message 
+        });
+      }
     }
 }
 
 module.exports = {
     authenticate,
-    hasRole
+    authorizeRole
 }; 
 

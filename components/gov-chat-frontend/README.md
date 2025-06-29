@@ -54,57 +54,168 @@ src/
 
 ### GENIE.AI Framework Configuration
 
-The application uses a dynamic configuration system that loads from `/config/genie-ai-config.json`, allowing complete customization without code changes:
+The application uses a dynamic configuration system that loads from `/config/genie-ai-config.json`, allowing complete customization without code changes. The configuration follows a JSON Schema for validation and type safety.
 
-```javascript
-// Configuration structure for any domain
+#### Complete Configuration Schema
+
+```json
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "app": {
-    "title": "Your AI Assistant", // Customizable app name
-    "icon": { "type": "file", "value": "/config/your-icon.svg" }
+    "title": "Huduma AI",
+    "icon": {
+      "type": "file",
+      "value": "/config/huduma-icon.svg"
+    }
   },
   "theme": {
-    "primaryColor": "#4E97D1",    // Brand colors
-    "secondaryColor": "#2C5F8A",
-    "backgroundColor": "#f5f7fa",
-    "textColor": "#333333",
+    "primaryColor": "#7A2A6A",
+    "secondaryColor": "#4D143F", 
+    "backgroundColor": "#EAD9E5",
+    "textColor": "#1C1519",
     "navbar": {
-      "gradientStart": "#4E97D1",
-      "gradientEnd": "#2C5F8A",
-      "textColor": "#ffffff"
+      "gradientStart": "#6B245C",
+      "gradientEnd": "#3D0F31",
+      "textColor": "#F0E7EC"
     }
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome! How can I help you today?",
-      "botName": "Assistant",
-      "quickHelp": [
-        // Domain-specific quick actions
-        "Find products",
-        "Check order status", 
-        "Get support",
-        "View account"
-      ]
-    },
-    "userProfile": {
-      "enabled": true,
-      "sections": [
-        // Configurable profile sections for your domain
-      ]
-    },
-    "analytics": {
-      "enabled": true,
-      "metrics": ["queries", "satisfaction", "categories"]
+      "welcomeMessage": "Welcome to Huduma AI, your public service assistant!",
+      "botName": "Huduma",
+      "quickHelp": {
+        "buttons": [
+          {
+            "id": "just-chat",
+            "title": "quickhelp.justChat",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/just-chat.svg"
+            },
+            "category": null,
+            "prompt": "quickhelp.justChatPrompt",
+            "styles": {
+              "backgroundColor": "#EAD9E5",
+              "hoverColor": "#D8C1D3",
+              "outlineColor": "#B69CB1"
+            }
+          }
+          // Additional buttons...
+        ]
+      }
     }
   },
-  "domain": {
-    "categories": [
-      // Industry-specific service categories
-      "Product Information",
-      "Order Management", 
-      "Technical Support",
-      "Account Services"
-    ]
+  "custom": {
+    // Custom domain-specific configurations
+  }
+}
+```
+
+#### Configuration Structure
+
+**App Settings**:
+- `title`: Application name displayed in the UI
+- `icon`: SVG icon configuration (file path or inline SVG)
+
+**Theme Configuration**:
+- `primaryColor`: Main brand color for buttons and accents
+- `secondaryColor`: Secondary color for highlights
+- `backgroundColor`: Main content area background
+- `textColor`: Primary text color
+- `navbar`: Navigation bar specific styling with gradient support
+
+**Chat Features**:
+- `welcomeMessage`: Custom greeting message
+- `botName`: Assistant name for personalization
+- `quickHelp.buttons`: Configurable quick action buttons
+
+**Quick Help Button Structure**:
+```json
+{
+  "id": "unique-identifier",
+  "title": "i18n.translationKey",
+  "icon": {
+    "type": "file|inline",
+    "value": "/path/to/icon.svg"
+  },
+  "category": "service-category-id",
+  "prompt": "i18n.promptKey", 
+  "styles": {
+    "backgroundColor": "#color",
+    "hoverColor": "#color",
+    "outlineColor": "#color"
+  }
+}
+```
+
+#### Domain-Specific Examples
+
+**E-commerce Configuration**:
+```json
+{
+  "app": {
+    "title": "ShopBot Assistant",
+    "icon": {
+      "type": "file", 
+      "value": "/config/shop-icon.svg"
+    }
+  },
+  "theme": {
+    "primaryColor": "#FF6B35",
+    "secondaryColor": "#E55A31",
+    "backgroundColor": "#FFF8F6",
+    "textColor": "#2D1B17"
+  },
+  "features": {
+    "chat": {
+      "welcomeMessage": "Hi! I'm here to help you shop smart.",
+      "botName": "ShopBot",
+      "quickHelp": {
+        "buttons": [
+          {
+            "id": "find-products",
+            "title": "quickhelp.findProducts",
+            "category": "search",
+            "prompt": "quickhelp.findProductsPrompt"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**Healthcare Configuration**:
+```json
+{
+  "app": {
+    "title": "HealthCare Assistant",
+    "icon": {
+      "type": "file",
+      "value": "/config/health-icon.svg"
+    }
+  },
+  "theme": {
+    "primaryColor": "#2E8B57",
+    "secondaryColor": "#228B22",
+    "backgroundColor": "#F0FFF0",
+    "textColor": "#2F4F4F"
+  },
+  "features": {
+    "chat": {
+      "welcomeMessage": "Hello! I'm here to help with your healthcare needs.",
+      "botName": "HealthBot",
+      "quickHelp": {
+        "buttons": [
+          {
+            "id": "book-appointment",
+            "title": "quickhelp.bookAppointment",
+            "category": "appointments",
+            "prompt": "quickhelp.bookAppointmentPrompt"
+          }
+        ]
+      }
+    }
   }
 }
 ```
@@ -636,38 +747,206 @@ Configurable analytics system that adapts to different business needs:
 - Swipe gestures for navigation
 - Optimized input handling
 
-## Customization Guide
+## Quick Start for New Domains
 
-### Quick Start for New Domains
+### 1. Configuration Setup
+```bash
+# Clone the repository
+git clone <repository-url>
+cd genie-ai-frontend
 
-1. **Configuration Setup**
-   ```bash
-   # Copy the example configuration
-   cp /config/genie-ai-config.example.json /config/genie-ai-config.json
-   
-   # Customize for your domain
-   nano /config/genie-ai-config.json
-   ```
+# Install dependencies
+npm install
 
-2. **Branding Customization**
-   - Replace logo/icon files in `/config/`
-   - Update color scheme in configuration
-   - Modify welcome messages and bot personality
+# Create your configuration file
+cp /public/config/genie-ai-config.example.json /public/config/genie-ai-config.json
 
-3. **Service Categories**
-   - Define your domain-specific categories
-   - Configure quick help actions
-   - Set up service hierarchies
+# Customize for your domain
+nano /public/config/genie-ai-config.json
+```
 
-4. **Internationalization**
-   - Add domain-specific translations to `i18n.js`
-   - Configure supported languages
-   - Customize regional settings
+### 2. Docker Quick Start
+```bash
+# Development with Docker
+docker build -t genie-ai:dev .
+docker run -p 8090:8090 \
+  -e VUE_APP_API_URL=https://your-api-url.com/api \
+  genie-ai:dev
 
-5. **User Profile Fields**
-   - Define relevant user data fields
-   - Configure validation rules
-   - Set up data collection preferences
+# Access the application
+open http://localhost:8090
+```
+
+### 3. Configuration Customization Steps
+
+**Step 1: Basic Branding**
+```json
+{
+  "app": {
+    "title": "Your Assistant Name",
+    "icon": {
+      "type": "file",
+      "value": "/config/your-logo.svg"
+    }
+  }
+}
+```
+
+**Step 2: Theme Customization**
+```json
+{
+  "theme": {
+    "primaryColor": "#YOUR_BRAND_COLOR",
+    "secondaryColor": "#YOUR_SECONDARY_COLOR",
+    "backgroundColor": "#YOUR_BG_COLOR",
+    "textColor": "#YOUR_TEXT_COLOR",
+    "navbar": {
+      "gradientStart": "#NAVBAR_START_COLOR",
+      "gradientEnd": "#NAVBAR_END_COLOR", 
+      "textColor": "#NAVBAR_TEXT_COLOR"
+    }
+  }
+}
+```
+
+**Step 3: Quick Help Buttons**
+```json
+{
+  "features": {
+    "chat": {
+      "quickHelp": {
+        "buttons": [
+          {
+            "id": "your-action",
+            "title": "quickhelp.yourAction",
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/your-icon.svg"
+            },
+            "category": "your-category",
+            "prompt": "quickhelp.yourActionPrompt",
+            "styles": {
+              "backgroundColor": "#BUTTON_BG",
+              "hoverColor": "#BUTTON_HOVER", 
+              "outlineColor": "#BUTTON_OUTLINE"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**Step 4: Add Translations**
+Update `src/i18n.js` with your domain-specific translations:
+```javascript
+export const messages = {
+  en: {
+    quickhelp: {
+      yourAction: "Your Action Label",
+      yourActionPrompt: "Prompt to send when clicked"
+    }
+  }
+}
+```
+
+**Step 5: Add Custom Assets**
+```bash
+# Add your icons and assets
+mkdir -p public/config/quickhelp
+# Copy your SVG icons to public/config/quickhelp/
+# Copy your main logo to public/config/
+```
+
+### 4. Environment Configuration
+```bash
+# Create .env file for development
+VUE_APP_API_URL=https://your-backend-api.com/api
+VUE_APP_VERSION=1.0.0
+VUE_APP_ENVIRONMENT=development
+
+# Production environment variables
+VUE_APP_API_URL=https://api.your-domain.com
+VUE_APP_VERSION=1.0.0
+VUE_APP_ENVIRONMENT=production
+```
+
+### 5. Build and Deploy
+```bash
+# Development
+npm run serve
+
+# Production build
+npm run build
+
+# Docker production build
+docker build -f Dockerfile.prod -t genie-ai:prod .
+docker run -p 80:80 genie-ai:prod
+```
+
+### RAG Integration Points
+
+The frontend is designed to work seamlessly with RAG backend systems:
+
+- **Knowledge Base Queries**: Structured query formatting for RAG retrieval
+- **Context Management**: Conversation context preservation for enhanced responses
+- **Document References**: Support for cited sources and reference materials
+- **Feedback Integration**: User feedback collection for RAG model improvement
+- **Real-time Streaming**: Support for streaming responses from RAG systems
+
+#### Backend API Integration
+
+The application connects to the RAG backend through configurable API endpoints:
+
+```javascript
+// Environment-based API configuration
+const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api'
+
+// Service integration example
+class ChatbotService {
+  async submitQuery(queryData) {
+    const response = await fetch(`${API_BASE_URL}/chat/query`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userToken}`
+      },
+      body: JSON.stringify({
+        userId: queryData.userId,
+        sessionId: queryData.sessionId,
+        text: queryData.text,
+        categoryId: queryData.categoryId,
+        serviceId: queryData.serviceId,
+        context: queryData.context
+      })
+    })
+    
+    return response.json()
+  }
+}
+```
+
+#### Docker Environment Variables
+
+The Docker configuration supports environment-specific API endpoints:
+
+```bash
+# Development
+docker run -p 8090:8090 \
+  -e VUE_APP_API_URL=https://dev-api.example.com/api \
+  genie-ai:dev
+
+# Staging  
+docker run -p 8090:8090 \
+  -e VUE_APP_API_URL=https://staging-api.example.com/api \
+  genie-ai:staging
+
+# Production
+docker run -p 80:80 \
+  -e VUE_APP_API_URL=https://api.example.com \
+  genie-ai:prod
+```
 
 ## Development Setup
 
@@ -713,30 +992,3 @@ npm run build
 - **D3.js**: Data manipulation and visualization
 
 ### Development
-
-### Ensure that the VUE_APP_API_URL env for the back end services is set up for example (port on which node.js is running)
-VUE_APP_API_URL=http://localhost:3000/api
-
-## Project setup
-```
-npm install
-```
-
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
-
-### Compiles and minifies for production
-```
-npm run build
-```
-
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
-

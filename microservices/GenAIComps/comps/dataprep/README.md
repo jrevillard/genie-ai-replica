@@ -14,3 +14,39 @@ Several modifications have been introduced to adapt the original OPEA microservi
 
 ## Second-phase Modifications (for the integration of document repository)
 
+### ingest
+
+When receiving the request from doc-repo ingest endpoint:
+
+```javascript
+router.post('/:fileId/ingest', fileController.ingestFile);
+
+...
+
+// Send file info to dataprep microservice
+const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+const response = await axios.post(dataprepUrl, {
+    fileId: file.file_id,
+    filePath: file.storage_path,
+    // or provide a download URL if needed
+});
+```
+
+It will:
+
+1. Chunk text ✅
+2. Deploy guardrail endpoint to check each chunk ✅
+3. For each file, generate one graph, and assign related metadata (file_id, file_path) to the chunk ✅
+4. Send results to doc-repo ✅
+5. Doc-repo update certain metadata ✅
+
+
+Call the `ingest_file_from_repo`, which calls `ingest_file_with_guardrail`, which again calls `ingest_file_with_guardrail` and `ingest_data_to_arango_with_guardrail`.
+
+### retract
+
+1. Doc-repo POST retract (send the file_id that needs to be retracted) ✅
+2. Dataprep receive the file_id, and delete the corresponding graph, which contains chunks, entities and relations. ✅
+3. Return the result to doc-repo ✅
+	a. if deletion successes, update related metadata; 
+	b. if fails, let it be...

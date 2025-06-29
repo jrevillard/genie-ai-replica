@@ -5,6 +5,7 @@ import json
 import os
 from typing import List, Optional, Union
 import aiohttp
+import base64
 
 import openai
 from arango import ArangoClient
@@ -21,7 +22,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
 
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry, ServiceType
-from comps.cores.proto.api_protocol import ArangoDBDataprepRequest, DataprepRequest
+from comps.cores.proto.api_protocol import ArangoDBDataprepRequest, DataprepRequest, ArangoDBDataprepRequestFromDocRepo
 from comps.dataprep.src.utils import (
     decode_filename,
     document_loader,
@@ -67,6 +68,9 @@ EMBED_CHUNKS = os.getenv("EMBED_CHUNKS", "true").lower() == "true"
 # Guardrail configuration
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guard/check")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "true").lower() == "true"
+
+# Document repository configuration
+DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3000") # Document repository URL
 
 # OpenAI configuration (alternative to TEI/VLLM)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -299,44 +303,6 @@ class OpeaArangoDataprep(OpeaComponent):
             logger.info(f"Created {len(chunks)} chunks of the original file")
 
         ################################
-        # Guardrail check for chunks   #
-        ################################
-
-        guardrail_url = GUARDRAIL_URL
-        if GUARDRAIL_ENABLED and guardrail_url:
-            if logflag:
-                logger.info("Guardrail service is enabled, checking chunks for harmful content.")
-
-            # Ensure the guardrail URL is valid
-            if not guardrail_url.startswith("http://") and not guardrail_url.startswith("https://"):
-                raise HTTPException(status_code=400, detail="Invalid Guardrail URL.")
-
-            # Check each chunk for harmful content
-            if logflag:
-                logger.info(f"Sending {len(chunks)} chunks to Guardrail service at {guardrail_url}")
-                
-            async with aiohttp.ClientSession() as session:
-                for i, text in enumerate(chunks):
-                    payload = {"text": text}
-                    async with session.post(guardrail_url, json=payload) as resp:
-                        if resp.status != 200:
-                            logger.error(f"Guardrail service error on chunk {i}")
-                            return {
-                                "success": False,
-                                "message": f"Guardrail service error on chunk {i}",
-                                "chunk_index": i,
-                            }
-                        result = await resp.json()
-                        if result.get("harmful", False):
-                            logger.error(f"Harmful content detected in chunk {i}")
-                            return {
-                                "success": False,
-                                "message": f"Harmful content detected in chunk {i}",
-                                "chunk_index": i,
-                            }
-
-
-        ################################
         # Graph generation & insertion #
         ################################
 
@@ -525,14 +491,155 @@ class OpeaArangoDataprep(OpeaComponent):
 
 
 
+    async def ingest_data_to_arango_with_guardrail(
+        self,
+        doc_path: DocPath,
+        file_id: str,
+        graph_name: str,
+        insert_async: bool,
+        insert_batch_size: int,
+        embed_nodes: bool,
+        embed_edges: bool,
+        embed_chunks: bool,
+        include_chunks: bool,
+        text_capitalization_strategy: str,
+    ):
+        """Ingest document to ArangoDB."""
 
-    async def ingest_file_with_guardrail(self, input: Union[DataprepRequest, ArangoDBDataprepRequest]):
+        path = doc_path.path
+        if logflag:
+            logger.info(f"Parsing document {path}")
+
+        ############
+        # Chunking #
+        ############
+
+        if path.endswith(".html"):
+            headers_to_split_on = [
+                ("h1", "Header 1"),
+                ("h2", "Header 2"),
+                ("h3", "Header 3"),
+            ]
+            text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+        else:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=doc_path.chunk_size,
+                chunk_overlap=doc_path.chunk_overlap,
+                add_start_index=True,
+                separators=get_separators(),
+            )
+
+        content = await document_loader(path)
+
+        structured_types = [".xlsx", ".csv", ".json", "jsonl"]
+        _, ext = os.path.splitext(path)
+
+        if ext in structured_types:
+            chunks = content
+        else:
+            chunks = text_splitter.split_text(content)
+
+        if doc_path.process_table and path.endswith(".pdf"):
+            table_chunks = get_tables_result(path, doc_path.table_strategy)
+            if isinstance(table_chunks, list):
+                chunks = chunks + table_chunks
+
+        if logflag:
+            logger.info(f"Created {len(chunks)} chunks of the original file")
+
+        ################################
+        # Guardrail check for chunks   #
+        ################################
+
+        guardrail_url = GUARDRAIL_URL
+        if GUARDRAIL_ENABLED and guardrail_url:
+            if logflag:
+                logger.info("Guardrail service is enabled, checking chunks for harmful content.")
+
+            # Ensure the guardrail URL is valid
+            if not guardrail_url.startswith("http://") and not guardrail_url.startswith("https://"):
+                raise HTTPException(status_code=400, detail="Invalid Guardrail URL.")
+
+            # Check each chunk for harmful content
+            if logflag:
+                logger.info(f"Sending {len(chunks)} chunks to Guardrail service at {guardrail_url}")
+
+            async with aiohttp.ClientSession() as session:
+                for i, text in enumerate(chunks):
+                    payload = {"text": text} # Adjust based on actual guardrail prompt template
+                    async with session.post(guardrail_url, json=payload) as resp:
+                        if resp.status != 200:
+                            logger.error(f"Guardrail service error on chunk {i}")
+                            return {
+                                "success": False,
+                                "message": f"Guardrail service error on chunk {i}",
+                                "chunk_index": i,
+                            }
+                        result = await resp.json()
+                        if "Violated policies: harmful" in result.get("text", ""):  # Adjust based on actual response structure, which again determined by the guardrail prompt template
+                            logger.error(f"Harmful content detected in chunk {i}")
+                            return {
+                                "success": False,
+                                "message": f"Harmful content detected in chunk {i}",
+                                "chunk_index": i,
+                            }
+
+
+        ################################
+        # Graph generation & insertion #
+        ################################
+
+        if logflag:
+            logger.info(f"Creating graph {graph_name}.")
+
+        graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
+
+        for i, text in enumerate(chunks):
+            document = Document(page_content=text, metadata={"file_id": file_id, "file_path": path, "chunk_index": i})
+
+            if logflag:
+                logger.info(f"Chunk {i}: extracting nodes & relationships")
+
+            graph_doc = self.llm_transformer.process_response(document)
+
+            if logflag:
+                logger.info(f"Chunk {i}: inserting into ArangoDB")
+
+            graph.add_graph_documents(
+                graph_documents=[graph_doc],
+                include_source=include_chunks,
+                graph_name=graph_name,
+                update_graph_definition_if_exists=False,
+                batch_size=insert_batch_size,
+                use_one_entity_collection=True,
+                insert_async=insert_async,
+                embeddings=self.embeddings,
+                embedding_field="embedding",
+                embed_source=embed_chunks,
+                embed_nodes=embed_nodes,
+                embed_relationships=embed_edges,
+                capitalization_strategy=text_capitalization_strategy,
+            )
+
+            if logflag:
+                logger.info(f"Chunk {i}: processed")
+
+        if logflag:
+            logger.info(f"Graph {graph_name} created with {len(chunks)} chunks.")
+
+        return graph_name
+
+
+
+    async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo):
         """Ingest files/links content into ArangoDB database.
 
         Save in the format of vector[768].
         Returns '{"status": 200, "message": "Data preparation succeeded"}' if successful.
         Args:
-            input (DataprepRequest | ArangoDBDataprepRequest): Model containing the following parameters:
+            input (ArangoDBDataprepRequestFromDocRepo): Model containing the following parameters:
+                file_id: The ID of the file to be ingested from the document repository.
+                file_path: file storage path on local disk.
                 files (Union[UploadFile, List[UploadFile]], optional): A file or a list of files to be ingested. Defaults to File(None).
                 link_list (str, optional): A list of links to be ingested. Defaults to Form(None).
                 chunk_size (int, optional): The size of the chunks to be split. Defaults to Form(500).
@@ -552,14 +659,13 @@ class OpeaArangoDataprep(OpeaComponent):
                 text_capitalization_strategy (str, optional): The text capitalization strategy. Defaults to "upper".
                 include_chunks (bool, optional): Whether to include chunks in the graph. Defaults to True.
         """
-
-        files = input.files
-        link_list = input.link_list
+        file_id = input.file_id
+        file_path = input.file_path
         chunk_size = input.chunk_size
         chunk_overlap = input.chunk_overlap
         process_table = input.process_table
         table_strategy = input.table_strategy
-        graph_name = getattr(input, "graph_name", ARANGO_GRAPH_NAME)
+        graph_name = getattr(input, "graph_name", ARANGO_GRAPH_NAME) # It tries to get the attribute graph_name from the object input. If input has a graph_name attribute, its value is used. If not, it uses the value of ARANGO_GRAPH_NAME as a default.
         insert_async = getattr(input, "insert_async", ARANGO_INSERT_ASYNC)
         insert_batch_size = getattr(input, "insert_batch_size", ARANGO_BATCH_SIZE)
         embed_nodes = getattr(input, "embed_nodes", EMBED_NODES)
@@ -580,95 +686,42 @@ class OpeaArangoDataprep(OpeaComponent):
         )
 
         if logflag:
-            logger.info(f"files:{files}")
-            logger.info(f"link_list:{link_list}")
+            logger.info(f"file to be ingested:{file_id}")
 
-        if not files and not link_list:
-            raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
-
-        graph_names_created = set()
-
-        if files:
-            if not isinstance(files, list):
-                files = [files]
-            uploaded_files = []
-            for file in files:
-                encode_file = encode_filename(file.filename)
-                save_path = self.upload_folder + encode_file
-                await save_content_to_local_disk(save_path, file)
-                try:
-                    graph_name = await self.ingest_data_to_arango(
-                        DocPath(
-                            path=save_path,
-                            chunk_size=chunk_size,
-                            chunk_overlap=chunk_overlap,
-                            process_table=process_table,
-                            table_strategy=table_strategy,
-                        ),
-                        graph_name=graph_name,
-                        insert_async=insert_async,
-                        insert_batch_size=insert_batch_size,
-                        embed_nodes=embed_nodes,
-                        embed_edges=embed_edges,
-                        embed_chunks=embed_chunks,
-                        text_capitalization_strategy=text_capitalization_strategy,
-                        include_chunks=include_chunks,
-                    )
-
-                    uploaded_files.append(save_path)
-                    graph_names_created.add(graph_name)
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
-
-                if logflag:
-                    logger.info(f"Successfully saved file {save_path}")
-
-        if link_list:
-            link_list = json.loads(link_list)  # Parse JSON string to list
-            if not isinstance(link_list, list):
-                raise HTTPException(status_code=400, detail="link_list should be a list.")
-            for link in link_list:
-                encoded_link = encode_filename(link)
-                save_path = self.upload_folder + encoded_link + ".txt"
-                content = parse_html([link])[0][0]
-                await save_content_to_local_disk(save_path, content)
-                try:
-                    graph_name = await self.ingest_data_to_arango(
-                        DocPath(
-                            path=save_path,
-                            chunk_size=chunk_size,
-                            chunk_overlap=chunk_overlap,
-                            process_table=process_table,
-                            table_strategy=table_strategy,
-                        ),
-                        graph_name=graph_name,
-                        insert_async=insert_async,
-                        insert_batch_size=insert_batch_size,
-                        embed_nodes=embed_nodes,
-                        embed_edges=embed_edges,
-                        embed_chunks=embed_chunks,
-                        text_capitalization_strategy=text_capitalization_strategy,
-                        include_chunks=include_chunks,
-                    )
-                    graph_names_created.add(graph_name)
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
-
-                if logflag:
-                    logger.info(f"Successfully saved link {link}")
-
+        try:
+            graph_name = await self.ingest_data_to_arango_with_guardrail(
+                DocPath(
+                    path=file_path,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                    process_table=process_table,
+                    table_strategy=table_strategy,
+                ),
+                file_id=file_id,
+                graph_name=graph_name,
+                insert_async=insert_async,
+                insert_batch_size=insert_batch_size,
+                embed_nodes=embed_nodes,
+                embed_edges=embed_edges,
+                embed_chunks=embed_chunks,
+                text_capitalization_strategy=text_capitalization_strategy,
+                include_chunks=include_chunks,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to ingest {file_id} into ArangoDB: {e}")
+        if logflag:
+            logger.info(f"Successfully ingested file {file_id}!")
         result = {
             "status": 200,
-            "message": f"Data preparation succeeded: {graph_names_created}",
-            "graph_names": list(graph_names_created),
+            "success": True,
+            "message": f"Data preparation succeeded: {graph_name}",
+            "graph_name": {graph_name},
         }
 
         if logflag:
             logger.info(result)
 
         return result
-
-
 
 
 
@@ -732,3 +785,28 @@ class OpeaArangoDataprep(OpeaComponent):
             self.db.delete_graph(file_path, drop_collections=True)
 
         return {"status": True}
+    
+
+
+    async def retract_files(self, file_id: str = Body(..., embed=True)):
+        """Delete a Graph according to `file_id`, which also defines the graph name: graph_name=f"GRAPH_{payload.fileId}"
+        """
+        graph_name = f"GRAPH_{file_id}"
+
+        if file_id == "all":
+            for graph in self.db.graphs():
+                self.db.delete_graph(graph["name"], drop_collections=True)
+        else:
+            if not self.db.has_graph(graph_name):
+                raise HTTPException(status_code=400, detail=f"GRAPH_{file_id} does not exist.")
+
+            self.db.delete_graph(graph_name, drop_collections=True)
+
+        result = {
+            "status": 200,
+            "success": True,
+            "message": f"Data retraction succeeded: {graph_name}",
+            "graph_name": {graph_name},
+        }
+
+        return result

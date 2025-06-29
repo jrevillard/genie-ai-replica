@@ -160,7 +160,7 @@ def load_pdf(pdf_path):
             page_idx = futures[future]
             results[page_idx] = future.result()
 
-    combined_result = "".join(results[i] for i in sorter(results))
+    combined_result = "".join(results[i] for i in sorted(results))
     return combined_result
 ###################################################################################################
 
@@ -407,7 +407,8 @@ async def load_svg(svg_path):
 
 async def document_loader(doc_path):
     if doc_path.endswith(".pdf"):
-        return await load_pdf_async(doc_path)
+        # return await load_pdf_async(doc_path)
+        return load_pdf(doc_path)
     elif doc_path.endswith(".html"):
         return load_html(doc_path)
     elif doc_path.endswith(".txt"):

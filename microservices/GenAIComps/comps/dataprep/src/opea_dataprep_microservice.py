@@ -42,7 +42,7 @@ logger = CustomLogger("opea_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 
-dataprep_component_name = os.getenv("DATAPREP_COMPONENT_NAME", "OPEA_DATAPREP_REDIS")
+dataprep_component_name = os.getenv("DATAPREP_COMPONENT_NAME", "OPEA_DATAPREP_ARANGODB")
 # Initialize OpeaComponentLoader
 loader = OpeaDataprepLoader(
     dataprep_component_name,
@@ -169,7 +169,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         # Construct the full request using ArangoDBDataprepRequestFromDocRepo
         input = ArangoDBDataprepRequestFromDocRepo(
             file_id=payload.fileId,
-            file_path=payload.filePath
+            file_path=payload.filePath,
+            graph_name=f"GRAPH_{payload.fileId}"
         )
 
         response = await loader.ingest_file_with_guardrail(input)
@@ -181,6 +182,11 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     except Exception as e:
         logger.error(f"Error during dataprep ingest invocation from document repository: {e}")
         raise
+
+# {"success": False, "message": f"Guardrail service error on chunk {i}", "chunk_index": i}
+# {"success": False, "message": f"Harmful content detected in chunk {i}", "chunk_index": i}
+# {"status": 200, "success": True, "message": f"Data preparation succeeded: {graph_name}", "graph_name": {graph_name}}
+
 
 
 
@@ -256,6 +262,46 @@ async def delete_files(file_path: str = Body(..., embed=True), index_name: str =
     except Exception as e:
         logger.error(f"Error during dataprep delete invocation: {e}")
         raise
+
+
+
+
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/retract_file",
+    host="0.0.0.0",
+    port=5000,
+)
+@register_statistics(names=["opea_service@dataprep"])
+async def retract_file(file_id: str = Body(..., embed=True), index_name: str = Body(None, embed=True)):
+    start = time.time()
+
+    if logflag:
+        logger.info("[ delete ] start to delete ingested file (graph, chunks, entities and relations)")
+
+    try:
+        # Use the loader to invoke the component
+        if dataprep_component_name == "OPEA_DATAPREP_ARANGODB":
+            # response = await loader.delete_files(file_id, index_name)
+            response = await loader.retract_file(file_id)
+        else:
+            logger.error(
+                    'dataprep_component_name is not set.'
+                )
+            raise
+
+        # Log the result if logging is enabled
+        if logflag:
+            logger.info(f"[ retract ] retracted result: {response}")
+        # Record statistics
+        statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
+        return response
+    except Exception as e:
+        logger.error(f"Error during dataprep retract invocation: {e}")
+        raise
+
+
 
 
 @register_microservice(

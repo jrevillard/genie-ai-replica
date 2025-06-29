@@ -1027,7 +1027,7 @@ class FileController {
     if (!file) return res.status(404).json({ success: false, error: 'File not found' });
 
     // Send retract request to dataprep microservice
-    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`; // Replace with actual URL/port
+    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`; // Replace with actual URL/port
     const response = await axios.post(dataprepUrl, { fileId: file.file_id });
 
     if (response.data.success) {

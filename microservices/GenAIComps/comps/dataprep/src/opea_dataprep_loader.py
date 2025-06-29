@@ -36,6 +36,11 @@ class OpeaDataprepLoader(OpeaComponentLoader):
         if logflag:
             logger.info("[ dataprep loader ] delete files")
         return await self.component.delete_files(*args, **kwargs)
+    
+    async def retract_file(self, *args, **kwargs):
+        if logflag:
+            logger.info("[ dataprep loader ] retract files")
+        return await self.component.retract_file(*args, **kwargs)
 
     async def get_list_of_indices(self, *args, **kwargs):
         if logflag:

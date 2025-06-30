@@ -333,6 +333,27 @@ class FileController {
     }
   }
 
+
+
+  uploadLink = async (req, res) => {
+  try {
+    const { url, fileType = 'html' } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    // Call fileService to handle crawling and saving
+    const fileRecord = await fileService.uploadLink(url, fileType);
+    logger.debug(`[FILE-CONTROLLER] fileRecord: ${fileRecord}`);
+    res.status(201).json({
+      success: true,
+      message: 'URL crawled and html file saved successfully',
+      data: this._formatFileRecord(fileRecord)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
   /**
    * Get all files with pagination and filtering
    * @param {Object} req - Express request object

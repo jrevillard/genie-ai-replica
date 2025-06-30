@@ -140,6 +140,50 @@ class FileService {
     }
   }
 
+
+  async uploadLink(url, fileType = 'html') {
+    // Use crawler to fetch content
+    const crawler = new Crawler();
+    const response = await crawler.fetch(url);
+    if (!response) throw new Error('Failed to fetch URL');
+
+    // Save content to a temp file
+    const fileId = fileUtils.generateUniqueFileId();
+    const ext = fileType === 'md' ? '.md' : '.html'; // ? and : means if fileType is 'md' then use .md else use .html
+    const fileName = `${fileId}${ext}`;
+    const filePath = path.join(this.uploadDir, fileName);
+
+    let content = response.data || response.text;
+    if (fileType === 'md') {
+      // Optionally convert HTML to Markdown here
+      const TurndownService = require('turndown');
+      const turndownService = new TurndownService();
+      content = turndownService.turndown(content);
+    }
+
+    await fileUtils.ensureDirectoryExists(this.uploadDir);
+    await fs.writeFile(filePath, content);
+
+    // Prepare fileData object similar to multer
+    const stats = await fs.stat(filePath);
+    const fileData = {
+      originalname: fileName,
+      mimetype: fileType === 'md' ? 'text/markdown' : 'text/html',
+      size: stats.size,
+      buffer: Buffer.from(content)
+    };
+
+    // 4. Call uploadFile to handle security, metadata, etc.
+    const fileInfo = {
+      sourceUrl: url,
+      labels: [],
+      author: 'crawler',
+      crawlDate: new Date().toISOString()
+    };
+    return await this.uploadFile(fileData, fileInfo);
+  }
+
+
   // /**
   //  * Get file by ID
   //  * @param {string} fileId - File ID

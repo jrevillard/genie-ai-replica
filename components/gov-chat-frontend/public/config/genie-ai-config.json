@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GENIE.AI Framework Configuration",
-  "description": "Configuration file for customizing the GENIE.AI chatbot framework with a magenta theme for Huduma AI",
+  "description": "Configuration file for customizing the GENIE.AI chatbot framework with a darker light blue theme inspired by ITU website banner",
   "type": "object",
   "properties": {
     "app": {
@@ -217,27 +217,27 @@
     "theme"
   ],
   "app": {
-    "title": "Huduma AI",
+    "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "/config/huduma-icon.svg"
+      "value": "/config/genie-ai-icon.svg"
     }
   },
   "theme": {
-    "primaryColor": "#7A2A6A",
-    "secondaryColor": "#4D143F",
-    "backgroundColor": "#EAD9E5",
-    "textColor": "#1C1519",
+    "primaryColor": "#4682B4",
+    "secondaryColor": "#5F9EA0",
+    "backgroundColor": "#D3E0EA",
+    "textColor": "#1C2526",
     "navbar": {
-      "gradientStart": "#6B245C",
-      "gradientEnd": "#3D0F31",
-      "textColor": "#F0E7EC"
+      "gradientStart": "#4682B4",
+      "gradientEnd": "#5F9EA0",
+      "textColor": "#F0F8FF"
     }
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to Huduma AI, your public service assistant!",
-      "botName": "Huduma",
+      "welcomeMessage": "Welcome to GENIE.AI, your public service RAG framework!",
+      "botName": "GENIE.AI",
       "quickHelp": {
         "buttons": [
           {
@@ -250,9 +250,9 @@
             "category": null,
             "prompt": "quickhelp.justChatPrompt",
             "styles": {
-              "backgroundColor": "#EAD9E5",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -265,9 +265,9 @@
             "category": "1",
             "prompt": "quickhelp.applyForIDPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -280,9 +280,9 @@
             "category": "5",
             "prompt": "quickhelp.payTaxesPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -295,9 +295,9 @@
             "category": "8",
             "prompt": "quickhelp.startBusinessPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -310,9 +310,9 @@
             "category": "2",
             "prompt": "quickhelp.findHealthcarePrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -325,9 +325,9 @@
             "category": "3",
             "prompt": "quickhelp.educationServicesPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -340,9 +340,9 @@
             "category": "7",
             "prompt": "quickhelp.transportLicensesPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -355,9 +355,9 @@
             "category": "9",
             "prompt": "quickhelp.housingProgramsPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           },
           {
@@ -370,9 +370,9 @@
             "category": "4",
             "prompt": "quickhelp.findJobsPrompt",
             "styles": {
-              "backgroundColor": "#F0E0EB",
-              "hoverColor": "#D8C1D3",
-              "outlineColor": "#B69CB1"
+              "backgroundColor": "#D3E0EA",
+              "hoverColor": "#A3BFFA",
+              "outlineColor": "#87CEEB"
             }
           }
         ]

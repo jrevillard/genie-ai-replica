@@ -1,4 +1,4 @@
-<!-- src/components/LoginScreen.vue -->
+// src/components/LoginScreen.vue
 <template>
   <div class="login-container" :data-theme="theme">
     <div class="login-card">
@@ -258,21 +258,12 @@ export default {
     }
   },
   created() {
-    // Apply theme to document element to ensure it cascades properly
     document.documentElement.setAttribute('data-theme', this.theme)
-
-    // Add viewport meta tag to ensure proper mobile rendering if not already present
     this.ensureViewportMeta()
-
-    // Clear any previous error messages when navigating to login page
     this.error = ''
-
-    // Check for redirect with error message
     if (this.$route.query.error) {
       this.error = this.$route.query.error
     }
-
-    // DEBUG: Attempt to read stored credentials from localStorage
     try {
       console.log('[DEBUG] Attempting to retrieve credentials from localStorage')
       const savedLoginName = localStorage.getItem('savedLoginName')
@@ -295,15 +286,10 @@ export default {
     }
   },
   mounted() {
-    // Fix for full-height issues on mobile browsers
     this.setMobileHeight()
     window.addEventListener('resize', this.setMobileHeight)
-
-    // Apply theme and observe changes
     this.applyTheme()
     this.observeThemeChanges()
-
-    // Debug: Log checkbox computed background color
     const checkbox = document.querySelector('.remember-me input')
     console.log(
       '[LOGIN] Checkbox computed background color:',
@@ -312,14 +298,12 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setMobileHeight)
-    // Observer cleanup is handled in observeThemeChanges
     if (this.themeObserver) {
       console.log('[LOGIN] Disconnecting MutationObserver')
       this.themeObserver.disconnect()
     }
   },
   watch: {
-    // Watch for theme changes from parent
     theme(newTheme) {
       console.log(
         '[LOGIN] Theme prop updated:',
@@ -331,15 +315,11 @@ export default {
     }
   },
   methods: {
-    // Fix for mobile viewport height issues (esp. on iOS)
     setMobileHeight() {
-      // First we get the viewport height and multiply it by 1% to get a value for a vh unit
       const vh = window.innerHeight * 0.01
-      // Then we set the value in the --vh custom property to the root of the document
       document.documentElement.style.setProperty('--vh', `${vh}px`)
     },
 
-    // Ensure the viewport meta tag exists
     ensureViewportMeta() {
       if (!document.querySelector('meta[name="viewport"]')) {
         const meta = document.createElement('meta')
@@ -350,33 +330,27 @@ export default {
       }
     },
 
-    // Navigate to forgot password page
     goToForgotPassword() {
       this.$router.push('/forgot-password')
     },
 
     async handleLogin() {
       try {
-        // Clear any previous errors
         this.error = ''
         this.isLoading = true
 
-        // Validate inputs
         if (!this.username || !this.password) {
           this.error = this.$t('login.fieldsRequired')
           return
         }
 
-        // Call userService to authenticate
         const result = await userService.login(this.username, this.password)
 
-        // Verify we got a valid response with access token
         if (!result || !result.accessToken) {
           this.error = this.$t('login.invalidCredentials')
           return
         }
 
-        // Store credentials in localStorage if rememberMe is checked
         if (this.rememberMe) {
           try {
             console.log(
@@ -384,7 +358,7 @@ export default {
               result.loginName
             )
             localStorage.setItem('savedLoginName', result.loginName)
-            localStorage.setItem('savedPassword', this.password) // Insecure, development only
+            localStorage.setItem('savedPassword', this.password)
             console.log(
               '[DEBUG] Credentials stored successfully in localStorage'
             )
@@ -395,7 +369,6 @@ export default {
             )
           }
         } else {
-          // Clear stored credentials
           try {
             console.log('[DEBUG] Clearing credentials from localStorage')
             localStorage.removeItem('savedLoginName')
@@ -409,30 +382,34 @@ export default {
           }
         }
 
-        // Dispatch auth action to store
         this.$store.dispatch('initAuth')
         this.$store.commit('setUser', result)
 
         // Emit login success event
+        console.log("Emitting login-success with user data:", result);
         this.$emit('login-success', result)
 
-        // Show welcome toast on every login
-        if (this.$config?.features?.chat?.welcomeMessage) {
+        // Show welcome toast
+        /** if (this.$config?.features?.chat?.welcomeMessage) {
+          console.log("Showing welcome toast");
           eventBus.$emit('notification:show', {
             message: this.$config.features.chat.welcomeMessage,
             type: 'success',
             duration: 5000
           })
           console.log('[DEBUG] Welcome toast shown')
-        }
+        } **/
 
-        // Navigate to home or dashboard or redirect URL if it exists
+        // Trigger splash screen
+        /**console.log("Emitting show-splash event");
+        this.$emit('show-splash')**/
+
+        // Navigate to home or dashboard or redirect URL
         const redirectPath = this.$route.query.redirect || '/'
+        console.log("Navigating to:", redirectPath);
         this.$router.push(redirectPath)
       } catch (error) {
         console.error('Login error:', error)
-
-        // Handle specific error cases
         if (error.status === 401) {
           this.error = this.$t('login.invalidCredentials')
         } else if (error.status === 429) {
@@ -449,9 +426,6 @@ export default {
       try {
         this.error = ''
         this.isLoading = true
-
-        // This would normally call your OAuth implementation
-        // For now, we'll just show a message that it’s not implemented
         this.error = this.$t('login.oauthNotImplemented')
       } catch (error) {
         console.error('Google login error:', error)
@@ -465,9 +439,6 @@ export default {
       try {
         this.error = ''
         this.isLoading = true
-
-        // This would normally call your OAuth implementation
-        // For now, we'll just show a message that it’s not implemented
         this.error = this.$t('login.oauthNotImplemented')
       } catch (error) {
         console.error('Facebook login error:', error)
@@ -481,12 +452,6 @@ export default {
       try {
         this.error = ''
         this.isLoading = true
-
-        // In a real implementation, you would:
-        // 1. Look up the saved credentials securely
-        // 2. Use them to authenticate
-
-        // For now, we'll just show a message that it’s not implemented
         this.error = this.$t('login.savedLoginNotImplemented')
       } catch (error) {
         console.error('Saved account login error:', error)
@@ -496,7 +461,6 @@ export default {
       }
     },
 
-    // Apply theme to document
     applyTheme() {
       console.log(
         '[LOGIN] Applying theme:',
@@ -520,7 +484,6 @@ export default {
       )
     },
 
-    // Observe external theme changes
     observeThemeChanges() {
       console.log(
         '[LOGIN] Setting up MutationObserver, initial theme:',
@@ -550,7 +513,6 @@ export default {
         })
       })
       observer.observe(document.documentElement, { attributes: true })
-      // Store observer for cleanup
       this.themeObserver = observer
     }
   }
@@ -562,10 +524,9 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh; /* Fallback */
-  min-height: calc(var(--vh, 1vh) * 100); /* Mobile viewport fix */
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
   padding: 16px;
-  /* Add safe area insets for notches and home indicators */
   padding-top: env(safe-area-inset-top, 16px);
   padding-bottom: env(safe-area-inset-bottom, 16px);
   box-sizing: border-box;
@@ -582,10 +543,10 @@ export default {
 .login-card {
   width: 100%;
   max-width: 400px;
-  max-height: 95vh; /* Prevent scrolling by limiting height */
-  border-radius: 16px; /* More rounded corners */
+  max-height: 95vh;
+  border-radius: 16px;
   box-shadow: var(--shadow-md);
-  padding: 24px; /* Reduced padding */
+  padding: 24px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -614,21 +575,20 @@ export default {
 
 .logo {
   text-align: center;
-  margin-bottom: 16px; /* Reduced margin */
+  margin-bottom: 16px;
 }
 
 .app-logo {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  width: 60px; /* Smaller logo */
+  width: 60px;
   height: 60px;
   border-radius: 50%;
   background-color: var(--bg-button-primary, #2a9d8f);
-  margin-bottom: 10px; /* Reduced margin */
+  margin-bottom: 10px;
 }
 
-/* Add after .app-logo rule */
 .app-logo:has(.ui-icon) {
   background-color: transparent;
 }
@@ -648,7 +608,7 @@ export default {
 }
 
 .app-name {
-  font-size: 28px; /* Smaller font */
+  font-size: 28px;
   margin: 0;
   font-weight: bold;
 }
@@ -662,17 +622,17 @@ export default {
 }
 
 .login-form {
-  margin-bottom: 16px; /* Reduced margin */
+  margin-bottom: 16px;
 }
 
 .form-group {
-  margin-bottom: 10px; /* Reduced margin */
+  margin-bottom: 10px;
 }
 
 .form-control {
   width: 100%;
-  padding: 10px 12px; /* Smaller padding */
-  font-size: 15px; /* Smaller font */
+  padding: 10px 12px;
+  font-size: 15px;
   border: none;
   border-radius: 8px;
   transition: background-color 0.2s;
@@ -704,8 +664,8 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px; /* Reduced margin */
-  font-size: 13px; /* Smaller font */
+  margin-bottom: 14px;
+  font-size: 13px;
 }
 
 .remember-me {
@@ -753,10 +713,10 @@ export default {
 
 .login-button {
   width: 100%;
-  padding: 10px; /* Reduced padding */
+  padding: 10px;
   background-color: var(--bg-button-primary, #2a9d8f);
   color: var(--text-button-primary, #ffffff);
-  font-size: 15px; /* Smaller font */
+  font-size: 15px;
   font-weight: bold;
   border: none;
   border-radius: 8px;
@@ -778,7 +738,6 @@ export default {
   opacity: 0.7;
 }
 
-/* Added styles for registration link */
 .register-account {
   text-align: center;
   margin-top: 12px;
@@ -799,7 +758,7 @@ export default {
 .divider {
   display: flex;
   align-items: center;
-  margin: 14px 0; /* Reduced margin */
+  margin: 14px 0;
 }
 
 .divider-line {
@@ -817,7 +776,7 @@ export default {
 
 .divider-text {
   padding: 0 15px;
-  font-size: 13px; /* Smaller font */
+  font-size: 13px;
 }
 
 [data-theme='light'] .divider-text {
@@ -831,17 +790,17 @@ export default {
 .social-login {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Reduced gap */
-  margin: 14px 0; /* Reduced margin */
+  gap: 8px;
+  margin: 14px 0;
 }
 
 .social-button {
   display: flex;
   align-items: center;
   padding: 0;
-  height: 36px; /* Reduced height */
+  height: 36px;
   border-radius: 8px;
-  font-size: 13px; /* Smaller font */
+  font-size: 13px;
   cursor: pointer;
   transition: background-color 0.2s;
   overflow: hidden;
@@ -859,13 +818,13 @@ export default {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 0 14px; /* Reduced padding */
+  padding: 0 14px;
 }
 
 .social-icon {
   min-width: 18px;
   height: 18px;
-  margin-right: 20px; /* Reduced margin */
+  margin-right: 20px;
   flex-shrink: 0;
 }
 
@@ -918,7 +877,7 @@ export default {
 .accounts-container {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Reduced gap */
+  gap: 8px;
 }
 
 [data-theme='light'] .accounts-container {
@@ -933,7 +892,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px; /* Reduced padding */
+  padding: 8px 12px;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -958,19 +917,19 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px; /* Smaller initials */
+  width: 28px;
   height: 28px;
   border-radius: 50%;
   background-color: var(--bg-button-primary, #2a9d8f);
   color: white;
   font-weight: bold;
-  margin-right: 10px; /* Reduced margin */
-  font-size: 13px; /* Smaller font */
+  margin-right: 10px;
+  font-size: 13px;
 }
 
 .account-name {
   font-weight: 500;
-  font-size: 14px; /* Smaller font */
+  font-size: 14px;
 }
 
 [data-theme='light'] .account-name {
@@ -984,9 +943,9 @@ export default {
 .account-provider {
   display: flex;
   align-items: center;
-  padding: 3px 6px; /* Reduced padding */
+  padding: 3px 6px;
   border-radius: 6px;
-  font-size: 11px; /* Smaller font */
+  font-size: 11px;
 }
 
 [data-theme='light'] .account-provider {
@@ -1000,20 +959,20 @@ export default {
 }
 
 .provider-icon {
-  margin-right: 5px; /* Reduced margin */
-  width: 14px; /* Smaller icon */
+  margin-right: 5px;
+  width: 14px;
   height: 14px;
 }
 
 .login-footer {
-  margin-top: auto; /* Push to bottom */
+  margin-top: auto;
   padding-top: 10px;
   text-align: center;
-  font-size: 11px; /* Smaller font */
+  font-size: 11px;
 }
 
 .terms-policy {
-  margin-bottom: 10px; /* Reduced margin */
+  margin-bottom: 10px;
 }
 
 [data-theme='light'] .terms-policy {
@@ -1025,10 +984,9 @@ export default {
 }
 
 .language-selector {
-  margin-top: 8px; /* Reduced margin */
+  margin-top: 8px;
 }
 
-/* Style LanguageSelector.vue's select to match original */
 .language-selector :deep(select) {
   padding: 6px 12px;
   border-radius: 8px;
@@ -1059,11 +1017,10 @@ export default {
   border-color: var(--bg-button-primary, #2a9d8f);
 }
 
-/* Responsive adjustments */
 @media (max-width: 480px) {
   .login-card {
-    padding: 20px 16px; /* Further reduced padding on small screens */
-    max-height: 92vh; /* Allow a bit more space for scrolling if needed */
+    padding: 20px 16px;
+    max-height: 92vh;
   }
 
   .app-logo {
@@ -1081,26 +1038,24 @@ export default {
     font-size: 24px;
   }
 
-  /* Ensure the container doesn't force scrolling on small screens */
   .login-container {
     padding: 10px;
     overflow-y: hidden;
   }
 }
 
-/* For very tall phones - keep the same compact layout */
 @media (min-height: 800px) {
   .login-card {
     padding: 24px;
-    max-height: 760px; /* Limit height on very tall phones */
+    max-height: 760px;
   }
 }
 
 .saved-accounts h3 {
-  color: #fff !important; /* Override inline style */
+  color: #fff !important;
 }
 
 .login-card .saved-accounts h3 {
-  color: inherit !important; /* Use theme color */
+  color: inherit !important;
 }
 </style>

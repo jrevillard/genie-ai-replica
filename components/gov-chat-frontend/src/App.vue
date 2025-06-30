@@ -5,11 +5,16 @@
     :class="{ 'sidebar-collapsed': !isSidebarOpen }"
     :data-theme="theme"
   >
-    <!-- Always show public routes without authentication requirement -->
-    <router-view v-if="$route.meta.requiresAuth === false" :theme="theme" />
+    <!-- Fallback loading state -->
+    <div v-if="isLoading" class="loading-screen">
+      Loading...
+    </div>
 
-    <!-- Only show main app when authenticated and route requires auth -->
-    <template v-else-if="isAuthenticated">
+    <!-- Public routes (no auth required) -->
+    <router-view v-else-if="!isLoading && $route.meta.requiresAuth === false" :theme="theme" />
+
+    <!-- Authenticated app content -->
+    <template v-else-if="!isLoading && isAuthenticated">
       <!-- Top navigation bar -->
       <nav-bar-component
         :is-sidebar-open="isSidebarOpen"
@@ -47,15 +52,16 @@
         @close="showSettings = false"
         @themeChanged="handleThemeChange"
       />
+      <AdminDashboard
+        v-if="showAdminDashboard"
+        @close="showAdminDashboard = false"
+      />
     </template>
 
-    <!-- Show login screen if not authenticated and route requires auth -->
+    <!-- Login screen for unauthenticated users on auth-required routes -->
     <login-screen
-      v-else
-      @login-success="
-        console.log('login-success event:', $event);
-        handleLoginSuccess($event);
-      "
+      v-else-if="!isLoading && !isAuthenticated && $route.meta.requiresAuth !== false"
+      @login-success="handleLoginSuccess"
       :theme="theme"
     />
 
@@ -68,10 +74,9 @@
     >
       {{ notification.message }}
     </div>
-    <AdminDashboard
-      v-if="showAdminDashboard"
-      @close="showAdminDashboard = false"
-    />
+
+    <!-- Splash screen (controlled via auth state) -->
+    <splash-screen v-if="showSplash" @splash-complete="showSplash = false" />
   </div>
 </template>
 
@@ -83,6 +88,7 @@ import UserProfileComponent from "./components/UserProfileComponent.vue";
 import SettingsComponent from "./components/SettingsComponent.vue";
 import LoginScreen from "./components/LoginScreen.vue";
 import AdminDashboard from "./components/AdminDashboard.vue";
+import SplashScreen from "./components/SplashScreen.vue";
 import { mapGetters } from "vuex";
 import { eventBus } from "./eventBus.js";
 import chatHistoryService from "./services/chatHistoryService";
@@ -98,6 +104,7 @@ export default {
     SettingsComponent,
     LoginScreen,
     AdminDashboard,
+    SplashScreen,
   },
 
   data() {
@@ -114,6 +121,8 @@ export default {
         type: "success",
         timer: null,
       },
+      showSplash: false,
+      isLoading: true,
     };
   },
   computed: {
@@ -122,40 +131,55 @@ export default {
   watch: {
     isAuthenticated(newVal) {
       if (newVal) {
-        console.log("isAuthenticated changed to true, loading folders");
+        console.log("isAuthenticated changed to true, loading folders and triggering splash");
         this.loadFoldersOnAuth();
+        // Show splash screen with a slight delay to ensure DOM readiness
+        setTimeout(() => {
+          this.showSplash = true;
+          console.log("Splash screen displayed");
+          // Auto-hide splash after 3 seconds
+          setTimeout(() => {
+            this.showSplash = false;
+            console.log("Splash screen hidden");
+          }, 3000);
+        }, 100);
       }
+    },
+    showSplash(newVal) {
+      console.log("showSplash changed to:", newVal);
     },
   },
   mounted() {
-    // Initialize auth state
-    this.$store.dispatch("initAuth").then(() => {
-      if (this.isAuthenticated) {
-        console.log("User authenticated on mount, loading folders");
-        this.loadFoldersOnAuth();
-      }
-    });
+    console.log("App.vue mounted");
+    this.$store
+      .dispatch("initAuth")
+      .then(() => {
+        console.log("initAuth completed, isAuthenticated:", this.isAuthenticated);
+        if (this.isAuthenticated) {
+          this.loadFoldersOnAuth();
+        }
+        this.isLoading = false;
+      })
+      .catch((error) => {
+        console.error("initAuth failed:", error);
+        this.isLoading = false;
+        this.showNotification({
+          message: "Failed to initialize authentication",
+          type: "error",
+          duration: 5000,
+        });
+      });
 
-    // Check if sidebar state is saved in localStorage
     const savedSidebarState = localStorage.getItem("sidebarOpen");
     if (savedSidebarState !== null) {
       this.isSidebarOpen = savedSidebarState === "true";
     }
 
-    // Load saved theme preference
     this.initTheme();
-
-    // Initialize font size from settings
     this.initFontSize();
-
-    // Adjust sidebar for mobile devices
     this.checkScreenSize();
     window.addEventListener("resize", this.checkScreenSize);
-
-    // Add listener for system theme changes if using system theme
     this.setupSystemThemeListener();
-
-    // Set up notification event listener
     eventBus.$on("notification:show", this.showNotification);
   },
   beforeUnmount() {
@@ -168,7 +192,6 @@ export default {
     eventBus.$off("notification:show", this.showNotification);
   },
   methods: {
-    // Notification methods
     showNotification(payload) {
       if (this.notification.timer) {
         clearTimeout(this.notification.timer);
@@ -179,6 +202,7 @@ export default {
         type: payload.type || "success",
         timer: null,
       };
+      console.log("Showing notification:", payload);
       this.notification.timer = setTimeout(() => {
         this.hideNotification();
       }, payload.duration || 3000);
@@ -189,9 +213,9 @@ export default {
         clearTimeout(this.notification.timer);
         this.notification.timer = null;
       }
+      console.log("Notification hidden");
     },
 
-    // Initialize theme by syncing with main.js
     initTheme() {
       const currentTheme =
         document.documentElement.getAttribute("data-theme") || "light";
@@ -199,7 +223,6 @@ export default {
       console.log("App component synchronized theme to:", this.theme);
     },
 
-    // Initialize font size from settings
     initFontSize() {
       try {
         const fontSize = localStorage.getItem("fontSize");
@@ -213,7 +236,6 @@ export default {
       }
     },
 
-    // Setup listener for system theme changes
     setupSystemThemeListener() {
       if (this.theme === "system" && window.matchMedia) {
         this.systemThemeListener = (e) => {
@@ -227,7 +249,6 @@ export default {
       }
     },
 
-    // Handle theme changes from settings
     handleThemeChange(newTheme) {
       console.log("Theme changed to:", newTheme);
       this.theme = newTheme;
@@ -410,22 +431,33 @@ body {
   background-color: var(--bg-primary, #f5f7fa);
 }
 
-/* Notification styles */
+/* Loading screen */
+.loading-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: var(--bg-primary, #f5f7fa);
+  color: var(--text-primary, #333);
+  font-size: 1.5rem;
+}
+
+/* Notification styles (fallback for eventBus-based notifications) */
 .notification {
   position: fixed;
   top: 0;
-  left: 0; /* Start from left edge */
-  right: 0; /* Stretch to right edge */
-  width: 100%; /* Full width */
+  left: 0;
+  right: 0;
+  width: 100%;
   padding: 16px 20px;
   color: white;
   font-weight: 500;
-  line-height: 1.8; /* Increased line height */
-  z-index: 1000;
+  line-height: 1.8;
+  z-index: 9000; /* Lower than NotificationSystem.vue and SplashScreen.vue */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: notification-fadeIn 0.3s ease;
   cursor: pointer;
-  text-align: center; /* Center the text */
+  text-align: center;
   border-bottom-left-radius: 6px;
   border-bottom-right-radius: 6px;
 }

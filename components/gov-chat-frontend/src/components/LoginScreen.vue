@@ -390,7 +390,7 @@ export default {
         this.$emit('login-success', result)
 
         // Show welcome toast
-        /** if (this.$config?.features?.chat?.welcomeMessage) {
+        if (this.$config?.features?.chat?.welcomeMessage) {
           console.log("Showing welcome toast");
           eventBus.$emit('notification:show', {
             message: this.$config.features.chat.welcomeMessage,
@@ -398,11 +398,8 @@ export default {
             duration: 5000
           })
           console.log('[DEBUG] Welcome toast shown')
-        } **/
+        }
 
-        // Trigger splash screen
-        /**console.log("Emitting show-splash event");
-        this.$emit('show-splash')**/
 
         // Navigate to home or dashboard or redirect URL
         const redirectPath = this.$route.query.redirect || '/'

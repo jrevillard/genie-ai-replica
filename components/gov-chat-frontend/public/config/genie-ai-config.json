@@ -11,7 +11,7 @@
         "title": {
           "type": "string",
           "description": "Main application title displayed in the UI",
-          "default": "GENIE.AI Chatbot"
+          "default": "GENIE.AI"
         },
         "icon": {
           "type": "object",
@@ -220,7 +220,7 @@
     "title": "GENIE.AI",
     "icon": {
       "type": "file",
-      "value": "/config/genie-ai-icon.svg"
+      "value": "/config/genie-ai-icon-light.svg"
     }
   },
   "theme": {
@@ -236,7 +236,7 @@
   },
   "features": {
     "chat": {
-      "welcomeMessage": "Welcome to GENIE.AI, your public service RAG framework!",
+      "welcomeMessage": "Welcome to GENIE.AI, for Global Empowerment, Intelligence and Equity",
       "botName": "GENIE.AI",
       "quickHelp": {
         "buttons": [

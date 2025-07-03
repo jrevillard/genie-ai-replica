@@ -90,7 +90,7 @@ class OpeaTEIReranking(OpeaComponent):
                 )
 
                 response.raise_for_status()  # Raise an error for bad responses
-                best_response = response.json()[: input.top_n]
+                best_response = response.json()[: input.top_n] 
                 reranking_results = [
                     {"text": input.retrieved_docs[doc["index"]].text, "score": doc["score"]} for doc in best_response
                 ]

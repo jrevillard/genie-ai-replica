@@ -388,7 +388,7 @@ services:
       - TEI_RERANKING_ENDPOINT=http://tei_reranker:80
       - RERANKER_MODEL_ID=bge-reranker-base
     ports:
-      - "6100:8000"
+      - "6100:8000" # Expose port 6100 for the reranker service. 8000 is the internal port used by the service, which is mapped to 6100 on the host.
     ipc: "host"
     networks:
       - llm_network

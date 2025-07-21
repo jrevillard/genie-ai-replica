@@ -1,11 +1,3 @@
-/*
- * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @Date: 2025-06-15 19:41:49
- * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @LastEditTime: 2025-06-29 15:59:43
- * @FilePath: /genie-ai/components/document-repository/src/config/appConfig.js
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
- */
 require('dotenv').config();
 
 const config = {
@@ -65,7 +57,8 @@ const config = {
     quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED || false, // False: Don't quarantine, Path: Moves files to this place.
     debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false, // Whether or not to log info/debug/error msgs to the console
     socket: process.env.CLAMSCAN_SOCKET || false, // Socket file for connecting via TCP
-    host: process.env.CLAMSCAN_HOST || 'localhost', // IP of host to connect to TCP interface
+    // socket: process.env.CLAMSCAN_SOCKET || "/opt/homebrew/var/run/clamav/clamd.sock",
+    host: process.env.CLAMSCAN_HOST || '127.0.0.1', // IP of host to connect to TCP interface
     port: process.env.CLAMSCAN_PORT || 3310, // Port of host to use when connecting via TCP interface
     timeout: process.env.CLAMSCAN_TIMEOUT || 60000, // Timeout for scanning files
     localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true, // Use local preferred binary to scan if socket/tcp fails

@@ -29,7 +29,7 @@ async function extractMetadata(filePath, fileInfo = {}) {
         create_date: fileInfo.create_date || stats.birthtime.toISOString(),
         crawl_date: fileInfo.crawl_date || '',
         source_url: fileInfo.source_url || '',
-        language: 'unknown',
+        language: fileInfo.language || 'unknown',
         chunk_count: 0,
         dataprep: {
             status: 'pending',

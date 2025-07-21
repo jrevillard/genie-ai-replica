@@ -23,7 +23,7 @@ Extracted *immediately after upload* and stored **in ArangoDB document-repositor
 * `language` 🔍 ✍️ (set as `unknown` at this stage, to be detected later)
 * `chunk_count` (number of text chunks. Set to `0` at this stage, to be updated later)
 * dataprep
-    * `status` (initially set to `pending`, updated to `ingested` after successful ingestion, or `retracted` if the file is retracted)
+    * `status` 🔍 (initially set to `pending`, updated to `ingested` after successful ingestion, or `retracted` if the file is retracted)
     * `ingest_date` (timestamp of when the file was successfully ingested, initially empty)
     * `retract_date` (timestamp of when the file was retracted, initially empty)
 

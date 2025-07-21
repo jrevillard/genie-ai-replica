@@ -351,7 +351,7 @@ class FileController {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-};
+  }
 
 
   /**
@@ -676,7 +676,7 @@ class FileController {
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
-   async updateFile(req, res) {
+  async updateFile(req, res) {
     try {
       const { fileId } = req.params;
 
@@ -934,9 +934,9 @@ class FileController {
    */
   async getMetadata(req, res) {
     try {
-      const { file_id } = req.params;
+      const { fileId } = req.params;
 
-      if (!file_id) {
+      if (!fileId) {
         return res.status(400).json({
           success: false,
           error: 'Missing file ID',
@@ -944,7 +944,7 @@ class FileController {
         });
       }
 
-      const metadata = await metadataService.getMetadataById(file_id);
+      const metadata = await metadataService.getMetadataById(fileId);
       if (!metadata) {
         return res.status(404).json({
           success: false,

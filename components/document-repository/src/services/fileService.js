@@ -6,6 +6,7 @@ const { logger } = require('../shared-lib/logger');
 const dbService = require('../shared-lib/db-connection-service');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
+const Crawler = require('../utils/crawler'); // Assuming you have a crawler utility to fetch webpage content
 
 
 // Import services
@@ -106,7 +107,7 @@ class FileService {
         created_date: createdDate,
         crawl_date: fileInfo.crawlDate || null,
         source_url: fileInfo.sourceUrl || '',
-        language: '',
+        language: fileInfo.language || '',
         chunk_count: 0,
         dataprep: {
           status: 'pending',
@@ -147,13 +148,29 @@ class FileService {
     const response = await crawler.fetch(url);
     if (!response) throw new Error('Failed to fetch URL');
 
+    let content = response.data || response.text;
+
+    const language = crawler.getLanguage(content);
+
     // Save content to a temp file
-    const fileId = fileUtils.generateUniqueFileId();
+    let title = crawler.getTitle(content) || 'untitled';
+    title = title.replace(/[\/\\?%*:|"<>]/g, '-').substring(0, 100) || 'untitled';
+
+    if (title === 'untitled') {
+      try {
+        const { hostname, pathname } = new URL(url);
+        // Use hostname and last path segment as fallback
+        const pathPart = pathname.split('/').filter(Boolean).pop() || 'index';
+        title = `${hostname}-${pathPart}`;
+      } catch {
+        title = 'untitled-webpage';
+      }
+    }
+
     const ext = fileType === 'md' ? '.md' : '.html'; // ? and : means if fileType is 'md' then use .md else use .html
-    const fileName = `${fileId}${ext}`;
+    const fileName = `${title}${ext}`;
     const filePath = path.join(this.uploadDir, fileName);
 
-    let content = response.data || response.text;
     if (fileType === 'md') {
       // Optionally convert HTML to Markdown here
       const TurndownService = require('turndown');
@@ -165,7 +182,7 @@ class FileService {
     await fs.writeFile(filePath, content);
 
     // Prepare fileData object similar to multer
-    const stats = await fs.stat(filePath);
+    const stats = await fs.stat(filePath); // Get file stats
     const fileData = {
       originalname: fileName,
       mimetype: fileType === 'md' ? 'text/markdown' : 'text/html',
@@ -178,9 +195,20 @@ class FileService {
       sourceUrl: url,
       labels: [],
       author: 'crawler',
+      language: language,
       crawlDate: new Date().toISOString()
     };
-    return await this.uploadFile(fileData, fileInfo);
+    const uploadedFile = await this.uploadFile(fileData, fileInfo);
+
+    //5. Delete the originally downloaded html file
+    try {
+      await fs.unlink(filePath);
+      logger.debug(`[FILE-SERVICE] Deleted temp file: ${filePath}`);
+    } catch (err) {
+      logger.warn(`[FILE-SERVICE] Failed to delete temp file: ${filePath} - ${err.message}`);
+    }
+
+    return uploadedFile;
   }
 
 
@@ -234,6 +262,7 @@ class FileService {
       }
       if (search) {
         filters.push('CONTAINS(LOWER(file.file_name), LOWER(@search))');
+        // filters.push('CONTAINS(file.file_name, @search)');
         bindVars.search = search;
       }
       if (dataprepStatus) {

@@ -1,11 +1,3 @@
-/*
- * @Author: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @Date: 2025-06-16 11:46:56
- * @LastEditors: ScarlettSun9 53145308+ScarlettSun9@users.noreply.github.com
- * @LastEditTime: 2025-06-30 16:09:15
- * @FilePath: /genie-ai/components/document-repository/src/routes/fileRoutes.js
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
- */
 const express = require('express');
 const fileController = require('../controllers/fileController');
 const { uploadSingle, uploadMultiple } = require('../middlewares/fileUpload');
@@ -26,6 +18,7 @@ router.use(authenticateToken);
  * @body {string[]} [tags] - Array of tags
  */
 router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
+// router.post('/upload', uploadSingle, fileController.uploadFile);
 
 /**
  * @route POST /api/files/uploads
@@ -79,7 +72,7 @@ router.get('/search', fileController.searchMetadata);
  * @access Public
  * @param {string} id - File ID
  */
-router.get('/:metadata', fileController.getMetadata);
+router.get('/:fileId', fileController.getMetadata);
 
 /**
  * @route GET /api/files/:id/view

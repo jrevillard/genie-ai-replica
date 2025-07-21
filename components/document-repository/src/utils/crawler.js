@@ -81,6 +81,31 @@ class Crawler {
     throw lastError;
   }
 
+  getTitle(html) {
+    try {
+      const $ = cheerio.load(html);
+      return $('title').text().trim() || 'untitled';
+    } catch {
+      return 'untitled';
+    }
+  }
+
+
+  getLanguage(html) {
+    try {
+      const $ = cheerio.load(html, { lowerCaseTags: true, lowerCaseAttributeNames: true });
+      // Try to get lang attribute from <html>
+      let lang = $('html').attr('lang');
+      if (lang) return lang.split('-')[0].toLowerCase();
+      // Fallback: regex search for lang attribute in <html ...>
+      const match = html.match(/<html[^>]*\slang=["']?([a-zA-Z0-9-]+)["']?/i);
+      if (match && match[1]) return match[1].split('-')[0].toLowerCase();
+      return '';
+    } catch {
+      return '';
+    }
+  }
+
   async processWork(subUrl, work) {
     const response = await this.fetch(subUrl);
     if (!response) return [];

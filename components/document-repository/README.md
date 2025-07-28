@@ -535,7 +535,7 @@ curl "http://localhost:3000/api/files?mimeType=text/html" \
 
 💚 Search by file name (case insensitive):
 ```bash
-curl "http://localhost:3000/api/files?search=world" \
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -604,11 +604,16 @@ curl -X PATCH http://localhost:3000/api/files/1752757770440-ce960082 \
 
 ### Search Files by Filtering Metadata
 
+For search files by name, the terminal does not encode non-ASCII characters correctly in the URL. Must percent-encode all characters.
+
 ```bash
 curl "http://localhost:3000/api/files/search?file_type=application/pdf" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_name=ITU" \
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
+  -H "Authorization: Bearer <accessToken>"
+
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' ITU)" \
   -H "Authorization: Bearer <accessToken>"
 
 curl "http://localhost:3000/api/files/search?upload_date_from=2025-07-15T14:30:00.092Z&upload_date_to=2025-07-16T14:40:07.092Z" \

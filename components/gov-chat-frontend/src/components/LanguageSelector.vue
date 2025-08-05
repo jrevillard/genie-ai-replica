@@ -14,10 +14,13 @@ export default {
       currentLocale: this.$i18n.locale,
       localeNames: {
         en: 'English',
+        de: 'German',
         es: 'Spanish',
         fr: 'Français',
         id: 'Indonesian',
-        sw: 'Kiswahili'
+        sw: 'Kiswahili',
+        th: 'Thai',
+        zh: 'Chinese'
       }
     }
   },

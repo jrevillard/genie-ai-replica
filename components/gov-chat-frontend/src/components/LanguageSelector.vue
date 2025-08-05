@@ -14,6 +14,7 @@ export default {
       currentLocale: this.$i18n.locale,
       localeNames: {
         en: 'English',
+        es: 'Spanish',
         fr: 'Français',
         id: 'Indonesian',
         sw: 'Kiswahili'

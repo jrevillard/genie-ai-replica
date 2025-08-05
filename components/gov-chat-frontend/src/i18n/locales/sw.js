@@ -211,7 +211,7 @@ export default {
     backToLogin: 'Rudi kwa Kuingia'
   },
   admin: {
-    huduma: 'Huduma AI',
+    huduma: 'Genie AI',
     dashboard: 'Dashibodi',
     system: 'Mfumo',
     settings: 'Mipangilio',
@@ -242,7 +242,7 @@ export default {
     runDiagnostics: 'Endesha Uchunguzi',
     resourceUsage: 'Matumizi ya Rasilimali',
     services: {
-      apiServices: 'Huduma za API',
+      apiServices: 'Genie za API',
       database: 'Hifadhidata',
       cache: 'Akiba',
       storage: 'Hifadhi',
@@ -265,7 +265,7 @@ export default {
     searchLogs: 'Tafuta Kumbukumbu',
     logTime: 'Wakati',
     logLevel: 'Kiwango',
-    logService: 'Huduma',
+    logService: 'Genie',
     logMessage: 'Ujumbe',
     showingEntries: 'Inaonyesha {start}-{end} kati ya {total} viingizo',
     logLevels: {
@@ -432,7 +432,7 @@ export default {
       lastSeen: 'Ilionekana Mwisho',
       timestamp: 'Muhuri wa Wakati',
       message: 'Ujumbe',
-      service: 'Huduma',
+      service: 'Genie',
       type: 'Aina',
       severity: 'Ukali',
       url: 'URL',
@@ -484,7 +484,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'Tengeneza Nenosiri Mpya',
     tokenLabel: 'Tokeni ya Kubadilisha',
     tokenPlaceholder: 'Ingiza tokeni ya kubadilisha',
@@ -524,7 +524,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'Weka Nenosiri Upya',
     emailLabel: 'Anwani ya Barua Pepe',
     emailPlaceholder: 'Ingiza barua pepe yako',
@@ -539,7 +539,7 @@ export default {
     checkEmail: 'Tafadhali angalia barua pepe yako kwa maagizo zaidi.'
   },
   register: {
-    appTitle: "Huduma AI",
+    appTitle: "Genie AI",
     createAccount: "Tengeneza Akaunti Mpya",
     username: "Jina la mtumiaji",
     usernamePlaceholder: "Ingiza jina la mtumiaji",
@@ -550,17 +550,17 @@ export default {
     confirmPassword: "Thibitisha Nenosiri",
     confirmPasswordPlaceholder: "Thibitisha nenosiri lako",
     acceptTerms: "Ninakubali",
-    termsOfService: "Masharti ya Huduma",
+    termsOfService: "Masharti ya Genie",
     registerButton: "Tengeneza Akaunti",
     processing: "Inachakata...",
     alreadyHaveAccount: "Una akaunti tayari?",
     loginNow: "Ingia",
-    privacyNotice: "Kwa kujiandikisha, unakubali Masharti ya Huduma na Sera ya Faragha",
+    privacyNotice: "Kwa kujiandikisha, unakubali Masharti ya Genie na Sera ya Faragha",
     usernameMinLength: "Jina la mtumiaji lazima liwe na angalau herufi 3",
     invalidEmail: "Tafadhali ingiza anwani halali ya barua pepe",
     passwordRequirements: "Nenosiri lazima liwe na angalau herufi 8 na angalau namba 1 na herufi kubwa 1",
     passwordsDoNotMatch: "Nenosiri hazilingani",
-    mustAcceptTerms: "Lazima ukubali Masharti ya Huduma",
+    mustAcceptTerms: "Lazima ukubali Masharti ya Genie",
     registrationFailed: "Usajili umeshindwa. Tafadhali jaribu tena.",
     usernameExists: "Jina la mtumiaji tayari lipo",
     emailExists: "Barua pepe tayari ipo",
@@ -576,7 +576,7 @@ export default {
     networkError: 'Hitilafu ya mtandao. Tafadhali angalia muunganisho wako na ujaribu tena.'
   },
   login: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     username: 'Jina la mtumiaji',
     password: 'Nywila',
     loginButton: 'Ingia',
@@ -591,7 +591,7 @@ export default {
     noAccount: 'Huna akaunti?',
     createAccount: 'Fungua akaunti',
     registerNow: "Jiandikishe sasa",
-    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Huduma na Sera ya Faragha',
+    termsAndPolicy: 'Kwa kuingia, unakubali Masharti yetu ya Genie na Sera ya Faragha',
     loggingIn: "Inaingia...",
     fieldsRequired: "Jina la mtumiaji na nenosiri zinahitajika",
     invalidCredentials: "Jina la mtumiaji au nenosiri batili",
@@ -713,7 +713,7 @@ export default {
     satisfactionRate: 'Kiwango cha Kuridhika',
     satisfactionAnalysis: 'Uchambuzi wa Kuridhika kwa Watumiaji'
   },
-  brandName: 'Huduma AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
+  brandName: 'Genie AI: Msaidizi Wako wa Kiserikali wa Kidijitali',
   nav: {
     systemStatus: 'Hali ya Mfumo',
     menu: 'Menyu',
@@ -732,8 +732,8 @@ export default {
     }
   },
   systemStatus: {
-    title: 'Hali ya Huduma',
-    services: 'Huduma',
+    title: 'Hali ya Genie',
+    services: 'Genie',
     operational: 'Inafanya Kazi',
     degraded: 'Ina Shida Ndogo',
     outage: 'Haifanyi Kazi',
@@ -845,15 +845,15 @@ export default {
       children: ['Vyeti vya kuzaliwa', 'Vitambulisho vya Taifa', 'Pasi za kusafiria', 'Vyeti vya ndoa na vifo', 'Usajili wa wapiga kura']
     },
     cat2: {
-      name: '2. Huduma za Afya & Ustawi wa Jamii',
-      children: ['Upatikanaji wa huduma za afya', 'Mikakati ya chanjo', 'Bima ya afya', 'Huduma za walemavu', 'Msaada wa ustawi na chakula']
+      name: '2. Genie za Afya & Ustawi wa Jamii',
+      children: ['Upatikanaji wa huduma za afya', 'Mikakati ya chanjo', 'Bima ya afya', 'Genie za walemavu', 'Msaada wa ustawi na chakula']
     },
     cat3: {
       name: '3. Elimu & Kujifunza',
       children: ['Shule za umma na vyuo vikuu', 'Mikopo na ufadhili wa wanafunzi', 'Programu za elimu ya watu wazima', 'Rasilimali za kujifunza mtandaoni']
     },
     cat4: {
-      name: '4. Ajira & Huduma za Kazi',
+      name: '4. Ajira & Genie za Kazi',
       children: ['Utafutaji wa kazi na malipo ya ukosefu wa ajira', 'Haki na ulinzi wa wafanyakazi', 'Kanuni za usalama kazini', 'Mafunzo ya stadi na uanagenzi']
     },
     cat5: {
@@ -873,8 +873,8 @@ export default {
       children: ['Msaada wa makazi ya umma', 'Usajili wa ardhi na mali', 'Mikopo na ruzuku za makazi', 'Vibali vya ujenzi na upangaji']
     },
     cat9: {
-      name: '9. Huduma za Umma & Mazingira',
-      children: ['Huduma za maji na umeme', 'Usimamizi wa taka na urejelezaji', 'Kanuni za mazingira', 'Miradi ya nishati mbadala']
+      name: '9. Genie za Umma & Mazingira',
+      children: ['Genie za maji na umeme', 'Usimamizi wa taka na urejelezaji', 'Kanuni za mazingira', 'Miradi ya nishati mbadala']
     },
     cat10: {
       name: '10. Biashara & Biashara',
@@ -1050,14 +1050,14 @@ export default {
       country: 'Nchi',
       residencyStatus: 'Hali ya Makazi',
       homeOrRental: 'Maelezo ya Umiliki au Upangaji',
-      utilityBills: 'Bili za Huduma Zinazohusiana na Anwani',
+      utilityBills: 'Bili za Genie Zinazohusiana na Anwani',
       landRecords: 'Rekodi za Umiliki wa Ardhi na Mali',
       idCard: 'Nambari ya Kitambulisho cha Taifa',
       passport: 'Maelezo ya Pasipoti',
       driversLicense: 'Leseni ya Udereva',
       voterId: 'Kitambulisho cha Mpiga Kura',
       ssn: 'Nambari ya Hifadhi ya Jamii / Bima ya Taifa',
-      militaryRecords: 'Rekodi za Huduma ya Jeshi',
+      militaryRecords: 'Rekodi za Genie ya Jeshi',
       medicalHistory: 'Historia ya Matibabu na Hali za Afya',
       vaccinations: 'Rekodi za Chanjo',
       insuranceDetails: 'Maelezo ya Bima ya Afya',
@@ -1101,8 +1101,8 @@ export default {
       voterRegistration: 'Maelezo ya Usajili wa Mpiga Kura',
       electionHistory: 'Historia ya Ushiriki wa Uchaguzi',
       partyMembership: 'Uanachama wa Chama cha Kisiasa',
-      militaryStatus: 'Huduma ya Jeshi au Hali ya Utii',
-      publicServiceRoles: 'Majukumu ya Huduma za Umma'
+      militaryStatus: 'Genie ya Jeshi au Hali ya Utii',
+      publicServiceRoles: 'Majukumu ya Genie za Umma'
     },
     placeholders: {
       fullName: 'Ingiza jina lako kamili la kisheria',
@@ -1341,7 +1341,7 @@ export default {
     payTaxes: "Lipa kodi",
     startBusiness: "Anza biashara",
     findHealthcare: "Pata huduma za afya",
-    educationServices: "Huduma za elimu",
+    educationServices: "Genie za elimu",
     transportLicenses: "Usafiri na leseni",
     housingPrograms: "Programu za nyumba",
     findJobs: "Tafuta kazi",

@@ -211,7 +211,7 @@ export default {
     backToLogin: 'Retour à la connexion'
   },
   admin: {
-    huduma: 'Huduma AI',
+    huduma: 'Genie AI',
     dashboard: 'Tableau de bord',
     system: 'Système',
     settings: 'Paramètres',
@@ -484,7 +484,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'Créer un nouveau mot de passe',
     tokenLabel: 'Jeton de réinitialisation',
     tokenPlaceholder: 'Entrez le jeton de réinitialisation',
@@ -524,7 +524,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'Réinitialiser votre mot de passe',
     emailLabel: 'Adresse email',
     emailPlaceholder: 'Entrez votre email',
@@ -539,7 +539,7 @@ export default {
     checkEmail: 'Veuillez vérifier votre email pour les instructions.'
   },
   register: {
-    appTitle: "Huduma AI",
+    appTitle: "Genie AI",
     createAccount: "Créer un nouveau compte",
     username: "Nom d'utilisateur",
     usernamePlaceholder: "Entrez un nom d'utilisateur",
@@ -576,7 +576,7 @@ export default {
     networkError: 'Erreur réseau. Veuillez vérifier votre connexion et réessayer.'
   },
   login: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     username: 'Nom d\'utilisateur',
     password: 'Mot de passe',
     loginButton: 'Connexion',
@@ -713,7 +713,7 @@ export default {
     satisfactionRate: 'Taux de satisfaction',
     satisfactionAnalysis: 'Analyse de la satisfaction des utilisateurs'
   },
-  brandName: 'Huduma AI: Votre assistant gouvernemental numérique',
+  brandName: 'Genie AI: Votre assistant gouvernemental numérique',
   nav: {
     systemStatus: 'État du système',
     menu: 'Menu',

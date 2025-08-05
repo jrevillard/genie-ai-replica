@@ -211,7 +211,7 @@ export default {
     backToLogin: 'Kembali ke Login'
   },
   admin: {
-    huduma: 'Huduma AI',
+    huduma: 'Genie AI',
     dashboard: 'Dasbor',
     system: 'Sistem',
     settings: 'Pengaturan',
@@ -484,7 +484,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'Buat Kata Sandi Baru',
     tokenLabel: 'Token Atur Ulang',
     tokenPlaceholder: 'Masukkan token atur ulang',
@@ -524,7 +524,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'Atur Ulang Kata Sandi Anda',
     emailLabel: 'Alamat Email',
     emailPlaceholder: 'Masukkan email Anda',
@@ -539,7 +539,7 @@ export default {
     checkEmail: 'Silakan periksa email Anda untuk instruksi lebih lanjut.'
   },
   register: {
-    appTitle: "Huduma AI",
+    appTitle: "Genie AI",
     createAccount: "Buat Akun Baru",
     username: "Nama Pengguna",
     usernamePlaceholder: "Masukkan nama pengguna",
@@ -576,7 +576,7 @@ export default {
     networkError: 'Kesalahan jaringan. Silakan periksa koneksi Anda dan coba lagi.'
   },
   login: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     username: 'Nama Pengguna',
     password: 'Kata Sandi',
     loginButton: 'Masuk',
@@ -713,7 +713,7 @@ export default {
     satisfactionRate: 'Tingkat Kepuasan',
     satisfactionAnalysis: 'Analisis Kepuasan Pengguna'
   },
-  brandName: 'Huduma AI: Asisten Digital Pemerintah Anda',
+  brandName: 'Genie AI: Asisten Digital Pemerintah Anda',
   nav: {
     systemStatus: 'Status Sistem',
     menu: 'Menu',

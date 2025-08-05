@@ -8,11 +8,37 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+const { Server: SocketIOServer } = require('socket.io');
 const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8090; // Changed to 8090
+
+// Initialize WebSocket server
+const server = require('http').createServer(app);
+const io = new SocketIOServer(server, {
+  path: '/ws',
+  transports: ['websocket'],
+  perMessageDeflate: false,
+});
+io.on('connection', (socket) => {
+  logger.info('WebSocket client connected', { id: socket.id });
+  socket.on('message', (msg) => {
+    logger.info('WebSocket message received:', { message: msg, id: socket.id });
+    socket.emit('message', 'Server response: ' + msg);
+  });
+  socket.on('disconnect', (reason) => {
+    logger.info('WebSocket client disconnected:', { id: socket.id, reason });
+  });
+  socket.on('error', (error) => {
+    logger.error('WebSocket error:', {
+      error: error.message,
+      stack: error.stack,
+      id: socket.id
+    });
+  });
+});
 
 // Disable ETag generation completely
 app.disable('etag');
@@ -48,10 +74,10 @@ app.set('trust proxy', 1); // Trust the first proxy (Kong)
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 try {
   if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    logger.info(`Created uploads directory: ${uploadsDir}`);
+    fs.mkdirSync(UploadsDir, { recursive: true });
+    logger.info(`Created uploads directory: ${UploadsDir}`);
   } else {
-    logger.debug(`Uploads directory already exists: ${uploadsDir}`);
+    logger.debug(`Uploads directory already exists: ${UploadsDir}`);
   }
 } catch (error) {
   logger.error('Failed to create uploads directory:', {
@@ -146,7 +172,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || 'http://localhost:3000/api',
+        url: process.env.API_URL || 'http://localhost:8090/api', // Updated to 8090
         description: 'Development server'
       }
     ],
@@ -448,8 +474,8 @@ const cspOptions = {
     scriptSrc: ["'self'", "cdn.jsdelivr.net"],
     styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
-    fontSrc: ["'self'", "data:"],
-    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net:*", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org"],
+    fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
+    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net:*", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org", "wss://genie-ai.itu.int:443", "ws://localhost:8090"],
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -900,8 +926,8 @@ async function startApp() {
     logger.info('Services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize services:', {
-      error: error.message || 'Unknown error',
-      stack: error.stack || 'No stack trace',
+      error: options.error,
+      stack: error.stack,
       rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
       errorType: error?.constructor?.name || 'Unknown'
     });
@@ -1122,7 +1148,7 @@ async function startApp() {
 
   // Start the server
   try {
-    const server = app.listen(PORT, () => {
+    server.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });

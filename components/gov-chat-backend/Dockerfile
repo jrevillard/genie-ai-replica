@@ -52,5 +52,6 @@ ENV BACKUP_FORMAT=json
 ENV LOG_LEVEL=debug
 ENV OPEA_HOST=e2e-109-198
 ENV OPEA_PORT=8888
+ENV CONTEXT_OPTION=single-message
 
 CMD ["node", "index.js"]

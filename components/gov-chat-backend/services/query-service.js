@@ -66,65 +66,137 @@ class QueryService {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start', { dataLength: JSON.stringify(queryData).length });
-  
+
       // Validate required fields
       let missingFields = [];
       if (!queryData.userId) missingFields.push('userId');
       if (!queryData.sessionId) missingFields.push('sessionId');
-      if (!queryData.text) missingFields.push('text');
-  
+
+      // Determine context option: queryData > environment > default
+      const validContextOptions = ['single-message', 'conversation-with-context-labels'];
+      const contextOption = queryData.contextOption || process.env.CONTEXT_OPTION || 'single-message';
+      if (!validContextOptions.includes(contextOption)) {
+        logger.error('QueryService.invalid_context_option', { contextOption });
+        throw new Error(`Invalid contextOption: ${contextOption}. Must be one of ${validContextOptions.join(', ')}.`);
+      }
+
+      // Validate input based on context option
+      if (contextOption === 'single-message') {
+        if (!queryData.text) missingFields.push('text');
+      } else if (contextOption === 'conversation-with-context-labels') {
+        if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
+          missingFields.push('messages');
+        }
+        if (!queryData.context || typeof queryData.context !== 'object') {
+          missingFields.push('context');
+        } else {
+          if (!queryData.context.categoryLabel) missingFields.push('context.categoryLabel');
+          if (!Array.isArray(queryData.context.serviceLabels)) missingFields.push('context.serviceLabels');
+          // language is optional, default to 'EN'
+        }
+      }
+
       if (missingFields.length > 0) {
         logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
         throw new Error('Missing required query data');
       }
-  
+
       // Create query document
       const basicQueryDoc = {
         userId: queryData.userId,
         sessionId: queryData.sessionId,
-        text: queryData.text,
         timestamp: queryData.timestamp || new Date().toISOString(),
         isAnswered: queryData.isAnswered !== undefined ? queryData.isAnswered : false,
         categoryId: queryData.categoryId || null,
         serviceId: queryData.serviceId || null,
-        responseTime: queryData.responseTime || 0
+        responseTime: queryData.responseTime || 0,
+        contextOption // Store the option used
       };
-  
+
+      // Add text or messages based on option
+      if (contextOption === 'single-message') {
+        basicQueryDoc.text = queryData.text;
+      } else {
+        basicQueryDoc.messages = queryData.messages;
+        basicQueryDoc.context = queryData.context;
+      }
+
       // Save query document
       logger.debug('QueryService.saving_query_document', { basicQueryDoc });
       const query = await this.queries.save(basicQueryDoc);
       const queryId = query._key;
       logger.info('QueryService.query_created', { queryId });
-  
+
       // Call OPEA service
       const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
       const opeaPort = process.env.OPEA_PORT || '8888';
       const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
-      const opeaPayload = {
-        messages: queryData.text,
-        stream: false
-      };
-  
+
+      let opeaPayload;
+      if (contextOption === 'single-message') {
+        opeaPayload = {
+          messages: queryData.text,
+          stream: false
+        };
+      } else {
+        // For conversation-with-context-labels
+        // If categoryId/serviceId provided and labels not in context, fetch them
+        let categoryLabel = queryData.context.categoryLabel;
+        let serviceLabels = queryData.context.serviceLabels;
+
+        if (queryData.categoryId && !categoryLabel) {
+          const categoryDoc = await this.serviceCategories.document(queryData.categoryId);
+          categoryLabel = categoryDoc.name || categoryLabel;
+        }
+
+        if (queryData.serviceId && (!serviceLabels || serviceLabels.length === 0)) {
+          const serviceDoc = await this.services.document(queryData.serviceId);
+          serviceLabels = [serviceDoc.name] || serviceLabels;
+        }
+
+        opeaPayload = {
+          messages: queryData.messages,
+          context: {
+            categoryLabel,
+            serviceLabels,
+            language: queryData.context.language || 'EN'
+          },
+          stream: false
+        };
+      }
+
       // Log OPEA configuration
       logger.info('QueryService.opea_config', { opeaHost, opeaPort, url: opeaUrl });
       logger.info('QueryService.preparing_opea_call', { queryId, payload: JSON.stringify(opeaPayload) });
-  
+
       let opeaResponseContent = null;
+      let opeaMetadata = null;
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
       try {
         logger.info('QueryService.calling_opea_service', { queryId });
         const opeaResponse = await axios.post(opeaUrl, opeaPayload);
         opeaResponseTime = Date.now() - opeaStartTime;
-        opeaResponseContent = opeaResponse.data.choices[0].message.content; // Extract the response content
+
+        if (contextOption === 'single-message') {
+          opeaResponseContent = opeaResponse.data.choices[0].message.content;
+        } else {
+          opeaResponseContent = opeaResponse.data.response;
+          opeaMetadata = opeaResponse.data.metadata;
+        }
+
         logger.info(`QueryService.opea_response_received for query ${queryId}: status=${opeaResponse.status}, data=${JSON.stringify(opeaResponse.data)}, duration=${opeaResponseTime}ms`);
         
         // Update query document with response content and time
-        await this.queries.update(queryId, {
+        const updateData = {
           response: opeaResponseContent,
           responseTime: opeaResponseTime,
           isAnswered: true
-        });
+        };
+        if (contextOption === 'conversation-with-context-labels') {
+          updateData.metadata = opeaMetadata;
+        }
+        await this.queries.update(queryId, updateData);
       } catch (error) {
         opeaResponseTime = Date.now() - opeaStartTime;
         logger.error(`QueryService.opea_service_error for query ${queryId}: ${error.message} (Status: ${error.response ? error.response.status : 'N/A'}, Duration: ${opeaResponseTime}ms)`);
@@ -142,27 +214,33 @@ class QueryService {
           isAnswered: false
         });
       }
-  
+
       // Record analytics if available
       if (this.analyticsService) {
         try {
           logger.debug('QueryService.recording_analytics', { queryId });
-          await this.analyticsService.recordQuery({
+          const analyticsData = {
             _key: queryId,
             userId: queryData.userId,
             sessionId: queryData.sessionId,
-            text: queryData.text,
-            categoryId: queryData.categoryId || null,
-            serviceId: queryData.serviceId || null,
             responseTime: opeaResponseTime,
             isAnswered: opeaResponseContent !== null
-          });
+          };
+          if (contextOption === 'single-message') {
+            analyticsData.text = queryData.text;
+          } else {
+            analyticsData.messages = queryData.messages;
+            analyticsData.context = queryData.context;
+          }
+          analyticsData.categoryId = queryData.categoryId || null;
+          analyticsData.serviceId = queryData.serviceId || null;
+          await this.analyticsService.recordQuery(analyticsData);
           logger.info('QueryService.analytics_recorded', { queryId });
         } catch (error) {
           logger.error('QueryService.record_analytics_failed', { queryId, error: error.message });
         }
       }
-  
+
       // Return the final query document
       const finalQuery = await this.queries.document(queryId);
       logger.info('QueryService.query_created_success', {
@@ -176,7 +254,7 @@ class QueryService {
         stack: error.stack,
         durationMs: Date.now() - startTime
       });
-  
+
       // Debug collection properties if schema error occurs
       if (error.message.includes('schema')) {
         try {
@@ -307,11 +385,11 @@ class QueryService {
   }
 
   /**
- * Update the response time for a query
- * @param {String} queryId - Query ID
- * @param {Number} responseTime - Response time in milliseconds
- * @returns {Promise<Object>} The updated query
- */
+   * Update the response time for a query
+   * @param {String} queryId - Query ID
+   * @param {Number} responseTime - Response time in milliseconds
+   * @returns {Promise<Object>} The updated query
+   */
   async updateQueryResponseTime(queryId, responseTime) {
     const startTime = Date.now();
     try {

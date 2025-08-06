@@ -837,7 +837,11 @@ export default {
     folderDeleted: "Folder berhasil dihapus",
     errorDeletingFolder: "Gagal menghapus folder",
     chatRemovedFromFolders: "Percakapan dihapus dari folder",
-    errorRemovingChat: "Gagal menghapus percakapan dari folder"
+    errorRemovingChat: "Gagal menghapus percakapan dari folder",
+    id: "ID",
+    labels: "Label",
+    confidence: "Keyakinan",
+    unknown: "Tidak diketahui"
   },
   leftPanel: {
     cat1: {

@@ -837,7 +837,11 @@ export default {
     folderDeleted: "Folder deleted successfully",
     errorDeletingFolder: "Failed to delete folder",
     chatRemovedFromFolders: "Conversation removed from folder",
-    errorRemovingChat: "Failed to remove conversation from folder"
+    errorRemovingChat: "Failed to remove conversation from folder",
+    id: 'ID',
+    labels: 'Labels',
+    confidence: 'Confidence',
+    unknown: 'Unknown'
   },
   leftPanel: {
     cat1: {

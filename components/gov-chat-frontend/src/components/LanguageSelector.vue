@@ -13,11 +13,13 @@ export default {
     return {
       currentLocale: this.$i18n.locale,
       localeNames: {
+        ar: 'Arabic',
         en: 'English',
         de: 'German',
         es: 'Spanish',
         fr: 'Français',
         id: 'Indonesian',
+        ru: 'Russian',
         sw: 'Kiswahili',
         th: 'Thai',
         zh: 'Chinese'

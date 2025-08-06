@@ -836,7 +836,11 @@ export default {
     folderDeleted: "Dossier supprimé avec succès",
     errorDeletingFolder: "Échec de la suppression du dossier",
     chatRemovedFromFolders: "Conversation retirée du dossier",
-    errorRemovingChat: "Échec de la suppression de la conversation du dossier"
+    errorRemovingChat: "Échec de la suppression de la conversation du dossier",
+    id: "ID",
+    labels: "Étiquettes",
+    confidence: "Confiance",
+    unknown: "Inconnu"
   },
   leftPanel: {
     cat1: {

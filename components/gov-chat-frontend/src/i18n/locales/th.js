@@ -837,7 +837,11 @@ export default {
       folderDeleted: "ลบโฟลเดอร์สำเร็จ",
       errorDeletingFolder: "ล้มเหลวในการลบโฟลเดอร์",
       chatRemovedFromFolders: "ลบการสนทนาออกจากโฟลเดอร์",
-      errorRemovingChat: "ล้มเหลวในการลบการสนทนาจากโฟลเดอร์"
+      errorRemovingChat: "ล้มเหลวในการลบการสนทนาจากโฟลเดอร์",
+      id: "ID",
+      labels: "ป้ายกำกับ",
+      confidence: "ความมั่นใจ",
+      unknown: "ไม่ทราบ"
     },
     leftPanel: {
       cat1: {

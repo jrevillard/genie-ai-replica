@@ -837,7 +837,11 @@ export default {
     folderDeleted: "Folda imefutwa kwa mafanikio",
     errorDeletingFolder: "Imeshindwa kufuta folda",
     chatRemovedFromFolders: "Mazungumzo yameondolewa kwenye folda",
-    errorRemovingChat: "Imeshindwa kuondoa mazungumzo kwenye folda"
+    errorRemovingChat: "Imeshindwa kuondoa mazungumzo kwenye folda",
+    id: "ID",
+    labels: "Lebo",
+    confidence: "Kujiamini",
+    unknown: "Haijulikani"
   },
   leftPanel: {
     cat1: {

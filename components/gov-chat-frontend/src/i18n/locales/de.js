@@ -837,7 +837,11 @@ export default {
     folderDeleted: "Ordner erfolgreich gelöscht",
     errorDeletingFolder: "Fehler beim Löschen des Ordners",
     chatRemovedFromFolders: "Gespräch aus dem Ordner entfernt",
-    errorRemovingChat: "Fehler beim Entfernen des Gesprächs aus dem Ordner"
+    errorRemovingChat: "Fehler beim Entfernen des Gesprächs aus dem Ordner",
+    id: "ID",
+    labels: "Etiketten",
+    confidence: "Konfidenz",
+    unknown: "Unbekannt"
   },
   leftPanel: {
     cat1: {

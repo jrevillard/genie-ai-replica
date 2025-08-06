@@ -186,7 +186,7 @@ class QueryService {
         }
 
         logger.info(`QueryService.opea_response_received for query ${queryId}: status=${opeaResponse.status}, data=${JSON.stringify(opeaResponse.data)}, duration=${opeaResponseTime}ms`);
-        
+
         // Update query document with response content and time
         const updateData = {
           response: opeaResponseContent,
@@ -1065,6 +1065,48 @@ class QueryService {
         stack: error.stack,
         durationMs: Date.now() - startTime
       });
+      throw error;
+    }
+  }
+
+  /**
+ * Mark a query as answered
+ * @param {String} queryId - Query ID
+ * @param {Number} responseTime - Response time in milliseconds
+ * @returns {Promise<Object>} Updated query
+ */
+  async markQueryAsAnswered(queryId, responseTime) {
+    const startTime = Date.now();
+    try {
+      logger.info('QueryService.mark_query_as_answered_start', { queryId, responseTime });
+
+      const updateData = {
+        isAnswered: true,
+        responseTime,
+        updatedAt: new Date().toISOString()
+      };
+
+      const updatedQuery = await this.queries.update(queryId, updateData);
+
+      logger.info('QueryService.query_marked_as_answered', {
+        queryId,
+        responseTime,
+        durationMs: Date.now() - startTime
+      });
+
+      return updatedQuery;
+    } catch (error) {
+      logger.error('QueryService.mark_query_as_answered_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+
+      if (error.name === 'ArangoError' && error.errorNum === 1202) {
+        throw new Error('Query not found');
+      }
+
       throw error;
     }
   }

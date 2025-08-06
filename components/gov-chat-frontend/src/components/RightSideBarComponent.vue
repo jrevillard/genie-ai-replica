@@ -12,29 +12,6 @@
 
     <!-- Only show these sections when sidebar is not collapsed -->
     <div v-if="!sidebarCollapsed">
-      <!-- Chat History Section -->
-      <div class="sidebar-section">
-        <h4 class="section-title">
-          <i class="fas fa-history"></i>
-          {{ $t("sidebar.chatHistory") }}
-        </h4>
-        <div class="chat-history">
-          <div
-            v-for="chat in recentChats"
-            :key="chat.id"
-            class="history-item"
-            :class="{ active: currentChatId === chat.id }"
-            @click="loadChatFromHistory(chat.id)"
-          >
-            <div class="history-item-title">{{ chat.title }}</div>
-            <div class="history-item-preview">{{ chat.preview }}</div>
-            <div class="history-item-date">{{ formatDate(chat.date) }}</div>
-          </div>
-          <div v-if="recentChats.length === 0" class="empty-state">
-            {{ $t("sidebar.noChats") }}
-          </div>
-        </div>
-      </div>
       <!-- Related Documents Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
@@ -46,15 +23,30 @@
             v-for="doc in relatedDocuments"
             :key="doc.id"
             class="document-item"
-            @click="openDocument(doc)"
           >
-            <div class="document-icon">
-              <i :class="documentIconClass(doc.type)"></i>
+            <div class="document-header" @click="openDocument(doc)">
+              <div class="document-icon">
+                <i :class="documentIconClass(doc.type)"></i>
+              </div>
+              <div class="document-info">
+                <div class="document-title">{{ doc.title }}</div>
+                <div class="document-meta">
+                  {{ doc.type }} • {{ formatFileSize(doc.size) }}
+                </div>
+              </div>
             </div>
-            <div class="document-info">
-              <div class="document-title">{{ doc.title }}</div>
-              <div class="document-meta">
-                {{ doc.type }} • {{ formatFileSize(doc.size) }}
+            <div class="document-details">
+              <div class="detail-item">
+                <span class="detail-label">{{ $t("sidebar.id") }}:</span>
+                <span class="detail-value">{{ doc.id }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">{{ $t("sidebar.labels") }}:</span>
+                <span class="detail-value small-text">{{ formatLabels(doc) }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">{{ $t("sidebar.confidence") }}:</span>
+                <span class="detail-value">{{ formatScore(doc.score) }}</span>
               </div>
             </div>
           </div>
@@ -113,6 +105,51 @@ export default {
       type: String,
       default: "en",
     },
+    relatedDocuments: {
+      type: Array,
+      default: () => [
+        {
+          id: "doc1",
+          title: "Government Services FAQ",
+          type: "PDF",
+          size: 1240000,
+          url: "#",
+          categoryLabel: "General",
+          serviceLabels: ["FAQ", "Services"],
+          score: 0.95,
+        },
+        {
+          id: "doc2",
+          title: "Business Registration Form",
+          type: "DOCX",
+          size: 350000,
+          url: "#",
+          categoryLabel: "Business & Trade",
+          serviceLabels: ["Business Registration"],
+          score: 0.90,
+        },
+        {
+          id: "doc3",
+          title: "Tax Filing Guidelines 2024",
+          type: "PDF",
+          size: 2800000,
+          url: "#",
+          categoryLabel: "Taxation",
+          serviceLabels: ["Filing", "Guidelines"],
+          score: 0.85,
+        },
+        {
+          id: "doc4",
+          title: "ID Application Process",
+          type: "PDF",
+          size: 890000,
+          url: "#",
+          categoryLabel: "Identity & Civil Registration",
+          serviceLabels: ["Birth Registration"],
+          score: 0.92,
+        },
+      ]
+    }
   },
 
   data() {
@@ -121,58 +158,6 @@ export default {
       expandedFaqs: [],
 
       // Sidebar content
-      recentChats: [
-        {
-          id: "chat1",
-          title: "Tax Filing Help",
-          preview: "How do I file my business taxes?",
-          date: new Date("2025-03-06T14:23:00"),
-        },
-        {
-          id: "chat2",
-          title: "License Renewal",
-          preview: "What documents do I need to renew my...",
-          date: new Date("2025-03-04T09:15:00"),
-        },
-        {
-          id: "chat3",
-          title: "Business Registration",
-          preview: "I want to register a new business",
-          date: new Date("2025-03-01T16:45:00"),
-        },
-      ],
-
-      relatedDocuments: [
-        {
-          id: "doc1",
-          title: "Government Services FAQ",
-          type: "PDF",
-          size: 1240000,
-          url: "#",
-        },
-        {
-          id: "doc2",
-          title: "Business Registration Form",
-          type: "DOCX",
-          size: 350000,
-          url: "#",
-        },
-        {
-          id: "doc3",
-          title: "Tax Filing Guidelines 2024",
-          type: "PDF",
-          size: 2800000,
-          url: "#",
-        },
-        {
-          id: "doc4",
-          title: "ID Application Process",
-          type: "PDF",
-          size: 890000,
-          url: "#",
-        },
-      ],
-
       frequentlyAskedQuestions: [
         {
           question: "How do I reset my account password?",
@@ -212,10 +197,6 @@ export default {
       }
     },
 
-    loadChatFromHistory(chatId) {
-      this.$emit("load-chat", chatId);
-    },
-
     openDocument(doc) {
       // In a real application, this would open the document
       window.open(doc.url, "_blank");
@@ -242,26 +223,21 @@ export default {
       }
     },
 
-    formatDate(date) {
-      // Returns relative time (Today, Yesterday) or formatted date
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      if (date >= today) {
-        return "Today";
-      } else if (date >= yesterday) {
-        return "Yesterday";
-      } else {
-        return date.toLocaleDateString();
-      }
-    },
-
     formatFileSize(bytes) {
       if (bytes < 1024) return bytes + " B";
       if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
       return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    },
+
+    formatScore(score) {
+      if (typeof score !== 'number' || isNaN(score)) return this.$t("sidebar.unknown");
+      return (score * 100).toFixed(2) + '%';
+    },
+
+    formatLabels(doc) {
+      if (!doc.categoryLabel) return this.$t("sidebar.unknown");
+      const services = doc.serviceLabels?.join(', ') || '';
+      return `${doc.categoryLabel}${services ? ':' + services : ''}`;
     },
   },
 };
@@ -340,72 +316,31 @@ export default {
   color: var(--text-tertiary, #64748b);
 }
 
-/* Chat History styles */
-.chat-history {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.history-item {
-  background: var(--bg-card, #fff);
-  border-radius: 6px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border-light, #e5e7eb);
-}
-
-.history-item:hover,
-.history-item.active {
-  background: var(--bg-tertiary, #f0f7ff);
-  border-color: var(--accent-color, #bcdcff);
-}
-
-.history-item-title {
-  font-weight: 500;
-  font-size: 0.9rem;
-  margin-bottom: 4px;
-  color: var(--text-primary, #334155);
-}
-
-.history-item-preview {
-  font-size: 0.8rem;
-  color: var(--text-tertiary, #64748b);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 4px;
-}
-
-.history-item-date {
-  font-size: 0.75rem;
-  color: var(--text-muted, #94a3b8);
-  text-align: right;
-}
-
 /* Document styles */
 .related-documents {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.document-item {
-  display: flex;
-  align-items: center;
-  background: var(--bg-card, #fff);
-  border-radius: 6px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid var(--border-light, #e5e7eb);
   gap: 12px;
 }
 
-.document-item:hover {
-  background: var(--bg-tertiary, #f0f7ff);
-  border-color: var(--accent-color, #bcdcff);
+.document-item {
+  background: var(--bg-card, #fff);
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-light, #e5e7eb);
+}
+
+.document-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.document-header:hover {
+  color: var(--accent-color, #4e97d1);
 }
 
 .document-icon {
@@ -436,6 +371,38 @@ export default {
 .document-meta {
   font-size: 0.75rem;
   color: var(--text-muted, #94a3b8);
+}
+
+.document-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #475569);
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light, #e5e7eb);
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: var(--text-primary, #334155);
+  white-space: nowrap;
+}
+
+.detail-value {
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-value.small-text {
+  font-size: 0.75rem;
 }
 
 /* FAQ styles */
@@ -516,13 +483,20 @@ html[data-theme="dark"] .section-title {
   color: rgba(255, 255, 255, 0.9) !important;
 }
 
-[data-theme="dark"] .history-item-title,
-html[data-theme="dark"] .history-item-title,
 [data-theme="dark"] .document-title,
 html[data-theme="dark"] .document-title,
 [data-theme="dark"] .faq-question,
-html[data-theme="dark"] .faq-question {
+html[data-theme="dark"] .faq-question,
+[data-theme="dark"] .detail-label,
+html[data-theme="dark"] .detail-label {
   color: rgba(255, 255, 255, 0.9) !important;
+}
+
+[data-theme="dark"] .detail-value,
+html[data-theme="dark"] .detail-value,
+[data-theme="dark"] .document-meta,
+html[data-theme="dark"] .document-meta {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 [data-theme="dark"] .empty-state,

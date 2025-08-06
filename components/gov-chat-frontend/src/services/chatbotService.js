@@ -30,6 +30,11 @@ export default {
       console.log('Response time:', responseTime, 'ms'); // Log the time taken
       console.log('OPEA response content:', response.data.response || 'No response content available'); // Log the specific OPEA response field
       
+      // Log metadata if present (for conversation mode)
+      if (response.data.metadata) {
+        console.log('Metadata:', JSON.stringify(response.data.metadata, null, 2));
+      }
+      
       // Update the query with the response time
       await this.updateQueryResponseTime(response.data._key, responseTime);
       

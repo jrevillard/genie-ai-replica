@@ -65,43 +65,62 @@ class QueryService {
   async createQuery(queryData) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.create_query_start', { dataLength: JSON.stringify(queryData).length });
+      logger.info('QueryService.create_query_start');
+      // *** START OF DEBUGGING ADDITIONS ***
+      // Log the entire incoming request body from the frontend for easy debugging.
+      logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      // Validate required fields
+      // The logic now strictly depends on the environment variable, not the request body.
+      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
+
+      // Validate required fields based on what the frontend ALWAYS sends
+      logger.info('[DEBUG] Starting validation of incoming data...');
       let missingFields = [];
-      if (!queryData.userId) missingFields.push('userId');
-      if (!queryData.sessionId) missingFields.push('sessionId');
-
-      // Determine context option: queryData > environment > default
-      const validContextOptions = ['single-message', 'conversation-with-context-labels'];
-      const contextOption = queryData.contextOption || process.env.CONTEXT_OPTION || 'single-message';
-      if (!validContextOptions.includes(contextOption)) {
-        logger.error('QueryService.invalid_context_option', { contextOption });
-        throw new Error(`Invalid contextOption: ${contextOption}. Must be one of ${validContextOptions.join(', ')}.`);
+      
+      if (!queryData.userId) {
+        logger.warn('[DEBUG] Validation FAILED: userId is missing.');
+        missingFields.push('userId');
+      } else {
+        logger.info(`[DEBUG] Validation PASSED: userId is present (${queryData.userId}).`);
       }
 
-      // Validate input based on context option
-      if (contextOption === 'single-message') {
-        if (!queryData.text) missingFields.push('text');
-      } else if (contextOption === 'conversation-with-context-labels') {
-        if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
-          missingFields.push('messages');
-        }
-        if (!queryData.context || typeof queryData.context !== 'object') {
-          missingFields.push('context');
+      if (!queryData.sessionId) {
+        logger.warn('[DEBUG] Validation FAILED: sessionId is missing.');
+        missingFields.push('sessionId');
+      } else {
+        logger.info(`[DEBUG] Validation PASSED: sessionId is present (${queryData.sessionId}).`);
+      }
+
+      if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
+        logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty.');
+        missingFields.push('messages');
+      } else {
+        logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
+      }
+
+      if (!queryData.context) {
+        logger.warn('[DEBUG] Validation FAILED: context object is missing.');
+        missingFields.push('context');
+      } else {
+        logger.info('[DEBUG] Validation PASSED: context object is present.');
+        if (!Array.isArray(queryData.context.serviceLabels)) {
+          logger.warn('[DEBUG] Validation FAILED: context.serviceLabels is not an array.');
+          missingFields.push('context.serviceLabels');
         } else {
-          if (!queryData.context.categoryLabel) missingFields.push('context.categoryLabel');
-          if (!Array.isArray(queryData.context.serviceLabels)) missingFields.push('context.serviceLabels');
-          // language is optional, default to 'EN'
+           logger.info(`[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`);
         }
       }
 
       if (missingFields.length > 0) {
+        const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;
         logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
-        throw new Error('Missing required query data');
+        throw new Error(errorMsg);
       }
+      logger.info('[DEBUG] All validations passed successfully.');
+      // *** END OF DEBUGGING ADDITIONS ***
 
-      // Create query document
+      // Create query document to be saved in ArangoDB
       const basicQueryDoc = {
         userId: queryData.userId,
         sessionId: queryData.sessionId,
@@ -110,16 +129,10 @@ class QueryService {
         categoryId: queryData.categoryId || null,
         serviceId: queryData.serviceId || null,
         responseTime: queryData.responseTime || 0,
-        contextOption // Store the option used
+        contextOption: backendMode, // Store the mode the backend is actually running in
+        messages: queryData.messages,
+        context: queryData.context
       };
-
-      // Add text or messages based on option
-      if (contextOption === 'single-message') {
-        basicQueryDoc.text = queryData.text;
-      } else {
-        basicQueryDoc.messages = queryData.messages;
-        basicQueryDoc.context = queryData.context;
-      }
 
       // Save query document
       logger.debug('QueryService.saving_query_document', { basicQueryDoc });
@@ -133,32 +146,27 @@ class QueryService {
       const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
 
       let opeaPayload;
-      if (contextOption === 'single-message') {
+      // Construct the OPEA payload based on the backend's configured mode.
+      if (backendMode === 'single-message') {
+        logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
+        const lastMessage = queryData.messages[queryData.messages.length - 1];
+        const queryText = lastMessage ? lastMessage.content : '';
+        
+        if (!queryText) {
+          throw new Error('Could not extract last message content for single-message mode.');
+        }
+
         opeaPayload = {
-          messages: queryData.text,
+          messages: queryText, // Per spec for single-message mode
           stream: false
         };
-      } else {
-        // For conversation-with-context-labels
-        // If categoryId/serviceId provided and labels not in context, fetch them
-        let categoryLabel = queryData.context.categoryLabel;
-        let serviceLabels = queryData.context.serviceLabels;
-
-        if (queryData.categoryId && !categoryLabel) {
-          const categoryDoc = await this.serviceCategories.document(queryData.categoryId);
-          categoryLabel = categoryDoc.name || categoryLabel;
-        }
-
-        if (queryData.serviceId && (!serviceLabels || serviceLabels.length === 0)) {
-          const serviceDoc = await this.services.document(queryData.serviceId);
-          serviceLabels = [serviceDoc.name] || serviceLabels;
-        }
-
+      } else { // Handles 'conversation-with-labels' and 'conversation-with-context-labels'
+        logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
         opeaPayload = {
-          messages: queryData.messages,
+          messages: queryData.messages, // The full message history
           context: {
-            categoryLabel,
-            serviceLabels,
+            categoryLabel: queryData.context.categoryLabel || '',
+            serviceLabels: queryData.context.serviceLabels,
             language: queryData.context.language || 'EN'
           },
           stream: false
@@ -167,7 +175,7 @@ class QueryService {
 
       // Log OPEA configuration
       logger.info('QueryService.opea_config', { opeaHost, opeaPort, url: opeaUrl });
-      logger.info('QueryService.preparing_opea_call', { queryId, payload: JSON.stringify(opeaPayload) });
+      logger.info(`QueryService.preparing_opea_call for mode "${backendMode}"`, { queryId, payload: JSON.stringify(opeaPayload) });
 
       let opeaResponseContent = null;
       let opeaMetadata = null;
@@ -178,7 +186,8 @@ class QueryService {
         const opeaResponse = await axios.post(opeaUrl, opeaPayload);
         opeaResponseTime = Date.now() - opeaStartTime;
 
-        if (contextOption === 'single-message') {
+        // Unpack response based on the backend mode
+        if (backendMode === 'single-message') {
           opeaResponseContent = opeaResponse.data.choices[0].message.content;
         } else {
           opeaResponseContent = opeaResponse.data.response;
@@ -193,7 +202,7 @@ class QueryService {
           responseTime: opeaResponseTime,
           isAnswered: true
         };
-        if (contextOption === 'conversation-with-context-labels') {
+        if (backendMode.startsWith('conversation-with')) {
           updateData.metadata = opeaMetadata;
         }
         await this.queries.update(queryId, updateData);
@@ -224,16 +233,12 @@ class QueryService {
             userId: queryData.userId,
             sessionId: queryData.sessionId,
             responseTime: opeaResponseTime,
-            isAnswered: opeaResponseContent !== null
+            isAnswered: opeaResponseContent !== null,
+            messages: queryData.messages,
+            context: queryData.context,
+            categoryId: queryData.categoryId || null,
+            serviceId: queryData.serviceId || null,
           };
-          if (contextOption === 'single-message') {
-            analyticsData.text = queryData.text;
-          } else {
-            analyticsData.messages = queryData.messages;
-            analyticsData.context = queryData.context;
-          }
-          analyticsData.categoryId = queryData.categoryId || null;
-          analyticsData.serviceId = queryData.serviceId || null;
           await this.analyticsService.recordQuery(analyticsData);
           logger.info('QueryService.analytics_recorded', { queryId });
         } catch (error) {

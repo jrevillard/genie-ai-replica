@@ -137,11 +137,17 @@
             <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
             <div v-else v-html="renderMarkdown(msg.content)"></div>
           </div>
-          <!-- Feedback for bot messages -->
-          <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-            <button @click="openFeedbackDialog(index)">
-              {{ translate("feedback.button") }}
-            </button>
+          <!-- Feedback and confidence score for bot messages -->
+          <div v-if="msg.sender === 'bot'" class="bot-message-meta">
+            <div v-if="msg.confidenceScore" class="confidence-score">
+              <i class="fas fa-brain"></i>
+              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="feedback-trigger">
+              <button @click="openFeedbackDialog(index)">
+                {{ translate("feedback.button") }}
+              </button>
+            </div>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
@@ -283,6 +289,7 @@
       :current-chat-id="currentChatId"
       :current-locale="currentLocale"
       :translations="translations"
+      :related-documents="relatedDocuments"
       @load-chat="loadChatFromHistory"
       @open-document="handleOpenDocument"
       @sidebar-toggle="handleSidebarToggle"
@@ -298,6 +305,7 @@ import ChatResponseFeedbackDialog from "./ChatResponseFeedbackDialog.vue";
 import ModalDialog from "./ModalDialog.vue";
 import RightSideBarComponent from "./RightSideBarComponent.vue";
 import chatbotService from "../services/chatbotService";
+import serviceTreeService from "../services/serviceTreeService"; // *** NEW: Import serviceTreeService
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import chatHistoryService from "../services/chatHistoryService";
 import analyticsService from "../services/analyticsService";
@@ -338,7 +346,8 @@ export default {
       currentChatTitle: "",
       currentLocale: "en",
       showQuickHelp: true,
-      conversationCategory: null,
+      currentCategoryId: null,
+      serviceCategories: [], // This will now hold the transformed tree data
       chatHistoryService: chatHistoryService,
       systemStatus: {
         online: true,
@@ -369,6 +378,7 @@ export default {
       },
       pendingConversationId: null,
       isLoading: false, // Loading state for spinner
+      relatedDocuments: [], // Holds documents for the right sidebar
     };
   },
 
@@ -387,6 +397,7 @@ export default {
         ];
         this.newMessage = "";
         this.selectedContextItems = [];
+        this.relatedDocuments = [];
         this.lastSavedState = {
           messages: JSON.parse(JSON.stringify(this.chatMessages)),
           contextItems: [],
@@ -408,6 +419,7 @@ export default {
       } else {
         this.chatMessages = []; // Clear previous messages
         this.selectedContextItems = [];
+        this.relatedDocuments = [];
         this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
         this.loadExistingConversation(conversationId);
       }
@@ -453,6 +465,7 @@ export default {
             ...item,
             service: this.safeTranslate(item.serviceKey || item.service),
           }));
+          this.loadServiceCategories(); // Reload categories for the new locale
         }
       );
     }
@@ -461,6 +474,7 @@ export default {
     eventBus.$on("open-chat", this.loadChatFromHistory);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
+    this.loadServiceCategories(); // Fetch categories on mount
 
     this.statusUpdateInterval = setInterval(() => {
       this.systemStatus.uptime += 30;
@@ -498,6 +512,39 @@ export default {
   methods: {
     ...mapActions("chatHistory", ["createChat", "updateChat"]),
 
+    // *** UPDATED: Use serviceTreeService to load and transform categories ***
+    async loadServiceCategories() {
+        try {
+            // Use the service which handles transformation and localization
+            this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
+            console.log('[ChatBotComponent] Service categories loaded for lookup via serviceTreeService:', this.serviceCategories);
+        } catch (error) {
+            console.error('[ChatBotComponent] Failed to load service categories:', error);
+            notificationService.error('Could not load service categories.');
+        }
+    },
+
+    // *** UPDATED: Find category label by its key in the transformed tree data ***
+    getCategoryLabelById(id) {
+        if (id === null || id === undefined) {
+            const selectedServices = this.selectedContextItems.map(item => item.serviceKey);
+            if (selectedServices.includes('quickhelp.justChat')) {
+                return 'General';
+            }
+            return null;
+        }
+
+        // The service returns `catKey` which corresponds to the numeric ID
+        const category = this.serviceCategories.find(cat => cat.catKey == id.toString());
+        if (category) {
+            // The service already provides the localized name in the `name` property
+            return category.name || `Category ${id}`;
+        }
+        
+        console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`);
+        return `Category ${id}`; // Fallback
+    },
+
     // Safely translate a key, with mapping for static strings
     safeTranslate(key) {
       try {
@@ -512,15 +559,14 @@ export default {
           Pajak: "context.tax",
           Pensiun: "context.retirement",
           "Lainnya - Pribadi": "context.personalOther",
-          // Add more mappings as needed
         };
         const translationKey = serviceKeyMap[key] || key;
         if (typeof translationKey === "string" && translationKey.trim()) {
           const translated = this.$t(translationKey);
-          return translated !== translationKey ? translated : key; // Fallback to original if untranslated
+          return translated !== translationKey ? translated : key;
         }
         console.warn(`Invalid translation key: ${key}`);
-        return this.$t("context.fallback") || key || "Unknown"; // Default fallback
+        return this.$t("context.fallback") || key || "Unknown";
       } catch (error) {
         console.error(`Translation error for key ${key}:`, error);
         return this.$t("context.fallback") || key || "Unknown";
@@ -534,7 +580,7 @@ export default {
         return DOMPurify.sanitize(html);
       } catch (error) {
         console.error("Error rendering Markdown:", error);
-        return DOMPurify.sanitize(content); // Fallback to plain text, sanitized
+        return DOMPurify.sanitize(content);
       }
     },
 
@@ -617,47 +663,42 @@ export default {
         console.error("Invalid quick help option, missing service:", rawOption);
         return;
       }
-      const category =
+      const categoryId =
         rawOption.category ||
         (rawOption.service !== this.$t("quickhelp.justChat")
           ? "general"
           : null);
 
-      // Check if the context item already exists to avoid duplicates
       const contextExists = this.selectedContextItems.some(
         (item) =>
-          item.service === rawOption.service && item.category === category
+          item.service === rawOption.service && item.category === categoryId
       );
 
       if (!contextExists) {
-        // Append the new context item to the existing list
         this.selectedContextItems.push({
           service: rawOption.service,
-          serviceKey: rawOption.textKey, // Store translation key
-          category: category,
+          serviceKey: rawOption.textKey,
+          category: categoryId,
           selected: true,
         });
         console.log(
-          `Added new context item: ${rawOption.service} with category ${category}`
+          `Added new context item: ${rawOption.service} with category ID ${categoryId}`
         );
       } else {
         console.log(
-          `Context item ${rawOption.service} with category ${category} already exists`
+          `Context item ${rawOption.service} with category ID ${categoryId} already exists`
         );
       }
 
       if (rawOption.service !== this.$t("quickhelp.justChat")) {
-        this.conversationCategory = category;
+        this.currentCategoryId = categoryId;
         console.log(
-          `Set conversation category to ${category} for quick help option ${rawOption.service}`
+          `Set current category ID to ${this.currentCategoryId} from quick help option.`
         );
       } else {
-        this.conversationCategory = this.conversationCategory || null;
-        console.log(
-          "Just Chat selected, retaining existing category:",
-          this.conversationCategory
-        );
+        this.currentCategoryId = this.currentCategoryId || null;
       }
+
       this.showQuickHelp = false;
       if (rawOption.promptKey) {
         const message = this.$t(rawOption.promptKey);
@@ -677,7 +718,6 @@ export default {
       }
 
       if (item.selected) {
-        // Check if the context item already exists to avoid duplicates
         const exists = this.selectedContextItems.some(
           (existing) =>
             existing.service === this.safeTranslate(item.service) &&
@@ -685,41 +725,34 @@ export default {
         );
         if (!exists) {
           this.selectedContextItems.push({
-            service: this.safeTranslate(item.service), // Translate service
-            serviceKey: item.service, // Store original key
+            service: this.safeTranslate(item.service),
+            serviceKey: item.service,
             category: item.category || "general",
             selected: true,
           });
           console.log(
             `Added sidebar context item: ${this.safeTranslate(
               item.service
-            )} with category ${item.category || "general"}`
+            )} with category ID ${item.category || "general"}`
           );
           notificationService.info(
             this.translate("chatbot.contextAdded"),
             1500
           );
-          // Update conversation category if not set or is general
-          if (
-            !this.conversationCategory ||
-            this.conversationCategory === "general"
-          ) {
-            this.conversationCategory = item.category || "general";
+          if (!this.currentCategoryId) {
+            this.currentCategoryId = item.category || null;
             console.log(
-              `Set conversation category to ${
-                this.conversationCategory
-              } from sidebar node ${this.safeTranslate(item.service)}`
+              `Set current category ID to ${this.currentCategoryId} from sidebar node.`
             );
           }
         } else {
           console.log(
-            `Context item ${this.safeTranslate(item.service)} with category ${
+            `Context item ${this.safeTranslate(item.service)} with category ID ${
               item.category
             } already exists`
           );
         }
       } else {
-        // Remove the context item if deselected
         const index = this.selectedContextItems.findIndex(
           (existing) =>
             existing.service === this.safeTranslate(item.service) &&
@@ -728,18 +761,17 @@ export default {
         if (index !== -1) {
           const removedItem = this.selectedContextItems.splice(index, 1)[0];
           console.log(
-            `Removed sidebar context item: ${removedItem.service} with category ${removedItem.category}`
+            `Removed sidebar context item: ${removedItem.service} with category ID ${removedItem.category}`
           );
           notificationService.info(
             this.translate("chatbot.contextRemoved"),
             1500
           );
           eventBus.$emit("contextItemRemoved", removedItem);
-          // Clear conversation category if no context items remain
           if (this.selectedContextItems.length === 0) {
-            this.conversationCategory = null;
+            this.currentCategoryId = null;
             console.log(
-              "Cleared conversation category as no context items remain"
+              "Cleared current category ID as no context items remain."
             );
           }
         }
@@ -753,40 +785,26 @@ export default {
           `Removed context item: ${removedItem.service} at index ${index}`
         );
       }
-      if (this.selectedContextItems.length === 0 && this.conversationCategory) {
+      if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
         const quickHelpOption = this.quickHelpButtons.find(
-          (option) => option.category === this.conversationCategory
+          (option) => option.category === this.currentCategoryId
         );
         if (quickHelpOption) {
           this.selectedContextItems = [
             {
-              service: this.safeTranslate(quickHelpOption.textKey), // Use translated service
-              serviceKey: quickHelpOption.textKey, // Store translation key
-              category: this.conversationCategory,
+              service: this.safeTranslate(quickHelpOption.textKey),
+              serviceKey: quickHelpOption.textKey,
+              category: this.currentCategoryId,
               selected: true,
             },
           ];
           console.log(
-            `Restored context item for category ${
-              this.conversationCategory
+            `Restored context item for category ID ${
+              this.currentCategoryId
             }: ${this.safeTranslate(quickHelpOption.textKey)}`
           );
         } else {
-          this.selectedContextItems = [
-            {
-              service: this.safeTranslate(
-                `category.${this.conversationCategory}`
-              ), // Translate category
-              serviceKey: `category.${this.conversationCategory}`,
-              category: this.conversationCategory,
-              selected: true,
-            },
-          ];
-          console.log(
-            `Restored sidebar context item for category ${
-              this.conversationCategory
-            }: ${this.safeTranslate(`category.${this.conversationCategory}`)}`
-          );
+           this.currentCategoryId = null;
         }
       }
     },
@@ -794,6 +812,7 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
+
       this.chatMessages.push({
         sender: "user",
         content,
@@ -801,58 +820,103 @@ export default {
         isSaved: false,
       });
       this.newMessage = "";
-      const contextInfo =
-        this.selectedContextItems.length > 0
-          ? this.selectedContextItems.map((item) => item.service).join(", ")
-          : null;
       this.showQuickHelp = false;
-      this.isLoading = true; // Show spinner
+      this.isLoading = true;
+      this.relatedDocuments = [];
+
       try {
-        const queryData = {
-          userId: this.$store.getters.currentUser?._key || "anonymous",
-          sessionId: this.currentSessionId || "new-session",
-          text: content,
-          categoryId:
-            this.conversationCategory ||
-            (contextInfo ? this.selectedContextItems[0].category : "general"),
-          serviceId: contextInfo ? this.selectedContextItems[0].service : null,
-          isAnswered: false,
-        };
-        console.log("Query data sent:", queryData);
-        console.log("Before queryData:", {
-          conversationCategory: this.conversationCategory,
-          selectedContextItems: this.selectedContextItems,
-        });
+        const useConversationContext = this.selectedContextItems.length > 0;
+        const contextOption = useConversationContext
+          ? "conversation-with-labels"
+          : "single-message";
+
+        let queryData;
+
+        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
+
+        if (contextOption === "conversation-with-labels") {
+          const serviceLabels = this.selectedContextItems.map(
+            (item) => item.service
+          );
+
+          queryData = {
+            conversationId: this.conversationId,
+            userId: this.$store.getters.currentUser?._key || "anonymous",
+            sessionId: this.currentSessionId || "new-session",
+            messages: this.chatMessages.map((msg) => ({
+              role: msg.sender === "user" ? "user" : "assistant",
+              content: msg.content,
+            })),
+            context: {
+              categoryLabel: categoryLabel,
+              serviceLabels: serviceLabels,
+              language: this.currentLocale.toUpperCase(),
+            },
+            contextOption: "conversation-with-context-labels",
+            timestamp: new Date().toISOString()
+          };
+        } else {
+          queryData = {
+            userId: this.$store.getters.currentUser?._key || "anonymous",
+            sessionId: this.currentSessionId || "new-session",
+            text: content,
+            contextOption: contextOption,
+            timestamp: new Date().toISOString()
+          };
+        }
+
+        console.log(
+          "Submitting query with data:",
+          JSON.stringify(queryData, null, 2)
+        );
         const result = await chatbotService.submitQuery(queryData);
+        console.log("Query result:", result);
+
         const botMessage = {
           sender: "bot",
-          content:
-            result.response ||
-            `${this.translate("chatbot.responsePrefix")}: "${content}"${
-              contextInfo
-                ? ` ${this.translate("chatbot.withContext")}: ${contextInfo}`
-                : ""
-            }`,
+          content: result.response || this.translate("chatbot.processingError"),
           queryId: result._key,
           timestamp: new Date().toISOString(),
           isSaved: false,
         };
+
+        if (result.metadata) {
+          if (result.metadata.confidence_score) {
+            botMessage.confidenceScore = result.metadata.confidence_score;
+          }
+          if (
+            result.metadata.source_documents &&
+            Array.isArray(result.metadata.source_documents)
+          ) {
+            this.relatedDocuments = result.metadata.source_documents.map(
+              (doc) => ({
+                id: doc.document_id,
+                title:
+                  doc.title ||
+                  `${doc.categoryLabel || "Document"} - ${
+                    doc.serviceLabels?.join(", ") || "Source"
+                  }`,
+                type: doc.url?.split(".").pop().toUpperCase() || "LINK",
+                size: 0,
+                url: doc.url,
+                score: doc.score,
+                categoryLabel: doc.categoryLabel,
+                serviceLabels: doc.serviceLabels,
+              })
+            );
+          }
+        }
+
         this.chatMessages.push(botMessage);
-        console.log("Query result:", result);
 
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
-          notificationService.info(
-            this.translate("chatbot.sessionUpdated"),
-            1500
-          );
         }
-        console.log("About to mark query as answered:", result._key);
         await chatbotService.markQueryAsAnswered(
           result._key,
           result.responseTime
         );
-        console.log("Query marked as answered successfully");
       } catch (error) {
         console.error("Error sending query:", error);
         this.chatMessages.push({
@@ -863,7 +927,7 @@ export default {
         });
         notificationService.error(this.translate("chatbot.processingError"));
       } finally {
-        this.isLoading = false; // Hide spinner
+        this.isLoading = false;
       }
       this.scrollToBottom();
       if (this.currentChatId) {
@@ -931,7 +995,8 @@ export default {
         this.conversationId = conversation._key;
         this.currentChatId = conversation._key;
         this.currentChatTitle = conversation.title || this.generateChatTitle();
-        this.conversationCategory = conversation.categoryId || null;
+        this.currentCategoryId = conversation.categoryId || null;
+        this.relatedDocuments = [];
 
         this.chatMessages = [];
         const messages = conversation.messages || [];
@@ -959,29 +1024,25 @@ export default {
         if (conversation.tags && Array.isArray(conversation.tags)) {
           console.log(`Conversation tags:`, conversation.tags);
           conversation.tags.forEach((tag) => {
-            // Include all tags, using fallback for empty/invalid
             this.selectedContextItems.push({
               service: this.safeTranslate(
-                tag || `category.${this.conversationCategory || "general"}`
-              ), // Fallback to category
+                tag || `category.${this.currentCategoryId || "general"}`
+              ),
               serviceKey:
-                tag || `category.${this.conversationCategory || "general"}`, // Store original or fallback
-              category: this.conversationCategory || "general",
+                tag || `category.${this.currentCategoryId || "general"}`,
+              category: this.currentCategoryId || "general",
               selected: true,
             });
           });
-        } else if (this.conversationCategory) {
-          // Fallback if no tags
+        } else if (this.currentCategoryId) {
           this.selectedContextItems.push({
-            service: this.safeTranslate(
-              `category.${this.conversationCategory}`
-            ),
-            serviceKey: `category.${this.conversationCategory}`,
-            category: this.conversationCategory,
+            service: this.getCategoryLabelById(this.currentCategoryId),
+            serviceKey: `category.${this.currentCategoryId}`,
+            category: this.currentCategoryId,
             selected: true,
           });
           console.log(
-            `No tags, using fallback category: ${this.conversationCategory}`
+            `No tags, using fallback category ID: ${this.currentCategoryId}`
           );
         }
 
@@ -1095,7 +1156,7 @@ export default {
 
     getContextTags() {
       return this.selectedContextItems
-        .map((item) => item.serviceKey || item.service) // Use serviceKey if available
+        .map((item) => item.serviceKey || item.service)
         .filter((tag) => tag);
     },
 
@@ -1120,7 +1181,7 @@ export default {
           userId: currentUser._key,
           title: this.saveChatDialog.title || this.generateChatTitle(),
           initialMessage: firstUserMessage,
-          categoryId: this.conversationCategory || null,
+          categoryId: this.currentCategoryId || null,
           tags: this.getContextTags(),
         };
 
@@ -1174,9 +1235,8 @@ export default {
           }
         }
 
-        // Update Vuex store with the new conversation
         const chatData = {
-          id: conversation._key, // Use backend _key instead of generating new UUID
+          id: conversation._key,
           title: conversationData.title,
           preview: this.chatPreview,
           folderId: this.saveChatDialog.folderId || "default",
@@ -1187,7 +1247,6 @@ export default {
         };
         console.log("Dispatching createChat with:", chatData);
         await this.$store.dispatch("chatHistory/createChat", chatData);
-        // Debug: Log Vuex chats state after createChat
         console.log(
           "Vuex chats state after createChat:",
           this.$store.state.chatHistory.chats
@@ -1213,7 +1272,6 @@ export default {
           console.log(
             `Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`
           );
-          // Add to specific folder in Vuex store
           console.log("Dispatching addChatToFolder with:", {
             chatId: conversation._key,
             folderId: this.saveChatDialog.folderId,
@@ -1222,7 +1280,6 @@ export default {
             chatId: conversation._key,
             folderId: this.saveChatDialog.folderId,
           });
-          // Debug: Log Vuex folderChats state after addChatToFolder
           console.log(
             "Vuex folderChats state after addChatToFolder:",
             this.$store.state.chatHistory.folderChats[
@@ -1240,7 +1297,6 @@ export default {
         notificationService.success(this.translate("chatbot.chatSaved"));
         this.saveChatDialog.visible = false;
 
-        // Emit event to notify ChatFolders.vue of new conversation
         console.log(
           `Emitting conversation-saved event for conversation ${conversation._key}`
         );
@@ -1269,7 +1325,7 @@ export default {
         const updateData = {
           userId: currentUser._key,
           title: this.currentChatTitle || this.generateChatTitle(),
-          categoryId: this.conversationCategory || null,
+          categoryId: this.currentCategoryId || null,
           tags: this.getContextTags(),
           isStarred: false,
           isArchived: false,
@@ -1427,9 +1483,10 @@ export default {
       this.conversationId = null;
       this.selectedContextItems = [];
       this.newMessage = "";
-      this.conversationCategory = null;
+      this.currentCategoryId = null;
       this.currentChatTitle = "";
       this.showQuickHelp = true;
+      this.relatedDocuments = [];
       this.lastSavedState = {
         messages: JSON.parse(JSON.stringify(this.chatMessages)),
         contextItems: [],
@@ -1449,13 +1506,6 @@ export default {
       };
     },
 
-    /**
-     * Helper method to recursively process an array of inline markdown tokens.
-     * This is used to break down paragraphs, headings, and list items into
-     * styled text fragments.
-     * @param {Array} tokens - An array of inline tokens from the `marked` library.
-     * @returns {Array} An array of objects, e.g., [{ text: 'Hello', style: 'bold' }].
-     */
     _processInlineTokens(tokens) {
       const parts = [];
       if (!tokens) {
@@ -1465,14 +1515,11 @@ export default {
       tokens.forEach((token) => {
         switch (token.type) {
           case "strong":
-            // A 'strong' token contains its own 'tokens' array for its content.
-            // We process them and ensure the 'bold' style is applied.
             const boldParts = this._processInlineTokens(token.tokens);
             boldParts.forEach((p) => (p.style = "bold"));
             parts.push(...boldParts);
             break;
           case "em":
-            // Similar to 'strong', for italics.
             const italicParts = this._processInlineTokens(token.tokens);
             italicParts.forEach((p) => (p.style = "italic"));
             parts.push(...italicParts);
@@ -1481,17 +1528,14 @@ export default {
             parts.push({ text: token.text, style: "code" });
             break;
           case "link":
-            // Process the text within the link.
             const linkParts = this._processInlineTokens(token.tokens);
             linkParts.forEach((p) => (p.style = "link"));
             parts.push(...linkParts);
             break;
           case "text":
-            // A plain text segment.
             parts.push({ text: token.text, style: "normal" });
             break;
           default:
-            // Fallback for other potential inline token types.
             if (token.text) {
               parts.push({ text: token.text, style: "normal" });
             }
@@ -1501,21 +1545,13 @@ export default {
       return parts;
     },
 
-    /**
-     * Parses a markdown string into a structured array of blocks and lines
-     * suitable for rendering in a PDF with jsPDF.
-     * @param {string} markdown - The markdown content to parse.
-     * @returns {Array} A structured array representing the document.
-     */
     parseMarkdownForPDF(markdown) {
       try {
-        // Use marked.lexer to get block-level tokens.
         const tokens = marked.lexer(markdown);
         const result = [];
         let listCounter = 0;
         let listOrdered = false;
 
-        // Iterate over the top-level blocks.
         tokens.forEach((token) => {
           switch (token.type) {
             case "space":
@@ -1525,9 +1561,7 @@ export default {
               result.push({ type: "hr" });
               break;
             case "heading":
-              // Process inline content of the heading.
               const headingParts = this._processInlineTokens(token.tokens);
-              // Apply the heading style to all parts of the line.
               headingParts.forEach((p) => (p.style = `h${token.depth}`));
               result.push({ type: "line", indent: 0, content: headingParts });
               break;
@@ -1540,22 +1574,18 @@ export default {
               break;
             case "list":
               listOrdered = token.ordered;
-              // `marked` provides the 'start' number for ordered lists.
               listCounter = token.start ? token.start - 1 : 0;
-              // Process each list item.
               token.items.forEach((item) => {
                 listCounter++;
                 const prefix = listOrdered ? `${listCounter}. ` : "- ";
-                // An item's content is in its `tokens`, usually a single 'text' block that contains further inline tokens.
                 const itemContent = this._processInlineTokens(
                   item.tokens[0].tokens
                 );
-                // Prepend the bullet or number to the line.
                 itemContent.unshift({ text: prefix, style: "normal" });
                 result.push({ type: "line", indent: 15, content: itemContent });
               });
               break;
-            case "code": // Fenced code blocks
+            case "code":
               const codeLines = token.text.split("\n");
               codeLines.forEach((line) => {
                 result.push({
@@ -1566,7 +1596,6 @@ export default {
               });
               break;
             case "blockquote":
-              // Recursively parse the content of the blockquote and add indentation.
               const quoteContent = token.tokens.map((tok) =>
                 this._processInlineTokens(tok.tokens)
               );
@@ -1585,7 +1614,6 @@ export default {
         return result;
       } catch (error) {
         console.error("Error parsing markdown for PDF:", error);
-        // Fallback to plain text on error.
         return [
           {
             type: "line",
@@ -1596,9 +1624,6 @@ export default {
       }
     },
 
-    /**
-     * Exports the current chat history to a PDF file, correctly rendering markdown.
-     */
     exportChatToPDF() {
       try {
         const doc = new jsPDF();
@@ -1609,7 +1634,6 @@ export default {
         const leftMargin = 15;
         const rightMargin = doc.internal.pageSize.width - 15;
 
-        // Helper to add a new page if the content gets too close to the bottom.
         const checkPageBreak = (neededHeight = 10) => {
           if (yOffset + neededHeight > pageHeight - bottomMargin) {
             doc.addPage();
@@ -1617,7 +1641,6 @@ export default {
           }
         };
 
-        // 1. Add Document Title
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
         doc.text(
@@ -1627,12 +1650,10 @@ export default {
         );
         yOffset += 15;
 
-        // 2. Process and add each message
         this.chatMessages.forEach((msg) => {
-          checkPageBreak(20); // Check for space before adding a new message block
+          checkPageBreak(20);
           yOffset += 5;
 
-          // Render sender and timestamp
           doc.setFontSize(10);
           doc.setFont("helvetica", "bold");
           const sender = msg.sender === "user" ? "User" : "Bot";
@@ -1642,7 +1663,6 @@ export default {
           doc.text(`${sender} (${timestamp}):`, leftMargin, yOffset);
           yOffset += 6;
 
-          // Parse the content into structured blocks
           const parsedContent =
             msg.sender === "bot" && msg.content
               ? this.parseMarkdownForPDF(msg.content)
@@ -1654,11 +1674,9 @@ export default {
                   },
                 ];
 
-          // 3. Render each block from the parsed content
           parsedContent.forEach((block) => {
             checkPageBreak();
 
-            // Handle special block types
             if (block.type === "space") {
               yOffset += 5;
               return;
@@ -1674,24 +1692,19 @@ export default {
               return;
             }
 
-            // Set initial X position for the line, including indentation
             let xOffset = leftMargin + (block.indent || 0);
 
-            // If it's a quote, draw a small indicator bar
             if (block.isQuote) {
               doc.setFillColor(230, 230, 230);
               doc.rect(leftMargin, yOffset - 4, 3, 6, "F");
             }
 
-            // A queue of text parts to render for the current line
             let linePartsQueue = [...block.content];
 
-            // Process the queue, handling word wrapping
             while (linePartsQueue.length > 0) {
               const part = linePartsQueue.shift();
               const availableWidth = rightMargin - xOffset;
 
-              // Set font styles for the current part
               doc.setFontSize(12);
               let fontStyle = "normal";
               if (part.style === "bold") fontStyle = "bold";
@@ -1707,42 +1720,33 @@ export default {
                 doc.setFontSize(10);
               }
 
-              // Use jsPDF's splitTextToSize for wrapping
               const splitText = doc.splitTextToSize(part.text, availableWidth);
 
-              // Render the first line of the potentially wrapped text
               doc.text(splitText[0], xOffset, yOffset);
-              // Move the x-cursor by the width of the rendered text
               xOffset +=
                 (doc.getStringUnitWidth(splitText[0]) * doc.getFontSize()) /
                 doc.internal.scaleFactor;
 
-              // If the text was wrapped...
               if (splitText.length > 1) {
                 const remainingText = splitText.slice(1).join(" ");
-                // Add the rest of the text back to the front of the queue
                 linePartsQueue.unshift({
                   text: remainingText,
                   style: part.style,
                 });
 
-                // And move to the next line in the PDF for the next part
-                yOffset += 6; // Use a standard line height
+                yOffset += 6;
                 checkPageBreak();
                 xOffset = leftMargin + (block.indent || 0);
                 if (block.isQuote) {
-                  // Redraw quote bar on new line
                   doc.setFillColor(230, 230, 230);
                   doc.rect(leftMargin, yOffset - 4, 3, 6, "F");
                 }
               }
             }
-            // After a full block is rendered, move to the next line
             yOffset += 6;
           });
         });
 
-        // 4. Sanitize filename and save the document
         let filename = this.exportDialog.filename.trim();
         if (!filename.toLowerCase().endsWith(".pdf")) {
           filename += ".pdf";
@@ -2145,9 +2149,28 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   color: var(--text-primary, #ffffff);
 }
 
-.feedback-trigger {
+.bot-message-meta {
   margin-left: 8px;
   align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.confidence-score {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #64748b);
+  background: var(--bg-tertiary, #f8fafc);
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feedback-trigger {
+  margin-left: 0;
 }
 
 .feedback-trigger button {
@@ -2362,7 +2385,7 @@ html[data-theme="dark"] .loading-spinner .loading-text {
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color, 0.2s;
 }
 
 .cancel-btn {
@@ -2453,5 +2476,15 @@ html[data-theme="dark"] .quick-help-heading {
 [data-theme="dark"] .quick-help-overlay,
 html[data-theme="dark"] .quick-help-overlay {
   background: var(--bg-primary, #1e1e1e) !important;
+}
+
+[data-theme="dark"] .confidence-score {
+    color: var(--text-tertiary, #a0aec0);
+    background: var(--bg-tertiary, #2d3748);
+}
+
+[data-theme="dark"] .feedback-trigger button {
+    background: var(--bg-button-secondary, #2d3748);
+    color: var(--text-button-secondary, #e2e8f0);
 }
 </style>

@@ -71,6 +71,8 @@ class FileController {
     this.searchMetadata = this.searchMetadata.bind(this);
     this.getMetadata = this.getMetadata.bind(this);
     // this.updateMetadataController = this.updateMetadataController.bind(this);
+    this.ingestFile = this.ingestFile.bind(this);
+    this.retractFile = this.retractFile.bind(this);
   }
 
   /**
@@ -506,6 +508,15 @@ class FileController {
     }
   }
 
+
+  async _getFileBase64(fileId) {
+    const { file, filePath } = await this._getFileAndPath(fileId);
+    const fileBuffer = await fs.readFile(filePath);
+    const base64String = fileBuffer.toString('base64');
+    return { file, base64String };
+  }
+
+
   /**
    * Get file as base64
    * @param {Object} req - Express request object
@@ -514,11 +525,7 @@ class FileController {
   async viewFile(req, res) {
     try {
       const { fileId } = req.params;
-      const { file, filePath } = await this._getFileAndPath(fileId);
-
-      // Read file and convert to base64
-      const fileBuffer = await fs.readFile(filePath);
-      const base64String = fileBuffer.toString('base64');
+      const { file, base64String } = await this._getFileBase64(fileId);
 
       // construct response with file file information and base64 string
       res.json({
@@ -1006,15 +1013,16 @@ class FileController {
   async ingestFile(req, res) {
   try {
     const { fileId } = req.params;
-    const file = await metadataService.getMetadataById(fileId);
-    if (!file) return res.status(404).json({ success: false, error: 'File not found' });
+    const { file, base64String } = await this._getFileBase64(fileId);
 
     // Send file info to dataprep microservice
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     const response = await axios.post(dataprepUrl, {
       fileId: file.file_id,
-      filePath: file.storage_path,
-      // or provide a download URL if needed
+      fileName: file.file_name,
+      fileType: file.file_type,
+      uploadDate: file.upload_date,
+      base64: base64String, // any other necessary file metadata can be added here? fileName, fileType, etc.
     });
 
     if (response.data.success) {

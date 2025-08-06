@@ -13,8 +13,8 @@ const config = {
   },
 
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://e2e-132-198', // to be replaced with the actual host
-    port: process.env.DATAPREP_PORT || '5000', // to be replaced with the actual port
+    host: process.env.DATAPREP_HOST || 'http://91.203.132.198', // to be replaced with the actual host
+    port: process.env.DATAPREP_PORT || '6007', // to be replaced with the actual port
     ingestPath: '/v1/dataprep/ingest_file',
     retractPath: '/v1/dataprep/retract_file'
   },

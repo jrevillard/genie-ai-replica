@@ -17,7 +17,7 @@ async function extractMetadata(filePath, fileInfo = {}) {
     const stats = await fs.stat(filePath);
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';
     const baseMeta = {
-        file_id: fileInfo.file_id || uuidv4(),
+        file_id: String(fileInfo.file_id || uuidv4()),
         file_name: fileInfo.file_name || path.basename(filePath),
         file_size: fileInfo.file_size || stats.size,
         file_type: fileInfo.file_type || mimeType,

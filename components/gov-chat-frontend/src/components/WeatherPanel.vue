@@ -1,10 +1,10 @@
 <template>
-  <div class="weather-panel" :data-theme="$route.meta.theme || 'light'">
+  <div class="weather-panel" :data-theme="$route.meta.theme || 'light'" :key="$i18n.locale">
     <div class="weather-header">
-      <h4>{{ $t('sidebar.weatherTitle', 'Weather Forecast') }}</h4>
+      <h4>{{ weatherTitle }}</h4>
       <div class="weather-location">
-        {{ location }}
-        <button @click="refreshWeather" class="refresh-btn" title="Refresh Weather">
+        {{ location || weatherLocationLoading }}
+        <button @click="refreshWeather" class="refresh-btn" :title="weatherRefresh">
           <i class="fas fa-sync-alt" :class="{ 'rotating': isLoading }"></i>
         </button>
       </div>
@@ -12,12 +12,12 @@
     
     <div v-if="isLoading" class="weather-loading">
       <i class="fas fa-spinner fa-pulse"></i>
-      {{ $t('sidebar.weatherLoading', 'Loading weather data...') }}
+      {{ weatherLoading }}
     </div>
     
-    <div v-else-if="error" class="weather-error">
+    <div v-else-if="errorKey" class="weather-error">
       <i class="fas fa-exclamation-triangle"></i>
-      {{ error }}
+      {{ $t(`sidebar.${errorKey}`) }}
     </div>
     
     <div v-else class="weather-content">
@@ -28,7 +28,7 @@
         </div>
         <div class="current-details">
           <div class="current-temp">{{ currentWeather.temperature }}°C</div>
-          <div class="current-condition">{{ currentWeather.condition }}</div>
+          <div class="current-condition">{{ getTranslatedCondition(currentWeather.condition) }}</div>
         </div>
         <div class="current-info">
           <div class="info-item">
@@ -42,15 +42,16 @@
       
       <!-- Daily Forecast -->
       <div class="forecast-list">
-        <div v-for="(day, index) in forecast" :key="index" class="forecast-day">
-          <div class="day-name">{{ formatDay(day.date) }}</div>
+        <div v-for="(day, index) in formattedForecast" :key="index" class="forecast-day">
+          <div class="day-name">{{ day.formattedDate }}</div>
           <div class="day-icon">
-            <i :class="getWeatherIcon(day.condition)"></i>
+            <i :class="day.iconClass"></i>
           </div>
           <div class="day-temp">
             <span class="temp-high">{{ day.highTemp }}°</span>
             <span class="temp-low">{{ day.lowTemp }}°</span>
           </div>
+          <div class="day-condition">{{ day.translatedCondition }}</div>
         </div>
       </div>
     </div>
@@ -66,9 +67,9 @@ export default {
   
   data() {
     return {
-      location: 'Loading location...',
+      location: null,
       isLoading: true,
-      error: null,
+      errorKey: null,
       currentWeather: {
         temperature: 0,
         condition: '',
@@ -79,6 +80,39 @@ export default {
     };
   },
   
+  computed: {
+    weatherTitle() {
+      return this.$t('sidebar.weatherTitle');
+    },
+    weatherLoading() {
+      return this.$t('sidebar.weatherLoading');
+    },
+    weatherLocationLoading() {
+      return this.$t('sidebar.weatherLocationLoading');
+    },
+    weatherRefresh() {
+      return this.$t('sidebar.weatherRefresh');
+    },
+    formattedForecast() {
+      return this.forecast.map(day => ({
+        ...day,
+        formattedDate: this.formatDay(day.date),
+        iconClass: this.getWeatherIcon(day.condition),
+        translatedCondition: this.getTranslatedCondition(day.condition)
+      }));
+    }
+  },
+  
+  watch: {
+    '$i18n.locale': {
+      handler() {
+        this.getWeather();
+        this.$forceUpdate();
+      },
+      immediate: true
+    }
+  },
+  
   created() {
     this.getWeather();
   },
@@ -86,7 +120,8 @@ export default {
   methods: {
     async getWeather() {
       this.isLoading = true;
-      this.error = null;
+      this.errorKey = null;
+      this.location = null;
 
       try {
         if (navigator.geolocation) {
@@ -96,17 +131,18 @@ export default {
           const { latitude, longitude } = position.coords;
           const user = await authService.getCurrentUser(); // Fetch user from authService
           const userId = user?._key || null;
+          const locale = this.$i18n.locale;
 
-          const weatherData = await weatherService.getWeather({ latitude, longitude, userId });
+          const weatherData = await weatherService.getWeather({ latitude, longitude, userId, locale });
           this.location = weatherData.location;
           this.currentWeather = weatherData.current;
           this.forecast = weatherData.forecast;
         } else {
-          throw new Error('Geolocation not supported by your browser.');
+          this.errorKey = 'weatherGeolocationUnsupported';
         }
       } catch (error) {
         console.warn('Weather fetch error:', error);
-        this.error = error.message || 'Unable to retrieve weather data.';
+        this.errorKey = 'weatherErrorDefault';
       } finally {
         this.isLoading = false;
       }
@@ -117,11 +153,29 @@ export default {
     },
     
     formatDay(date) {
-      return new Date(date).toLocaleDateString(undefined, { weekday: 'short' });
+      return new Date(date).toLocaleDateString(this.$i18n.locale, { weekday: 'short' });
+    },
+    
+    getTranslatedCondition(condition) {
+      if (!condition) return '';
+      const conditionLower = condition.toLowerCase();
+      const key = this.getConditionKey(conditionLower);
+      const translationKey = `sidebar.weatherConditions.${key}`;
+      return this.$te(translationKey) ? this.$t(translationKey) : condition;
+    },
+    
+    getConditionKey(conditionLower) {
+      if (conditionLower.includes('thunder')) return 'thunderstorm';
+      if (conditionLower.includes('shower')) return 'shower';
+      if (conditionLower.includes('rain')) return 'rain';
+      if (conditionLower.includes('snow')) return 'snow';
+      if (conditionLower.includes('overcast')) return 'overcast';
+      if (conditionLower.includes('cloudy')) return 'cloudy';
+      if (conditionLower.includes('partly')) return 'partlycloudy';
+      return 'clear';
     },
     
     getWeatherIcon(condition) {
-      // Map weather conditions to Font Awesome icons
       const conditionLower = condition.toLowerCase();
       
       if (conditionLower.includes('thunder')) {
@@ -293,5 +347,11 @@ html[data-theme="dark"] .weather-header h4 {
 
 .temp-low {
   color: var(--text-secondary);
+}
+
+.day-condition {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-top: 2px;
 }
 </style>

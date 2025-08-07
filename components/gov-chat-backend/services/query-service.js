@@ -66,7 +66,6 @@ class QueryService {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
-      // *** START OF DEBUGGING ADDITIONS ***
       // Log the entire incoming request body from the frontend for easy debugging.
       logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
@@ -118,7 +117,6 @@ class QueryService {
         throw new Error(errorMsg);
       }
       logger.info('[DEBUG] All validations passed successfully.');
-      // *** END OF DEBUGGING ADDITIONS ***
 
       // Create query document to be saved in ArangoDB
       const basicQueryDoc = {
@@ -173,9 +171,12 @@ class QueryService {
         };
       }
 
-      // Log OPEA configuration
-      logger.info('QueryService.opea_config', { opeaHost, opeaPort, url: opeaUrl });
-      logger.info(`QueryService.preparing_opea_call for mode "${backendMode}"`, { queryId, payload: JSON.stringify(opeaPayload) });
+      // *** START: ENHANCED OPEA LOGGING ***
+      logger.info('==================== OPEA PAYLOAD START ====================');
+      logger.info(`[OPEA DEBUG] Sending payload to ${opeaUrl} for query ${queryId}:`);
+      logger.info(`[OPEA DEBUG] Payload Content:\n${JSON.stringify(opeaPayload, null, 2)}`);
+      logger.info('==================== OPEA PAYLOAD END ======================');
+      // *** END: ENHANCED OPEA LOGGING ***
 
       let opeaResponseContent = null;
       let opeaMetadata = null;
@@ -186,6 +187,14 @@ class QueryService {
         const opeaResponse = await axios.post(opeaUrl, opeaPayload);
         opeaResponseTime = Date.now() - opeaStartTime;
 
+        // *** START: ENHANCED OPEA LOGGING ***
+        logger.info('==================== OPEA RESPONSE START ====================');
+        logger.info(`[OPEA DEBUG] Received response from OPEA for query ${queryId}.`);
+        logger.info(`[OPEA DEBUG] Status: ${opeaResponse.status}`);
+        logger.info(`[OPEA DEBUG] Response Data:\n${JSON.stringify(opeaResponse.data, null, 2)}`);
+        logger.info('==================== OPEA RESPONSE END ======================');
+        // *** END: ENHANCED OPEA LOGGING ***
+
         // Unpack response based on the backend mode
         if (backendMode === 'single-message') {
           opeaResponseContent = opeaResponse.data.choices[0].message.content;
@@ -193,8 +202,6 @@ class QueryService {
           opeaResponseContent = opeaResponse.data.response;
           opeaMetadata = opeaResponse.data.metadata;
         }
-
-        logger.info(`QueryService.opea_response_received for query ${queryId}: status=${opeaResponse.status}, data=${JSON.stringify(opeaResponse.data)}, duration=${opeaResponseTime}ms`);
 
         // Update query document with response content and time
         const updateData = {
@@ -208,14 +215,21 @@ class QueryService {
         await this.queries.update(queryId, updateData);
       } catch (error) {
         opeaResponseTime = Date.now() - opeaStartTime;
-        logger.error(`QueryService.opea_service_error for query ${queryId}: ${error.message} (Status: ${error.response ? error.response.status : 'N/A'}, Duration: ${opeaResponseTime}ms)`);
+        // *** START: ENHANCED OPEA LOGGING ***
+        logger.error('==================== OPEA ERROR START ====================');
+        logger.error(`[OPEA DEBUG] OPEA service call failed for query ${queryId}.`);
+        logger.error(`[OPEA DEBUG] Error Message: ${error.message}`);
         if (error.response) {
-          logger.error(`OPEA service response details: ${JSON.stringify(error.response.data)}`);
+          logger.error(`[OPEA DEBUG] Error Status: ${error.response.status}`);
+          logger.error(`[OPEA DEBUG] Error Response Data:\n${JSON.stringify(error.response.data, null, 2)}`);
         } else if (error.request) {
-          logger.error('No response received from OPEA service - possible network or timeout issue');
+            logger.error('[OPEA DEBUG] No response received from OPEA service - possible network or timeout issue');
         } else {
-          logger.error('Error setting up OPEA service request - check configuration');
+            logger.error('[OPEA DEBUG] Error setting up OPEA service request - check configuration');
         }
+        logger.error('==================== OPEA ERROR END ======================');
+        // *** END: ENHANCED OPEA LOGGING ***
+        
         // Optionally set a default response or handle the error gracefully
         await this.queries.update(queryId, {
           response: 'Error: Unable to retrieve response from OPEA service',

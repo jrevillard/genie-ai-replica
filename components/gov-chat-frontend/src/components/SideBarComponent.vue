@@ -1,7 +1,3 @@
-<!-- SideBarComponent.vue with improved theme compatibility -->
-<!-- SideBarComponent.vue with improved mobile keyboard handling (corrected styles) -->
-<!-- SideBarComponent.vue with Android keyboard fix -->
-<!-- SideBarComponent.vue with sidebar width set to 450px -->
 <template>
   <aside
     class="side-bar"
@@ -13,7 +9,6 @@
     :data-theme="$route.meta.theme || 'light'"
     ref="sideBar"
   >
-    <!-- Overlay that only appears on mobile when sidebar is open -->
     <div
       class="mobile-sidebar-overlay"
       v-if="isOpen"
@@ -21,7 +16,6 @@
     ></div>
 
     <div class="sidebar-inner">
-      <!-- Tabbed navigation -->
       <div class="sidebar-tabs">
         <button
           class="tab-button"
@@ -41,13 +35,9 @@
         </button>
       </div>
 
-      <!-- Main flex container for content -->
       <div class="sidebar-content-wrapper">
-        <!-- Scrollable content area -->
         <div class="sidebar-content" ref="sidebarContent">
-          <!-- Government Services Tab -->
           <div v-if="activeTab === 'services'" class="services-list">
-            <!-- Service Tree Panel -->
             <service-tree-panel-component
               ref="serviceTree"
               @keyboard-focus="handleKeyboardFocus"
@@ -55,9 +45,7 @@
             />
           </div>
 
-          <!-- Chat History Tab -->
           <div v-else-if="activeTab === 'history'" class="chat-history">
-            <!-- Second level tabs for chat organization -->
             <div class="chat-sub-tabs" :key="currentLocale">
               <button
                 class="chat-sub-tab"
@@ -89,63 +77,14 @@
               </button>
             </div>
 
-            <!-- All Chats Tab -->
-            <div v-if="activeSubTab === 'all'" class="all-chats-content">
-              <!-- Search box -->
-              <div class="search-container">
-                <input
-                  type="text"
-                  class="search-box"
-                  :placeholder="$t('sidebar.searchConversations')"
-                  v-model="searchQuery"
-                />
-                <button class="search-btn">
-                  <i class="fas fa-search"></i>
-                </button>
-              </div>
-
-              <!-- All Chats Folder (directly without the FOLDERS label) -->
-              <div class="all-chats-folder">
-                <chat-folders
-                  @open-chat="openChat"
-                  :showDefaultOnly="true"
-                  :hideFolderLabel="true"
-                  @locale-changed="handleLocaleChange"
-                />
-              </div>
-            </div>
-
-            <!-- Folders Tab -->
-            <div v-else-if="activeSubTab === 'folders'" class="folders-content">
-              <chat-folders
-                @open-chat="openChat"
-                :showDefaultOnly="false"
-                :hideAllChats="true"
-              />
-            </div>
-
-            <!-- Starred Tab -->
-            <div v-else-if="activeSubTab === 'starred'" class="starred-content">
-              <div class="empty-state">
-                <i class="fas fa-star empty-icon"></i>
-                <p>{{ $t("sidebar.noStarredChats") }}</p>
-              </div>
-            </div>
-
-            <!-- Archived Tab -->
-            <div
-              v-else-if="activeSubTab === 'archived'"
-              class="archived-content"
-            >
-              <div class="empty-state">
-                <i class="fas fa-archive empty-icon"></i>
-                <p>{{ $t("sidebar.noArchivedChats") }}</p>
-              </div>
-            </div>
+            <chat-folders
+              :active-tab="activeSubTab"
+              @open-chat="openChat"
+              @locale-changed="handleLocaleChange"
+            />
           </div>
         </div>
 
-        <!-- Weather Panel in its own container, not part of the scroll area -->
         <div
           class="weather-container"
           :class="{ 'hide-on-keyboard': isKeyboardActive }"
@@ -186,32 +125,7 @@ export default {
       isMobileDevice: false,
       isAndroid: false,
       sidebarHeight: 0,
-      tabLabels: {
-        all: {
-          en: "All",
-          fr: "Tous",
-          sw: "Zote",
-          es: "Todos",
-        },
-        folders: {
-          en: "Folders",
-          fr: "Dossiers",
-          sw: "Folda",
-          es: "Carpetas",
-        },
-        starred: {
-          en: "Starred",
-          fr: "Favoris",
-          sw: "Vipendwa",
-          es: "Destacados",
-        },
-        archived: {
-          en: "Archived",
-          fr: "Archivés",
-          sw: "Zilizohifadhiwa",
-          es: "Archivados",
-        },
-      },
+      currentLocale: "en",
     };
   },
   mounted() {
@@ -258,7 +172,7 @@ export default {
     handleLocaleChange(newLocale) {
       console.log("[SideBar] Locale changed to:", newLocale);
       this.currentLocale = newLocale;
-      this.$forceUpdate(); // Re-render tabs
+      this.$forceUpdate();
     },
     checkDevice() {
       this.isMobileDevice =
@@ -339,14 +253,7 @@ export default {
           console.warn(`[SIDEBAR] Translation error for tab: ${tabKey}`, error);
         }
       }
-      const locale = this.currentLocale || "en";
-      if (this.tabLabels[tabKey] && this.tabLabels[tabKey][locale]) {
-        return this.tabLabels[tabKey][locale];
-      }
-      return (
-        this.tabLabels[tabKey]?.en ||
-        tabKey.charAt(0).toUpperCase() + tabKey.slice(1)
-      );
+      return tabKey.charAt(0).toUpperCase() + tabKey.slice(1);
     },
     openChat(chatId) {
       this.$emit("open-chat", chatId);
@@ -723,7 +630,8 @@ export default {
 
 [data-theme="dark"] .chat-sub-tab.active {
   color: #4e97d1;
-  border-bottom-color: #4e97d1;
+  border-bottom: 2px solid #4e97d1;
+  font-weight: 500;
 }
 
 [data-theme="dark"] .chat-sub-tab:hover:not(.active) {

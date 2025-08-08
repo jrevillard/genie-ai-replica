@@ -55,6 +55,7 @@ services:
       - LOG_LEVEL=debug
       - OPEA_HOST=e2e-109-198
       - OPEA_PORT=8888
+      - CONTEXT_OPTION=single-message
     env_file:
       - ./gov-chat-backend/.env
     networks:

@@ -13,6 +13,7 @@ const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount, get
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 
+
 async function extractMetadata(filePath, fileInfo = {}) {
     const stats = await fs.stat(filePath);
     const mimeType = mime.lookup(filePath) || 'application/octet-stream';

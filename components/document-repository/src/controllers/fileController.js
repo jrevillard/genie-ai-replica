@@ -1017,12 +1017,13 @@ class FileController {
 
     // Send file info to dataprep microservice
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+    logger.debug(`🤠 [FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
     const response = await axios.post(dataprepUrl, {
       fileId: file.file_id,
       fileName: file.file_name,
       fileType: file.file_type,
       uploadDate: file.upload_date,
-      base64: base64String, // any other necessary file metadata can be added here? fileName, fileType, etc.
+      fileBase64: base64String, // any other necessary file metadata can be added here? fileName, fileType, etc.
     });
 
     if (response.data.success) {
@@ -1036,10 +1037,15 @@ class FileController {
       });
       return res.json({ success: true, message: 'File ingested successfully' });
     } else {
+      logger.error('Dataprep ingest failed:', response.data);
       return res.status(500).json({ success: false, error: 'Data prep failed.', details: response.data });
     }
   } catch (error) {
     logger.error('Ingest file error:', error);
+    if (error.response) {
+    logger.error('Response data:', error.response.data);
+    logger.error('Response status:', error.response.status);
+    }
     res.status(500).json({ success: false, error: error.message });
   }
   }

@@ -19,6 +19,7 @@ export default {
         es: 'Spanish',
         fr: 'Français',
         id: 'Indonesian',
+        pt: 'Portuguese',
         ru: 'Russian',
         sw: 'Kiswahili',
         th: 'Thai',

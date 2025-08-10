@@ -172,7 +172,6 @@ export default {
     'SE': 'Swedia',
     'CH': 'Swiss',
     'SY': 'Suriah',
-    'TW': 'Taiwan',
     'TJ': 'Tajikistan',
     'TZ': 'Tanzania',
     'TH': 'Thailand',

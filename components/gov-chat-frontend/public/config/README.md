@@ -1,6 +1,6 @@
 # GENIE.AI Framework Configuration Guide
 
-This guide provides developers with detailed instructions for configuring the GENIE.AI chatbot framework, used in applications like Huduma AI and NAAT - Noor AI AL Tafsir. The configuration system, driven by JSON files (e.g., `genie-ai-config.json`, `genie-ai-config-huduma.json`, `genie-ai-config-naat.json`), customizes the application’s title, icon, color scheme, chatbot features, and Quick Help button functionalities. This document explains how the configuration system works, how to apply style changes (e.g., navbar gradient, button colors), how to configure Quick Help buttons for specific knowledge areas and prompts, how to create new use cases, and the impact on all screens and components, including how button styles and Quick Help configurations propagate across the application.
+This guide provides developers with detailed instructions for configuring the GENIE.AI chatbot framework, used in use cases like Huduma AI (a government services chatbot fro Kenya) and NAAT - Noor AI AL Tafsir (a Muslim catbot for Indonesia). The configuration system, driven by JSON files (e.g., `genie-ai-config.json`, `genie-ai-config-huduma.json`, `genie-ai-config-naat.json`), customizes the application’s title, icon, color scheme, chatbot features, and Quick Help button functionalities. This document explains how the configuration system works, how to apply style changes (e.g., navbar gradient, button colors), how to configure Quick Help buttons for specific knowledge areas and prompts, how to create new use cases, and the impact on all screens and components, including how button styles and Quick Help configurations propagate across the application.
 
 ## Overview
 
@@ -48,7 +48,7 @@ Configurations are JSON files in `/public/config/`, validated against a JSON sch
 
 ### Example Configurations
 
-#### Huduma AI (`genie-ai-config-huduma.json`)
+#### Huduma AI Example (`genie-ai-config-huduma.json`)
 ```json
 {
   "app": {
@@ -113,7 +113,7 @@ Configurations are JSON files in `/public/config/`, validated against a JSON sch
 }
 ```
 
-#### NAAT - Noor AI AL Tafsir (`genie-ai-config-naat.json`)
+#### NAAT - Noor AI AL Tafsir Example (`genie-ai-config-naat.json`)
 ```json
 {
   "app": {
@@ -193,6 +193,7 @@ To change styles like navbar gradients, button colors, or other UI elements:
 3. **Deploy**:
    - Run `npm run build` to include updated config.
    - Deploy `/public/config/*` to the server, ensuring accessibility.
+   - preferrably just use the docker-compose.yaml (docker compose up --build -d)
 
 ### Configuring Quick Help Buttons
 Quick Help buttons provide quick access to specific knowledge areas and predefined prompts, enhancing user interaction with the chatbot. These buttons are configured in the `features.chat.quickHelp.buttons` array and are displayed in the chat interface (e.g., `ChatScreen.vue`).

@@ -172,7 +172,6 @@ export default {
     'SE': 'Швеция',
     'CH': 'Швейцария',
     'SY': 'Сирия',
-    'TW': 'Тайвань',
     'TJ': 'Таджикистан',
     'TZ': 'Танзания',
     'TH': 'Таиланд',
@@ -1355,10 +1354,10 @@ export default {
     exportError: 'Не удалось экспортировать чат. Пожалуйста, попробуйте снова.'
   },
   quickhelp: {
-    applyForID: "Подать заявку на ID",
+    applyForID: "Заявка на удостоверение личности",
     payTaxes: "Оплатить налоги",
     startBusiness: "Начать бизнес",
-    findHealthcare: "Найти здравоохранение",
+    findHealthcare: "Услуги здравоохранения",
     educationServices: "Образовательные услуги",
     transportLicenses: "Транспорт и лицензии",
     housingPrograms: "Жилищные программы",

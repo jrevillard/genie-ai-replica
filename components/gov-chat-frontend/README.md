@@ -767,11 +767,12 @@ nano /public/config/genie-ai-config.json
 
 ### 2. Docker Quick Start
 ```bash
-# Development with Docker
-docker build -t genie-ai:dev .
-docker run -p 8090:8090 \
-  -e VUE_APP_API_URL=https://your-api-url.com/api \
-  genie-ai:dev
+# To deploy the full stack (frontend and backend) using Docker Compose
+# Ensure docker-compose.yaml is in the parent directory containing gov-chat-frontend and gov-chat-backend
+
+cd ..
+docker-compose build
+docker-compose up -d
 
 # Access the application
 open http://localhost:8090
@@ -874,15 +875,58 @@ VUE_APP_ENVIRONMENT=production
 
 ### 5. Build and Deploy
 ```bash
-# Development
+# Development (frontend local)
 npm run serve
 
-# Production build
+# Production build (frontend only)
 npm run build
 
-# Docker production build
-docker build -f Dockerfile.prod -t genie-ai:prod .
-docker run -p 80:80 genie-ai:prod
+# Full stack deployment with Docker Compose
+docker-compose up -d --build
+
+# Access the frontend at http://localhost:8090
+# The backend is available at http://localhost:3000
+
+# Required Configurations
+# Update the docker-compose.yaml file with the following environment variables.
+# For sensitive values, use a .env file or set them directly.
+
+# Frontend environment variables (under services.frontend.environment):
+- NODE_ENV=production
+- VUE_APP_API_URL=https://e2e-82-109.ssdcloudindia.net:443/api  # Or your backend API URL
+
+# Backend environment variables (under services.backend.environment):
+- NODE_ENV=production
+- PORT=3000
+- API_PREFIX=/api
+- UPLOAD_DIR=./Uploads
+- MAX_FILE_SIZE=5242880
+- SESSION_SECRET=${SESSION_SECRET:-default-session-secret}  # Replace with a secure secret
+- SESSION_EXPIRATION_TIME=1800000
+- CORS_ORIGIN=https://e2e-82-109.ssdcloudindia.net/  # Set to your frontend URL
+- EMAIL_HOST=in-V3.mailjet.com
+- EMAIL_PORT=587
+- EMAIL_SECURE=false
+- EMAIL_USER=187ad3288090609e6e282b07f359acd4  # Replace with your email user
+- EMAIL_PASSWORD=6615d81ddd46faab7e69eb6710ac364a  # Replace with your email password
+- EMAIL_FROM=fordendk@gmail.com  # Replace with your from email
+- APP_NAME=Huduma AI
+- FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/  # Set to your frontend URL
+- ARANGO_URL=http://arango-vector-db:8529
+- ARANGO_DB=node-services
+- ARANGO_USER=root
+- ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}  # Replace with secure password
+- BACKUP_DIR=./database_backups
+- MAX_BACKUPS=5
+- BACKUP_FORMAT=json
+- JWT_SECRET=${JWT_SECRET:-default-jwt-secret}  # Replace with a secure secret
+- JWT_EXPIRES_IN=24h
+- LOG_LEVEL=debug
+- OPEA_HOST=e2e-109-198
+- OPEA_PORT=8888
+- CONTEXT_OPTION=single-message
+
+# The backend also loads additional variables from ./gov-chat-backend/.env
 ```
 
 ### RAG Integration Points
@@ -929,24 +973,20 @@ class ChatbotService {
 
 #### Docker Environment Variables
 
-The Docker configuration supports environment-specific API endpoints:
+The Docker Compose configuration supports environment-specific API endpoints for the frontend. Update the docker-compose.yaml under services.frontend.environment:
 
-```bash
+- VUE_APP_API_URL=https://your-api-url.com/api
+
+Examples for different environments (modify in docker-compose.yaml):
+
 # Development
-docker run -p 8090:8090 \
-  -e VUE_APP_API_URL=https://dev-api.example.com/api \
-  genie-ai:dev
+- VUE_APP_API_URL=https://dev-api.example.com/api
 
 # Staging  
-docker run -p 8090:8090 \
-  -e VUE_APP_API_URL=https://staging-api.example.com/api \
-  genie-ai:staging
+- VUE_APP_API_URL=https://staging-api.example.com/api
 
 # Production
-docker run -p 80:80 \
-  -e VUE_APP_API_URL=https://api.example.com \
-  genie-ai:prod
-```
+- VUE_APP_API_URL=https://api.example.com
 
 ## Development Setup
 

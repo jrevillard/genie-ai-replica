@@ -6,6 +6,10 @@ This README provides documentation on using the provided scripts to manage and c
 
 
 
+Additionally, this guide includes documentation for the `docker-compose.yaml` file, which orchestrates the deployment of the entire stack, including Kong, databases, Keycloak for authentication, NGINX, and OWASP ZAP for security testing.
+
+
+
 \## Introduction
 
 
@@ -22,6 +26,8 @@ This README provides documentation on using the provided scripts to manage and c
 
 \- Configuration files include JSON for Kong and `.conf` files for NGINX.
 
+\- \*\*Docker Compose\*\*: Manages the containerized services for the full environment.
+
 
 
 The system is designed for a production-like setup with security best practices (e.g., CSP, HSTS, CORS).
@@ -32,15 +38,7 @@ The system is designed for a production-like setup with security best practices 
 
 
 
-\- Docker or local setup with:
-
-&nbsp; - Kong running (e.g., via Docker Compose).
-
-&nbsp; - Node.js Express server on `e2e-109-51:3000`.
-
-&nbsp; - Vue 3 app on `e2e-109-51:8090`.
-
-&nbsp; - NGINX with access to certs (`/etc/nginx/certs/server.crt` and `.key`).
+\- Docker and Docker Compose installed.
 
 \- Tools: `curl`, `jq` (for JSON parsing), `bash`.
 
@@ -49,6 +47,214 @@ The system is designed for a production-like setup with security best practices 
 &nbsp; - `LOGIN\_PASSWORD`: For automated testing in `restore-kong-config.sh`.
 
 \- Backup files: Stored in `kong\_backups/` directory.
+
+\- Custom files: Ensure `./pg\_hba.conf`, `./kong\_logs`, `./nginx/conf`, `./nginx/certs` are present or created as needed.
+
+
+
+\## Docker Compose Setup
+
+
+
+The `docker-compose.yaml` file defines a multi-container application stack using Docker Compose version 3.8. It sets up a network (`kong-net`) and volumes for data persistence. This configuration integrates Kong as the API gateway, databases (Postgres and Mongo), Keycloak for identity management, NGINX as the reverse proxy, and OWASP ZAP for API security testing.
+
+
+
+\### Key Services
+
+
+
+\- \*\*kong-database\*\*: Postgres database for Kong.
+
+&nbsp; - Image: `postgres:13`.
+
+&nbsp; - Environment: User `kong`, DB `kong`, Password `k1ngk0ng`.
+
+&nbsp; - Ports: `5432`.
+
+&nbsp; - Volume: `kong\_data` for persistence; mounts custom `pg\_hba.conf` for host-based authentication.
+
+&nbsp; - Healthcheck: Ensures database readiness.
+
+
+
+\- \*\*kong\*\*: Kong API gateway.
+
+&nbsp; - Image: `kong:latest`.
+
+&nbsp; - Depends on: `kong-database`.
+
+&nbsp; - Environment: Connects to Postgres; logs to stdout/stderr.
+
+&nbsp; - Ports: `8000` (proxy), `8443` (HTTPS proxy), `8001` (admin API).
+
+&nbsp; - Volume: `./kong\_logs` for logs.
+
+
+
+\- \*\*konga\*\*: Web UI for managing Kong.
+
+&nbsp; - Image: `pantsel/konga:0.14.9`.
+
+&nbsp; - Depends on: `kong`, `mongo`.
+
+&nbsp; - Environment: Production mode, Mongo DB connection, token secret, Kong admin URL.
+
+&nbsp; - Ports: `1337`.
+
+
+
+\- \*\*mongo\*\*: MongoDB for Konga.
+
+&nbsp; - Image: `mongo:4.4`.
+
+&nbsp; - Volume: `mongo\_data`.
+
+&nbsp; - Ports: `27017`.
+
+
+
+\- \*\*keycloak\*\*: Keycloak identity and access management.
+
+&nbsp; - Image: `quay.io/keycloak/keycloak:latest`.
+
+&nbsp; - Depends on: `keycloak-db`.
+
+&nbsp; - Command: Builds and starts in optimized mode.
+
+&nbsp; - Environment: Postgres connection, admin credentials (`admin`/`adminpassword`), HTTP enabled.
+
+&nbsp; - Ports: `8080`.
+
+
+
+\- \*\*keycloak-db\*\*: Postgres database for Keycloak.
+
+&nbsp; - Image: `postgres:15`.
+
+&nbsp; - Environment: DB `keycloak`, User `keycloak`, Password `keycloakpassword`.
+
+&nbsp; - Volume: `keycloak\_data`.
+
+
+
+\- \*\*nginx\*\*: NGINX reverse proxy.
+
+&nbsp; - Image: `nginx:latest`.
+
+&nbsp; - Ports: `80` (HTTP), `443` (HTTPS).
+
+&nbsp; - Volumes: `./nginx/conf` for configs, `./nginx/certs` for SSL certs, `nginx\_conf` and `nginx\_certs` for additional persistence.
+
+&nbsp; - Depends on: `kong`.
+
+
+
+\- \*\*zap\*\*: OWASP ZAP for automated security testing.
+
+&nbsp; - Image: `ghcr.io/zaproxy/zaproxy:stable`.
+
+&nbsp; - Ports: `8095` (mapped to internal 8080).
+
+&nbsp; - Volume: `zap\_data` for working directory.
+
+&nbsp; - Command: Runs in daemon mode with API key disabled.
+
+
+
+\### Networks and Volumes
+
+
+
+\- \*\*Network\*\*: All services connected to `kong-net` (bridge driver) for internal communication.
+
+\- \*\*Volumes\*\*: Persistent storage for databases (`kong\_data`, `mongo\_data`, `keycloak\_data`), NGINX configs/certs (`nginx\_conf`, `nginx\_certs`), ZAP data (`zap\_data`), and Kong logs.
+
+
+
+\### Usage
+
+
+
+1\. \*\*Start the Stack\*\*:
+
+&nbsp;  ```
+
+&nbsp;  docker-compose up -d
+
+&nbsp;  ```
+
+&nbsp;  - This starts all services in detached mode.
+
+&nbsp;  - Wait for healthchecks (e.g., Kong database) to pass.
+
+
+
+2\. \*\*Stop the Stack\*\*:
+
+&nbsp;  ```
+
+&nbsp;  docker-compose down
+
+&nbsp;  ```
+
+&nbsp;  - Add `-v` to remove volumes (data loss warning).
+
+
+
+3\. \*\*Logs\*\*:
+
+&nbsp;  ```
+
+&nbsp;  docker-compose logs -f <service\_name>  # e.g., kong
+
+&nbsp;  ```
+
+
+
+4\. \*\*Access Points\*\*:
+
+&nbsp;  - Kong Proxy: `http://localhost:8000`
+
+&nbsp;  - Kong Admin API: `http://localhost:8001`
+
+&nbsp;  - Konga UI: `http://localhost:1337`
+
+&nbsp;  - Keycloak: `http://localhost:8080`
+
+&nbsp;  - NGINX: `http://localhost:80` or `https://localhost:443`
+
+&nbsp;  - ZAP: `http://localhost:8095` (API at `/UI/`)
+
+
+
+5\. \*\*Configuration Notes\*\*:
+
+&nbsp;  - Customize environment variables (e.g., passwords) in production.
+
+&nbsp;  - Ensure `./pg\_hba.conf` allows necessary host-based access.
+
+&nbsp;  - For Keycloak, initial setup via admin UI; bootstrap admin is `admin`/`adminpassword`.
+
+&nbsp;  - NGINX mounts local configs and certs; generate self-signed certs if needed (e.g., via OpenSSL).
+
+&nbsp;  - ZAP runs without API key for easy access; secure in production.
+
+
+
+6\. \*\*Troubleshooting\*\*:
+
+&nbsp;  - Check dependencies: Use `docker-compose ps` to verify service status.
+
+&nbsp;  - Database issues: Ensure healthchecks pass; inspect logs.
+
+&nbsp;  - Network: Services communicate via service names (e.g., `kong-database`).
+
+&nbsp;  - Volumes: Persistent data survives restarts; backup volumes regularly.
+
+
+
+This setup provides a complete, secure environment for developing and testing the API gateway with frontend/backend integration.
 
 
 
@@ -359,6 +565,8 @@ server {
 \- \*\*Timeouts\*\*: Adjust proxy timeouts if requests hang.
 
 \- \*\*CORS/CSP Blocks\*\*: Inspect browser console; adjust origins/sources in configs.
+
+\- \*\*Docker Issues\*\*: Check `docker-compose logs` for startup errors; ensure ports are free; verify volume mounts.
 
 
 

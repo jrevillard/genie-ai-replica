@@ -72,7 +72,7 @@ The `docker-compose.yaml` file defines a multi-container application stack using
 
 &nbsp; - Ports: `5432`.
 
-&nbsp; - Volume: `kong\_data` for persistence; mounts custom `pg\_hba.conf` for host-based authentication.
+&nbsp; - Volume: `kong\_data:/var/lib/postgresql/data`; mounts custom `pg\_hba.conf` for host-based authentication.
 
 &nbsp; - Healthcheck: Ensures database readiness.
 
@@ -178,7 +178,7 @@ The `docker-compose.yaml` file defines a multi-container application stack using
 
 1\. \*\*Start the Stack\*\*:
 
-&nbsp;  ```
+&nbsp;  ```bash
 
 &nbsp;  docker-compose up -d
 
@@ -192,7 +192,7 @@ The `docker-compose.yaml` file defines a multi-container application stack using
 
 2\. \*\*Stop the Stack\*\*:
 
-&nbsp;  ```
+&nbsp;  ```bash
 
 &nbsp;  docker-compose down
 
@@ -204,7 +204,7 @@ The `docker-compose.yaml` file defines a multi-container application stack using
 
 3\. \*\*Logs\*\*:
 
-&nbsp;  ```
+&nbsp;  ```bash
 
 &nbsp;  docker-compose logs -f <service\_name>  # e.g., kong
 
@@ -300,7 +300,7 @@ This script backs up, applies, or fixes Kong configurations.
 
 \- \*\*Example\*\*:
 
-&nbsp; ```
+&nbsp; ```bash
 
 &nbsp; ./manage-kong-config.sh -b  # Backup current config
 
@@ -346,7 +346,7 @@ Restores Kong config from a backup JSON file and optionally tests endpoints.
 
 \- \*\*Example\*\*:
 
-&nbsp; ```
+&nbsp; ```bash
 
 &nbsp; ./restore-kong-config.sh -b kong\_backups/kong\_backup\_20250527\_162608.json  # Restore from backup
 
@@ -386,7 +386,7 @@ Manages the rate-limiting plugin (ID: `13e146bb-0dff-4bfa-a9ca-95b8189ffb03`) on
 
 \- \*\*Example\*\*:
 
-&nbsp; ```
+&nbsp; ```bash
 
 &nbsp; ./kong-rate-limit.sh status   # View current rate limits (e.g., 1000/min, 10000/hour)
 
@@ -516,21 +516,27 @@ server {
 
 1\. \*\*Full Kong Setup\*\*:
 
-&nbsp;  - Backup current: `./manage-kong-config.sh -b`
+&nbsp;  ```bash
 
-&nbsp;  - Apply new: `./manage-kong-config.sh -a`
+&nbsp;  ./manage-kong-config.sh -b  # Backup current config
 
-&nbsp;  - Fix auth: `./manage-kong-config.sh -f`
+&nbsp;  ./manage-kong-config.sh -a  # Apply kong\_config.json
 
-&nbsp;  - Check rate limits: `./kong-rate-limit.sh status`
+&nbsp;  ./manage-kong-config.sh -f  # Fix auth routes
+
+&nbsp;  ```
 
 
 
 2\. \*\*Restore and Test\*\*:
 
-&nbsp;  - Restore: `./restore-kong-config.sh -b <backup.json>`
+&nbsp;  ```bash
 
-&nbsp;  - Test: `./restore-kong-config.sh -t`
+&nbsp;  ./restore-kong-config.sh -b <backup.json>  # Restore from backup
+
+&nbsp;  ./restore-kong-config.sh -t  # Test and prompt for credentials
+
+&nbsp;  ```
 
 
 

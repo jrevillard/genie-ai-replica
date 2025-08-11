@@ -9,10 +9,17 @@ class DatabaseService {
   constructor() {
     const url = process.env.ARANGO_URL || 'http://arango-vector-db:8529';
     const databaseName = process.env.ARANGO_DB || 'node-services';
-    const username = 'root';
-    const password = 'test';
+    //const username = 'root';
+    const username = process.env.ARANGO_USER || 'root';
+    //const password = process.env.ARANGO_PASSWORD || 'test';
 
     logger.info(`Initializing Enhanced DatabaseService with COMPLETE RECOVERY:`);
+    // Logging the environment to ensure it is being read
+    logger.info(`process.env.ARANGO_URL:`+ process.env.ARANGO_URL);
+    logger.info(`process.env.ARANGO_DB:`+ process.env.ARANGO_DB);
+    logger.info(`process.env.ARANGO_USER:`+ process.env.ARANGO_USER);
+    logger.info(`process.env.ARANGO_PASSWORD:`+ process.env.ARANGO_PASSWORD);
+    // Logging the final connection params
     logger.info(`ARANGO_URL: ${url}`);
     logger.info(`ARANGO_DB: ${databaseName}`);
     logger.info(`ARANGO_USERNAME: ${username}`);

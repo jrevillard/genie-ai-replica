@@ -46,7 +46,7 @@ services:
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=node-services
       - ARANGO_USER=root
-      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
+      - ARANGO_PASSWORD=test
       - BACKUP_DIR=./database_backups
       - MAX_BACKUPS=5
       - BACKUP_FORMAT=json

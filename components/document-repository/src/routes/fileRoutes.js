@@ -139,5 +139,7 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
 
 router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
 router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
+router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFiles);
+router.post('/retract', authorizeRole(['Admin']), fileController.retractMultipleFiles);
 
 module.exports = router;

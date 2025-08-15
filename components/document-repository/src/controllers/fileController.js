@@ -73,6 +73,8 @@ class FileController {
     // this.updateMetadataController = this.updateMetadataController.bind(this);
     this.ingestFile = this.ingestFile.bind(this);
     this.retractFile = this.retractFile.bind(this);
+    this.ingestMultipleFiles = this.ingestMultipleFiles.bind(this);
+    this.retractMultipleFiles = this.retractMultipleFiles.bind(this);
   }
 
   /**
@@ -974,7 +976,7 @@ class FileController {
     }
   }
 
-//   /**
+  //   /**
 //    * Update file metadata
 //    */
 //   async updateMetadataController(req, res) {
@@ -1005,17 +1007,14 @@ class FileController {
 //     }
 //   }
 
-  /**
-   * Ingest file into dataprep service
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async ingestFile(req, res) {
-  try {
-    const { fileId } = req.params;
-    const { file, base64String } = await this._getFileBase64(fileId);
 
-    // Send file info to dataprep microservice
+  // --- Helper for ingesting a single file ---
+
+  async _ingestFileById(fileId) {
+    const { file, base64String } = await this._getFileBase64(fileId);
+    if (file.dataprep && file.dataprep.status === 'ingested') {
+      return { success: false, error: 'File has already been ingested' };
+    }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
     logger.debug(`🤠 [FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
     const response = await axios.post(dataprepUrl, {
@@ -1023,66 +1022,207 @@ class FileController {
       fileName: file.file_name,
       fileType: file.file_type,
       uploadDate: file.upload_date,
-      fileBase64: base64String, // any other necessary file metadata can be added here? fileName, fileType, etc.
+      fileBase64: base64String,
     });
-
     if (response.data.success) {
-      // Update metadata
       await metadataService.updateMetadata(fileId, {
         dataprep: {
           status: 'ingested',
           ingest_date: new Date().toISOString(),
-          retract_date: file.dataprep.retract_date || null // Preserve existing retract date if any
+          retract_date: file.dataprep.retract_date || null,
         }
       });
-      return res.json({ success: true, message: 'File ingested successfully' });
+      return { success: true };
     } else {
-      logger.error('Dataprep ingest failed:', response.data);
-      return res.status(500).json({ success: false, error: 'Data prep failed.', details: response.data });
+      return { success: false, error: response.data };
     }
-  } catch (error) {
-    logger.error('Ingest file error:', error);
-    if (error.response) {
-    logger.error('Response data:', error.response.data);
-    logger.error('Response status:', error.response.status);
+  }
+
+  // --- Single file ingest ---
+  async ingestFile(req, res) {
+    try {
+      const { fileId } = req.params;
+      const result = await this._ingestFileById(fileId);
+      if (result.success) {
+        return res.json({ success: true, message: 'File ingested successfully' });
+      } else {
+        return res.status(500).json({ success: false, error: 'Data prep failed.', details: result.error });
+      }
+    } catch (error) {
+      logger.error('Ingest file error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-    res.status(500).json({ success: false, error: error.message });
   }
+
+  // --- Multiple file ingest ---
+  async ingestMultipleFiles(req, res) {
+    try {
+      const { fileIds } = req.body;
+      if (!Array.isArray(fileIds) || fileIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'No file IDs provided' });
+      }
+      const results = [];
+      for (const fileId of fileIds) {
+        try {
+          const result = await this._ingestFileById(fileId);
+          results.push({ fileId, ...result });
+        } catch (error) {
+          results.push({ fileId, success: false, error: error.message });
+        }
+      }
+      res.json({ success: true, results });
+    } catch (error) {
+      logger.error('Ingest multiple files error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
+
+  // /**
+  //  * Ingest file into dataprep service
+  //  * @param {Object} req - Express request object
+  //  * @param {Object} res - Express response object
+  //  */
+  // async ingestFile(req, res) {
+  // try {
+  //   const { fileId } = req.params;
+  //   const { file, base64String } = await this._getFileBase64(fileId);
+
+  //   // Send file info to dataprep microservice
+  //   const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
+  //   logger.debug(`🤠 [FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
+  //   const response = await axios.post(dataprepUrl, {
+  //     fileId: file.file_id,
+  //     fileName: file.file_name,
+  //     fileType: file.file_type,
+  //     uploadDate: file.upload_date,
+  //     fileBase64: base64String, // any other necessary file metadata can be added here? fileName, fileType, etc.
+  //   });
+
+  //   if (response.data.success) {
+  //     // Update metadata
+  //     await metadataService.updateMetadata(fileId, {
+  //       dataprep: {
+  //         status: 'ingested',
+  //         ingest_date: new Date().toISOString(),
+  //         retract_date: file.dataprep.retract_date || null // Preserve existing retract date if any
+  //       }
+  //     });
+  //     return res.json({ success: true, message: 'File ingested successfully' });
+  //   } else {
+  //     logger.error('Dataprep ingest failed:', response.data);
+  //     return res.status(500).json({ success: false, error: 'Data prep failed.', details: response.data });
+  //   }
+  // } catch (error) {
+  //   logger.error('Ingest file error:', error);
+  //   if (error.response) {
+  //   logger.error('Response data:', error.response.data);
+  //   logger.error('Response status:', error.response.status);
+  //   }
+  //   res.status(500).json({ success: false, error: error.message });
+  // }
+  // }
   
-  /**
-   * Retract file from dataprep service
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async retractFile(req, res) {
-  try {
-    const { fileId } = req.params;
+
+  // --- Helper for retracting a single file ---
+  async _retractFileById(fileId) {
     const file = await metadataService.getMetadataById(fileId);
-    if (!file) return res.status(404).json({ success: false, error: 'File not found' });
-
-    // Send retract request to dataprep microservice
-    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`; // Replace with actual URL/port
+    if (!file) return { success: false, error: 'File not found' };
+    if (!file.dataprep || file.dataprep.status === 'retracted') {
+      return { success: false, error: 'File has already been retracted' };
+    }
+    const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`;
     const response = await axios.post(dataprepUrl, { fileId: file.file_id });
-
     if (response.data.success) {
-      // Update metadata
       await metadataService.updateMetadata(fileId, {
         dataprep: {
           status: 'retracted',
-          ingest_date: file.dataprep.ingest_date || null, // Preserve existing ingest date if any
-          retract_date: new Date().toISOString()
+          ingest_date: file.dataprep.ingest_date || null,
+          retract_date: new Date().toISOString(),
         }
       });
-      return res.json({ success: true, message: 'File retracted successfully' });
+      return { success: true };
     } else {
-      return res.status(500).json({ success: false, error: 'Dataprep retract failed', details: response.data });
+      return { success: false, error: response.data };
     }
-  } catch (error) {
-    logger.error('Retract file error:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
+
+
+  // --- Single file retract ---
+  async retractFile(req, res) {
+    try {
+      const { fileId } = req.params;
+      const result = await this._retractFileById(fileId);
+      if (result.success) {
+        return res.json({ success: true, message: 'File retracted successfully' });
+      } else if (result.error === 'File not found') {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      } else {
+        return res.status(500).json({ success: false, error: 'Dataprep retract failed', details: result.error });
+      }
+    } catch (error) {
+      logger.error('Retract file error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
+
+
+  // --- Multiple file retract ---
+  async retractMultipleFiles(req, res) {
+    try {
+      const { fileIds } = req.body;
+      if (!Array.isArray(fileIds) || fileIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'No file IDs provided' });
+      }
+      const results = [];
+      for (const fileId of fileIds) {
+        try {
+          const result = await this._retractFileById(fileId);
+          results.push({ fileId, ...result });
+        } catch (error) {
+          results.push({ fileId, success: false, error: error.message });
+        }
+      }
+      res.json({ success: true, results });
+    } catch (error) {
+      logger.error('Retract multiple files error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+
+  // /**
+  //  * Retract file from dataprep service
+  //  * @param {Object} req - Express request object
+  //  * @param {Object} res - Express response object
+  //  */
+  // async retractFile(req, res) {
+  // try {
+  //   const { fileId } = req.params;
+  //   const file = await metadataService.getMetadataById(fileId);
+  //   if (!file) return res.status(404).json({ success: false, error: 'File not found' });
+
+  //   // Send retract request to dataprep microservice
+  //   const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`; // Replace with actual URL/port
+  //   const response = await axios.post(dataprepUrl, { fileId: file.file_id });
+
+  //   if (response.data.success) {
+  //     // Update metadata
+  //     await metadataService.updateMetadata(fileId, {
+  //       dataprep: {
+  //         status: 'retracted',
+  //         ingest_date: file.dataprep.ingest_date || null, // Preserve existing ingest date if any
+  //         retract_date: new Date().toISOString()
+  //       }
+  //     });
+  //     return res.json({ success: true, message: 'File retracted successfully' });
+  //   } else {
+  //     return res.status(500).json({ success: false, error: 'Dataprep retract failed', details: response.data });
+  //   }
+  // } catch (error) {
+  //   logger.error('Retract file error:', error);
+  //   res.status(500).json({ success: false, error: error.message });
+  // }
+  // }
 }
 
 

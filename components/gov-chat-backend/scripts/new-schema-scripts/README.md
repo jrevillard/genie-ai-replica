@@ -6,27 +6,28 @@ This repository contains database setup and migration scripts for the **GENIE.AI
 
 The GENIE.AI framework uses a hierarchical knowledge categorization system to enhance AI query responses:
 
-- **Knowledge Areas** (represented as `serviceCategories`): These form the primary navigation tree in the UI's left panel.
-- **Services**: Specific topics or functions within each knowledge area.
-- **Multi-language Support**: Native language interfaces with backend translation handling via the Google Cloud Translate API.
+  - **Knowledge Areas** (represented as `serviceCategories`): These form the primary navigation tree in the UI's left panel.
+  - **Services**: Specific topics or functions within each knowledge area.
+  - **Multi-language Support**: Native language interfaces with backend translation handling via the Google Cloud Translate API.
 
 ### How It Works
 
-1. **UI Navigation**: Users navigate through knowledge areas in their native language via the left tree interface.
-2. **Context Building**: Selected categories and services are used to build query context.
-3. **RAG Integration**: Category labels are passed to the backend RAG framework to:
-   - Fine-tune model responses.
-   - Provide domain-specific context.
-   - Improve response quality and relevance.
-4. **Translation Layer**: All translations (input/output) are handled by backend services using the Google Cloud Translate API.
+1.  **UI Navigation**: Users navigate through knowledge areas in their native language via the left tree interface.
+2.  **Context Building**: Selected categories and services are used to build query context.
+3.  **RAG Integration**: Category labels are passed to the backend RAG framework to:
+      - Fine-tune model responses.
+      - Provide domain-specific context.
+      - Improve response quality and relevance.
+4.  **Translation Layer**: All translations (input/output) are handled by backend services using the Google Cloud Translate API.
 
 ### Adaptability
 
 The framework can be adapted to various use cases by modifying the categorization structure:
-- **Government Services**: Public service categories and citizen services.
-- **Healthcare Systems**: Medical specialties and patient services.
-- **Educational Platforms**: Subject areas and learning resources.
-- **Enterprise Knowledge Bases**: Departments and business functions.
+
+  - **Government Services**: Public service categories and citizen services.
+  - **Healthcare Systems**: Medical specialties and patient services.
+  - **Educational Platforms**: Subject areas and learning resources.
+  - **Enterprise Knowledge Bases**: Departments and business functions.
 
 A future utility will allow framework users to create custom left-tree navigation with service categories in English (`nameEN`) and add translations for additional national languages.
 
@@ -49,16 +50,18 @@ The framework uses the following collections to build the knowledge hierarchy:
 ## 🚀 Setup Process
 
 These scripts enable you to:
-- **Create new GENIE.AI framework instances** with custom knowledge categorizations.
-- **Import existing categorizations** to new environments.
-- **Add multi-language support** for global deployments using the Google Cloud Translate API.
-- **Maintain referential integrity** through proper edge relationships.
+
+  - **Create new GENIE.AI framework instances** with custom knowledge categorizations.
+  - **Import existing categorizations** to new environments.
+  - **Add multi-language support** for global deployments using the Google Cloud Translate API.
+  - **Maintain referential integrity** through proper edge relationships.
 
 ### Schema Evolution for Multi-language RAG Support
 
 **Legacy Schema (fixed language fields):**
 
 Knowledge Area (`serviceCategories`):
+
 ```json
 {
   "_key": "1",
@@ -70,6 +73,7 @@ Knowledge Area (`serviceCategories`):
 ```
 
 Service (`services`):
+
 ```json
 {
   "_key": "101",
@@ -85,9 +89,12 @@ Service (`services`):
 **New Translation Schema (flexible for RAG context building):**
 
 The new schema separates language concerns to support:
-- Dynamic language addition without schema changes.
-- Clean separation of concerns for RAG processing.
-- Efficient context building in the user's native language.
+
+  - Dynamic language addition without schema changes.
+  - Clean separation of concerns for RAG processing.
+  - Efficient context building in the user's native language.
+
+<!-- end list -->
 
 ```json
 // serviceCategories (knowledge areas - preserved for compatibility)
@@ -139,10 +146,11 @@ The new schema separates language concerns to support:
 ```
 
 This structure enables:
-- **RAG Context**: Category and service labels in the user's language provide domain context.
-- **Query Enhancement**: Selected categories and services guide AI model responses.
-- **Backend Processing**: All translation complexity is handled server-side.
-- **UI Flexibility**: Easy addition of new languages without database schema changes.
+
+  - **RAG Context**: Category and service labels in the user's language provide domain context.
+  - **Query Enhancement**: Selected categories and services guide AI model responses.
+  - **Backend Processing**: All translation complexity is handled server-side.
+  - **UI Flexibility**: Easy addition of new languages without database schema changes.
 
 ## 🛠️ Scripts Overview
 
@@ -151,32 +159,42 @@ This structure enables:
 | `arango-schema-extractor.js` | Extract complete database schema. | **READ ONLY** | None |
 | `arango-schema-creator.js` | Create new database from schema. | **CREATES DATABASE** | None |
 | `export-service-categories.js` | Export `serviceCategories`, `services`, `categoryServices`, and translation collections. | **READ ONLY** | None |
-| `import-service-categories.js` | Import `serviceCategories`, `services`, `categoryServices`, and translation collections. | **WRITES DATA** | **Schema validation must be disabled** |
+| `import-service-categories.js` | Import `serviceCategories`, `services`, `categoryServices`, and translation collections from a full export file. | **WRITES DATA** | **Schema validation must be disabled** |
+| `create-knowledge-hierarchy.js` | Interactively or from a simple JSON file, create the initial English `serviceCategories` and `services` hierarchy. | **WRITES DATA** | `npm install inquirer yargs` |
 | `create-translations.js` | Create translations for `serviceCategories` and `services` using Google Cloud Translate API. | **WRITES DATA** | Google Cloud credentials, API enabled |
 
-**Note**: The `category-migration.js` script is no longer needed, as translation support is now handled by `create-translations.js` for adding new languages and by `import-service گوشي.js` for importing existing translations.
+**Note**: The `category-migration.js` script is no longer needed, as translation support is now handled by `create-translations.js` for adding new languages and by `import-service-categories.js` for importing existing translations.
 
 ## 🎯 Primary Use Cases
 
 ### Use Case 1: Deploy New GENIE.AI Instance
+
 Create a new framework instance with your organization's knowledge categorization for RAG-enhanced responses.
 
 ### Use Case 2: Add Multi-language Support
+
 Add translations for service categories and services in additional national languages to support global users while maintaining RAG context quality.
 
 ### Use Case 3: Migrate Existing Deployment
+
 Transfer an existing GENIE.AI instance, including knowledge hierarchy and translations, to a new environment.
 
 ## 🚀 Complete Workflows
 
 ### Prerequisites
 
-1. **Install Dependencies**
+1.  **Install Dependencies**
+
+<!-- end list -->
+
 ```bash
-npm install arangojs dotenv @google-cloud/translate
+npm install arangojs dotenv @google-cloud/translate inquirer yargs
 ```
 
-2. **Set Base Environment Variables** (in `.env` file)
+2.  **Set Base Environment Variables** (in `.env` file)
+
+<!-- end list -->
+
 ```bash
 export ARANGO_URL="http://localhost:8529"
 export ARANGO_USERNAME="root"
@@ -184,21 +202,23 @@ export ARANGO_PASSWORD="your-password"
 export GOOGLE_CREDENTIALS_PATH="./google-credentials.json"
 ```
 
-3. **Set Up Google Cloud Credentials**
-   - Create a Google Cloud service account with the 'Cloud Translation API User' role.
-   - Download the JSON key file and add an `apiKey` field (generated from Google Cloud Console > APIs & Services > Credentials).
-   - Save as `google-credentials.json` or specify a custom path via `GOOGLE_CREDENTIALS_PATH`.
-   - Enable the Cloud Translation API in Google Cloud Console.
+3.  **Set Up Google Cloud Credentials**
 
-4. **⚠️ BACKUP YOUR DATABASES** before running any scripts that modify data!
+      - Create a Google Cloud service account with the 'Cloud Translation API User' role.
+      - Download the JSON key file and add an `apiKey` field (generated from Google Cloud Console \> APIs & Services \> Credentials).
+      - Save as `google-credentials.json` or specify a custom path via `GOOGLE_CREDENTIALS_PATH`.
+      - Enable the Cloud Translation API in Google Cloud Console.
 
----
+4.  **⚠️ BACKUP YOUR DATABASES** before running any scripts that modify data\!
+
+-----
 
 ## 📋 Workflow 1: Deploy New GENIE.AI Instance
 
 This workflow creates a new GENIE.AI framework instance with your custom knowledge categorization.
 
 ### Step 1: Extract Schema from Source Framework
+
 ```bash
 # Point to your source GENIE.AI database
 export ARANGO_DATABASE="genie-ai-source"
@@ -212,6 +232,7 @@ node arango-schema-extractor.js
 **⚠️ Safe**: Read-only operation
 
 ### Step 2: Export Knowledge Categories, Services, and Translations
+
 ```bash
 # Still pointing to source database
 export ARANGO_DATABASE="genie-ai-source"
@@ -224,13 +245,15 @@ node export-service-categories.js
 **Output**: `exports/serviceCategoriesAndServices_export_2025-06-28T10-30-45.json`
 
 **📝 Important**:
-- Exports the complete knowledge hierarchy, including `serviceCategories`, `services`, `categoryServices`, and translation collections.
-- Includes category-service relationships via edges and translation relationships.
-- Copy the exact filename for the import step.
+
+  - Exports the complete knowledge hierarchy, including `serviceCategories`, `services`, `categoryServices`, and translation collections.
+  - Includes category-service relationships via edges and translation relationships.
+  - Copy the exact filename for the import step.
 
 **⚠️ Safe**: Read-only operation
 
 ### Step 3: Create New Framework Database
+
 ```bash
 # Point to your NEW GENIE.AI instance
 export ARANGO_DATABASE="genie-ai-production"
@@ -244,37 +267,41 @@ node arango-schema-creator.js ./arango-schema.json
 **⚠️ Caution**: Creates a new database; ensure the name doesn't conflict with existing databases.
 
 ### Step 4: Import Knowledge Hierarchy and Translations
-**⚠️ IMPORTANT: Disable Schema Validation First!**
+
+**⚠️ IMPORTANT: Disable Schema Validation First\!**
 
 Before running the import script, you MUST disable schema validation for all collections to prevent validation errors:
 
-1. **In ArangoDB Web UI**:
-   - Go to your database (e.g., `genie-ai-production`).
-   - Navigate to Collections.
-   - For each of these collections (if they exist):
-     - `serviceCategories`
-     - `services`
-     - `categoryServices`
-     - `serviceCategoryTranslations`
-     - `serviceCategoryTranslationsEdge`
-     - `serviceTranslations`
-     - `serviceTranslationsEdge`
-   - Click on each collection → Settings/Schema tab.
-   - Set "Schema Validation Level" to **"None"**.
-   - Click Save.
+1.  **In ArangoDB Web UI**:
 
-2. **Or via AQL (run for each collection)**:
-   ```aql
-   db.serviceCategories.properties({ schema: null });
-   db.services.properties({ schema: null });
-   db.categoryServices.properties({ schema: null });
-   db.serviceCategoryTranslations.properties({ schema: null });
-   db.serviceCategoryTranslationsEdge.properties({ schema: null });
-   db.serviceTranslations.properties({ schema: null });
-   db.serviceTranslationsEdge.properties({ schema: null });
-   ```
+      - Go to your database (e.g., `genie-ai-production`).
+      - Navigate to Collections.
+      - For each of these collections (if they exist):
+          - `serviceCategories`
+          - `services`
+          - `categoryServices`
+          - `serviceCategoryTranslations`
+          - `serviceCategoryTranslationsEdge`
+          - `serviceTranslations`
+          - `serviceTranslationsEdge`
+      - Click on each collection → Settings/Schema tab.
+      - Set "Schema Validation Level" to **"None"**.
+      - Click Save.
+
+2.  **Or via AQL (run for each collection)**:
+
+    ```aql
+    db.serviceCategories.properties({ schema: null });
+    db.services.properties({ schema: null });
+    db.categoryServices.properties({ schema: null });
+    db.serviceCategoryTranslations.properties({ schema: null });
+    db.serviceCategoryTranslationsEdge.properties({ schema: null });
+    db.serviceTranslations.properties({ schema: null });
+    db.serviceTranslationsEdge.properties({ schema: null });
+    ```
 
 **Now run the import**:
+
 ```bash
 # Still pointing to NEW database
 export ARANGO_DATABASE="genie-ai-production"
@@ -286,190 +313,193 @@ node import-service-categories.js
 ```
 
 **Output**:
-- Knowledge areas (`serviceCategories`) imported with `nameEN` preserved.
-- Services imported with `nameEN` and proper category references.
-- Hierarchy edges (`categoryServices`) imported for navigation tree.
-- Translation collections (`serviceCategoryTranslations`, `serviceTranslations`) and edges imported.
-- RAG context structure preserved.
+
+  - Knowledge areas (`serviceCategories`) imported with `nameEN` preserved.
+  - Services imported with `nameEN` and proper category references.
+  - Hierarchy edges (`categoryServices`) imported for navigation tree.
+  - Translation collections (`serviceCategoryTranslations`, `serviceTranslations`) and edges imported.
+  - RAG context structure preserved.
 
 **📝 Critical**:
-- The knowledge hierarchy is essential for RAG context building.
-- Categories form the UI navigation and RAG domain context.
-- Edge relationships maintain the tree structure and translation links.
-- The `nameEN` field is retained in `serviceCategories` and `services` for compatibility.
+
+  - The knowledge hierarchy is essential for RAG context building.
+  - Categories form the UI navigation and RAG domain context.
+  - Edge relationships maintain the tree structure and translation links.
+  - The `nameEN` field is retained in `serviceCategories` and `services` for compatibility.
 
 **⚠️ Caution**: Writes data to the target database.
 
 ### Result: GENIE.AI Instance Ready
+
 Your new GENIE.AI framework instance is ready with:
-- Complete knowledge categorization for RAG enhancement.
-- UI navigation tree structure.
-- Multi-language support via translation collections.
-- Backend integration points for context building.
 
----
+  - Complete knowledge categorization for RAG enhancement.
+  - UI navigation tree structure.
+  - Multi-language support via translation collections.
+  - Backend integration points for context building.
 
-## 📋 Workflow 2: Establish Service Categories and Add National Languages
+-----
 
-This workflow sets up a new GENIE.AI instance with custom service categories and adds translations for additional national languages using the Google Cloud Translate API.
+## 📋 Workflow 2: Setup New GENIE.AI Use Case From Scratch
+
+This workflow is the standard process for defining a new knowledge hierarchy for a GENIE.AI instance. It involves creating a new database, defining your custom service categories and services in English, and then adding translations.
 
 ### Step 1: Create New Framework Database
-Follow Step 3 from Workflow 1 to create a new database using `arango-schema-creator.js`.
 
-### Step 2: Define Custom Service Categories
-Create a JSON file (e.g., `custom-categories.json`) with your knowledge hierarchy. Ensure `nameEN` is included for all categories and services, as it is required for RAG context and translation.
+Follow Step 3 from Workflow 1 to create a new, empty database with the correct schema using `arango-schema-creator.js`.
 
-**Example `custom-categories.json`**:
-```json
-{
-  "metadata": {
-    "exportDate": "2025-06-28T10:30:45.123Z",
-    "sourceDatabase": "custom",
-    "collections": ["serviceCategories", "services", "categoryServices"],
-    "documentCounts": {
-      "serviceCategories": 3,
-      "services": 3,
-      "categoryServices": 3
-    },
-    "exportVersion": "4.0"
-  },
-  "data": {
-    "serviceCategories": [
-      { "_key": "1", "nameEN": "Emergency Services", "order": 1 },
-      { "_key": "2", "nameEN": "Specialist Care", "order": 2 },
-      { "_key": "3", "nameEN": "Preventive Medicine", "order": 3 }
-    ],
-    "services": [
-      { "_key": "101", "categoryId": "1", "nameEN": "Ambulance Dispatch", "order": 1 },
-      { "_key": "102", "categoryId": "1", "nameEN": "Emergency Room", "order": 2 },
-      { "_key": "103", "categoryId": "2", "nameEN": "Cardiology", "order": 1 }
-    ],
-    "categoryServices": [
-      { "_from": "serviceCategories/1", "_to": "services/101", "order": 1 },
-      { "_from": "serviceCategories/1", "_to": "services/102", "order": 2 },
-      { "_from": "serviceCategories/2", "_to": "services/103", "order": 1 }
-    ],
-    "serviceCategoryTranslations": [],
-    "serviceCategoryTranslationsEdge": [],
-    "serviceTranslations": [],
-    "serviceTranslationsEdge": []
-  }
-}
-```
-
-**Note**:
-- Ensure `_key`, `nameEN`, and `order` are included for `serviceCategories` and `services`.
-- The `categoryId` in `services` must match the `_key` of a `serviceCategories` document.
-- The `_from` and `_to` fields in `categoryServices` must reference valid collection IDs.
-
-### Step 3: Import Custom Service Categories
-Disable schema validation as described in Workflow 1, Step 4, then import the custom hierarchy:
 ```bash
-export ARANGO_DATABASE="genie-ai-production"
-export IMPORT_FILE="./custom-categories.json"
-export SCHEMA_STRICT="true"
+# Point to your NEW GENIE.AI instance
+export ARANGO_DATABASE="genie-ai-new-use-case"
 
-node import-service-categories.js
+# Create database with GENIE.AI schema
+node arango-schema-creator.js ./arango-schema.json
 ```
+
+### Step 2: Define and Create the Knowledge Hierarchy
+
+Using the new `create-knowledge-hierarchy.js` script, define your service categories and services. You can do this interactively or by preparing a simple JSON file. This script will only create the English (`nameEN`) entries.
+
+**Option A: Interactive Mode (Recommended for manual setup)**
+Run the script without arguments and follow the prompts.
+
+```bash
+# Still pointing to your NEW database
+export ARANGO_DATABASE="genie-ai-new-use-case"
+
+node create-knowledge-hierarchy.js
+```
+
+The script will guide you through entering each category and its associated services, then ask for confirmation before writing to the database.
+
+**Option B: File Mode (Recommended for automated setup)**
+Create a simple JSON file (e.g., `my-hierarchy.json`) that defines your categories and services.
+
+**Example `my-hierarchy.json`**:
+
+```json
+[
+  {
+    "category": "Emergency Services",
+    "services": [
+      "Ambulance Dispatch",
+      "Emergency Room Locations",
+      "Poison Control Hotline"
+    ]
+  },
+  {
+    "category": "Specialist Care",
+    "services": [
+      "Cardiology Appointments",
+      "Neurology Specialist Finder",
+      "Oncology Treatment Centers"
+    ]
+  }
+]
+```
+
+Then, run the script with the `--file` flag.
+
+```bash
+# Still pointing to your NEW database
+export ARANGO_DATABASE="genie-ai-new-use-case"
+
+node create-knowledge-hierarchy.js --file ./my-hierarchy.json
+```
+
+The script will ask for final confirmation before writing the data.
 
 **Output**:
-- Custom knowledge areas and services imported.
-- Hierarchy edges established for navigation.
-- Ready for translation addition.
 
-### Step 4: Add National Language Translations
-Use `create-translations.js` to generate translations for a target language (e.g., Indonesian `ID`):
+  - Your custom knowledge areas (`serviceCategories`) and services (`services`) are created in the database.
+  - The hierarchy is correctly linked with edges in `categoryServices`.
+  - The instance is now ready for translation.
+
+### Step 3: Add National Language Translations
+
+Use `create-translations.js` to automatically generate translations for your new hierarchy. Run the script for each target language (e.g., Indonesian `ID`, French `FR`).
+
 ```bash
-export ARANGO_DATABASE="genie-ai-production"
+export ARANGO_DATABASE="genie-ai-new-use-case"
 export GOOGLE_CREDENTIALS_PATH="./google-credentials.json"
 
+# Create Indonesian translations
 node create-translations.js ID
+
+# Create French translations
+node create-translations.js FR
 ```
 
 **Output**:
-- Translations for `serviceCategories` and `services` created in `serviceCategoryTranslations` and `serviceTranslations`.
-- Edges created in `serviceCategoryTranslationsEdge` and `serviceTranslationsEdge`.
-- Example:
-  ```json
-  // serviceCategoryTranslations
-  {
-    "_key": "1_ID",
-    "serviceCategoryId": "1",
-    "languageCode": "ID",
-    "translation": "Layanan Darurat",
-    "isActive": true,
-    "createdAt": "2025-06-28T21:44:00.000Z"
-  }
-  // serviceTranslations
-  {
-    "_key": "101_ID",
-    "serviceId": "101",
-    "languageCode": "ID",
-    "translation": "Pengiriman Ambulans",
-    "isActive": true,
-    "createdAt": "2025-06-28T21:44:00.000Z"
-  }
-  ```
 
-**📝 Important**:
-- Requires a valid `google-credentials.json` file with service account credentials and an API key.
-- The script skips existing translations to avoid duplicates.
-- The `nameEN` field is used as the source for translations.
-- Run multiple times with different language codes (e.g., `FR`, `SW`, `ES`) to add more languages.
+  - Translations are created in `serviceCategoryTranslations` and `serviceTranslations`.
+  - Edges linking items to their translations are created.
 
 ### Result: GENIE.AI Instance with Custom Hierarchy and Multi-language Support
-Your framework now supports:
-- Custom knowledge categorization for your use case.
-- UI navigation in multiple languages.
-- Language-aware RAG context building.
-- Seamless backend translation handling via Google Cloud Translate API.
 
----
+Your framework now supports:
+
+  - A custom knowledge categorization tailored to your specific use case.
+  - UI navigation in multiple languages.
+  - Language-aware RAG context building.
+  - Seamless backend translation handling via Google Cloud Translate API.
+
+-----
 
 ## 📋 Workflow 3: Migrate Existing GENIE.AI Deployment
 
 This workflow transfers an existing GENIE.AI instance, including its knowledge hierarchy and translations, to a new environment.
 
 ### Step 1: Export Existing Data
+
 Follow Step 2 from Workflow 1 to export `serviceCategories`, `services`, `categoryServices`, and translation collections.
 
 ### Step 2: Create New Database
+
 Follow Step 3 from Workflow 1 to create a new database using `arango-schema-creator.js`.
 
 ### Step 3: Import Data
+
 Follow Step 4 from Workflow 1 to import the exported data, ensuring schema validation is disabled.
 
 ### Result: Migrated GENIE.AI Instance
-Your new instance retains:
-- Original knowledge hierarchy with `nameEN` fields preserved.
-- All translations and edge relationships.
-- RAG context building capabilities.
-- No service interruption during migration.
 
----
+Your new instance retains:
+
+  - Original knowledge hierarchy with `nameEN` fields preserved.
+  - All translations and edge relationships.
+  - RAG context building capabilities.
+  - No service interruption during migration.
+
+-----
 
 ## 🔄 Schema Export Considerations
 
 ### Schema Export Timing
+
 The schema export includes all collections present at the time of export:
-- **Before Adding Translations**: Schema includes `serviceCategories`, `services`, and `categoryServices`. New databases will require `create-translations.js` to add translations.
-- **After Adding Translations**: Schema includes all collections (`serviceCategories`, `services`, `categoryServices`, `serviceCategoryTranslations`, `serviceCategoryTranslationsEdge`, `serviceTranslations`, `serviceTranslationsEdge`). New databases will have translation support built-in.
+
+  - **Before Adding Translations**: Schema includes `serviceCategories`, `services`, and `categoryServices`. New databases will require `create-translations.js` to add translations.
+  - **After Adding Translations**: Schema includes all collections (`serviceCategories`, `services`, `categoryServices`, `serviceCategoryTranslations`, `serviceCategoryTranslationsEdge`, `serviceTranslations`, `serviceTranslationsEdge`). New databases will have translation support built-in.
 
 ### Recommended Approach
-1. Define or import your knowledge hierarchy.
-2. Run `create-translations.js` to add required languages.
-3. Export the schema using `arango-schema-extractor.js` to include translation collections.
-4. Use the schema for new database creation.
-5. Import data with `import-service-categories.js`.
+
+1.  Define or import your knowledge hierarchy.
+2.  Run `create-translations.js` to add required languages.
+3.  Export the schema using `arango-schema-extractor.js` to include translation collections.
+4.  Use the schema for new database creation.
+5.  Import data with `import-service-categories.js`.
 
 This ensures new databases have the full schema with translation support.
 
----
+-----
 
 ## 📊 Data Structure Details
 
 ### Export/Import File Structure (v4.0)
+
 The export/import format includes all collections:
+
 ```json
 {
   "metadata": {
@@ -508,7 +538,9 @@ The export/import format includes all collections:
 ```
 
 ### Translation Collections Structure
+
 **`serviceCategoryTranslations`**:
+
 ```json
 {
   "_key": "1_ID",
@@ -522,6 +554,7 @@ The export/import format includes all collections:
 ```
 
 **`serviceTranslations`**:
+
 ```json
 {
   "_key": "101_ID",
@@ -535,6 +568,7 @@ The export/import format includes all collections:
 ```
 
 **`serviceCategoryTranslationsEdge`**:
+
 ```json
 {
   "_from": "serviceCategories/1",
@@ -544,6 +578,7 @@ The export/import format includes all collections:
 ```
 
 **`serviceTranslationsEdge`**:
+
 ```json
 {
   "_from": "services/101",
@@ -552,35 +587,42 @@ The export/import format includes all collections:
 }
 ```
 
----
+-----
 
 ## 🛡️ Safety Features
 
 ### Translation Creation Safety
+
 The `create-translations.js` script:
-- Checks for existing translations to avoid duplicates.
-- Creates collections and indexes if they don’t exist.
-- Uses unique keys (`${key}_${lang}`) to prevent conflicts.
-- Handles Google Translate API errors with fallback translations.
+
+  - Checks for existing translations to avoid duplicates.
+  - Creates collections and indexes if they don’t exist.
+  - Uses unique keys (`${key}_${lang}`) to prevent conflicts.
+  - Handles Google Translate API errors with fallback translations.
 
 ### Import Safety
+
 The `import-service-categories.js` script:
-- Validates data before import.
-- Skips existing documents to prevent duplicates.
-- Imports collections in dependency order (`serviceCategories`, `services`, `categoryServices`, then translations).
-- Preserves `nameEN` fields for compatibility.
+
+  - Validates data before import.
+  - Skips existing documents to prevent duplicates.
+  - Imports collections in dependency order (`serviceCategories`, `services`, `categoryServices`, then translations).
+  - Preserves `nameEN` fields for compatibility.
 
 ### Export Safety
-The `export-service-categories.js` script:
-- Includes all relevant collections, even if empty.
-- Validates exported data structure.
-- Supports optional system fields for flexibility.
 
----
+The `export-service-categories.js` script:
+
+  - Includes all relevant collections, even if empty.
+  - Validates exported data structure.
+  - Supports optional system fields for flexibility.
+
+-----
 
 ## 🔍 Verification & Troubleshooting
 
 ### Verify Complete Import
+
 ```aql
 // Check counts
 FOR cat IN serviceCategories
@@ -609,6 +651,7 @@ FOR svc IN services
 ```
 
 ### Verify Translations
+
 ```aql
 // Check serviceCategoryTranslations
 FOR cat IN serviceCategories
@@ -644,28 +687,34 @@ FOR svc IN services
 ### Common Issues
 
 **"Import file format not recognized"**
-- Ensure the export file is in v4.0 format (includes all collections).
-- Check `exportVersion` in the metadata.
+
+  - Ensure the export file is in v4.0 format (includes all collections).
+  - Check `exportVersion` in the metadata.
 
 **"Service categoryId references not found"**
-- Verify `serviceCategories` are imported before `services`.
-- Ensure `categoryId` matches `_key` in `serviceCategories`.
+
+  - Verify `serviceCategories` are imported before `services`.
+  - Ensure `categoryId` matches `_key` in `serviceCategories`.
 
 **"Translation already exists"**
-- Expected behavior in `create-translations.js` and `import-service-categories.js`.
-- The scripts skip existing translations to avoid duplicates.
+
+  - Expected behavior in `create-translations.js` and `import-service-categories.js`.
+  - The scripts skip existing translations to avoid duplicates.
 
 **"Google Translate API error"**
-- Verify `google-credentials.json` contains valid credentials and an API key.
-- Ensure the Cloud Translation API is enabled in Google Cloud Console.
-- Check network connectivity and API quota limits.
 
----
+  - Verify `google-credentials.json` contains valid credentials and an API key.
+  - Ensure the Cloud Translation API is enabled in Google Cloud Console.
+  - Check network connectivity and API quota limits.
+
+-----
 
 ## 🔄 GENIE.AI Integration Strategy
 
 ### RAG Context Flow
+
 **1. User Interaction**:
+
 ```javascript
 // User selects category in UI (shown in their language)
 const selectedCategory = "Layanan Darurat"; // Indonesian user
@@ -673,6 +722,7 @@ const categoryId = "1";
 ```
 
 **2. Backend Processing**:
+
 ```javascript
 // Category label passed to RAG for context
 const ragContext = {
@@ -686,12 +736,15 @@ const enhancedQuery = buildQueryWithContext(userQuery, ragContext);
 ```
 
 **3. Response Generation**:
-- RAG system understands domain context in the user's language.
-- Responses are more relevant and culturally appropriate.
-- Backend handles all translation complexity using Google Cloud Translate API.
+
+  - RAG system understands domain context in the user's language.
+  - Responses are more relevant and culturally appropriate.
+  - Backend handles all translation complexity using Google Cloud Translate API.
 
 ### Customizing for Your Use Case
+
 **1. Define Knowledge Areas**:
+
 ```javascript
 // Example: Healthcare System
 const categories = [
@@ -702,6 +755,7 @@ const categories = [
 ```
 
 **2. Structure Services**:
+
 ```javascript
 const services = [
   { _key: "101", categoryId: "1", nameEN: "Ambulance Dispatch", order: 1 },
@@ -711,6 +765,7 @@ const services = [
 ```
 
 **3. Add Language Support**:
+
 ```bash
 node create-translations.js ID
 node create-translations.js ES
@@ -718,57 +773,67 @@ node create-translations.js ES
 
 **Note**: A future utility will simplify this process by providing a UI or CLI to define categories and services in English and generate translations.
 
----
+-----
 
 ## 📊 Expected Outcomes
 
 ### After New Instance Deployment (Workflow 1):
-- ✅ New database with GENIE.AI schema.
-- ✅ Complete knowledge hierarchy imported.
-- ✅ Translation collections and edges imported.
-- ✅ UI navigation tree ready.
-- ✅ RAG context structure in place.
+
+  - ✅ New database with GENIE.AI schema.
+  - ✅ Complete knowledge hierarchy imported.
+  - ✅ Translation collections and edges imported.
+  - ✅ UI navigation tree ready.
+  - ✅ RAG context structure in place.
 
 ### After Adding Translations (Workflow 2):
-- ✅ Custom knowledge hierarchy established.
-- ✅ Translations for multiple languages added.
-- ✅ Native language UI support.
-- ✅ Enhanced RAG context building.
-- ✅ Backend translation handling ready.
+
+  - ✅ Custom knowledge hierarchy established.
+  - ✅ Translations for multiple languages added.
+  - ✅ Native language UI support.
+  - ✅ Enhanced RAG context building.
+  - ✅ Backend translation handling ready.
 
 ### After Migration (Workflow 3):
-- ✅ Existing GENIE.AI instance migrated.
-- ✅ Knowledge hierarchy and translations preserved.
-- ✅ No service interruption.
-- ✅ Enhanced RAG responses in multiple languages.
 
----
+  - ✅ Existing GENIE.AI instance migrated.
+  - ✅ Knowledge hierarchy and translations preserved.
+  - ✅ No service interruption.
+  - ✅ Enhanced RAG responses in multiple languages.
+
+-----
 
 ## 📞 Best Practices for GENIE.AI Deployment
 
 ### Knowledge Categorization Guidelines
-1. **Keep Categories Broad**: 8-15 top-level categories work best for UI navigation.
-2. **Logical Grouping**: Group services by user intent, not organizational structure.
-3. **Clear Naming**: Use descriptive `nameEN` fields for clarity.
-4. **Order Matters**: Most important categories/services should appear first (lower `order` values).
+
+1.  **Keep Categories Broad**: 8-15 top-level categories work best for UI navigation.
+2.  **Logical Grouping**: Group services by user intent, not organizational structure.
+3.  **Clear Naming**: Use descriptive `nameEN` fields for clarity.
+
+<!-- end list -->
+
+  - **Order Matters**: Most important categories/services should appear first (lower `order` values).
 
 ### RAG Context Optimization
-1. **Descriptive Labels**: Use clear, specific `nameEN` fields to improve RAG understanding.
-2. **Consistent Terminology**: Maintain consistent terms across categories and services.
-3. **Language Considerations**: Ensure translations preserve semantic meaning.
-4. **Testing**: Test RAG responses with different category contexts and languages.
+
+1.  **Descriptive Labels**: Use clear, specific `nameEN` fields to improve RAG understanding.
+2.  **Consistent Terminology**: Maintain consistent terms across categories and services.
+3.  **Language Considerations**: Ensure translations preserve semantic meaning.
+4.  **Testing**: Test RAG responses with different category contexts and languages.
 
 ### Database Naming Convention
-- `genie-ai-dev` - Development environment
-- `genie-ai-staging` - Staging environment
-- `genie-ai-production` - Production deployment
-- `genie-ai-[client]` - Client-specific instances
+
+  - `genie-ai-dev` - Development environment
+  - `genie-ai-staging` - Staging environment
+  - `genie-ai-production` - Production deployment
+  - `genie-ai-[client]` - Client-specific instances
 
 ### Deployment Strategy
-1. Deploy to development first.
-2. Test RAG integration and translations thoroughly.
-3. Validate UI navigation tree and language support.
-4. Deploy to staging for user testing.
-5. Monitor production deployment.
+
+1.  Deploy to development first.
+2.  Test RAG integration and translations thoroughly.
+3.  Validate UI navigation tree and language support.
+4.  Deploy to staging for user testing.
+5.  Monitor production deployment.
 
 **Note**: The quality of your knowledge categorization and translations directly impacts RAG response quality. Well-structured categories and accurate translations lead to better context understanding and more relevant AI responses.

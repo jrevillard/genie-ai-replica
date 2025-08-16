@@ -288,7 +288,7 @@ document-repository/
     npm run dev
     ```
 
-## Usage (to be updated)
+## Usage
 
 Use the following `curl` commands to interact with the file system backend service. Replace `<accessToken>` with your own accessToken obtained from the authentication service.
 
@@ -311,7 +311,7 @@ curl -X POST http://localhost:3000/api/files/upload \
          "file_name":"Example.pdf",
          "file_size":4577594,
          "file_type":"application/pdf",
-         "storage_path":"/uploads/Example.pdf",
+         "storage_path":"/Users/Desktop/Example.pdf",
          "file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892",
          "labels":[],
          "crawl_date":null,
@@ -342,7 +342,7 @@ curl -X POST http://localhost:3000/api/files/uploads \
 ```json
 {"success":true,
  "message":"Files uploaded successfully",
- "data":[{"file_id":"1750164437466-b51fa7c5", "file_name":"Example1.txt", "file_size":210930, "file_type":"text/plain", "storage_path":"/uploads/1750164437466-b51fa7c5.txt","file_hash":"60a92fa3b2ce3bd8039702806ffdf65250ddfcab59cca1ed6cbd0f60cf23beff","labels":[], "crawl_date":null, "source_url":"","language":"","chunk_count":0, "dataprep":{"status":"pending","ingest_date":"","retract_date":""}},
+ "data":[{"file_id":"1750164437466-b51fa7c5", "file_name":"Example1.txt", "file_size":210930, "file_type":"text/plain", "storage_path":"/Users/Desktop/1750164437466-b51fa7c5.txt","file_hash":"60a92fa3b2ce3bd8039702806ffdf65250ddfcab59cca1ed6cbd0f60cf23beff","labels":[], "crawl_date":null, "source_url":"","language":"","chunk_count":0, "dataprep":{"status":"pending","ingest_date":"","retract_date":""}},
          {"file_id":"1750164437466-1c31ed4c","file_name":"Example2.xlsx", "..."},{"file_id":"1750164437467-42b326a7", "..."},
          {"..."}]}
 ```
@@ -367,7 +367,7 @@ curl -X POST http://localhost:3000/api/files/upload-link \
          "file_name":"GenAI for Good Challenge - IEEE Humanitarian Technologies.html",
          "file_size":225894,
          "file_type":"text/html",
-         "storage_path":"/uploads/1753107703650-7e7b18fe.html",
+         "storage_path":"/Users/Desktop/1753107703650-7e7b18fe.html",
          "file_hash":"cff5f98ba82a1ade25de41e9dc7ba030fe436485bd4b47b18b0067b727458c12",
          "labels":[],
          "author":"crawler",
@@ -503,7 +503,7 @@ curl -X GET "http://localhost:3000/api/files/1755261342481-8b804597" \
          "file_name":"ExamplePDF.pdf",
          "file_size":4577594,
          "file_type":"application/pdf",
-         "storage_path":"/uploads/1752590647458-fea8525c.pdf",
+         "storage_path":"/Users/Desktop/1752590647458-fea8525c.pdf",
          "file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892",
          "labels":[],
          "author":"",
@@ -564,9 +564,9 @@ curl "http://localhost:3000/api/files?mimeType=text/html&search=world" \
 ```json
 {"success":true,
  "message":"Files retrieved successfully",
- "data":[{"_key":"2665","_id":"files/2665","_rev":"_j1S7H16---","file_id":"1750018631535-79b1bc54","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/uploads/1750018631535-79b1bc54.pdf","labels":[],"uploaded_date":"2025-06-15T20:17:11.545Z","created_date":"2025-06-15T20:17:11.536Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
-         {"_key":"3132","_id":"files/3132","_rev":"_j1TKMHO---","file_id":"1750019618934-ce1317a4","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/uploads/1750019618934-ce1317a4.pdf","labels":[],"uploaded_date":"2025-06-15T20:33:38.961Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
-         {"_key":"3663","_id":"files/3663","_rev":"_j1TbepG---","file_id":"1750020752005-1ba26d2d","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/uploads/1750020752005-1ba26d2d.pdf","labels":[],"uploaded_date":"2025-06-15T20:52:32.048Z","created_date":"1970-01-01T00:00:00.000Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}}]
+ "data":[{"_key":"2665","_id":"files/2665","_rev":"_j1S7H16---","file_id":"1750018631535-79b1bc54","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/Users/Desktop/1750018631535-79b1bc54.pdf","labels":[],"uploaded_date":"2025-06-15T20:17:11.545Z","created_date":"2025-06-15T20:17:11.536Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
+         {"_key":"3132","_id":"files/3132","_rev":"_j1TKMHO---","file_id":"1750019618934-ce1317a4","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/Users/Desktop/1750019618934-ce1317a4.pdf","labels":[],"uploaded_date":"2025-06-15T20:33:38.961Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
+         {"_key":"3663","_id":"files/3663","_rev":"_j1TbepG---","file_id":"1750020752005-1ba26d2d","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/Users/Desktop/1750020752005-1ba26d2d.pdf","labels":[],"uploaded_date":"2025-06-15T20:52:32.048Z","created_date":"1970-01-01T00:00:00.000Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}}]
  "pagination":{"currentPage":1,
                "totalPages":3,
                "totalFiles":28,
@@ -594,7 +594,7 @@ curl -X PATCH http://localhost:3000/api/files/1752757770440-ce960082 \
          "file_name":"GenAI for Good Challenge.html",
          "file_size":100686,
          "file_type":"text/html",
-         "storage_path":"/uploads/1752757770440-ce960082.html",
+         "storage_path":"/Users/Desktop/1752757770440-ce960082.html",
          "file_hash":"0625305ccd073180e6f3896ca793e654f2250ba96dd4eb6ec70943a0dfab9507",
          "labels":["itu","ai"],
          "author":"ITU",
@@ -649,7 +649,7 @@ curl "http://localhost:3000/api/files/search?file_name=budget&file_type=text/htm
 ```json
 {"success":true,
  "message":"Metadata search completed successfully",
- "data":[{"_key":"42503","_id":"files/42503","_rev":"_j2IEPHa---","file_id":"1750239869811-68b40128","file_name":"Urban Immunization Toolkit.pdf","file_size":2770818,"file_type":"application/pdf","storage_path":"/uploads/1750239869811-68b40128.pdf","file_hash":"3456a1eef50facf4d1b70768ee904f91dd057c6f702f55923243fbe20b5c1131","labels":["two","orange"],"author":"NewAuthor","upload_date":"2025-06-18T09:44:29.852Z","create_date":"2025-06-18T09:44:29.813Z","crawl_date":"","source_url":"","language":"sw","chunk_count":0,"dataprep":{"status":"pending","ingest_date":"","retract_date":""},"page_count":69}],
+ "data":[{"_key":"42503","_id":"files/42503","_rev":"_j2IEPHa---","file_id":"1750239869811-68b40128","file_name":"Urban Immunization Toolkit.pdf","file_size":2770818,"file_type":"application/pdf","storage_path":"/Users/Desktop/1750239869811-68b40128.pdf","file_hash":"3456a1eef50facf4d1b70768ee904f91dd057c6f702f55923243fbe20b5c1131","labels":["two","orange"],"author":"NewAuthor","upload_date":"2025-06-18T09:44:29.852Z","create_date":"2025-06-18T09:44:29.813Z","crawl_date":"","source_url":"","language":"sw","chunk_count":0,"dataprep":{"status":"pending","ingest_date":"","retract_date":""},"page_count":69}],
  "query":{"file_type":"application/pdf","labels":"orange"},
  "resultCount":1}
 ```

@@ -1,3 +1,74 @@
+# ArangoDB Server Setup & Maintenance (Docker)
+
+This section describes how to set up and maintain the ArangoDB database server using Docker and the provided scripts. The configuration is designed to run ArangoDB as a containerized service with data persistence and support for experimental vector indexes, which are essential for AI and vector search applications.
+
+### Prerequisites
+
+  * **Docker and Docker Compose:** Must be installed on your system.
+  * **Environment Variable:** You must set the ArangoDB root password before starting the container.
+    ```bash
+    export ARANGO_PASSWORD=test
+    ```
+    **Note:** The provided backup and restore scripts (`dump.sh`, `restore.sh`) assume a root password of `test` for simplicity. If you use a different password, you must update these scripts accordingly.
+
+### 1\. Starting the ArangoDB Server
+
+To start the ArangoDB server, run Docker Compose in detached mode from the `arangodb` directory containing the `compose.yaml` file:
+
+```bash
+docker-compose up -d
+```
+
+This command launches the `arango-vector-db` service with the following key configurations:
+
+  * **Image:** `arangodb/arangodb:3.12.4`.
+  * **Port:** The database will be accessible on port `8529` on your host machine.
+  * **Password:** The root password is set using the `ARANGO_PASSWORD` environment variable you exported.
+  * **Data Persistence:** Database files are stored in `/root/arango_data` on the host machine, ensuring your data is safe even if the container is removed.
+  * **Vector Search:** The experimental vector index feature is enabled with the `--experimental-vector-index=true` flag.
+  * **Networking:** The container connects to an external network named `chatqna_default`.
+
+To verify that the container is running, use `docker ps`. To check its logs for any issues, use `docker logs arango-vector-db`.
+
+### 2\. Backup and Restore
+
+The provided shell scripts use the `arangodump` and `arangorestore` utilities to manage backups of all databases.
+
+#### Creating a Backup
+
+To create a full backup of all databases, including `_system`, run the `dump.sh` script:
+
+```bash
+sh dump.sh
+```
+
+This script automatically discovers all databases, creates a timestamped backup directory (e.g., `/root/arango_backups/20250816214500`), and dumps each database into it.
+
+#### Restoring from a Backup
+
+To restore all databases from a specific backup, run the `restore.sh` script with the backup's timestamp:
+
+```bash
+sh restore.sh <backup_timestamp>
+```
+
+For example, to restore the backup created above:
+
+```bash
+sh restore.sh 20250816214500
+```
+
+The script finds the backup directory and uses `arangorestore` to import the data, creating databases if they don't already exist.
+
+**⚠️ WARNING:** Restoring from a backup will overwrite any existing data in the target databases. Always ensure you have a current backup before performing a restore.
+
+### 3\. Accessing the Database
+
+  * **Web Interface:** You can access the ArangoDB web UI by navigating to `http://localhost:8529` in your browser. Log in with the username `root` and the password you set in the `ARANGO_PASSWORD` environment variable.
+  * **Command Line:** You can connect using tools like `arangosh` by pointing them to the running container.
+
+-----
+
 # GENIE.AI Framework Database Setup Scripts
 
 This repository contains database setup and migration scripts for the **GENIE.AI User Interface Framework**. GENIE.AI is an adaptable framework designed to provide intelligent, context-aware query responses through integration with RAG (Retrieval-Augmented Generation) systems. These scripts facilitate the creation and management of the database schema and knowledge hierarchy for various use cases, such as government services, healthcare systems, educational platforms, and enterprise knowledge bases.
@@ -160,7 +231,7 @@ This structure enables:
 | `arango-schema-creator.js` | Create new database from schema. | **CREATES DATABASE** | None |
 | `export-service-categories.js` | Export `serviceCategories`, `services`, `categoryServices`, and translation collections. | **READ ONLY** | None |
 | `import-service-categories.js` | Import `serviceCategories`, `services`, `categoryServices`, and translation collections from a full export file. | **WRITES DATA** | **Schema validation must be disabled** |
-| `create-knowledge-hierarchy.js` | Interactively or from a simple JSON file, create the initial English `serviceCategories` and `services` hierarchy. | **WRITES DATA** | `npm install inquirer yargs` |
+| `create-knowledge-hierarchy.js` | Interactively or from a simple JSON file, **populates** the initial English `serviceCategories` and `services` hierarchy. | **WRITES DATA** | `npm install inquirer yargs`. **Target collections must exist.** |
 | `create-translations.js` | Create translations for `serviceCategories` and `services` using Google Cloud Translate API. | **WRITES DATA** | Google Cloud credentials, API enabled |
 
 **Note**: The `category-migration.js` script is no longer needed, as translation support is now handled by `create-translations.js` for adding new languages and by `import-service-categories.js` for importing existing translations.
@@ -293,11 +364,7 @@ Before running the import script, you MUST disable schema validation for all col
     ```aql
     db.serviceCategories.properties({ schema: null });
     db.services.properties({ schema: null });
-    db.categoryServices.properties({ schema: null });
-    db.serviceCategoryTranslations.properties({ schema: null });
-    db.serviceCategoryTranslationsEdge.properties({ schema: null });
-    db.serviceTranslations.properties({ schema: null });
-    db.serviceTranslationsEdge.properties({ schema: null });
+    // ... and so on for all collections
     ```
 
 **Now run the import**:
@@ -346,7 +413,7 @@ This workflow is the standard process for defining a new knowledge hierarchy for
 
 ### Step 1: Create New Framework Database
 
-Follow Step 3 from Workflow 1 to create a new, empty database with the correct schema using `arango-schema-creator.js`.
+This is a mandatory first step. It creates the database and all the necessary collections.
 
 ```bash
 # Point to your NEW GENIE.AI instance
@@ -356,9 +423,19 @@ export ARANGO_DATABASE="genie-ai-new-use-case"
 node arango-schema-creator.js ./arango-schema.json
 ```
 
-### Step 2: Define and Create the Knowledge Hierarchy
+### Step 2: Populate the Knowledge Hierarchy
 
-Using the new `create-knowledge-hierarchy.js` script, define your service categories and services. You can do this interactively or by preparing a simple JSON file. This script will only create the English (`nameEN`) entries.
+**⚠️ IMPORTANT: Disable Schema Validation First\!**
+
+Before running the `create-knowledge-hierarchy.js` script, you MUST temporarily disable schema validation to prevent errors.
+
+In the ArangoDB Web UI, for your new database:
+
+1.  Go to the **Collections** tab.
+2.  Click on the **`serviceCategories`** collection, go to its **Settings** tab, and set the Schema **Validation Level** to **`none`**.
+3.  Repeat this process for the **`services`** and **`categoryServices`** collections.
+
+After creating the database schema in Step 1 and disabling validation, use the `create-knowledge-hierarchy.js` script to populate your service categories and services.
 
 **Option A: Interactive Mode (Recommended for manual setup)**
 Run the script without arguments and follow the prompts.
@@ -370,10 +447,8 @@ export ARANGO_DATABASE="genie-ai-new-use-case"
 node create-knowledge-hierarchy.js
 ```
 
-The script will guide you through entering each category and its associated services, then ask for confirmation before writing to the database.
-
 **Option B: File Mode (Recommended for automated setup)**
-Create a simple JSON file (e.g., `my-hierarchy.json`) that defines your categories and services.
+Create a simple JSON file (e.g., `my-hierarchy.json`).
 
 **Example `my-hierarchy.json`**:
 
@@ -385,14 +460,6 @@ Create a simple JSON file (e.g., `my-hierarchy.json`) that defines your categori
       "Ambulance Dispatch",
       "Emergency Room Locations",
       "Poison Control Hotline"
-    ]
-  },
-  {
-    "category": "Specialist Care",
-    "services": [
-      "Cardiology Appointments",
-      "Neurology Specialist Finder",
-      "Oncology Treatment Centers"
     ]
   }
 ]
@@ -407,13 +474,7 @@ export ARANGO_DATABASE="genie-ai-new-use-case"
 node create-knowledge-hierarchy.js --file ./my-hierarchy.json
 ```
 
-The script will ask for final confirmation before writing the data.
-
-**Output**:
-
-  - Your custom knowledge areas (`serviceCategories`) and services (`services`) are created in the database.
-  - The hierarchy is correctly linked with edges in `categoryServices`.
-  - The instance is now ready for translation.
+**After the script completes successfully, remember to go back and re-enable schema validation (`moderate` or `strict`) for the `serviceCategories`, `services`, and `categoryServices` collections.**
 
 ### Step 3: Add National Language Translations
 
@@ -429,11 +490,6 @@ node create-translations.js ID
 # Create French translations
 node create-translations.js FR
 ```
-
-**Output**:
-
-  - Translations are created in `serviceCategoryTranslations` and `serviceTranslations`.
-  - Edges linking items to their translations are created.
 
 ### Result: GENIE.AI Instance with Custom Hierarchy and Multi-language Support
 
@@ -809,10 +865,7 @@ node create-translations.js ES
 1.  **Keep Categories Broad**: 8-15 top-level categories work best for UI navigation.
 2.  **Logical Grouping**: Group services by user intent, not organizational structure.
 3.  **Clear Naming**: Use descriptive `nameEN` fields for clarity.
-
-<!-- end list -->
-
-  - **Order Matters**: Most important categories/services should appear first (lower `order` values).
+4.  **Order Matters**: Most important categories/services should appear first (lower `order` values).
 
 ### RAG Context Optimization
 

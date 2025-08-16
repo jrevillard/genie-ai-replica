@@ -114,7 +114,6 @@ document-repository/
 │   │   ├── fileService.js
 │   │   ├── securityService.js
 │   │   ├── metadataService.js
-│   │   ├── dataprepClient.js     # Handles HTTP calls to dataprep
 │   ├── utils/                    # Helper functions
 │   │   ├── fileUtils.js
 │   │   ├── virusScanner.js       # Hooks to ClamAV or similar
@@ -122,18 +121,21 @@ document-repository/
 │   ├── middlewares/             # Middleware for Express
 │   │   ├── fileUpload.js         # Multer config
 │   │   ├── errorHandler.js
+│   │   ├── authMiddleware.js
 │   ├── config/
 │   │   ├── appConfig.js
-│   │   ├── dataprepConfig.js
+│   ├── utils/
+│   │   ├── crawler.js
+│   │   ├── fileUtils.js
+│   │   ├── mimeTypeValidator.js
 │   ├── app.js                    # Express app
 │   ├── server.js                 # Entry point
 ├── uploads/                      # Stores uploaded files
-├── tests/
-│   ├── unit/
-│   ├── integration/
 ├── Dockerfile
 ├── package.json
 ├── README.md
+├── README_metadata.md
+├── README_ingest&retract.md
 ```
 
 ## Responsibilities
@@ -154,7 +156,7 @@ document-repository/
 | Retract from dataprep     | ✅ via `POST /api/:fileId/retract` router     |
 
 > ✅ Means this service initiates the action, but the dataprep microservice owns the actual data processing.
-> Metadata extraction is done at both upload time and ingest time, allowing for quick user access and later semantic enrichment. In document-repository, the basic metadata is extracted and stored in the ArangoDB database, while the enrichment is handled by the dataprep microservice.
+> Metadata extraction is done at upload time. In document-repository, the basic metadata is extracted and stored in the ArangoDB database, while the ingest_date, retract_date and status are changed during ingestion or retraction.
 
 **Dataprep microservice responsibilities (related to document-repository)**:
 
@@ -163,7 +165,7 @@ document-repository/
 * Text extraction from files
 * Chunking
 * Embedding
-* Indexing & storing in DB
+* Graph generation & storing in DB
 * ...
 
 ## Routes Overview (to be updated)
@@ -185,6 +187,8 @@ document-repository/
 | DELETE | `/api/files`                          | Delete multiple files by IDs                | Authenticated   |
 | POST   | `/api/files/:fileId/ingest`           | Ingest file to dataprep                     | Admin only      |
 | POST   | `/api/files/:fileId/retract`          | Retract file from dataprep                  | Admin only      |
+| POST   | `/api/files/ingest`                   | Ingest multiple files to dataprep           | Admin only      |
+| POST   | `/api/files/retract`                  | Retract multiple files from dataprep        | Admin only      |
 
 ## Setup (to be updated)
 
@@ -286,7 +290,7 @@ document-repository/
 
 ## Usage (to be updated)
 
-Use the following `curl` commands to interact with the file system backend service. Replace `<remote-node-ip>` with the actual IP address of the remote node if you are accessing it remotely.
+Use the following `curl` commands to interact with the file system backend service. Replace `<accessToken>` with your own accessToken obtained from the authentication service.
 
 ### Upload a File
 
@@ -295,7 +299,7 @@ Use the following `curl` commands to interact with the file system backend servi
 ```bash
 curl -X POST http://localhost:3000/api/files/upload \
   -H "Authorization: Bearer <accessToken>" \
-  -F "file=@/Users/scarlettsun/Desktop/ITU/ExamplePDF.pdf"
+  -F "file=@/Users/Desktop/Example.pdf"
 ```
 
 **Response**
@@ -304,10 +308,11 @@ curl -X POST http://localhost:3000/api/files/upload \
 {"success":true,
  "message":"File uploaded successfully",
  "data":{"file_id":"1750164284119-30f48760",
-         "file_name":"ExamplePDF.pdf",
+         "file_name":"Example.pdf",
          "file_size":4577594,
          "file_type":"application/pdf",
-         "storage_path":"/app/uploads/1750164284119-30f48760.pdf","file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892",
+         "storage_path":"/uploads/Example.pdf",
+         "file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892",
          "labels":[],
          "crawl_date":null,
          "source_url":"",
@@ -325,11 +330,11 @@ curl -X POST http://localhost:3000/api/files/upload \
 ```bash
 curl -X POST http://localhost:3000/api/files/uploads \
   -H "Authorization: Bearer <accessToken>" \
-  -F "files=@/Users/scarlettsun/Desktop/ITU/txtai.txt" \
-  -F "files=@/Users/scarlettsun/Desktop/ITU/Sample_criteria.xlsx" \
-  -F "files=@/Users/scarlettsun/Desktop/ITU/EMBEDDING MODEL TESTS.docx" \
-  -F "files=@/Users/scarlettsun/Desktop/ITU/pymupdf4llm_markdown.md" \
-  -F "files=@/Users/scarlettsun/Desktop/ITU/ExamplePDF.pdf"
+  -F "files=@/Users/Desktop/Example1.txt" \
+  -F "files=@/Users/Desktop/Example2.xlsx" \
+  -F "files=@/Users/Desktop/Example3.docx" \
+  -F "files=@/Users/Desktop/Example4.md" \
+  -F "files=@/Users/Desktop/Example5.pdf"
 ```
 
 **Response**
@@ -337,8 +342,8 @@ curl -X POST http://localhost:3000/api/files/uploads \
 ```json
 {"success":true,
  "message":"Files uploaded successfully",
- "data":[{"file_id":"1750164437466-b51fa7c5", "file_name":"txtai.txt", "file_size":210930, "file_type":"text/plain", "storage_path":"/app/uploads/1750164437466-b51fa7c5.txt","file_hash":"60a92fa3b2ce3bd8039702806ffdf65250ddfcab59cca1ed6cbd0f60cf23beff","labels":[], "crawl_date":null, "source_url":"","language":"","chunk_count":0, "dataprep":{"status":"pending","ingest_date":"","retract_date":""}},
-         {"file_id":"1750164437466-1c31ed4c","file_name":"Sample_criteria.xlsx", "..."},{"file_id":"1750164437467-42b326a7", "..."},
+ "data":[{"file_id":"1750164437466-b51fa7c5", "file_name":"Example1.txt", "file_size":210930, "file_type":"text/plain", "storage_path":"/uploads/1750164437466-b51fa7c5.txt","file_hash":"60a92fa3b2ce3bd8039702806ffdf65250ddfcab59cca1ed6cbd0f60cf23beff","labels":[], "crawl_date":null, "source_url":"","language":"","chunk_count":0, "dataprep":{"status":"pending","ingest_date":"","retract_date":""}},
+         {"file_id":"1750164437466-1c31ed4c","file_name":"Example2.xlsx", "..."},{"file_id":"1750164437467-42b326a7", "..."},
          {"..."}]}
 ```
 
@@ -362,7 +367,7 @@ curl -X POST http://localhost:3000/api/files/upload-link \
          "file_name":"GenAI for Good Challenge - IEEE Humanitarian Technologies.html",
          "file_size":225894,
          "file_type":"text/html",
-         "storage_path":"/app/uploads/1753107703650-7e7b18fe.html",
+         "storage_path":"/uploads/1753107703650-7e7b18fe.html",
          "file_hash":"cff5f98ba82a1ade25de41e9dc7ba030fe436485bd4b47b18b0067b727458c12",
          "labels":[],
          "author":"crawler",
@@ -380,8 +385,8 @@ curl -X POST http://localhost:3000/api/files/upload-link \
 **View a file in base64** (for future API integration)
 
 ```bash
-curl http://localhost:3000/api/files/1752590647147-8ca95cff/view \
-  -H "Authorization: Bearer <accessToken>"
+curl http://localhost:3000/api/files/1755357489820-bcbb939a/view \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU1MzQ5MDI2LCJleHAiOjE3NTU0MzU0MjZ9.QdJ5mx8eJNygS8L3nnMglqP-wC23k7Rp7Lj6J35nEKo"
 ```
 
 **Response**
@@ -407,7 +412,7 @@ http://localhost:3000/api/files/1752590647147-8ca95cff/viewbrowser
 Download from the backend server:
 
 ```bash
-curl http://localhost:3000/api/files/1752662663501-73b73909/download --output /Desktop/ITU/test-download-4.html \
+curl http://localhost:3000/api/files/1755357489820-bcbb939a/download --output /Users/Desktop/test-download-1.html \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -426,8 +431,8 @@ curl http://localhost:3000/api/files/1752662663501-73b73909/download --output /D
 ```bash
 curl -X POST http://localhost:3000/api/files/downloads \
   -H "Content-Type: application/json" \
-  -o /Desktop/ITU/download-files-2.zip \
-  -d '{"fileIds":["1752590647457-165b5132","1752662663501-73b73909","1752755682277-8bed74bc"]}' \
+  -o /Users/Desktop/download-files-2.zip \
+  -d '{"fileIds":["1755357122708-fc7201fc","1755357329946-94612fe5","1755357329947-47e3aadb"]}' \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -445,7 +450,7 @@ curl -X POST http://localhost:3000/api/files/downloads \
 
 Delete from the backend server:
 ```bash
-curl -X DELETE http://localhost:3000/api/files/1751639317979-872bb122 \
+curl -X DELETE http://localhost:3000/api/files/1755357329946-94612fe5 \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -462,7 +467,7 @@ curl -X DELETE http://localhost:3000/api/files/1751639317979-872bb122 \
 ```bash
 curl -X DELETE http://localhost:3000/api/files \
   -H "Content-Type: application/json" \
-  -d '{"fileIds":["76d74b7c-b3e5-4162-b4ca-6ba09809515a", "1750163480096-19d9304a", "1750164437466-b51fa7c5"]}' \
+  -d '{"fileIds":["1755357122708-fc7201fc", "1755357329947-47e3aadb"]}' \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -473,7 +478,8 @@ curl -X DELETE http://localhost:3000/api/files \
  "results":[{"fileId":"76d74b7c-b3e5-4162-b4ca-6ba09809515a",
              "success":false,
              "error":"File record not found in database: 76d74b7c-b3e5-4162-b4ca-6ba09809515a"},
-            {"fileId":"1750163480096-19d9304a","success":true},{"fileId":"1750164437466-b51fa7c5","success":true}]}
+            {"fileId":"1750163480096-19d9304a","success":true},
+            {"fileId":"1750164437466-b51fa7c5","success":true}]}
 ```
 
 ---
@@ -481,7 +487,7 @@ curl -X DELETE http://localhost:3000/api/files \
 ### Get File Metadata by ID
 
 ```bash
-curl -X GET "http://localhost:3000/api/files/1752590647458-fea8525c" \
+curl -X GET "http://localhost:3000/api/files/1755261342481-8b804597" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -497,7 +503,7 @@ curl -X GET "http://localhost:3000/api/files/1752590647458-fea8525c" \
          "file_name":"ExamplePDF.pdf",
          "file_size":4577594,
          "file_type":"application/pdf",
-         "storage_path":"/app/uploads/1752590647458-fea8525c.pdf",
+         "storage_path":"/uploads/1752590647458-fea8525c.pdf",
          "file_hash":"65f7f55f1142a85eff2ee54896dbe531c6db38289a1dac9ded7594ca7f9a5892",
          "labels":[],
          "author":"",
@@ -558,9 +564,9 @@ curl "http://localhost:3000/api/files?mimeType=text/html&search=world" \
 ```json
 {"success":true,
  "message":"Files retrieved successfully",
- "data":[{"_key":"2665","_id":"files/2665","_rev":"_j1S7H16---","file_id":"1750018631535-79b1bc54","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/app/uploads/1750018631535-79b1bc54.pdf","labels":[],"uploaded_date":"2025-06-15T20:17:11.545Z","created_date":"2025-06-15T20:17:11.536Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
-         {"_key":"3132","_id":"files/3132","_rev":"_j1TKMHO---","file_id":"1750019618934-ce1317a4","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/app/uploads/1750019618934-ce1317a4.pdf","labels":[],"uploaded_date":"2025-06-15T20:33:38.961Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
-         {"_key":"3663","_id":"files/3663","_rev":"_j1TbepG---","file_id":"1750020752005-1ba26d2d","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/app/uploads/1750020752005-1ba26d2d.pdf","labels":[],"uploaded_date":"2025-06-15T20:52:32.048Z","created_date":"1970-01-01T00:00:00.000Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}}]
+ "data":[{"_key":"2665","_id":"files/2665","_rev":"_j1S7H16---","file_id":"1750018631535-79b1bc54","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/uploads/1750018631535-79b1bc54.pdf","labels":[],"uploaded_date":"2025-06-15T20:17:11.545Z","created_date":"2025-06-15T20:17:11.536Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
+         {"_key":"3132","_id":"files/3132","_rev":"_j1TKMHO---","file_id":"1750019618934-ce1317a4","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/uploads/1750019618934-ce1317a4.pdf","labels":[],"uploaded_date":"2025-06-15T20:33:38.961Z","created_date":"2025-06-15T20:33:38.936Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}},
+         {"_key":"3663","_id":"files/3663","_rev":"_j1TbepG---","file_id":"1750020752005-1ba26d2d","file_name":"ExamplePDF.pdf","file_size":4577594,"file_type":"application/pdf","file_path":"/uploads/1750020752005-1ba26d2d.pdf","labels":[],"uploaded_date":"2025-06-15T20:52:32.048Z","created_date":"1970-01-01T00:00:00.000Z","crawl_date":null,"source_url":"","language":"","chunk_count":0,"dataprep":{"status":"pending","ingested_date":"","retracted_date":""}}]
  "pagination":{"currentPage":1,
                "totalPages":3,
                "totalFiles":28,
@@ -574,7 +580,7 @@ curl "http://localhost:3000/api/files?mimeType=text/html&search=world" \
 ```bash
 curl -X PATCH http://localhost:3000/api/files/1752757770440-ce960082 \
   -H "Content-Type: application/json" \
-  -d '{"language":"zh", "labels":["one", "red"], "author":"New Author"}' \
+  -d '{"language":"en", "labels":["itu", "ai"], "author":"ITU"}' \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -585,17 +591,17 @@ curl -X PATCH http://localhost:3000/api/files/1752757770440-ce960082 \
 {"success":true,
  "message":"File updated successfully",
  "data":{"file_id":"1752757770440-ce960082",
-         "file_name":"国际电联：致力于连通世界.html",
+         "file_name":"GenAI for Good Challenge.html",
          "file_size":100686,
          "file_type":"text/html",
-         "storage_path":"/app/uploads/1752757770440-ce960082.html",
+         "storage_path":"/uploads/1752757770440-ce960082.html",
          "file_hash":"0625305ccd073180e6f3896ca793e654f2250ba96dd4eb6ec70943a0dfab9507",
-         "labels":["one","red"],
-         "author":"New Author",
+         "labels":["itu","ai"],
+         "author":"ITU",
          "create_date":"2025-07-17T13:09:30.441Z",
          "crawl_date":"2025-07-17T13:09:30.440Z",
-         "source_url":"https://www.itu.int/zh/Pages/default.aspx#/zh",
-         "language":"zh",
+         "source_url":"https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/ITU_OSPO/Open-Source_AI_for_Public_Services/GenAI-for-Good-Community-Challenge.aspx",
+         "language":"en",
          "chunk_count":0,
          "dataprep":{"status":"pending","ingest_date":"","retract_date":""}}}
 ```
@@ -610,7 +616,7 @@ For search files by name, the terminal does not encode non-ASCII characters corr
 curl "http://localhost:3000/api/files/search?file_type=application/pdf" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' world)" \
   -H "Authorization: Bearer <accessToken>"
 
 curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' ITU)" \
@@ -628,13 +634,13 @@ curl "http://localhost:3000/api/files/search?author=Google" \
 curl "http://localhost:3000/api/files/search?status=pending" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?language=zh" \
+curl "http://localhost:3000/api/files/search?language=en" \
   -H "Authorization: Bearer <accessToken>"
 
 curl "http://localhost:3000/api/files/search?file_type=text/html&labels=orange" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_name=budget&file_type=application/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en" \
+curl "http://localhost:3000/api/files/search?file_name=budget&file_type=text/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -643,7 +649,7 @@ curl "http://localhost:3000/api/files/search?file_name=budget&file_type=applicat
 ```json
 {"success":true,
  "message":"Metadata search completed successfully",
- "data":[{"_key":"42503","_id":"files/42503","_rev":"_j2IEPHa---","file_id":"1750239869811-68b40128","file_name":"Urban Immunization Toolkit.pdf","file_size":2770818,"file_type":"application/pdf","storage_path":"/app/uploads/1750239869811-68b40128.pdf","file_hash":"3456a1eef50facf4d1b70768ee904f91dd057c6f702f55923243fbe20b5c1131","labels":["two","orange"],"author":"NewAuthor","upload_date":"2025-06-18T09:44:29.852Z","create_date":"2025-06-18T09:44:29.813Z","crawl_date":"","source_url":"","language":"sw","chunk_count":0,"dataprep":{"status":"pending","ingest_date":"","retract_date":""},"page_count":69}],
+ "data":[{"_key":"42503","_id":"files/42503","_rev":"_j2IEPHa---","file_id":"1750239869811-68b40128","file_name":"Urban Immunization Toolkit.pdf","file_size":2770818,"file_type":"application/pdf","storage_path":"/uploads/1750239869811-68b40128.pdf","file_hash":"3456a1eef50facf4d1b70768ee904f91dd057c6f702f55923243fbe20b5c1131","labels":["two","orange"],"author":"NewAuthor","upload_date":"2025-06-18T09:44:29.852Z","create_date":"2025-06-18T09:44:29.813Z","crawl_date":"","source_url":"","language":"sw","chunk_count":0,"dataprep":{"status":"pending","ingest_date":"","retract_date":""},"page_count":69}],
  "query":{"file_type":"application/pdf","labels":"orange"},
  "resultCount":1}
 ```
@@ -656,17 +662,80 @@ curl "http://localhost:3000/api/files/search?file_name=budget&file_type=applicat
  "resultCount":0}
 ```
 
+### Ingest a File
+
+```bash
+curl -X POST "http://localhost:3000/api/files/1755357430227-0c636b1c/ingest" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+**Response**
+
+```json
+{"success":true,"message":"File ingested successfully"}
+```
+
+### Retract a File
+
+```bash
+curl -X POST "http://localhost:3000/api/files/1755082518852-7c90b350/retract" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+```json
+{"success":true,"message":"File retracted successfully"}
+```
+
+### Ingest Multiple Files
+
+```bash
+curl -X POST http://localhost:3000/api/files/ingest \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"fileIds": ["1755357489820-bcbb939a", "1755083178494-6bc7607a", "1755084048825-3fe82e7b", "1755078348409-c2b7bff9", "1755082518852-7c90b350"]}'
+```
+
+**Response**
+
+```json
+{"success":true,
+ "results":[{"fileId":"1755357489820-bcbb939a","success":false,"error":{"success":false,"message":"File ./uploaded_files/GenAI for Good Challenge.html is empty or could not be read."}},
+            {"fileId":"1755083178494-6bc7607a","success":false,"error":{"success":false,"message":"Less than 20% of the content are valid. Please check the file content to remove any potential base64 codes or web archive content."}},
+            {"fileId":"1755084048825-3fe82e7b","success":true},
+            {"fileId":"1755078348409-c2b7bff9","success":true},
+            {"fileId":"1755082518852-7c90b350","success":false,"error":"File has already been ingested"}]}
+```
+
+### Retract Multiple Files
+
+```bash
+curl -X POST http://localhost:3000/api/files/retract \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"fileIds": ["1755082518852-7c90b350", "1755078047177-b7cac673", "1755083821792-8142c703"]}'
+```
+
+**Response**
+
+```json
+{"success":true,
+ "results":[{"fileId":"1755082518852-7c90b350","success":false,"error":"File has already been retracted"},
+            {"fileId":"1755078047177-b7cac673","success":true},
+            {"fileId":"1755083821792-8142c703","success":true}]}
+```
+
 ---
 
 ## Security for Access Control
 
-- Common users authenticated as citizens can only read files.
+- Common users authenticated as citizens can only read & download files in the `Related Document` panel.
 - Users authenticated as administrators can access all the file operations.
 - File access is not restricted to intranet or localhost; remote access is supported.
 
 ## Notes
 
 * For metadata-related operations, please see [`README_metadata.md`](./README_metadata.md) for more details.
+* For ingest & retract operations, please see [`README_ingest&retract.md`](./README_ingest&retract.md) for more details.
 
 ## Extending
 

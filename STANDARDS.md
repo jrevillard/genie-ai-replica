@@ -1,11 +1,3 @@
-Of course. I understand that different platforms can have slightly different Markdown renderers, which can lead to formatting issues. GitLab, in particular, is often stricter about indentation, especially for code blocks nested within lists.
-
-I have reviewed the entire specification and applied stricter formatting rules to ensure it renders correctly in GitLab. The primary changes involve adding consistent blank lines between elements and properly indenting code blocks that are part of a list item. This revised version should appear as intended.
-
-Here is the corrected and properly formatted Project Coding Standards Specification.
-
------
-
 # GENIE.AI - Project Coding Standards Specification
 
 ## 1\. Introduction

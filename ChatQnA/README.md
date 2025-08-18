@@ -4,18 +4,21 @@ This megaservice is derived from the [OPEA ChatQnA](https://github.com/opea-proj
 
 The ChatQnA megaservice defines the high-level logic for the backend of the RAG application / chatbot. It orchestrates the dataflow through the different microservices (embedding, retriever, reranker, LLM, etc.). Each of the microservices is defined separately by corresponding code directory (see genie-ai/microservices)
 
-## Custom features integrated in GENIE.AI ChatQnA
-
-- handle_request function 
-    modified to accept additional context parameters from the frontend;
-- allign_inputs function 
-    modified to handle modified data between retriever and LLM
-
-
 ```mermaid
 graph LR
 E1[Embedding Service] --> R1[Retriever Service] --> Rk1[Reranker Service] --> L1[LLM Service]
 ```
+
+
+## Custom features integrated in GENIE.AI ChatQnA
+
+- **handle_request function** 
+    > modified to accept additional context parameters from the frontend
+
+- **allign_inputs function** 
+    > modified to handle modified data between retriever and LLM
+
+
 
 ### Key Dependencies and Supporting Modules
 **comps package**

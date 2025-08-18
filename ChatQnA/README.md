@@ -1,13 +1,32 @@
 # GENIE.AI ChatQnA 
 
-This megaservice is derived from the (OPEA ChatQnA)[https://github.com/opea-project/GenAIExamples/tree/main/ChatQnA] megaservice.
+This megaservice is derived from the [OPEA ChatQnA](https://github.com/opea-project/GenAIExamples/tree/main/ChatQnA) megaservice.
 
 The ChatQnA megaservice defines the high-level logic for the backend of the RAG application / chatbot. It orchestrates the dataflow through the different microservices (embedding, retriever, reranker, LLM, etc.). Each of the microservices is defined separately by corresponding code directory (see genie-ai/microservices)
 
 ## Custom features integrated in GENIE.AI ChatQnA
 
-- handle_request function modified to accept additional context parameters from the frontend;
-- allign_inputs function modified to handle modified data between retriever and LLM
+    > handle_request function modified to accept additional context parameters from the frontend;
+    > allign_inputs function modified to handle modified data between retriever and LLM
+
+```mermaid
+flowchart TD
+    %% Core nodes
+    subgraph Standard_RAG[Standard RAG Pipeline]
+        E1[Embedding Service] --> R1[Retriever Service] --> Rk1[Reranker Service] --> L1[LLM Service]
+    end
+
+    subgraph No_Rerank[Without Rerank]
+        E2[Embedding Service] --> R2[Retriever Service] --> L2[LLM Service]
+    end
+
+    subgraph Guardrails[With Guardrails]
+        G[Guardrail In Service] --> E3[Embedding Service] --> R3[Retriever Service] --> Rk3[Reranker Service] --> L3[LLM Service]
+    end
+
+    subgraph FAQgen[FAQ Generation]
+        E4[Embedding Service] --> R4[Retriever Service] --> Rk4[Reranker Service] --> L4[LLM Service (FAQgen Endpoint)]
+    end
 
 ### Key Dependencies and Supporting Modules
 **comps package**

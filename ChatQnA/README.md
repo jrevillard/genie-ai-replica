@@ -21,7 +21,7 @@ E1[Embedding Service] --> R1[Retriever Service] --> Rk1[Reranker Service] --> L1
 
 
 
-### Key Dependencies and Supporting Modules
+## Key Dependencies and Supporting Modules
 **comps package**
 Provides the orchestration framework:
 - ServiceOrchestrator → Manages execution graph and service dependencies.
@@ -50,7 +50,7 @@ Underpins the HTTP API and streaming responses.
 
 
 
-### Key functions and components
+## Key functions and components
 **ChatTemplate.generate_rag_prompt(question, documents)**
 - Allows to dynamically define prompts for the LLM using LangChain PromptTemplate.
 - Supports user-provided chat_template definitions.

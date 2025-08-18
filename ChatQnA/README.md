@@ -20,6 +20,7 @@ E1[Embedding Service] --> R1[Retriever Service] --> Rk1[Reranker Service] --> L1
 
 
 
+
 ### Key Dependencies and Supporting Modules
 **comps package**
 Provides the orchestration framework:
@@ -45,6 +46,8 @@ Used for building and formatting flexible prompt templates.
 
 **fastapi & StreamingResponse**
 Underpins the HTTP API and streaming responses.
+
+
 
 
 ### Key functions and components

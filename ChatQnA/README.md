@@ -1,15 +1,15 @@
-#GENIE.AI ChatQnA 
+# GENIE.AI ChatQnA 
 
 This megaservice is derived from the (OPEA ChatQnA)[https://github.com/opea-project/GenAIExamples/tree/main/ChatQnA] megaservice.
 
 The ChatQnA megaservice defines the high-level logic for the backend of the RAG application / chatbot. It orchestrates the dataflow through the different microservices (embedding, retriever, reranker, LLM, etc.). Each of the microservices is defined separately by corresponding code directory (see genie-ai/microservices)
 
-##Custom features integrated in GENIE.AI ChatQnA
+## Custom features integrated in GENIE.AI ChatQnA
 
 - handle_request function modified to accept additional context parameters from the frontend;
 - allign_inputs function modified to handle modified data between retriever and LLM
 
-###Key Dependencies and Supporting Modules
+### Key Dependencies and Supporting Modules
 **comps package**
 Provides the orchestration framework:
 - ServiceOrchestrator → Manages execution graph and service dependencies.
@@ -30,7 +30,7 @@ Used for building and formatting flexible prompt templates.
 **fastapi & StreamingResponse**
 Underpins the HTTP API and streaming responses.
 
-###Key functions and components
+### Key functions and components
 **ChatTemplate.generate_rag_prompt(question, documents)**
 - Allows to dynamically define prompts for the LLM using LangChain PromptTemplate.
 - Supports user-provided chat_template definitions.
@@ -51,5 +51,5 @@ Underpins the HTTP API and streaming responses.
 - Schedules the workflow via Service Orchestrator
 - Returns a ChatCompletionResponse
 
-**ChatQnAService.add_remote_service*()**
+**ChatQnAService.add_remote_service()**
 - Introduces methods to configure different workflow topologies. 

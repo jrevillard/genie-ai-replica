@@ -7,7 +7,9 @@ The ChatQnA megaservice defines the high-level logic for the backend of the RAG 
 ## Custom features integrated in GENIE.AI ChatQnA
 
     > handle_request function modified to accept additional context parameters from the frontend;
+
     > allign_inputs function modified to handle modified data between retriever and LLM
+
 
 ```mermaid
 flowchart TD
@@ -27,6 +29,7 @@ flowchart TD
     subgraph FAQgen[FAQ Generation]
         E4[Embedding Service] --> R4[Retriever Service] --> Rk4[Reranker Service] --> L4[LLM Service (FAQgen Endpoint)]
     end
+```
 
 ### Key Dependencies and Supporting Modules
 **comps package**

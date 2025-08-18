@@ -6,19 +6,16 @@ The ChatQnA megaservice defines the high-level logic for the backend of the RAG 
 
 ## Custom features integrated in GENIE.AI ChatQnA
 
-    handle_request function modified to accept additional context parameters from the frontend;
-
-    allign_inputs function modified to handle modified data between retriever and LLM
+- handle_request function 
+    modified to accept additional context parameters from the frontend;
+- allign_inputs function 
+    modified to handle modified data between retriever and LLM
 
 
 ```mermaid
 graph LR
-A[Square Rect] -- Link text --> B((Circle))
-A --> C(Round Rect)
-B --> D{Rhombus}
-C --> D
+E1[Embedding Service] --> R1[Retriever Service] --> Rk1[Reranker Service] --> L1[LLM Service]
 ```
-
 
 ### Key Dependencies and Supporting Modules
 **comps package**
@@ -26,20 +23,26 @@ Provides the orchestration framework:
 - ServiceOrchestrator → Manages execution graph and service dependencies.
 - MicroService → Defines an external service (embedding, retriever, reranker, LLM, guardrail).
 - MegaServiceEndpoint, ServiceType, ServiceRoleType → Enums/constants for service classification.
+
 **comps.cores.mega.utils.handle_message**
 Helper to convert chat messages into a flat input prompt.
+
 **comps.cores.proto.api_protocol**
 Defines request/response schemas:
 - ChatCompletionRequest, ChatCompletionResponse
 - ChatMessage, UsageInfo, ChatCompletionResponseChoice
 - Ensures OpenAI API compatibility.
+
 **comps.cores.proto.docarray**
 Provides parameter classes for fine-tuning services:
 - LLMParams, RetrieverParms, RerankerParms.
+
 **langchain_core.prompts.PromptTemplate**
 Used for building and formatting flexible prompt templates.
+
 **fastapi & StreamingResponse**
 Underpins the HTTP API and streaming responses.
+
 
 ### Key functions and components
 **ChatTemplate.generate_rag_prompt(question, documents)**

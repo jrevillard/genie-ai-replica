@@ -38,6 +38,11 @@ const config = {
     allowedExtensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.md', '.html', '.txt']
   },
 
+  labels: {
+    allowedLevels: ['category', 'service'], // Allowed levels for labels
+    allowedStatuses: ['pending', 'active'] // Allowed statuses for labels
+  },
+
   // Security configuration
   security: {
     jwtSecret: process.env.JWT_SECRET || 'default-jwt-secret',

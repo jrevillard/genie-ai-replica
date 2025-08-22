@@ -12,14 +12,16 @@ The labelling system enables precise categorization and retrieval of documents a
 
 - Users create a label tree with two levels: **category labels** and **service labels**.
 - Each label has attributes:
+    - `_id`: a unique id for the label
+    - `name`: the label itself
     - `level`: category or service
     - `status`: pending or active
     - `parent_id`: id of the category label that a service label belongs to; `null` for category labels.
-    - `publish_date`: timestamp if the user click publish and all the active labels will be shown to the public. Default is `null`.
+    - `publish`: true or false. Default is false.
 
 ### 2. File Ingestion
 
-- Users upload files and assign labels from the predefined label tree.
+- Users upload files and assign labels from the predefined label tree, which means that the label attributes of a file contains an array of labelId (_key). No need to validate if the labelId is in the label collection. 
 - File metadata, including selected labels, is stored in the database.
 
 ### 3. Chunk Labelling
@@ -50,6 +52,78 @@ The labelling system enables precise categorization and retrieval of documents a
 
 ## Usage
 
+1. Get Label Information by Id (_key) ✅
+
+```bash
+curl -X GET "http://localhost:3000/api/labels/768202" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json"
+```
+
+2. Get All Labels or Filter by Level/Status/ParentId/Publish ✅
+
+```bash
+curl -X GET "http://localhost:3000/api/labels?" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json"
+```
+
+```bash
+curl -X GET "http://localhost:3000/api/labels?name=health&level=category&status=active&parentId=<parentId>&publish=true" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json"
+```
+
+3. Create a New Label ✅
+
+```bash
+curl -X POST "http://localhost:3000/api/labels" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json" \
+-d '{
+  "name": "Homeownership",
+  "level": "service",
+  "status": "active",
+  "publish": false,
+  "parentId": "772554"
+}'
+```
+
+4. Update a Label by ID ✅
+
+```bash
+curl -X PATCH "http://localhost:3000/api/labels/768264" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json" \
+-d '{
+  "level": "service",
+  "publish": true
+}'
+```
+
+5. Delete a Label by ID ✅
+
+```bash
+curl -X DELETE "http://localhost:3000/api/labels/768102" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json"
+```
+
+6. Delete a Category Label and Its Children ✅
+
+```bash
+curl -X DELETE "http://localhost:3000/api/labels/766794/with-children" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json"
+```
+
+7. Get Related Labels (Parent and Children) ✅
+
+```bash
+curl -X GET "http://localhost:3000/api/labels/767715/related" \
+-H "Authorization: Bearer <accessToken>" \
+-H "Content-Type: application/json"
+```
 
 
 ## Responsibilities

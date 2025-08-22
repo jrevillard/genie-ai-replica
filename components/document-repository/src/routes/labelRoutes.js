@@ -7,6 +7,16 @@ const router = express.Router();
 // apply authentication to all endpoints 
 router.use(authenticateToken);
 
+
+/**
+ * @route GET /api/labels/:labelId
+ * @desc Get a label by its _key
+ * @access Admin
+ * @param {string} labelId - Label _key
+ */
+router.get('/:labelId', authorizeRole(['Admin']), labelController.getLabelById);
+
+
 /**
  * @route GET /api/labels
  * @desc Get all labels or filter by level/status
@@ -14,7 +24,8 @@ router.use(authenticateToken);
  * @query {string} level - Filter by label level (category/service)
  * @query {string} status - Filter by label status (pending/active)
  */
-router.get('/labels', authorizeRole(['Admin']), labelController.getLabels);
+router.get('/', authorizeRole(['Admin']), labelController.getLabels);
+
 
 /**
  * @route POST /api/labels
@@ -25,7 +36,7 @@ router.get('/labels', authorizeRole(['Admin']), labelController.getLabels);
  * @body {string} status - Label status (pending/active)
  * @body {string} [publish_date] - Optional publish date
  */
-router.post('/labels', authorizeRole(['Admin']), labelController.createLabel);
+router.post('/', authorizeRole(['Admin']), labelController.createLabel);
 
 /**
  * @route PATCH /api/labels/:labelId
@@ -34,7 +45,7 @@ router.post('/labels', authorizeRole(['Admin']), labelController.createLabel);
  * @param {string} labelId - Label ID
  * @body {Object} updates - JSON object with fields to update
  */
-router.patch('/labels/:labelId', authorizeRole(['Admin']), labelController.updateLabel);
+router.patch('/:labelId', authorizeRole(['Admin']), labelController.updateLabel);
 
 /**
  * @route DELETE /api/labels/:labelId
@@ -42,7 +53,15 @@ router.patch('/labels/:labelId', authorizeRole(['Admin']), labelController.updat
  * @access Admin
  * @param {string} labelId - Label ID
  */
-router.delete('/labels/:labelId', authorizeRole(['Admin']), labelController.deleteLabel);
+router.delete('/:labelId', authorizeRole(['Admin']), labelController.deleteLabel);
+
+/**
+ * @route DELETE /api/labels/:labelId/with-children
+ * @desc Delete a category label and its children
+ * @access Admin
+ * @param {string} labelId - Label ID
+ */
+router.delete('/:labelId/with-children', authorizeRole(['Admin']), labelController.deleteCategoryWithChildren);
 
 /**
  * @route GET /api/labels/:labelId/related
@@ -50,6 +69,6 @@ router.delete('/labels/:labelId', authorizeRole(['Admin']), labelController.dele
  * @access Admin
  * @param {string} labelId - Label ID
  */
-router.get('/labels/:labelId/related', authorizeRole(['Admin']), labelController.getRelatedLabels);
+router.get('/:labelId/related', authorizeRole(['Admin']), labelController.getRelatedLabels);
 
 module.exports = router;

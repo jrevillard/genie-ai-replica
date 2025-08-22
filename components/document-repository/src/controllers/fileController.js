@@ -15,7 +15,7 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
 // Validation schemas
 const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
-  labels: Joi.array().items(Joi.string().max(50)).max(10).default(['general']),
+  labels: Joi.array().items(Joi.string().max(50)).max(10).default([]),
   crawlDate: Joi.date().optional(),
   sourceUrl: Joi.string().uri().optional()
 }); // Schema for file upload validation
@@ -1021,6 +1021,7 @@ class FileController {
       fileId: file.file_id,
       fileName: file.file_name,
       fileType: file.file_type,
+      fileLabels:file.labels, // 🏷️🏷️🏷️🏷️🏷️🏷️
       uploadDate: file.upload_date,
       fileBase64: base64String,
     });

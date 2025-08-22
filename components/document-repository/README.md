@@ -665,7 +665,7 @@ curl "http://localhost:3000/api/files/search?file_name=budget&file_type=text/htm
 ### Ingest a File
 
 ```bash
-curl -X POST "http://localhost:3000/api/files/1755357430227-0c636b1c/ingest" \
+curl -X POST "http://localhost:3000/api/files/1755083821792-8142c703/ingest" \
   -H "Authorization: Bearer <accessToken>"
 ```
 

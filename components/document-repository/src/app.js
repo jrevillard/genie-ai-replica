@@ -13,6 +13,7 @@ const { errorHandler } = require('./middlewares/errorHandler');
 
 // Import routes
 const fileRoutes = require('./routes/fileRoutes');
+const labelRoutes = require('./routes/labelRoutes'); // Import label routes
 
 // Import config
 const appConfig = require('./config/appConfig');
@@ -96,7 +97,7 @@ app.get('/api', (req, res) => {
   res.json({
     name: 'Document Repository API',
     version: '1.0.0',
-    description: 'Backend API for document repository with file upload, virus scanning, and search capabilities',
+    description: 'Backend API for document repository with file upload, virus scanning, label management, and search capabilities',
     endpoints: {
       files: '/api/files',
       health: '/health'
@@ -106,6 +107,7 @@ app.get('/api', (req, res) => {
       'Virus scanning',
       'File processing via dataprep service',
       'File search',
+      'Label management',
       'ArangoDB integration'
     ]
   });
@@ -113,6 +115,7 @@ app.get('/api', (req, res) => {
 
 // API routes
 app.use('/api/files', fileRoutes);
+app.use('/api/labels', labelRoutes); // Use label routes
 
 // Serve uploaded files (with security considerations)
 app.use('/uploads', express.static(uploadDir, {
@@ -129,19 +132,15 @@ app.use('/uploads', express.static(uploadDir, {
 
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
+  console.log('Registered routes:', app._router.stack);
+  
+  const availableRoutes = app._router.stack
+    .filter(r => r.route)
+    .map((r) => `${Object.keys(r.route.methods).join(', ').toUpperCase()} ${r.route.path}`);
   res.status(404).json({
     error: 'Route not found',
     message: `The requested route ${req.originalUrl} does not exist.`,
-    availableRoutes: [
-      'GET /health',
-      'GET /api',
-      'POST /api/files/upload',
-      'GET /api/files',
-      'GET /api/files/:id',
-      'DELETE /api/files/:id',
-      'POST /api/files/:id/process',
-      'GET /api/files/search'
-    ]
+    availableRoutes: availableRoutes
   });
 });
 

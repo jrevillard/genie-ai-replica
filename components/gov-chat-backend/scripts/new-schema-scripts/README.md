@@ -876,10 +876,10 @@ node create-translations.js ES
 
 ### Database Naming Convention
 
-  - `genie-ai-dev` - Development environment
-  - `genie-ai-staging` - Staging environment
-  - `genie-ai-production` - Production deployment
-  - `genie-ai-[client]` - Client-specific instances
+  - `<use-case>-dev` - Development environment
+  - `<use-case>-staging` - Staging environment
+  - `<use-case>-production` - Production deployment
+  - `<use-case>-[client]` - Client-specific instances
 
 ### Deployment Strategy
 

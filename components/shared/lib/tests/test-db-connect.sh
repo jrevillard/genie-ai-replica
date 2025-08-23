@@ -32,8 +32,8 @@ export ARCADE_PASSWORD="playwithdata" # <-- IMPORTANT: SET YOUR PASSWORD
 
 # --- CHOOSE THE DATABASE TO TEST ---
 # Change this value to 'arango' to test against ArangoDB
-export DB_TYPE="arcade"
-#export DB_TYPE="arango"
+#export DB_TYPE="arcade"
+export DB_TYPE="arango"
 
 
 # --- Run the Test ---

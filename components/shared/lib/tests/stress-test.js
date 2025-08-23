@@ -3,7 +3,7 @@ const { fork } = require('child_process');
 const path = require('path');
 
 // --- Configuration ---
-const NUM_WORKERS = 500; // Number of independent services to simulate
+const NUM_WORKERS = 50; // Number of independent services to simulate
 const POLL_INTERVAL_SECONDS = 5; // How often to check health
 const TEST_DURATION_SECONDS = 300; // How long the test should run
 

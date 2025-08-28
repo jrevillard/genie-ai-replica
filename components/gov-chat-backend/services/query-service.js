@@ -1,4 +1,5 @@
 require('dotenv').config();
+const axios = require('axios');
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
@@ -57,6 +58,125 @@ class QueryService {
   }
 
   /**
+   * Generates a mock OPEA response for testing purposes.
+   * @param {Object} queryData - The incoming query data.
+   * @returns {Object} A mock response object { response, metadata }.
+   */
+  getMockOpeaResponse(queryData) {
+    logger.info('[DEBUG] Generating mock OPEA response for test mode.');
+    const { categoryLabel, serviceLabels } = queryData.context;
+    const lastMessage = queryData.messages[queryData.messages.length - 1].content.toLowerCase();
+    
+    let response = `This is a general mock response. You asked about "${lastMessage}" within the context of "${categoryLabel}".`;
+    let metadata = {
+      source_documents: [],
+      confidence_score: Math.random() * (0.98 - 0.85) + 0.85,
+    };
+
+    // Main theme response based on categoryLabel
+    switch (categoryLabel) {
+        case "Identity & Civil Registration":
+            response = `This is a mock response regarding **Identity & Civil Registration**. This category covers services like applying for National IDs, passports, and birth certificates. What specific service do you need help with?`;
+            break;
+        case "Taxes & Revenue":
+            response = `This is a mock response for **Taxes & Revenue**. You can get assistance with filing returns, paying taxes, or getting a tax compliance certificate. Please specify what you need.`;
+            break;
+        case "Business & Trade":
+            response = `This is a mock response for **Business & Trade**. We can help with business registration, permits, and licenses. How can I assist you today?`;
+            break;
+        case "Healthcare & Social Services":
+            response = `This is a mock response for **Healthcare & Social Services**. This includes finding hospitals, information on national health insurance, and other social programs.`;
+            break;
+        case "Education & Learning":
+            response = `This is a mock response for **Education & Learning**. You can find information on public schools, higher education loans, and curriculum details here.`;
+            break;
+        case "Transportation & Mobility":
+            response = `This is a mock response for **Transport & Licenses**. This covers driver's licenses, vehicle registration, and public transport information.`;
+            break;
+        case "Housing & Urban Development":
+            response = `This is a mock response for **Housing & Urban Development**. Information about affordable housing programs, land rates, and building permits can be found here.`;
+            break;
+        case "Employment & Labor Services":
+            response = `This is a mock response for **Employment & Labor Services**. We can provide information on job searching, labor laws, and workplace safety.`;
+            break;
+        case "General":
+             response = `This is a general mock response as no specific category was selected. I can answer questions about a wide range of government services. What would you like to know?`;
+             break;
+    }
+
+    // Add documents based on serviceLabels
+    if (serviceLabels && serviceLabels.length > 0) {
+        serviceLabels.forEach(label => {
+            if (label.toLowerCase().includes('id')) {
+                metadata.source_documents.push({
+                    document_id: `doc_id_${Math.floor(Math.random() * 1000)}`,
+                    url: "http://example.com/docs/id_application_form.pdf",
+                    text: "Official form for National ID card application.",
+                    categoryLabel: categoryLabel || "Identity & Civil Registration",
+                    serviceLabels: [label],
+                    score: 0.95
+                });
+            }
+            if (label.toLowerCase().includes('birth registration')) {
+                metadata.source_documents.push({
+                    document_id: `doc_birth_${Math.floor(Math.random() * 1000)}`,
+                    url: "http://example.com/docs/birth_registration_guide",
+                    text: "A step-by-step guide on registering a birth.",
+                    categoryLabel: categoryLabel || "Identity & Civil Registration",
+                    serviceLabels: [label],
+                    score: 0.98
+                });
+            }
+            if (label.toLowerCase().includes('passport')) {
+                metadata.source_documents.push({
+                    document_id: `doc_passport_${Math.floor(Math.random() * 1000)}`,
+                    url: "http://example.com/docs/passport_application_ecitizen",
+                    text: "Link to the eCitizen portal for passport applications.",
+                    categoryLabel: categoryLabel || "Identity & Civil Registration",
+                    serviceLabels: [label],
+                    score: 0.93
+                });
+            }
+            if (label.toLowerCase().includes('tax')) {
+                metadata.source_documents.push({
+                    document_id: `doc_tax_${Math.floor(Math.random() * 1000)}`,
+                    url: "http://example.com/docs/tax_payment_options",
+                    text: "Information on various methods to pay your taxes.",
+                    categoryLabel: categoryLabel || "Taxes & Revenue",
+                    serviceLabels: [label],
+                    score: 0.91
+                });
+            }
+             if (label.toLowerCase().includes('business')) {
+                metadata.source_documents.push({
+                    document_id: `doc_biz_${Math.floor(Math.random() * 1000)}`,
+                    url: "http://example.com/docs/business_registration_requirements",
+                    text: "Checklist of requirements for starting a new business.",
+                    categoryLabel: categoryLabel || "Business & Trade",
+                    serviceLabels: [label],
+                    score: 0.96
+                });
+            }
+        });
+    }
+    
+    // If no specific documents were added but we have labels, add a generic one.
+    if (metadata.source_documents.length === 0 && serviceLabels && serviceLabels.length > 0) {
+        metadata.source_documents.push({
+            document_id: `doc_generic_${Math.floor(Math.random() * 1000)}`,
+            url: "http://example.com/docs/general_info",
+            text: `General information document related to your query about ${serviceLabels.join(', ')}.`,
+            categoryLabel: categoryLabel || "General",
+            serviceLabels: serviceLabels,
+            score: 0.85
+        });
+    }
+
+    return { response, metadata };
+  }
+
+
+  /**
    * Create a new query
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
@@ -64,58 +184,211 @@ class QueryService {
   async createQuery(queryData) {
     const startTime = Date.now();
     try {
-      logger.info('QueryService.create_query_start', { dataLength: JSON.stringify(queryData).length });
+      logger.info('QueryService.create_query_start');
+      logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      // Ensure minimum required data
+      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
+
+      logger.info('[DEBUG] Starting validation of incoming data...');
       let missingFields = [];
-      if (!queryData.userId) missingFields.push('userId');
-      if (!queryData.sessionId) missingFields.push('sessionId');
-      if (!queryData.text) missingFields.push('text');
-
-      if (missingFields.length > 0) {
-        logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
-        throw new Error('Missing required query data');
+      
+      if (!queryData.userId) {
+        logger.warn('[DEBUG] Validation FAILED: userId is missing.');
+        missingFields.push('userId');
+      } else {
+        logger.info(`[DEBUG] Validation PASSED: userId is present (${queryData.userId}).`);
       }
 
-      // Create query document
+      if (!queryData.sessionId) {
+        logger.warn('[DEBUG] Validation FAILED: sessionId is missing.');
+        missingFields.push('sessionId');
+      } else {
+        logger.info(`[DEBUG] Validation PASSED: sessionId is present (${queryData.sessionId}).`);
+      }
+
+      if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
+        logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty.');
+        missingFields.push('messages');
+      } else {
+        logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
+      }
+
+      if (!queryData.context) {
+        logger.warn('[DEBUG] Validation FAILED: context object is missing.');
+        missingFields.push('context');
+      } else {
+        logger.info('[DEBUG] Validation PASSED: context object is present.');
+        if (!Array.isArray(queryData.context.serviceLabels)) {
+          logger.warn('[DEBUG] Validation FAILED: context.serviceLabels is not an array.');
+          missingFields.push('context.serviceLabels');
+        } else {
+           logger.info(`[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`);
+        }
+      }
+
+      if (missingFields.length > 0) {
+        const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;
+        logger.error('QueryService.missing_required_data', { missingFields: missingFields.join(', ') });
+        throw new Error(errorMsg);
+      }
+      logger.info('[DEBUG] All validations passed successfully.');
+
       const basicQueryDoc = {
         userId: queryData.userId,
         sessionId: queryData.sessionId,
-        text: queryData.text,
         timestamp: queryData.timestamp || new Date().toISOString(),
-        isAnswered: queryData.isAnswered !== undefined ? queryData.isAnswered : false,
+        isAnswered: false, // Will be updated after response
         categoryId: queryData.categoryId || null,
         serviceId: queryData.serviceId || null,
-        responseTime: queryData.responseTime || 0
+        responseTime: 0, // Will be updated after response
+        contextOption: backendMode,
+        messages: queryData.messages,
+        context: queryData.context
       };
 
-      // Save query document
       logger.debug('QueryService.saving_query_document', { basicQueryDoc });
       const query = await this.queries.save(basicQueryDoc);
       const queryId = query._key;
       logger.info('QueryService.query_created', { queryId });
 
-      // Record query in analytics if service is set
+      let opeaResponseContent = null;
+      let opeaMetadata = null;
+      let opeaResponseTime = 0;
+      const opeaStartTime = Date.now();
+
+      // *** START: TEST MODE LOGIC ***
+      if (backendMode === 'test-mode') {
+        logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
+        const mockData = this.getMockOpeaResponse(queryData);
+        opeaResponseContent = mockData.response;
+        opeaMetadata = mockData.metadata;
+        opeaResponseTime = (Date.now() - opeaStartTime) + Math.floor(Math.random() * 200); // Simulate network delay
+        
+        logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
+        logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
+        logger.info(`[DEBUG] Mock Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
+
+        const updateData = {
+          response: opeaResponseContent,
+          responseTime: opeaResponseTime,
+          isAnswered: true,
+          metadata: opeaMetadata
+        };
+        await this.queries.update(queryId, updateData);
+
+      } else {
+        // *** EXISTING OPEA CALL LOGIC ***
+        const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+        const opeaPort = process.env.OPEA_PORT || '8888';
+        const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+
+        let opeaPayload;
+        if (backendMode === 'single-message') {
+          logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
+          const lastMessage = queryData.messages[queryData.messages.length - 1];
+          const queryText = lastMessage ? lastMessage.content : '';
+          
+          if (!queryText) {
+            throw new Error('Could not extract last message content for single-message mode.');
+          }
+
+          opeaPayload = {
+            messages: queryText,
+            stream: false
+          };
+        } else {
+          logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
+          opeaPayload = {
+            messages: queryData.messages,
+            context: {
+              categoryLabel: queryData.context.categoryLabel || '',
+              serviceLabels: queryData.context.serviceLabels,
+              language: queryData.context.language || 'EN'
+            },
+            stream: false
+          };
+        }
+
+        logger.info('==================== OPEA PAYLOAD START ====================');
+        logger.info(`[OPEA DEBUG] Sending payload to ${opeaUrl} for query ${queryId}:`);
+        logger.info(`[OPEA DEBUG] Payload Content:\n${JSON.stringify(opeaPayload, null, 2)}`);
+        logger.info('==================== OPEA PAYLOAD END ======================');
+        
+        try {
+          logger.info('QueryService.calling_opea_service', { queryId });
+          const opeaResponse = await axios.post(opeaUrl, opeaPayload);
+          opeaResponseTime = Date.now() - opeaStartTime;
+
+          logger.info('==================== OPEA RESPONSE START ====================');
+          logger.info(`[OPEA DEBUG] Received response from OPEA for query ${queryId}.`);
+          logger.info(`[OPEA DEBUG] Status: ${opeaResponse.status}`);
+          logger.info(`[OPEA DEBUG] Response Data:\n${JSON.stringify(opeaResponse.data, null, 2)}`);
+          logger.info('==================== OPEA RESPONSE END ======================');
+
+          if (backendMode === 'single-message') {
+            opeaResponseContent = opeaResponse.data.choices[0].message.content;
+          } else {
+            opeaResponseContent = opeaResponse.data.response;
+            opeaMetadata = opeaResponse.data.metadata;
+          }
+
+          const updateData = {
+            response: opeaResponseContent,
+            responseTime: opeaResponseTime,
+            isAnswered: true
+          };
+          if (backendMode.startsWith('conversation-with')) {
+            updateData.metadata = opeaMetadata;
+          }
+          await this.queries.update(queryId, updateData);
+        } catch (error) {
+          opeaResponseTime = Date.now() - opeaStartTime;
+          logger.error('==================== OPEA ERROR START ====================');
+          logger.error(`[OPEA DEBUG] OPEA service call failed for query ${queryId}.`);
+          logger.error(`[OPEA DEBUG] Error Message: ${error.message}`);
+          if (error.response) {
+            logger.error(`[OPEA DEBUG] Error Status: ${error.response.status}`);
+            logger.error(`[OPEA DEBUG] Error Response Data:\n${JSON.stringify(error.response.data, null, 2)}`);
+          } else if (error.request) {
+              logger.error('[OPEA DEBUG] No response received from OPEA service - possible network or timeout issue');
+          } else {
+              logger.error('[OPEA DEBUG] Error setting up OPEA service request - check configuration');
+          }
+          logger.error('==================== OPEA ERROR END ======================');
+          
+          await this.queries.update(queryId, {
+            response: 'Error: Unable to retrieve response from OPEA service',
+            responseTime: opeaResponseTime,
+            isAnswered: false
+          });
+        }
+      }
+      // *** END: TEST MODE LOGIC ***
+
+      // Record analytics if available
       if (this.analyticsService) {
         try {
-          await this.analyticsService.recordQuery({
+          logger.debug('QueryService.recording_analytics', { queryId });
+          const analyticsData = {
             _key: queryId,
             userId: queryData.userId,
             sessionId: queryData.sessionId,
-            text: queryData.text,
+            responseTime: opeaResponseTime,
+            isAnswered: opeaResponseContent !== null,
+            messages: queryData.messages,
+            context: queryData.context,
             categoryId: queryData.categoryId || null,
             serviceId: queryData.serviceId || null,
-            responseTime: queryData.responseTime || 0,
-            isAnswered: queryData.isAnswered || false
-          });
+          };
+          await this.analyticsService.recordQuery(analyticsData);
           logger.info('QueryService.analytics_recorded', { queryId });
         } catch (error) {
           logger.error('QueryService.record_analytics_failed', { queryId, error: error.message });
-          // Continue even if analytics recording fails
         }
       }
 
-      // Return the document
+      // Return the final query document
       const finalQuery = await this.queries.document(queryId);
       logger.info('QueryService.query_created_success', {
         queryId,
@@ -129,7 +402,6 @@ class QueryService {
         durationMs: Date.now() - startTime
       });
 
-      // Log collection properties for debugging if save fails
       if (error.message.includes('schema')) {
         try {
           const collProperties = await this.queries.properties();
@@ -259,11 +531,11 @@ class QueryService {
   }
 
   /**
- * Update the response time for a query
- * @param {String} queryId - Query ID
- * @param {Number} responseTime - Response time in milliseconds
- * @returns {Promise<Object>} The updated query
- */
+   * Update the response time for a query
+   * @param {String} queryId - Query ID
+   * @param {Number} responseTime - Response time in milliseconds
+   * @returns {Promise<Object>} The updated query
+   */
   async updateQueryResponseTime(queryId, responseTime) {
     const startTime = Date.now();
     try {
@@ -939,6 +1211,48 @@ class QueryService {
         stack: error.stack,
         durationMs: Date.now() - startTime
       });
+      throw error;
+    }
+  }
+
+  /**
+ * Mark a query as answered
+ * @param {String} queryId - Query ID
+ * @param {Number} responseTime - Response time in milliseconds
+ * @returns {Promise<Object>} Updated query
+ */
+  async markQueryAsAnswered(queryId, responseTime) {
+    const startTime = Date.now();
+    try {
+      logger.info('QueryService.mark_query_as_answered_start', { queryId, responseTime });
+
+      const updateData = {
+        isAnswered: true,
+        responseTime,
+        updatedAt: new Date().toISOString()
+      };
+
+      const updatedQuery = await this.queries.update(queryId, updateData);
+
+      logger.info('QueryService.query_marked_as_answered', {
+        queryId,
+        responseTime,
+        durationMs: Date.now() - startTime
+      });
+
+      return updatedQuery;
+    } catch (error) {
+      logger.error('QueryService.mark_query_as_answered_failed', {
+        queryId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+
+      if (error.name === 'ArangoError' && error.errorNum === 1202) {
+        throw new Error('Query not found');
+      }
+
       throw error;
     }
   }

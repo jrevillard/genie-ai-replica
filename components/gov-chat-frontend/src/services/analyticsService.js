@@ -10,7 +10,6 @@ class AnalyticsService {
    */
   constructor() {
     this.baseUrl = process.env.VUE_APP_API_URL || '/api';
-    this.latestUniqueUsers = 0; // Store the latest unique users count
     this.$i18n = null; // Will be set after initialization
   }
 
@@ -56,12 +55,7 @@ class AnalyticsService {
 
       console.log("Unique users direct response:", response.data);
 
-      if (response.data && typeof response.data.value === 'number') {
-        this.latestUniqueUsers = response.data.value;
-        return response.data.value;
-      }
-
-      return 0;
+      return typeof response.data.value === 'number' ? response.data.value : 0;
     } catch (error) {
       console.error('Error getting unique users count:', error);
       return 0;
@@ -151,12 +145,6 @@ class AnalyticsService {
         current: currentResponse.data,
         previous: previousResponse.data
       });
-
-      // For uniqueUsers specifically, update the analytics value in real-time
-      if (metric === 'uniqueUsers' && currentResponse.data && typeof currentResponse.data.value === 'number') {
-        // Force an update to the dashboard's uniqueUsers value
-        this.latestUniqueUsers = currentResponse.data.value;
-      }
 
       return {
         current: currentResponse.data.value,
@@ -450,24 +438,13 @@ class AnalyticsService {
     console.log("Dashboard data received:", data);
 
     // Extract the unique users count
-    let uniqueUsers = 0;
-    if (data.users && typeof data.users.activeCount === 'number') {
-      uniqueUsers = data.users.activeCount;
-      console.log("Unique users count from API:", uniqueUsers);
-    } else {
-      console.warn("No users.activeCount in dashboard data:", data.users);
-    }
-
-    // Use latestUniqueUsers if available and not zero (from getComparisonData)
-    if (this.latestUniqueUsers && this.latestUniqueUsers > 0) {
-      console.log("Using latest unique users count:", this.latestUniqueUsers);
-      uniqueUsers = this.latestUniqueUsers;
-    }
+    let uniqueUsers = data.users && typeof data.users.activeCount === 'number' ? data.users.activeCount : 0;
+    console.log("Unique users count from API:", uniqueUsers);
 
     // Transform the data from the API response structure
     return {
       totalQueries: data.queries?.total || 0,
-      uniqueUsers: uniqueUsers || 0,
+      uniqueUsers,
       averageResponseTime: data.queries?.avgResponseTime || 0,
       satisfactionRate: data.feedback?.positivePercentage || 0,
 
@@ -492,21 +469,25 @@ class AnalyticsService {
    */
   formatValue(value, format = 'number', locale = null) {
     if (value === null || value === undefined) return '—';
-
+  
     // Get current locale
     const currentLocale = locale || (this.$i18n ? this.$i18n.locale : 'en');
-
+  
     switch (format) {
       case 'number':
         return value.toLocaleString(currentLocale);
-
+  
       case 'time':
         // Format as seconds with 1 decimal place
         return `${value.toFixed(1)}s`;
-
+  
       case 'percent':
         return `${value.toFixed(1)}%`;
-
+  
+      case 'milliseconds':
+        // Format as whole milliseconds with 'ms' suffix
+        return `${Math.round(value)}ms`;
+  
       default:
         return String(value);
     }
@@ -676,12 +657,12 @@ class AnalyticsService {
   }
 
   /**
- * Get satisfaction gauge data
- * @param {string} period - Time period (daily, weekly, monthly, all-time)
- * @param {string} date - Selected date (YYYY-MM-DD)
- * @param {string} locale - Locale override (optional)
- * @returns {Promise<Object>} Satisfaction gauge data
- */
+   * Get satisfaction gauge data
+   * @param {string} period - Time period (daily, weekly, monthly, all-time)
+   * @param {string} date - Selected date (YYYY-MM-DD)
+   * @param {string} locale - Locale override (optional)
+   * @returns {Promise<Object>} Satisfaction gauge data
+   */
   async getSatisfactionGauge(period, date, locale = null) {
     try {
       // Calculate start and end dates based on period and date
@@ -726,10 +707,10 @@ class AnalyticsService {
   }
 
   /**
- * Record a query in analytics
- * @param {Object} queryDoc - Query document
- * @returns {Promise<Object>} The created analytics record
- */
+   * Record a query in analytics
+   * @param {Object} queryDoc - Query document
+   * @returns {Promise<Object>} The created analytics record
+   */
   async recordQuery(queryDoc) {
     try {
       const response = await httpService.post(`${this.baseUrl}/analytics/query`, queryDoc);

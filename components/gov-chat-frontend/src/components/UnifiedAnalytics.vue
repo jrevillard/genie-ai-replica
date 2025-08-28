@@ -107,7 +107,7 @@
             <div class="metric-card">
               <h3>{{ translate("analytics.metrics.avgResponseTime") }}</h3>
               <div class="metric-value">
-                {{ formatValue(analytics.averageResponseTime, "time") }}
+                {{ formatValue(analytics.averageResponseTime, "milliseconds") }}
               </div>
               <div
                 v-if="comparison.averageResponseTime"
@@ -701,6 +701,7 @@ export default {
       }, 500);
     },
 
+    // UnifiedAnalytics.vue
     async loadAnalytics() {
       if (!this.useDynamicData) {
         this.loadStaticData();
@@ -713,9 +714,16 @@ export default {
       try {
         console.log(`Loading analytics with locale: ${this.currentLocale}`);
 
+        const { startDate, endDate } = this.calculateTimeSeriesParams(); // Use same date range as time series
         const analyticsData = await analyticsService.getDashboardAnalytics(
           this.selectedPeriod,
           this.selectedDate,
+          this.currentLocale
+        );
+
+        const uniqueUsers = await analyticsService.getUniqueUsersCount(
+          startDate,
+          endDate,
           this.currentLocale
         );
 
@@ -723,10 +731,6 @@ export default {
           this.selectedPeriod,
           this.selectedDate,
           this.currentLocale
-        );
-        console.log(
-          "[UnifiedAnalytics] Gauge data received:",
-          JSON.stringify(gaugeData, null, 2)
         );
 
         const heatmapData = await analyticsService.getSatisfactionHeatmap(
@@ -737,6 +741,7 @@ export default {
 
         this.analytics = {
           ...analyticsData,
+          uniqueUsers, // Override with direct count
           satisfactionGaugeData: {
             currentValue: gaugeData?.currentValue || 0,
             historicalData: gaugeData?.historicalData || [],
@@ -747,13 +752,7 @@ export default {
           satisfactionHeatmapData: heatmapData || [],
         };
 
-        console.log(
-          "[UnifiedAnalytics] Analytics data updated:",
-          JSON.stringify(this.analytics.satisfactionGaugeData, null, 2)
-        );
-
         await this.loadComparisonData();
-
         await this.loadTimeSeriesData();
       } catch (error) {
         console.error("Error loading analytics data:", error);

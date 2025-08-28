@@ -1,6 +1,17 @@
 <template>
-  <div class="chat-folders" :data-theme="$route.meta.theme || 'light'">
-    <!-- Folders Section - Only show in second-level folders tab, hide in history tab when viewing All tab -->
+  <div class="chat-folders-content">
+    <div class="search-container">
+      <input
+        type="text"
+        class="search-box"
+        :placeholder="safeT('sidebar.searchConversations', 'Search conversations...')"
+        v-model="searchTerm"
+      />
+      <button class="search-btn" @click="handleSearch">
+        <i class="fas fa-search"></i>
+      </button>
+    </div>
+
     <template v-if="shouldShowFoldersSection">
       <div class="folders-header">
         <h3>{{ safeT("sidebar.folders", "Folders") }}</h3>
@@ -13,7 +24,6 @@
         </button>
       </div>
 
-      <!-- Folder List -->
       <div class="folders-list">
         <div
           v-for="folder in nonDefaultFolders"
@@ -54,13 +64,11 @@
       </div>
     </template>
 
-    <!-- Chats in Selected Folder or Tab -->
     <div class="folder-chats">
       <h3>{{ getTabTitle() }}</h3>
 
-      <!-- Debug information -->
       <div v-if="debug" class="debug-info">
-        <p>Current tab: {{ currentSecondLevelTab }}</p>
+        <p>Current tab: {{ activeTab }}</p>
         <p>Conversations: {{ conversations.length }}</p>
         <p>
           First conversation:
@@ -68,9 +76,8 @@
         </p>
       </div>
 
-      <!-- Add direct dump for starred tab -->
       <div
-        v-if="debug && currentSecondLevelTab === 'starred'"
+        v-if="debug && activeTab === 'starred'"
         class="debug-info"
       >
         <p>Direct dump of conversations:</p>
@@ -79,9 +86,8 @@
         </div>
       </div>
 
-      <!-- Add direct dump for archived tab -->
       <div
-        v-if="debug && currentSecondLevelTab === 'archived'"
+        v-if="debug && activeTab === 'archived'"
         class="debug-info"
       >
         <p>Direct dump of conversations:</p>
@@ -90,13 +96,11 @@
         </div>
       </div>
 
-      <!-- Loading state -->
       <div class="loading-state" v-if="isLoading">
         <i class="fas fa-spinner fa-spin"></i>
         <p>{{ safeT("sidebar.loadingChats", "Loading conversations...") }}</p>
       </div>
 
-      <!-- Error state -->
       <div class="error-state" v-else-if="errorMessage">
         <i class="fas fa-exclamation-circle"></i>
         <p>{{ errorMessage }}</p>
@@ -105,9 +109,8 @@
         </button>
       </div>
 
-      <!-- Folder instruction state (shown only in folders tab with no folder selected) -->
       <div
-        v-else-if="currentSecondLevelTab === 'folders' && !folderSelected"
+        v-else-if="activeTab === 'folders' && !folderSelected"
         class="empty-state"
       >
         <i class="fas fa-folder-open empty-state-icon"></i>
@@ -121,11 +124,10 @@
         </p>
       </div>
 
-      <!-- Conversations list - Show when a folder is selected in folders tab or when not in folders tab -->
       <div
         class="chats-list"
-        v-if="
-          (currentSecondLevelTab !== 'folders' || folderSelected) &&
+        v-else-if="
+          (activeTab !== 'folders' || folderSelected) &&
           filteredConversations.length > 0
         "
       >
@@ -225,33 +227,30 @@
         </div>
       </div>
 
-      <!-- Empty state - Only show when not in folders tab or when a folder is selected -->
       <div
         class="empty-state"
-        v-else-if="currentSecondLevelTab !== 'folders' || folderSelected"
+        v-else-if="activeTab !== 'folders' || folderSelected"
       >
         <p>{{ getEmptyStateMessage() }}</p>
-        <!-- Add appropriate icons for empty states based on tab -->
         <i
-          v-if="currentSecondLevelTab === 'starred'"
+          v-if="activeTab === 'starred'"
           class="fas fa-star empty-state-icon"
         ></i>
         <i
-          v-else-if="currentSecondLevelTab === 'archived'"
+          v-else-if="activeTab === 'archived'"
           class="fas fa-archive empty-state-icon"
         ></i>
         <i
-          v-else-if="currentSecondLevelTab === 'all'"
+          v-else-if="activeTab === 'all'"
           class="fas fa-comments empty-state-icon"
         ></i>
         <i
-          v-else-if="currentSecondLevelTab === 'folders'"
+          v-else-if="activeTab === 'folders'"
           class="fas fa-folder-open empty-state-icon"
         ></i>
       </div>
     </div>
 
-    <!-- Create Folder Dialog -->
     <modal-dialog
       v-if="showCreateFolderDialog"
       @close="showCreateFolderDialog = false"
@@ -289,7 +288,6 @@
       </template>
     </modal-dialog>
 
-    <!-- Edit Folder Dialog -->
     <modal-dialog
       v-if="showEditFolderDialog"
       @close="
@@ -336,7 +334,6 @@
       </template>
     </modal-dialog>
 
-    <!-- Delete Folder Confirmation -->
     <modal-dialog
       v-if="showDeleteFolderDialog"
       @close="
@@ -381,7 +378,6 @@
       </template>
     </modal-dialog>
 
-    <!-- Chat Action Menu -->
     <context-menu
       v-if="showChatMenu"
       :position="menuPosition"
@@ -402,7 +398,6 @@
       </button>
     </context-menu>
 
-    <!-- Move Chat Dialog -->
     <modal-dialog
       v-if="showMoveChatDialog"
       @close="showMoveChatDialog = false"
@@ -453,7 +448,6 @@
       </template>
     </modal-dialog>
 
-    <!-- Rename Chat Dialog -->
     <modal-dialog
       v-if="showRenameChatDialog"
       @close="showRenameChatDialog = false"
@@ -491,7 +485,6 @@
       </template>
     </modal-dialog>
 
-    <!-- Delete Chat Confirmation -->
     <modal-dialog
       v-if="showDeleteChatDialog"
       @close="showDeleteChatDialog = false"
@@ -542,10 +535,15 @@ export default {
     ModalDialog,
     ContextMenu,
   },
+  props: {
+    activeTab: {
+      type: String,
+      default: "all",
+    },
+  },
   data() {
     return {
       selectedFolderId: "default",
-      currentSecondLevelTab: "all",
       folderSelected: false,
       conversations: [],
       isLoading: false,
@@ -570,6 +568,7 @@ export default {
       categories: {},
       folderCounts: {},
       debug: false,
+      forceUpdateKey: 0,
     };
   },
 
@@ -581,8 +580,8 @@ export default {
       "getChatById",
     ]),
     themeClass() {
-      const theme = this.$route.meta.theme || 'light';
-      return theme === 'dark' ? 'context-menu-dark' : 'context-menu-light';
+      const theme = this.$route.meta.theme || "light";
+      return theme === "dark" ? "context-menu-dark" : "context-menu-light";
     },
     folders() {
       return this.getAllFolders;
@@ -593,7 +592,7 @@ export default {
     },
 
     shouldShowFoldersSection() {
-      return this.currentSecondLevelTab === "folders";
+      return this.activeTab === "folders";
     },
 
     selectedFolder() {
@@ -610,24 +609,32 @@ export default {
 
     filteredConversations() {
       console.log(
-        `Computing filteredConversations for tab: ${this.currentSecondLevelTab}, searchTerm: "${this.searchTerm}"`
+        `Computing filteredConversations for tab: ${this.activeTab}, searchTerm: "${this.searchTerm}"`
       );
       try {
         let filteredChats = [...this.conversations];
         console.log(`Initial filteredChats length: ${filteredChats.length}`);
-        if (this.currentSecondLevelTab === "starred") {
+        if (this.activeTab === "starred") {
           filteredChats = filteredChats.filter(
             (conv) => conv.isStarred === true
           );
           console.log(
             `After starred filtering: ${filteredChats.length} conversations`
           );
-        } else if (this.currentSecondLevelTab === "archived") {
+        } else if (this.activeTab === "archived") {
           filteredChats = filteredChats.filter(
             (conv) => conv.isArchived === true
           );
           console.log(
             `After archived filtering: ${filteredChats.length} conversations`
+          );
+        } else if (this.activeTab === "folders") {
+          // Exclude archived conversations in folders tab
+          filteredChats = filteredChats.filter(
+            (conv) => conv.isArchived !== true
+          );
+          console.log(
+            `After excluding archived in folders tab: ${filteredChats.length} conversations`
           );
         }
         if (this.searchTerm && this.searchTerm.trim() !== "") {
@@ -672,56 +679,62 @@ export default {
 
   created() {
     this.loadCurrentUser();
-    this.checkCurrentTab();
+    // Watch for locale changes to notify parent for tab title updates
+    if (this.$i18n) {
+      this.$watch(
+        () => this.$i18n.locale,
+        (newLocale) => {
+          console.log("[ChatFolders] Locale changed to:", newLocale);
+          this.currentLocale = newLocale;
+          this.forceUpdateKey++; // Track locale change
+          this.$emit("locale-changed", newLocale); // Notify parent to re-render tabs
+        }
+      );
+    }
+    // Listen for new conversation saved event
+    eventBus.$on("conversation-saved", this.handleConversationSaved);
   },
 
   mounted() {
     console.log("ChatFolders component mounted");
-
-    if (this.$parent && this.$parent.activeTab) {
-      console.log("Parent activeTab:", this.$parent.activeTab);
-    }
-
-    window.addEventListener("hashchange", this.checkCurrentTab);
-    this.checkActiveTabElements();
     this.connectExistingSearchField();
-    this.addTabClickListeners();
-
-    setTimeout(() => {
-      if (
-        this.currentSecondLevelTab === "folders" &&
-        this.selectedFolderId === "default"
-      ) {
-        this.loadFoldersFromBackend()
-          .then(() => {
-            this.selectFirstCustomFolder();
-          })
-          .catch((error) => {
-            console.error(
-              "Error loading folders during initialization:",
-              error
-            );
-          });
-      }
-    }, 500);
-
-    try {
-      if (window.httpService && window.httpService.getBaseUrl) {
-        console.log("API Base URL:", window.httpService.getBaseUrl());
-      }
-    } catch (error) {
-      console.warn("Could not determine API base URL:", error);
-    }
   },
 
   beforeDestroy() {
-    window.removeEventListener("hashchange", this.checkCurrentTab);
+    const searchInput = document.querySelector("input.search-box");
 
-    const searchInput = document.querySelector(
-      'input[placeholder="Search conversations..."]'
-    );
     if (searchInput) {
-      searchInput.removeEventListener("input", this.handleExistingSearchInput);
+      searchInput.removeEventListener("input", this.handleSearchInput);
+    }
+
+    // Clean up conversation-saved event listener
+    eventBus.$off("conversation-saved", this.handleConversationSaved);
+  },
+
+  watch: {
+    // Watch the prop to trigger conversation loading
+    activeTab: {
+      immediate: true,
+      handler(newTab) {
+        this.resetComponentState();
+        if (newTab === "folders") {
+          this.handleFoldersTabActivation();
+        } else {
+          this.loadConversationsForCurrentTab();
+        }
+      },
+    },
+    selectedFolderId(newFolderId) {
+      if (
+        newFolderId &&
+        this.activeTab === "folders" &&
+        newFolderId !== "default"
+      ) {
+        this.fetchFolderChats(newFolderId);
+      }
+    },
+    searchTerm() {
+      this.handleSearchInput();
     }
   },
 
@@ -735,18 +748,95 @@ export default {
       "moveChat",
     ]),
 
+    handleConversationSaved(conversationId) {
+      console.log(
+        `Received conversation-saved event for conversation ${conversationId}`
+      );
+      // Debug: Log Vuex state before processing
+      console.log("Vuex chats state:", this.$store.state.chatHistory.chats);
+      console.log(
+        "Vuex folderChats state for selected folder",
+        this.selectedFolderId,
+        ":",
+        this.$store.state.chatHistory.folderChats[this.selectedFolderId]
+      );
+      // Refresh only if the current tab is 'all' or 'folders'
+      if (this.activeTab === "all" || this.activeTab === "folders") {
+        console.log(
+          `Refreshing ${this.activeTab} tab due to new conversation`
+        );
+        this.loadConversationsForCurrentTab();
+        // If in folders tab and the conversation belongs to the selected folder, add it immediately
+        if (this.activeTab === "folders" && this.selectedFolderId) {
+          // Check if the conversation is in the selected folder's folderChats
+          const folderChats =
+            this.$store.state.chatHistory.folderChats[this.selectedFolderId] ||
+            [];
+          console.log(
+            `Checking if conversation ${conversationId} is in folderChats for ${this.selectedFolderId}:`,
+            folderChats
+          );
+          if (folderChats.includes(conversationId)) {
+            // Retry fetching chat with $nextTick to account for Vuex reactivity
+            this.$nextTick(() => {
+              const chat = this.getChatById(conversationId);
+              console.log(`Fetched chat ${conversationId} from Vuex:`, chat);
+              if (
+                chat &&
+                !this.conversations.find((c) => c._key === conversationId)
+              ) {
+                console.log(
+                  `Manually adding conversation ${conversationId} to conversations for folder ${this.selectedFolderId}`
+                );
+                // Create conversation object matching backend structure
+                const newConversation = {
+                  _key: chat.id,
+                  title: chat.title,
+                  preview: chat.preview,
+                  created: chat.createdAt,
+                  updated: chat.updatedAt,
+                  messageCount: chat.messageCount || 0,
+                  isStarred: false,
+                  isArchived: false,
+                  category: null,
+                  tags: [], // Assume no tags for new conversation
+                };
+                this.conversations = [...this.conversations, newConversation];
+                this.folderCounts[this.selectedFolderId] =
+                  (this.folderCounts[this.selectedFolderId] || 0) + 1;
+                console.log(
+                  `Updated conversations for folder ${this.selectedFolderId}: ${this.conversations.length} chats`
+                );
+              } else if (!chat) {
+                console.warn(
+                  `Conversation ${conversationId} still not found in Vuex store after $nextTick`
+                );
+              } else {
+                console.log(
+                  `Conversation ${conversationId} already in conversations`
+                );
+              }
+            });
+          } else {
+            console.log(
+              `Conversation ${conversationId} not in folder ${this.selectedFolderId}'s folderChats`
+            );
+          }
+        }
+      } else {
+        console.log(`No refresh needed for ${this.activeTab} tab`);
+      }
+    },
+
     resetComponentState() {
       console.log("Resetting component state");
-
       this.conversations = [];
       this.folderSelected = false;
       this.searchTerm = "";
       this.isLoading = false;
       this.errorMessage = null;
 
-      const searchInput = document.querySelector(
-        'input[placeholder="Search conversations..."]'
-      );
+      const searchInput = document.querySelector("input.search-box");
       if (searchInput) {
         searchInput.value = "";
       }
@@ -777,213 +867,6 @@ export default {
       this.showCreateFolderDialog = false;
     },
 
-    addTabClickListeners() {
-      console.log("Adding tab click listeners");
-
-      setTimeout(() => {
-        const allTabs = document.querySelectorAll(".chat-sub-tab");
-        allTabs.forEach((tab) => {
-          const newTab = tab.cloneNode(true);
-          tab.parentNode.replaceChild(newTab, tab);
-
-          const text = newTab.textContent.trim().toLowerCase();
-          newTab.addEventListener("click", (event) => {
-            console.log(`Tab clicked: ${text}`);
-            this.handleTabClick(text);
-          });
-        });
-
-        console.log(`Set up clean click handlers for ${allTabs.length} tabs`);
-      }, 500);
-    },
-
-    debugLogAllElements() {
-      console.log("DEBUG: Logging all potential tab elements");
-
-      const potentialTabContainers = document.querySelectorAll(
-        ".tabs, .tab-container, .nav-tabs, .nav"
-      );
-      console.log("Found potential tab containers:", potentialTabContainers);
-
-      const allLinks = document.querySelectorAll("a");
-      console.log("All links in document:", allLinks);
-
-      const allElements = document.querySelectorAll("*");
-      const possibleTabs = Array.from(allElements).filter((el) => {
-        const text = el.textContent.trim().toLowerCase();
-        return (
-          ["all", "starred", "archived", "folders"].includes(text) &&
-          !["script", "style"].includes(el.tagName.toLowerCase())
-        );
-      });
-
-      console.log("Elements containing tab text:", possibleTabs);
-    },
-
-    setUpManualTabClickHandlers() {
-      console.log("Setting up manual tab click handlers");
-
-      const allTabElements = document.querySelectorAll(
-        ".chat-sub-tab, [data-tab], li"
-      );
-
-      console.log(
-        `Found ${allTabElements.length} potential tab elements by class/attribute`
-      );
-
-      allTabElements.forEach((el) => {
-        const text = el.textContent.trim().toLowerCase();
-        console.log(
-          `Examining potential tab element: ${text}, classes: ${el.className}`
-        );
-
-        if (text === "all" || text.includes("all chats")) {
-          el.addEventListener("click", () => this.handleTabClick("all"));
-          console.log("Added click handler for All tab");
-        } else if (text === "starred") {
-          el.addEventListener("click", () => this.handleTabClick("starred"));
-          console.log("Added click handler for Starred tab");
-        } else if (text === "archived") {
-          el.addEventListener("click", () => this.handleTabClick("archived"));
-          console.log("Added click handler for Archived tab");
-        } else if (text === "folders") {
-          el.addEventListener("click", () => this.handleTabClick("folders"));
-          console.log("Added click handler for Folders tab");
-        }
-      });
-
-      const tabsContainer = document.querySelector(
-        ".tabs, .nav-tabs, .tab-container, .nav"
-      );
-      if (tabsContainer) {
-        console.log("Found tabs container:", tabsContainer);
-
-        const childTabs = Array.from(tabsContainer.children);
-        console.log(
-          `Found ${childTabs.length} child elements in tabs container`
-        );
-
-        childTabs.forEach((tab, index) => {
-          const text = tab.textContent.trim().toLowerCase();
-          console.log(`Tab container child ${index}: ${text}`);
-
-          tab.addEventListener("click", (event) => {
-            console.log(`Tab container child clicked: ${text}`);
-
-            if (index === 0 || text.includes("all")) {
-              this.handleTabClick("all");
-            } else if (index === 1 || text.includes("folder")) {
-              this.handleTabClick("folders");
-            } else if (index === 2 || text.includes("star")) {
-              this.handleTabClick("starred");
-            } else if (index === 3 || text.includes("archiv")) {
-              this.handleTabClick("archived");
-            }
-          });
-        });
-      }
-    },
-
-    handleTabClick(tabName) {
-      console.log(`Tab clicked handler triggered for: ${tabName}`);
-
-      if (this.currentSecondLevelTab !== tabName) {
-        console.log(
-          `Tab changed from ${this.currentSecondLevelTab} to ${tabName}`
-        );
-
-        this.resetComponentState();
-        this.currentSecondLevelTab = tabName;
-
-        if (tabName === "folders") {
-          console.log("Loading folders for Folders tab");
-          this.loadFoldersFromBackend();
-          this.ensureFoldersSectionVisible();
-        } else {
-          console.log(`Loading conversations for ${tabName} tab`);
-          setTimeout(() => {
-            this.isLoading = true;
-            this.loadConversationsForCurrentTab();
-          }, 50);
-        }
-
-        this.$nextTick(() => {
-          document.querySelectorAll(".chat-sub-tab").forEach((tab) => {
-            tab.classList.remove("active");
-          });
-
-          const clickedTab = Array.from(
-            document.querySelectorAll(".chat-sub-tab")
-          ).find((tab) => tab.textContent.trim().toLowerCase() === tabName);
-          if (clickedTab) {
-            clickedTab.classList.add("active");
-          }
-
-          this.ensureSearchFieldVisible();
-        });
-      }
-    },
-
-    async loadSpecificTabConversations(tabType) {
-      console.log(`Direct loading for ${tabType} tab with proper parameters`);
-      this.isLoading = true;
-      this.errorMessage = null;
-      this.conversations = [];
-
-      try {
-        if (!this.currentUser || !this.currentUser._key) {
-          this.errorMessage = "User data is missing";
-          this.isLoading = false;
-          return;
-        }
-
-        const options = { limit: 100, offset: 0 };
-        if (tabType === "archived") {
-          options.includeArchived = true;
-        }
-
-        console.log("Fetching conversations with options:", options);
-
-        const response = await chatHistoryService.getUserConversations(
-          this.currentUser._key,
-          options
-        );
-        console.log(
-          `Received ${
-            response.conversations?.length || 0
-          } conversations from server:`,
-          response
-        );
-
-        this.conversations = (response.conversations || []).map((conv) => {
-          return {
-            ...conv,
-            isStarred: conv.isStarred === true,
-            isArchived: conv.isArchived === true,
-            preview: this.generatePreview(conv),
-            messageCount: conv.messageCount || 0,
-          };
-        });
-
-        console.log(
-          `Loaded ${this.conversations.length} conversations for ${tabType} tab`
-        );
-
-        this.forceDisplayConversations();
-
-        if (Object.keys(this.categories).length === 0) {
-          this.loadCategories();
-        }
-      } catch (error) {
-        console.error(`Error loading ${tabType} conversations:`, error);
-        this.errorMessage = `Failed to load conversations: ${
-          error.message || "Unknown error"
-        }`;
-      } finally {
-        this.isLoading = false;
-      }
-    },
-
     handleFoldersTabActivation() {
       console.log("Folders tab activated, loading folders from backend");
       this.folderSelected = false;
@@ -995,98 +878,55 @@ export default {
       try {
         console.log("Loading current user data");
         this.currentUser = userService.getCurrentUser();
-
         if (!this.currentUser) {
           this.currentUser = await userService.getCurrentUserInfo();
         }
-
         console.log("Current user loaded:", this.currentUser);
-
-        if (
-          !this.currentUser ||
-          (!this.currentUser._key && !this.currentUser.id)
-        ) {
-          console.error(
-            "User data loaded but no valid ID found:",
-            this.currentUser
-          );
-          this.errorMessage = this.safeT(
-            "sidebar.errorLoadingUser",
-            "User data is incomplete. Please reload the page."
-          );
+        if (!this.currentUser || (!this.currentUser._key && !this.currentUser.id)) {
+          console.error("User data loaded but no valid ID found:", this.currentUser);
+          this.errorMessage = this.safeT("sidebar.errorLoadingUser", "User data is incomplete. Please reload the page.");
           return;
         }
-
         if (!this.currentUser._key && this.currentUser.id) {
           this.currentUser._key = this.currentUser.id;
           console.log("Using user.id as user._key:", this.currentUser._key);
         }
-
-        this.loadConversations();
+        this.loadConversationsForCurrentTab();
         this.loadFoldersFromBackend();
       } catch (error) {
         console.error("Error loading current user:", error);
-        this.errorMessage = this.safeT(
-          "sidebar.errorLoadingUser",
-          "Error loading user data"
-        );
+        this.errorMessage = this.safeT("sidebar.errorLoadingUser", "Error loading user data");
       }
     },
 
     forceDisplayConversations() {
       console.log("Force displaying conversations:", this.conversations.length);
-
       this.conversations = [...this.conversations];
-
       this.$nextTick(() => {
         console.log("UI update scheduled after conversations change");
       });
     },
 
     async loadConversations() {
-      console.log(
-        "Starting loadConversations for tab:",
-        this.currentSecondLevelTab
-      );
-      if (this.currentSecondLevelTab === "folders") {
-        console.log("⛔ BLOCKING conversation loading for Folders tab");
-        this.conversations = [];
-        this.isLoading = false;
-        return;
-      }
+      console.log("Starting loadConversations for tab:", this.activeTab);
       this.isLoading = true;
       this.errorMessage = null;
       try {
         if (!this.currentUser || !this.currentUser._key) {
-          console.error(
-            "Cannot load conversations: No current user or missing user ID"
-          );
-          this.errorMessage = this.safeT(
-            "sidebar.errorLoadingUser",
-            "User data is missing. Please reload the page."
-          );
+          console.error("Cannot load conversations: No current user or missing user ID");
+          this.errorMessage = this.safeT("sidebar.errorLoadingUser", "User data is missing. Please reload the page.");
           this.isLoading = false;
           return;
         }
         const userId = this.currentUser._key;
         console.log(`Loading conversations for user ID: ${userId}`);
         const options = { limit: 100, offset: 0 };
-        if (this.currentSecondLevelTab === "all") {
+        if (this.activeTab === "all") {
           options.includeArchived = false;
-        } else if (this.currentSecondLevelTab === "archived") {
-          options.includeArchived = true;
         }
         console.log("Fetching conversations with options:", options);
-        const response = await chatHistoryService.getUserConversations(
-          userId,
-          options
-        );
-        console.log(
-          `Received ${
-            response.conversations?.length || 0
-          } conversations from server:`,
-          response
-        );
+        const response = await chatHistoryService.getUserConversations(userId, options);
+        console.log(`Received ${response.conversations?.length || 0} conversations from server:`, response);
         this.conversations = (response.conversations || []).map((conv) => {
           return {
             ...conv,
@@ -1096,9 +936,7 @@ export default {
             messageCount: conv.messageCount || 0,
           };
         });
-        console.log(
-          `Set this.conversations to length: ${this.conversations.length}`
-        );
+        console.log(`Set this.conversations to length: ${this.conversations.length}`);
         this.$nextTick(() => {
           console.log("UI should now be updated with conversations");
         });
@@ -1107,42 +945,73 @@ export default {
         }
       } catch (error) {
         console.error("Error loading conversations:", error);
-        this.errorMessage = this.safeT(
-          "sidebar.errorLoadingConversations",
-          "Failed to load conversations. Please try again."
-        );
+        this.errorMessage = this.safeT("sidebar.errorLoadingConversations", "Failed to load conversations. Please try again.");
       } finally {
         this.isLoading = false;
       }
     },
 
     loadConversationsForCurrentTab() {
-      console.log(
-        `Loading conversations for current tab: ${this.currentSecondLevelTab}`
-      );
+      console.log(`Loading conversations for current tab: ${this.activeTab}`);
 
-      if (this.currentSecondLevelTab === "folders") {
+      if (this.activeTab === "folders") {
         if (this.folderSelected && this.selectedFolderId) {
-          console.log(
-            `Loading conversations for selected folder: ${this.selectedFolderId}`
-          );
+          console.log(`Loading conversations for selected folder: ${this.selectedFolderId}`);
           this.fetchFolderChats(this.selectedFolderId);
         } else {
-          console.log(
-            "No folder selected in Folders tab - clearing conversations"
-          );
+          console.log("No folder selected in Folders tab - clearing conversations");
           this.conversations = [];
           this.isLoading = false;
         }
         return;
       }
 
-      if (this.currentSecondLevelTab === "starred") {
+      if (this.activeTab === "starred") {
         this.loadSpecificTabConversations("starred");
-      } else if (this.currentSecondLevelTab === "archived") {
+      } else if (this.activeTab === "archived") {
         this.loadSpecificTabConversations("archived");
       } else {
         this.loadConversations();
+      }
+    },
+
+    async loadSpecificTabConversations(tabType) {
+      console.log(`Direct loading for ${tabType} tab with proper parameters`);
+      this.isLoading = true;
+      this.errorMessage = null;
+      this.conversations = [];
+      try {
+        if (!this.currentUser || !this.currentUser._key) {
+          this.errorMessage = "User data is missing";
+          this.isLoading = false;
+          return;
+        }
+        const options = { limit: 100, offset: 0 };
+        if (tabType === "archived") {
+          options.includeArchived = true;
+        }
+        console.log("Fetching conversations with options:", options);
+        const response = await chatHistoryService.getUserConversations(this.currentUser._key, options);
+        console.log(`Received ${response.conversations?.length || 0} conversations from server:`, response);
+        this.conversations = (response.conversations || []).map((conv) => {
+          return {
+            ...conv,
+            isStarred: conv.isStarred === true,
+            isArchived: conv.isArchived === true,
+            preview: this.generatePreview(conv),
+            messageCount: conv.messageCount || 0,
+          };
+        });
+        console.log(`Loaded ${this.conversations.length} conversations for ${tabType} tab`);
+        this.forceDisplayConversations();
+        if (Object.keys(this.categories).length === 0) {
+          this.loadCategories();
+        }
+      } catch (error) {
+        console.error(`Error loading ${tabType} conversations:`, error);
+        this.errorMessage = `Failed to load conversations: ${error.message || "Unknown error"}`;
+      } finally {
+        this.isLoading = false;
       }
     },
 
@@ -1185,17 +1054,11 @@ export default {
 
     async toggleStarred(conversation) {
       try {
-        console.log(
-          `Toggling starred status for conversation ${conversation._key}`
-        );
+        console.log(`Toggling starred status for conversation ${conversation._key}`);
         const newStatus = !conversation.isStarred;
         if (!this.currentUser || !this.currentUser._key) {
-          console.error(
-            "Cannot update conversation: No current user or missing user ID"
-          );
-          notificationService.error(
-            this.safeT("sidebar.errorNoUser", "User data is missing")
-          );
+          console.error("Cannot update conversation: No current user or missing user ID");
+          notificationService.error(this.safeT("sidebar.errorNoUser", "User data is missing"));
           return;
         }
         conversation.isStarred = newStatus;
@@ -1203,54 +1066,32 @@ export default {
           isStarred: newStatus,
           userId: this.currentUser._key,
         });
-        if (this.currentSecondLevelTab === "starred" && !newStatus) {
-          this.conversations = this.conversations.filter(
-            (conv) => conv._key !== conversation._key
-          );
+        if (this.activeTab === "starred" && !newStatus) {
+          this.conversations = this.conversations.filter((conv) => conv._key !== conversation._key);
           this.forceDisplayConversations();
-          // Update folderCounts for the current folder
           if (this.selectedFolderId) {
-            this.folderCounts[this.selectedFolderId] =
-              this.conversations.length;
+            this.folderCounts[this.selectedFolderId] = this.conversations.length;
           }
         }
         if (newStatus) {
-          notificationService.success(
-            this.safeT("sidebar.chatStarred", "Conversation has been starred")
-          );
+          notificationService.success(this.safeT("sidebar.chatStarred", "Conversation has been starred"));
         } else {
-          notificationService.info(
-            this.safeT(
-              "sidebar.chatUnstarred",
-              "Conversation has been unstarred"
-            )
-          );
+          notificationService.info(this.safeT("sidebar.chatUnstarred", "Conversation has been unstarred"));
         }
       } catch (error) {
         conversation.isStarred = !conversation.isStarred;
         console.error("Error toggling starred status:", error);
-        notificationService.error(
-          this.safeT(
-            "sidebar.errorUpdatingChat",
-            "Failed to update conversation"
-          )
-        );
+        notificationService.error(this.safeT("sidebar.errorUpdatingChat", "Failed to update conversation"));
       }
     },
 
     async toggleArchived(conversation, event) {
       try {
-        console.log(
-          `Toggling archived status for conversation ${conversation._key}`
-        );
+        console.log(`Toggling archived status for conversation ${conversation._key}`);
         const newStatus = event.target.checked;
         if (!this.currentUser || !this.currentUser._key) {
-          console.error(
-            "Cannot update conversation: No current user or missing user ID"
-          );
-          notificationService.error(
-            this.safeT("sidebar.errorNoUser", "User data is missing")
-          );
+          console.error("Cannot update conversation: No current user or missing user ID");
+          notificationService.error(this.safeT("sidebar.errorNoUser", "User data is missing"));
           return;
         }
         conversation.isArchived = newStatus;
@@ -1258,287 +1099,96 @@ export default {
           isArchived: newStatus,
           userId: this.currentUser._key,
         });
-        if (this.currentSecondLevelTab !== "archived" && newStatus) {
-          this.conversations = this.conversations.filter(
-            (conv) => conv._key !== conversation._key
-          );
+        if (this.activeTab !== "archived" && newStatus) {
+          this.conversations = this.conversations.filter((conv) => conv._key !== conversation._key);
           this.forceDisplayConversations();
-          // Update folderCounts for the current folder
           if (this.selectedFolderId) {
-            this.folderCounts[this.selectedFolderId] =
-              this.conversations.length;
+            this.folderCounts[this.selectedFolderId] = this.conversations.length;
           }
         }
-        if (this.currentSecondLevelTab === "archived" && !newStatus) {
-          this.conversations = this.conversations.filter(
-            (conv) => conv._key !== conversation._key
-          );
+        if (this.activeTab === "archived" && !newStatus) {
+          this.conversations = this.conversations.filter((conv) => conv._key !== conversation._key);
           this.forceDisplayConversations();
-          // Update folderCounts for the current folder
           if (this.selectedFolderId) {
-            this.folderCounts[this.selectedFolderId] =
-              this.conversations.length;
+            this.folderCounts[this.selectedFolderId] = this.conversations.length;
           }
         }
         if (newStatus) {
-          notificationService.success(
-            this.safeT("sidebar.chatArchived", "Conversation has been archived")
-          );
+          notificationService.success(this.safeT("sidebar.chatArchived", "Conversation has been archived"));
         } else {
-          notificationService.info(
-            this.safeT(
-              "sidebar.chatUnarchived",
-              "Conversation has been unarchived"
-            )
-          );
+          notificationService.info(this.safeT("sidebar.chatUnarchived", "Conversation has been unarchived"));
         }
       } catch (error) {
         conversation.isArchived = !conversation.isArchived;
         console.error("Error toggling archived status:", error);
-        notificationService.error(
-          this.safeT(
-            "sidebar.errorUpdatingChat",
-            "Failed to update conversation"
-          )
-        );
-      }
-    },
-
-    checkCurrentTab() {
-      const url = window.location.href;
-      const oldTab = this.currentSecondLevelTab;
-
-      let newTab = this.currentSecondLevelTab;
-
-      if (url.includes("/folders") || url.includes("#folders")) {
-        newTab = "folders";
-      } else if (
-        url.includes("/all") ||
-        url.includes("#all") ||
-        !url.includes("#")
-      ) {
-        newTab = "all";
-      } else if (url.includes("/starred") || url.includes("#starred")) {
-        newTab = "starred";
-      } else if (url.includes("/archived") || url.includes("#archived")) {
-        newTab = "archived";
-      }
-
-      console.log("Current second-level tab:", newTab);
-
-      if (oldTab !== newTab) {
-        console.log(
-          `Tab changed from ${oldTab} to ${newTab}, handling tab change`
-        );
-
-        this.resetComponentState();
-        this.currentSecondLevelTab = newTab;
-
-        if (newTab === "folders") {
-          this.loadFoldersFromBackend();
-          this.ensureFoldersSectionVisible();
-        } else {
-          setTimeout(() => {
-            this.loadConversationsForCurrentTab();
-          }, 50);
-        }
-      }
-    },
-
-    checkActiveTabElements() {
-      const activeElements = document.querySelectorAll(
-        ".active, .selected, .router-link-active, .router-link-exact-active"
-      );
-      const oldTab = this.currentSecondLevelTab;
-
-      activeElements.forEach((el) => {
-        const text = el.textContent.trim().toLowerCase();
-        console.log("Found active element:", text, el.tagName, el.className);
-
-        if (text === "folders") {
-          this.currentSecondLevelTab = "folders";
-        } else if (text === "all") {
-          this.currentSecondLevelTab = "all";
-        } else if (text === "starred") {
-          this.currentSecondLevelTab = "starred";
-        } else if (text === "archived") {
-          this.currentSecondLevelTab = "archived";
-        }
-      });
-
-      if (oldTab !== this.currentSecondLevelTab) {
-        console.log(
-          `Tab changed from ${oldTab} to ${this.currentSecondLevelTab} (detected from DOM), reloading conversations`
-        );
-        this.searchTerm = "";
-
-        const searchInput = document.querySelector(
-          'input[placeholder="Search conversations..."]'
-        );
-        if (searchInput) {
-          searchInput.value = "";
-        }
-
-        if (this.currentSecondLevelTab === "folders") {
-          this.folderSelected = false;
-          this.conversations = [];
-          this.loadFoldersFromBackend();
-        } else {
-          this.loadConversationsForCurrentTab();
-        }
-      }
-
-      if (oldTab !== "folders" && this.currentSecondLevelTab === "folders") {
-        this.selectFirstCustomFolder();
-        this.ensureFoldersSectionVisible();
+        notificationService.error(this.safeT("sidebar.errorUpdatingChat", "Failed to update conversation"));
       }
     },
 
     connectExistingSearchField() {
       console.log("Connecting to existing search field");
-
-      const searchInput = document.querySelector(
-        'input[placeholder="Search conversations..."]'
-      );
-
+      const searchInput = document.querySelector("input.search-box");
       if (searchInput) {
-        console.log("Found existing search input:", searchInput);
-
-        searchInput.addEventListener("input", this.handleExistingSearchInput);
-
-        const searchButton =
-          searchInput.parentElement.querySelector("button") ||
-          document.querySelector(".search-button");
-
-        if (searchButton) {
-          console.log("Found search button, adding click handler");
-          searchButton.addEventListener("click", () =>
-            this.handleExistingSearchInput({ target: searchInput })
-          );
-        }
+        console.log("[ChatFolders] Search input found:", searchInput);
+        searchInput.addEventListener("input", this.handleSearchInput);
       } else {
         console.warn("Could not find existing search input in DOM");
       }
     },
 
-    ensureSearchFieldVisible() {
-      const searchInput = document.querySelector(
-        'input[placeholder="Search conversations..."]'
-      );
-
-      if (!searchInput) {
-        console.log("Search field not found");
-      } else {
-        searchInput.addEventListener("input", this.handleExistingSearchInput);
-
-        const searchContainer =
-          searchInput.closest(".search-container") || searchInput.parentElement;
-
-        if (searchContainer) {
-          searchContainer.style.display = "flex";
-        }
-      }
+    handleSearchInput() {
+      clearTimeout(this.searchDebounceTimeout);
+      this.searchDebounceTimeout = setTimeout(() => {
+        console.log(`Search term changed to: ${this.searchTerm}, reloading conversations`);
+        this.loadConversationsForCurrentTab();
+      }, 300);
     },
 
-    handleExistingSearchInput(event) {
-      console.log("Search input changed");
-      this.searchTerm = event.target.value;
-
-      console.log(
-        `Search term changed to: ${this.searchTerm}, reloading conversations`
-      );
-
+    handleSearch() {
       this.loadConversationsForCurrentTab();
-
-      this.$nextTick(() => {
-        console.log("UI update scheduled after search term change");
-      });
     },
 
     getTabTitle() {
-      if (this.currentSecondLevelTab === "all") {
-        return this.safeT("sidebar.allChats", "All Chats");
-      } else if (this.currentSecondLevelTab === "starred") {
-        return this.safeT("sidebar.starredChats", "Starred");
-      } else if (this.currentSecondLevelTab === "archived") {
-        return this.safeT("sidebar.archivedChats", "Archived");
-      } else if (this.currentSecondLevelTab === "folders") {
-        return this.folderSelected && this.selectedFolder
-          ? this.selectedFolder.name
-          : this.safeT("sidebar.folders", "Folders");
+      switch (this.activeTab) {
+        case "all":
+          return this.safeT("sidebar.allChats", "All Chats");
+        case "folders":
+          return this.folderSelected && this.selectedFolder
+            ? this.selectedFolder.name
+            : this.safeT("sidebar.tab.folders", "Folders");
+        case "starred":
+          return this.safeT("sidebar.tab.starred", "Starred");
+        case "archived":
+          return this.safeT("sidebar.tab.archived", "Archived");
+        default:
+          return this.safeT("sidebar.chats", "Chats");
       }
-
-      return this.safeT("sidebar.chats", "Chats");
     },
 
     getEmptyStateMessage() {
       if (this.searchTerm) {
-        return this.safeT(
-          "sidebar.noSearchResults",
-          `No conversations found for "${this.searchTerm}"`
-        );
+        return this.safeT("sidebar.noSearchResults", `No conversations found for "${this.searchTerm}"`);
       }
-
-      if (this.currentSecondLevelTab === "all") {
-        return this.safeT(
-          "sidebar.noChats",
-          "No conversations found. Start a new conversation!"
-        );
-      } else if (this.currentSecondLevelTab === "starred") {
-        return this.safeT(
-          "sidebar.noStarredChats",
-          "No starred conversations yet. Star a conversation to add it here."
-        );
-      } else if (this.currentSecondLevelTab === "archived") {
-        return this.safeT(
-          "sidebar.noArchivedChats",
-          "No archived conversations yet."
-        );
-      } else if (this.currentSecondLevelTab === "folders") {
+      if (this.activeTab === "all") {
+        return this.safeT("sidebar.noChats", "No conversations found. Start a new conversation!");
+      } else if (this.activeTab === "starred") {
+        return this.safeT("sidebar.noStarredChats", "No starred conversations yet. Star a conversation to add it here.");
+      } else if (this.activeTab === "archived") {
+        return this.safeT("sidebar.noArchivedChats", "No archived conversations yet.");
+      } else if (this.activeTab === "folders") {
         return this.folderSelected
-          ? this.safeT(
-              "sidebar.emptyFolder",
-              "This folder is empty. Move conversations here from the chat menu."
-            )
-          : this.safeT(
-              "sidebar.selectFolderInstruction",
-              "Select a folder to view its conversations"
-            );
+          ? this.safeT("sidebar.emptyFolder", "This folder is empty. Move conversations here from the chat menu.")
+          : this.safeT("sidebar.selectFolderInstruction", "Select a folder to view its conversations");
       }
-
       return this.safeT("sidebar.noChats", "No conversations found.");
-    },
-
-    ensureFoldersSectionVisible() {
-      if (this.currentSecondLevelTab === "folders") {
-        this.$nextTick(() => {
-          console.log("Ensuring folders section is visible");
-
-          const foldersHeader = document.querySelector(".folders-header");
-          if (foldersHeader) {
-            foldersHeader.style.display = "flex";
-            console.log("Made folders header visible");
-          }
-
-          const foldersList = document.querySelector(".folders-list");
-          if (foldersList) {
-            foldersList.style.display = "block";
-            console.log("Made folders list visible");
-          }
-
-          this.$forceUpdate();
-        });
-      }
     },
 
     selectFirstCustomFolder() {
       console.log("Attempting to select first custom folder");
-
       if (!this.nonDefaultFolders || this.nonDefaultFolders.length === 0) {
         console.log("No custom folders available to select");
         return;
       }
-
       const customFolders = this.nonDefaultFolders;
       if (customFolders.length > 0) {
         const firstFolder = customFolders[0];
@@ -1591,12 +1241,8 @@ export default {
       }
       try {
         if (!this.currentUser || !this.currentUser._key) {
-          console.error(
-            "Cannot create folder: No current user or missing user ID"
-          );
-          notificationService.error(
-            this.safeT("sidebar.errorNoUser", "User data is missing")
-          );
+          console.error("Cannot create folder: No current user or missing user ID");
+          notificationService.error(this.safeT("sidebar.errorNoUser", "User data is missing"));
           return;
         }
         const folderData = {
@@ -1607,16 +1253,12 @@ export default {
         const result = await chatHistoryService.createFolder(folderData);
         console.log("Folder created successfully:", result);
         this.folderCounts[result._key] = 0;
-        notificationService.success(
-          this.safeT("sidebar.folderCreated", "Folder created successfully")
-        );
+        notificationService.success(this.safeT("sidebar.folderCreated", "Folder created successfully"));
         this.showCreateFolderDialog = false;
         this.loadFoldersFromBackend();
       } catch (error) {
         console.error("Error creating folder:", error);
-        notificationService.error(
-          this.safeT("sidebar.errorCreatingFolder", "Failed to create folder")
-        );
+        notificationService.error(this.safeT("sidebar.errorCreatingFolder", "Failed to create folder"));
       }
     },
 
@@ -1624,25 +1266,13 @@ export default {
       try {
         console.log("Loading folders from backend");
         if (!this.currentUser || !this.currentUser._key) {
-          console.error(
-            "Cannot load folders: No current user or missing user ID"
-          );
-          this.errorMessage = this.safeT(
-            "sidebar.errorNoUser",
-            "User data is missing"
-          );
+          console.error("Cannot load folders: No current user or missing user ID");
+          this.errorMessage = this.safeT("sidebar.errorNoUser", "User data is missing");
           return [];
         }
-        const response = await chatHistoryService.getUserFolders(
-          this.currentUser._key
-        );
-        console.log(
-          "Raw getUserFolders response:",
-          JSON.stringify(response, null, 2)
-        );
-        let foldersArray = Array.isArray(response)
-          ? response
-          : response?.folders || [];
+        const response = await chatHistoryService.getUserFolders(this.currentUser._key);
+        console.log("Raw getUserFolders response:", JSON.stringify(response, null, 2));
+        let foldersArray = Array.isArray(response) ? response : response?.folders || [];
         console.log(`Received ${foldersArray.length} folders:`, foldersArray);
         const processedFolders = foldersArray
           .filter((folder) => folder && (folder._key || folder.id))
@@ -1663,39 +1293,24 @@ export default {
         };
         this.folderCounts[defaultFolder.id] = 0;
         const allFolders = [defaultFolder, ...processedFolders];
-        console.log(
-          "All folders (with default) before dispatch:",
-          JSON.stringify(allFolders, null, 2)
-        );
+        console.log("All folders (with default) before dispatch:", JSON.stringify(allFolders, null, 2));
         await this.$store.dispatch("chatHistory/setFolders", allFolders);
         const stateFolders = [...this.$store.state.chatHistory.folders];
-        console.log(
-          "Vuex state.chatHistory.folders after dispatch:",
-          stateFolders
-        );
-        const getterFolders = [
-          ...this.$store.getters["chatHistory/getAllFolders"],
-        ];
+        console.log("Vuex state.chatHistory.folders after dispatch:", stateFolders);
+        const getterFolders = [...this.$store.getters["chatHistory/getAllFolders"]];
         console.log("Vuex getter getAllFolders after dispatch:", getterFolders);
         const nonDefaultFoldersDebug = [...this.nonDefaultFolders];
-        console.log(
-          "Computed nonDefaultFolders after dispatch:",
-          nonDefaultFoldersDebug
-        );
+        console.log("Computed nonDefaultFolders after dispatch:", nonDefaultFoldersDebug);
         for (const folder of processedFolders) {
           await this.fetchFolderChats(folder.id, false);
         }
-        if (this.currentSecondLevelTab === "folders") {
-          this.ensureFoldersSectionVisible();
+        if (this.activeTab === "folders") {
           this.selectFirstCustomFolder();
         }
         return processedFolders;
       } catch (error) {
         console.error("Error loading folders from backend:", error);
-        this.errorMessage = this.safeT(
-          "sidebar.errorLoadingFolders",
-          "Failed to load folders"
-        );
+        this.errorMessage = this.safeT("sidebar.errorLoadingFolders", "Failed to load folders");
         notificationService.error(this.errorMessage);
         return [];
       }
@@ -1706,31 +1321,20 @@ export default {
         console.log("No folder selected or empty name, not updating");
         return;
       }
-
       try {
-        console.log(
-          `Updating folder ${this.editingFolder.id} with name: ${this.editingFolderName}`
-        );
-
+        console.log(`Updating folder ${this.editingFolder.id} with name: ${this.editingFolderName}`);
         await chatHistoryService.updateFolder(this.editingFolder.id, {
           name: this.editingFolderName.trim(),
           userId: this.currentUser._key,
         });
-
         await this.loadFoldersFromBackend();
-
-        notificationService.success(
-          this.safeT("sidebar.folderUpdated", "Folder updated successfully")
-        );
-
+        notificationService.success(this.safeT("sidebar.folderUpdated", "Folder updated successfully"));
         this.editingFolder = null;
         this.editingFolderName = "";
         this.showEditFolderDialog = false;
       } catch (error) {
         console.error(`Error updating folder ${this.editingFolder.id}:`, error);
-        notificationService.error(
-          this.safeT("sidebar.errorUpdatingFolder", "Failed to update folder")
-        );
+        notificationService.error(this.safeT("sidebar.errorUpdatingFolder", "Failed to update folder"));
       }
     },
 
@@ -1739,46 +1343,26 @@ export default {
         console.log("No folder selected, not deleting");
         return;
       }
-
       try {
-        console.log(`Deleting folder ${this.editingFolder.id}`);
         this.isLoading = true;
-
         if (!this.currentUser || !this.currentUser._key) {
-          console.error(
-            "Cannot delete folder: No current user or missing user ID"
-          );
-          notificationService.error(
-            this.safeT("sidebar.errorNoUser", "User data is missing")
-          );
+          console.error("Cannot delete folder: No current user or missing user ID");
+          notificationService.error(this.safeT("sidebar.errorNoUser", "User data is missing"));
           return;
         }
-
-        await chatHistoryService.deleteFolder(
-          this.editingFolder.id,
-          this.currentUser._key,
-          false
-        );
-
+        await chatHistoryService.deleteFolder(this.editingFolder.id, this.currentUser._key, false);
         await this.loadFoldersFromBackend();
-
         if (this.selectedFolderId === this.editingFolder.id) {
           this.selectedFolderId = "default";
           this.folderSelected = false;
           this.conversations = [];
         }
-
-        notificationService.success(
-          this.safeT("sidebar.folderDeleted", "Folder deleted successfully")
-        );
-
+        notificationService.success(this.safeT("sidebar.folderDeleted", "Folder deleted successfully"));
         this.editingFolder = null;
         this.showDeleteFolderDialog = false;
       } catch (error) {
         console.error(`Error deleting folder ${this.editingFolder.id}:`, error);
-        notificationService.error(
-          this.safeT("sidebar.errorDeletingFolder", "Failed to delete folder")
-        );
+        notificationService.error(this.safeT("sidebar.errorDeletingFolder", "Failed to delete folder"));
       } finally {
         this.isLoading = false;
       }
@@ -1792,23 +1376,15 @@ export default {
     showChatActionsMenu(chat, event) {
       console.log(`Showing actions menu for chat ${chat._key}`);
       this.activeChat = chat;
-
-      // Only update folder selection if not in Folders tab
-      if (this.currentSecondLevelTab !== "folders") {
+      if (this.activeTab !== "folders") {
         const folderChats = this.$store.state.chatHistory.folderChats;
         let foundFolderId = null;
-
         for (const folderId in folderChats) {
-          if (
-            folderId !== "default" &&
-            folderChats[folderId] &&
-            folderChats[folderId].includes(chat._key)
-          ) {
+          if (folderId !== "default" && folderChats[folderId] && folderChats[folderId].includes(chat._key)) {
             foundFolderId = folderId;
             break;
           }
         }
-
         if (foundFolderId) {
           this.selectedFolderId = foundFolderId;
           this.folderSelected = true;
@@ -1817,28 +1393,21 @@ export default {
           this.folderSelected = false;
         }
       }
-
       const rect = event.target.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-
       const menuWidth = 180;
-
       this.menuPosition = {
         x: Math.max(10, rect.left - menuWidth + 20),
         y: rect.bottom + 5,
       };
-
       this.showChatMenu = true;
-
       setTimeout(() => {
         const menu = document.querySelector(".context-menu");
         if (menu) {
           const menuRect = menu.getBoundingClientRect();
-
           if (menuRect.right > viewportWidth - 10) {
             this.menuPosition.x = viewportWidth - menuWidth - 10;
           }
-
           const viewportHeight = window.innerHeight;
           if (menuRect.bottom > viewportHeight - 10) {
             this.menuPosition.y = rect.top - menuRect.height - 5;
@@ -1860,41 +1429,25 @@ export default {
       if (!this.activeChat || !this.newChatTitle.trim()) {
         return;
       }
-
-      console.log(
-        `Renaming chat ${this.activeChat._key} to "${this.newChatTitle}"`
-      );
-
+      console.log(`Renaming chat ${this.activeChat._key} to "${this.newChatTitle}"`);
       try {
         const originalTitle = this.activeChat.title;
         this.activeChat.title = this.newChatTitle.trim();
-
         await chatHistoryService.updateConversation(this.activeChat._key, {
           title: this.newChatTitle.trim(),
           userId: this.currentUser._key,
         });
-
         this.updateChat({
           chatId: this.activeChat._key,
           title: this.newChatTitle.trim(),
         });
-
         this.showRenameChatDialog = false;
         this.showChatMenu = false;
-
-        notificationService.success(
-          this.safeT("sidebar.chatRenamed", "Conversation renamed successfully")
-        );
+        notificationService.success(this.safeT("sidebar.chatRenamed", "Conversation renamed successfully"));
       } catch (error) {
         this.activeChat.title = originalTitle;
-
         console.error("Error renaming chat:", error);
-        notificationService.error(
-          this.safeT(
-            "sidebar.errorRenamingChat",
-            "Failed to rename conversation"
-          )
-        );
+        notificationService.error(this.safeT("sidebar.errorRenamingChat", "Failed to rename conversation"));
       }
     },
 
@@ -1912,113 +1465,76 @@ export default {
       }
       if (!this.currentUser || !this.currentUser._key) {
         console.error("Cannot delete chat: No current user or missing user ID");
-        notificationService.error(
-          this.safeT("sidebar.errorNoUser", "User data is missing")
-        );
+        notificationService.error(this.safeT("sidebar.errorNoUser", "User data is missing"));
         return;
       }
       console.log(`Deleting chat ${this.activeChat._key}`);
       try {
-        await chatHistoryService.deleteConversation(
-          this.activeChat._key,
-          this.currentUser._key
-        );
-        this.conversations = this.conversations.filter(
-          (c) => c._key !== this.activeChat._key
-        );
+        await chatHistoryService.deleteConversation(this.activeChat._key, this.currentUser._key);
+        this.conversations = this.conversations.filter((c) => c._key !== this.activeChat._key);
         this.deleteChat(this.activeChat._key);
-        if (
-          this.selectedFolderId &&
-          this.folderCounts[this.selectedFolderId] !== undefined
-        ) {
+        if (this.selectedFolderId && this.folderCounts[this.selectedFolderId] !== undefined) {
           this.folderCounts[this.selectedFolderId] = this.conversations.length;
         }
         this.showDeleteChatDialog = false;
         eventBus.$emit("chat-deleted", this.activeChat._key);
         this.activeChat = null;
         this.showChatMenu = false;
-        notificationService.success(
-          this.safeT("sidebar.chatDeleted", "Conversation deleted successfully")
-        );
+        notificationService.success(this.safeT("sidebar.chatDeleted", "Conversation deleted successfully"));
         this.loadConversationsForCurrentTab();
       } catch (error) {
         console.error("Error deleting chat:", error);
-        notificationService.error(
-          this.safeT(
-            "sidebar.errorDeletingChat",
-            "Failed to delete conversation"
-          )
-        );
+        notificationService.error(this.safeT("sidebar.errorDeletingChat", "Failed to delete conversation"));
       }
     },
 
     async handleMoveChat() {
-      if (!this.activeChat) {
+      if (!this.activeChat || !this.destinationFolderId) {
+        console.error("No active chat or destination folder selected");
         return;
       }
       if (!this.currentUser || !this.currentUser._key) {
         console.error("Cannot move chat: No current user or missing user ID");
-        notificationService.error(
-          this.safeT("sidebar.errorNoUser", "User data is missing")
-        );
+        notificationService.error(this.safeT("sidebar.errorNoUser", "User data is missing"));
         return;
       }
       const isRemovingFromFolder = this.destinationFolderId === "no_folder";
-      console.log(
-        `${isRemovingFromFolder ? "Removing" : "Moving"} chat ${
-          this.activeChat._key
-        } ${
-          isRemovingFromFolder
-            ? "from all custom folders"
-            : `to folder ${this.destinationFolderId}`
-        }`
-      );
+      console.log(`${isRemovingFromFolder ? "Removing" : "Moving"} chat ${this.activeChat._key} ${
+          isRemovingFromFolder ? "from all custom folders" : `to folder ${this.destinationFolderId}`
+        }`);
       try {
         if (isRemovingFromFolder) {
-          await chatHistoryService.removeConversationFromFolder(
-            this.activeChat._key,
-            this.selectedFolderId,
-            this.currentUser._key
-          );
-          if (
-            this.$store.state.chatHistory.folderChats[this.selectedFolderId]
-          ) {
+          await chatHistoryService.removeConversationFromFolder(this.activeChat._key, this.selectedFolderId, this.currentUser._key);
+          if (this.$store.state.chatHistory.folderChats[this.selectedFolderId]) {
             await this.$store.dispatch("chatHistory/removeChatFromFolder", {
               chatId: this.activeChat._key,
               folderId: this.selectedFolderId,
             });
           }
-          const sourceCount =
-            (this.folderCounts[this.selectedFolderId] || 1) - 1;
+          const sourceCount = (this.folderCounts[this.selectedFolderId] || 1) - 1;
           this.folderCounts[this.selectedFolderId] = Math.max(0, sourceCount);
           this.selectedFolderId = "default";
           this.folderSelected = false;
         } else {
-          await chatHistoryService.moveConversation(
-            this.activeChat._key,
-            this.selectedFolderId,
-            this.destinationFolderId,
-            this.currentUser._key
-          );
+          await chatHistoryService.moveConversation(this.activeChat._key, this.selectedFolderId, this.destinationFolderId, this.currentUser._key);
           await this.moveChat({
             chatId: this.activeChat._key,
             fromFolderId: this.selectedFolderId,
             toFolderId: this.destinationFolderId,
           });
-          const sourceCount =
-            (this.folderCounts[this.selectedFolderId] || 1) - 1;
-          const destCount =
-            (this.folderCounts[this.destinationFolderId] || 0) + 1;
+          const sourceCount = (this.folderCounts[this.selectedFolderId] || 1) - 1;
+          const destCount = (this.folderCounts[this.destinationFolderId] || 0) + 1;
           this.folderCounts[this.selectedFolderId] = Math.max(0, sourceCount);
           this.folderCounts[this.destinationFolderId] = destCount;
-          this.selectedFolderId = this.destinationFolderId;
-          this.folderSelected = true;
+          if (sourceCount <= 0 && this.selectedFolderId !== "default") {
+            this.selectedFolderId = this.nonDefaultFolders.length > 0 ? this.nonDefaultFolders[0].id : "default";
+            this.folderSelected = this.selectedFolderId !== "default";
+          } else {
+            this.selectedFolderId = this.destinationFolderId;
+            this.folderSelected = true;
+          }
         }
-        if (
-          !this.$store.state.chatHistory.folderChats.default.includes(
-            this.activeChat._key
-          )
-        ) {
+        if (!this.$store.state.chatHistory.folderChats.default.includes(this.activeChat._key)) {
           await this.$store.dispatch("chatHistory/addChatToFolder", {
             chatId: this.activeChat._key,
             folderId: "default",
@@ -2027,55 +1543,31 @@ export default {
         this.showMoveChatDialog = false;
         this.destinationFolderId = null;
         this.showChatMenu = false;
-        notificationService.success(
-          isRemovingFromFolder
-            ? this.safeT(
-                "sidebar.chatRemovedFromFolders",
-                "Conversation removed from folder"
-              )
-            : this.safeT("sidebar.chatMoved", "Conversation moved successfully")
-        );
+        notificationService.success(isRemovingFromFolder ? this.safeT("sidebar.chatRemovedFromFolders", "Conversation removed from folder") : this.safeT("sidebar.chatMoved", "Conversation moved successfully"));
         this.loadConversationsForCurrentTab();
-        if (this.currentSecondLevelTab === "folders") {
-          if (isRemovingFromFolder) {
+        if (this.activeTab === "folders") {
+          if (isRemovingFromFolder || this.selectedFolderId === "default") {
             if (this.selectedFolderId !== "default") {
-              this.fetchFolderChats(this.selectedFolderId);
+              await this.fetchFolderChats(this.selectedFolderId);
             } else {
               this.conversations = [];
               this.forceDisplayConversations();
             }
           } else {
-            this.selectFolder(this.destinationFolderId);
+            await this.selectFolder(this.selectedFolderId);
           }
         }
       } catch (error) {
-        console.error(
-          `Error ${
-            isRemovingFromFolder ? "removing chat from folder" : "moving chat"
-          }:`,
-          error
-        );
-        notificationService.error(
-          isRemovingFromFolder
-            ? this.safeT(
-                "sidebar.errorRemovingChat",
-                "Failed to remove conversation from folder"
-              )
-            : this.safeT(
-                "sidebar.errorMovingChat",
-                "Failed to move conversation"
-              )
-        );
+        console.error(`Error ${isRemovingFromFolder ? "removing chat from folder" : "moving chat"}:`, error);
+        notificationService.error(isRemovingFromFolder ? this.safeT("sidebar.errorRemovingChat", "Failed to remove conversation from folder") : this.safeT("sidebar.errorMovingChat", "Failed to move conversation"));
       }
     },
 
     formatDate(dateStr) {
       if (!dateStr) return "";
-
       let date;
       try {
         date = new Date(dateStr);
-
         if (isNaN(date.getTime())) {
           console.warn(`Invalid date string: ${dateStr}`);
           return dateStr;
@@ -2084,7 +1576,6 @@ export default {
         console.warn(`Error parsing date ${dateStr}:`, error);
         return dateStr;
       }
-
       const today = new Date();
       if (date.toDateString() === today.toDateString()) {
         return date.toLocaleTimeString(undefined, {
@@ -2092,14 +1583,12 @@ export default {
           minute: "2-digit",
         });
       }
-
       if (date.getFullYear() === today.getFullYear()) {
         return date.toLocaleDateString(undefined, {
           month: "short",
           day: "numeric",
         });
       }
-
       return date.toLocaleDateString(undefined, {
         year: "numeric",
         month: "short",
@@ -2131,14 +1620,15 @@ export default {
             preview: this.generatePreview(conv),
             messageCount: conv.messageCount || 0,
           }));
+          console.log(`Total conversations fetched for folder ${folderId}: ${convs.length}`);
+          const nonArchivedConvs = convs.filter((conv) => conv.isArchived !== true);
+          console.log(`Non-archived conversations for folder ${folderId}: ${nonArchivedConvs.length}`);
           if (isSelected) {
             this.conversations = convs;
             this.forceDisplayConversations();
           }
-          this.folderCounts[folderId] = convs.length;
-          console.log(
-            `Loaded ${convs.length} conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${convs.length}`
-          );
+          this.folderCounts[folderId] = nonArchivedConvs.length;
+          console.log(`Loaded ${nonArchivedConvs.length} non-archived conversations for folder ${folderId}, updated folderCounts[${folderId}] = ${nonArchivedConvs.length}`);
           await this.$store.dispatch("chatHistory/setFolderChats", {
             folderId,
             chats: convs.map((conv) => conv._key),
@@ -2149,24 +1639,10 @@ export default {
         }
       } catch (error) {
         console.error(`Error fetching chats for folder ${folderId}:`, error);
-        this.errorMessage =
-          this.safeT("sidebar.errorLoadingFolder", "Failed to load folder: ") +
-          (error.message || "Unknown error");
+        this.errorMessage = this.safeT("sidebar.errorLoadingFolder", "Failed to load folder: ") + (error.message || "Unknown error");
         notificationService.error(this.errorMessage);
       } finally {
         this.isLoading = false;
-      }
-    },
-  },
-
-  watch: {
-    selectedFolderId(newFolderId) {
-      if (
-        newFolderId &&
-        this.currentSecondLevelTab === "folders" &&
-        newFolderId !== "default"
-      ) {
-        this.fetchFolderChats(newFolderId);
       }
     },
   },
@@ -2174,6 +1650,46 @@ export default {
 </script>
 
 <style scoped>
+.chat-folders-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.search-container {
+  display: flex;
+  margin-bottom: 15px;
+  padding: 5px;
+  width: 100%;
+}
+
+.search-box {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-input, #ddd);
+  border-radius: 4px 0 0 4px;
+  font-size: 0.9rem;
+  background-color: var(--bg-input, #fff);
+  color: var(--text-primary, #333);
+}
+
+.search-btn {
+  background: var(--accent-color, #4e97d1);
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  padding: 0 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-btn:hover {
+  background: var(--accent-hover, #3a7da0);
+}
+
 .chat-folders {
   display: flex;
   flex-direction: column;
@@ -2294,7 +1810,7 @@ html[data-theme="dark"] .folders-header h3 {
 
 .folder-chats {
   padding: 12px 16px;
-  border-top: 1px solid var(--border-light);
+  border-top: 1_2_1px solid var(--border-light);
   overflow-y: auto;
   flex-grow: 1;
   background-color: var(--bg-sidebar);
@@ -2554,12 +2070,6 @@ html[data-theme="dark"] .folders-header h3 {
   transition: background-color 0.2s;
 }
 
-.cancel-btn {
-  background-color: var(--bg-button-secondary);
-  color: var(--text-button-secondary);
-  border: 1px solid var(--border-light);
-}
-
 .cancel-btn:hover {
   background-color: var(--bg-tertiary);
 }
@@ -2790,5 +2300,4 @@ html[data-theme="dark"] .folder-chats > h3 {
 .move-chat-dialog {
   z-index: 10000 !important;
 }
-
 </style>

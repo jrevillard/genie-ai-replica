@@ -56,6 +56,8 @@ services:
       - "8000:8000"
       - "8443:8443"
       - "8001:8001"
+    volumes:
+      - ./kong_logs:/var/log/kong
 
   konga:
     image: pantsel/konga:0.14.9

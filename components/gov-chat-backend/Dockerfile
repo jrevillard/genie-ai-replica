@@ -50,5 +50,7 @@ ENV BACKUP_DIR=./database_backups
 ENV MAX_BACKUPS=5
 ENV BACKUP_FORMAT=json
 ENV LOG_LEVEL=debug
+ENV OPEA_HOST=e2e-109-198
+ENV OPEA_PORT=8888
 
 CMD ["node", "index.js"]

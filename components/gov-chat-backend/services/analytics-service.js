@@ -14,6 +14,7 @@ class AnalyticsService {
     this.usersCollection = null;
     this.sessionsCollection = null;
     this.serviceCategoriesCollection = null;
+    this.serviceCategoryService = ServiceCategoryService; // Store reference for use
     this.initialized = false;
     logger.info('AnalyticsService constructor called');
   }
@@ -34,7 +35,12 @@ class AnalyticsService {
 
       logger.info('Initializing AnalyticsService...');
       await this.initialize();
-      await this.ensureServiceCategories();
+      
+      // Initialize ServiceCategoryService
+      logger.info('Initializing ServiceCategoryService from AnalyticsService...');
+      await this.serviceCategoryService.init();
+      logger.info('ServiceCategoryService initialized successfully');
+      
       this.initialized = true;
       logger.info('AnalyticsService initialized successfully');
     } catch (error) {
@@ -76,78 +82,6 @@ class AnalyticsService {
       logger.info('Collections initialized successfully');
     } catch (error) {
       logger.error(`Error initializing collections: ${error.message}`, { stack: error.stack });
-    }
-  }
-
-  /**
-   * Ensure service categories exist and add sample data if empty
-   * @returns {Promise<boolean>} Success indicator
-   */
-  async ensureServiceCategories() {
-    try {
-      const collections = await this.db.listCollections();
-      const collectionNames = collections.map(c => c.name);
-
-      if (!collectionNames.includes('serviceCategories')) {
-        logger.info('Creating serviceCategories collection...');
-        try {
-          await this.db.createCollection('serviceCategories');
-          logger.info('Created serviceCategories collection successfully');
-        } catch (err) {
-          if (err.errorNum !== 1207) {
-            throw err;
-          }
-          logger.warn('serviceCategories collection already exists, skipping creation');
-        }
-      }
-
-      const serviceCategories = this.db.collection('serviceCategories');
-
-      const cursor = await this.db.query(`
-        FOR doc IN serviceCategories
-        LIMIT 1
-        RETURN doc
-      `);
-
-      const existingCategories = await cursor.all();
-
-      if (existingCategories.length === 0) {
-        logger.info('Adding sample service categories...');
-
-        const sampleCategories = [
-          { _key: "1", nameEN: "Identity & Civil Registration", nameFR: "Identité et état civil", nameSW: "Utambulisho na Usajili wa Raia", order: 1 },
-          { _key: "2", nameEN: "Transportation", nameFR: "Transport", nameSW: "Usafiri", order: 2 },
-          { _key: "3", nameEN: "Taxes & Revenue", nameFR: "Impôts et Revenus", nameSW: "Kodi na Mapato", order: 3 },
-          { _key: "4", nameEN: "Immigration & Citizenship", nameFR: "Immigration et Citoyenneté", nameSW: "Uhamiaji na Uraia", order: 4 },
-          { _key: "5", nameEN: "Education & Learning", nameFR: "Éducation et Apprentissage", nameSW: "Elimu na Mafunzo", order: 5 },
-          { _key: "6", nameEN: "Housing & Properties", nameFR: "Logement et Propriétés", nameSW: "Nyumba na Mali", order: 6 },
-          { _key: "7", nameEN: "Health & Healthcare", nameFR: "Santé et Soins Médicaux", nameSW: "Afya na Huduma za Afya", order: 7 },
-          { _key: "8", nameEN: "Public Safety", nameFR: "Sécurité Publique", nameSW: "Usalama wa Umma", order: 8 },
-          { _key: "9", nameEN: "Business & Economy", nameFR: "Entreprise et Économie", nameSW: "Biashara na Uchumi", order: 9 },
-          { _key: "10", nameEN: "Social Services", nameFR: "Services Sociaux", nameSW: "Huduma za Kijamii", order: 10 },
-          { _key: "11", nameEN: "Environment", nameFR: "Environnement", nameSW: "Mazingira", order: 11 },
-          { _key: "12", nameEN: "Culture & Recreation", nameFR: "Culture et Loisirs", nameSW: "Utamaduni na Burudani", order: 12 },
-          { _key: "13", nameEN: "Legal Services", nameFR: "Services Juridiques", nameSW: "Huduma za Kisheria", order: 13 }
-        ];
-
-        for (const category of sampleCategories) {
-          try {
-            await serviceCategories.save(category);
-            logger.info(`Sample category ${category._key} saved successfully`);
-          } catch (err) {
-            logger.error(`Error saving category ${category._key}: ${err.message}`, { stack: err.stack });
-          }
-        }
-
-        logger.info('Sample service categories added successfully');
-      } else {
-        logger.info('Service categories already exist, skipping sample data insertion');
-      }
-
-      return true;
-    } catch (error) {
-      logger.error(`Error ensuring service categories: ${error.message}`, { stack: error.stack });
-      return false;
     }
   }
 
@@ -471,66 +405,58 @@ class AnalyticsService {
       logger.info("======= DEBUG: CATEGORY NAMES LOCALIZATION =======");
       logger.info(`DEBUG: Processing locale "${locale}" for category name localization`);
 
-      logger.info("Getting service categories for name localization...");
-      const categoriesQuery = `
-        FOR cat IN serviceCategories
-        RETURN {
-          _id: cat._id,
-          _key: cat._key,
-          nameEN: cat.nameEN,
-          nameFR: cat.nameFR,
-          nameSW: cat.nameSW
+      // Use ServiceCategoryService to get properly translated categories
+      logger.info("Getting categories with translations using ServiceCategoryService...");
+      try {
+        const categoriesWithTranslations = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
+        logger.info(`DEBUG: Retrieved ${categoriesWithTranslations.length} categories from ServiceCategoryService`);
+        
+        if (categoriesWithTranslations.length > 0) {
+          logger.info("DEBUG: First few categories from service:", JSON.stringify(categoriesWithTranslations.slice(0, 3).map(c => ({
+            catKey: c.catKey,
+            name: c.name
+          })), null, 2));
         }
-      `;
 
-      const categories = await this.db.query(categoriesQuery).then(cursor => cursor.all());
-      logger.info(`Found ${categories.length} service categories for localization`);
-
-      if (categories.length > 0) {
-        logger.info("DEBUG: First few categories from database:", JSON.stringify(categories.slice(0, 3), null, 2));
-      }
-
-      if (analyticsData.categories && analyticsData.categories.length > 0) {
-        logger.info(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
-        logger.info("DEBUG: First category from analytics:", JSON.stringify(analyticsData.categories[0], null, 2));
-
-        analyticsData.categories = analyticsData.categories.map(category => {
-          const idParts = category.categoryId.split('/');
-          const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
-
-          logger.info(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
-
-          const matchingCategory = categories.find(cat =>
-            cat._key === categoryKey || cat._id === category.categoryId
-          );
-
-          if (matchingCategory) {
-            logger.info(`DEBUG: Found matching category: ${JSON.stringify(matchingCategory, null, 2)}`);
-
-            let name;
-            if (locale === 'fr' && matchingCategory.nameFR) {
-              name = matchingCategory.nameFR;
-              logger.info(`DEBUG: Using French name: "${name}"`);
-            } else if (locale === 'sw' && matchingCategory.nameSW) {
-              name = matchingCategory.nameSW;
-              logger.info(`DEBUG: Using Swahili name: "${name}"`);
-            } else {
-              name = matchingCategory.nameEN;
-              logger.info(`DEBUG: Using English name: "${name}" (default)`);
-            }
-
-            logger.info(`DEBUG: Final name selected for locale ${locale}: "${name}"`);
-
-            return {
-              ...category,
-              name: name
-            };
-          } else {
-            logger.info(`DEBUG: No matching category found for ID: ${category.categoryId}`);
-            logger.info(`DEBUG: Available category keys: ${categories.map(c => c._key).slice(0, 5).join(', ')}`);
-            return category;
-          }
+        // Build a map of categoryId to translated name
+        const categoryMap = {};
+        categoriesWithTranslations.forEach(cat => {
+          categoryMap[cat.catKey] = cat.name;
+          logger.debug(`DEBUG: Mapped category ${cat.catKey} => "${cat.name}"`);
         });
+
+        // Apply translated names to analytics data
+        if (analyticsData.categories && analyticsData.categories.length > 0) {
+          logger.info(`DEBUG: Processing ${analyticsData.categories.length} categories from analytics data`);
+          
+          analyticsData.categories = analyticsData.categories.map(category => {
+            const idParts = category.categoryId.split('/');
+            const categoryKey = idParts.length > 1 ? idParts[1] : category.categoryId;
+
+            logger.debug(`DEBUG: Looking up category for ID: ${category.categoryId}, extracted key: ${categoryKey}`);
+
+            const translatedName = categoryMap[categoryKey];
+            
+            if (translatedName) {
+              logger.debug(`DEBUG: Found translated name for category ${categoryKey}: "${translatedName}"`);
+              return {
+                ...category,
+                name: translatedName
+              };
+            } else {
+              logger.warn(`DEBUG: No translation found for category ${categoryKey} in locale ${locale}`);
+              return {
+                ...category,
+                name: `Category ${categoryKey}` // Generic fallback
+              };
+            }
+          });
+        }
+      } catch (serviceCategoryError) {
+        logger.error(`Error getting categories from ServiceCategoryService: ${serviceCategoryError.message}`, { 
+          stack: serviceCategoryError.stack 
+        });
+        // Analytics data will be returned without category names
       }
 
       logger.info("======= END DEBUG: CATEGORY NAMES LOCALIZATION =======");
@@ -548,7 +474,7 @@ class AnalyticsService {
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
    * @returns {Object} Sample dashboard data
    */
-  generateSampleDashboardData(locale = 'en') {
+  async generateSampleDashboardData(locale = 'en') {
     logger.info(`Generating sample dashboard data for locale: ${locale}`);
 
     const sampleTopQueries = [
@@ -559,91 +485,40 @@ class AnalyticsService {
       { text: "When are property taxes due?", count: 1289, avgTime: 1.5 }
     ];
 
-    const categoryNames = {
-      "1": {
-        en: "Identity & Civil Registration",
-        fr: "Identité et état civil",
-        sw: "Utambulisho na Usajili wa Raia"
-      },
-      "2": {
-        en: "Transportation",
-        fr: "Transport",
-        sw: "Usafiri"
-      },
-      "3": {
-        en: "Taxes & Revenue",
-        fr: "Impôts et Revenus",
-        sw: "Kodi na Mapato"
-      },
-      "4": {
-        en: "Immigration & Citizenship",
-        fr: "Immigration et Citoyenneté",
-        sw: "Uhamiaji na Uraia"
-      },
-      "5": {
-        en: "Education & Learning",
-        fr: "Éducation et Apprentissage",
-        sw: "Elimu na Mafunzo"
-      },
-      "6": {
-        en: "Housing & Properties",
-        fr: "Logement et Propriétés",
-        sw: "Nyumba na Mali"
-      },
-      "7": {
-        en: "Health & Healthcare",
-        fr: "Santé et Soins Médicaux",
-        sw: "Afya na Huduma za Afya"
-      },
-      "8": {
-        en: "Public Safety",
-        fr: "Sécurité Publique",
-        sw: "Usalama wa Umma"
-      },
-      "9": {
-        en: "Business & Economy",
-        fr: "Entreprise et Économie",
-        sw: "Biashara na Uchumi"
-      },
-      "10": {
-        en: "Social Services",
-        fr: "Services Sociaux",
-        sw: "Huduma za Kijamii"
-      },
-      "11": {
-        en: "Environment",
-        fr: "Environnement",
-        sw: "Mazingira"
-      },
-      "12": {
-        en: "Culture & Recreation",
-        fr: "Culture et Loisirs",
-        sw: "Utamaduni na Burudani"
-      },
-      "13": {
-        en: "Legal Services",
-        fr: "Services Juridiques",
-        sw: "Huduma za Kisheria"
+    // Try to get real categories from ServiceCategoryService
+    let sampleCategories = [];
+    
+    try {
+      logger.info("Attempting to get real categories for sample data using ServiceCategoryService...");
+      const realCategories = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
+      
+      if (realCategories && realCategories.length > 0) {
+        logger.info(`DEBUG: Using ${realCategories.length} real categories for sample data`);
+        
+        // Use real category names with sample counts
+        sampleCategories = realCategories.map((cat, index) => ({
+          categoryId: cat.catKey,
+          name: cat.name, // Already translated by service
+          count: Math.max(2347 - (index * 150), 470), // Descending sample counts
+          value: Math.max(15 - index, 8) // Sample values
+        }));
+        
+        logger.debug(`DEBUG: Sample categories generated:`, JSON.stringify(sampleCategories.slice(0, 3), null, 2));
       }
-    };
+    } catch (error) {
+      logger.error(`Error getting real categories for sample data: ${error.message}`, { stack: error.stack });
+    }
 
-    const language = locale === 'fr' ? 'fr' : (locale === 'sw' ? 'sw' : 'en');
-
-    const sampleCategories = [
-      { categoryId: "1", name: categoryNames["1"][language], count: 2347, value: 15 },
-      { categoryId: "2", name: categoryNames["2"][language], count: 1782, value: 12 },
-      { categoryId: "3", name: categoryNames["3"][language], count: 1645, value: 15 },
-      { categoryId: "4", name: categoryNames["4"][language], count: 1245, value: 12 },
-      { categoryId: "5", name: categoryNames["5"][language], count: 980, value: 12 },
-      { categoryId: "6", name: categoryNames["6"][language], count: 850, value: 12 },
-      { categoryId: "7", name: categoryNames["7"][language], count: 720, value: 12 },
-      { categoryId: "8", name: categoryNames["8"][language], count: 650, value: 14 },
-      { categoryId: "9", name: categoryNames["9"][language], count: 550, value: 9 },
-      { categoryId: "10", name: categoryNames["10"][language], count: 520, value: 8 },
-      { categoryId: "11", name: categoryNames["11"][language], count: 490, value: 8 },
-      { categoryId: "12", name: categoryNames["12"][language], count: 480, value: 8 },
-      { categoryId: "13", name: categoryNames["13"][language], count: 470, value: 9 }
-    ];
+    // Fallback if no real categories available
+    if (sampleCategories.length === 0) {
+      logger.warn("Using generic fallback categories for sample data");
+      sampleCategories = Array.from({length: 13}, (_, i) => ({
+        categoryId: String(i + 1),
+        name: `Category ${i + 1}`, // Generic names
+        count: Math.max(2347 - (i * 150), 470),
+        value: Math.max(15 - i, 8)
+      }));
+    }
 
     logger.info('Sample dashboard data generated successfully');
 
@@ -688,42 +563,40 @@ class AnalyticsService {
 
       logger.info(`Getting time series data for metric: ${metricType}, interval: ${interval}, from ${startDateISO} to ${endDateISO}`);
 
+      let dateFormat;
+      switch (interval) {
+        case 'hourly': dateFormat = '%Y-%m-%dT%H:00:00Z'; break;
+        case 'daily': dateFormat = '%Y-%m-%d'; break;
+        case 'weekly': dateFormat = '%Y-W%W'; break;
+        case 'monthly': dateFormat = '%Y-%m'; break;
+        default: dateFormat = '%Y-%m-%d';
+      }
+
       const baseQuery = `
-        LET dailyBreakdown = (
-          FOR q IN queries
-            FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
-            
-            COLLECT dateGroup = DATE_FORMAT(q.timestamp, '%Y-%m-%d')
-            
-            LET dayQueries = (
-              FOR query IN queries
-                FILTER query.timestamp >= @startDate AND query.timestamp <= @endDate
-                FILTER DATE_FORMAT(query.timestamp, '%Y-%m-%d') == dateGroup
-                RETURN query
-            )
-            
-            RETURN {
-              date: dateGroup,
-              totalQueries: LENGTH(dayQueries),
-              uniqueUsers: LENGTH(UNIQUE(dayQueries[*].userId))
-            }
-        )
-        
-        RETURN dailyBreakdown
-      `;
+      FOR q IN queries
+        FILTER q.timestamp >= @startDate AND q.timestamp <= @endDate
+        COLLECT dateGroup = DATE_FORMAT(q.timestamp, @dateFormat) INTO groups
+        LET uniqueUsers = LENGTH(UNIQUE(groups[*].q.userId))
+        LET totalQueries = LENGTH(groups)
+        RETURN {
+          date: dateGroup,
+          totalQueries: totalQueries,
+          uniqueUsers: uniqueUsers
+        }
+    `;
 
       logger.info('Executing time series data query...');
       const cursor = await this.db.query(baseQuery, {
         startDate: startDateISO,
-        endDate: endDateISO
+        endDate: endDateISO,
+        dateFormat
       });
 
-      const results = await cursor.all();
-      const dailyBreakdown = results[0] || [];
+      const dailyBreakdown = await cursor.all();
 
       const chartData = dailyBreakdown.map(day => ({
         timestamp: day.date,
-        dateLabel: day.date,
+        dateLabel: this.formatDateLabel(day.date, interval),
         value: day.totalQueries,
         userCount: day.uniqueUsers
       }));
@@ -734,7 +607,6 @@ class AnalyticsService {
       }
 
       logger.info(`Time series data retrieved successfully with ${chartData.length} data points`);
-
       return chartData;
     } catch (error) {
       logger.error(`Error in getTimeSeriesData: ${error.message}`, { stack: error.stack });
@@ -882,12 +754,12 @@ class AnalyticsService {
   }
 
   /**
- * Get satisfaction gauge data
- * @param {String} period - Period type (daily, weekly, monthly, all-time)
- * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
- * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
- * @returns {Promise<Object>} Satisfaction gauge data
- */
+   * Get satisfaction gauge data
+   * @param {String} period - Period type (daily, weekly, monthly, all-time)
+   * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
+   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
+   * @returns {Promise<Object>} Satisfaction gauge data
+   */
   async getSatisfactionGaugeData(period, selectedDate, locale = 'en') {
     try {
       await this.init();
@@ -1103,12 +975,12 @@ class AnalyticsService {
   }
 
   /**
- * Get satisfaction heatmap data
- * @param {String} period - Period type (daily, weekly, monthly, all-time)
- * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
- * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
- * @returns {Promise<Array>} Heatmap data for all categories
- */
+   * Get satisfaction heatmap data
+   * @param {String} period - Period type (daily, weekly, monthly, all-time)
+   * @param {String} selectedDate - Selected date (ISO string or YYYY-MM-DD)
+   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
+   * @returns {Promise<Array>} Heatmap data for all categories
+   */
   async getSatisfactionHeatmapData(period, selectedDate, locale = 'en') {
     try {
       await this.init();
@@ -1179,17 +1051,33 @@ class AnalyticsService {
         }
       ];
 
-      // Fetch all service categories
-      const categoriesQuery = aql`
-        FOR c IN serviceCategories
-        SORT c._key
-        RETURN {
-          id: c._key,
-          name: c[${locale == 'fr' ? 'nameFR' : locale == 'sw' ? 'nameSW' : 'nameEN'}]
-        }
-      `;
-      const categoriesCursor = await this.db.query(categoriesQuery);
-      const categories = await categoriesCursor.all();
+      // Use ServiceCategoryService to get all categories with translations
+      logger.info('Getting categories with translations using ServiceCategoryService for heatmap...');
+      let categories = [];
+      
+      try {
+        const categoriesWithTranslations = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
+        logger.info(`DEBUG: Retrieved ${categoriesWithTranslations.length} categories for heatmap from ServiceCategoryService`);
+        
+        // Map to format needed for heatmap
+        categories = categoriesWithTranslations.map(cat => ({
+          id: cat.catKey,
+          name: cat.name // Already translated by service
+        }));
+        
+        logger.debug(`DEBUG: Mapped categories for heatmap:`, JSON.stringify(categories.slice(0, 3), null, 2));
+      } catch (serviceCategoryError) {
+        logger.error(`Error getting categories from ServiceCategoryService for heatmap: ${serviceCategoryError.message}`, { 
+          stack: serviceCategoryError.stack 
+        });
+        
+        // Fallback to generic categories if service fails
+        logger.warn('Using generic fallback categories for heatmap');
+        categories = Array.from({length: 10}, (_, i) => ({
+          id: String(i + 1),
+          name: `Category ${i + 1}`
+        }));
+      }
 
       // Initialize heatmap data with zeros for all categories
       const heatmapData = categories.map(category => ({
@@ -1212,25 +1100,37 @@ class AnalyticsService {
               average: totalRatings > 0 ? (sumRatings / totalRatings) : 0
             }
         `;
-        const feedbackCursor = await this.db.query(feedbackQuery);
-        const feedbackResults = await feedbackCursor.all();
+        
+        try {
+          const feedbackCursor = await this.db.query(feedbackQuery);
+          const feedbackResults = await feedbackCursor.all();
+          
+          logger.debug(`DEBUG: Feedback results for period ${period.label}:`, feedbackResults.length);
 
-        // Update heatmap data for this period
-        feedbackResults.forEach(result => {
-          const categoryIndex = categories.findIndex(c => c.id === result.categoryId);
-          if (categoryIndex !== -1) {
-            const periodIndex = timePeriods.findIndex(p => p.label === period.label);
-            if (periodIndex !== -1) {
-              heatmapData[categoryIndex].data[periodIndex].y = Math.floor((result.average / 5) * 100);
+          // Update heatmap data for this period
+          feedbackResults.forEach(result => {
+            const categoryIndex = categories.findIndex(c => c.id === result.categoryId);
+            if (categoryIndex !== -1) {
+              const periodIndex = timePeriods.findIndex(p => p.label === period.label);
+              if (periodIndex !== -1) {
+                const satisfactionPercentage = Math.floor((result.average / 5) * 100);
+                heatmapData[categoryIndex].data[periodIndex].y = satisfactionPercentage;
+                logger.debug(`DEBUG: Set heatmap value for ${categories[categoryIndex].name} at ${period.label}: ${satisfactionPercentage}%`);
+              }
             }
-          }
-        });
+          });
+        } catch (queryError) {
+          logger.error(`Error querying feedback for period ${period.label}: ${queryError.message}`, { stack: queryError.stack });
+        }
       }
 
       logger.info('getSatisfactionHeatmapData: Successful data retrieval', {
         categories: categories.length,
         periods: timePeriods.length,
-        data: heatmapData,
+        heatmapDataSample: heatmapData.slice(0, 2).map(item => ({
+          name: item.name,
+          dataLength: item.data.length
+        })),
         method: 'getSatisfactionHeatmapData'
       });
 
@@ -1241,7 +1141,9 @@ class AnalyticsService {
         stack: error.stack,
         method: 'getSatisfactionHeatmapData'
       });
-      throw error;
+      
+      // Return sample data as fallback
+      return this.getSampleSatisfactionHeatmapData(locale);
     }
   }
 
@@ -1250,40 +1152,40 @@ class AnalyticsService {
    * @param {String} locale - Locale code
    * @returns {Array} Sample satisfaction heatmap data
    */
-  getSampleSatisfactionHeatmapData(locale = 'en') {
+  async getSampleSatisfactionHeatmapData(locale = 'en') {
     logger.info(`DEBUG: Generating sample heatmap data for locale: ${locale}`);
 
-    const areas = [];
-    if (locale === 'fr') {
-      areas.push(
-        'Immigration et Citoyenneté',
-        'Entreprise et Commerce',
-        'Identité et État Civil',
-        'Sécurité Sociale et Retraites',
-        'Éducation et Apprentissage',
-        'Emploi et Services du Travail',
-        'Santé et Services Sociaux'
-      );
-    } else if (locale === 'sw') {
-      areas.push(
-        'Uhamiaji na Uraia',
-        'Biashara na Biashara',
-        'Utambulisho na Usajili wa Kiraia',
-        'Usalama wa Jamii na Pensheni',
-        'Elimu na Mafunzo',
-        'Ajira na Huduma za Kazi',
-        'Afya na Huduma za Kijamii'
-      );
-    } else {
-      areas.push(
-        'Immigration & Citizenship',
-        'Business & Trade',
-        'Identity & Civil Registration',
-        'Social Security & Pensions',
-        'Education & Learning',
-        'Employment & Labor Services',
-        'Health & Social Services'
-      );
+    // Try to get real categories from ServiceCategoryService
+    let areas = [];
+    
+    try {
+      logger.info("Attempting to get real categories for sample heatmap data using ServiceCategoryService...");
+      const realCategories = await this.serviceCategoryService.getAllCategoriesWithServices(locale);
+      
+      if (realCategories && realCategories.length > 0) {
+        logger.info(`DEBUG: Using ${realCategories.length} real categories for sample heatmap data`);
+        
+        // Use first 7 categories for heatmap
+        areas = realCategories.slice(0, 7).map(cat => cat.name);
+        
+        logger.debug(`DEBUG: Areas for heatmap:`, areas);
+      }
+    } catch (error) {
+      logger.error(`Error getting real categories for sample heatmap: ${error.message}`, { stack: error.stack });
+    }
+
+    // Fallback if no real categories available
+    if (areas.length === 0) {
+      logger.warn("Using generic fallback areas for sample heatmap");
+      areas = [
+        'Category 1',
+        'Category 2',
+        'Category 3',
+        'Category 4',
+        'Category 5',
+        'Category 6',
+        'Category 7'
+      ];
     }
 
     const periods = [];

@@ -90,21 +90,7 @@
               <label class="section-label">{{
                 translate("settings.displayLanguage", "Display Language")
               }}</label>
-              <select
-                class="dropdown"
-                v-model="settings.language"
-                @change="applyLanguage"
-              >
-                <option value="en">
-                  {{ translate("settings.languages.english", "English") }}
-                </option>
-                <option value="fr">
-                  {{ translate("settings.languages.french", "Français") }}
-                </option>
-                <option value="sw">
-                  {{ translate("settings.languages.swahili", "Kiswahili") }}
-                </option>
-              </select>
+              <language-selector v-model="settings.language" />
             </div>
 
             <!-- Theme Controls -->
@@ -514,11 +500,15 @@ import { themeManager } from "@/utils/ThemeManager";
 // Import the ConfirmDialog component for displaying confirmation dialogs
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 
+// Import LanguageSelector component
+import LanguageSelector from '@/components/LanguageSelector.vue'
+
 export default {
   name: "SettingsComponent",
   components: {
     PasswordResetInitiateScreen,
     ConfirmDialog,
+    LanguageSelector
   },
   data() {
     return {
@@ -787,32 +777,6 @@ export default {
       } catch (e) {
         console.warn(`[SETTINGS] Error accessing localStorage for ${key}:`, e);
         return defaultValue;
-      }
-    },
-    applyLanguage() {
-      console.log(
-        "[SETTINGS] Applying language change:",
-        this.settings.language
-      );
-      if (this.$i18n) {
-        console.log(
-          "[SETTINGS] Setting i18n locale to:",
-          this.settings.language
-        );
-        this.$i18n.locale = this.settings.language;
-
-        try {
-          console.log("[SETTINGS] Saving language to localStorage...");
-          localStorage.setItem("userLocale", this.settings.language);
-          console.log("[SETTINGS] Language saved successfully");
-        } catch (e) {
-          console.warn("[SETTINGS] Error saving language preference:", e);
-        }
-
-        console.log(
-          "[SETTINGS] Forcing component re-render for language update..."
-        );
-        this.$forceUpdate();
       }
     },
     translate(key, fallback = "") {
@@ -1167,21 +1131,6 @@ export default {
         this.newEmail = this.userData.email;
         console.log("[SETTINGS] Original email stored:", this.newEmail);
       }
-    },
-    getCurrentTheme() {
-      console.log("[SETTINGS] Getting current theme...");
-      let theme = localStorage.getItem("theme") || "light";
-      console.log("[SETTINGS] Theme from localStorage:", theme);
-      if (theme === "system") {
-        console.log(
-          "[SETTINGS] Theme set to 'system', checking OS preference..."
-        );
-        theme = window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-        console.log("[SETTINGS] Resolved system theme to:", theme);
-      }
-      return theme;
     },
     confirmDeleteAccount() {
       console.log("[SETTINGS] Showing delete account confirmation...");

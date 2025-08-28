@@ -86,7 +86,7 @@ module.exports = (queryService) => {
    * /queries:
    *   post:
    *     summary: Create a new query
-   *     description: Creates a new query and records it in analytics
+   *     description: Creates a new query and records it in analytics. Supports single-message or full conversation modes.
    *     tags: [Queries]
    *     requestBody:
    *       required: true
@@ -97,7 +97,6 @@ module.exports = (queryService) => {
    *             required:
    *               - userId
    *               - sessionId
-   *               - text
    *             properties:
    *               userId:
    *                 type: string
@@ -107,7 +106,36 @@ module.exports = (queryService) => {
    *                 description: ID of the current session
    *               text:
    *                 type: string
-   *                 description: The query text
+   *                 description: The query text (required for single-message mode)
+   *               messages:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *                   properties:
+   *                     role:
+   *                       type: string
+   *                       enum: [user, assistant]
+   *                     content:
+   *                       type: string
+   *                 description: Full conversation history (required for conversation mode)
+   *               context:
+   *                 type: object
+   *                 properties:
+   *                   categoryLabel:
+   *                     type: string
+   *                   serviceLabels:
+   *                     type: array
+   *                     items:
+   *                       type: string
+   *                   language:
+   *                     type: string
+   *                     default: EN
+   *                 description: Context labels (required for conversation mode)
+   *               contextOption:
+   *                 type: string
+   *                 enum: [single-message, conversation-with-context-labels]
+   *                 default: single-message
+   *                 description: Query mode (defaults to env or single-message)
    *               categoryId:
    *                 type: string
    *                 description: Category ID for the query
@@ -124,9 +152,32 @@ module.exports = (queryService) => {
    *         content:
    *           application/json:
    *             schema:
-   *               $ref: '#/components/schemas/Query'
+   *               type: object
+   *               properties:
+   *                 _key:
+   *                   type: string
+   *                 userId:
+   *                   type: string
+   *                 sessionId:
+   *                   type: string
+   *                 timestamp:
+   *                   type: string
+   *                 isAnswered:
+   *                   type: boolean
+   *                 categoryId:
+   *                   type: string
+   *                 serviceId:
+   *                   type: string
+   *                 responseTime:
+   *                   type: integer
+   *                 contextOption:
+   *                   type: string
+   *                 text:
+   *                   type: string
+   *                 response:
+   *                   type: string
    *       400:
-   *         description: Missing required fields
+   *         description: Missing required fields or invalid contextOption
    *       500:
    *         description: Server error
    */
@@ -161,7 +212,30 @@ module.exports = (queryService) => {
    *         content:
    *           application/json:
    *             schema:
-   *               $ref: '#/components/schemas/Query'
+   *               type: object
+   *               properties:
+   *                 _key:
+   *                   type: string
+   *                 userId:
+   *                   type: string
+   *                 sessionId:
+   *                   type: string
+   *                 timestamp:
+   *                   type: string
+   *                 isAnswered:
+   *                   type: boolean
+   *                 categoryId:
+   *                   type: string
+   *                 serviceId:
+   *                   type: string
+   *                 responseTime:
+   *                   type: integer
+   *                 contextOption:
+   *                   type: string
+   *                 text:
+   *                   type: string
+   *                 response:
+   *                   type: string
    *       404:
    *         description: Query not found
    *       500:
@@ -215,7 +289,37 @@ module.exports = (queryService) => {
    *         content:
    *           application/json:
    *             schema:
-   *               $ref: '#/components/schemas/Query'
+   *               type: object
+   *               properties:
+   *                 _key:
+   *                   type: string
+   *                 userId:
+   *                   type: string
+   *                 sessionId:
+   *                   type: string
+   *                 timestamp:
+   *                   type: string
+   *                 isAnswered:
+   *                   type: boolean
+   *                 categoryId:
+   *                   type: string
+   *                 serviceId:
+   *                   type: string
+   *                 responseTime:
+   *                   type: integer
+   *                 contextOption:
+   *                   type: string
+   *                 text:
+   *                   type: string
+   *                 response:
+   *                   type: string
+   *                 feedback:
+   *                   type: object
+   *                   properties:
+   *                     rating:
+   *                       type: number
+   *                     comment:
+   *                       type: string
    *       400:
    *         description: Missing required fields
    *       404:
@@ -230,6 +334,9 @@ module.exports = (queryService) => {
       res.json(query);
     } catch (error) {
       logger.error(`Error adding feedback to query ${req.params.queryId}: ${error.message}`, { stack: error.stack });
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: 'Query not found' });
+      }
       res.status(500).json({ message: error.message });
     }
   });
@@ -238,8 +345,8 @@ module.exports = (queryService) => {
    * @swagger
    * /queries/{queryId}/answered:
    *   patch:
-   *     summary: Mark a query as answered (PATCH)
-   *     description: Updates a query to mark it as answered with response time
+   *     summary: Mark query as answered
+   *     description: Marks a query as answered and updates response time
    *     tags: [Queries]
    *     parameters:
    *       - in: path
@@ -247,84 +354,59 @@ module.exports = (queryService) => {
    *         required: true
    *         schema:
    *           type: string
-   *         description: Query ID
+   *         description: ID of the query to update.
    *     requestBody:
+   *       required: true
    *       content:
    *         application/json:
    *           schema:
    *             type: object
+   *             required:
+   *               - responseTime
    *             properties:
    *               responseTime:
-   *                 type: number
-   *                 description: Response time in milliseconds
+   *                 type: integer
+   *                 description: Response time in milliseconds.
+   *           example:
+   *             responseTime: 250
    *     responses:
    *       200:
-   *         description: Query marked as answered
+   *         description: Query marked as answered successfully.
    *         content:
    *           application/json:
    *             schema:
-   *               $ref: '#/components/schemas/Query'
+   *               type: object
+   *               properties:
+   *                 _key:
+   *                   type: string
+   *                 isAnswered:
+   *                   type: boolean
+   *                 responseTime:
+   *                   type: integer
+   *       400:
+   *         description: Response time is required.
    *       404:
-   *         description: Query not found
+   *         description: Query not found.
    *       500:
-   *         description: Server error
+   *         description: Server error.
    */
   router.patch('/:queryId/answered', async (req, res) => {
     try {
-      logger.info(`Marking query ${req.params.queryId} as answered with body: ${JSON.stringify(req.body)}`);
-      const query = await queryService.markAsAnswered(req.params.queryId, req.body.responseTime);
-      res.json(query);
-    } catch (error) {
-      logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ message: error.message });
-    }
-  });
+      const { queryId } = req.params;
+      const { responseTime } = req.body;
 
-  /**
-   * @swagger
-   * /queries/{queryId}/answered:
-   *   put:
-   *     summary: Mark a query as answered (PUT)
-   *     description: Updates a query to mark it as answered with response time
-   *     tags: [Queries]
-   *     parameters:
-   *       - in: path
-   *         name: queryId
-   *         required: true
-   *         schema:
-   *           type: string
-   *         description: Query ID
-   *     requestBody:
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               responseTime:
-   *                 type: number
-   *                 description: Response time in milliseconds
-   *     responses:
-   *       200:
-   *         description: Query marked as answered
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Query'
-   *       404:
-   *         description: Query not found
-   *       500:
-   *         description: Server error
-   */
-  router.put('/:queryId/answered', async (req, res) => {
-    try {
-      const responseTime = req.body.responseTime || 0;
-      
-      logger.info(`Marking query ${req.params.queryId} as answered with response time: ${responseTime}ms and body: ${JSON.stringify(req.body)}`);
-      
-      const query = await queryService.markAsAnswered(req.params.queryId, responseTime);
-      res.json(query);
+      if (!responseTime && responseTime !== 0) {
+        return res.status(400).json({ message: 'Response time is required' });
+      }
+
+      const updatedQuery = await queryService.markQueryAsAnswered(queryId, responseTime);
+
+      res.json(updatedQuery);
     } catch (error) {
       logger.error(`Error marking query ${req.params.queryId} as answered: ${error.message}`, { stack: error.stack });
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: 'Query not found' });
+      }
       res.status(500).json({ message: error.message });
     }
   });
@@ -334,7 +416,7 @@ module.exports = (queryService) => {
    * /queries:
    *   get:
    *     summary: Search queries
-   *     description: Search for queries based on various criteria with pagination
+   *     description: Searches queries based on various criteria with pagination
    *     tags: [Queries]
    *     parameters:
    *       - in: query
@@ -342,13 +424,13 @@ module.exports = (queryService) => {
    *         schema:
    *           type: integer
    *           default: 20
-   *         description: Maximum number of results to return
+   *         description: Number of queries per page
    *       - in: query
    *         name: offset
    *         schema:
    *           type: integer
    *           default: 0
-   *         description: Number of results to skip for pagination
+   *         description: Offset for pagination
    *       - in: query
    *         name: userId
    *         schema:
@@ -363,7 +445,7 @@ module.exports = (queryService) => {
    *         name: text
    *         schema:
    *           type: string
-   *         description: Filter by query text (partial match)
+   *         description: Filter by text content
    *       - in: query
    *         name: categoryId
    *         schema:
@@ -402,7 +484,30 @@ module.exports = (queryService) => {
    *                 queries:
    *                   type: array
    *                   items:
-   *                     $ref: '#/components/schemas/Query'
+   *                     type: object
+   *                     properties:
+   *                       _key:
+   *                         type: string
+   *                       userId:
+   *                         type: string
+   *                       sessionId:
+   *                         type: string
+   *                       timestamp:
+   *                         type: string
+   *                       isAnswered:
+   *                         type: boolean
+   *                       categoryId:
+   *                         type: string
+   *                       serviceId:
+   *                         type: string
+   *                       responseTime:
+   *                         type: integer
+   *                       contextOption:
+   *                         type: string
+   *                       text:
+   *                         type: string
+   *                       response:
+   *                         type: string
    *                 pagination:
    *                   type: object
    *                   properties:
@@ -448,6 +553,12 @@ module.exports = (queryService) => {
    *     responses:
    *       200:
    *         description: Conversations associated with the query
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
    *       404:
    *         description: Query not found
    *       500:
@@ -503,6 +614,13 @@ module.exports = (queryService) => {
    *     responses:
    *       201:
    *         description: Conversation created successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 conversation:
+   *                   type: object
    *       404:
    *         description: Query not found
    *       500:
@@ -565,6 +683,10 @@ module.exports = (queryService) => {
    *     responses:
    *       200:
    *         description: Link created successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
    *       404:
    *         description: Query or message not found
    *       500:

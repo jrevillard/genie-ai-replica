@@ -76,12 +76,7 @@
 
           <!-- Language Selector for Mobile -->
           <div class="language-select-container mobile-language-select">
-            <select v-model="currentLocale" @change="changeLocale" aria-label="Change language" class="language-select">
-              <option value="en">EN</option>
-              <option value="fr">FR</option>
-              <option value="sw">SW</option>
-            </select>
-            <div class="select-arrow"></div>
+            <language-selector />
           </div>
 
           <!-- Analytics button for Mobile -->
@@ -112,7 +107,7 @@
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
               <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l-.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
               </path>
             </svg>
             <span class="tooltip">{{ $t('nav.settings') }}</span>
@@ -199,12 +194,7 @@
       <!-- Right section with language and user controls - Only visible on desktop -->
       <div class="nav-right desktop-only">
         <div class="language-select-container">
-          <select v-model="currentLocale" @change="changeLocale" aria-label="Change language" class="language-select">
-            <option value="en">English</option>
-            <option value="fr">Français</option>
-            <option value="sw">Kiswahili</option>
-          </select>
-          <div class="select-arrow"></div>
+          <language-selector />
         </div>
 
         <!-- Analytics button for Desktop -->
@@ -235,7 +225,7 @@
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
             </path>
           </svg>
           <span class="tooltip">{{ $t('nav.settings') }}</span>
@@ -266,8 +256,13 @@
 </template>
 
 <script>
+import LanguageSelector from '@/components/LanguageSelector.vue'
+
 export default {
   name: 'NavBarComponent',
+  components: {
+    LanguageSelector
+  },
   emits: ['toggleSidebar', 'openAnalytics', 'openProfile', 'openSettings', 'viewStatusPage', 'logout', 'openAdmin'],
   props: {
     isSidebarOpen: {
@@ -290,7 +285,6 @@ export default {
   },
   data() {
     return {
-      currentLocale: this.$i18n.locale,
       isStatusDropdownOpen: false,
       currentUser: null,
       // Sample system status data - would be fetched from an API
@@ -476,21 +470,6 @@ export default {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
         window.location.href = '/login';
-      }
-    },
-    changeLocale() {
-      // Use the global method defined in main.js if available
-      if (this.$setLocale) {
-        this.$setLocale(this.currentLocale);
-      } else {
-        this.$i18n.locale = this.currentLocale;
-
-        // Save preference
-        try {
-          localStorage.setItem('userLocale', this.currentLocale);
-        } catch (e) {
-          console.warn('Unable to save locale preference:', e);
-        }
       }
     },
     toggleSidebar() {
@@ -1048,7 +1027,7 @@ export default {
   background: rgba(255, 255, 255, 0.25);
 }
 
-.language-select {
+.language-select-container :deep(select) {
   width: 100%;
   padding: 8px 10px;
   padding-right: 28px;
@@ -1062,7 +1041,7 @@ export default {
   height: 36px;
 }
 
-.language-select option {
+.language-select-container :deep(select option) {
   background: #4E97D1;
   color: white;
   padding: 8px;
@@ -1200,6 +1179,27 @@ export default {
     height: 8px;
     background: white;
     transform: rotate(45deg);
+  }
+
+  .mobile-language-select :deep(select) {
+    width: 100%;
+    padding: 8px 10px;
+    padding-right: 28px;
+    border: none;
+    background: transparent;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    appearance: none;
+    cursor: pointer;
+    height: 36px;
+  }
+
+  .mobile-language-select :deep(select option) {
+    background: #4E97D1;
+    color: white;
+    padding: 8px;
+    font-weight: 500;
   }
 }
 

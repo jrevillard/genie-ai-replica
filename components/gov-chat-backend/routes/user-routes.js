@@ -1222,5 +1222,130 @@ router.post('/admin/users/:userId/resend-verification', authMiddleware.authentic
   }
 });
 
+/**
+ * @swagger
+ * /api/users/admin/users/{userId}/force-logout:
+ *   post:
+ *     summary: Force logout a user
+ *     description: Admin-only endpoint to force logout a user by invalidating their tokens and ending all active sessions
+ *     tags: [User Administration]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the user to force logout
+ *     responses:
+ *       200:
+ *         description: User logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User logged out successfully
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Forbidden, admin privileges required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/admin/users/:userId/force-logout', authMiddleware.authenticate, authMiddleware.isAdmin, async (req, res) => {
+  logger.info('\n=======================================================');
+  logger.info('========= POST ADMIN/USERS/:userId/FORCE-LOGOUT ROUTE ACCESSED =========');
+  logger.info(`Method: ${req.method}`);
+  logger.info(`Full URL: ${req.originalUrl}`);
+  logger.info(`User ID from params: ${req.params.userId}`);
+  logger.info(`Authenticated user: ${req.user?._key || 'unknown'}`);
+  logger.info(`User role: ${req.user?.role || 'unknown'}`);
+  logger.info(`Timestamp: ${new Date().toISOString()}`);
+  logger.info('=======================================');
+
+  try {
+    const userId = req.params.userId;
+    const adminId = req.user?._key;
+
+    logger.info(`[FORCE LOGOUT] Admin ${adminId} requested force logout for user ${userId}`);
+
+    if (!userId) {
+      logger.warn(`[FORCE LOGOUT] Missing userId in request`);
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    const result = await userService.forceUserLogout(userId, adminId);
+
+    logger.info(`[FORCE LOGOUT] User ${userId} logged out successfully by admin ${adminId}`);
+    return res.json({
+      success: true,
+      message: 'User logged out successfully'
+    });
+  } catch (error) {
+    logger.error(`[FORCE LOGOUT] Error forcing logout for user ${req.params.userId} by admin ${req.user?._key}: ${error.message}`, {
+      stack: error.stack,
+      userId: req.params.userId,
+      adminId: req.user?._key,
+      timestamp: new Date().toISOString()
+    });
+
+    if (error.message === 'User not found') {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.status(500).json({ success: false, message: 'Failed to force logout' });
+  }
+});
+
+/**
+ * Catch-all route for unmatched requests
+ * Logs details of unmatched requests for debugging
+ */
+router.all('*', (req, res) => {
+  logger.warn('\n=========================================================');
+  logger.warn(`[UNMATCHED ROUTE DEBUG] ${new Date().toISOString()} - Unmatched Request`);
+  logger.warn('=========================================================');
+  logger.warn(`[UNMATCHED ROUTE DEBUG] Method: ${req.method}`);
+  logger.warn(`[UNMATCHED ROUTE DEBUG] URL: ${req.originalUrl}`);
+  logger.warn(`[UNMATCHED ROUTE DEBUG] Path: ${req.path}`);
+  logger.warn(`[UNMATCHED ROUTE DEBUG] Headers:`, JSON.stringify(req.headers, (key, value) => 
+    key.toLowerCase() === 'authorization' ? value.substring(0, 20) + '...' : value, 2));
+  logger.warn(`[UNMATCHED ROUTE DEBUG] Body:`, JSON.stringify(maskSensitiveFields(req.body), null, 2));
+  logger.warn(`[UNMATCHED ROUTE DEBUG] Query:`, JSON.stringify(req.query, null, 2));
+  logger.warn(`[UNMATCHED ROUTE DEBUG] Registered Routes:`, router.stack
+    .filter(layer => layer.route)
+    .map(layer => `${Object.keys(layer.route.methods).map(m => m.toUpperCase()).join(', ')}: ${layer.route.path}`));
+
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
+logger.info('User Routes Module: LOADED');
+logger.info('Initializing user routes with base path assumption: /api/users');
+logger.info('Total routes in stack:', router.stack.length);
+router.stack.forEach((middleware, index) => {
+  if (middleware.route) {
+    const path = middleware.route.path;
+    const methods = Object.keys(middleware.route.methods).map(m => m.toUpperCase()).join(', ');
+    logger.info(`Route ${index}: ${methods} - /api/users${path}`);
+  } else if (middleware.name === 'router') {
+    logger.info(`Route ${index}: Sub-router mounted at ${middleware.regexp}`);
+  } else {
+    logger.info(`Route ${index}: Middleware - ${middleware.name || 'anonymous'}`);
+  }
+});
+logger.info('Available routes can be checked at: GET /api/users/debug-routes');
+
   return router;
 };

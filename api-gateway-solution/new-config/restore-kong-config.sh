@@ -1,19 +1,19 @@
 #!/bin/bash
 
 # restore-kong-config.sh
-# Shell script to restore Kong configuration from kong_backup_20250527_162608.json
-# Usage: ./restore-kong-config.sh [-t <jwt_token>] [-h]
+# Shell script to restore Kong configuration from a specified backup file
+# Usage: ./restore-kong-config.sh [-b <backup_file>] [-t [jwt_token]] [-h]
 # Switches:
-#   -t <jwt_token>: Test endpoints with provided JWT token
-#   -h: Display help
+#   -b <backup_file>  Path to Kong configuration backup file (required for restoration)
+#   -t [jwt_token]    Test endpoints with provided JWT token or prompt for credentials if no token
+#   -h                Display help message
+# Environment Variables:
+#   LOGIN_PASSWORD    Password for testing (optional, used if not prompted)
 
 # Constants
 KONG_ADMIN_URL="http://localhost:8001"
 KONG_PUBLIC_URL="http://e2e-82-109.ssdcloudindia.net:8000"
-BACKUP_FILE="kong_backups/kong_backup_20250527_162608.json"
 USER_ID="2133"
-LOGIN_NAME="fordendk"
-LOGIN_PASSWORD="test" # Replace with actual password
 LOG_FILE="kong_restore.log"
 
 # Log function
@@ -33,23 +33,67 @@ fi
 
 # Usage function
 usage() {
-    echo "Usage: $0 [-t <jwt_token>] [-h]"
-    echo "  -t <jwt_token>  Test endpoints with provided JWT token"
-    echo "  -h              Display this help message"
+    echo "Usage: $0 [-b <backup_file>] [-t [jwt_token]] [-h]"
+    echo "  -b <backup_file>  Path to Kong configuration backup file (required for restoration)"
+    echo "  -t [jwt_token]    Test endpoints with provided JWT token or prompt for credentials if no token"
+    echo "  -h                Display this help message"
+    echo "Environment Variables:"
+    echo "  LOGIN_PASSWORD    Password for testing (optional, used if not prompted)"
     exit 1
+}
+
+# Clean up existing JWT plugins and credentials
+cleanup_jwt() {
+    log "Cleaning up existing JWT plugins and credentials"
+
+    # List all routes
+    routes=$(curl -s "$KONG_ADMIN_URL/routes" | jq -r '.data[].id')
+    for route_id in $routes; do
+        plugins=$(curl -s "$KONG_ADMIN_URL/routes/$route_id/plugins" | jq -r '.data[] | select(.name == "jwt") | .id')
+        for plugin_id in $plugins; do
+            log "Deleting JWT plugin $plugin_id from route $route_id"
+            response=$(curl -s -w "\n%{http_code}" -X DELETE "$KONG_ADMIN_URL/routes/$route_id/plugins/$plugin_id")
+            http_code=$(echo "$response" | tail -n1)
+            if [ "$http_code" -eq 204 ]; then
+                log "JWT plugin $plugin_id deleted successfully"
+            else
+                log "ERROR: Failed to delete JWT plugin $plugin_id with HTTP status $http_code"
+            fi
+        done
+    done
+
+    # List all consumers
+    consumers=$(curl -s "$KONG_ADMIN_URL/consumers" | jq -r '.data[].id')
+    for consumer_id in $consumers; do
+        jwts=$(curl -s "$KONG_ADMIN_URL/consumers/$consumer_id/jwt" | jq -r '.data[].id')
+        for jwt_id in $jwts; do
+            log "Deleting JWT credential $jwt_id for consumer $consumer_id"
+            response=$(curl -s -w "\n%{http_code}" -X DELETE "$KONG_ADMIN_URL/consumers/$consumer_id/jwt/$jwt_id")
+            http_code=$(echo "$response" | tail -n1)
+            if [ "$http_code" -eq 204 ]; then
+                log "JWT credential $jwt_id deleted successfully"
+            else
+                log "ERROR: Failed to delete JWT credential $jwt_id with HTTP status $http_code"
+            fi
+        done
+    done
 }
 
 # Restore configuration
 restore_config() {
-    if [ ! -f "$BACKUP_FILE" ]; then
-        log "ERROR: $BACKUP_FILE not found"
+    local backup_file="$1"
+    if [ ! -f "$backup_file" ]; then
+        log "ERROR: Backup file $backup_file not found"
         exit 1
     fi
 
-    log "Restoring Kong configuration from $BACKUP_FILE"
+    log "Restoring Kong configuration from $backup_file"
+
+    # Clean up existing JWT plugins and credentials
+    cleanup_jwt
 
     # Read JSON config
-    config_json=$(cat "$BACKUP_FILE")
+    config_json=$(cat "$backup_file")
 
     errors=0
 
@@ -121,13 +165,40 @@ restore_config() {
                 if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
                     log "Plugin $plugin_name for route $route_name processed successfully"
                 else
-                    log "ERROR: Failed to process plugin $plugin_name for route $route_name with HTTP status $http_code"
+                    log "WARNING: Failed to process plugin $plugin_name for route $route_name with HTTP status $http_code"
                     log "Response: $body"
                     errors=$((errors + 1))
+                    continue
                 fi
             done < <(echo "$route" | jq -c '.plugins[]?')
         fi
     done < <(echo "$config_json" | jq -c '.routes[]')
+
+    # Add user-admin-route
+    log "Adding user-admin-route"
+    existing_route=$(curl -s "$KONG_ADMIN_URL/routes/user-admin-route")
+    if [ -z "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
+        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name/routes" \
+            -H "Content-Type: application/json" \
+            -d '{
+                "name": "user-admin-route",
+                "paths": ["/api/users/admin/users"],
+                "strip_path": false,
+                "preserve_host": true,
+                "protocols": ["http", "https"]
+            }')
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n -1)
+        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+            log "Route user-admin-route added successfully"
+        else
+            log "ERROR: Failed to add route user-admin-route with HTTP status $http_code"
+            log "Response: $body"
+            errors=$((errors + 1))
+        fi
+    else
+        log "Route user-admin-route already exists, skipping"
+    fi
 
     # Update or create service plugins
     while IFS= read -r plugin; do
@@ -148,9 +219,10 @@ restore_config() {
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Service plugin $plugin_name processed successfully"
         else
-            log "ERROR: Failed to process service plugin $plugin_name with HTTP status $http_code"
+            log "WARNING: Failed to process service plugin $plugin_name with HTTP status $http_code"
             log "Response: $body"
             errors=$((errors + 1))
+            continue
         fi
     done < <(echo "$config_json" | jq -c '.plugins[] | select(.service?)')
 
@@ -159,7 +231,7 @@ restore_config() {
         plugin_name=$(echo "$plugin" | jq -r '.name')
         log "Processing global plugin $plugin_name"
         existing_plugins=$(curl -s "$KONG_ADMIN_URL/plugins")
-        plugin_exists=$(echo "$existing_plugins" | jq -r --arg name "$plugin_name" '.data[] | select(.name == $name and .service == null and .route == null) | .id')
+        plugin_exists=$(echo "$existing_plugins" | jq -r --arg name "$plugin_name" '.data[] | select(.name == $name and .service == null and (.route == null or .route.id == "'$(echo "$plugin" | jq -r '.route.id // empty')'")) | .id')
         if [ -n "$plugin_exists" ]; then
             log "Global plugin $plugin_name already exists, skipping"
             continue
@@ -173,9 +245,10 @@ restore_config() {
         if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
             log "Global plugin $plugin_name processed successfully"
         else
-            log "ERROR: Failed to process global plugin $plugin_name with HTTP status $http_code"
+            log "WARNING: Failed to process global plugin $plugin_name with HTTP status $http_code"
             log "Response: $body"
             errors=$((errors + 1))
+            continue
         fi
     done < <(echo "$config_json" | jq -c '.plugins[] | select(.service? | not)')
 
@@ -198,135 +271,6 @@ restore_config() {
             continue
         fi
     done < <(echo "$config_json" | jq -c '.upstreams[]')
-
-    # Add auth-refresh-route and auth-login-route
-    log "Adding auth-refresh-route"
-    existing_route=$(curl -s "$KONG_ADMIN_URL/routes/auth-refresh-route")
-    if [ -z "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name/routes" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "auth-refresh-route",
-                "paths": ["/api/auth/refresh-token"],
-                "methods": ["POST"],
-                "strip_path": false,
-                "preserve_host": true,
-                "protocols": ["http", "https"]
-            }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "Route auth-refresh-route added successfully"
-        else
-            log "ERROR: Failed to add route auth-refresh-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "Route auth-refresh-route already exists, skipping"
-    fi
-
-    log "Adding JWT plugin for auth-refresh-route"
-    existing_plugins=$(curl -s "$KONG_ADMIN_URL/routes/auth-refresh-route/plugins")
-    if [ -z "$(echo "$existing_plugins" | jq -r '.data[] | select(.name == "jwt") | .id')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/auth-refresh-route/plugins" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "jwt",
-                "config": {
-                    "key_claim_name": "iss",
-                    "secret_is_base64": false
-                }
-            }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "JWT plugin for auth-refresh-route added successfully"
-        else
-            log "ERROR: Failed to add JWT plugin for auth-refresh-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "JWT plugin for auth-refresh-route already exists, skipping"
-    fi
-
-    log "Adding auth-login-route"
-    existing_route=$(curl -s "$KONG_ADMIN_URL/routes/auth-login-route")
-    if [ -z "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name/routes" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "auth-login-route",
-                "paths": ["/api/auth/login"],
-                "methods": ["POST"],
-                "strip_path": false,
-                "preserve_host": true,
-                "protocols": ["http", "https"]
-            }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "Route auth-login-route added successfully"
-        else
-            log "ERROR: Failed to add route auth-login-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "Route auth-login-route already exists, skipping"
-    fi
-
-    log "Adding JWT plugin for auth-login-route"
-    existing_plugins=$(curl -s "$KONG_ADMIN_URL/routes/auth-login-route/plugins")
-    if [ -z "$(echo "$existing_plugins" | jq -r '.data[] | select(.name == "jwt") | .id')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/auth-login-route/plugins" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "jwt",
-                "config": {
-                    "key_claim_name": "iss",
-                    "secret_is_base64": false
-                }
-            }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "JWT plugin for auth-login-route added successfully"
-        else
-            log "ERROR: Failed to add JWT plugin for auth-login-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "JWT plugin for auth-login-route already exists, skipping"
-    fi
-
-    # Ensure JWT plugin for auth-route
-    log "Ensuring JWT plugin for auth-route"
-    existing_plugins=$(curl -s "$KONG_ADMIN_URL/routes/auth-route/plugins")
-    if [ -z "$(echo "$existing_plugins" | jq -r '.data[] | select(.name == "jwt") | .id')" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes/auth-route/plugins" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "jwt",
-                "config": {
-                    "key_claim_name": "iss",
-                    "secret_is_base64": false
-                }
-            }')
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n -1)
-        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-            log "JWT plugin for auth-route added successfully"
-        else
-            log "ERROR: Failed to add JWT plugin for auth-route with HTTP status $http_code"
-            log "Response: $body"
-            errors=$((errors + 1))
-        fi
-    else
-        log "JWT plugin for auth-route already exists, skipping"
-    fi
 
     # Add upstream target
     log "Adding target e2e-109-51:3000 for upstream express-api-servers"
@@ -372,8 +316,7 @@ restore_config() {
     if [ "$errors" -eq 0 ]; then
         log "Configuration restored successfully"
     else
-        log "Configuration restored with $errors errors"
-        exit 1
+        log "Configuration restored with $errors warnings/errors, but continuing"
     fi
 }
 
@@ -381,40 +324,72 @@ restore_config() {
 test_endpoints() {
     local jwt_token="$1"
     if [ -z "$jwt_token" ]; then
-        log "ERROR: JWT token required for testing. Use -t <jwt_token>"
-        exit 1
+        log "No JWT token provided, prompting for username and password"
+        read -p "Enter username (email): " username
+        if [ -z "$username" ]; then
+            log "ERROR: Username is required"
+            exit 1
+        fi
+        read -s -p "Enter password: " password
+        echo
+        if [ -z "$password" ]; then
+            if [ -n "$LOGIN_PASSWORD" ]; then
+                log "Using LOGIN_PASSWORD from environment variable"
+                password="$LOGIN_PASSWORD"
+            else
+                log "ERROR: Password is required"
+                exit 1
+            fi
+        fi
+
+        log "Obtaining new JWT token via login for $username"
+        response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\": \"$username\", \"password\": \"$password\"}")
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n -1)
+        if [ "$http_code" -eq 200 ]; then
+            jwt_token=$(echo "$body" | jq -r '.accessToken')
+            log "SUCCESS: Obtained JWT token (first 10 chars: ${jwt_token:0:10}...)"
+        else
+            log "ERROR: Failed to obtain JWT token with HTTP status $http_code"
+            log "Response: $body"
+            exit 1
+        fi
+    else
+        log "Using provided JWT token (first 10 chars: ${jwt_token:0:10}...)"
     fi
 
-    log "Testing endpoints with JWT token (first 10 chars: ${jwt_token:0:10}...)"
-
-    # Test 1: POST /api/auth/refresh-token
-    log "Testing POST /api/auth/refresh-token"
-    response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/auth/refresh-token" \
+    # Test 1: POST /api/auth/logout
+    log "Testing POST /api/auth/logout"
+    response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/auth/logout" \
         -H "Authorization: Bearer $jwt_token" \
         -H "Content-Type: application/json" \
         -d '{}')
     http_code=$(echo "$response" | tail -n1)
     body=$(echo "$response" | head -n -1)
     if [ "$http_code" -eq 200 ]; then
-        log "SUCCESS: /api/auth/refresh-token returned 200"
+        log "SUCCESS: /api/auth/logout returned 200"
         log "Response: $body"
     else
-        log "ERROR: /api/auth/refresh-token failed with status $http_code"
+        log "ERROR: /api/auth/logout failed with status $http_code"
         log "Response: $body"
         exit 1
     fi
 
-    # Test 2: GET /api/chat/folders?userId=2133
-    log "Testing GET /api/chat/folders?userId=$USER_ID"
-    response=$(curl -s -w "\n%{http_code}" "$KONG_PUBLIC_URL/api/chat/folders?userId=$USER_ID" \
-        -H "Authorization: Bearer $jwt_token")
+    # Test 2: POST /api/users/admin/users/2133/force-logout
+    log "Testing POST /api/users/admin/users/$USER_ID/force-logout"
+    response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_PUBLIC_URL/api/users/admin/users/$USER_ID/force-logout" \
+        -H "Authorization: Bearer $jwt_token" \
+        -H "Content-Type: application/json" \
+        -d '{}')
     http_code=$(echo "$response" | tail -n1)
     body=$(echo "$response" | head -n -1)
     if [ "$http_code" -eq 200 ]; then
-        log "SUCCESS: /api/chat/folders returned 200"
+        log "SUCCESS: /api/users/admin/users/$USER_ID/force-logout returned 200"
         log "Response: $body"
     else
-        log "ERROR: /api/chat/folders failed with status $http_code"
+        log "ERROR: /api/users/admin/users/$USER_ID/force-logout failed with status $http_code"
         log "Response: $body"
         exit 1
     fi
@@ -436,11 +411,17 @@ test_endpoints() {
 }
 
 # Parse command-line options
+BACKUP_FILE=""
 TEST_TOKEN=""
-while getopts "t:h" opt; do
+TEST_MODE=false
+while getopts "b:t::h" opt; do
     case $opt in
+        b)
+            BACKUP_FILE="$OPTARG"
+            ;;
         t)
-            TEST_TOKEN="$OPTARG"
+            TEST_TOKEN="${OPTARG:-}"
+            TEST_MODE=true
             ;;
         h)
             usage
@@ -449,14 +430,26 @@ while getopts "t:h" opt; do
             log "ERROR: Invalid option: -$OPTARG"
             usage
             ;;
+        :)
+            if [ "$OPTARG" = "t" ]; then
+                TEST_TOKEN=""
+                TEST_MODE=true
+            else
+                log "ERROR: Option -$OPTARG requires an argument"
+                usage
+            fi
+            ;;
     esac
 done
 
 # Execute operations
-if [ -z "$TEST_TOKEN" ]; then
-    restore_config
-else
+if [ "$TEST_MODE" = false ] && [ -z "$BACKUP_FILE" ]; then
+    log "ERROR: Backup file is required. Use -b <backup_file>"
+    usage
+elif [ "$TEST_MODE" = true ]; then
     test_endpoints "$TEST_TOKEN"
+elif [ -n "$BACKUP_FILE" ]; then
+    restore_config "$BACKUP_FILE"
 fi
 
 log "Operation completed successfully"

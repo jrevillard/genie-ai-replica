@@ -225,29 +225,48 @@ class DatabaseOperationsService {
       const filenameBase = `${this.appName.toLowerCase()}_backup_${timestamp}`;
       const backupFilename = `${filenameBase}.${this.backupFormat}`;
       const backupPath = path.join(this.backupDir, backupFilename);
-
-      const collections = await this.db.collections();
+  
       const dbInfo = {
         name: process.env.ARANGO_DB,
         version: await this.db.version(),
         timestamp: timestamp,
-        environment: process.env.NODE_ENV,
-        collections: collections.map(c => c.name)
+        environment: process.env.NODE_ENV
       };
-
+  
+      // Get collection metadata reliably
+      const collectionInfos = await this.db.listCollections();
+      dbInfo.collections = collectionInfos
+        .filter(info => !info.isSystem)
+        .map(info => info.name);
+  
       const writeStream = fsStandard.createWriteStream(backupPath);
       if (this.backupFormat === 'json') {
         writeStream.write('{\n');
         writeStream.write(`  "_metadata": ${JSON.stringify(dbInfo, null, 2)},\n`);
       }
-
+  
       let collectionCount = 0;
-      for (const collection of collections) {
-        const collectionName = collection.name;
-        const cursor = await collection.all();
+      for (const info of collectionInfos) {
+        const collectionName = info.name;
+        if (info.isSystem) {
+          logger.info(`Skipping system collection: ${collectionName}`);
+          continue;
+        }
+  
+        logger.info(`Attempting to backup collection: ${collectionName}`);
+  
+        // Get proxied collection instance
+        const collection = this.db.collection(collectionName);
+  
+        // Use interpolation for safe collection binding
+        const cursor = await this.db.query(aql`
+          FOR doc IN ${collection}
+          RETURN doc
+        `);
+  
         const documents = await cursor.all();
-        logger.info(`Backing up collection: ${collectionName} (${documents.length} documents)`);
-
+        logger.info(`Backed up collection: ${collectionName} (${documents.length} documents)`);
+  
         if (this.backupFormat === 'json') {
           if (collectionCount > 0) {
             writeStream.write(',\n');
@@ -258,20 +277,20 @@ class DatabaseOperationsService {
         }
         collectionCount++;
       }
-
+  
       if (this.backupFormat === 'json') {
         writeStream.write('\n}');
       }
       writeStream.end();
-
+  
       await new Promise((resolve, reject) => {
         writeStream.on('finish', resolve);
         writeStream.on('error', reject);
       });
-
+  
       const stats = await fs.stat(backupPath);
       const fileSize = this._formatSize(stats.size);
-
+  
       let finalPath = backupPath;
       if (this.compressBackups) {
         finalPath = await this._compressBackup(backupPath);
@@ -280,10 +299,10 @@ class DatabaseOperationsService {
         const compressedSize = this._formatSize(compressedStats.size);
         logger.info(`Backup compressed successfully: ${fileSize} -> ${compressedSize}`);
       }
-
+  
       await this._cleanupOldBackups();
       const relativeBackupPath = path.relative(process.cwd(), finalPath);
-
+  
       logger.info(`Database backup completed successfully: ${relativeBackupPath} (${fileSize})`);
       return {
         success: true,

@@ -10,7 +10,7 @@ const logFormat = format.printf(({ level, message, timestamp }) => {
 
 // Default configuration for the logger
 let loggerConfig = {
-  level: 'debug',
+  level: 'info',
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
@@ -27,14 +27,14 @@ let loggerConfig = {
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       level: 'error',
-      maxSize: '5m',
+      maxSize: '10m',
       maxFiles: '30d',
       zippedArchive: true,
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
-      maxSize: '5m',
+      maxSize: '10m',
       maxFiles: '30d',
       zippedArchive: true,
     }),
@@ -74,14 +74,14 @@ const reconfigureLogger = (newConfig) => {
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       level: 'error',
-      maxSize: newConfig.errorMaxSize || '5m',
+      maxSize: newConfig.errorMaxSize || '10m',
       maxFiles: newConfig.errorMaxFiles || '30d',
       zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
-      maxSize: newConfig.combinedMaxSize || '5m',
+      maxSize: newConfig.combinedMaxSize || '10m',
       maxFiles: newConfig.combinedMaxFiles || '30d',
       zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
     }),

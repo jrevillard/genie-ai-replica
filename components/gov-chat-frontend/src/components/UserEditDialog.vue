@@ -664,11 +664,13 @@ export default {
         this.isSaving = true;
         this.operationMessage = "";
 
-        // Call service to invalidate token - using the new admin method
         const response = await userService.forceUserLogout(this.userId);
+        console.log(
+          "[FORCE LOGOUT DEBUG] Response:",
+          JSON.stringify(response, null, 2)
+        );
 
-        if (response && response.data && response.data.success) {
-          // Update user data
+        if (response && response.success) {
           this.userData.accessToken = null;
           this.showMessage(
             this.translate(
@@ -677,13 +679,15 @@ export default {
             ),
             true
           );
-
-          // Emit event to parent component
           this.$emit("user-updated", {
             userId: this.userId,
             changes: { accessToken: null },
           });
         } else {
+          console.warn(
+            "[FORCE LOGOUT DEBUG] Unexpected response structure:",
+            response
+          );
           this.showMessage(
             this.translate(
               "admin.userEdit.logoutFailed",
@@ -693,7 +697,11 @@ export default {
           );
         }
       } catch (error) {
-        console.error("Error forcing logout:", error);
+        console.error(
+          "[FORCE LOGOUT DEBUG] Error:",
+          error.message,
+          error.stack
+        );
         this.showMessage(
           this.translate(
             "admin.userEdit.errorForcingLogout",
@@ -726,20 +734,6 @@ export default {
 </script>
   
  <style scoped>
-/* Theme variables */
-:root {
-  --bg-button-primary-hover: #3a7da0; /* Fallback, overridden by config */
-  --switch-track-off: #d0d0d0;
-  --switch-track-on: var(--bg-button-primary);
-  --switch-thumb: #ffffff;
-}
-[data-theme="dark"] {
-  --bg-button-primary-hover: #3a7da0;
-  --switch-track-off: #475569;
-  --switch-track-on: var(--bg-button-primary);
-  --switch-thumb: #ffffff;
-}
-
 /* Modal Base Styles */
 .modal {
   position: fixed;
@@ -964,7 +958,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--switch-track-off);
+  background-color: var(--switch-track-off, #d0d0d0);
   transition: 0.4s;
   border-radius: 20px;
 }
@@ -976,16 +970,13 @@ export default {
   width: 16px;
   left: 2px;
   bottom: 2px;
-  background-color: var(--switch-thumb);
+  background-color: var(--switch-thumb, #ffffff);
   transition: 0.4s;
   border-radius: 50%;
 }
 
 input:checked + .slider {
-  background-color: var(--switch-track-on);
-}
-[data-theme="dark"] input:checked + .slider {
-  background-color: var(--switch-track-on);
+  background-color: var(--switch-track-on, #3b82f6);
 }
 
 input:disabled + .slider {
@@ -1047,12 +1038,12 @@ input:checked + .slider:before {
 }
 
 .verify-email-button {
-  border-color: var(--success, #10b981);
-  color: var(--success, #10b981);
+  border-color: var(--primary, #3b82f6);
+  color: var(--primary, #3b82f6);
 }
 
 .verify-email-button:hover:not(:disabled) {
-  background-color: rgba(16, 185, 129, 0.05);
+  background-color: rgba(59, 130, 246, 0.05);
 }
 
 .reset-password-button {
@@ -1097,7 +1088,7 @@ input:checked + .slider:before {
 
 /* Button Styles */
 .btn {
-  padding: 0.4rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 0.375rem;
   border: none;
   font-size: 0.8rem;
@@ -1111,19 +1102,17 @@ input:checked + .slider:before {
 }
 
 .btn-primary {
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary, #ffffff);
+  background-color: var(--bg-button-primary) !important;
+  color: var(--text-button-primary, #ffffff) !important;
 }
-[data-theme="dark"] .btn-primary {
-  background-color: var(--bg-button-primary);
-  color: var(--text-button-primary, #ffffff);
+
+html[data-theme="dark"][data-v-46520cd6] .modal .btn-primary {
+  background-color: var(--bg-button-primary) !important;
+  color: var(--text-button-primary, #ffffff) !important;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--bg-button-primary-hover);
-}
-[data-theme="dark"] .btn-primary:hover:not(:disabled) {
-  background-color: var(--bg-button-primary-hover);
+  background-color: var(--primary-dark, #8b3c7a) !important;
 }
 
 .btn-outline {
@@ -1156,7 +1145,7 @@ input:checked + .slider:before {
   height: 32px;
   border: 3px solid rgba(59, 130, 246, 0.3);
   border-radius: 50%;
-  border-top-color: var(--bg-button-primary);
+  border-top-color: var(--primary, #3b82f6);
   animation: spin 1s linear infinite;
   margin-bottom: 0.75rem;
 }
@@ -1240,6 +1229,15 @@ input:checked + .slider:before {
 
 [data-theme="dark"] .btn-outline:hover:not(:disabled) {
   background-color: #3a3a3a !important;
+}
+
+/* Toggle Dark Mode Adjustments */
+[data-theme="dark"] .slider {
+  background-color: #2b2b2b !important; /* Match dialog background */
+}
+
+[data-theme="dark"] input:checked + .slider {
+  background-color: #475569 !important; /* Dark slate gray for on state */
 }
 
 /* Responsive Adjustments */

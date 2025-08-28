@@ -1,8 +1,8 @@
 <template>
   <select v-model="currentLocale" @change="changeLanguage">
-    <option value="en">English</option>
-    <option value="fr">Français</option>
-    <option value="sw">Kiswahili</option>
+    <option v-for="locale in $i18n.availableLocales" :key="locale" :value="locale">
+      {{ localeNames[locale] || locale }}
+    </option>
   </select>
 </template>
 
@@ -11,12 +11,38 @@ export default {
   name: 'LanguageSelector',
   data() {
     return {
-      currentLocale: this.$i18n.locale
+      currentLocale: this.$i18n.locale,
+      localeNames: {
+        ar: 'Arabic',
+        en: 'English',
+        de: 'German',
+        es: 'Spanish',
+        fr: 'Français',
+        id: 'Indonesian',
+        pt: 'Portuguese',
+        ru: 'Russian',
+        sw: 'Kiswahili',
+        th: 'Thai',
+        zh: 'Chinese'
+      }
+    }
+  },
+  watch: {
+    '$i18n.locale'(newLocale) {
+      this.currentLocale = newLocale
     }
   },
   methods: {
     changeLanguage() {
       this.$i18n.locale = this.currentLocale
+      try {
+        localStorage.setItem('userLocale', this.currentLocale)
+        window.dispatchEvent(new CustomEvent('languageChanged', {
+          detail: { language: this.currentLocale }
+        }))
+      } catch (e) {
+        console.warn('Unable to save locale preference:', e)
+      }
     }
   }
 }
@@ -31,4 +57,3 @@ select {
   cursor: pointer;
 }
 </style>
-

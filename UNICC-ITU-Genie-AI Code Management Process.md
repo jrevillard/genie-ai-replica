@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the **code management process** for the UNICC-ITU Genie AI repository (`https://os.unicc.biz/un/itu/genie-ai`), which hosts the Huduma AI framework for Retrieval-Augmented Generation (RAG) based chatbots. It defines how developers, including UNICC ITU team members and third-party collaborators (e.g., NOOR-AI-AL-TAFSIR), interact with the repository to ensure code quality, repository integrity, and efficient collaboration. The process is based on the GitLab collaboration guidelines for UNICC ITU and NOOR-AI-AL-TAFSIR, extended to cover all developers and future third parties.
+This document outlines the **code management process** for the UNICC-ITU Genie AI repository (`https://os.unicc.biz/un/itu/genie-ai`), which hosts the GENIE-AI framework for Retrieval-Augmented Generation (RAG) based chatbots. It defines how developers, including UNICC ITU team members and third-party collaborators (e.g., NOOR-AI-AL-TAFSIR), interact with the repository to ensure code quality, repository integrity, and efficient collaboration. The process is based on the GitLab collaboration guidelines for UNICC ITU and NOOR-AI-AL-TAFSIR, extended to cover all developers and future third parties.
 
 ## Objectives
 
@@ -282,4 +282,4 @@ The repository is organized to support modularity, shared libraries, and third-p
 - Updates are published in `/docs/code-management-process.md`.
 
 ## Conclusion
-This code management process ensures efficient collaboration, high code quality, and repository integrity for the Huduma AI framework. Developers must follow the defined workflow, and third parties must align with the cherry-picking and merge request process. For questions, contact UNICC ITU via GitLab issues or sync meetings.
+This code management process ensures efficient collaboration, high code quality, and repository integrity for the GENIE-AI framework. Developers must follow the defined workflow, and third parties must align with the cherry-picking and merge request process. For questions, contact UNICC ITU via GitLab issues or sync meetings.

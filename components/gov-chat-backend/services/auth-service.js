@@ -193,11 +193,7 @@ class AuthService {
       if (user.disabled === true) throw new Error('This account has been disabled');
       if (!user.emailVerified) throw new Error('Email not verified');
       const accessToken = this.generateToken(user);
-      const refreshToken = jwt.sign(
-        { userId: user._key },
-        this.jwtSecret,
-        { expiresIn: '7d' }
-      );
+      const refreshToken = this.generateRefreshToken(user._key, user.tokenVersion || 0); // Include tokenVersion
       await this.users.update(user._key, {
         accessToken: accessToken,
         refreshToken: refreshToken,
@@ -219,41 +215,81 @@ class AuthService {
 
   async refreshToken(refreshToken) {
     if (!this.initialized) throw new Error('AuthService not initialized');
+    const startTime = Date.now();
     try {
-      logger.info('Validating refresh token');
+      logger.info('AuthService.refresh_token_start');
+
+      // Verify refresh token
       const decoded = jwt.verify(refreshToken, this.jwtSecret);
       if (!decoded || !decoded.userId) {
-        logger.warn('Invalid refresh token');
+        logger.warn('AuthService.invalid_refresh_token', { token: refreshToken.substring(0, 10) + '...' });
         throw new Error('Invalid refresh token');
       }
 
-      logger.info(`Generating JWT token for user: ${decoded.userId}`);
-      const accessToken = this.generateToken({ _key: decoded.userId });
-      const newRefreshToken = jwt.sign(
-        { userId: decoded.userId },
-        this.jwtSecret,
-        { expiresIn: '7d' }
-      );
+      // Fetch user to validate tokenVersion
+      const user = await this.getUserById(decoded.userId);
+      if (!user) {
+        logger.warn('AuthService.user_not_found', { userId: decoded.userId });
+        throw new Error('User not found');
+      }
 
-      // Update tokens in database (optional, but try to maintain consistency)
+      // Check token version
+      const currentTokenVersion = user.tokenVersion || 0;
+      const tokenVersionInToken = decoded.tokenVersion || 0;
+      if (currentTokenVersion !== tokenVersionInToken) {
+        logger.warn('AuthService.invalid_token_version', {
+          userId: decoded.userId,
+          currentTokenVersion,
+          tokenVersionInToken
+        });
+        throw new Error('Invalid refresh token');
+      }
+
+      // Generate new tokens
+      logger.info(`AuthService.generating_tokens_for_user`, { userId: decoded.userId });
+      const accessToken = this.generateToken({ _key: decoded.userId });
+      const newRefreshToken = this.generateRefreshToken(decoded.userId, currentTokenVersion);
+
+      // Update tokens in database
       try {
         await this.users.update(decoded.userId, {
-          accessToken: accessToken,
+          accessToken,
           refreshToken: newRefreshToken,
           updatedAt: new Date().toISOString()
         });
-        logger.info(`Tokens updated for user: ${decoded.userId}`);
+        logger.info('AuthService.tokens_updated', { userId: decoded.userId });
       } catch (dbError) {
-        logger.warn(`Failed to update tokens for user ${decoded.userId}: ${dbError.message}`);
+        logger.warn('AuthService.token_update_failed', {
+          userId: decoded.userId,
+          error: dbError.message
+        });
         // Continue without failing the refresh
       }
 
-      logger.info(`Refresh token validated for user ${decoded.userId}`);
+      logger.info('AuthService.refresh_token_success', {
+        userId: decoded.userId,
+        durationMs: Date.now() - startTime
+      });
       return { accessToken, refreshToken: newRefreshToken };
     } catch (error) {
-      logger.error(`Refresh token error: ${error.message}`, { stack: error.stack });
+      logger.error('AuthService.refresh_token_failed', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
       throw new Error('Invalid refresh token');
     }
+  }
+
+  generateRefreshToken(userId, tokenVersion) {
+    logger.info(`AuthService.generating_refresh_token`, { userId });
+    const token = jwt.sign(
+      { userId, tokenVersion: tokenVersion || 0 },
+      this.jwtSecret,
+      { expiresIn: '7d' }
+    );
+    logger.info(`AuthService.refresh_token_generated`, { userId });
+    return token;
   }
 
   async logout(userId, token) {
@@ -432,7 +468,7 @@ class AuthService {
 
       await this.sendVerificationEmail(user, finalFrontendUrl, backendUrl);
       logger.info(`Verification email resent successfully to: ${email}`);
-      
+
       return {
         success: true,
         message: 'If your email exists in our system, a verification email has been sent'
@@ -668,7 +704,7 @@ class AuthService {
 
       await this.db.query(tokenQuery);
       logger.info(`Password reset successfully for user ${userId}`);
-      
+
       return { success: true, message: 'Password has been reset successfully' };
     } catch (error) {
       logger.error(`Error resetting password with token ${token}: ${error.message}`, { stack: error.stack });
@@ -862,7 +898,7 @@ class AuthService {
       const verifyRemoved = await verifyCursor.all();
 
       logger.info(`Expired tokens cleaned up successfully: ${resetRemoved.length} reset tokens, ${verifyRemoved.length} verification tokens`);
-      
+
       return {
         success: true,
         removed: resetRemoved.length + verifyRemoved.length,

@@ -1,6 +1,12 @@
 # GENIE.AI
+This repository contains code and resources of the GENIE.AI framework - a purpose-built platform designed to empower public institutions to rapidly design, deploy, and manage custom Generative AI solutions—such as chatbots, digital assistants, and content generation tools—at low cost, with full control, and without external dependency.
 
+- ​​Fully open-source and interoperable technology stack, aligned with [GovStack](https://specs.govstack.global) digital public infrastructure standards, enabling seamless integration with the broader ecosystem of digital public services.
 
+- Modular and adaptable architecture, featuring a customizable UI, hybrid Retrieval-Augmented Generation (RAG) pipeline, and support for agentic and tool-calling capabilities.
+
+- Dockerized deployment optimized for Kubernetes, ensuring scalability, reliability, and ease of maintenance.
+- Developed based on input from a multi-stakeholder working group and built on the [Open Platform for Enterprise AI (OPEA)](https://opea.dev).​
 
 ### Objective: 
 Empower governments and institutions with a free, open-source, modular stack of software and tools to create tailored, scalable, and context-specific GenAI and RAG applications and conduct reference implementations of solutions addressing selected public sector use cases. 
@@ -36,7 +42,8 @@ A non-exhaustive list of public sector use cases for GenAI and RAG has been coll
 
 
 ### Relevant sites and resources:
-- [Open Source AI for Digital Public Services - project Confluence space](https://osaips.atlassian.net/wiki/external/ZjA2MjBhMWM1NDQ4NDFhY2EzNTRiYjZjMWNjNjI3NjQ)
+- [ITU Initiative on Open Source AI for Public Services](https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/ITU_OSPO/Open-Source_AI_for_Public_Services/About_the_Initiative.aspx)
+- [Open Source AI for Public Services - Confluence documentation](https://osaips.atlassian.net/wiki/external/ZjA2MjBhMWM1NDQ4NDFhY2EzNTRiYjZjMWNjNjI3NjQ)
 - [AI for Good Global Summit: Track on Open-Source AI for Digital Public Goods](https://aiforgood.itu.int/eventcat/discovery-open-source-ai-for-digital-public-goods/)
-- [ITU OSPO project webpage](https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/ITU_OSPO/About.aspx)
+- [ITU Open Source Programme Office](https://www.itu.int/en/ITU-D/ICT-Applications/Pages/Initiatives/ITU_OSPO/About.aspx)
 

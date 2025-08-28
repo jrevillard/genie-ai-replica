@@ -1,3 +1,0 @@
-This is a temporary file. 
-
-The final requirements (package list) can be automatically generated upon code completion.

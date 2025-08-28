@@ -1,10 +1,10 @@
 <template>
-  <div class="weather-panel" :data-theme="$route.meta.theme || 'light'">
+  <div class="weather-panel" :data-theme="$route.meta.theme || 'light'" :key="$i18n.locale">
     <div class="weather-header">
-      <h4>{{ $t('sidebar.weatherTitle', 'Weather Forecast') }}</h4>
+      <h4>{{ weatherTitle }}</h4>
       <div class="weather-location">
-        {{ location }}
-        <button @click="refreshWeather" class="refresh-btn" title="Refresh Weather">
+        {{ location || weatherLocationLoading }}
+        <button @click="refreshWeather" class="refresh-btn" :title="weatherRefresh">
           <i class="fas fa-sync-alt" :class="{ 'rotating': isLoading }"></i>
         </button>
       </div>
@@ -12,12 +12,12 @@
     
     <div v-if="isLoading" class="weather-loading">
       <i class="fas fa-spinner fa-pulse"></i>
-      {{ $t('sidebar.weatherLoading', 'Loading weather data...') }}
+      {{ weatherLoading }}
     </div>
     
-    <div v-else-if="error" class="weather-error">
+    <div v-else-if="errorKey" class="weather-error">
       <i class="fas fa-exclamation-triangle"></i>
-      {{ error }}
+      {{ $t(`sidebar.${errorKey}`) }}
     </div>
     
     <div v-else class="weather-content">
@@ -28,7 +28,7 @@
         </div>
         <div class="current-details">
           <div class="current-temp">{{ currentWeather.temperature }}°C</div>
-          <div class="current-condition">{{ currentWeather.condition }}</div>
+          <div class="current-condition">{{ getTranslatedCondition(currentWeather.condition) }}</div>
         </div>
         <div class="current-info">
           <div class="info-item">
@@ -42,15 +42,16 @@
       
       <!-- Daily Forecast -->
       <div class="forecast-list">
-        <div v-for="(day, index) in forecast" :key="index" class="forecast-day">
-          <div class="day-name">{{ formatDay(day.date) }}</div>
+        <div v-for="(day, index) in formattedForecast" :key="index" class="forecast-day">
+          <div class="day-name">{{ day.formattedDate }}</div>
           <div class="day-icon">
-            <i :class="getWeatherIcon(day.condition)"></i>
+            <i :class="day.iconClass"></i>
           </div>
           <div class="day-temp">
             <span class="temp-high">{{ day.highTemp }}°</span>
             <span class="temp-low">{{ day.lowTemp }}°</span>
           </div>
+          <div class="day-condition">{{ day.translatedCondition }}</div>
         </div>
       </div>
     </div>
@@ -58,137 +59,123 @@
 </template>
 
 <script>
+import weatherService from '@/services/weatherService'; // Adjust path as needed
+import authService from '@/services/authService'; // Adjust path as needed
+
 export default {
   name: 'WeatherPanel',
   
   data() {
     return {
-      location: 'Loading location...',
+      location: null,
       isLoading: true,
-      error: null,
+      errorKey: null,
       currentWeather: {
-        temperature: 24,
-        condition: 'Partly Cloudy',
-        humidity: 65,
-        windSpeed: 12
+        temperature: 0,
+        condition: '',
+        humidity: 0,
+        windSpeed: 0
       },
-      forecast: [
-        {
-          date: new Date(Date.now() + 86400000), // Tomorrow
-          condition: 'Sunny',
-          highTemp: 26,
-          lowTemp: 18
-        },
-        {
-          date: new Date(Date.now() + 86400000 * 2), // Day after tomorrow
-          condition: 'Scattered Showers',
-          highTemp: 23,
-          lowTemp: 17
-        },
-        {
-          date: new Date(Date.now() + 86400000 * 3), // 3 days from now
-          condition: 'Thunderstorm',
-          highTemp: 21,
-          lowTemp: 16
-        }
-      ]
+      forecast: []
     };
   },
   
+  computed: {
+    weatherTitle() {
+      return this.$t('sidebar.weatherTitle');
+    },
+    weatherLoading() {
+      return this.$t('sidebar.weatherLoading');
+    },
+    weatherLocationLoading() {
+      return this.$t('sidebar.weatherLocationLoading');
+    },
+    weatherRefresh() {
+      return this.$t('sidebar.weatherRefresh');
+    },
+    formattedForecast() {
+      return this.forecast.map(day => ({
+        ...day,
+        formattedDate: this.formatDay(day.date),
+        iconClass: this.getWeatherIcon(day.condition),
+        translatedCondition: this.getTranslatedCondition(day.condition)
+      }));
+    }
+  },
+  
+  watch: {
+    '$i18n.locale': {
+      handler() {
+        this.getWeather();
+        this.$forceUpdate();
+      },
+      immediate: true
+    }
+  },
+  
   created() {
-    this.getUserLocation();
+    this.getWeather();
   },
   
   methods: {
-    getUserLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          this.handleLocationSuccess,
-          this.handleLocationError,
-          { timeout: 10000 }
-        );
-      } else {
-        // Fallback to default location
-        this.location = 'Nairobi, Kenya';
-        this.simulateWeatherData();
+    async getWeather() {
+      this.isLoading = true;
+      this.errorKey = null;
+      this.location = null;
+
+      try {
+        if (navigator.geolocation) {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+          });
+          const { latitude, longitude } = position.coords;
+          const user = await authService.getCurrentUser(); // Fetch user from authService
+          const userId = user?._key || null;
+          const locale = this.$i18n.locale;
+
+          const weatherData = await weatherService.getWeather({ latitude, longitude, userId, locale });
+          this.location = weatherData.location;
+          this.currentWeather = weatherData.current;
+          this.forecast = weatherData.forecast;
+        } else {
+          this.errorKey = 'weatherGeolocationUnsupported';
+        }
+      } catch (error) {
+        console.warn('Weather fetch error:', error);
+        this.errorKey = 'weatherErrorDefault';
+      } finally {
+        this.isLoading = false;
       }
     },
     
-    handleLocationSuccess(position) {
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
-      
-      // Reverse geocoding to get city name (in a real app, use an API)
-      this.reverseGeocode(latitude, longitude);
-      
-      // In a real app, you would use coordinates to get weather data
-      this.simulateWeatherData();
-    },
-    
-    handleLocationError(error) {
-      console.warn('Geolocation error:', error);
-      // Fallback to default location
-      this.location = 'Nairobi, Kenya';
-      this.simulateWeatherData();
-    },
-    
-    reverseGeocode(latitude, longitude) {
-      // Simulate reverse geocoding
-      // In a real app, use a geocoding API like Google Maps, OpenStreetMap, etc.
-      
-      setTimeout(() => {
-        // This would normally come from an API
-        const cities = [
-          'Nairobi, Kenya',
-          'Mombasa, Kenya',
-          'Kisumu, Kenya',
-          'Nakuru, Kenya',
-          'Eldoret, Kenya'
-        ];
-        
-        // For demo purposes, select a random city
-        this.location = cities[Math.floor(Math.random() * cities.length)];
-      }, 500);
-    },
-    
-    simulateWeatherData() {
-      // Simulate API loading
-      setTimeout(() => {
-        this.isLoading = false;
-      }, 1000);
-    },
-    
-    refreshWeather() {
-      this.isLoading = true;
-      
-      // Simulate API call
-      setTimeout(() => {
-        // Randomly vary the weather a bit
-        this.currentWeather.temperature = Math.floor(22 + Math.random() * 6);
-        this.currentWeather.humidity = Math.floor(60 + Math.random() * 20);
-        this.currentWeather.windSpeed = Math.floor(8 + Math.random() * 10);
-        
-        // Random condition (for demo)
-        const conditions = ['Sunny', 'Partly Cloudy', 'Cloudy', 'Light Rain', 'Thunderstorm'];
-        this.currentWeather.condition = conditions[Math.floor(Math.random() * conditions.length)];
-        
-        // Update forecast (for demo)
-        this.forecast.forEach(day => {
-          day.highTemp = Math.floor(20 + Math.random() * 8);
-          day.lowTemp = Math.floor(15 + Math.random() * 6);
-          day.condition = conditions[Math.floor(Math.random() * conditions.length)];
-        });
-        
-        this.isLoading = false;
-      }, 1000);
+    async refreshWeather() {
+      await this.getWeather();
     },
     
     formatDay(date) {
-      return new Date(date).toLocaleDateString(undefined, { weekday: 'short' });
+      return new Date(date).toLocaleDateString(this.$i18n.locale, { weekday: 'short' });
+    },
+    
+    getTranslatedCondition(condition) {
+      if (!condition) return '';
+      const conditionLower = condition.toLowerCase();
+      const key = this.getConditionKey(conditionLower);
+      const translationKey = `sidebar.weatherConditions.${key}`;
+      return this.$te(translationKey) ? this.$t(translationKey) : condition;
+    },
+    
+    getConditionKey(conditionLower) {
+      if (conditionLower.includes('thunder')) return 'thunderstorm';
+      if (conditionLower.includes('shower')) return 'shower';
+      if (conditionLower.includes('rain')) return 'rain';
+      if (conditionLower.includes('snow')) return 'snow';
+      if (conditionLower.includes('overcast')) return 'overcast';
+      if (conditionLower.includes('cloudy')) return 'cloudy';
+      if (conditionLower.includes('partly')) return 'partlycloudy';
+      return 'clear';
     },
     
     getWeatherIcon(condition) {
-      // Map weather conditions to Font Awesome icons
       const conditionLower = condition.toLowerCase();
       
       if (conditionLower.includes('thunder')) {
@@ -360,5 +347,11 @@ html[data-theme="dark"] .weather-header h4 {
 
 .temp-low {
   color: var(--text-secondary);
+}
+
+.day-condition {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-top: 2px;
 }
 </style>

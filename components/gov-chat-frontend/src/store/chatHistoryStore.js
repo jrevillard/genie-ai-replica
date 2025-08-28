@@ -1,6 +1,7 @@
 // src/store/chatHistoryStore.js
 import { v4 as uuidv4 } from 'uuid';
 import chatHistoryService from '@/services/chatHistoryService'; // Adjust path
+import userService from '@/services/userService';
 
 export default {
   namespaced: true,
@@ -78,7 +79,7 @@ export default {
 
     ADD_CHAT(state, chatData) {
       const newChat = {
-        id: uuidv4(),
+        id: chatData.id || uuidv4(), // Use provided id if available
         title: chatData.title || 'Untitled Chat',
         preview: chatData.preview || '',
         createdAt: new Date().toISOString(),
@@ -92,6 +93,9 @@ export default {
       if (folderId !== 'default' && !state.folderChats.default.includes(newChat.id)) {
         state.folderChats.default.push(newChat.id);
       }
+      // Debug: Log new chat and folderChats
+      console.log("ADD_CHAT mutation: Added chat:", newChat);
+      console.log("ADD_CHAT mutation: Updated folderChats for", folderId, ":", state.folderChats[folderId]);
       return newChat.id;
     },
 
@@ -143,12 +147,26 @@ export default {
         state.folderChats.default.push(chatId);
       }
     },
+
+    CLEAR_FOLDERS(state) {
+      state.folders = [
+        {
+          id: 'default',
+          name: 'All Chats',
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      state.folderChats = { default: [] };
+      console.log('CLEAR_FOLDERS mutation: Reset folders and folderChats');
+    },
   },
 
   actions: {
     setFolders({ commit }, folders) {
-      console.log("setFolders action dispatching:", folders);
+      console.log('setFolders action: Dispatching folders:', folders);
       commit('setFolders', folders);
+      console.log('setFolders action: Completed');
     },
 
     createFolder({ commit }, name) {
@@ -187,13 +205,13 @@ export default {
     async moveChat({ commit, state }, { chatId, fromFolderId, toFolderId }) {
       console.log(`Moving chat ${chatId} from ${fromFolderId} to ${toFolderId}`);
       try {
-        // Call backend service to move conversation
-        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, '2133'); // Hardcoded userId
-        // Refresh folder chats from backend
+        const user = userService.getCurrentUser();
+        const userId = user?._key || user?.id;
+        if (!userId) throw new Error('User ID is missing');
+        await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId, userId);
         const folder = await chatHistoryService.getFolder(toFolderId);
         const chatIds = folder.conversations.map(conv => conv._key);
         commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
-        // Update local move (optional, for immediate feedback)
         commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
         console.log(`Chat ${chatId} moved successfully to ${toFolderId}`);
       } catch (error) {
@@ -205,20 +223,24 @@ export default {
     async removeChatFromFolder({ commit, state }, { chatId, folderId }) {
       try {
         console.log(`Removing chat ${chatId} from folder ${folderId}`);
-        
+
         // Call the mutation to remove the chat from the folder
         commit('REMOVE_CHAT_FROM_FOLDER', { chatId, folderId });
-        
+
         // Ensure the chat remains in the default folder
         if (!state.folderChats.default.includes(chatId)) {
           commit('ADD_CHAT_TO_FOLDER', { chatId, folderId: 'default' });
         }
-        
+
         console.log(`Chat ${chatId} removed from folder ${folderId}`);
       } catch (error) {
         console.error(`Error removing chat ${chatId} from folder ${folderId}:`, error);
         throw error;
       }
+    },
+
+    async clearFolders({ commit }) {
+      commit('CLEAR_FOLDERS');
     }
   },
 };

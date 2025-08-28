@@ -237,10 +237,10 @@ class ChatHistoryService {
   }
 
   /**
-   * Get a conversation by ID
-   * @param {String} conversationId - Conversation ID
-   * @returns {Promise<Object>} Conversation details with messages
-   */
+ * Get a conversation by ID
+ * @param {String} conversationId - Conversation ID
+ * @returns {Promise<Object>} Conversation details with messages
+ */
   async getConversation(conversationId) {
     try {
       logger.info(`Getting conversation with ID: ${conversationId}`);
@@ -248,49 +248,53 @@ class ChatHistoryService {
       // Get conversation
       const conversation = await this.conversations.document(conversationId);
 
-      // Get messages for this conversation
+      // Get messages for this conversation with queryId from queryMessages
       const messagesCursor = await this.db.query(aql`
-        FOR msg IN messages
-          FILTER msg.conversationId == ${conversationId}
-          SORT msg.sequence ASC
-          RETURN msg
-      `);
-
+      FOR msg IN messages
+        FILTER msg.conversationId == ${conversationId}
+        SORT msg.sequence ASC
+        LET queryLink = (
+          FOR edge IN queryMessages
+            FILTER edge._to == CONCAT('messages/', msg._key)
+            FOR q IN queries
+              FILTER q._id == edge._from
+              RETURN q._key
+        )[0]
+        RETURN MERGE(msg, { queryId: queryLink })
+    `);
       const messages = await messagesCursor.all();
       logger.info(`Found ${messages.length} messages for conversation ${conversationId}`);
 
       // Get category details
       const categoryCursor = await this.db.query(aql`
-        FOR edge IN conversationCategories
-          FILTER edge._from == ${'conversations/' + conversationId}
-          FOR cat IN serviceCategories
-            FILTER cat._id == edge._to
-            RETURN {
-              _id: cat._id,
-              _key: cat._key,
-              nameEN: cat.nameEN,
-              nameFR: cat.nameFR,
-              nameSW: cat.nameSW,
-              relevanceScore: edge.relevanceScore
-            }
-      `);
-
+      FOR edge IN conversationCategories
+        FILTER edge._from == ${'conversations/' + conversationId}
+        FOR cat IN serviceCategories
+          FILTER cat._id == edge._to
+          RETURN {
+            _id: cat._id,
+            _key: cat._key,
+            nameEN: cat.nameEN,
+            nameFR: cat.nameFR,
+            nameSW: cat.nameSW,
+            relevanceScore: edge.relevanceScore
+          }
+    `);
       const categories = await categoryCursor.all();
 
       // Get owner details
       const ownerCursor = await this.db.query(aql`
-        FOR edge IN userConversations
-          FILTER edge._to == ${'conversations/' + conversationId}
-          FOR user IN users
-            FILTER user._id == edge._from
-            RETURN {
-              _id: user._id,
-              _key: user._key,
-              role: edge.role,
-              lastViewedAt: edge.lastViewedAt
-            }
-      `);
-
+      FOR edge IN userConversations
+        FILTER edge._to == ${'conversations/' + conversationId}
+        FOR user IN users
+          FILTER user._id == edge._from
+          RETURN {
+            _id: user._id,
+            _key: user._key,
+            role: edge.role,
+            lastViewedAt: edge.lastViewedAt
+          }
+    `);
       const owners = await ownerCursor.all();
 
       return {

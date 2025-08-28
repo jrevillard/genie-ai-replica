@@ -1,9 +1,7 @@
 <template>
-  <!-- Add backdrop -->
   <div class="admin-backdrop" @click="$emit('close')"></div>
 
   <div class="admin-dashboard">
-    <!-- Close button -->
     <button
       class="close-dashboard-btn"
       @click="$emit('close')"
@@ -26,7 +24,6 @@
     </button>
 
     <div class="dashboard">
-      <!-- Sidebar -->
       <div class="sidebar">
         <div class="logo">
           <div class="logo-icon">H</div>
@@ -110,7 +107,6 @@
         </div>
       </div>
 
-      <!-- Main Content -->
       <div class="main">
         <div class="header">
           <h1 class="page-title">
@@ -120,7 +116,6 @@
           </h1>
         </div>
 
-        <!-- Quick Stats -->
         <div class="quick-stats">
           <div class="stat-card">
             <div class="stat-title">
@@ -171,7 +166,6 @@
           </div>
         </div>
 
-        <!-- System Tabs -->
         <div class="tabs">
           <div class="tab-header">
             <button
@@ -187,7 +181,6 @@
 
           <div class="tab-content">
             <div class="dashboard-grid">
-              <!-- System Health Card - Overview Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'overview'">
                 <div class="card-header">
                   <div class="card-title">
@@ -221,7 +214,6 @@
                 </div>
               </div>
 
-              <!-- Resource Usage - Overview Tab Only -->
               <div class="dashboard-card" v-if="activeTab === 'overview'">
                 <div class="card-header">
                   <div class="card-title">
@@ -252,7 +244,6 @@
                 </div>
               </div>
 
-              <!-- Database Management - Database Tab Only -->
               <div
                 class="dashboard-card"
                 v-if="activeTab === 'database'"
@@ -349,7 +340,6 @@
                 </div>
               </div>
 
-              <!-- Log Management - Logs Tab Only -->
               <div
                 class="dashboard-card"
                 v-if="activeTab === 'logs'"
@@ -399,7 +389,7 @@
                           style="margin-right: 4px"
                         >
                           <path
-                            d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38"
+                            d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1 -.57-8.38"
                           />
                         </svg>
                         {{ translate("admin.rolloverLogs", "Rollover Logs") }}
@@ -408,7 +398,6 @@
                   </div>
                 </div>
 
-                <!-- Error Logs Summary -->
                 <div class="logs-summary">
                   <h3 class="summary-title">
                     <span class="status-indicator error"></span>
@@ -458,7 +447,6 @@
                   </div>
                 </div>
 
-                <!-- Warning Logs Summary -->
                 <div class="logs-summary">
                   <h3 class="summary-title">
                     <span class="status-indicator warning"></span>
@@ -508,7 +496,6 @@
                   </div>
                 </div>
 
-                <!-- Latest Search Results Section (shown when search results are available) -->
                 <div
                   class="logs-summary"
                   v-if="searchResults && searchResults.length > 0"
@@ -578,6 +565,13 @@
                   </div>
                 </div>
 
+                <log-search-dialog
+                  v-if="showLogSearchDialog"
+                  :theme="currentTheme"
+                  @close="showLogSearchDialog = false"
+                  @search-results="handleSearchResults"
+                />
+
                 <div class="logs-info">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -603,8 +597,6 @@
                 </div>
               </div>
 
-              <!-- Security Monitoring -->
-              <!-- Updated Security Tab with Detailed Vulnerability Display -->
               <div
                 class="dashboard-card"
                 v-if="activeTab === 'security'"
@@ -647,73 +639,20 @@
                   </div>
                 </div>
 
-                <!-- Security Metrics -->
-                <div style="margin-bottom: 1rem">
-                  <div class="usage-item">
-                    <div class="usage-header">
-                      <div class="usage-label">
-                        {{
-                          translate(
-                            "admin.failedLoginAttempts",
-                            "Failed Login Attempts (24h)"
-                          )
-                        }}
-                      </div>
-                      <div class="usage-value">
-                        {{ securityMetrics.failedLoginAttempts }}
-                      </div>
-                    </div>
-                    <div class="usage-bar">
-                      <div
-                        :class="[
-                          'usage-fill',
-                          getSecurityBarColor(
-                            securityMetrics.failedLoginAttempts
-                          ),
-                        ]"
-                        :style="{
-                          width: `${
-                            formatSecurityMetrics().failedLoginPercent
-                          }%`,
-                        }"
-                      ></div>
-                    </div>
-                  </div>
-
-                  <div class="usage-item">
-                    <div class="usage-header">
-                      <div class="usage-label">
-                        {{
-                          translate(
-                            "admin.suspiciousActivities",
-                            "Suspicious Activities (24h)"
-                          )
-                        }}
-                      </div>
-                      <div class="usage-value">
-                        {{ securityMetrics.suspiciousActivities }}
-                      </div>
-                    </div>
-                    <div class="usage-bar">
-                      <div
-                        :class="[
-                          'usage-fill',
-                          getSecurityBarColor(
-                            securityMetrics.suspiciousActivities
-                          ),
-                        ]"
-                        :style="{
-                          width: `${
-                            formatSecurityMetrics().suspiciousActivityPercent
-                          }%`,
-                        }"
-                      ></div>
-                    </div>
-                  </div>
+                <div
+                  v-if="isLoading && currentOperation === 'runSecurityScan'"
+                  class="loading-state"
+                >
+                  <div class="loading-spinner-small"></div>
+                  <span>{{
+                    translate(
+                      "admin.security.loadingScan",
+                      "Loading scan results..."
+                    )
+                  }}</span>
                 </div>
 
-                <!-- Scan Summary -->
-                <div class="security-details">
+                <div class="security-details" v-if="!isLoading">
                   <div>
                     <strong
                       >{{
@@ -723,7 +662,7 @@
                         )
                       }}:</strong
                     >
-                    {{ securityMetrics.lastSecurityScan }}
+                    {{ securityMetrics.lastScan }}
                   </div>
                   <div>
                     <strong
@@ -767,9 +706,16 @@
                   </div>
                 </div>
 
-                <!-- Detailed Vulnerability Information -->
-                <div v-if="securityDetails" class="security-findings-section">
-                  <!-- Critical Vulnerabilities -->
+                <div
+                  v-if="!isLoading && securityDetails"
+                  class="security-findings-section"
+                >
+                  {{
+                    console.log(
+                      "[AdminDashboard] Rendering security-findings-section, securityDetails:",
+                      securityDetails
+                    )
+                  }}
                   <div
                     v-if="
                       securityDetails.vulnerabilityDetails &&
@@ -801,71 +747,10 @@
                         <div class="vuln-detail">
                           <strong
                             >{{
-                              translate(
-                                "admin.security.occurrences",
-                                "Occurrences"
-                              )
+                              translate("admin.security.severity", "Severity")
                             }}:</strong
                           >
-                          {{ vuln.occurrences }}
-                        </div>
-                        <div v-if="vuln.firstSeen" class="vuln-detail">
-                          <strong
-                            >{{
-                              translate(
-                                "admin.security.firstSeen",
-                                "First Seen"
-                              )
-                            }}:</strong
-                          >
-                          {{ vuln.firstSeen }}
-                        </div>
-                        <div v-if="vuln.lastSeen" class="vuln-detail">
-                          <strong
-                            >{{
-                              translate("admin.security.lastSeen", "Last Seen")
-                            }}:</strong
-                          >
-                          {{ vuln.lastSeen }}
-                        </div>
-                        <div
-                          v-if="vuln.recommendation"
-                          class="vuln-recommendation"
-                        >
-                          {{ vuln.recommendation }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Medium Vulnerabilities -->
-                  <div
-                    v-if="
-                      securityDetails.vulnerabilityDetails &&
-                      securityDetails.vulnerabilityDetails.medium &&
-                      securityDetails.vulnerabilityDetails.medium.length > 0
-                    "
-                    class="vulnerability-section medium-section"
-                  >
-                    <h3 class="section-title">
-                      <span class="severity-indicator warning"></span>
-                      {{
-                        translate(
-                          "admin.security.mediumVulnerabilities",
-                          "Medium Vulnerabilities"
-                        )
-                      }}
-                    </h3>
-                    <div class="vulnerability-list">
-                      <div
-                        v-for="(vuln, index) in securityDetails
-                          .vulnerabilityDetails.medium"
-                        :key="'med-' + index"
-                        class="vulnerability-card"
-                      >
-                        <div class="vuln-type">{{ vuln.type }}</div>
-                        <div class="vuln-description">
-                          {{ vuln.description }}
+                          {{ vuln.severity }}
                         </div>
                         <div class="vuln-detail">
                           <strong
@@ -897,6 +782,66 @@
                           >
                           {{ vuln.lastSeen }}
                         </div>
+                        <div v-if="vuln.matchedTerm" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.matchedTerm",
+                                "Matched Term"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.matchedTerm }}
+                        </div>
+                        <div v-if="vuln.timestamp" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.timestamp",
+                                "Timestamp"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.timestamp }}
+                        </div>
+                        <div v-if="vuln.service" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.service", "Service")
+                            }}:</strong
+                          >
+                          {{ vuln.service }}
+                        </div>
+                        <div v-if="vuln.lineNumber" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.lineNumber",
+                                "Line Number"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.lineNumber }}
+                        </div>
+                        <div v-if="vuln.url" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.url", "URL")
+                            }}:</strong
+                          >
+                          {{ vuln.url }}
+                        </div>
+                        <div v-if="vuln.lineNumbers" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.lineNumbers",
+                                "Line Numbers"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.lineNumbers.join(", ") }}
+                        </div>
                         <div
                           v-if="vuln.recommendation"
                           class="vuln-recommendation"
@@ -907,133 +852,278 @@
                     </div>
                   </div>
 
-                  <!-- Failed Login Attempts -->
                   <div
                     v-if="
-                      securityDetails.failedLoginDetails &&
-                      securityDetails.failedLoginDetails.length > 0
+                      securityDetails.vulnerabilityDetails &&
+                      securityDetails.vulnerabilityDetails.medium &&
+                      securityDetails.vulnerabilityDetails.medium.length > 0
                     "
-                    class="vulnerability-section login-section"
+                    class="vulnerability-section medium-section"
                   >
                     <h3 class="section-title">
                       <span class="severity-indicator warning"></span>
                       {{
                         translate(
-                          "admin.security.authenticationIssues",
-                          "Authentication Issues"
+                          "admin.security.mediumVulnerabilities",
+                          "Medium Vulnerabilities"
                         )
                       }}
                     </h3>
-                    <div class="detail-table">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>
-                              {{
-                                translate(
-                                  "admin.security.timestamp",
-                                  "Timestamp"
-                                )
-                              }}
-                            </th>
-                            <th>
-                              {{
-                                translate("admin.security.message", "Message")
-                              }}
-                            </th>
-                            <th>
-                              {{
-                                translate("admin.security.service", "Service")
-                              }}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr
-                            v-for="(
-                              issue, index
-                            ) in securityDetails.failedLoginDetails.slice(0, 5)"
-                            :key="'login-' + index"
-                          >
-                            <td>{{ issue.timestamp }}</td>
-                            <td>{{ issue.message }}</td>
-                            <td>{{ issue.service }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                    <div class="vulnerability-list">
                       <div
-                        v-if="securityDetails.failedLoginDetails.length > 5"
-                        class="show-more"
+                        v-for="(vuln, index) in securityDetails
+                          .vulnerabilityDetails.medium"
+                        :key="'med-' + index"
+                        class="vulnerability-card"
                       >
-                        <button
-                          class="btn btn-outline btn-sm"
-                          @click="toggleShowAllLogins"
-                        >
-                          {{
-                            showAllLogins
-                              ? translate(
-                                  "admin.security.showLess",
-                                  "Show Less"
-                                )
-                              : translate(
-                                  "admin.security.showMore",
-                                  "Show All Authentication Issues"
-                                ) +
-                                " (" +
-                                securityDetails.failedLoginDetails.length +
-                                ")"
-                          }}
-                        </button>
-                      </div>
-                    </div>
-                    <!-- Full list when expanded -->
-                    <div
-                      v-if="
-                        showAllLogins &&
-                        securityDetails.failedLoginDetails.length > 5
-                      "
-                      class="detail-table full-list"
-                    >
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>
-                              {{
-                                translate(
-                                  "admin.security.timestamp",
-                                  "Timestamp"
-                                )
-                              }}
-                            </th>
-                            <th>
-                              {{
-                                translate("admin.security.message", "Message")
-                              }}
-                            </th>
-                            <th>
-                              {{
-                                translate("admin.security.service", "Service")
-                              }}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr
-                            v-for="(
-                              issue, index
-                            ) in securityDetails.failedLoginDetails.slice(5)"
-                            :key="'login-more-' + index"
+                        <div class="vuln-type">{{ vuln.type }}</div>
+                        <div class="vuln-description">
+                          {{ vuln.description }}
+                        </div>
+                        <div class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.severity", "Severity")
+                            }}:</strong
                           >
-                            <td>{{ issue.timestamp }}</td>
-                            <td>{{ issue.message }}</td>
-                            <td>{{ issue.service }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                          {{ vuln.severity }}
+                        </div>
+                        <div class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.occurrences",
+                                "Occurrences"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.occurrences }}
+                        </div>
+                        <div v-if="vuln.firstSeen" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.firstSeen",
+                                "First Seen"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.firstSeen }}
+                        </div>
+                        <div v-if="vuln.lastSeen" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.lastSeen", "Last Seen")
+                            }}:</strong
+                          >
+                          {{ vuln.lastSeen }}
+                        </div>
+                        <div v-if="vuln.matchedTerm" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.matchedTerm",
+                                "Matched Term"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.matchedTerm }}
+                        </div>
+                        <div v-if="vuln.timestamp" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.timestamp",
+                                "Timestamp"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.timestamp }}
+                        </div>
+                        <div v-if="vuln.service" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.service", "Service")
+                            }}:</strong
+                          >
+                          {{ vuln.service }}
+                        </div>
+                        <div v-if="vuln.lineNumber" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.lineNumber",
+                                "Line Number"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.lineNumber }}
+                        </div>
+                        <div v-if="vuln.url" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.url", "URL")
+                            }}:</strong
+                          >
+                          {{ vuln.url }}
+                        </div>
+                        <div v-if="vuln.lineNumbers" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.lineNumbers",
+                                "Line Numbers"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.lineNumbers.join(", ") }}
+                        </div>
+                        <div
+                          v-if="vuln.recommendation"
+                          class="vuln-recommendation"
+                        >
+                          {{ vuln.recommendation }}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <!-- Security Recommendations -->
+                  <div
+                    v-if="
+                      securityDetails.vulnerabilityDetails &&
+                      securityDetails.vulnerabilityDetails.low &&
+                      securityDetails.vulnerabilityDetails.low.length > 0
+                    "
+                    class="vulnerability-section low-section"
+                  >
+                    <h3 class="section-title">
+                      <span class="severity-indicator info"></span>
+                      {{
+                        translate(
+                          "admin.security.lowVulnerabilities",
+                          "Low Vulnerabilities"
+                        )
+                      }}
+                    </h3>
+                    <div class="vulnerability-list">
+                      <div
+                        v-for="(vuln, index) in securityDetails
+                          .vulnerabilityDetails.low"
+                        :key="'low-' + index"
+                        class="vulnerability-card"
+                      >
+                        <div class="vuln-type">{{ vuln.type }}</div>
+                        <div class="vuln-description">
+                          {{ vuln.description }}
+                        </div>
+                        <div class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.severity", "Severity")
+                            }}:</strong
+                          >
+                          {{ vuln.severity }}
+                        </div>
+                        <div class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.occurrences",
+                                "Occurrences"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.occurrences }}
+                        </div>
+                        <div v-if="vuln.firstSeen" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.firstSeen",
+                                "First Seen"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.firstSeen }}
+                        </div>
+                        <div v-if="vuln.lastSeen" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.lastSeen", "Last Seen")
+                            }}:</strong
+                          >
+                          {{ vuln.lastSeen }}
+                        </div>
+                        <div v-if="vuln.matchedTerm" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.matchedTerm",
+                                "Matched Term"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.matchedTerm }}
+                        </div>
+                        <div v-if="vuln.timestamp" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.timestamp",
+                                "Timestamp"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.timestamp }}
+                        </div>
+                        <div v-if="vuln.service" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.service", "Service")
+                            }}:</strong
+                          >
+                          {{ vuln.service }}
+                        </div>
+                        <div v-if="vuln.lineNumber" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.lineNumber",
+                                "Line Number"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.lineNumber }}
+                        </div>
+                        <div v-if="vuln.url" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate("admin.security.url", "URL")
+                            }}:</strong
+                          >
+                          {{ vuln.url }}
+                        </div>
+                        <div v-if="vuln.lineNumbers" class="vuln-detail">
+                          <strong
+                            >{{
+                              translate(
+                                "admin.security.lineNumbers",
+                                "Line Numbers"
+                              )
+                            }}:</strong
+                          >
+                          {{ vuln.lineNumbers.join(", ") }}
+                        </div>
+                        <div
+                          v-if="vuln.recommendation"
+                          class="vuln-recommendation"
+                        >
+                          {{ vuln.recommendation }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div
                     v-if="
                       securityDetails &&
@@ -1081,8 +1171,6 @@
                           hardening is in place
                         </div>
                       </div>
-
-                      <!-- Additional specific recommendation for .env files if they exist -->
                       <div
                         v-if="
                           securityDetails.vulnerabilityDetails.medium.some(
@@ -1121,8 +1209,6 @@
                           access to sensitive files
                         </div>
                       </div>
-
-                      <!-- Additional specific recommendation for .git files if they exist -->
                       <div
                         v-if="
                           securityDetails.vulnerabilityDetails.medium.some(
@@ -1162,46 +1248,178 @@
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <!-- No Vulnerabilities Found Message -->
-                <div
-                  v-if="
-                    securityDetails &&
-                    (!securityDetails.vulnerabilityDetails ||
-                      (securityDetails.vulnerabilityDetails.critical.length ===
-                        0 &&
-                        securityDetails.vulnerabilityDetails.medium.length ===
-                          0 &&
-                        securityDetails.vulnerabilityDetails.low.length === 0 &&
-                        (!securityDetails.failedLoginDetails ||
-                          securityDetails.failedLoginDetails.length === 0)))
-                  "
-                  class="no-vulnerabilities"
-                >
-                  <div class="empty-state">
-                    <div class="empty-icon">✓</div>
-                    <div class="empty-title">
+                  <div
+                    v-if="
+                      securityDetails.failedLoginDetails &&
+                      securityDetails.failedLoginDetails.length > 0
+                    "
+                    class="vulnerability-section login-section"
+                  >
+                    <h3 class="section-title">
+                      <span class="severity-indicator warning"></span>
                       {{
                         translate(
-                          "admin.security.noVulnerabilitiesFound",
-                          "No Vulnerabilities Found"
+                          "admin.security.authenticationIssues",
+                          "Authentication Issues"
                         )
                       }}
+                    </h3>
+                    <div class="detail-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th style="width: 25%">
+                              {{
+                                translate(
+                                  "admin.security.timestamp",
+                                  "Timestamp"
+                                )
+                              }}
+                            </th>
+                            <th style="width: 15%">
+                              {{ translate("admin.security.type", "Type") }}
+                            </th>
+                            <th>
+                              {{
+                                translate("admin.security.message", "Message")
+                              }}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr
+                            v-for="(
+                              issue, index
+                            ) in securityDetails.failedLoginDetails"
+                            :key="'login-' + index"
+                          >
+                            <td>{{ issue.timestamp }}</td>
+                            <td>
+                              <span
+                                v-if="issue.type"
+                                :class="[
+                                  'log-level',
+                                  `log-${issue.type.toLowerCase()}`,
+                                ]"
+                              >
+                                {{ issue.type }}
+                              </span>
+                            </td>
+                            <td class="log-message-cell">
+                              {{ issue.message }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                    <div class="empty-description">
+                  </div>
+
+                  <div
+                    v-if="
+                      securityDetails.suspiciousDetails &&
+                      securityDetails.suspiciousDetails.length > 0
+                    "
+                    class="vulnerability-section suspicious-section"
+                  >
+                    <h3 class="section-title">
+                      <span class="severity-indicator warning"></span>
                       {{
                         translate(
-                          "admin.security.systemSecure",
-                          "Your system appears to be secure. Continue monitoring regularly."
+                          "admin.security.suspiciousActivityLogs",
+                          "Suspicious Activity Logs"
                         )
                       }}
+                    </h3>
+                    <div class="detail-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th style="width: 25%">
+                              {{
+                                translate(
+                                  "admin.security.timestamp",
+                                  "Timestamp"
+                                )
+                              }}
+                            </th>
+                            <th style="width: 15%">
+                              {{ translate("admin.security.type", "Type") }}
+                            </th>
+                            <th>
+                              {{
+                                translate("admin.security.message", "Message")
+                              }}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr
+                            v-for="(
+                              activity, index
+                            ) in securityDetails.suspiciousDetails"
+                            :key="'suspicious-' + index"
+                          >
+                            <td>{{ activity.timestamp }}</td>
+                            <td>
+                              <span
+                                v-if="activity.type"
+                                :class="[
+                                  'log-level',
+                                  `log-${activity.type.toLowerCase()}`,
+                                ]"
+                              >
+                                {{ activity.type }}
+                              </span>
+                            </td>
+                            <td class="log-message-cell">
+                              {{ activity.message }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="
+                      !isLoading &&
+                      securityDetails &&
+                      (!securityDetails.vulnerabilityDetails ||
+                        (securityDetails.vulnerabilityDetails.critical
+                          .length === 0 &&
+                          securityDetails.vulnerabilityDetails.medium.length ===
+                            0 &&
+                          securityDetails.vulnerabilityDetails.low.length ===
+                            0 &&
+                          (!securityDetails.failedLoginDetails ||
+                            securityDetails.failedLoginDetails.length === 0)))
+                    "
+                    class="no-vulnerabilities"
+                  >
+                    <div class="empty-state">
+                      <div class="empty-icon">✓</div>
+                      <div class="empty-title">
+                        {{
+                          translate(
+                            "admin.security.noVulnerabilitiesFound",
+                            "No Vulnerabilities Found"
+                          )
+                        }}
+                      </div>
+                      <div class="empty-description">
+                        {{
+                          translate(
+                            "admin.security.systemSecure",
+                            "Your system appears to be secure. Continue monitoring regularly."
+                          )
+                        }}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- User Management - Users Tab Only -->
               <div
                 class="dashboard-card"
                 v-if="activeTab === 'users'"
@@ -1213,7 +1431,6 @@
                   </div>
                 </div>
 
-                <!-- User Stats Summary -->
                 <div class="user-stats-summary">
                   <div class="stats-row">
                     <div class="stat-item">
@@ -1248,7 +1465,6 @@
                   </div>
                 </div>
 
-                <!-- Search Bar -->
                 <div class="search-bar">
                   <div class="search-input-container">
                     <svg
@@ -1331,7 +1547,6 @@
                   </div>
                 </div>
 
-                <!-- Search Results Info -->
                 <div class="search-results-info" v-if="userSearchResults">
                   <span>
                     {{ userSearchTotal }}
@@ -1346,7 +1561,6 @@
                   </span>
                 </div>
 
-                <!-- Loading Indicator -->
                 <div class="search-loading" v-if="isSearchingUsers">
                   <div class="loading-spinner-small"></div>
                   <span>{{
@@ -1378,7 +1592,6 @@
                         </button>
                       </td>
                     </tr>
-                    <!-- Empty state when no users are found -->
                     <tr v-if="displayedUsers.length === 0">
                       <td colspan="4" style="text-align: center; padding: 2rem">
                         <div v-if="isSearchingUsers">
@@ -1407,7 +1620,6 @@
                   </tbody>
                 </table>
 
-                <!-- Pagination Controls -->
                 <div
                   class="pagination"
                   v-if="userSearchResults && userSearchTotal > userSearchLimit"
@@ -1456,7 +1668,6 @@
       </div>
     </div>
 
-    <!-- Loading Indicator -->
     <div class="loading-overlay" v-if="isLoading">
       <div class="loading-spinner"></div>
       <p>
@@ -1471,7 +1682,6 @@
       </p>
     </div>
 
-    <!-- Operation Results Modal -->
     <OperationResultsModal
       v-if="showOperationResults && operationResults"
       :operation="currentOperation"
@@ -1480,20 +1690,10 @@
     />
 
     <UserEditDialog
-      v-if="showUserEditDialog && selectedUserId"
+      v-if="showUserEditDialog"
       :userId="selectedUserId"
-      :currentUserId="currentUser.userId || currentUser._key"
-      :theme="currentTheme"
       @close="showUserEditDialog = false"
       @user-updated="handleUserUpdated"
-    />
-
-    <!-- Log Search Dialog -->
-    <LogSearchDialog
-      v-if="showLogSearchDialog"
-      @close="showLogSearchDialog = false"
-      @search-completed="handleSearchResults"
-      :theme="currentTheme"
     />
   </div>
 </template>
@@ -1505,7 +1705,6 @@ import OperationResultsModal from "./OperationResultsModal.vue";
 import LogSearchDialog from "./LogSearchDialog.vue";
 import UserEditDialog from "./UserEditDialog.vue";
 import { eventBus } from "../eventBus.js";
-import securityService from "../services/securityService";
 
 export default {
   components: {
@@ -1519,7 +1718,10 @@ export default {
     return {
       // Current locale for translations
       currentLocale: this.getCurrentLanguage(),
-
+      securityDetails: null,
+      showAllLogins: false,
+      showAllSuspicious: false,
+      debugSecurity: true,
       // Theme settings
       currentTheme:
         document.documentElement.getAttribute("data-theme") || "light",
@@ -1568,75 +1770,14 @@ export default {
         { id: "network", label: "Network Bandwidth", value: 35 },
       ],
 
-      // Logs data
-      logs: [
-        {
-          time: "10:42:15",
-          level: "ERROR",
-          service: "API Gateway",
-          message: "Connection timeout to external provider",
-          messageKey: "connectionTimeout",
-        },
-        {
-          time: "10:38:22",
-          level: "WARNING",
-          service: "Storage",
-          message: "Disk space below 10% threshold",
-          messageKey: "lowDiskSpace",
-        },
-        {
-          time: "10:35:47",
-          level: "INFO",
-          service: "Auth Service",
-          message: "User role updated for admin@huduma.ai",
-          messageKey: "userRoleUpdated",
-        },
-      ],
+      logs: [],
 
-      // Add these to the data object
-      errorLogsSummary: [
-        {
-          typeKey: "connectionTimeout",
-          type: "Connection timeout",
-          service: "API Gateway",
-          count: 5,
-        },
-        {
-          typeKey: "databaseFailed",
-          type: "Database query failed",
-          service: "Data Service",
-          count: 3,
-        },
-        {
-          typeKey: "authFailed",
-          type: "Authentication failure",
-          service: "Auth Service",
-          count: 2,
-        },
-      ],
-      warningLogsSummary: [
-        {
-          typeKey: "lowDiskSpace",
-          type: "Disk space below threshold",
-          service: "Storage",
-          count: 1,
-        },
-        {
-          typeKey: "slowQuery",
-          type: "Slow query performance",
-          service: "Database",
-          count: 8,
-        },
-        {
-          typeKey: "rateLimit",
-          type: "Rate limit approaching",
-          service: "External API",
-          count: 4,
-        },
-      ],
+      // CORRECTED: Hardcoded data removed. Initialized as empty arrays.
+      errorLogsSummary: [],
+      warningLogsSummary: [],
+
       showLogSearchDialog: false,
 
-      // Feature flags
       featureFlags: [
         {
           id: "enhancedSearch",
@@ -1658,7 +1799,6 @@ export default {
         },
       ],
 
-      // Alert configurations
       alertConfigs: [
         {
           id: "cpuUsage",
@@ -1680,16 +1820,10 @@ export default {
         },
       ],
 
-      // Maintenance mode toggle
       maintenanceMode: false,
-
-      // Alert configuration modal
       showAlertsConfig: false,
-
-      // Show operation results modal
       showOperationResults: false,
 
-      // System metrics
       metrics: {
         systemUptime: 99.98,
         avgResponseTime: 245,
@@ -1697,16 +1831,13 @@ export default {
         monthlyActiveUsers: 0,
       },
 
-      // Log filter options
       logFilter: {
         level: "",
         service: "",
       },
 
-      // Total log count
       logsTotal: 1284,
 
-      // Security metrics
       securityMetrics: {
         failedLoginAttempts: 23,
         suspiciousActivities: 5,
@@ -1718,7 +1849,6 @@ export default {
         },
       },
 
-      // User statistics
       userStats: {
         totalUsers: 0,
         activeUsers: 0,
@@ -1726,15 +1856,12 @@ export default {
         users: [],
       },
 
-      // User edit dialog
       showUserEditDialog: false,
       selectedUserId: null,
-      currentUser: {}, // Will hold the current logged-in user's information
+      currentUser: {},
 
-      // For search functionality
       searchResults: [],
 
-      // Status indicator styling for info logs
       status: {
         info: {
           color: "#3b82f6",
@@ -1742,9 +1869,8 @@ export default {
         },
       },
 
-      // User Search Properties - NEW
       userSearchTerm: "",
-      userSearchField: "all", // Default to search all fields
+      userSearchField: "all",
       isSearchingUsers: false,
       userSearchResults: null,
       userSearchTotal: 0,
@@ -1907,15 +2033,20 @@ export default {
 
     // Set active tab
     setActiveTab(tabId) {
+      console.log(
+        `[AdminDashboard] Setting active tab to: ${tabId}, current securityDetails:`,
+        this.securityDetails
+      );
       this.activeTab = tabId;
-
-      // Load tab-specific data based on active tab
       if (tabId === "database") {
         this.loadDatabaseStats();
       } else if (tabId === "logs") {
         this.loadLogsSummary();
         this.loadLogs();
       } else if (tabId === "security") {
+        console.log(
+          `[AdminDashboard] Loading security tab, isLoading: ${this.isLoading}`
+        );
         this.loadSecurityMetrics();
       } else if (tabId === "users") {
         this.loadUserStats();
@@ -2011,16 +2142,60 @@ export default {
       try {
         this.isLoading = true;
         const response = await adminDashboardService.getLogsSummary({
-          date: new Date().toISOString().split("T")[0], // Today's date in YYYY-MM-DD format
+          date: new Date().toISOString().split("T")[0],
         });
+        console.log(
+          "[AdminDashboard] Logs summary response:",
+          JSON.stringify(response, null, 2)
+        );
 
-        if (response && response.data && response.data.data) {
-          this.errorLogsSummary = response.data.data.errors || [];
-          this.warningLogsSummary = response.data.data.warnings || [];
+        if (
+          response &&
+          response.data &&
+          Array.isArray(response.data.errors) &&
+          Array.isArray(response.data.warnings)
+        ) {
+          this.errorLogsSummary = response.data.errors || [];
+          this.warningLogsSummary = response.data.warnings || [];
+          if (
+            this.errorLogsSummary.length === 0 &&
+            this.warningLogsSummary.length === 0
+          ) {
+            this.showNotification(
+              this.translate("admin.noLogsFound", "No logs found for today"),
+              "info"
+            );
+          }
+        } else {
+          console.error(
+            "[AdminDashboard] Invalid logs summary response structure:",
+            response
+          );
+          this.showNotification(
+            this.translate(
+              "admin.invalidLogsResponse",
+              "Invalid logs summary response structure"
+            ),
+            "error"
+          );
+          this.errorLogsSummary = [];
+          this.warningLogsSummary = [];
         }
       } catch (error) {
-        console.error("Error loading logs summary:", error);
-        this.showNotification("Failed to load logs summary", "error");
+        console.error(
+          "[AdminDashboard] Error loading logs summary:",
+          error.message,
+          error.stack
+        );
+        this.showNotification(
+          this.translate(
+            "admin.logsSummaryError",
+            "Failed to load logs summary"
+          ),
+          "error"
+        );
+        this.errorLogsSummary = [];
+        this.warningLogsSummary = [];
       } finally {
         this.isLoading = false;
       }
@@ -2028,14 +2203,45 @@ export default {
 
     // Security operations
     async runSecurityScan() {
-      this.executeOperation("runSecurityScan", async () => {
+      console.log(
+        "[AdminDashboard] Starting runSecurityScan, isLoading:",
+        this.isLoading
+      );
+      this.isLoading = true;
+      this.currentOperation = "runSecurityScan";
+
+      try {
         const response = await adminDashboardService.runSecurityScan();
-        // Refresh security metrics after scan
-        if (response.data && response.data.success) {
-          this.loadSecurityMetrics();
+        console.log("[AdminDashboard] Security scan API response:", response);
+
+        if (response.success) {
+          await Promise.all([
+            this.loadSecurityMetrics(),
+            this.loadSecurityDetails(),
+          ]);
+          this.$forceUpdate();
+          console.log("[AdminDashboard] Security scan completed successfully");
+        } else {
+          throw new Error(response.message || "Security scan failed");
         }
-        return response.data;
-      });
+
+        console.log(
+          "[AdminDashboard] After scan, securityDetails:",
+          this.securityDetails
+        );
+      } catch (error) {
+        console.error("[AdminDashboard] Error running security scan:", error);
+        console.error("[AdminDashboard] Failed to run security scan");
+      } finally {
+        this.isLoading = false;
+        this.currentOperation = null;
+        console.log(
+          "[AdminDashboard] runSecurityScan complete, isLoading:",
+          this.isLoading,
+          "currentOperation:",
+          this.currentOperation
+        );
+      }
     },
 
     // Search logs method - launches the search dialog
@@ -2101,16 +2307,46 @@ export default {
 
     // Load security metrics
     async loadSecurityMetrics() {
+      console.log("[AdminDashboard] Loading security metrics...");
       try {
         this.isLoading = true;
         const response = await adminDashboardService.getSecurityMetrics();
-
-        if (response && response.data && response.data.data) {
-          this.securityMetrics = response.data.data;
+        if (response && response.data) {
+          console.log(
+            "[AdminDashboard] Security metrics loaded successfully:",
+            response.data
+          );
+          this.securityMetrics = {
+            failedLoginAttempts: response.data.failedLoginAttempts || 0,
+            suspiciousActivities: response.data.suspiciousActivities || 0,
+            lastSecurityScan: response.data.lastSecurityScan || "Never",
+            vulnerabilities: response.data.vulnerabilities || {
+              critical: 0,
+              medium: 0,
+              low: 0,
+            },
+          };
+          await this.loadSecurityDetails();
+        } else {
+          console.warn(
+            "[AdminDashboard] Security metrics response missing data property"
+          );
         }
       } catch (error) {
-        console.error("Error loading security metrics:", error);
-        this.showNotification("Failed to load security metrics", "error");
+        console.error(
+          "[AdminDashboard] Error loading security metrics:",
+          error
+        );
+        this.securityMetrics = {
+          failedLoginAttempts: 0,
+          suspiciousActivities: 0,
+          lastSecurityScan: "Never",
+          vulnerabilities: {
+            critical: 0,
+            medium: 0,
+            low: 0,
+          },
+        };
       } finally {
         this.isLoading = false;
       }
@@ -2362,8 +2598,11 @@ export default {
 
     // Open user edit dialog
     openUserEditDialog(userId) {
+      console.log(`UserId clicked:`, userId);
       this.selectedUserId = userId;
+      console.log(`this.selectedUserId:`, this.selectedUserId);
       this.showUserEditDialog = true;
+      console.log(`this.showUserEditDialog`, this.showUserEditDialog);
     },
 
     // Handle user updated event from dialog
@@ -2454,125 +2693,149 @@ export default {
     },
 
     // Load security metrics from the service
-    async loadSecurityMetrics() {
-      try {
-        this.isLoading = true;
-        console.log("Loading security metrics...");
-        const response = await securityService.getSecurityMetrics();
 
-        if (response && response.data) {
-          console.log("Security metrics loaded successfully:", response.data);
-          this.securityMetrics = {
-            failedLoginAttempts: response.data.failedLoginAttempts || 0,
-            suspiciousActivities: response.data.suspiciousActivities || 0,
-            lastSecurityScan: response.data.lastSecurityScan || "Never",
-            vulnerabilities: response.data.vulnerabilities || {
-              critical: 0,
-              medium: 0,
-              low: 0,
-            },
-          };
-
-          // Get detailed security information
-          this.loadSecurityDetails();
-        } else {
-          console.warn("Security metrics response missing data property");
-        }
-      } catch (error) {
-        console.error("Error loading security metrics:", error);
-        // Use fallback data instead of showing notification
-        this.securityMetrics = {
-          failedLoginAttempts: 0,
-          suspiciousActivities: 0,
-          lastSecurityScan: "Never",
-          vulnerabilities: {
-            critical: 0,
-            medium: 0,
-            low: 0,
-          },
-        };
-      } finally {
-        this.isLoading = false;
+    /**
+     * Parses a log message string to extract the log level.
+     * @param {string} logString - The raw log message.
+     * @returns {{type: string, message: string}}
+     */
+    parseLogMessage(logString) {
+      if (typeof logString !== "string") {
+        return { type: "UNKNOWN", message: String(logString) };
       }
+      const match = logString.match(/^\[([A-Z]+)\]:?\s*/);
+      if (match) {
+        return {
+          type: match[1], // e.g., "INFO", "ERROR"
+          message: logString.substring(match[0].length),
+        };
+      }
+      return { type: "INFO", message: logString }; // Default if no prefix
     },
 
     // Load detailed security information
     async loadSecurityDetails() {
+      console.log("[AdminDashboard] Starting loadSecurityDetails");
       try {
-        const details = await securityService.getLastScanDetails();
-        console.log("Security details loaded:", details); // Add this line
+        this.isLoading = true;
+        const response = await adminDashboardService.getSecurityDetails();
+        console.log(
+          "[AdminDashboard] Security details API response:",
+          JSON.stringify(response, null, 2)
+        );
 
-        // Also add more detailed logging to see the structure:
-        if (details) {
-          console.log("Vulnerability details structure:", {
-            hasMedium:
-              details.vulnerabilityDetails &&
-              details.vulnerabilityDetails.medium,
-            mediumCount: details.vulnerabilityDetails?.medium?.length,
-            fullMediumDetails: details.vulnerabilityDetails?.medium,
-          });
-        }
+        // Define a helper to map vulnerability details
+        const mapVulnerability = (v) => ({
+          type: v.type,
+          severity: v.severity,
+          description: v.description,
+          recommendation: v.recommendation,
+          matchedTerm: v.matchedTerm,
+          timestamp: v.timestamp,
+          service: v.service,
+          lineNumber: v.lineNumber,
+          url: v.url,
+          occurrences: v.instanceCount,
+          firstSeen: v.firstSeen,
+          lastSeen: v.lastSeen,
+          lineNumbers: v.lineNumbers,
+        });
 
-        if (details) {
-          this.securityDetails = details;
-        }
+        // REVISED: Define a helper to map and parse log details
+        const mapAndParseLogDetail = (log) => {
+          const parsed = this.parseLogMessage(log.message || "");
+          return {
+            timestamp: log.timestamp,
+            type: parsed.type,
+            message: parsed.message,
+          };
+        };
+
+        this.securityDetails = {
+          lastScan: response.lastScan || "Never",
+          vulnerabilities: response.vulnerabilities || {
+            critical: 0,
+            medium: 0,
+            low: 0,
+            details: [],
+          },
+          vulnerabilityDetails: {
+            critical: Array.isArray(response.vulnerabilityDetails?.critical)
+              ? response.vulnerabilityDetails.critical.map(mapVulnerability)
+              : [],
+            medium: Array.isArray(response.vulnerabilityDetails?.medium)
+              ? response.vulnerabilityDetails.medium.map(mapVulnerability)
+              : [],
+            low: Array.isArray(response.vulnerabilityDetails?.low)
+              ? response.vulnerabilityDetails.low.map(mapVulnerability)
+              : [],
+          },
+          failedLoginDetails: Array.isArray(response.failedLoginDetails)
+            ? response.failedLoginDetails.map(mapAndParseLogDetail)
+            : [],
+          suspiciousDetails: Array.isArray(response.suspiciousDetails)
+            ? response.suspiciousDetails.map(mapAndParseLogDetail)
+            : [],
+        };
+        console.log(
+          "[AdminDashboard] Security details loaded and parsed successfully:",
+          this.securityDetails
+        );
       } catch (error) {
-        console.error("Error loading security details:", error);
-        this.securityDetails = null;
+        console.error(
+          "[AdminDashboard] Error loading security details:",
+          error
+        );
+        this.securityDetails = {
+          lastScan: "Never",
+          vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
+          vulnerabilityDetails: { critical: [], medium: [], low: [] },
+          failedLoginDetails: [],
+          suspiciousDetails: [],
+        };
+      } finally {
+        this.isLoading = false;
       }
     },
 
     // Run security scan with progress indication and results display
     async runSecurityScan() {
+      console.log(
+        "[AdminDashboard] Starting runSecurityScan, isLoading:",
+        this.isLoading
+      );
+      if (this.isLoading) return;
       try {
-        // Show loading state with operation name
         this.isLoading = true;
-        this.currentOperation = "runSecurityScan";
-        this.operationResults = null;
-
-        console.log("Starting security scan...");
-        // Execute the API call
-        const response = await securityService.runSecurityScan();
-        console.log("Security scan response:", response);
-
-        // Store the scan results for display
-        if (response && response.data) {
-          this.operationResults = response.data;
-
-          // Show success notification
-          this.showNotification(
-            this.translate(
-              "admin.operations.runSecurityScan.success",
-              "Security scan completed successfully"
-            ),
-            "success"
+        this.currentOperation = "securityScan";
+        console.log(
+          "[AdminDashboard] Initiating security scan via adminDashboardService"
+        );
+        const response = await adminDashboardService.runSecurityScan();
+        console.log("[AdminDashboard] Security scan response:", response);
+        if (response.success) {
+          console.log(
+            "[AdminDashboard] Security scan completed successfully:",
+            response.data
+          );
+          await this.loadSecurityDetails();
+        } else {
+          console.error(
+            "[AdminDashboard] Security scan failed:",
+            response.data.message
           );
         }
-
-        // Update security metrics with new data
-        await this.loadSecurityMetrics();
-
-        return response;
       } catch (error) {
-        console.error("Error during security scan:", error);
-        // Set error result
-        this.operationResults = {
-          success: false,
-          message:
-            error.message ||
-            this.translate(
-              "admin.operations.runSecurityScan.error",
-              "Error during security scan"
-            ),
-          error: error.response?.data?.error || error.message,
-        };
-
-        // Show error notification
-        this.showNotification(this.operationResults.message, "error");
-        return this.operationResults;
+        console.error("[AdminDashboard] Error running security scan:", error);
       } finally {
-        // Reset loading state
         this.isLoading = false;
+        this.currentOperation = null;
+        console.log(
+          "[AdminDashboard] runSecurityScan complete, isLoading:",
+          this.isLoading,
+          "currentOperation:",
+          this.currentOperation
+        );
       }
     },
 
@@ -2586,6 +2849,11 @@ export default {
     // Toggle showing all login issues
     toggleShowAllLogins() {
       this.showAllLogins = !this.showAllLogins;
+    },
+
+    // NEW: Toggle showing all suspicious activities
+    toggleShowAllSuspicious() {
+      this.showAllSuspicious = !this.showAllSuspicious;
     },
 
     // Format the security metrics for display
@@ -3913,18 +4181,27 @@ input:checked + .slider:before {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
+  table-layout: fixed;
 }
 
-.detail-table th,
-.detail-table td {
-  padding: 0.5rem;
+.detail-table td,
+.detail-table th {
+  padding: 0.75rem 0.5rem;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
+  vertical-align: top; /* Vertically align all cell content to the top */
 }
 
 .detail-table th {
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+/* NEW: Style for wrapping text in message cells */
+.log-message-cell {
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .show-more {
@@ -4074,5 +4351,28 @@ input:checked + .slider:before {
 .severity-indicator.medium,
 .severity-indicator.warning {
   background-color: var(--warning);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.loading-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
+[data-theme="dark"] .loading-state {
+  color: var(--text-tertiary);
 }
 </style>

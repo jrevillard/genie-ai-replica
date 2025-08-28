@@ -8,6 +8,7 @@ services:
       - "8090:8090"
     environment:
       - NODE_ENV=production
+      - VUE_APP_API_URL=https://e2e-82-109.ssdcloudindia.net:443/api
     depends_on:
       - backend
     networks:
@@ -17,12 +18,13 @@ services:
     build:
       context: .
       dockerfile: gov-chat-backend/Dockerfile
-    restart: unless-stopped 
+    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
       - ./database_backups:/app/database_backups
       - ./logs:/app/logs
+      - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
     environment:
       - NODE_ENV=production
@@ -33,24 +35,27 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-default-session-secret}
       - SESSION_EXPIRATION_TIME=1800000
       - CORS_ORIGIN=https://e2e-82-109.ssdcloudindia.net/
-      - EMAIL_HOST=in-V3.mailjet.com
+      - EMAIL_HOST=smtp.itu.ch
       - EMAIL_PORT=587
       - EMAIL_SECURE=false
-      - EMAIL_USER=187ad3288090609e6e282b07f359acd4
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-default-email-password}
-      - EMAIL_FROM=fordendk@gmail.com
-      - APP_NAME=Huduma AI
+      - EMAIL_USER=genie-ai
+      - EMAIL_PASSWORD=gLp+Ek)Vf)
+      - EMAIL_FROM=noreply@genie-ai.itu.int
+      - APP_NAME=Genie AI
       - FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=node-services
       - ARANGO_USER=root
-      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
+      - ARANGO_PASSWORD=test
       - BACKUP_DIR=./database_backups
       - MAX_BACKUPS=5
       - BACKUP_FORMAT=json
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
       - JWT_EXPIRES_IN=24h
       - LOG_LEVEL=debug
+      - OPEA_HOST=e2e-109-198
+      - OPEA_PORT=8888
+      - CONTEXT_OPTION=single-message
     env_file:
       - ./gov-chat-backend/.env
     networks:

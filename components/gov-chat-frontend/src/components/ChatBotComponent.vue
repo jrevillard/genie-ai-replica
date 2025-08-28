@@ -32,20 +32,55 @@
         @secondary="saveAndLoadConversation"
       />
 
+      <!-- Export PDF Dialog -->
+      <modal-dialog
+        v-if="exportDialog.visible"
+        @close="exportDialog.visible = false"
+      >
+        <template v-slot:header>
+          <h3>{{ translate("chatbot.exportChat") }}</h3>
+        </template>
+        <template v-slot:body>
+          <div class="form-group">
+            <label for="exportFilename">{{
+              translate("chatbot.exportFilename")
+            }}</label>
+            <input
+              type="text"
+              id="exportFilename"
+              v-model="exportDialog.filename"
+              :placeholder="translate('chatbot.exportFilenamePlaceholder')"
+            />
+          </div>
+        </template>
+        <template v-slot:footer>
+          <button @click="exportDialog.visible = false" class="cancel-btn">
+            {{ translate("common.cancel") }}
+          </button>
+          <button
+            @click="exportChatToPDF"
+            class="primary-btn"
+            :disabled="!exportDialog.filename.trim()"
+          >
+            {{ translate("chatbot.exportButton") }}
+          </button>
+        </template>
+      </modal-dialog>
+
       <!-- System Status Panel -->
       <div class="system-status-panel">
         <div class="status-indicator" :class="{ online: systemStatus.online }">
           <div class="status-dot"></div>
           <span>{{
             systemStatus.online
-              ? translate("status.online", "System Online")
-              : translate("status.offline", "System Offline")
+              ? translate("status.online")
+              : translate("status.offline")
           }}</span>
         </div>
         <div class="status-metrics">
           <div class="metric">
             <span class="metric-label">{{
-              translate("status.responseTime", "Avg. Response Time")
+              translate("status.responseTime")
             }}</span>
             <span class="metric-value"
               >{{ systemStatus.avgResponseTime }}ms</span
@@ -53,14 +88,12 @@
           </div>
           <div class="metric">
             <span class="metric-label">{{
-              translate("status.queueLength", "Queue")
+              translate("status.queueLength")
             }}</span>
             <span class="metric-value">{{ systemStatus.requestQueue }}</span>
           </div>
           <div class="metric">
-            <span class="metric-label">{{
-              translate("status.uptime", "Uptime")
-            }}</span>
+            <span class="metric-label">{{ translate("status.uptime") }}</span>
             <span class="metric-value">{{
               formatUptime(systemStatus.uptime)
             }}</span>
@@ -71,7 +104,7 @@
       <div class="context-panel" v-if="selectedContextItems.length > 0">
         <div class="context-header">
           <span class="context-title">{{
-            translate("chatbot.queryContext", "Query Context:")
+            translate("chatbot.queryContext")
           }}</span>
         </div>
         <div class="context-items">
@@ -84,7 +117,7 @@
             <button
               class="context-remove-btn"
               @click="removeContextItem(index)"
-              :aria-label="translate('chatbot.removeItem', 'Remove item')"
+              :aria-label="translate('chatbot.removeItem')"
             >
               ✕
             </button>
@@ -92,7 +125,7 @@
         </div>
       </div>
       <!-- The scrollable chat window -->
-      <div class="chat-window" ref="chatWindow">
+      <div class="chat-window" ref="chatWindow" aria-live="polite">
         <div
           v-for="(msg, index) in chatMessages"
           :key="index"
@@ -100,17 +133,34 @@
           :class="msg.sender"
         >
           <div class="message-bubble">
-            <span>{{ msg.content }}</span>
+            <!-- Render bot messages as sanitized HTML for Markdown, user messages as plain text -->
+            <span v-if="msg.sender === 'user'">{{ msg.content }}</span>
+            <div v-else v-html="renderMarkdown(msg.content)"></div>
           </div>
-          <!-- Feedback for bot messages -->
-          <div v-if="msg.sender === 'bot'" class="feedback-trigger">
-            <button @click="openFeedbackDialog(index)">
-              {{ translate("feedback.button", "Feedback") }}
-            </button>
+          <!-- Feedback and confidence score for bot messages -->
+          <div v-if="msg.sender === 'bot'" class="bot-message-meta">
+            <div v-if="msg.confidenceScore" class="confidence-score">
+              <i class="fas fa-brain"></i>
+              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="feedback-trigger">
+              <button @click="openFeedbackDialog(index)">
+                {{ translate("feedback.button") }}
+              </button>
+            </div>
           </div>
         </div>
         <!-- Auto-scroll anchor element -->
         <div ref="messagesEnd"></div>
+      </div>
+      <!-- Loading spinner with "Thinking..." text -->
+      <div
+        v-if="isLoading"
+        class="loading-spinner"
+        aria-label="Processing your request"
+      >
+        <i class="fas fa-spinner fa-spin"></i>
+        <span class="loading-text">Thinking...</span>
       </div>
       <!-- Quick Help Overlay -->
       <div
@@ -119,32 +169,23 @@
       >
         <div class="quick-help-content">
           <h2 class="quick-help-heading">
-            {{ translate("chatbot.whatCanIHelp", "How can I help you today?") }}
+            {{ translate("chatbot.whatCanIHelp") }}
           </h2>
 
           <div class="quick-help-grid">
-            <!-- Just Chat option with different styling -->
             <div
-              class="quick-help-item just-chat"
-              @click="selectQuickHelpOption(justChatOption)"
-            >
-              <div class="quick-help-icon" v-html="justChatOption.icon"></div>
-              <div class="quick-help-text">
-                {{ translate(justChatOption.textKey, "Just Chat") }}
-              </div>
-            </div>
-
-            <!-- Other service options with proper i18n -->
-            <div
-              v-for="(option, index) in quickHelpOptions"
-              :key="index"
+              v-for="button in quickHelpButtons"
+              :key="button.id"
               class="quick-help-item"
-              @click="selectQuickHelpOption(option)"
+              :class="{ 'just-chat': !button.category }"
+              @click="selectQuickHelpOption(button)"
             >
-              <div class="quick-help-icon" v-html="option.icon"></div>
-              <div class="quick-help-text">
-                {{ translate(option.textKey, option.textKey.split(".")[1]) }}
-              </div>
+              <img
+                class="quick-help-icon"
+                :src="button.icon"
+                alt="Quick Help Icon"
+              />
+              <div class="quick-help-text">{{ $t(button.textKey) }}</div>
             </div>
           </div>
         </div>
@@ -155,9 +196,7 @@
           v-model="newMessage"
           class="prompt-textarea"
           rows="4"
-          :placeholder="
-            translate('chatbot.placeholder', 'Type your message here...')
-          "
+          :placeholder="translate('chatbot.placeholder')"
           @keyup.enter.exact.prevent="sendMessage"
           @focus="handleTextareaFocus"
         ></textarea>
@@ -165,7 +204,7 @@
           <button
             class="new-chat-btn"
             @click="startNewChat"
-            :title="translate('chatbot.newChat', 'Start New Chat')"
+            :title="translate('chatbot.newChat')"
           >
             <i class="fas fa-plus"></i>
           </button>
@@ -173,12 +212,20 @@
             v-if="chatMessages.length > 0"
             class="save-chat-btn"
             @click="saveChatToHistory"
-            :title="translate('chatbot.saveChat', 'Save Chat')"
+            :title="translate('chatbot.saveChat')"
           >
             <i class="fas fa-save"></i>
           </button>
+          <button
+            v-if="chatMessages.length > 0"
+            class="export-chat-btn"
+            @click="openExportDialog"
+            :title="translate('chatbot.exportChat')"
+          >
+            <i class="fas fa-file-pdf"></i>
+          </button>
           <button class="send-btn" @click="sendMessage">
-            {{ translate("chatbot.sendButton", "Send") }}
+            {{ translate("chatbot.sendButton") }}
           </button>
         </div>
       </div>
@@ -196,28 +243,21 @@
         @close="saveChatDialog.visible = false"
       >
         <template v-slot:header>
-          <h3>{{ translate("chatbot.saveChat", "Save Chat") }}</h3>
+          <h3>{{ translate("chatbot.saveChat") }}</h3>
         </template>
         <template v-slot:body>
           <div class="form-group">
-            <label for="chatTitle">{{
-              translate("chatbot.chatTitle", "Chat Title")
-            }}</label>
+            <label for="chatTitle">{{ translate("chatbot.chatTitle") }}</label>
             <input
               type="text"
               id="chatTitle"
               v-model="saveChatDialog.title"
-              :placeholder="
-                translate(
-                  'chatbot.chatTitlePlaceholder',
-                  'Enter a title for this chat'
-                )
-              "
+              :placeholder="translate('chatbot.chatTitlePlaceholder')"
             />
           </div>
           <div class="form-group">
             <label for="chatFolder">{{
-              translate("chatbot.selectFolder", "Select Folder")
+              translate("chatbot.selectFolder")
             }}</label>
             <select id="chatFolder" v-model="saveChatDialog.folderId">
               <option
@@ -232,14 +272,14 @@
         </template>
         <template v-slot:footer>
           <button @click="saveChatDialog.visible = false" class="cancel-btn">
-            {{ translate("common.cancel", "Cancel") }}
+            {{ translate("common.cancel") }}
           </button>
           <button
             @click="handleSaveChat"
             class="primary-btn"
             :disabled="!saveChatDialog.title.trim()"
           >
-            {{ translate("common.save", "Save") }}
+            {{ translate("common.save") }}
           </button>
         </template>
       </modal-dialog>
@@ -249,6 +289,7 @@
       :current-chat-id="currentChatId"
       :current-locale="currentLocale"
       :translations="translations"
+      :related-documents="relatedDocuments"
       @load-chat="loadChatFromHistory"
       @open-document="handleOpenDocument"
       @sidebar-toggle="handleSidebarToggle"
@@ -264,9 +305,13 @@ import ChatResponseFeedbackDialog from "./ChatResponseFeedbackDialog.vue";
 import ModalDialog from "./ModalDialog.vue";
 import RightSideBarComponent from "./RightSideBarComponent.vue";
 import chatbotService from "../services/chatbotService";
+import serviceTreeService from "../services/serviceTreeService"; // *** NEW: Import serviceTreeService
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import chatHistoryService from "../services/chatHistoryService";
 import analyticsService from "../services/analyticsService";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import jsPDF from "jspdf";
 
 export default {
   name: "ChatBotComponent",
@@ -293,11 +338,16 @@ export default {
         title: "",
         folderId: "default",
       },
+      exportDialog: {
+        visible: false,
+        filename: "",
+      },
       currentChatId: null,
       currentChatTitle: "",
       currentLocale: "en",
       showQuickHelp: true,
-      conversationCategory: null,
+      currentCategoryId: null,
+      serviceCategories: [], // This will now hold the transformed tree data
       chatHistoryService: chatHistoryService,
       systemStatus: {
         online: true,
@@ -306,240 +356,7 @@ export default {
         uptime: 3659,
         lastUpdated: new Date(),
       },
-      justChatOption: {
-        service: "Just Chat",
-        textKey: "quickhelp.justChat",
-        promptKey: "quickhelp.justChatPrompt",
-        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4e97d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
-      },
-      quickHelpOptions: [
-        {
-          service: "Identity & Civil Registration",
-          category: "1",
-          textKey: "quickhelp.applyForID",
-          promptKey: "quickhelp.applyForIDPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M16 19c-1.43-1.74-3.58-3-6-3s-4.57 1.26-6 3"></path></svg>',
-        },
-        {
-          service: "Taxes & Revenue",
-          category: "5",
-          textKey: "quickhelp.payTaxes",
-          promptKey: "quickhelp.payTaxesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M16 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path><path d="M12 10v.01"></path></svg>',
-        },
-        {
-          service: "Business & Trade",
-          category: "8",
-          textKey: "quickhelp.startBusiness",
-          promptKey: "quickhelp.startBusinessPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v3a4 4 0 0 1-4 4h-3"></path><path d="M7 3v7a4 4 0 0 0 4 4h7"></path><path d="M13 21l-3-3 3-3"></path><path d="M9 3l3 3-3 3"></path></svg>',
-        },
-        {
-          service: "Healthcare & Social Services",
-          category: "2",
-          textKey: "quickhelp.findHealthcare",
-          promptKey: "quickhelp.findHealthcarePrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>',
-        },
-        {
-          service: "Education & Learning",
-          category: "3",
-          textKey: "quickhelp.educationServices",
-          promptKey: "quickhelp.educationServicesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20v14H2zM8 21h8m-4-4v4"></path></svg>',
-        },
-        {
-          service: "Transportation & Mobility",
-          category: "7",
-          textKey: "quickhelp.transportLicenses",
-          promptKey: "quickhelp.transportLicensesPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>',
-        },
-        {
-          service: "Housing & Urban Development",
-          category: "9",
-          textKey: "quickhelp.housingPrograms",
-          promptKey: "quickhelp.housingProgramsPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
-        },
-        {
-          service: "Employment & Labor Services",
-          category: "4",
-          textKey: "quickhelp.findJobs",
-          promptKey: "quickhelp.findJobsPrompt",
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"></path><path d="M13 2v7h7"></path></svg>',
-        },
-      ],
-      translations: {
-        en: {
-          "chatbot.welcomeMessage": "Welcome! How can I help you today?",
-          "chatbot.queryContext": "Query Context:",
-          "chatbot.removeItem": "Remove item",
-          "chatbot.placeholder": "Type your message here...",
-          "chatbot.sendButton": "Send",
-          "feedback.button": "Feedback",
-          "chatbot.responsePrefix": "I received your message",
-          "chatbot.withContext": "with context",
-          "chatbot.processingError":
-            "Sorry, there was an error processing your request.",
-          "chatbot.saveChat": "Save Chat",
-          "chatbot.chatTitle": "Chat Title",
-          "chatbot.chatTitlePlaceholder": "Enter a title for this chat",
-          "chatbot.selectFolder": "Select Folder",
-          "chatbot.chatSaved": "Chat saved successfully!",
-          "chatbot.chatUpdated": "Chat updated successfully!",
-          "chatbot.newChat": "Start New Chat",
-          "chatbot.clearContext": "Clear context and start a new conversation",
-          "chatbot.unsavedChanges":
-            "You have unsaved changes. Are you sure you want to start a new chat?",
-          "chatbot.whatCanIHelp": "How can I help you today?",
-          "chatbot.justChat": "Just Chat",
-          "quickhelp.applyForID": "Apply for ID",
-          "quickhelp.payTaxes": "Pay taxes",
-          "quickhelp.startBusiness": "Start a business",
-          "quickhelp.findHealthcare": "Find healthcare",
-          "quickhelp.educationServices": "Education services",
-          "quickhelp.transportLicenses": "Transport & licenses",
-          "quickhelp.housingPrograms": "Housing programs",
-          "quickhelp.findJobs": "Find jobs",
-          "common.cancel": "Cancel",
-          "common.save": "Save",
-          "status.online": "System Online",
-          "status.offline": "System Offline",
-          "status.responseTime": "Avg. Response Time",
-          "status.queueLength": "Queue",
-          "status.uptime": "Uptime",
-          "sidebar.title": "Info & Resources",
-          "sidebar.chatHistory": "Recent Chats",
-          "sidebar.relatedDocs": "Related Documents",
-          "sidebar.faq": "Frequently Asked Questions",
-          "sidebar.noChats": "No recent chats",
-          "sidebar.noDocuments": "No related documents",
-          "chatbot.saveConfirmTitle": "Save Existing Conversation",
-          "chatbot.saveConfirmMessage": "Save existing conversation?",
-          "chatbot.loadConfirmTitle": "Load Existing Conversation",
-          "chatbot.loadConfirmMessage":
-            "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?",
-          "chatbot.loadAndDiscard": "Load and Discard",
-          "chatbot.saveAndLoad": "Save and Load",
-          "chatbot.saveAndStartNew": "Save and Start New",
-          "chatbot.discardAndStartNew": "Discard and Start New",
-        },
-        fr: {
-          "chatbot.welcomeMessage":
-            "Bienvenue ! Comment puis-je vous aider aujourd'hui ?",
-          "chatbot.queryContext": "Contexte de la requête :",
-          "chatbot.removeItem": "Supprimer l'élément",
-          "chatbot.placeholder": "Tapez votre message ici...",
-          "chatbot.sendButton": "Envoyer",
-          "feedback.button": "Commentaires",
-          "chatbot.responsePrefix": "J'ai reçu votre message",
-          "chatbot.withContext": "avec le contexte",
-          "chatbot.processingError":
-            "Désolé, une erreur s'est produite lors du traitement de votre demande.",
-          "chatbot.saveChat": "Enregistrer la discussion",
-          "chatbot.chatTitle": "Titre de la discussion",
-          "chatbot.chatTitlePlaceholder":
-            "Entrez un titre pour cette discussion",
-          "chatbot.selectFolder": "Sélectionner un dossier",
-          "chatbot.chatSaved": "Discussion enregistrée avec succès !",
-          "chatbot.chatUpdated": "Discussion mise à jour avec succès !",
-          "chatbot.newChat": "Démarrer une nouvelle discussion",
-          "chatbot.clearContext":
-            "Effacer le contexte et démarrer une nouvelle conversation",
-          "chatbot.unsavedChanges":
-            "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir démarrer une nouvelle discussion ?",
-          "chatbot.whatCanIHelp": "Comment puis-je vous aider aujourd'hui ?",
-          "chatbot.justChat": "Juste discuter",
-          "quickhelp.applyForID": "Demander une carte d'identité",
-          "quickhelp.payTaxes": "Payer les impôts",
-          "quickhelp.startBusiness": "Démarrer une entreprise",
-          "quickhelp.findHealthcare": "Trouver des soins de santé",
-          "quickhelp.educationServices": "Services éducatifs",
-          "quickhelp.transportLicenses": "Transport et licences",
-          "quickhelp.housingPrograms": "Programmes de logement",
-          "quickhelp.findJobs": "Trouver des emplois",
-          "common.cancel": "Annuler",
-          "common.save": "Enregistrer",
-          "status.online": "Système en ligne",
-          "status.offline": "Système hors ligne",
-          "status.responseTime": "Temps de réponse moyen",
-          "status.queueLength": "File d'attente",
-          "status.uptime": "Temps de fonctionnement",
-          "sidebar.title": "Infos et ressources",
-          "sidebar.chatHistory": "Discussions récentes",
-          "sidebar.relatedDocs": "Documents associés",
-          "sidebar.faq": "Questions fréquentes",
-          "sidebar.noChats": "Aucune discussion récente",
-          "sidebar.noDocuments": "Aucun document associé",
-          "chatbot.saveConfirmTitle": "Enregistrer la conversation existante",
-          "chatbot.saveConfirmMessage":
-            "Enregistrer la conversation existante ?",
-          "chatbot.loadConfirmTitle": "Charger une conversation existante",
-          "chatbot.loadConfirmMessage":
-            "Vous avez des modifications non enregistrées. Voulez-vous les abandonner et charger la conversation sélectionnée, ou enregistrer la conversation actuelle d'abord ?",
-          "chatbot.loadAndDiscard": "Charger et abandonner",
-          "chatbot.saveAndLoad": "Enregistrer et charger",
-          "chatbot.saveAndStartNew":
-            "Enregistrer et démarrer une nouvelle discussion",
-          "chatbot.discardAndStartNew":
-            "Abandonner et démarrer une nouvelle discussion",
-        },
-        sw: {
-          "chatbot.welcomeMessage": "Karibu! Nawezaje kukusaidia leo?",
-          "chatbot.queryContext": "Muktadha wa Swali:",
-          "chatbot.removeItem": "Ondoa kipengee",
-          "chatbot.placeholder": "Andika ujumbe wako hapa...",
-          "chatbot.sendButton": "Tuma",
-          "feedback.button": "Maoni",
-          "chatbot.responsePrefix": "Nimepokea ujumbe wako",
-          "chatbot.withContext": "na muktadha",
-          "chatbot.processingError":
-            "Samahani, kulikuwa na hitilafu katika kushughulikia ombi lako.",
-          "chatbot.saveChat": "Hifadhi Mazungumzo",
-          "chatbot.chatTitle": "Kichwa cha Mazungumzo",
-          "chatbot.chatTitlePlaceholder": "Ingiza kichwa cha mazungumzo haya",
-          "chatbot.selectFolder": "Chagua Folda",
-          "chatbot.chatSaved": "Mazungumzo yamehifadhiwa kwa mafanikio!",
-          "chatbot.chatUpdated": "Mazungumzo yamesasishwa kwa mafanikio!",
-          "chatbot.newChat": "Anza Mazungumzo Mapya",
-          "chatbot.clearContext": "Futa muktadha na uanze mazungumzo mapya",
-          "chatbot.unsavedChanges":
-            "Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?",
-          "chatbot.whatCanIHelp": "Nawezaje kukusaidia leo?",
-          "chatbot.justChat": "Zungumza tu",
-          "quickhelp.applyForID": "Omba Kitambulisho",
-          "quickhelp.payTaxes": "Lipa kodi",
-          "quickhelp.startBusiness": "Anza Biashara",
-          "quickhelp.findHealthcare": "Pata Huduma za Afya",
-          "quickhelp.educationServices": "Huduma za Elimu",
-          "quickhelp.transportLicenses": "Usafiri na Leseni",
-          "quickhelp.housingPrograms": "Programu za Nyumba",
-          "quickhelp.findJobs": "Tafuta Kazi",
-          "common.cancel": "Ghairi",
-          "common.save": "Hifadhi",
-          "status.online": "Mfumo Uko Mtandaoni",
-          "status.offline": "Mfumo Hauko Mtandaoni",
-          "status.responseTime": "Wastani wa Muda wa Kumudu",
-          "status.queueLength": "Foleni",
-          "status.uptime": "Muda wa Kuendelea",
-          "sidebar.title": "Taarifa na Rasilimali",
-          "sidebar.chatHistory": "Mazungumzo ya Hivi Karibuni",
-          "sidebar.relatedDocs": "Hati Zilizohusiana",
-          "sidebar.faq": "Maswali Yanayoulizwa Mara kwa Mara",
-          "sidebar.noChats": "Hakuna mazungumzo ya hivi karibuni",
-          "sidebar.noDocuments": "Hakuna hati zinazohusiana",
-          "chatbot.saveConfirmTitle": "Hifadhi Mazungumzo Yaliyopo",
-          "chatbot.saveConfirmMessage": "Hifadhi mazungumzo yaliyopo?",
-          "chatbot.loadConfirmTitle": "Pakia Mazungumzo Yaliyopo",
-          "chatbot.loadConfirmMessage":
-            "Una mabadiliko ambayo hayajahifadhiwa. Je, unataka kuyatupa na kupakia mazungumzo yaliyochaguliwa, au kuhifadhi mazungumzo ya sasa kwanza?",
-          "chatbot.loadAndDiscard": "Pakia na Tupa",
-          "chatbot.saveAndLoad": "Hifadhi na Pakia",
-          "chatbot.saveAndStartNew": "Hifadhi na Anza Mazungumzo Mapya",
-          "chatbot.discardAndStartNew": "Tupa na Anza Mazungumzo Mapya",
-        },
-      },
+      quickHelpButtons: [],
       showNewChatConfirm: false,
       newChatDialog: {
         title: "",
@@ -560,6 +377,8 @@ export default {
         secondaryText: "",
       },
       pendingConversationId: null,
+      isLoading: false, // Loading state for spinner
+      relatedDocuments: [], // Holds documents for the right sidebar
     };
   },
 
@@ -571,22 +390,20 @@ export default {
         this.chatMessages = [
           {
             sender: "bot",
-            content: this.translate(
-              "chatbot.welcomeMessage",
-              "Welcome! How can I help you today?"
-            ),
+            content: this.translate("chatbot.welcomeMessage"),
             timestamp: new Date().toISOString(),
             isSaved: true,
           },
         ];
         this.newMessage = "";
         this.selectedContextItems = [];
+        this.relatedDocuments = [];
         this.lastSavedState = {
           messages: JSON.parse(JSON.stringify(this.chatMessages)),
           contextItems: [],
         };
         console.log(
-          `Reset conversationId after deletion of chat ${deletedChatId}`
+          `Reset conversation ID after deletion of chat ${deletedChatId}`
         );
       }
     });
@@ -600,8 +417,9 @@ export default {
         this.pendingConversationId = conversationId;
         this.showLoadConfirm = true;
       } else {
-        this.chatMessages = []; // Clear messages to avoid carryover
+        this.chatMessages = []; // Clear previous messages
         this.selectedContextItems = [];
+        this.relatedDocuments = [];
         this.lastSavedState = { messages: [], contextItems: [] }; // Reset state
         this.loadExistingConversation(conversationId);
       }
@@ -632,23 +450,31 @@ export default {
     if (this.chatMessages.length === 0) {
       this.chatMessages.push({
         sender: "bot",
-        content: this.translate(
-          "chatbot.welcomeMessage",
-          "Welcome! How can I help you today?"
-        ),
+        content: this.translate("chatbot.welcomeMessage"),
       });
     }
 
     if (this.$root.$i18n) {
       this.currentLocale = this.$root.$i18n.locale;
-      this.$watch("$root.$i18n.locale", (newLocale) => {
-        this.currentLocale = newLocale;
-      });
+      this.$watch(
+        () => this.$root.$i18n.locale,
+        (newLocale) => {
+          this.currentLocale = newLocale;
+          // Update context labels when locale changes
+          this.selectedContextItems = this.selectedContextItems.map((item) => ({
+            ...item,
+            service: this.safeTranslate(item.serviceKey || item.service),
+          }));
+          this.loadServiceCategories(); // Reload categories for the new locale
+        }
+      );
     }
 
     eventBus.$on("treeNodeSelected", this.handleTreeNodeSelected);
     eventBus.$on("open-chat", this.loadChatFromHistory);
     this.scrollToBottom();
+    this.loadQuickHelpButtons();
+    this.loadServiceCategories(); // Fetch categories on mount
 
     this.statusUpdateInterval = setInterval(() => {
       this.systemStatus.uptime += 30;
@@ -686,6 +512,116 @@ export default {
   methods: {
     ...mapActions("chatHistory", ["createChat", "updateChat"]),
 
+    // *** UPDATED: Use serviceTreeService to load and transform categories ***
+    async loadServiceCategories() {
+        try {
+            // Use the service which handles transformation and localization
+            this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
+            console.log('[ChatBotComponent] Service categories loaded for lookup via serviceTreeService:', this.serviceCategories);
+        } catch (error) {
+            console.error('[ChatBotComponent] Failed to load service categories:', error);
+            notificationService.error('Could not load service categories.');
+        }
+    },
+
+    // *** UPDATED: Find category label by its key in the transformed tree data ***
+    getCategoryLabelById(id) {
+        if (id === null || id === undefined) {
+            const selectedServices = this.selectedContextItems.map(item => item.serviceKey);
+            if (selectedServices.includes('quickhelp.justChat')) {
+                return 'General';
+            }
+            return null;
+        }
+
+        // The service returns `catKey` which corresponds to the numeric ID
+        const category = this.serviceCategories.find(cat => cat.catKey == id.toString());
+        if (category) {
+            // The service already provides the localized name in the `name` property
+            return category.name || `Category ${id}`;
+        }
+        
+        console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`);
+        return `Category ${id}`; // Fallback
+    },
+
+    // Safely translate a key, with mapping for static strings
+    safeTranslate(key) {
+      try {
+        const serviceKeyMap = {
+          "Layanan Pelanggan": "context.customerService",
+          Pembayaran: "context.payment",
+          Pengiriman: "context.shipping",
+          "Layanan Kesehatan": "context.healthService",
+          Perumahan: "context.housing",
+          Imigrasi: "context.immigration",
+          Pendidikan: "context.education",
+          Pajak: "context.tax",
+          Pensiun: "context.retirement",
+          "Lainnya - Pribadi": "context.personalOther",
+        };
+        const translationKey = serviceKeyMap[key] || key;
+        if (typeof translationKey === "string" && translationKey.trim()) {
+          const translated = this.$t(translationKey);
+          return translated !== translationKey ? translated : key;
+        }
+        console.warn(`Invalid translation key: ${key}`);
+        return this.$t("context.fallback") || key || "Unknown";
+      } catch (error) {
+        console.error(`Translation error for key ${key}:`, error);
+        return this.$t("context.fallback") || key || "Unknown";
+      }
+    },
+
+    // Render Markdown safely
+    renderMarkdown(content) {
+      try {
+        const html = marked.parse(content);
+        return DOMPurify.sanitize(html);
+      } catch (error) {
+        console.error("Error rendering Markdown:", error);
+        return DOMPurify.sanitize(content);
+      }
+    },
+
+    async loadQuickHelpButtons() {
+      console.log("[ChatBotComponent] Loading Quick Help buttons from config");
+      try {
+        const { loadConfig } = await import("../main.js");
+        const config = await loadConfig();
+        const buttons = config?.features?.chat?.quickHelp?.buttons || [];
+        this.quickHelpButtons = buttons.map((button) => {
+          if (this.$t(button.title) === button.title) {
+            console.warn(
+              `[ChatBotComponent] Missing i18n key: ${button.title}`
+            );
+          }
+          return {
+            service: this.$t(button.title),
+            textKey: button.title,
+            promptKey: button.prompt,
+            icon: button.icon.value,
+            category: button.category,
+            id: button.id,
+          };
+        });
+        console.log(
+          `[ChatBotComponent] Loaded ${buttons.length} Quick Help buttons:`,
+          buttons.map((b) => ({
+            id: b.id,
+            title: b.title,
+            category: b.category,
+          }))
+        );
+      } catch (error) {
+        console.error(
+          "[ChatBotComponent] Failed to load Quick Help config:",
+          error
+        );
+        this.quickHelpButtons = [];
+      }
+    },
+
     getCurrentTheme() {
       const documentTheme = document.documentElement.getAttribute("data-theme");
       const bodyTheme = document.body.getAttribute("data-theme");
@@ -713,68 +649,59 @@ export default {
       console.log("Document opened:", doc);
     },
 
-    translate(key, fallback) {
-      if (this.$t && typeof this.$t === "function") {
-        try {
-          const i18nTranslation = this.$t(key);
-          if (i18nTranslation && i18nTranslation !== key) {
-            return i18nTranslation;
-          }
-        } catch (error) {
-          console.warn(`Translation error for key: ${key}`, error);
-        }
-      }
-      const localTranslation = this.translations[this.currentLocale]?.[key];
-      if (localTranslation) {
-        return localTranslation;
-      }
-      return this.translations["en"]?.[key] || fallback;
+    translate(key) {
+      return this.$t(key);
     },
 
     selectQuickHelpOption(option) {
-      // Handle Vue Proxy or null option
+      console.log(
+        `[ChatBotComponent] Quick Help button clicked: id=${option.id}, textKey=${option.textKey}`
+      );
       const rawOption =
         option && option.__v_isReactive ? { ...option } : option || {};
       if (!rawOption.service) {
         console.error("Invalid quick help option, missing service:", rawOption);
         return;
       }
-      // Update context items
-      const category =
+      const categoryId =
         rawOption.category ||
-        (rawOption.service !== this.justChatOption.service ? "general" : null);
-      this.selectedContextItems = [
-        {
-          service: rawOption.service,
-          category: category,
-          selected: true,
-        },
-      ];
+        (rawOption.service !== this.$t("quickhelp.justChat")
+          ? "general"
+          : null);
 
-      // Set conversation category for non-Just Chat options, overriding sidebar
-      if (rawOption.service !== this.justChatOption.service) {
-        this.conversationCategory = category;
+      const contextExists = this.selectedContextItems.some(
+        (item) =>
+          item.service === rawOption.service && item.category === categoryId
+      );
+
+      if (!contextExists) {
+        this.selectedContextItems.push({
+          service: rawOption.service,
+          serviceKey: rawOption.textKey,
+          category: categoryId,
+          selected: true,
+        });
         console.log(
-          `Set conversation category to ${category} for quick help option ${rawOption.service}, overriding any sidebar context`
+          `Added new context item: ${rawOption.service} with category ID ${categoryId}`
         );
       } else {
-        // Just Chat: retain existing sidebar category or set to null
-        this.conversationCategory = this.conversationCategory || null;
         console.log(
-          "Just Chat selected, retaining sidebar category:",
-          this.conversationCategory
+          `Context item ${rawOption.service} with category ID ${categoryId} already exists`
         );
       }
 
-      // Hide quick help
-      this.showQuickHelp = false;
-
-      // Send predefined message if available
-      if (rawOption.promptKey) {
-        const message = this.translate(
-          rawOption.promptKey,
-          rawOption.promptKey.split(".")[1]
+      if (rawOption.service !== this.$t("quickhelp.justChat")) {
+        this.currentCategoryId = categoryId;
+        console.log(
+          `Set current category ID to ${this.currentCategoryId} from quick help option.`
         );
+      } else {
+        this.currentCategoryId = this.currentCategoryId || null;
+      }
+
+      this.showQuickHelp = false;
+      if (rawOption.promptKey) {
+        const message = this.$t(rawOption.promptKey);
         this.newMessage = message;
         this.sendMessage();
       }
@@ -785,55 +712,68 @@ export default {
     },
 
     handleTreeNodeSelected(item) {
-      if (!item || typeof item !== "object") return;
+      if (!item || typeof item !== "object" || !item.service) {
+        console.warn("Invalid tree node selected:", item);
+        return;
+      }
+
       if (item.selected) {
         const exists = this.selectedContextItems.some(
           (existing) =>
-            existing.category === item.category &&
-            existing.service === item.service
+            existing.service === this.safeTranslate(item.service) &&
+            existing.category === item.category
         );
         if (!exists) {
-          this.selectedContextItems.push(item);
+          this.selectedContextItems.push({
+            service: this.safeTranslate(item.service),
+            serviceKey: item.service,
+            category: item.category || "general",
+            selected: true,
+          });
+          console.log(
+            `Added sidebar context item: ${this.safeTranslate(
+              item.service
+            )} with category ID ${item.category || "general"}`
+          );
           notificationService.info(
-            this.translate(
-              "chatbot.contextAdded",
-              "Context added to your query."
-            ),
+            this.translate("chatbot.contextAdded"),
             1500
           );
-          // Set conversationCategory if not set by a non-Just Chat quick help button
-          if (
-            !this.conversationCategory ||
-            this.conversationCategory === "general"
-          ) {
-            this.conversationCategory = item.category || "general";
+          if (!this.currentCategoryId) {
+            this.currentCategoryId = item.category || null;
             console.log(
-              `Set conversation category to ${this.conversationCategory} from sidebar tree node ${item.service}`
+              `Set current category ID to ${this.currentCategoryId} from sidebar node.`
             );
           }
+        } else {
+          console.log(
+            `Context item ${this.safeTranslate(item.service)} with category ID ${
+              item.category
+            } already exists`
+          );
         }
       } else {
-        this.selectedContextItems = this.selectedContextItems.filter(
+        const index = this.selectedContextItems.findIndex(
           (existing) =>
-            !(
-              existing.category === item.category &&
-              existing.service === item.service
-            )
+            existing.service === this.safeTranslate(item.service) &&
+            existing.category === item.category
         );
-        eventBus.$emit("contextItemRemoved", item);
-        notificationService.info(
-          this.translate(
-            "chatbot.contextRemoved",
-            "Context removed from your query."
-          ),
-          1500
-        );
-        // Clear conversationCategory if no context items remain and not set by quick help
-        if (this.selectedContextItems.length === 0 && !this.newMessage) {
-          this.conversationCategory = null;
+        if (index !== -1) {
+          const removedItem = this.selectedContextItems.splice(index, 1)[0];
           console.log(
-            "Cleared conversation category after removing sidebar context"
+            `Removed sidebar context item: ${removedItem.service} with category ID ${removedItem.category}`
           );
+          notificationService.info(
+            this.translate("chatbot.contextRemoved"),
+            1500
+          );
+          eventBus.$emit("contextItemRemoved", removedItem);
+          if (this.selectedContextItems.length === 0) {
+            this.currentCategoryId = null;
+            console.log(
+              "Cleared current category ID as no context items remain."
+            );
+          }
         }
       }
     },
@@ -845,34 +785,26 @@ export default {
           `Removed context item: ${removedItem.service} at index ${index}`
         );
       }
-      // Restore context item only if conversationCategory exists and matches a valid quick help option or sidebar context
-      if (this.selectedContextItems.length === 0 && this.conversationCategory) {
-        const quickHelpOption = this.quickHelpOptions.find(
-          (option) => option.category === this.conversationCategory
+      if (this.selectedContextItems.length === 0 && this.currentCategoryId) {
+        const quickHelpOption = this.quickHelpButtons.find(
+          (option) => option.category === this.currentCategoryId
         );
         if (quickHelpOption) {
           this.selectedContextItems = [
             {
-              service: quickHelpOption.service,
-              category: this.conversationCategory,
+              service: this.safeTranslate(quickHelpOption.textKey),
+              serviceKey: quickHelpOption.textKey,
+              category: this.currentCategoryId,
               selected: true,
             },
           ];
           console.log(
-            `Restored context item for category ${this.conversationCategory}: ${quickHelpOption.service}`
+            `Restored context item for category ID ${
+              this.currentCategoryId
+            }: ${this.safeTranslate(quickHelpOption.textKey)}`
           );
         } else {
-          // Assume sidebar context; restore generic item
-          this.selectedContextItems = [
-            {
-              service: `Category ${this.conversationCategory}`,
-              category: this.conversationCategory,
-              selected: true,
-            },
-          ];
-          console.log(
-            `Restored sidebar context item for category ${this.conversationCategory}`
-          );
+           this.currentCategoryId = null;
         }
       }
     },
@@ -880,6 +812,7 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
+
       this.chatMessages.push({
         sender: "user",
         content,
@@ -887,80 +820,114 @@ export default {
         isSaved: false,
       });
       this.newMessage = "";
-      const contextInfo =
-        this.selectedContextItems.length > 0
-          ? this.selectedContextItems.map((item) => item.service).join(", ")
-          : null;
       this.showQuickHelp = false;
+      this.isLoading = true;
+      this.relatedDocuments = [];
+
       try {
-        const queryData = {
-          userId: this.$store.getters.currentUser?._key || "anonymous",
-          sessionId: this.currentSessionId || "new-session",
-          text: content,
-          categoryId:
-            this.conversationCategory ||
-            (contextInfo ? this.selectedContextItems[0].category : "general"),
-          serviceId: contextInfo ? this.selectedContextItems[0].service : null,
-          isAnswered: false,
-        };
-        console.log("Query data sent:", queryData);
-        console.log("Before queryData:", {
-          conversationCategory: this.conversationCategory,
-          selectedContextItems: this.selectedContextItems,
-        });
+        const useConversationContext = this.selectedContextItems.length > 0;
+        const contextOption = useConversationContext
+          ? "conversation-with-labels"
+          : "single-message";
+
+        let queryData;
+
+        const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
+        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
+
+        if (contextOption === "conversation-with-labels") {
+          const serviceLabels = this.selectedContextItems.map(
+            (item) => item.service
+          );
+
+          queryData = {
+            conversationId: this.conversationId,
+            userId: this.$store.getters.currentUser?._key || "anonymous",
+            sessionId: this.currentSessionId || "new-session",
+            messages: this.chatMessages.map((msg) => ({
+              role: msg.sender === "user" ? "user" : "assistant",
+              content: msg.content,
+            })),
+            context: {
+              categoryLabel: categoryLabel,
+              serviceLabels: serviceLabels,
+              language: this.currentLocale.toUpperCase(),
+            },
+            contextOption: "conversation-with-context-labels",
+            timestamp: new Date().toISOString()
+          };
+        } else {
+          queryData = {
+            userId: this.$store.getters.currentUser?._key || "anonymous",
+            sessionId: this.currentSessionId || "new-session",
+            text: content,
+            contextOption: contextOption,
+            timestamp: new Date().toISOString()
+          };
+        }
+
+        console.log(
+          "Submitting query with data:",
+          JSON.stringify(queryData, null, 2)
+        );
         const result = await chatbotService.submitQuery(queryData);
+        console.log("Query result:", result);
+
         const botMessage = {
           sender: "bot",
-          content:
-            result.response ||
-            `${this.translate(
-              "chatbot.responsePrefix",
-              "I received your message"
-            )}: "${content}"${
-              contextInfo
-                ? ` ${this.translate(
-                    "chatbot.withContext",
-                    "with context"
-                  )}: ${contextInfo}`
-                : ""
-            }`,
+          content: result.response || this.translate("chatbot.processingError"),
           queryId: result._key,
           timestamp: new Date().toISOString(),
           isSaved: false,
         };
+
+        if (result.metadata) {
+          if (result.metadata.confidence_score) {
+            botMessage.confidenceScore = result.metadata.confidence_score;
+          }
+          if (
+            result.metadata.source_documents &&
+            Array.isArray(result.metadata.source_documents)
+          ) {
+            this.relatedDocuments = result.metadata.source_documents.map(
+              (doc) => ({
+                id: doc.document_id,
+                title:
+                  doc.title ||
+                  `${doc.categoryLabel || "Document"} - ${
+                    doc.serviceLabels?.join(", ") || "Source"
+                  }`,
+                type: doc.url?.split(".").pop().toUpperCase() || "LINK",
+                size: 0,
+                url: doc.url,
+                score: doc.score,
+                categoryLabel: doc.categoryLabel,
+                serviceLabels: doc.serviceLabels,
+              })
+            );
+          }
+        }
+
         this.chatMessages.push(botMessage);
-        console.log("Query result:", result);
 
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
-          notificationService.info(
-            this.translate("chatbot.sessionUpdated", "Session updated."),
-            1500
-          );
         }
-        console.log("About to mark query as answered:", result._key);
         await chatbotService.markQueryAsAnswered(
           result._key,
           result.responseTime
         );
-        console.log("Query marked as answered successfully");
       } catch (error) {
         console.error("Error sending query:", error);
         this.chatMessages.push({
           sender: "bot",
-          content: this.translate(
-            "chatbot.processingError",
-            "Sorry, there was an error processing your request."
-          ),
+          content: this.translate("chatbot.processingError"),
           timestamp: new Date().toISOString(),
           isSaved: false,
         });
-        notificationService.error(
-          this.translate(
-            "chatbot.processingError",
-            "Sorry, there was an error processing your request."
-          )
-        );
+        notificationService.error(this.translate("chatbot.processingError"));
+      } finally {
+        this.isLoading = false;
       }
       this.scrollToBottom();
       if (this.currentChatId) {
@@ -982,22 +949,26 @@ export default {
     async handleFeedbackSubmit(feedback) {
       const queryId = feedback.message.queryId;
       if (!queryId) {
-        console.error("Cannot submit feedback: No queryId found");
+        console.error("Cannot submit feedback: No queryId found for message");
+        notificationService.error(
+          this.translate("chatbot.feedbackMissingQueryId")
+        );
+        this.closeFeedbackDialog();
         return;
       }
       try {
         await chatbotService.submitFeedback(queryId, {
-          rating: feedback.rating,
-          comment: feedback.text,
+          rating: feedback.rating || (feedback.thumbFeedback === "up" ? 4 : 2),
+          comment: feedback.text || "",
           providedAt: new Date().toISOString(),
         });
-        console.log("Feedback submitted successfully");
-        notificationService.success("Thank you for your feedback!");
-      } catch (error) {
-        console.error("Error submitting feedback:", error);
-        notificationService.error(
-          "Unable to submit feedback. Please try again."
+        console.log("Feedback submitted successfully for queryId:", queryId);
+        notificationService.success(
+          this.translate("chatbot.feedbackSubmitted")
         );
+      } catch (error) {
+        console.error("Error submitting feedback for queryId:", queryId, error);
+        notificationService.error(this.translate("chatbot.feedbackError"));
       }
       this.closeFeedbackDialog();
     },
@@ -1021,82 +992,82 @@ export default {
           throw new Error("Conversation not found");
         }
 
-        // Set conversation metadata
         this.conversationId = conversation._key;
         this.currentChatId = conversation._key;
         this.currentChatTitle = conversation.title || this.generateChatTitle();
-        this.conversationCategory = conversation.categoryId || null;
+        this.currentCategoryId = conversation.categoryId || null;
+        this.relatedDocuments = [];
 
-        // Load messages
         this.chatMessages = [];
         const messages = conversation.messages || [];
         messages.forEach((msg) => {
           this.chatMessages.push({
             sender: msg.sender === "user" ? "user" : "bot",
             content: msg.content,
-            timestamp: msg.createdAt || new Date().toISOString(),
+            timestamp: msg.timestamp || new Date().toISOString(),
             queryId: msg.queryId || null,
-            isSaved: true, // Mark all loaded messages as saved
+            isSaved: true,
           });
         });
 
-        // If no messages, add welcome message
         if (this.chatMessages.length === 0) {
           this.chatMessages.push({
             sender: "bot",
-            content: this.translate(
-              "chatbot.welcomeMessage",
-              "Welcome! How can I help you today?"
-            ),
+            content: this.translate("chatbot.welcomeMessage"),
             timestamp: new Date().toISOString(),
+            queryId: null,
             isSaved: true,
           });
         }
 
-        // Load context items from tags
         this.selectedContextItems = [];
         if (conversation.tags && Array.isArray(conversation.tags)) {
+          console.log(`Conversation tags:`, conversation.tags);
           conversation.tags.forEach((tag) => {
             this.selectedContextItems.push({
-              service: tag,
-              category: this.conversationCategory || "general",
+              service: this.safeTranslate(
+                tag || `category.${this.currentCategoryId || "general"}`
+              ),
+              serviceKey:
+                tag || `category.${this.currentCategoryId || "general"}`,
+              category: this.currentCategoryId || "general",
               selected: true,
             });
           });
+        } else if (this.currentCategoryId) {
+          this.selectedContextItems.push({
+            service: this.getCategoryLabelById(this.currentCategoryId),
+            serviceKey: `category.${this.currentCategoryId}`,
+            category: this.currentCategoryId,
+            selected: true,
+          });
+          console.log(
+            `No tags, using fallback category ID: ${this.currentCategoryId}`
+          );
         }
 
-        // Reset lastSavedState to match loaded state
         this.lastSavedState = {
-          messages: JSON.parse(JSON.stringify(this.chatMessages)), // Deep copy
-          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems)), // Deep copy
+          messages: JSON.parse(JSON.stringify(this.chatMessages)),
+          contextItems: JSON.parse(JSON.stringify(this.selectedContextItems)),
         };
 
-        // Reset UI state
         this.newMessage = "";
         this.showQuickHelp = false;
         this.scrollToBottom();
 
-        // Update Vuex store
         this.updateChatInHistory();
 
         notificationService.success(
-          this.translate(
-            "chatbot.conversationLoaded",
-            "Conversation loaded successfully!"
-          )
+          this.translate("chatbot.conversationLoaded")
         );
       } catch (error) {
         console.error("Error loading conversation:", error);
-        notificationService.error(
-          this.translate("chatbot.loadError", "Unable to load conversation.")
-        );
+        notificationService.error(this.translate("chatbot.loadError"));
       }
     },
 
     hasUnsavedChanges() {
-      // Case 3: New conversation not yet saved
       if (!this.conversationId && !this.currentChatId) {
-        // Check if there are user messages or context items
         const hasUserMessages = this.chatMessages.some(
           (msg) => msg.sender === "user"
         );
@@ -1104,7 +1075,6 @@ export default {
         return hasUserMessages || hasContextItems;
       }
 
-      // Case 1: Check for new messages in existing conversation
       const hasNewMessages = this.chatMessages.some(
         (msg) =>
           !msg.isSaved &&
@@ -1114,7 +1084,6 @@ export default {
         return true;
       }
 
-      // Case 2: Check for context item differences
       if (
         this.selectedContextItems.length !==
         this.lastSavedState.contextItems.length
@@ -1158,7 +1127,6 @@ export default {
           title: this.generateChatTitle(),
           folderId: "default",
         };
-        // Wait for save to complete (handled in handleSaveChat)
         await new Promise((resolve) => {
           const unwatch = this.$watch("saveChatDialog.visible", (newVal) => {
             if (!newVal) {
@@ -1176,10 +1144,8 @@ export default {
 
     saveChatToHistory() {
       if (this.conversationId || this.currentChatId) {
-        // Existing conversation: update directly
         this.updateExistingChat();
       } else {
-        // New conversation: open save dialog
         this.saveChatDialog = {
           visible: true,
           title: this.generateChatTitle(),
@@ -1188,14 +1154,12 @@ export default {
       }
     },
 
-    // Convert selectedContextItems to tags array for storing the conversation
     getContextTags() {
       return this.selectedContextItems
-        .map((item) => item.service)
+        .map((item) => item.serviceKey || item.service)
         .filter((tag) => tag);
     },
 
-    // Saves a new conversation to the backend... note that existing conversstions are handled differently
     async handleSaveChat() {
       console.log("handleSaveChat called");
       try {
@@ -1217,7 +1181,7 @@ export default {
           userId: currentUser._key,
           title: this.saveChatDialog.title || this.generateChatTitle(),
           initialMessage: firstUserMessage,
-          categoryId: this.conversationCategory || null,
+          categoryId: this.currentCategoryId || null,
           tags: this.getContextTags(),
         };
 
@@ -1237,17 +1201,15 @@ export default {
         console.log("Conversation created:", conversation);
         this.conversationId = conversation._key;
 
-        // Add all messages, skipping the first user message if it matches initialMessage
         for (const message of this.chatMessages) {
-          // Skip the welcome message (bot's initial message) and the first user message if it matches initialMessage
           if (
-            (message.sender === "bot" && !message.queryId) || // Skip bot welcome message
+            (message.sender === "bot" && !message.queryId) ||
             (message.sender === "user" &&
               message.content === firstUserMessage &&
-              !message.isSaved) // Skip first user message
+              !message.isSaved)
           ) {
             console.log(`Skipping message: ${message.content}`);
-            message.isSaved = true; // Mark as saved to avoid reprocessing
+            message.isSaved = true;
             continue;
           }
 
@@ -1273,7 +1235,23 @@ export default {
           }
         }
 
-        // Add conversation to folder if folderId is not 'default'
+        const chatData = {
+          id: conversation._key,
+          title: conversationData.title,
+          preview: this.chatPreview,
+          folderId: this.saveChatDialog.folderId || "default",
+          messageCount: this.chatMessages.filter(
+            (msg) =>
+              msg.sender === "user" || (msg.sender === "bot" && msg.queryId)
+          ).length,
+        };
+        console.log("Dispatching createChat with:", chatData);
+        await this.$store.dispatch("chatHistory/createChat", chatData);
+        console.log(
+          "Vuex chats state after createChat:",
+          this.$store.state.chatHistory.chats
+        );
+
         if (
           this.saveChatDialog.folderId &&
           this.saveChatDialog.folderId !== "default"
@@ -1294,20 +1272,35 @@ export default {
           console.log(
             `Conversation ${conversation._key} added to folder ${this.saveChatDialog.folderId}`
           );
+          console.log("Dispatching addChatToFolder with:", {
+            chatId: conversation._key,
+            folderId: this.saveChatDialog.folderId,
+          });
+          await this.$store.dispatch("chatHistory/addChatToFolder", {
+            chatId: conversation._key,
+            folderId: this.saveChatDialog.folderId,
+          });
+          console.log(
+            "Vuex folderChats state after addChatToFolder:",
+            this.$store.state.chatHistory.folderChats[
+              this.saveChatDialog.folderId
+            ]
+          );
         }
 
-        // Update Vuex store
         this.currentChatId = conversation._key;
         this.currentChatTitle = conversationData.title;
         this.lastSavedState.messages = [...this.chatMessages];
         this.lastSavedState.contextItems = [...this.selectedContextItems];
         this.updateChatInHistory();
 
-        // Notify success and close dialog
-        notificationService.success(
-          this.translate("chatbot.chatSaved", "Chat saved successfully!")
-        );
+        notificationService.success(this.translate("chatbot.chatSaved"));
         this.saveChatDialog.visible = false;
+
+        console.log(
+          `Emitting conversation-saved event for conversation ${conversation._key}`
+        );
+        eventBus.$emit("conversation-saved", conversation._key);
       } catch (error) {
         console.error("Error saving chat:", error);
         notificationService.error("Failed to save chat. Please try again.");
@@ -1315,7 +1308,6 @@ export default {
       }
     },
 
-    // Updates an existing conversation on the backend... note that saving new conversstions is handled differently
     async updateExistingChat() {
       console.log("updateExistingChat called");
       try {
@@ -1330,12 +1322,11 @@ export default {
           );
         }
 
-        // Structure updateData to match backend expectations
         const updateData = {
           userId: currentUser._key,
           title: this.currentChatTitle || this.generateChatTitle(),
-          categoryId: this.conversationCategory || null,
-          tags: this.getContextTags(), // Populate tags from context items
+          categoryId: this.currentCategoryId || null,
+          tags: this.getContextTags(),
           isStarred: false,
           isArchived: false,
         };
@@ -1349,7 +1340,6 @@ export default {
         );
         console.log("Conversation updated:", conversation);
 
-        // Save only new messages
         for (const message of this.chatMessages) {
           if (message.isSaved) {
             console.log(`Skipping already saved message: ${message.content}`);
@@ -1377,16 +1367,12 @@ export default {
           }
         }
 
-        // Update Vuex store
         this.currentChatId = this.conversationId;
         this.lastSavedState.messages = [...this.chatMessages];
         this.lastSavedState.contextItems = [...this.selectedContextItems];
         this.updateChatInHistory();
 
-        // Notify success
-        notificationService.success(
-          this.translate("chatbot.chatUpdated", "Chat updated successfully!")
-        );
+        notificationService.success(this.translate("chatbot.chatUpdated"));
       } catch (error) {
         console.error("Error updating chat:", error);
         notificationService.error("Failed to update chat. Please try again.");
@@ -1415,10 +1401,7 @@ export default {
           this.chatMessages = [
             {
               sender: "bot",
-              content: this.translate(
-                "chatbot.welcomeMessage",
-                "Welcome! How can I help you today?"
-              ),
+              content: this.translate("chatbot.welcomeMessage"),
             },
           ];
         }
@@ -1427,9 +1410,7 @@ export default {
         this.scrollToBottom();
       } catch (error) {
         console.error("Error loading chat:", error);
-        notificationService.error(
-          this.translate("chatbot.loadError", "Unable to load chat history.")
-        );
+        notificationService.error(this.translate("chatbot.loadError"));
       }
     },
 
@@ -1449,22 +1430,12 @@ export default {
     startNewChat() {
       if (this.hasUnsavedChanges()) {
         this.showNewChatConfirm = true;
-        // Update dialog text based on whether it's an existing or new conversation
         this.newChatDialog = {
-          title: this.translate("chatbot.newChatTitle", "Start New Chat"),
-          message: this.translate(
-            "chatbot.unsavedChanges",
-            "You have unsaved changes. Would you like to save them before starting a new chat?"
-          ),
-          confirmText: this.translate(
-            "chatbot.saveAndStartNew",
-            "Save and Start New"
-          ),
-          cancelText: this.translate(
-            "chatbot.discardAndStartNew",
-            "Discard and Start New"
-          ),
-          secondaryText: this.translate("common.cancel", "Cancel"),
+          title: this.translate("chatbot.newChatTitle"),
+          message: this.translate("chatbot.unsavedChanges"),
+          confirmText: this.translate("chatbot.saveAndStartNew"),
+          cancelText: this.translate("chatbot.discardAndStartNew"),
+          secondaryText: this.translate("common.cancel"),
         };
       } else {
         this.startNewChatConfirmed();
@@ -1475,16 +1446,13 @@ export default {
       this.showNewChatConfirm = false;
       try {
         if (this.conversationId || this.currentChatId) {
-          // Existing conversation: update it
           await this.updateExistingChat();
         } else {
-          // New conversation: save it
           this.saveChatDialog = {
             visible: true,
             title: this.generateChatTitle(),
             folderId: "default",
           };
-          // Wait for save to complete
           await new Promise((resolve) => {
             const unwatch = this.$watch("saveChatDialog.visible", (newVal) => {
               if (!newVal) {
@@ -1494,7 +1462,6 @@ export default {
             });
           });
         }
-        // After saving, start new chat
         this.startNewChatConfirmed();
       } catch (error) {
         console.error("Error saving before starting new chat:", error);
@@ -1507,10 +1474,7 @@ export default {
       this.chatMessages = [
         {
           sender: "bot",
-          content: this.translate(
-            "chatbot.welcomeMessage",
-            "Welcome! How can I help you today?"
-          ),
+          content: this.translate("chatbot.welcomeMessage"),
           timestamp: new Date().toISOString(),
           isSaved: true,
         },
@@ -1519,56 +1483,299 @@ export default {
       this.conversationId = null;
       this.selectedContextItems = [];
       this.newMessage = "";
-      this.conversationCategory = null;
+      this.currentCategoryId = null;
       this.currentChatTitle = "";
       this.showQuickHelp = true;
+      this.relatedDocuments = [];
       this.lastSavedState = {
         messages: JSON.parse(JSON.stringify(this.chatMessages)),
         contextItems: [],
       };
       this.scrollToBottom();
-      notificationService.info(
-        this.translate("chatbot.newChatStarted", "Started a new conversation."),
-        1500
-      );
+      notificationService.info(this.translate("chatbot.newChatStarted"), 1500);
     },
 
     cancelNewChat() {
       this.showNewChatConfirm = false;
     },
 
+    openExportDialog() {
+      this.exportDialog = {
+        visible: true,
+        filename: this.generateChatTitle(),
+      };
+    },
+
+    _processInlineTokens(tokens) {
+      const parts = [];
+      if (!tokens) {
+        return parts;
+      }
+
+      tokens.forEach((token) => {
+        switch (token.type) {
+          case "strong":
+            const boldParts = this._processInlineTokens(token.tokens);
+            boldParts.forEach((p) => (p.style = "bold"));
+            parts.push(...boldParts);
+            break;
+          case "em":
+            const italicParts = this._processInlineTokens(token.tokens);
+            italicParts.forEach((p) => (p.style = "italic"));
+            parts.push(...italicParts);
+            break;
+          case "codespan":
+            parts.push({ text: token.text, style: "code" });
+            break;
+          case "link":
+            const linkParts = this._processInlineTokens(token.tokens);
+            linkParts.forEach((p) => (p.style = "link"));
+            parts.push(...linkParts);
+            break;
+          case "text":
+            parts.push({ text: token.text, style: "normal" });
+            break;
+          default:
+            if (token.text) {
+              parts.push({ text: token.text, style: "normal" });
+            }
+            break;
+        }
+      });
+      return parts;
+    },
+
+    parseMarkdownForPDF(markdown) {
+      try {
+        const tokens = marked.lexer(markdown);
+        const result = [];
+        let listCounter = 0;
+        let listOrdered = false;
+
+        tokens.forEach((token) => {
+          switch (token.type) {
+            case "space":
+              result.push({ type: "space" });
+              break;
+            case "hr":
+              result.push({ type: "hr" });
+              break;
+            case "heading":
+              const headingParts = this._processInlineTokens(token.tokens);
+              headingParts.forEach((p) => (p.style = `h${token.depth}`));
+              result.push({ type: "line", indent: 0, content: headingParts });
+              break;
+            case "paragraph":
+              result.push({
+                type: "line",
+                indent: 0,
+                content: this._processInlineTokens(token.tokens),
+              });
+              break;
+            case "list":
+              listOrdered = token.ordered;
+              listCounter = token.start ? token.start - 1 : 0;
+              token.items.forEach((item) => {
+                listCounter++;
+                const prefix = listOrdered ? `${listCounter}. ` : "- ";
+                const itemContent = this._processInlineTokens(
+                  item.tokens[0].tokens
+                );
+                itemContent.unshift({ text: prefix, style: "normal" });
+                result.push({ type: "line", indent: 15, content: itemContent });
+              });
+              break;
+            case "code":
+              const codeLines = token.text.split("\n");
+              codeLines.forEach((line) => {
+                result.push({
+                  type: "line",
+                  indent: 10,
+                  content: [{ text: line, style: "code" }],
+                });
+              });
+              break;
+            case "blockquote":
+              const quoteContent = token.tokens.map((tok) =>
+                this._processInlineTokens(tok.tokens)
+              );
+              quoteContent.forEach((lineContent) => {
+                result.push({
+                  type: "line",
+                  indent: 20,
+                  isQuote: true,
+                  content: lineContent,
+                });
+              });
+              break;
+          }
+        });
+
+        return result;
+      } catch (error) {
+        console.error("Error parsing markdown for PDF:", error);
+        return [
+          {
+            type: "line",
+            indent: 0,
+            content: [{ text: markdown, style: "normal" }],
+          },
+        ];
+      }
+    },
+
+    exportChatToPDF() {
+      try {
+        const doc = new jsPDF();
+        let yOffset = 20;
+        const pageHeight = doc.internal.pageSize.height;
+        const topMargin = 20;
+        const bottomMargin = 20;
+        const leftMargin = 15;
+        const rightMargin = doc.internal.pageSize.width - 15;
+
+        const checkPageBreak = (neededHeight = 10) => {
+          if (yOffset + neededHeight > pageHeight - bottomMargin) {
+            doc.addPage();
+            yOffset = topMargin;
+          }
+        };
+
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.text(
+          this.currentChatTitle || this.generateChatTitle(),
+          leftMargin,
+          yOffset
+        );
+        yOffset += 15;
+
+        this.chatMessages.forEach((msg) => {
+          checkPageBreak(20);
+          yOffset += 5;
+
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "bold");
+          const sender = msg.sender === "user" ? "User" : "Bot";
+          const timestamp = msg.timestamp
+            ? new Date(msg.timestamp).toLocaleString()
+            : new Date().toLocaleString();
+          doc.text(`${sender} (${timestamp}):`, leftMargin, yOffset);
+          yOffset += 6;
+
+          const parsedContent =
+            msg.sender === "bot" && msg.content
+              ? this.parseMarkdownForPDF(msg.content)
+              : [
+                  {
+                    type: "line",
+                    content: [{ text: msg.content || "", style: "normal" }],
+                    indent: 0,
+                  },
+                ];
+
+          parsedContent.forEach((block) => {
+            checkPageBreak();
+
+            if (block.type === "space") {
+              yOffset += 5;
+              return;
+            }
+            if (block.type === "hr") {
+              doc.setDrawColor(150);
+              doc.line(leftMargin, yOffset + 2, rightMargin, yOffset + 2);
+              yOffset += 6;
+              return;
+            }
+            if (!block.content || block.content.length === 0) {
+              yOffset += 3;
+              return;
+            }
+
+            let xOffset = leftMargin + (block.indent || 0);
+
+            if (block.isQuote) {
+              doc.setFillColor(230, 230, 230);
+              doc.rect(leftMargin, yOffset - 4, 3, 6, "F");
+            }
+
+            let linePartsQueue = [...block.content];
+
+            while (linePartsQueue.length > 0) {
+              const part = linePartsQueue.shift();
+              const availableWidth = rightMargin - xOffset;
+
+              doc.setFontSize(12);
+              let fontStyle = "normal";
+              if (part.style === "bold") fontStyle = "bold";
+              if (part.style === "italic") fontStyle = "italic";
+              doc.setFont("helvetica", fontStyle);
+
+              if (part.style && part.style.startsWith("h")) {
+                const level = parseInt(part.style.replace("h", "")) || 1;
+                doc.setFontSize(12 + (6 - level) * 2);
+                doc.setFont("helvetica", "bold");
+              } else if (part.style === "code") {
+                doc.setFont("courier", "normal");
+                doc.setFontSize(10);
+              }
+
+              const splitText = doc.splitTextToSize(part.text, availableWidth);
+
+              doc.text(splitText[0], xOffset, yOffset);
+              xOffset +=
+                (doc.getStringUnitWidth(splitText[0]) * doc.getFontSize()) /
+                doc.internal.scaleFactor;
+
+              if (splitText.length > 1) {
+                const remainingText = splitText.slice(1).join(" ");
+                linePartsQueue.unshift({
+                  text: remainingText,
+                  style: part.style,
+                });
+
+                yOffset += 6;
+                checkPageBreak();
+                xOffset = leftMargin + (block.indent || 0);
+                if (block.isQuote) {
+                  doc.setFillColor(230, 230, 230);
+                  doc.rect(leftMargin, yOffset - 4, 3, 6, "F");
+                }
+              }
+            }
+            yOffset += 6;
+          });
+        });
+
+        let filename = this.exportDialog.filename.trim();
+        if (!filename.toLowerCase().endsWith(".pdf")) {
+          filename += ".pdf";
+        }
+        filename = filename.replace(/[^a-zA-Z0-9\-_\.]/g, "_");
+
+        doc.save(filename);
+        notificationService.success(this.translate("chatbot.exportSuccess"));
+        this.exportDialog.visible = false;
+      } catch (error) {
+        console.error("Error exporting chat to PDF:", error);
+        notificationService.error(this.translate("chatbot.exportError"));
+      }
+    },
+
     updateDialogTexts() {
       this.newChatDialog = {
-        title: this.translate("chatbot.newChatTitle", "Start New Chat"),
-        message: this.translate(
-          "chatbot.unsavedChanges",
-          "You have unsaved changes. Would you like to save them before starting a new chat?"
-        ),
-        confirmText: this.translate(
-          "chatbot.saveAndStartNew",
-          "Save and Start New"
-        ),
-        cancelText: this.translate(
-          "chatbot.discardAndStartNew",
-          "Discard and Start New"
-        ),
-        secondaryText: this.translate("common.cancel", "Cancel"),
+        title: this.translate("chatbot.newChatTitle"),
+        message: this.translate("chatbot.unsavedChanges"),
+        confirmText: this.translate("chatbot.saveAndStartNew"),
+        cancelText: this.translate("chatbot.discardAndStartNew"),
+        secondaryText: this.translate("common.cancel"),
       };
       this.loadConfirmDialog = {
-        title: this.translate(
-          "chatbot.loadConfirmTitle",
-          "Load Existing Conversation"
-        ),
-        message: this.translate(
-          "chatbot.loadConfirmMessage",
-          "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?"
-        ),
-        confirmText: this.translate(
-          "chatbot.loadAndDiscard",
-          "Load and Discard"
-        ),
-        cancelText: this.translate("common.cancel", "Cancel"),
-        secondaryText: this.translate("chatbot.saveAndLoad", "Save and Load"),
+        title: this.translate("chatbot.loadConfirmTitle"),
+        message: this.translate("chatbot.loadConfirmMessage"),
+        confirmText: this.translate("chatbot.loadAndDiscard"),
+        cancelText: this.translate("common.cancel"),
+        secondaryText: this.translate("chatbot.saveAndLoad"),
       };
     },
   },
@@ -1755,9 +1962,215 @@ export default {
   color: var(--text-button-primary, #fff);
 }
 
-.feedback-trigger {
+/* Markdown Styles within Message Bubble */
+.message-bubble :deep(h1),
+.message-bubble :deep(h2),
+.message-bubble :deep(h3),
+.message-bubble :deep(h4),
+.message-bubble :deep(h5),
+.message-bubble :deep(h6) {
+  font-weight: 600;
+  margin: 0.5em 0;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(h1) {
+  font-size: 1.5em;
+}
+.message-bubble :deep(h2) {
+  font-size: 1.3em;
+}
+.message-bubble :deep(h3) {
+  font-size: 1.2em;
+}
+.message-bubble :deep(h4) {
+  font-size: 1.1em;
+}
+.message-bubble :deep(h5) {
+  font-size: 1em;
+}
+.message-bubble :deep(h6) {
+  font-size: 0.9em;
+}
+
+.message-bubble :deep(p) {
+  margin: 0.5em 0;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(ul),
+.message-bubble :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.message-bubble :deep(li) {
+  margin-bottom: 0.3em;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(a) {
+  color: var(--accent-color, #4e97d1);
+  text-decoration: underline;
+}
+
+.message-bubble :deep(a:hover) {
+  color: var(--accent-hover, #3a7da0);
+}
+
+.message-bubble :deep(code) {
+  background: var(--bg-tertiary, #f5f5f5);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: monospace;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(pre) {
+  background: var(--bg-tertiary, #f5f5f5);
+  padding: 0.8em;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: monospace;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(blockquote) {
+  border-left: 3px solid var(--border-color, #ddd);
+  padding-left: 0.8em;
+  margin: 0.5em 0;
+  color: var(--text-secondary, #666);
+}
+
+.message-bubble :deep(table) {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+
+.message-bubble :deep(th),
+.message-bubble :deep(td) {
+  border: 1px solid var(--border-color, #ddd);
+  padding: 0.4em 0.8em;
+  color: var(--text-primary, #000);
+}
+
+.message-bubble :deep(th) {
+  background: var(--bg-tertiary, #f5f5f5);
+  font-weight: 600;
+}
+
+.message-bubble :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Dark Theme Adjustments for Markdown */
+[data-theme="dark"] .message-bubble :deep(h1),
+[data-theme="dark"] .message-bubble :deep(h2),
+[data-theme="dark"] .message-bubble :deep(h3),
+[data-theme="dark"] .message-bubble :deep(h4),
+[data-theme="dark"] .message-bubble :deep(h5),
+[data-theme="dark"] .message-bubble :deep(h6),
+[data-theme="dark"] .message-bubble :deep(p),
+[data-theme="dark"] .message-bubble :deep(li),
+[data-theme="dark"] .message-bubble :deep(th),
+[data-theme="dark"] .message-bubble :deep(td),
+[data-theme="dark"] .message-bubble :deep(code),
+[data-theme="dark"] .message-bubble :deep(pre) {
+  color: var(--text-primary, #ffffff);
+}
+
+[data-theme="dark"] .message-bubble :deep(code),
+[data-theme="dark"] .message-bubble :deep(pre),
+[data-theme="dark"] .message-bubble :deep(th) {
+  background: var(--bg-tertiary, #2d2d2d);
+}
+
+[data-theme="dark"] .message-bubble :deep(blockquote) {
+  color: var(--text-secondary, #cccccc);
+  border-left-color: var(--border-color, #555);
+}
+
+[data-theme="dark"] .message-bubble :deep(a) {
+  color: var(--accent-color, #4e97d1);
+}
+
+[data-theme="dark"] .message-bubble :deep(a:hover) {
+  color: var(--accent-hover, #3a7da0);
+}
+
+/* Loading Spinner Styles */
+.loading-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: rgba(
+    255,
+    255,
+    255,
+    0.8
+  ); /* Semi-transparent background for visibility */
+  padding: 10px 20px;
+  border-radius: 8px;
+  z-index: 100; /* Ensure it overlays other content */
+}
+
+.loading-spinner i {
+  font-size: 1.2rem;
+  color: var(--accent-color, #4e97d1); /* Match button colors */
+}
+
+.loading-spinner .loading-text {
+  font-size: 0.95rem;
+  color: var(--text-primary, #333);
+  font-weight: 500;
+}
+
+/* Dark Theme Adjustments for Spinner */
+[data-theme="dark"] .loading-spinner,
+html[data-theme="dark"] .loading-spinner {
+  background: rgba(30, 30, 30, 0.8); /* Darker background for dark mode */
+}
+
+[data-theme="dark"] .loading-spinner i,
+html[data-theme="dark"] .loading-spinner i {
+  color: var(--accent-color, #4e97d1);
+}
+
+[data-theme="dark"] .loading-spinner .loading-text,
+html[data-theme="dark"] .loading-spinner .loading-text {
+  color: var(--text-primary, #ffffff);
+}
+
+.bot-message-meta {
   margin-left: 8px;
   align-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.confidence-score {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #64748b);
+  background: var(--bg-tertiary, #f8fafc);
+  padding: 3px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feedback-trigger {
+  margin-left: 0;
 }
 
 .feedback-trigger button {
@@ -1814,29 +2227,29 @@ export default {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-light, #e5e7eb);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  box-shadow: var(--shadow-sm);
 }
 
 .quick-help-item:hover {
-  background: var(--bg-tertiary, #f9fafb);
-  border-color: var(--border-color, #d1d5db);
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-md, 0 2px 4px rgba(0, 0, 0, 0.1));
+  box-shadow: var(--shadow-md);
 }
 
 .quick-help-item.just-chat {
-  background: var(--bg-tertiary, #f0f7ff);
-  border-color: var(--accent-color, #bcdcff);
+  background: var(--bg-card);
+  border-color: var(--accent-color);
 }
 
 .quick-help-item.just-chat:hover {
-  background: var(--bg-tertiary, #e1f0ff);
-  border-color: var(--accent-color, #a3ceff);
+  background: var(--bg-tertiary);
+  border-color: var(--accent-hover);
 }
 
 .quick-help-icon {
@@ -1845,11 +2258,18 @@ export default {
   align-items: center;
   justify-content: center;
   width: 40px;
+  height: 40px;
+}
+
+.quick-help-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .quick-help-text {
   font-size: 0.95rem;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -1889,7 +2309,6 @@ export default {
   border-radius: 4px;
   cursor: pointer;
   margin-right: auto;
-  /* This pushes it to the left */
 }
 
 .new-chat-btn:hover {
@@ -1907,6 +2326,19 @@ export default {
 }
 
 .save-chat-btn:hover {
+  background: var(--bg-tertiary, #e0e0e0);
+}
+
+.export-chat-btn {
+  background: var(--bg-button-secondary, #f0f0f0);
+  color: var(--text-button-secondary, #555);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.export-chat-btn:hover {
   background: var(--bg-tertiary, #e0e0e0);
 }
 
@@ -1953,7 +2385,7 @@ export default {
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color, 0.2s;
 }
 
 .cancel-btn {
@@ -1995,13 +2427,13 @@ export default {
   }
 
   .quick-help-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (min-width: 1024px) {
   .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
@@ -2044,5 +2476,15 @@ html[data-theme="dark"] .quick-help-heading {
 [data-theme="dark"] .quick-help-overlay,
 html[data-theme="dark"] .quick-help-overlay {
   background: var(--bg-primary, #1e1e1e) !important;
+}
+
+[data-theme="dark"] .confidence-score {
+    color: var(--text-tertiary, #a0aec0);
+    background: var(--bg-tertiary, #2d3748);
+}
+
+[data-theme="dark"] .feedback-trigger button {
+    background: var(--bg-button-secondary, #2d3748);
+    color: var(--text-button-secondary, #e2e8f0);
 }
 </style>

@@ -1023,6 +1023,7 @@ class FileController {
       fileType: file.file_type,
       fileLabels:file.labels, // 🏷️🏷️🏷️🏷️🏷️🏷️
       uploadDate: file.upload_date,
+      storagePath: file.storage_path, // 🗂️🗂️🗂️🗂️🗂️🗂️
       fileBase64: base64String,
     });
     if (response.data.success) {

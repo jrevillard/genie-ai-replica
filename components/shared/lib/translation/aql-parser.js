@@ -80,6 +80,15 @@ class AqlParser {
             previousCursor = this.cursor;
             this.skipWhitespace();
             const nextChar = this.query.charAt(this.cursor);
+            if (nextChar === "'" || nextChar === '"') {
+                const quote = nextChar;
+                this.cursor++;
+                while (this.cursor < this.query.length && this.query[this.cursor] !== quote) {
+                    this.cursor++;
+                }
+                if (this.cursor < this.query.length) this.cursor++;
+                continue;
+            }
             if (nextChar === '(') {
                 parenDepth++;
                 this.cursor++;
@@ -154,20 +163,7 @@ class AqlParser {
         } else if (token) {
             this.consume(new RegExp(`^${token}\\b`, 'i'));
             
-            let parenDepth = 0;
-            while (!this.isAtEnd()) {
-                const nextKnownToken = this.peek();
-                if (knownKeywords.includes(nextKnownToken) && parenDepth === 0) {
-                    break;
-                }
-                
-                this.skipWhitespace();
-                const nextChar = this.query.charAt(this.cursor);
-                if (nextChar === '(') parenDepth++;
-                if (nextChar === ')') parenDepth--;
-                
-                this.consume(/^[^\s]+/) || this.cursor++;
-            }
+            this.skipExpression();
             return null;
         }
 
@@ -178,9 +174,13 @@ class AqlParser {
 
     parseForStatement() {
         this.consume(/^FOR\b/i);
-        const variableName = this.consume(/^(\w+)/i)[1];
+        const match1 = this.consume(/^(\w+)/i);
+        if (!match1) throw new Error('Expected variable name');
+        const variableName = match1[1];
         this.consume(/^IN\b/i);
-        const collectionName = this.consume(/^(@?\w+)/i)[1];
+        const match2 = this.consume(/^(@?\w+)/i);
+        if (!match2) throw new Error('Expected collection name');
+        const collectionName = match2[1];
         return { type: 'ForStatement', variableName, collectionName };
     }
 
@@ -232,7 +232,9 @@ class AqlParser {
 
     parseLetStatement() {
         this.consume(/^LET\b/i);
-        const variableName = this.consume(/^(\w+)/i)[1];
+        const match = this.consume(/^(\w+)/i);
+        if (!match) throw new Error('Expected variable name');
+        const variableName = match[1];
         this.consume(/^=/);
         const expression = this.parseExpression();
         return { type: 'LetStatement', variableName, expression };

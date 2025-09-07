@@ -46,7 +46,7 @@
  * e.g., FILTER u.age > 30
  * @typedef {object} FilterStatement
  * @property {'FilterStatement'} type
- * @property {Expression} condition - The expression that must evaluate to true for a document to pass.
+ * @property {Expression | 'Omitted'} condition - The expression that must evaluate to true for a document to pass, or 'Omitted' for simplified representation.
  */
 
 /**
@@ -80,7 +80,7 @@
  * e.g., SORT u.age DESC
  * @typedef {object} SortStatement
  * @property {'SortStatement'} type
- * @property {SortCriterion[]} criteria - An array of sorting criteria.
+ * @property {SortCriterion[] | 'Omitted'} criteria - An array of sorting criteria, or 'Omitted' for simplified representation.
  */
 
 /**

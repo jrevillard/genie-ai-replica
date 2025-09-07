@@ -50,6 +50,38 @@
 
         <div class="nav-section">
           <div class="nav-header">
+            {{ translate("admin.contentManagement", "CONTENT MANAGEMENT") }}
+          </div>
+          <ul class="nav-items">
+            <li class="nav-item">
+              <a
+                href="#"
+                class="nav-link"
+                @click.prevent="setActiveTab('hierarchy')"
+              >
+                <i>🔀</i>
+                <span>{{
+                  translate("admin.knowledgeHierarchy", "Knowledge Hierarchy")
+                }}</span>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a
+                href="#"
+                class="nav-link"
+                @click.prevent="setActiveTab('documents')"
+              >
+                <i>📂</i>
+                <span>{{
+                  translate("admin.documentManagement", "Document Management")
+                }}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-header">
             {{ translate("admin.system", "System") }}
           </div>
           <ul class="nav-items">
@@ -242,6 +274,379 @@
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div
+                v-if="activeTab === 'hierarchy'"
+                class="dashboard-card"
+                style="grid-column: span 2"
+              >
+                <div class="card-header">
+                  <div class="card-title">
+                    {{
+                      translate(
+                        "admin.hierarchy.title",
+                        "Knowledge Hierarchy Management"
+                      )
+                    }}
+                  </div>
+                  <div class="card-actions">
+                    <button
+                      class="btn btn-primary"
+                      @click="showAddCategoryForm"
+                    >
+                      <span style="display: flex; align-items: center">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          style="margin-right: 4px"
+                        >
+                          <path d="M5 12h14" />
+                          <path d="M12 5v14" />
+                        </svg>
+                        {{
+                          translate(
+                            "admin.hierarchy.addCategory",
+                            "Add New Category"
+                          )
+                        }}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="hierarchy-container">
+                  <div class="hierarchy-tree-panel">
+                    <ul class="hierarchy-list">
+                      <li
+                        v-for="category in knowledgeHierarchy"
+                        :key="category.id"
+                        class="hierarchy-category"
+                      >
+                        <div class="hierarchy-item">
+                          <span class="item-name">{{ category.nameEN }}</span>
+                          <div class="item-actions">
+                            <button
+                              class="action-btn"
+                              @click="showAddServiceForm(category)"
+                              :aria-label="
+                                translate(
+                                  'admin.hierarchy.addService',
+                                  'Add Service'
+                                )
+                              "
+                            >
+                              ➕
+                            </button>
+                            <button
+                              class="action-btn"
+                              @click="showEditForm(category)"
+                              :aria-label="
+                                translate(
+                                  'admin.hierarchy.editCategory',
+                                  'Edit Category'
+                                )
+                              "
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              class="action-btn"
+                              @click="deleteHierarchyItem(category)"
+                              :aria-label="
+                                translate(
+                                  'admin.hierarchy.deleteCategory',
+                                  'Delete Category'
+                                )
+                              "
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                        <ul
+                          v-if="
+                            category.services && category.services.length > 0
+                          "
+                          class="hierarchy-services-list"
+                        >
+                          <li
+                            v-for="service in category.services"
+                            :key="service.id"
+                          >
+                            <div class="hierarchy-item service-item">
+                              <span class="item-name">{{
+                                service.nameEN
+                              }}</span>
+                              <div class="item-actions">
+                                <button
+                                  class="action-btn"
+                                  @click="showEditForm(service, category)"
+                                  :aria-label="
+                                    translate(
+                                      'admin.hierarchy.editService',
+                                      'Edit Service'
+                                    )
+                                  "
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  class="action-btn"
+                                  @click="
+                                    deleteHierarchyItem(service, category)
+                                  "
+                                  :aria-label="
+                                    translate(
+                                      'admin.hierarchy.deleteService',
+                                      'Delete Service'
+                                    )
+                                  "
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        </ul>
+                      </li>
+                      <li
+                        v-if="knowledgeHierarchy.length === 0"
+                        class="empty-hierarchy"
+                      >
+                        {{
+                          translate(
+                            "admin.hierarchy.empty",
+                            'No categories found. Click "Add New Category" to start.'
+                          )
+                        }}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div
+                    v-if="hierarchyForm.visible"
+                    class="hierarchy-form-panel"
+                  >
+                    <h3 class="form-title">{{ hierarchyForm.title }}</h3>
+                    <div class="form-group">
+                      <label for="hierarchy-name">{{
+                        translate("admin.hierarchy.nameLabel", "Name (English)")
+                      }}</label>
+                      <input
+                        type="text"
+                        id="hierarchy-name"
+                        v-model="hierarchyForm.nameEN"
+                        class="form-input"
+                      />
+                    </div>
+                    <div class="form-actions">
+                      <button
+                        class="btn btn-primary"
+                        @click="saveHierarchyItem"
+                        :disabled="!hierarchyForm.nameEN"
+                      >
+                        {{ translate("admin.buttons.save", "Save") }}
+                      </button>
+                      <button
+                        class="btn btn-outline"
+                        @click="cancelHierarchyForm"
+                      >
+                        {{ translate("admin.buttons.cancel", "Cancel") }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                v-if="activeTab === 'documents'"
+                class="dashboard-card"
+                style="grid-column: span 2"
+              >
+                <div class="card-header">
+                  <div class="card-title">
+                    {{
+                      translate("admin.documents.title", "Document Management")
+                    }}
+                  </div>
+                  <div class="card-actions">
+                    <button class="btn btn-outline" @click="addFromLink">
+                      {{
+                        translate("admin.documents.addLink", "Add from Link")
+                      }}
+                    </button>
+                    <button class="btn btn-primary" @click="uploadFiles">
+                      {{
+                        translate("admin.documents.uploadFiles", "Upload Files")
+                      }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="filter-bar">
+                  <div class="search-input-container">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="search-icon"
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input
+                      type="text"
+                      v-model="documentSearchTerm"
+                      class="search-input"
+                      :placeholder="
+                        translate(
+                          'admin.documents.searchPlaceholder',
+                          'Search by file name...'
+                        )
+                      "
+                    />
+                  </div>
+                  <select
+                    v-model="documentFilters.status"
+                    class="filter-select"
+                  >
+                    <option value="all">
+                      {{
+                        translate("admin.documents.allStatuses", "All Statuses")
+                      }}
+                    </option>
+                    <option value="pending">
+                      {{
+                        translate("admin.documents.statusPending", "Pending")
+                      }}
+                    </option>
+                    <option value="ingested">
+                      {{
+                        translate("admin.documents.statusIngested", "Ingested")
+                      }}
+                    </option>
+                    <option value="retracted">
+                      {{
+                        translate(
+                          "admin.documents.statusRetracted",
+                          "Retracted"
+                        )
+                      }}
+                    </option>
+                  </select>
+                  <div class="card-actions" v-if="selectedDocuments.length > 0">
+                    <button
+                      class="btn btn-primary"
+                      @click="handleBatchAction('ingest')"
+                    >
+                      {{
+                        translate(
+                          "admin.documents.ingestSelected",
+                          "Ingest Selected"
+                        )
+                      }}
+                      ({{ selectedDocuments.length }})
+                    </button>
+                  </div>
+                </div>
+
+                <table class="log-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 40px">
+                        <input type="checkbox" @change="selectAllDocuments" />
+                      </th>
+                      <th>
+                        {{
+                          translate("admin.documents.colFileName", "File Name")
+                        }}
+                      </th>
+                      <th style="width: 120px">
+                        {{ translate("admin.documents.colStatus", "Status") }}
+                      </th>
+                      <th>
+                        {{ translate("admin.documents.colLabels", "Labels") }}
+                      </th>
+                      <th style="width: 150px">
+                        {{
+                          translate(
+                            "admin.documents.colUploadDate",
+                            "Upload Date"
+                          )
+                        }}
+                      </th>
+                      <th style="width: 100px">
+                        {{ translate("admin.documents.colSize", "Size") }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="doc in filteredDocuments"
+                      :key="doc.file_id"
+                      @click="viewDocumentDetails(doc.file_id)"
+                      class="document-row"
+                    >
+                      <td @click.stop>
+                        <input
+                          type="checkbox"
+                          v-model="selectedDocuments"
+                          :value="doc.file_id"
+                        />
+                      </td>
+                      <td>{{ doc.file_name }}</td>
+                      <td>
+                        <span
+                          :class="[
+                            'status-tag',
+                            getStatusClass(doc.dataprep.status),
+                          ]"
+                          >{{ doc.dataprep.status }}</span
+                        >
+                      </td>
+                      <td>
+                        <span
+                          v-for="label in doc.labels.slice(0, 2)"
+                          :key="label"
+                          class="label-tag"
+                          >{{ label }}</span
+                        >
+                        <span
+                          v-if="doc.labels.length > 2"
+                          class="label-tag-more"
+                          >+{{ doc.labels.length - 2 }}</span
+                        >
+                      </td>
+                      <td>
+                        {{ new Date(doc.upload_date).toLocaleDateString() }}
+                      </td>
+                      <td>{{ doc.file_size }}</td>
+                    </tr>
+                    <tr v-if="filteredDocuments.length === 0">
+                      <td colspan="6" style="text-align: center; padding: 2rem">
+                        {{
+                          translate(
+                            "admin.documents.empty",
+                            "No documents found."
+                          )
+                        }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <div
@@ -1695,6 +2100,26 @@
       @close="showUserEditDialog = false"
       @user-updated="handleUserUpdated"
     />
+
+    <UploadFilesDialog 
+        v-if="showUploadDialog" 
+        @close="showUploadDialog = false" 
+        @files-uploaded="handleFilesUploaded" 
+    />
+
+    <AddFromLinkDialog 
+        v-if="showLinkDialog" 
+        @close="showLinkDialog = false" 
+        @link-submitted="handleLinkSubmitted"
+    />
+
+    <FileDetailsDialog 
+        v-if="showDetailsDialog" 
+        :file-id="selectedFileId" 
+        @close="showDetailsDialog = false"
+        @file-updated="handleFileUpdated"
+        @action-triggered="handleFileAction"
+    />
   </div>
 </template>
 
@@ -1704,6 +2129,9 @@ import adminDashboardService from "../services/adminDashboardService";
 import OperationResultsModal from "./OperationResultsModal.vue";
 import LogSearchDialog from "./LogSearchDialog.vue";
 import UserEditDialog from "./UserEditDialog.vue";
+import UploadFilesDialog from "./UploadFilesDialog.vue";
+import AddFromLinkDialog from "./AddFromLinkDialog.vue";
+import FileDetailsDialog from "./FileDetailsDialog.vue";
 import { eventBus } from "../eventBus.js";
 
 export default {
@@ -1711,6 +2139,9 @@ export default {
     OperationResultsModal,
     LogSearchDialog,
     UserEditDialog,
+    UploadFilesDialog,
+    AddFromLinkDialog,
+    FileDetailsDialog,
   },
   name: "AdminDashboard",
   emits: ["close"],
@@ -1730,6 +2161,8 @@ export default {
       activeTab: "overview",
       tabs: [
         { id: "overview", label: "System Health" },
+        { id: "hierarchy", label: "Knowledge Hierarchy" },
+        { id: "documents", label: "Document Management" },
         { id: "database", label: "Database" },
         { id: "logs", label: "Logs" },
         { id: "security", label: "Security" },
@@ -1876,6 +2309,82 @@ export default {
       userSearchTotal: 0,
       userSearchLimit: 20,
       userSearchOffset: 0,
+
+      // --- START: NEW DATA FOR HIERARCHY & DOCUMENTS ---
+      knowledgeHierarchy: [
+        {
+          _key: "1",
+          nameEN: "Healthcare & Social Services",
+          order: 1,
+          services: [
+            { _key: "101", categoryId: "1", nameEN: "Find a Doctor", order: 1 },
+            {
+              _key: "102",
+              categoryId: "1",
+              nameEN: "Book a Hospital Appointment",
+              order: 2,
+            },
+          ],
+        },
+        {
+          _key: "2",
+          nameEN: "Finance & Taxation",
+          order: 2,
+          services: [
+            {
+              _key: "103",
+              categoryId: "2",
+              nameEN: "File Annual Tax Return",
+              order: 1,
+            },
+          ],
+        },
+      ],
+      hierarchyForm: {
+        visible: false,
+        mode: null, // 'createCategory', 'editCategory', 'createService', 'editService'
+        title: "",
+        _key: null,
+        nameEN: "",
+        parentId: null,
+      },
+      documents: [
+        {
+          file_id: "doc-001",
+          file_name: "Annual Budget Report 2025.pdf",
+          file_size: "2.1 MB",
+          upload_date: "2025-09-01T10:00:00Z",
+          labels: ["Finance & Taxation"],
+          dataprep: { status: "ingested" },
+        },
+        {
+          file_id: "doc-002",
+          file_name: "Public Health Guidelines.docx",
+          file_size: "750 KB",
+          upload_date: "2025-08-25T14:30:00Z",
+          labels: ["Healthcare & Social Services"],
+          dataprep: { status: "pending" },
+        },
+        {
+          file_id: "doc-003",
+          file_name: "Archived_Press_Release.html",
+          file_size: "150 KB",
+          upload_date: "2025-07-10T09:00:00Z",
+          labels: [],
+          dataprep: { status: "retracted" },
+        },
+      ],
+      documentSearchTerm: "",
+      documentFilters: {
+        status: "all",
+      },
+      selectedDocuments: [],
+      // --- END: NEW DATA ---
+
+      showUploadDialog: false,
+      showLinkDialog: false,
+      showDetailsDialog: false,
+      selectedFileId: null,
     };
   },
   computed: {
@@ -1893,6 +2402,19 @@ export default {
 
       // Otherwise, show all users
       return this.userStats.users || [];
+    },
+
+    // ... existing computed properties ...
+    filteredDocuments() {
+      return this.documents.filter((doc) => {
+        const matchesSearch = doc.file_name
+          .toLowerCase()
+          .includes(this.documentSearchTerm.toLowerCase());
+        const matchesStatus =
+          this.documentFilters.status === "all" ||
+          doc.dataprep.status === this.documentFilters.status;
+        return matchesSearch && matchesStatus;
+      });
     },
   },
   created() {
@@ -2877,6 +3399,209 @@ export default {
         lastSecurityScan: this.securityMetrics.lastSecurityScan,
         vulnerabilities: this.securityMetrics.vulnerabilities,
       };
+    },
+
+    // --- START: NEW METHODS FOR HIERARCHY ---
+    showAddCategoryForm() {
+      this.hierarchyForm = {
+        visible: true,
+        mode: "createCategory",
+        title: "Create New Category",
+        _key: null,
+        nameEN: "",
+        parentId: null,
+      };
+    },
+    showAddServiceForm(category) {
+      this.hierarchyForm = {
+        visible: true,
+        mode: "createService",
+        title: `Add Service to "${category.nameEN}"`,
+        _key: null,
+        nameEN: "",
+        parentId: category._key,
+      };
+    },
+    showEditForm(item, parentCategory = null) {
+      const isCategory = !parentCategory;
+      this.hierarchyForm = {
+        visible: true,
+        mode: isCategory ? "editCategory" : "editService",
+        title: `Edit ${isCategory ? "Category" : "Service"}: "${item.nameEN}"`,
+        _key: item._key,
+        nameEN: item.nameEN,
+        parentId: isCategory ? null : parentCategory._key,
+      };
+    },
+    cancelHierarchyForm() {
+      this.hierarchyForm.visible = false;
+    },
+    saveHierarchyItem() {
+      // In a real app, this method would make API calls to your backend.
+      // Here, we simulate the logic by directly manipulating the data array.
+      const { mode, _key, nameEN, parentId } = this.hierarchyForm;
+
+      if (mode === "createCategory") {
+        const newCategory = {
+          _key: Date.now().toString(),
+          nameEN,
+          order: this.knowledgeHierarchy.length + 1,
+          services: [],
+        };
+        this.knowledgeHierarchy.push(newCategory);
+        this.showNotification(`Category "${nameEN}" created.`, "success");
+      } else if (mode === "editCategory") {
+        const category = this.knowledgeHierarchy.find((c) => c._key === _key);
+        if (category) category.nameEN = nameEN;
+        this.showNotification(`Category updated to "${nameEN}".`, "success");
+      } else if (mode === "createService") {
+        const category = this.knowledgeHierarchy.find(
+          (c) => c._key === parentId
+        );
+        if (category) {
+          const newService = {
+            _key: Date.now().toString(),
+            categoryId: parentId,
+            nameEN,
+            order: category.services.length + 1,
+          };
+          category.services.push(newService);
+          this.showNotification(`Service "${nameEN}" added.`, "success");
+        }
+      } else if (mode === "editService") {
+        const category = this.knowledgeHierarchy.find(
+          (c) => c._key === parentId
+        );
+        if (category) {
+          const service = category.services.find((s) => s._key === _key);
+          if (service) service.nameEN = nameEN;
+          this.showNotification(`Service updated to "${nameEN}".`, "success");
+        }
+      }
+      this.cancelHierarchyForm();
+    },
+    deleteHierarchyItem(item, parentCategory = null) {
+      const isCategory = !parentCategory;
+      const type = isCategory ? "Category" : "Service";
+      if (
+        window.confirm(
+          `Are you sure you want to delete the ${type} "${item.nameEN}"?`
+        )
+      ) {
+        // In a real app, make an API call here.
+        if (isCategory) {
+          this.knowledgeHierarchy = this.knowledgeHierarchy.filter(
+            (c) => c._key !== item._key
+          );
+        } else {
+          const category = this.knowledgeHierarchy.find(
+            (c) => c._key === parentCategory._key
+          );
+          if (category) {
+            category.services = category.services.filter(
+              (s) => s._key !== item._key
+            );
+          }
+        }
+        this.showNotification(`${type} deleted.`, "success");
+      }
+    },
+    // --- END: HIERARCHY METHODS ---
+
+    // --- START: NEW METHODS FOR DOCUMENTS ---
+    uploadFiles() {
+      // This would typically open a file upload modal component
+      this.showNotification("Upload modal would open here.", "info");
+    },
+    addFromLink() {
+      // This would open a modal to input a URL
+      this.showNotification('"Add from Link" modal would open here.', "info");
+    },
+    viewDocumentDetails(docId) {
+      // This would open the side panel or a modal with the document's full metadata
+      console.log("Viewing details for doc ID:", docId);
+      this.showNotification(`Opening details for document ${docId}.`, "info");
+    },
+    getStatusClass(status) {
+      if (status === "ingested") return "status-ingested";
+      if (status === "pending") return "status-pending";
+      if (status === "retracted") return "status-retracted";
+      return "";
+    },
+    selectAllDocuments(event) {
+      if (event.target.checked) {
+        this.selectedDocuments = this.filteredDocuments.map((d) => d.file_id);
+      } else {
+        this.selectedDocuments = [];
+      }
+    },
+    handleBatchAction(action) {
+      this.showNotification(
+        `Performing "${action}" on ${this.selectedDocuments.length} documents.`,
+        "success"
+      );
+      console.log(action, this.selectedDocuments);
+      // Add API call logic here
+    },
+    // --- END: DOCUMENT METHODS ---
+
+    // This method is triggered by the "+ Upload Files" button
+    uploadFiles() {
+      this.showUploadDialog = true;
+    },
+
+    // This method is triggered by the "+ Add from Link" button
+    addFromLink() {
+      this.showLinkDialog = true;
+    },
+
+    // This method is triggered by clicking a row in the documents table
+    viewDocumentDetails(docId) {
+      this.selectedFileId = docId;
+      this.showDetailsDialog = true;
+    },
+
+    // This is a new method to refresh the document list after an action
+    refreshDocuments() {
+      // In a real application, this would re-fetch the document list from your API
+      this.showNotification("Document list refreshed.", "info");
+      console.log("Refreshing document list...");
+      // Example: this.loadDocuments();
+    },
+
+    // Handler for the @files-uploaded event from the UploadFilesDialog
+    handleFilesUploaded(uploadedFiles) {
+      this.showNotification(
+        `${uploadedFiles.length} file(s) uploaded successfully.`,
+        "success"
+      );
+      this.refreshDocuments();
+    },
+
+    // Handler for the @link-submitted event from the AddFromLinkDialog
+    handleLinkSubmitted(newFile) {
+      this.showNotification(
+        `Successfully crawled and saved "${newFile.file_name}".`,
+        "success"
+      );
+      this.refreshDocuments();
+    },
+
+    // Handler for events from the FileDetailsDialog
+    handleFileAction(payload) {
+      this.showNotification(
+        `Action "${payload.action}" on file ${payload.fileId} was successful.`,
+        "success"
+      );
+      this.refreshDocuments();
+    },
+
+    handleFileUpdated(payload) {
+      this.showNotification(
+        `Metadata for file ${payload.fileId} was updated.`,
+        "success"
+      );
+      this.refreshDocuments();
     },
   },
 };
@@ -4373,6 +5098,157 @@ input:checked + .slider:before {
 }
 
 [data-theme="dark"] .loading-state {
+  color: var(--text-tertiary);
+}
+
+/* ... at the end of <style scoped> ... */
+
+/* --- STYLES FOR KNOWLEDGE HIERARCHY --- */
+.hierarchy-container {
+  display: flex;
+  gap: 1.5rem;
+  min-height: 400px;
+}
+.hierarchy-tree-panel {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.hierarchy-form-panel {
+  flex-basis: 350px;
+  padding: 1rem;
+  background-color: var(--bg-section);
+  border-radius: 0.375rem;
+}
+.hierarchy-list,
+.hierarchy-services-list {
+  list-style: none;
+  padding-left: 0;
+}
+.hierarchy-services-list {
+  padding-left: 2rem;
+  border-left: 2px solid var(--border-color);
+  margin-left: 0.5rem;
+}
+.hierarchy-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+.hierarchy-item:hover {
+  background-color: var(--bg-section);
+}
+.hierarchy-item .item-name {
+  font-weight: 500;
+}
+.hierarchy-item.service-item .item-name {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.hierarchy-item .item-actions {
+  display: flex;
+  gap: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+.hierarchy-item:hover .item-actions {
+  opacity: 1;
+}
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.empty-hierarchy {
+  text-align: center;
+  color: var(--text-tertiary);
+  padding: 2rem;
+}
+.form-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+.form-group {
+  margin-bottom: 1rem;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.form-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-input);
+  border-radius: 0.25rem;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+}
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* --- STYLES FOR DOCUMENT MANAGEMENT --- */
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.filter-select {
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-input);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+}
+.document-row {
+  cursor: pointer;
+}
+.document-row:hover {
+  background-color: var(--bg-section);
+}
+.status-tag {
+  padding: 0.2rem 0.6rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.status-ingested {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+.status-pending {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+.status-retracted {
+  background-color: rgba(100, 116, 139, 0.1);
+  color: var(--secondary);
+}
+.label-tag {
+  background-color: var(--bg-section);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+  color: var(--text-secondary);
+}
+.label-tag-more {
+  font-size: 0.75rem;
   color: var(--text-tertiary);
 }
 </style>

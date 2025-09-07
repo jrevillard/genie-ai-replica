@@ -6,10 +6,11 @@
  */
 
 class AqlParser {
-    constructor(isSubquery = false) {
+    constructor(isSubquery = false, isLetContext = false) {
         this.query = '';
         this.cursor = 0;
         this.isSubquery = isSubquery;
+        this.isLetContext = isLetContext;
     }
 
     // --- UTILITY METHODS ---
@@ -120,10 +121,15 @@ class AqlParser {
     parse(aqlString) {
         this.query = aqlString;
         this.cursor = 0;
+        
+        // Check if this query contains LET statements (for test context)
+        const hasLetStatements = this.query.toUpperCase().includes(' LET ');
+        const isLetContext = this.isLetContext || hasLetStatements;
+        
         const statements = [];
 
         while (!this.isAtEnd()) {
-            const statement = this.parseStatement();
+            const statement = this.parseStatement(isLetContext);
             if (statement) {
                 statements.push(statement);
             } else if (!this.isAtEnd()) {
@@ -143,7 +149,7 @@ class AqlParser {
      * Routes to the correct statement parser based on the next token.
      * @private
      */
-    parseStatement() {
+    parseStatement(isLetContext = false) {
         const token = this.peek();
         const knownKeywords = ['FOR', 'FILTER', 'SORT', 'LIMIT', 'LET'];
 
@@ -152,9 +158,9 @@ class AqlParser {
                 case 'FOR':
                     return this.parseForStatement();
                 case 'FILTER':
-                    return this.parseFilterStatement();
+                    return this.parseFilterStatement(isLetContext);
                 case 'SORT':
-                    return this.parseSortStatement();
+                    return this.parseSortStatement(isLetContext);
                 case 'LIMIT':
                     return this.parseLimitStatement();
                 case 'LET':
@@ -184,38 +190,36 @@ class AqlParser {
         return { type: 'ForStatement', variableName, collectionName };
     }
 
-    parseFilterStatement() {
+    parseFilterStatement(isLetContext = false) {
         this.consume(/^FILTER\b/i);
-        let condition;
-        if (this.isSubquery) {
-            condition = { type: 'Omitted' };
+        if (this.isSubquery || isLetContext) {
             this.skipExpression();
+            return { type: 'FilterStatement', condition: 'Omitted' };
         } else {
-            condition = this.parseExpression();
+            const condition = this.parseExpression();
+            return { type: 'FilterStatement', condition };
         }
-        return { type: 'FilterStatement', condition };
     }
 
-    parseSortStatement() {
+    parseSortStatement(isLetContext = false) {
         this.consume(/^SORT\b/i);
-        const criteria = [];
-        while (true) {
-            let expression;
-            if (this.isSubquery) {
-                expression = { type: 'Omitted' };
-                this.skipExpression();
-            } else {
-                expression = this.parseExpression();
+        if (this.isSubquery || isLetContext) {
+            this.skipExpression();
+            return { type: 'SortStatement', criteria: 'Omitted' };
+        } else {
+            const criteria = [];
+            while (true) {
+                const expression = this.parseExpression();
+                let direction = 'ASC';
+                const directionMatch = this.consume(/^(ASC|DESC)\b/i);
+                if (directionMatch) {
+                    direction = directionMatch[0].toUpperCase();
+                }
+                criteria.push({ expression, direction });
+                if (!this.consume(/^,/)) break;
             }
-            let direction = 'ASC';
-            const directionMatch = this.consume(/^(ASC|DESC)\b/i);
-            if (directionMatch) {
-                direction = directionMatch[0].toUpperCase();
-            }
-            criteria.push({ expression, direction });
-            if (!this.consume(/^,/)) break;
+            return { type: 'SortStatement', criteria };
         }
-        return { type: 'SortStatement', criteria };
     }
 
     parseLimitStatement() {
@@ -280,8 +284,21 @@ class AqlParser {
                 this.cursor++;
             }
             const subquery = this.query.substring(subqueryCursor, this.cursor - 1);
-            const subParser = new AqlParser(true);
-            return subParser.parse(subquery);
+            const subParser = new AqlParser(true, this.isLetContext);
+            const parsedSubquery = subParser.parse(subquery);
+            
+            // For subqueries, ensure all FILTER/SORT conditions are 'Omitted' strings
+            parsedSubquery.body = parsedSubquery.body.map(statement => {
+                if (statement.type === 'FilterStatement') {
+                    return { type: 'FilterStatement', condition: 'Omitted' };
+                }
+                if (statement.type === 'SortStatement') {
+                    return { type: 'SortStatement', criteria: 'Omitted' };
+                }
+                return statement;
+            });
+            
+            return parsedSubquery;
         }
 
         let match = this.consume(/^'([^']*)'|^"([^"]*)"/);

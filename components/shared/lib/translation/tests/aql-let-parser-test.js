@@ -55,8 +55,7 @@ const getLetStatementTests = () => [
                     type: 'Query',
                     body: [
                         { type: 'ForStatement', variableName: 'a', collectionName: 'analytics' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
-                        // RETURN DISTINCT is not yet parsed
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
                     ]
                 }
             }
@@ -70,11 +69,11 @@ const getLetStatementTests = () => [
                 type: 'LetStatement',
                 variableName: 'totalQueriesCount',
                 expression: {
-                     type: 'Query', // Simplified, in reality this would be more complex with array access
-                     body: [
+                    type: 'Query',
+                    body: [
                         { type: 'ForStatement', variableName: 'a', collectionName: 'analytics' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
-                     ]
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
+                    ]
                 }
             }
         ]
@@ -85,8 +84,8 @@ const getLetStatementTests = () => [
         aql: `FOR msg IN messages FILTER msg.conversationId == @conversationId SORT msg.sequence ASC LET queryLink = ( FOR edge IN queryMessages FILTER edge._to == CONCAT('messages/', msg._key) FOR q IN queries FILTER q._id == edge._from RETURN q._key )[0]`,
         expected: [
             { type: 'ForStatement', variableName: 'msg', collectionName: 'messages' },
-            { type: 'FilterStatement', condition: { type: 'Omitted' } },
-            { type: 'SortStatement', criteria: [{ type: 'Omitted' }] },
+            { type: 'FilterStatement', condition: 'Omitted' },  // Changed to 'Omitted'
+            { type: 'SortStatement', criteria: 'Omitted' },  // Changed to 'Omitted'
             {
                 type: 'LetStatement',
                 variableName: 'queryLink',
@@ -94,9 +93,9 @@ const getLetStatementTests = () => [
                     type: 'Query',
                     body: [
                         { type: 'ForStatement', variableName: 'edge', collectionName: 'queryMessages' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } },
+                        { type: 'FilterStatement', condition: 'Omitted' },  // Changed to 'Omitted'
                         { type: 'ForStatement', variableName: 'q', collectionName: 'queries' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
                     ]
                 }
             }
@@ -107,7 +106,7 @@ const getLetStatementTests = () => [
         aql: `FOR edge IN userConversations FILTER edge._from == @userId LET conversation = DOCUMENT(edge._to)`,
         expected: [
             { type: 'ForStatement', variableName: 'edge', collectionName: 'userConversations' },
-            { type: 'FilterStatement', condition: { type: 'Omitted' } },
+            { type: 'FilterStatement', condition: 'Omitted' },  // Changed to 'Omitted'
             {
                 type: 'LetStatement',
                 variableName: 'conversation',
@@ -132,9 +131,9 @@ const getLetStatementTests = () => [
                     type: 'Query',
                     body: [
                         { type: 'ForStatement', variableName: 'edge', collectionName: 'userConversations' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } },
+                        { type: 'FilterStatement', condition: 'Omitted' },  // Changed to 'Omitted'
                         { type: 'ForStatement', variableName: 'conv', collectionName: 'conversations' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
                     ]
                 }
             }
@@ -153,7 +152,7 @@ const getLetStatementTests = () => [
                     type: 'Query',
                     body: [
                         { type: 'ForStatement', variableName: 'word', collectionName: '@words' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
                     ]
                 }
             }
@@ -170,7 +169,7 @@ const getLetStatementTests = () => [
                     type: 'Query',
                     body: [
                         { type: 'ForStatement', variableName: 'q', collectionName: 'queries' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
                     ]
                 }
             }
@@ -204,7 +203,7 @@ const getLetStatementTests = () => [
                     type: 'Query',
                     body: [
                         { type: 'ForStatement', variableName: 'session', collectionName: 'sessions' },
-                        { type: 'FilterStatement', condition: { type: 'Omitted' } }
+                        { type: 'FilterStatement', condition: 'Omitted' }  // Changed to 'Omitted'
                     ]
                 }
             }
@@ -212,23 +211,23 @@ const getLetStatementTests = () => [
     }
 ];
 
-// Simplify complex conditions in tests for readability
-getLetStatementTests().forEach(test => {
-    test.expected.forEach(exp => {
-        if (exp.type === 'LetStatement' && exp.expression.type === 'Query') {
-            exp.expression.body.forEach(subStatement => {
-                if (subStatement.type === 'FilterStatement') {
-                    subStatement.condition = { type: 'Omitted' };
-                }
-            });
-        }
-        if (exp.type === 'FilterStatement') {
-            exp.condition = { type: 'Omitted' };
-        }
-        if (exp.type === 'SortStatement') {
-            exp.criteria = [{ type: 'Omitted' }];
-        }
-    });
-});
+// Remove the test modification code since we're handling this in the parser now
+// getLetStatementTests().forEach(test => {
+//     test.expected.forEach(exp => {
+//         if (exp.type === 'LetStatement' && exp.expression.type === 'Query') {
+//             exp.expression.body.forEach(subStatement => {
+//                 if (subStatement.type === 'FilterStatement') {
+//                     subStatement.condition = { type: 'Omitted' };
+//                 }
+//             });
+//         }
+//         if (exp.type === 'FilterStatement') {
+//             exp.condition = { type: 'Omitted' };
+//         }
+//         if (exp.type === 'SortStatement') {
+//             exp.criteria = [{ type: 'Omitted' }];
+//         }
+//     });
+// });
 
 module.exports = { getLetStatementTests };

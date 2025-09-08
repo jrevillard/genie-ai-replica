@@ -2,11 +2,12 @@
 
 # manage-kong-config.sh
 # Shell script to manage Kong configuration via Admin API on localhost:8001
-# Usage: ./manage-kong-config.sh [-b] [-a] [-f] [-h]
+# Usage: ./manage-kong-config.sh [-b] [-a] [-f] [-d] [-h]
 # Switches:
 #   -b: Backup current Kong configuration to JSON
 #   -a: Apply kong_config.json
 #   -f: Fix auth routes to bypass JWT and proxy to backend
+#   -d: Enable debug mode (verbose output)
 #   -h: Display help
 
 # Constants
@@ -38,10 +39,11 @@ mkdir -p "$BACKUP_DIR"
 
 # Usage function
 usage() {
-    echo "Usage: $0 [-b] [-a] [-f] [-h]"
+    echo "Usage: $0 [-b] [-a] [-f] [-d] [-h]"
     echo "  -b              Backup current Kong configuration to JSON"
     echo "  -a              Apply $CONFIG_FILE"
     echo "  -f              Fix auth routes to bypass JWT and proxy to backend"
+    echo "  -d              Enable debug mode (verbose output)"
     echo "  -h              Display this help message"
     exit 1
 }
@@ -50,49 +52,86 @@ usage() {
 backup_config() {
     log "Backing up current Kong configuration to $BACKUP_FILE"
 
-    backup_json="{}"
-
-    # Fetch services
-    services=$(curl -s -w "\n%{http_code}" "$KONG_ADMIN_URL/services")
-    services_status=$(echo "$services" | tail -n1)
-    services_body=$(echo "$services" | head -n -1)
-
-    # Fetch routes
-    routes=$(curl -s -w "\n%{http_code}" "$KONG_ADMIN_URL/routes")
-    routes_status=$(echo "$routes" | tail -n1)
-    routes_body=$(echo "$routes" | head -n -1)
-
-    # Fetch plugins
-    plugins=$(curl -s -w "\n%{http_code}" "$KONG_ADMIN_URL/plugins")
-    plugins_status=$(echo "$plugins" | tail -n1)
-    plugins_body=$(echo "$plugins" | head -n -1)
-
-    # Fetch upstreams
-    upstreams=$(curl -s -w "\n%{http_code}" "$KONG_ADMIN_URL/upstreams")
-    upstreams_status=$(echo "$upstreams" | tail -n1)
-    upstreams_body=$(echo "$upstreams" | head -n -1)
-
-    # Fetch targets for each upstream
-    upstream_names=$(echo "$upstreams_body" | jq -r '.data[].name')
-    targets_json="[]"
-    for upstream_name in $upstream_names; do
-        targets=$(curl -s "$KONG_ADMIN_URL/upstreams/$upstream_name/targets")
-        targets_json=$(echo "$targets_json" | jq --argjson targets "$targets" '. += $targets.data')
-    done
-
-    if [ "$services_status" -eq 200 ] && [ "$routes_status" -eq 200 ] && [ "$plugins_status" -eq 200 ] && [ "$upstreams_status" -eq 200 ]; then
-        backup_json=$(echo "$backup_json" | jq --argjson services "$services_body" '.services = $services.data')
-        backup_json=$(echo "$backup_json" | jq --argjson routes "$routes_body" '.routes = $routes.data')
-        backup_json=$(echo "$backup_json" | jq --argjson plugins "$plugins_body" '.plugins = $plugins.data')
-        backup_json=$(echo "$backup_json" | jq --argjson upstreams "$upstreams_body" '.upstreams = $upstreams.data')
-        backup_json=$(echo "$backup_json" | jq --argjson targets "$targets_json" '.targets = $targets')
-
-        echo "$backup_json" | jq . > "$BACKUP_FILE"
-        log "Backup successful: $BACKUP_FILE"
-    else
-        log "ERROR: Backend failed. Services: $services_status, Routes: $routes_status, Plugins: $plugins_status, Upstreams: $upstreams_status"
+    # First, check if Kong Admin API is reachable
+    if ! curl -s -o /dev/null "$KONG_ADMIN_URL"; then
+        log "ERROR: Cannot connect to Kong Admin API at $KONG_ADMIN_URL. Please ensure Kong is running and accessible."
         exit 1
     fi
+
+    backup_json="{}"
+
+    # Helper function to fetch data and handle errors
+    fetch_endpoint_data() {
+        local endpoint_name="$1"
+        local url="$2"
+        local response
+        local http_code
+        local body
+
+        log "Fetching $endpoint_name..." >&2
+        response=$(curl -s -w "\n%{http_code}" "$url")
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n -1)
+
+        if [ "$http_code" -ne 200 ]; then
+            log "ERROR: Failed to fetch $endpoint_name. Kong API returned HTTP status $http_code."
+            return 1
+        fi
+
+        if ! echo "$body" | jq -e . > /dev/null 2>&1; then
+            log "ERROR: Response for $endpoint_name is not valid JSON. Body: $body"
+            return 1
+        fi
+
+        echo "$body" | jq '.data'
+    }
+
+    services_data=$(fetch_endpoint_data "services" "$KONG_ADMIN_URL/services")
+    if [ $? -ne 0 ]; then exit 1; fi
+
+    routes_data=$(fetch_endpoint_data "routes" "$KONG_ADMIN_URL/routes")
+    if [ $? -ne 0 ]; then exit 1; fi
+
+    plugins_data=$(fetch_endpoint_data "plugins" "$KONG_ADMIN_URL/plugins")
+    if [ $? -ne 0 ]; then exit 1; fi
+
+    upstreams_data=$(fetch_endpoint_data "upstreams" "$KONG_ADMIN_URL/upstreams")
+    if [ $? -ne 0 ]; then exit 1; fi
+
+    # Fetch targets for each upstream
+    targets_data="[]"
+    upstream_names=$(echo "$upstreams_data" | jq -r '.[].name // empty')
+    for upstream_name in $upstream_names; do
+        # === FIX START: Skip upstreams with empty names to prevent malformed URLs ===
+        if [ -z "$upstream_name" ]; then
+            continue
+        fi
+        # === FIX END ===
+        log "Fetching targets for upstream: $upstream_name"
+        targets_for_upstream=$(fetch_endpoint_data "targets for $upstream_name" "$KONG_ADMIN_URL/upstreams/$upstream_name/targets")
+        if [ $? -eq 0 ]; then
+            targets_data=$(echo "$targets_data" | jq --argjson new_targets "$targets_for_upstream" '. += $new_targets')
+        else
+            log "WARNING: Could not fetch targets for upstream '$upstream_name'. It may not have any."
+        fi
+    done
+
+    # Assemble the final JSON
+    backup_json=$(jq -n \
+        --argjson services "$services_data" \
+        --argjson routes "$routes_data" \
+        --argjson plugins "$plugins_data" \
+        --argjson upstreams "$upstreams_data" \
+        --argjson targets "$targets_data" \
+        '{services: $services, routes: $routes, plugins: $plugins, upstreams: $upstreams, targets: $targets}')
+
+    if [ -z "$backup_json" ] || [ "$backup_json" = "{}" ]; then
+         log "ERROR: Failed to assemble backup JSON. The resulting data is empty."
+         exit 1
+    fi
+
+    echo "$backup_json" | jq . > "$BACKUP_FILE"
+    log "Backup successful: $BACKUP_FILE"
 }
 
 # Apply configuration
@@ -109,22 +148,26 @@ apply_config() {
 
     errors=0
 
-    # Update or create service
-    service=$(echo "$config_json" | jq -r '.services[0]')
-    service_name=$(echo "$service" | jq -r '.name')
-    log "Processing service $service_name"
-    response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" \
-        -H "Content-Type: application/json" \
-        -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at)')")
-    http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
-    if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-        log "Service $service_name processed successfully"
-        service_id=$(curl -s "$KONG_ADMIN_URL/services/$service_name" | jq -r '.id')
-    else
-        log "ERROR: Failed to process service $service_name with HTTP status $http_code"
-        log "Response: $body"
-        errors=$((errors + 1))
+    # Update or create services
+    while IFS= read -r service; do
+        service_name=$(echo "$service" | jq -r '.name')
+        log "Processing service $service_name"
+        response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/services/$service_name" \
+            -H "Content-Type: application/json" \
+            -d "$(echo "$service" | jq 'del(.id, .routes, .plugins, .created_at, .updated_at)')")
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n -1)
+        if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+            log "Service $service_name processed successfully"
+        else
+            log "ERROR: Failed to process service $service_name with HTTP status $http_code"
+            log "Response: $body"
+            errors=$((errors + 1))
+        fi
+    done < <(echo "$config_json" | jq -c '.services[]')
+
+    if [ "$errors" -gt 0 ]; then
+        log "Errors occurred during service processing. Aborting."
         exit 1
     fi
 
@@ -132,14 +175,14 @@ apply_config() {
     while IFS= read -r route; do
         route_name=$(echo "$route" | jq -r '.name')
         log "Processing route $route_name"
-        route_payload=$(echo "$route" | jq --arg sid "$service_id" 'del(.id, .plugins, .created_at, .updated_at) | .service = {id: $sid}')
+        route_payload=$(echo "$route" | jq 'del(.id, .plugins, .created_at, .updated_at)')
         existing_route=$(curl -s "$KONG_ADMIN_URL/routes/$route_name")
         if [ "$(echo "$existing_route" | jq -r '.id // empty')" ]; then
             response=$(curl -s -w "\n%{http_code}" -X PUT "$KONG_ADMIN_URL/routes/$route_name" \
                 -H "Content-Type: application/json" \
                 -d "$route_payload")
         else
-            response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name/routes" \
+            response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/routes" \
                 -H "Content-Type: application/json" \
                 -d "$route_payload")
         fi
@@ -190,16 +233,17 @@ apply_config() {
     # Update or create service plugins
     while IFS= read -r plugin; do
         plugin_name=$(echo "$plugin" | jq -r '.name')
-        log "Processing service plugin $plugin_name"
-        existing_plugins=$(curl -s "$KONG_ADMIN_URL/services/$service_name/plugins")
+        service_name_from_plugin=$(echo "$plugin" | jq -r '.service.name')
+        log "Processing service plugin $plugin_name for service $service_name_from_plugin"
+        existing_plugins=$(curl -s "$KONG_ADMIN_URL/services/$service_name_from_plugin/plugins")
         plugin_exists=$(echo "$existing_plugins" | jq -r --arg name "$plugin_name" '.data[] | select(.name == $name) | .id')
-        plugin_payload=$(echo "$plugin" | jq --arg sid "$service_id" 'del(.id, .created_at, .updated_at) | .service = {id: $sid}')
+        plugin_payload=$(echo "$plugin" | jq 'del(.id, .created_at, .updated_at)')
         if [ -n "$plugin_exists" ]; then
             response=$(curl -s -w "\n%{http_code}" -X PATCH "$KONG_ADMIN_URL/plugins/$plugin_exists" \
                 -H "Content-Type: application/json" \
                 -d "$plugin_payload")
         else
-            response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name/plugins" \
+            response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/services/$service_name_from_plugin/plugins" \
                 -H "Content-Type: application/json" \
                 -d "$plugin_payload")
         fi
@@ -264,24 +308,6 @@ apply_config() {
         targets_count=$(echo "$upstream" | jq '.targets | length')
         if [ "$targets_count" -eq 0 ]; then
             log "No targets found for upstream $upstream_name"
-            existing_targets=$(curl -s "$KONG_ADMIN_URL/upstreams/$upstream_name/targets")
-            target_exists=$(echo "$existing_targets" | jq -r '.data[] | select(.target == "e2e-109-51:3000" and .weight == 100) | .id')
-            if [ -z "$target_exists" ]; then
-                response=$(curl -s -w "\n%{http_code}" -X POST "$KONG_ADMIN_URL/upstreams/$upstream_name/targets" \
-                    -H "Content-Type: application/json" \
-                    -d '{"target":"e2e-109-51:3000","weight":100}')
-                http_code=$(echo "$response" | tail -n1)
-                body=$(echo "$response" | head -n -1)
-                if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
-                    log "Target e2e-109-51:3000 added successfully"
-                else
-                    log "ERROR: Failed to add target e2e-109-51:3000 with HTTP status $http_code"
-                    log "Response: $body"
-                    errors=$((errors + 1))
-                fi
-            else
-                log "Target e2e-109-51:3000 already exists, skipping"
-            fi
         else
             existing_targets=$(curl -s "$KONG_ADMIN_URL/upstreams/$upstream_name/targets")
             while IFS= read -r target; do
@@ -452,7 +478,8 @@ fix_auth() {
 BACKUP=false
 APPLY=false
 FIX_AUTH=false
-while getopts "bafh" opt; do
+DEBUG=false
+while getopts "bafdh" opt; do
     case $opt in
         b)
             BACKUP=true
@@ -463,6 +490,9 @@ while getopts "bafh" opt; do
         f)
             FIX_AUTH=true
             ;;
+        d)
+            DEBUG=true
+            ;;
         h)
             usage
             ;;
@@ -472,6 +502,13 @@ while getopts "bafh" opt; do
             ;;
     esac
 done
+
+# === FIX START: Enable debug mode if -d is specified ===
+if [ "$DEBUG" = true ]; then
+    log "Debug mode enabled. Verbose output will be printed."
+    set -x
+fi
+# === FIX END ===
 
 # Execute operations
 if [ "$BACKUP" = false ] && [ "$APPLY" = false ] && [ "$FIX_AUTH" = false ]; then
@@ -489,6 +526,11 @@ fi
 
 if [ "$FIX_AUTH" = true ]; then
     fix_auth
+fi
+
+# Deactivate debug mode at the end
+if [ "$DEBUG" = true ]; then
+    set +x
 fi
 
 log "Operation completed successfully"

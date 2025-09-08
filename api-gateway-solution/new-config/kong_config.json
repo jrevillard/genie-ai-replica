@@ -18,6 +18,24 @@
       "tls_verify_depth": null,
       "ca_certificates": null,
       "tags": null
+    },
+    {
+      "name": "document-repository",
+      "id": "e1a2b3c4-d5e6-4f78-9a0b-1c2d3e4f5a6b",
+      "protocol": "http",
+      "host": "e2e-109-51",
+      "port": 3001,
+      "path": null,
+      "connect_timeout": 60000,
+      "read_timeout": 60000,
+      "write_timeout": 60000,
+      "retries": 5,
+      "enabled": true,
+      "client_certificate": null,
+      "tls_verify": null,
+      "tls_verify_depth": null,
+      "ca_certificates": null,
+      "tags": ["new"]
     }
   ],
   "routes": [
@@ -569,6 +587,48 @@
       "sources": null,
       "destinations": null,
       "tags": null
+    },
+    {
+      "name": "files-route",
+      "id": "f0e1d2c3-b4a5-4e6f-8d7c-9b8a7f6e5d4c",
+      "service": {"name": "document-repository"},
+      "paths": ["/api/files"],
+      "strip_path": false,
+      "preserve_host": true,
+      "regex_priority": 0,
+      "path_handling": "v0",
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "protocols": ["http", "https"],
+      "methods": null,
+      "hosts": null,
+      "headers": null,
+      "snis": null,
+      "sources": null,
+      "destinations": null,
+      "tags": ["new"]
+    },
+    {
+      "name": "labels-route",
+      "id": "a9b8c7d6-e5f4-4a3b-9c8d-7e6f5d4c3b2a",
+      "service": {"name": "document-repository"},
+      "paths": ["/api/labels"],
+      "strip_path": false,
+      "preserve_host": true,
+      "regex_priority": 0,
+      "path_handling": "v0",
+      "request_buffering": true,
+      "response_buffering": true,
+      "https_redirect_status_code": 426,
+      "protocols": ["http", "https"],
+      "methods": null,
+      "hosts": null,
+      "headers": null,
+      "snis": null,
+      "sources": null,
+      "destinations": null,
+      "tags": ["new"]
     }
   ],
   "plugins": [

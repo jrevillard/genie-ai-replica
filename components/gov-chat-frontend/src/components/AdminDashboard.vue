@@ -2133,6 +2133,7 @@ import UploadFilesDialog from "./UploadFilesDialog.vue";
 import AddFromLinkDialog from "./AddFromLinkDialog.vue";
 import FileDetailsDialog from "./FileDetailsDialog.vue";
 import { eventBus } from "../eventBus.js";
+import { availableLanguages } from '../config/languageConfig.js';
 
 export default {
   components: {

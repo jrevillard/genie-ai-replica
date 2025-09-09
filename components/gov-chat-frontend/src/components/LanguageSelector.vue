@@ -7,24 +7,14 @@
 </template>
 
 <script>
+import { localeNames } from '../config/languageConfig'; // Adjust the path as needed
+
 export default {
   name: 'LanguageSelector',
   data() {
     return {
       currentLocale: this.$i18n.locale,
-      localeNames: {
-        ar: 'Arabic',
-        en: 'English',
-        de: 'German',
-        es: 'Spanish',
-        fr: 'Français',
-        id: 'Indonesian',
-        pt: 'Portuguese',
-        ru: 'Russian',
-        sw: 'Kiswahili',
-        th: 'Thai',
-        zh: 'Chinese'
-      }
+      localeNames: localeNames
     }
   },
   watch: {

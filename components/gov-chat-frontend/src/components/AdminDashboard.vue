@@ -2250,6 +2250,9 @@ export default {
   emits: ["close"],
   data() {
     return {
+      // Placeholder for form state
+      originalHierarchyFormState: null,
+
       // State for loading translations
       isTranslationsLoading: false,
 
@@ -2472,6 +2475,17 @@ export default {
     };
   },
   computed: {
+    // Test if there are unsaved changes
+    isFormDirty() {
+      if (!this.originalHierarchyFormState) {
+        return false;
+      }
+      // Compare the stringified versions of the current and original form states
+      return (
+        JSON.stringify(this.hierarchyForm) !== this.originalHierarchyFormState
+      );
+    },
+
     // User list to display (either search results or all users)
     displayedUsers() {
       // If we have search results, show them
@@ -2642,11 +2656,26 @@ export default {
 
     // Set active tab
     setActiveTab(tabId) {
+      // Step 1: Guard against unsaved changes before doing anything else
+      if (this.activeTab === "hierarchy" && this.isFormDirty) {
+        if (
+          !window.confirm(
+            "You have unsaved changes that will be lost. Are you sure you want to switch tabs?"
+          )
+        ) {
+          return; // Stop the tab switch if the user cancels
+        }
+      }
+
+      // Step 2: Proceed with the tab switch
       console.log(
         `[AdminDashboard] Setting active tab to: ${tabId}, current securityDetails:`,
         this.securityDetails
       );
       this.activeTab = tabId;
+      this.originalHierarchyFormState = null; // Reset form state when leaving the hierarchy tab
+
+      // Step 3: Load the necessary data for the newly selected tab
       if (tabId === "database") {
         this.loadDatabaseStats();
       } else if (tabId === "logs") {
@@ -3491,7 +3520,7 @@ export default {
       this.isHierarchyLoading = true;
       try {
         // Using the serviceTreeService to fetch data
-        const categories = await serviceTreeService.getAllCategories("en");
+        const categories = await serviceTreeService.getAdminCategories("en");
         // The API returns a simple structure; adapt it for the UI.
         // A dedicated admin endpoint should return the full object with translations.
         this.knowledgeHierarchy = categories.map((cat) => ({
@@ -3539,6 +3568,7 @@ export default {
 
     async showEditForm(item, parentCategory = null) {
       const isCategory = !parentCategory;
+
       // Step 1: Immediately show the form with basic info
       this.hierarchyForm = {
         visible: true,
@@ -3555,29 +3585,31 @@ export default {
       try {
         let fetchedTranslations = [];
         if (isCategory) {
-          // Call the new service method for categories
+          // Call the service method for categories
           fetchedTranslations =
             await serviceTreeService.getCategoryTranslations(item._key);
         } else {
-          // Call the new service method for services
+          // Call the service method for services
           fetchedTranslations = await serviceTreeService.getServiceTranslations(
             item._key
           );
         }
 
-        // THIS IS THE NEW LINE: Filter out the English ('en') translation
+        // Filter out the English ('en') translation from the results
         const filteredTranslations = fetchedTranslations.filter(
           (t) => t.lang !== "en"
         );
 
-        // Step 3: Populate the form with the FILTERED data
+        // Step 3: Populate the form with the filtered data
         if (filteredTranslations.length > 0) {
-          // The backend service returns objects with 'lang' and 'text' properties
           this.hierarchyForm.translations = filteredTranslations;
         } else {
           // If no non-English translations exist, provide one empty row for the user to start
           this.hierarchyForm.translations.push({ lang: "", text: "" });
         }
+
+        // Step 4: Store the initial state for the unsaved changes check
+        this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch (error) {
         this.showNotification("Failed to load translations.", "error");
         // Ensure there's at least one empty row on error
@@ -3597,60 +3629,101 @@ export default {
       this.hierarchyForm.translations.splice(index, 1);
     },
 
+    // Modify cancelHierarchyForm
     cancelHierarchyForm() {
+      if (this.isFormDirty) {
+        if (
+          !window.confirm(
+            "You have unsaved changes. Are you sure you want to cancel?"
+          )
+        ) {
+          return; // Stop the action if the user cancels
+        }
+      }
       this.hierarchyForm.visible = false;
+      this.originalHierarchyFormState = null; // Reset state
     },
 
     async saveHierarchyItem() {
-      const { mode, _key, nameEN, translations, parentId } = this.hierarchyForm;
-      const validTranslations = translations.filter(
+      // --- 1. VALIDATION ---
+      const validTranslations = this.hierarchyForm.translations.filter(
         (t) => t.lang && t.text.trim()
       );
-      const payload = { nameEN: nameEN, translations: validTranslations };
+      const langCodes = validTranslations.map((t) => t.lang);
 
-      try {
-        console.log("Saving item:", {
-          mode,
-          key: _key,
-          parent: parentId,
-          payload,
-        });
-        // TODO: Replace with actual API calls to your service (e.g., serviceTreeService.createCategory(payload))
+      // Check for duplicate languages
+      if (new Set(langCodes).size !== langCodes.length) {
         this.showNotification(
-          "Hierarchy item saved successfully (SIMULATED).",
-          "success"
+          "Duplicate languages found in translations. Please remove them.",
+          "error"
         );
-        this.cancelHierarchyForm();
-        await this.loadKnowledgeHierarchy();
+        return;
+      }
+
+      // --- 2. PREPARE PAYLOAD ---
+      const payload = {
+        nameEN: this.hierarchyForm.nameEN,
+        translations: validTranslations,
+      };
+
+      this.isLoading = true;
+      try {
+        const { mode, _key, parentId } = this.hierarchyForm;
+
+        // --- 3. CALL CORRECT SERVICE METHOD (SAVE) ---
+        if (mode === "createCategory") {
+          await serviceTreeService.createCategory(payload);
+        } else if (mode === "editCategory") {
+          await serviceTreeService.updateCategory(_key, payload);
+        } else if (mode === "createService") {
+          await serviceTreeService.createService(parentId, payload);
+        } else if (mode === "editService") {
+          await serviceTreeService.updateService(_key, payload);
+        }
+
+        this.showNotification("Hierarchy item saved successfully.", "success");
+        this.cancelHierarchyForm(); // Close form on success
+
+        // --- 4. REFRESH DATA ---
+        await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
+        eventBus.$emit("knowledge-hierarchy-updated"); // Emit global event for other components
       } catch (error) {
         this.showNotification("Failed to save hierarchy item.", "error");
         console.error(error);
+      } finally {
+        this.isLoading = false;
       }
     },
 
     async deleteHierarchyItem(item, parentCategory = null) {
       const isCategory = !parentCategory;
       const type = isCategory ? "Category" : "Service";
+
+      // Use window.confirm to get user confirmation
       if (
         window.confirm(
-          `Are you sure you want to delete the ${type} "${item.nameEN}"?`
+          `Are you sure you want to delete the ${type} "${item.nameEN}"? This action cannot be undone.`
         )
       ) {
+        this.isLoading = true;
         try {
-          console.log("Deleting item:", {
-            type,
-            key: item._key,
-            parent: parentCategory?._key,
-          });
-          // TODO: Replace with actual API calls to your service (e.g., serviceTreeService.deleteCategory(item._key))
-          this.showNotification(
-            `${type} deleted successfully (SIMULATED).`,
-            "success"
-          );
+          // Conditionally call the correct delete method from the service
+          if (isCategory) {
+            await serviceTreeService.deleteCategory(item._key);
+          } else {
+            await serviceTreeService.deleteService(item._key);
+          }
+
+          this.showNotification(`${type} deleted successfully.`, "success");
+
+          // Refresh the data in the admin panel and the main application
           await this.loadKnowledgeHierarchy();
+          eventBus.$emit("knowledge-hierarchy-updated");
         } catch (error) {
           this.showNotification(`Failed to delete ${type}.`, "error");
           console.error(error);
+        } finally {
+          this.isLoading = false;
         }
       }
     },

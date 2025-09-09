@@ -3,25 +3,42 @@ import httpService from './httpService';
 
 export default {
   /**
-   * Fetch all service categories with their services
-   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
-   * @returns {Promise} Categories with services
+   * For the MAIN application sidebar.
+   * Fetches all categories with a simple array of service name strings.
+   * @param {String} locale - Locale code (e.g., 'en')
+   * @returns {Promise} Categories with simple service name strings.
    */
   async getAllCategories(locale = 'en') {
     try {
-      // The original route was 'services/categories'.
-      // The new admin route you created is in a different file, likely mounted at '/service-categories'
-      const response = await httpService.get('service-categories/categories/detailed', {
+      // This points to the PUBLIC endpoint that returns simple data
+      const response = await httpService.get('services/categories', {
         params: { locale }
       });
-
-      // The transform function can likely be removed or simplified if the new endpoint returns the desired format
-      return this.transformCategoriesToTreeNodes(response.data, locale);
+      return response.data || [];
     } catch (error) {
       console.error('Error fetching service categories:', error);
-      return this.getFallbackCategories(locale);
+      throw error;
     }
   },
+
+    /**
+   * For the ADMIN dashboard ONLY.
+   * Fetches all categories with a detailed array of service objects ({_key, name}).
+   * @param {String} locale - Locale code (e.g., 'en')
+   * @returns {Promise} Categories with detailed service objects.
+   */
+    async getAdminCategories(locale = 'en') {
+      try {
+        // This points to the ADMIN endpoint that returns detailed data
+        const response = await httpService.get('service-categories/categories/detailed', {
+          params: { locale }
+        });
+        return response.data || [];
+      } catch (error) {
+        console.error('Error fetching admin service categories:', error);
+        throw error;
+      }
+    },
 
   /**
    * Transform backend categories to tree panel format
@@ -195,6 +212,116 @@ export default {
     } catch (error) {
       console.error(`Error fetching translations for service ${serviceId}:`, error);
       return [];
+    }
+  },
+
+  /**
+ * Creates a new category.
+ * @param {Object} payload - The category data { nameEN, translations }.
+ * @returns {Promise<Object>} The newly created category.
+ */
+  async createCategory(payload) {
+    try {
+      // The backend's bulk endpoint expects an object with a 'categories' array.
+      // We will wrap our single payload object in that structure.
+      const apiPayload = {
+        categories: [
+          {
+            name: payload.nameEN, // The backend expects a 'name' property for the English value
+            translations: payload.translations, // Pass the new translations array
+            // The backend will generate catKey and children if not provided
+          }
+        ]
+      };
+
+      const response = await httpService.post('service-categories', apiPayload);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating category:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Updates an existing category.
+   * @param {String} categoryId - The ID of the category to update.
+   * @param {Object} payload - The category data { nameEN, translations }.
+   * @returns {Promise<Object>} The updated category.
+   */
+  async updateCategory(categoryId, payload) {
+    try {
+      // Assumes a PUT endpoint at /service-categories/:id
+      const response = await httpService.put(`service-categories/${categoryId}`, payload);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating category ${categoryId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Creates a new service under a category.
+   * @param {String} categoryId - The parent category ID.
+   * @param {Object} payload - The service data { nameEN, translations }.
+   * @returns {Promise<Object>} The newly created service.
+   */
+  async createService(categoryId, payload) {
+    try {
+      // Assumes a POST endpoint at /service-categories/:id/services
+      const response = await httpService.post(`service-categories/${categoryId}/services`, payload);
+      return response.data;
+    } catch (error) {
+      console.error(`Error creating service for category ${categoryId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Updates an existing service.
+   * @param {String} serviceId - The ID of the service to update.
+   * @param {Object} payload - The service data { nameEN, translations }.
+   * @returns {Promise<Object>} The updated service.
+   */
+  async updateService(serviceId, payload) {
+    try {
+      // Assumes a PUT endpoint at /service-categories/services/:id
+      const response = await httpService.put(`service-categories/services/${serviceId}`, payload);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating service ${serviceId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+* Deletes a category.
+* @param {String} categoryId - The ID of the category to delete.
+* @returns {Promise<Object>} The response from the server.
+*/
+  async deleteCategory(categoryId) {
+    try {
+      // This endpoint matches the DELETE /:categoryId route in service-category-routes.js
+      const response = await httpService.delete(`service-categories/${categoryId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error deleting category ${categoryId}:`, error);
+      throw error; // Re-throw to be caught by the component
+    }
+  },
+
+  /**
+   * Deletes a service.
+   * @param {String} serviceId - The ID of the service to delete.
+   * @returns {Promise<Object>} The response from the server.
+   */
+  async deleteService(serviceId) {
+    try {
+      // This endpoint is based on the previously defined roadmap
+      const response = await httpService.delete(`service-categories/services/${serviceId}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error deleting service ${serviceId}:`, error);
+      throw error;
     }
   },
 };

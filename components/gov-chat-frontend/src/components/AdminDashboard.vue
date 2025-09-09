@@ -324,7 +324,16 @@
 
                 <div class="hierarchy-container">
                   <div class="hierarchy-tree-panel">
-                    <ul class="hierarchy-list">
+                    <div v-if="isHierarchyLoading" class="loading-state">
+                      <div class="loading-spinner-small"></div>
+                      <span>{{
+                        translate(
+                          "admin.hierarchy.loading",
+                          "Loading Hierarchy..."
+                        )
+                      }}</span>
+                    </div>
+                    <ul v-else class="hierarchy-list">
                       <li
                         v-for="category in knowledgeHierarchy"
                         :key="category.id"
@@ -437,15 +446,107 @@
                   >
                     <h3 class="form-title">{{ hierarchyForm.title }}</h3>
                     <div class="form-group">
-                      <label for="hierarchy-name">{{
-                        translate("admin.hierarchy.nameLabel", "Name (English)")
+                      <label for="hierarchy-name-en">{{
+                        translate(
+                          "admin.hierarchy.nameEnLabel",
+                          "Name (English)"
+                        )
                       }}</label>
                       <input
                         type="text"
-                        id="hierarchy-name"
+                        id="hierarchy-name-en"
                         v-model="hierarchyForm.nameEN"
                         class="form-input"
                       />
+                    </div>
+                    <div class="translations-section">
+                      <h4 class="translations-title">
+                        {{
+                          translate(
+                            "admin.hierarchy.translationsTitle",
+                            "Translations for Display"
+                          )
+                        }}
+                      </h4>
+
+                      <div
+                        v-if="isTranslationsLoading"
+                        class="loading-state"
+                        style="padding: 1rem 0"
+                      >
+                        <div class="loading-spinner-small"></div>
+                        <span>{{
+                          translate(
+                            "admin.hierarchy.loadingTranslations",
+                            "Loading translations..."
+                          )
+                        }}</span>
+                      </div>
+
+                      <div v-else>
+                        <div
+                          v-for="(
+                            translation, index
+                          ) in hierarchyForm.translations"
+                          :key="index"
+                          class="translation-row"
+                        >
+                          <select
+                            v-model="translation.lang"
+                            class="translation-lang-select"
+                          >
+                            <option disabled value="">
+                              {{
+                                translate(
+                                  "admin.hierarchy.selectLang",
+                                  "Select Language"
+                                )
+                              }}
+                            </option>
+                            <option
+                              v-for="lang in availableLanguages"
+                              :key="lang.code"
+                              :value="lang.code"
+                            >
+                              {{ lang.name }} ({{ lang.code }})
+                            </option>
+                          </select>
+                          <input
+                            type="text"
+                            v-model="translation.text"
+                            class="translation-text-input"
+                            :placeholder="
+                              translate(
+                                'admin.hierarchy.translationPlaceholder',
+                                'Enter translation'
+                              )
+                            "
+                          />
+                          <button
+                            class="translation-delete-btn"
+                            @click="removeTranslationRow(index)"
+                            :aria-label="
+                              translate(
+                                'admin.hierarchy.deleteTranslation',
+                                'Delete Translation'
+                              )
+                            "
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                        <button
+                          class="btn btn-outline btn-sm"
+                          @click="addTranslationRow"
+                        >
+                          {{
+                            translate(
+                              "admin.hierarchy.addTranslation",
+                              "+ Add Translation"
+                            )
+                          }}
+                        </button>
+                      </div>
                     </div>
                     <div class="form-actions">
                       <button
@@ -2101,29 +2202,30 @@
       @user-updated="handleUserUpdated"
     />
 
-    <UploadFilesDialog 
-        v-if="showUploadDialog" 
-        @close="showUploadDialog = false" 
-        @files-uploaded="handleFilesUploaded" 
+    <UploadFilesDialog
+      v-if="showUploadDialog"
+      @close="showUploadDialog = false"
+      @files-uploaded="handleFilesUploaded"
     />
 
-    <AddFromLinkDialog 
-        v-if="showLinkDialog" 
-        @close="showLinkDialog = false" 
-        @link-submitted="handleLinkSubmitted"
+    <AddFromLinkDialog
+      v-if="showLinkDialog"
+      @close="showLinkDialog = false"
+      @link-submitted="handleLinkSubmitted"
     />
 
-    <FileDetailsDialog 
-        v-if="showDetailsDialog" 
-        :file-id="selectedFileId" 
-        @close="showDetailsDialog = false"
-        @file-updated="handleFileUpdated"
-        @action-triggered="handleFileAction"
+    <FileDetailsDialog
+      v-if="showDetailsDialog"
+      :file-id="selectedFileId"
+      @close="showDetailsDialog = false"
+      @file-updated="handleFileUpdated"
+      @action-triggered="handleFileAction"
     />
   </div>
 </template>
 
 <script>
+import serviceTreeService from "../services/serviceTreeService.js";
 import databaseOperationsService from "../services/databaseOperationsService";
 import adminDashboardService from "../services/adminDashboardService";
 import OperationResultsModal from "./OperationResultsModal.vue";
@@ -2133,7 +2235,7 @@ import UploadFilesDialog from "./UploadFilesDialog.vue";
 import AddFromLinkDialog from "./AddFromLinkDialog.vue";
 import FileDetailsDialog from "./FileDetailsDialog.vue";
 import { eventBus } from "../eventBus.js";
-import { availableLanguages } from '../config/languageConfig.js';
+import { availableLanguages } from "../config/languageConfig.js";
 
 export default {
   components: {
@@ -2148,8 +2250,15 @@ export default {
   emits: ["close"],
   data() {
     return {
+      // State for loading translations
+      isTranslationsLoading: false,
+
+      // Configuration for language dropdowns in translations tables
+      availableLanguages: availableLanguages,
+
       // Current locale for translations
       currentLocale: this.getCurrentLanguage(),
+
       securityDetails: null,
       showAllLogins: false,
       showAllSuspicious: false,
@@ -2312,41 +2421,15 @@ export default {
       userSearchOffset: 0,
 
       // --- START: NEW DATA FOR HIERARCHY & DOCUMENTS ---
-      knowledgeHierarchy: [
-        {
-          _key: "1",
-          nameEN: "Healthcare & Social Services",
-          order: 1,
-          services: [
-            { _key: "101", categoryId: "1", nameEN: "Find a Doctor", order: 1 },
-            {
-              _key: "102",
-              categoryId: "1",
-              nameEN: "Book a Hospital Appointment",
-              order: 2,
-            },
-          ],
-        },
-        {
-          _key: "2",
-          nameEN: "Finance & Taxation",
-          order: 2,
-          services: [
-            {
-              _key: "103",
-              categoryId: "2",
-              nameEN: "File Annual Tax Return",
-              order: 1,
-            },
-          ],
-        },
-      ],
+      isHierarchyLoading: false,
+      knowledgeHierarchy: [],
       hierarchyForm: {
         visible: false,
-        mode: null, // 'createCategory', 'editCategory', 'createService', 'editService'
+        mode: null,
         title: "",
         _key: null,
         nameEN: "",
+        translations: [], // Array for translation objects
         parentId: null,
       },
       documents: [
@@ -2418,18 +2501,21 @@ export default {
       });
     },
   },
+  watch: {
+    "$i18n.locale"(newLocale) {
+      console.log("Locale changed in AdminDashboard:", newLocale);
+      this.currentLocale = newLocale;
+      this.$forceUpdate();
+    },
+    activeTab(newTab) {
+      if (newTab === "hierarchy" && this.knowledgeHierarchy.length === 0) {
+        this.loadKnowledgeHierarchy();
+      }
+    },
+  },
   created() {
     // Initialize with the current language settings
     this.currentLocale = this.$i18n ? this.$i18n.locale : "en";
-
-    // Add watchers for language changes
-    if (this.$i18n) {
-      this.$watch("$i18n.locale", (newLocale) => {
-        console.log("Locale changed in AdminDashboard:", newLocale);
-        this.currentLocale = newLocale;
-        this.$forceUpdate();
-      });
-    }
   },
   mounted() {
     // Apply current language settings
@@ -2905,10 +2991,7 @@ export default {
 
     // Load all dashboard data
     async loadInitialData() {
-      // Load system health by default
       this.loadSystemHealth();
-
-      // Load tab-specific data based on active tab
       if (this.activeTab === "database") {
         this.loadDatabaseStats();
       } else if (this.activeTab === "logs") {
@@ -2918,6 +3001,8 @@ export default {
         this.loadSecurityMetrics();
       } else if (this.activeTab === "users") {
         this.loadUserStats();
+      } else if (this.activeTab === "hierarchy") {
+        this.loadKnowledgeHierarchy();
       }
     },
 
@@ -3402,7 +3487,32 @@ export default {
       };
     },
 
-    // --- START: NEW METHODS FOR HIERARCHY ---
+    async loadKnowledgeHierarchy() {
+      this.isHierarchyLoading = true;
+      try {
+        // Using the serviceTreeService to fetch data
+        const categories = await serviceTreeService.getAllCategories("en");
+        // The API returns a simple structure; adapt it for the UI.
+        // A dedicated admin endpoint should return the full object with translations.
+        this.knowledgeHierarchy = categories.map((cat) => ({
+          _key: cat.catKey,
+          nameEN: cat.name,
+          translations: [], // TODO: Your API should eventually return this data
+          services: (cat.children || []).map((service) => ({
+            // service is now the object {_key, name}
+            _key: service._key, // Use the REAL key from the database
+            nameEN: service.name, // Use the name property from the service object
+            translations: [],
+          })),
+        }));
+      } catch (error) {
+        this.showNotification("Failed to load knowledge hierarchy.", "error");
+        console.error(error);
+      } finally {
+        this.isHierarchyLoading = false;
+      }
+    },
+
     showAddCategoryForm() {
       this.hierarchyForm = {
         visible: true,
@@ -3410,9 +3520,11 @@ export default {
         title: "Create New Category",
         _key: null,
         nameEN: "",
+        translations: [{ lang: "", text: "" }],
         parentId: null,
       };
     },
+
     showAddServiceForm(category) {
       this.hierarchyForm = {
         visible: true,
@@ -3420,68 +3532,103 @@ export default {
         title: `Add Service to "${category.nameEN}"`,
         _key: null,
         nameEN: "",
+        translations: [{ lang: "", text: "" }],
         parentId: category._key,
       };
     },
-    showEditForm(item, parentCategory = null) {
+
+    async showEditForm(item, parentCategory = null) {
       const isCategory = !parentCategory;
+      // Step 1: Immediately show the form with basic info
       this.hierarchyForm = {
         visible: true,
         mode: isCategory ? "editCategory" : "editService",
         title: `Edit ${isCategory ? "Category" : "Service"}: "${item.nameEN}"`,
         _key: item._key,
         nameEN: item.nameEN,
+        translations: [], // Start with an empty array
         parentId: isCategory ? null : parentCategory._key,
       };
+
+      // Step 2: Fetch the translations asynchronously
+      this.isTranslationsLoading = true;
+      try {
+        let fetchedTranslations = [];
+        if (isCategory) {
+          // Call the new service method for categories
+          fetchedTranslations =
+            await serviceTreeService.getCategoryTranslations(item._key);
+        } else {
+          // Call the new service method for services
+          fetchedTranslations = await serviceTreeService.getServiceTranslations(
+            item._key
+          );
+        }
+
+        // THIS IS THE NEW LINE: Filter out the English ('en') translation
+        const filteredTranslations = fetchedTranslations.filter(
+          (t) => t.lang !== "en"
+        );
+
+        // Step 3: Populate the form with the FILTERED data
+        if (filteredTranslations.length > 0) {
+          // The backend service returns objects with 'lang' and 'text' properties
+          this.hierarchyForm.translations = filteredTranslations;
+        } else {
+          // If no non-English translations exist, provide one empty row for the user to start
+          this.hierarchyForm.translations.push({ lang: "", text: "" });
+        }
+      } catch (error) {
+        this.showNotification("Failed to load translations.", "error");
+        // Ensure there's at least one empty row on error
+        if (this.hierarchyForm.translations.length === 0) {
+          this.hierarchyForm.translations.push({ lang: "", text: "" });
+        }
+      } finally {
+        this.isTranslationsLoading = false;
+      }
     },
+
+    addTranslationRow() {
+      this.hierarchyForm.translations.push({ lang: "", text: "" });
+    },
+
+    removeTranslationRow(index) {
+      this.hierarchyForm.translations.splice(index, 1);
+    },
+
     cancelHierarchyForm() {
       this.hierarchyForm.visible = false;
     },
-    saveHierarchyItem() {
-      // In a real app, this method would make API calls to your backend.
-      // Here, we simulate the logic by directly manipulating the data array.
-      const { mode, _key, nameEN, parentId } = this.hierarchyForm;
 
-      if (mode === "createCategory") {
-        const newCategory = {
-          _key: Date.now().toString(),
-          nameEN,
-          order: this.knowledgeHierarchy.length + 1,
-          services: [],
-        };
-        this.knowledgeHierarchy.push(newCategory);
-        this.showNotification(`Category "${nameEN}" created.`, "success");
-      } else if (mode === "editCategory") {
-        const category = this.knowledgeHierarchy.find((c) => c._key === _key);
-        if (category) category.nameEN = nameEN;
-        this.showNotification(`Category updated to "${nameEN}".`, "success");
-      } else if (mode === "createService") {
-        const category = this.knowledgeHierarchy.find(
-          (c) => c._key === parentId
+    async saveHierarchyItem() {
+      const { mode, _key, nameEN, translations, parentId } = this.hierarchyForm;
+      const validTranslations = translations.filter(
+        (t) => t.lang && t.text.trim()
+      );
+      const payload = { nameEN: nameEN, translations: validTranslations };
+
+      try {
+        console.log("Saving item:", {
+          mode,
+          key: _key,
+          parent: parentId,
+          payload,
+        });
+        // TODO: Replace with actual API calls to your service (e.g., serviceTreeService.createCategory(payload))
+        this.showNotification(
+          "Hierarchy item saved successfully (SIMULATED).",
+          "success"
         );
-        if (category) {
-          const newService = {
-            _key: Date.now().toString(),
-            categoryId: parentId,
-            nameEN,
-            order: category.services.length + 1,
-          };
-          category.services.push(newService);
-          this.showNotification(`Service "${nameEN}" added.`, "success");
-        }
-      } else if (mode === "editService") {
-        const category = this.knowledgeHierarchy.find(
-          (c) => c._key === parentId
-        );
-        if (category) {
-          const service = category.services.find((s) => s._key === _key);
-          if (service) service.nameEN = nameEN;
-          this.showNotification(`Service updated to "${nameEN}".`, "success");
-        }
+        this.cancelHierarchyForm();
+        await this.loadKnowledgeHierarchy();
+      } catch (error) {
+        this.showNotification("Failed to save hierarchy item.", "error");
+        console.error(error);
       }
-      this.cancelHierarchyForm();
     },
-    deleteHierarchyItem(item, parentCategory = null) {
+
+    async deleteHierarchyItem(item, parentCategory = null) {
       const isCategory = !parentCategory;
       const type = isCategory ? "Category" : "Service";
       if (
@@ -3489,25 +3636,24 @@ export default {
           `Are you sure you want to delete the ${type} "${item.nameEN}"?`
         )
       ) {
-        // In a real app, make an API call here.
-        if (isCategory) {
-          this.knowledgeHierarchy = this.knowledgeHierarchy.filter(
-            (c) => c._key !== item._key
+        try {
+          console.log("Deleting item:", {
+            type,
+            key: item._key,
+            parent: parentCategory?._key,
+          });
+          // TODO: Replace with actual API calls to your service (e.g., serviceTreeService.deleteCategory(item._key))
+          this.showNotification(
+            `${type} deleted successfully (SIMULATED).`,
+            "success"
           );
-        } else {
-          const category = this.knowledgeHierarchy.find(
-            (c) => c._key === parentCategory._key
-          );
-          if (category) {
-            category.services = category.services.filter(
-              (s) => s._key !== item._key
-            );
-          }
+          await this.loadKnowledgeHierarchy();
+        } catch (error) {
+          this.showNotification(`Failed to delete ${type}.`, "error");
+          console.error(error);
         }
-        this.showNotification(`${type} deleted.`, "success");
       }
     },
-    // --- END: HIERARCHY METHODS ---
 
     // --- START: NEW METHODS FOR DOCUMENTS ---
     uploadFiles() {
@@ -5251,5 +5397,48 @@ input:checked + .slider:before {
 .label-tag-more {
   font-size: 0.75rem;
   color: var(--text-tertiary);
+}
+.translations-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+.translations-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+.translation-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.translation-lang-select {
+  flex-basis: 150px;
+  padding: 0.5rem;
+  border: 1px solid var(--border-input);
+  border-radius: 0.25rem;
+  background-color: var(--bg-input);
+}
+.translation-text-input {
+  flex-grow: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-input);
+  border-radius: 0.25rem;
+  background-color: var(--bg-input);
+}
+.translation-delete-btn {
+  background: none;
+  border: none;
+  color: var(--danger, #ef4444);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.25rem;
+}
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
 }
 </style>

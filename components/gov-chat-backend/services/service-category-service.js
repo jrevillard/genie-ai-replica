@@ -45,7 +45,7 @@ class ServiceCategoryService {
     try {
       const upperLocale = locale.toUpperCase();
       logger.debug(`Getting ${collectionType} translation for ${documentId} in ${upperLocale}`);
-      
+
       let query;
       if (collectionType === 'category') {
         query = aql`
@@ -65,15 +65,15 @@ class ServiceCategoryService {
         logger.error(`Invalid collection type: ${collectionType}`);
         return null;
       }
-      
+
       const cursor = await this.db.query(query);
       const result = await cursor.next();
-      
+
       if (!result) {
         logger.warn(`No translation found for ${collectionType} ${documentId} in ${upperLocale}`);
         return null;
       }
-      
+
       logger.debug(`Translation found for ${collectionType} ${documentId}: ${result}`);
       return result;
     } catch (error) {
@@ -97,25 +97,25 @@ class ServiceCategoryService {
       for (let i = 0; i < categories.length; i++) {
         const category = categories[i];
         logger.info(`Processing category ${i + 1}/${categories.length}: ${category.name}`);
-        
+
         // Skip invalid categories
         if (!category || typeof category !== 'object') {
           logger.warn(`Skipping invalid category at index ${i}`);
           continue;
         }
-        
+
         // Prepare category document without name fields
         const categoryDoc = {
           catCode: category.catKey || `cat${i + 1}`,
           order: i + 1
         };
-        
+
         logger.info(`Creating category with catCode: ${categoryDoc.catCode}`);
         try {
           const newCategory = await this.serviceCategories.save(categoryDoc);
           results.push(newCategory);
           logger.info(`Category created successfully with key: ${newCategory._key}`);
-          
+
           // Create or update translation
           const translationKey = `${newCategory._key}_${upperLocale}`;
           const translationDoc = {
@@ -127,7 +127,7 @@ class ServiceCategoryService {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
-          
+
           logger.info(`Creating/updating translation for category ${newCategory._key} in ${upperLocale}`);
           try {
             await this.serviceCategoryTranslations.save(translationDoc, { overwrite: true });
@@ -135,11 +135,11 @@ class ServiceCategoryService {
           } catch (transError) {
             logger.error(`Error creating translation for category ${newCategory._key}: ${transError.message}`, { stack: transError.stack });
           }
-          
+
           // Handle children (services)
           if (category.children && Array.isArray(category.children)) {
             logger.info(`Processing ${category.children.length} services for category ${newCategory._key}`);
-            
+
             try {
               await this.upsertServices(newCategory._key, category.children, locale);
               logger.info(`Services processed successfully for category ${newCategory._key}`);
@@ -153,7 +153,7 @@ class ServiceCategoryService {
           logger.error(`Error creating category ${category.name}: ${categoryError.message}`, { stack: categoryError.stack });
         }
       }
-      
+
       logger.info(`Categories upserted successfully: ${results.length}/${categories.length} categories processed`);
       return results;
     } catch (error) {
@@ -161,7 +161,7 @@ class ServiceCategoryService {
       throw error;
     }
   }
-  
+
   /**
    * Create or update services for a category
    * @param {String} categoryKey - Category key
@@ -174,26 +174,26 @@ class ServiceCategoryService {
       const upperLocale = locale.toUpperCase();
       logger.info(`Starting upsertServices for category ${categoryKey} with ${services.length} services in locale ${upperLocale}`);
       const results = [];
-      
+
       if (!categoryKey) {
         logger.error('Invalid category key provided');
         return [];
       }
-      
+
       if (!Array.isArray(services)) {
         logger.error(`Invalid services array: ${JSON.stringify(services)}`);
         return [];
       }
-      
+
       for (let i = 0; i < services.length; i++) {
         const serviceName = String(services[i] || '').trim();
         if (!serviceName) {
           logger.warn(`Skipping empty service at index ${i}`);
           continue;
         }
-        
+
         logger.info(`Processing service ${i + 1}/${services.length}: "${serviceName}"`);
-        
+
         try {
           // Create service document without name fields
           const serviceDoc = {
@@ -201,12 +201,12 @@ class ServiceCategoryService {
             categoryId: categoryKey,
             order: i + 1
           };
-          
+
           logger.info(`Creating service with serviceCode: ${serviceDoc.serviceCode}`);
           const newService = await this.services.save(serviceDoc);
           results.push(newService);
           logger.info(`Service created successfully with key ${newService._key}`);
-          
+
           // Create or update translation
           const translationKey = `${newService._key}_${upperLocale}`;
           const translationDoc = {
@@ -218,7 +218,7 @@ class ServiceCategoryService {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
-          
+
           logger.info(`Creating/updating translation for service ${newService._key} in ${upperLocale}`);
           try {
             await this.serviceTranslations.save(translationDoc, { overwrite: true });
@@ -226,14 +226,14 @@ class ServiceCategoryService {
           } catch (transError) {
             logger.error(`Error creating translation for service ${newService._key}: ${transError.message}`, { stack: transError.stack });
           }
-          
+
           // Create edge
           const edgeDoc = {
             _from: `serviceCategories/${categoryKey}`,
             _to: `services/${newService._key}`,
             order: i + 1
           };
-          
+
           logger.info(`Creating edge for service "${serviceName}"`);
           await this.categoryServices.save(edgeDoc);
           logger.info(`Edge created successfully for service "${serviceName}"`);
@@ -241,7 +241,7 @@ class ServiceCategoryService {
           logger.error(`Error creating service "${serviceName}": ${createError.message}`, { stack: createError.stack });
         }
       }
-      
+
       logger.info(`Services processed successfully for category ${categoryKey}: ${results.length}/${services.length} services`);
       return results;
     } catch (error) {
@@ -249,7 +249,7 @@ class ServiceCategoryService {
       return [];
     }
   }
-  
+
   /**
    * Check if a category exists
    * @param {String} categoryKey - Category key
@@ -262,7 +262,7 @@ class ServiceCategoryService {
         logger.warn('Invalid category key provided');
         return false;
       }
-      
+
       await this.serviceCategories.document(categoryKey);
       logger.info(`Category existence check successful: ${categoryKey} exists`);
       return true;
@@ -275,7 +275,7 @@ class ServiceCategoryService {
       return false;
     }
   }
-  
+
   /**
    * Get all categories with their services
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
@@ -285,7 +285,7 @@ class ServiceCategoryService {
     try {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with services for locale ${upperLocale}`);
-      
+
       const query = aql`
         FOR category IN serviceCategories
           SORT category.order ASC
@@ -316,25 +316,83 @@ class ServiceCategoryService {
             children: services
           }
       `;
-      
+
       const cursor = await this.db.query(query);
       const categories = await cursor.all();
       logger.info(`Categories with services retrieved successfully: ${categories.length} categories`);
-      
+
       // Log warning for categories without translations
       categories.forEach(cat => {
         if (!cat.name) {
           logger.warn(`Category ${cat.catKey} has no translation in ${upperLocale}`);
         }
       });
-      
+
       return categories;
     } catch (error) {
       logger.error(`Error getting all categories with services: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
-  
+
+  // Add this new method to your ServiceCategoryService class
+
+  /**
+   * Get all categories with DETAILED services for the admin panel
+   * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
+   * @returns {Promise<Array>} Categories with detailed service objects
+   */
+  async getAdminAllCategoriesWithServices(locale = 'en') {
+    try {
+      const upperLocale = locale.toUpperCase();
+      logger.info(`Fetching all categories with DETAILED services for admin panel, locale ${upperLocale}`);
+
+      // This query is identical to getAllCategoriesWithServices, except for the final RETURN in the services subquery
+      const query = aql`
+          FOR category IN serviceCategories
+              SORT category.order ASC
+              LET categoryTranslation = FIRST(
+                  FOR trans IN serviceCategoryTranslations
+                      FILTER trans.serviceCategoryId == category._key
+                      FILTER trans.languageCode == ${upperLocale}
+                      RETURN trans.translation
+              )
+              LET services = (
+                  FOR edge IN categoryServices
+                      FILTER edge._from == category._id
+                      FOR service IN services
+                          FILTER service._id == edge._to
+                          LET serviceTranslation = FIRST(
+                              FOR trans IN serviceTranslations
+                                  FILTER trans.serviceId == service._key
+                                  FILTER trans.languageCode == ${upperLocale}
+                                  RETURN trans.translation
+                          )
+                          SORT edge.order ASC
+                          // This is the key change: return an object with the key and name
+                          RETURN {
+                              _key: service._key,
+                              name: serviceTranslation
+                          }
+              )
+              RETURN {
+                  catKey: category._key,
+                  catCode: category.catCode,
+                  name: categoryTranslation,
+                  children: services
+              }
+      `;
+
+      const cursor = await this.db.query(query);
+      const categories = await cursor.all();
+      logger.info(`Admin categories with detailed services retrieved successfully: ${categories.length} categories`);
+      return categories;
+    } catch (error) {
+      logger.error(`Error getting all admin categories with services: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
   /**
    * Get category with services by key
    * @param {String} categoryKey - Category key
@@ -349,7 +407,7 @@ class ServiceCategoryService {
         logger.warn('Invalid category key provided');
         throw new Error('Invalid category key');
       }
-      
+
       const query = aql`
         LET category = DOCUMENT(${`serviceCategories/${categoryKey}`})
         LET categoryTranslation = FIRST(
@@ -379,19 +437,19 @@ class ServiceCategoryService {
           children: services
         }
       `;
-      
+
       const cursor = await this.db.query(query);
       const result = await cursor.next();
-      
+
       if (!result) {
         logger.warn(`Category ${categoryKey} not found`);
         throw new Error(`Category ${categoryKey} not found`);
       }
-      
+
       if (!result.name) {
         logger.warn(`Category ${categoryKey} has no translation in ${upperLocale}`);
       }
-      
+
       logger.info(`Category with services retrieved successfully: ${categoryKey}`);
       return result;
     } catch (error) {
@@ -399,7 +457,7 @@ class ServiceCategoryService {
       throw error;
     }
   }
-  
+
   /**
    * Delete a category and its services
    * @param {String} categoryKey - Category key
@@ -412,7 +470,7 @@ class ServiceCategoryService {
         logger.warn('Invalid category key provided');
         throw new Error('Invalid category key');
       }
-      
+
       // Delete all service translations for services in this category
       logger.info(`Deleting service translations for category ${categoryKey}`);
       await this.db.query(aql`
@@ -423,7 +481,7 @@ class ServiceCategoryService {
             FILTER trans.serviceId == service._key
             REMOVE trans IN serviceTranslations
       `);
-      
+
       // Delete all services and edges
       logger.info(`Deleting services and edges for category ${categoryKey}`);
       await this.db.query(aql`
@@ -433,7 +491,7 @@ class ServiceCategoryService {
           REMOVE edge IN categoryServices
           REMOVE service IN services
       `);
-      
+
       // Delete category translations
       logger.info(`Deleting category translations for category ${categoryKey}`);
       await this.db.query(aql`
@@ -441,7 +499,7 @@ class ServiceCategoryService {
           FILTER trans.serviceCategoryId == ${categoryKey}
           REMOVE trans IN serviceCategoryTranslations
       `);
-      
+
       // Delete the category itself
       const result = await this.serviceCategories.remove(categoryKey);
       logger.info(`Category deleted successfully: ${categoryKey}`);
@@ -451,7 +509,7 @@ class ServiceCategoryService {
       throw error;
     }
   }
-  
+
   /**
    * Search categories and services
    * @param {String} searchQuery - Search query string
@@ -466,9 +524,9 @@ class ServiceCategoryService {
         logger.info('No search query provided, returning empty results');
         return { categories: [], services: [] };
       }
-      
+
       const lowerQuery = String(searchQuery).toLowerCase();
-      
+
       const query = aql`
         LET matchingCategories = (
           FOR trans IN serviceCategoryTranslations
@@ -512,7 +570,7 @@ class ServiceCategoryService {
           services: matchingServices
         }
       `;
-      
+
       const cursor = await this.db.query(query);
       const result = await cursor.next();
       logger.info(`Search completed successfully: ${result.categories.length} categories, ${result.services.length} services matching query`);
@@ -520,6 +578,72 @@ class ServiceCategoryService {
     } catch (error) {
       logger.error(`Error searching categories and services for "${searchQuery}": ${error.message}`, { stack: error.stack });
       return { categories: [], services: [] };
+    }
+  }
+
+  /**
+ * Get all translations for a specific category
+ * @param {String} categoryKey - The _key of the category
+ * @returns {Promise<Array>} A list of translation objects
+ */
+  async getCategoryTranslations(categoryKey) {
+    await this.init(); // Ensure service is initialized
+    try {
+      logger.info(`Fetching all translations for category: ${categoryKey}`);
+      if (!categoryKey) {
+        throw new Error('Invalid category key provided');
+      }
+
+      // Query to find all translations for the given serviceCategoryId
+      const query = aql`
+          FOR trans IN serviceCategoryTranslations
+            FILTER trans.serviceCategoryId == ${categoryKey}
+            RETURN {
+              lang: LOWER(trans.languageCode),
+              text: trans.translation
+            }
+        `;
+
+      const cursor = await this.db.query(query); //
+      const translations = await cursor.all();
+      logger.info(`Found ${translations.length} translations for category ${categoryKey}`);
+      return translations;
+    } catch (error) {
+      logger.error(`Error fetching translations for category ${categoryKey}: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all translations for a specific service
+   * @param {String} serviceKey - The _key of the service
+   * @returns {Promise<Array>} A list of translation objects
+   */
+  async getServiceTranslations(serviceKey) {
+    await this.init(); // Ensure service is initialized
+    try {
+      logger.info(`Fetching all translations for service: ${serviceKey}`);
+      if (!serviceKey) {
+        throw new Error('Invalid service key provided');
+      }
+
+      // Query to find all translations for the given serviceId
+      const query = aql`
+          FOR trans IN serviceTranslations
+            FILTER trans.serviceId == ${serviceKey}
+            RETURN {
+              lang: LOWER(trans.languageCode),
+              text: trans.translation
+            }
+        `;
+
+      const cursor = await this.db.query(query); //
+      const translations = await cursor.all();
+      logger.info(`Found ${translations.length} translations for service ${serviceKey}`);
+      return translations;
+    } catch (error) {
+      logger.error(`Error fetching translations for service ${serviceKey}: ${error.message}`, { stack: error.stack });
+      throw error;
     }
   }
 }

@@ -9,15 +9,16 @@ export default {
    */
   async getAllCategories(locale = 'en') {
     try {
-      const response = await httpService.get('services/categories', {
+      // The original route was 'services/categories'.
+      // The new admin route you created is in a different file, likely mounted at '/service-categories'
+      const response = await httpService.get('service-categories/categories/detailed', {
         params: { locale }
       });
-      
-      // Transform the response to match the expected format for the tree panel
+
+      // The transform function can likely be removed or simplified if the new endpoint returns the desired format
       return this.transformCategoriesToTreeNodes(response.data, locale);
     } catch (error) {
       console.error('Error fetching service categories:', error);
-      // Return fallback data structure in case of error
       return this.getFallbackCategories(locale);
     }
   },
@@ -48,7 +49,7 @@ export default {
       const response = await httpService.get(`services/categories/${categoryId}`, {
         params: { locale }
       });
-      
+
       return response.data.children || [];
     } catch (error) {
       console.error(`Error fetching services for category ${categoryId}:`, error);
@@ -67,7 +68,7 @@ export default {
       const response = await httpService.get('services/search', {
         params: { query, locale }
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Error searching services:', error);
@@ -126,7 +127,7 @@ export default {
         { catKey: 'cat12', expanded: false }
       ]
     };
-    
+
     return fallbackData[locale] || fallbackData.en;
   },
 
@@ -141,7 +142,7 @@ export default {
       const response = await httpService.post(`users/${userId}/preferences/services`, {
         selectedServices
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('Error saving selected services:', error);
@@ -162,5 +163,38 @@ export default {
       console.error('Error getting user selected services:', error);
       return [];
     }
-  }
+  },
+
+  /**
+  * Get all translations for a specific category
+  * @param {String} categoryId - The ID of the category
+  * @returns {Promise<Array>} A list of translation objects [{lang, text}]
+  */
+  async getCategoryTranslations(categoryId) {
+    try {
+      // This endpoint matches the one created in service-category-routes.js
+      const response = await httpService.get(`service-categories/${categoryId}/translations`);
+      return response.data || [];
+    } catch (error) {
+      console.error(`Error fetching translations for category ${categoryId}:`, error);
+      // Return an empty array on failure so the UI doesn't break
+      return [];
+    }
+  },
+
+  /**
+   * Get all translations for a specific service
+   * @param {String} serviceId - The ID of the service
+   * @returns {Promise<Array>} A list of translation objects [{lang, text}]
+   */
+  async getServiceTranslations(serviceId) {
+    try {
+      // This endpoint matches the one created in service-category-routes.js
+      const response = await httpService.get(`service-categories/services/${serviceId}/translations`);
+      return response.data || [];
+    } catch (error) {
+      console.error(`Error fetching translations for service ${serviceId}:`, error);
+      return [];
+    }
+  },
 };

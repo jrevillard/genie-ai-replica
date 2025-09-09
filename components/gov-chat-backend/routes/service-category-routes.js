@@ -15,6 +15,41 @@ module.exports = (serviceCategoryService) => {
   router.use(authMiddleware.authenticate);
 
   /**
+ * @swagger
+ * /service-categories/categories/detailed:
+ * get:
+ * summary: Get all categories with detailed services for admin
+ * description: Retrieves all categories with their associated services as objects (including keys)
+ * tags: [Service Categories]
+ * parameters:
+ * - in: query
+ * name: locale
+ * schema:
+ * type: string
+ * default: en
+ * description: Language locale for category and service names
+ * responses:
+ * 200:
+ * description: List of categories with detailed service objects
+ * 500:
+ * description: Server error
+ */
+  router.get('/categories/detailed', async (req, res) => {
+    const start = Date.now();
+    try {
+      const locale = req.query.locale || 'en';
+      logger.info(`Fetching all DETAILED service categories with locale: ${locale}`);
+      // Call the NEW service method
+      const categories = await serviceCategoryService.getAdminAllCategoriesWithServices(locale);
+      logger.info(`Fetched ${categories.length} detailed categories in ${Date.now() - start}ms`);
+      res.json(categories);
+    } catch (error) {
+      logger.error(`Error getting all detailed categories: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
    * @swagger
    * /service-categories/categories:
    *   get:
@@ -120,6 +155,87 @@ module.exports = (serviceCategoryService) => {
         logger.error(`Error getting category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
         res.status(500).json({ message: error.message });
       }
+    }
+  });
+
+  /**
+ * @swagger
+ * /service-categories/{categoryId}/translations:
+ * get:
+ * summary: Get all translations for a category
+ * description: Retrieves all available translations for a specific service category
+ * tags: [Service Categories]
+ * parameters:
+ * - in: path
+ * name: categoryId
+ * required: true
+ * schema:
+ * type: string
+ * description: The key of the category
+ * responses:
+ * 200:
+ * description: A list of translation objects
+ * content:
+ * application/json:
+ * schema:
+ * type: array
+ * items:
+ * type: object
+ * properties:
+ * lang:
+ * type: string
+ * example: "FR"
+ * text:
+ * type: string
+ * example: "Santé et services sociaux"
+ * 500:
+ * description: Server error
+ */
+  router.get('/:categoryId/translations', async (req, res) => {
+    const start = Date.now();
+    try {
+      const { categoryId } = req.params;
+      logger.info(`Fetching all translations for category: ${categoryId}`);
+      const translations = await serviceCategoryService.getCategoryTranslations(categoryId);
+      logger.info(`Fetched ${translations.length} translations for category ${categoryId} in ${Date.now() - start}ms`);
+      res.json(translations);
+    } catch (error) {
+      logger.error(`Error getting translations for category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /service-categories/services/{serviceId}/translations:
+   * get:
+   * summary: Get all translations for a service
+   * description: Retrieves all available translations for a specific service
+   * tags: [Service Categories]
+   * parameters:
+   * - in: path
+   * name: serviceId
+   * required: true
+   * schema:
+   * type: string
+   * description: The key of the service
+   * responses:
+   * 200:
+   * description: A list of translation objects
+   * 500:
+   * description: Server error
+   */
+  router.get('/services/:serviceId/translations', async (req, res) => {
+    const start = Date.now();
+    try {
+      const { serviceId } = req.params;
+      logger.info(`Fetching all translations for service: ${serviceId}`);
+      const translations = await serviceCategoryService.getServiceTranslations(serviceId);
+      logger.info(`Fetched ${translations.length} translations for service ${serviceId} in ${Date.now() - start}ms`);
+      res.json(translations);
+    } catch (error) {
+      logger.error(`Error getting translations for service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      res.status(500).json({ message: error.message });
     }
   });
 

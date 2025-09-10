@@ -648,7 +648,7 @@
                       }}
                     </option>
                   </select>
-                  <div class="card-actions" v-if="selectedDocuments.length > 0">
+                  <div class="card-actions" v-if="showIngestButton">
                     <button
                       class="btn btn-primary"
                       @click="handleBatchAction('ingest')"
@@ -2515,6 +2515,29 @@ export default {
       return this.documents.filter(
         (doc) => doc.dataprep && doc.dataprep.status === selectedStatus
       );
+    },
+
+    showIngestButton() {
+      // 1. Don't show if no documents are selected
+      if (this.selectedDocuments.length === 0) {
+        return false;
+      }
+
+      // 2. Create a Set of selected keys for efficient lookup
+      const selectedKeys = new Set(this.selectedDocuments);
+
+      // 3. Find all the full document objects that are currently selected
+      const selectedDocObjects = this.documents.filter((doc) =>
+        selectedKeys.has(doc._key)
+      );
+
+      // 4. Check if ANY of the selected documents have the status 'ingested'
+      const hasIngestedFile = selectedDocObjects.some(
+        (doc) => doc.dataprep && doc.dataprep.status === "ingested"
+      );
+
+      // 5. Only show the button if there are selected files AND none of them are ingested
+      return !hasIngestedFile;
     },
   },
   watch: {

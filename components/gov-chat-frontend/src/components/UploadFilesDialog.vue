@@ -36,12 +36,14 @@
         @click="openFileDialog"
         :class="{ 'drag-over': isDragging }"
       >
+        <!-- The 'accept' attribute tells the browser to pre-filter files in the selection dialog -->
         <input
           type="file"
           ref="fileInput"
           @change="handleFileSelect"
           multiple
           hidden
+          :accept="allowedExtensions.join(',')"
         />
         <p>
           {{
@@ -52,6 +54,8 @@
           }}
         </p>
       </div>
+      <!-- Hint for allowed file types -->
+      <p class="form-hint">Allowed types: {{ allowedExtensions.join(", ") }}</p>
 
       <div class="file-list-container" v-if="files.length > 0">
         <ul class="file-list">
@@ -98,11 +102,21 @@ export default {
       files: [],
       isDragging: false,
       isUploading: false,
+      // Requirement: Define the list of allowed file extensions
+      allowedExtensions: [
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".md",
+        ".html",
+        ".txt",
+      ],
     };
   },
   methods: {
     translate(key, fallback) {
-      // In a real app, this would use your i18n library
       return fallback || key;
     },
     openFileDialog() {
@@ -110,62 +124,54 @@ export default {
     },
     handleFileSelect(event) {
       this.addFiles([...event.target.files]);
-      // Clear the input value to allow selecting the same file again
       event.target.value = "";
     },
-    /**
-     * Handles the drop event in a robust, cross-browser compatible way.
-     */
     handleDrop(event) {
       this.isDragging = false;
-      // This is critical to prevent the browser from opening the file.
       event.preventDefault();
-
-      const filesToAdd = [];
-
+      const droppedFiles = [];
       if (event.dataTransfer.items) {
-        // Use a classic for loop for maximum compatibility.
         for (let i = 0; i < event.dataTransfer.items.length; i++) {
           const item = event.dataTransfer.items[i];
           if (item.kind === "file") {
             const file = item.getAsFile();
             if (file) {
-              // Ensure the file is not null
-              filesToAdd.push(file);
+              droppedFiles.push(file);
             }
           }
         }
       } else {
-        // Fallback for older browsers
-        filesToAdd.push(...event.dataTransfer.files);
+        droppedFiles.push(...event.dataTransfer.files);
       }
-
-      if (filesToAdd.length > 0) {
-        this.addFiles(filesToAdd);
+      if (droppedFiles.length > 0) {
+        this.addFiles(droppedFiles);
       } else {
-        // This will now correctly catch any non-file drag-and-drop attempts
         this.showNotification(
           "Only files can be dropped. Please check you are dragging a valid file from your computer.",
           "error"
         );
       }
     },
-
-    // In UploadFilesDialog.vue -> methods
-
     /**
-     * Validates and adds an array of File objects to the component's list.
+     * Validates and adds files to the list.
      */
     addFiles(newFiles) {
       newFiles.forEach((file) => {
-        // Ensure we are only processing actual File objects
-        if (!(file instanceof File)) {
-          // This is a safeguard, but the main logic is in handleDrop
-          console.warn("Attempted to add a non-file item:", file);
-          return;
+        // --- START: NEW VALIDATION LOGIC ---
+
+        // 1. Get the file extension
+        const extension = "." + file.name.split(".").pop().toLowerCase();
+
+        // 2. Check if the extension is in the allowed list
+        if (!this.allowedExtensions.includes(extension)) {
+          this.showNotification(
+            `File type "${extension}" is not allowed.`,
+            "error"
+          );
+          return; // Skip this file
         }
 
-        // Check for unwanted .url extension
+        // 3. Check for .url shortcuts (existing logic)
         if (file.name.toLowerCase().endsWith(".url")) {
           this.showNotification(
             "Shortcut files (.url) are not supported. Please drag the actual file.",
@@ -174,7 +180,7 @@ export default {
           return;
         }
 
-        // Check for duplicates
+        // 4. Check for duplicates (existing logic)
         if (
           this.files.some((f) => f.name === file.name && f.size === file.size)
         ) {
@@ -184,6 +190,8 @@ export default {
           );
           return;
         }
+
+        // --- END: NEW VALIDATION LOGIC ---
 
         this.files.push(file);
       });
@@ -204,22 +212,13 @@ export default {
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     },
-    /**
-     * Handles the file upload process.
-     * Iterates through the selected files, uploading them one by one.
-     */
     async handleUpload() {
       this.isUploading = true;
       const successfulUploads = [];
-
-      // Use a for...of loop to upload files sequentially
       for (const file of this.files) {
         try {
-          // Create a new FormData object for each file
           const formData = new FormData();
-          formData.append("file", file); // 'file' is the key the backend expects
-
-          // Call the service to upload the file
+          formData.append("file", file);
           await documentFileService.uploadFile(formData);
           successfulUploads.push(file.name);
           this.showNotification(
@@ -229,18 +228,12 @@ export default {
         } catch (error) {
           this.showNotification(`Failed to upload ${file.name}.`, "error");
           console.error(`Error uploading ${file.name}:`, error);
-          // Continue to the next file even if one fails
         }
       }
-
       this.isUploading = false;
-
-      // If at least one file was uploaded successfully, emit the event
       if (successfulUploads.length > 0) {
         this.$emit("files-uploaded", successfulUploads);
       }
-
-      // Close the dialog only if all files were uploaded successfully
       if (successfulUploads.length === this.files.length) {
         this.$emit("close");
       }
@@ -348,6 +341,12 @@ export default {
   background-color: rgba(59, 130, 246, 0.05);
   border-color: #3b82f6;
 }
+.form-hint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  margin-top: 0.5rem;
+  text-align: center;
+}
 .file-list-container {
   margin-top: 1rem;
   max-height: 200px;
@@ -386,3 +385,4 @@ export default {
   cursor: pointer;
 }
 </style>
+

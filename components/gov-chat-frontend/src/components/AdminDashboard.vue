@@ -3800,13 +3800,45 @@ export default {
         this.selectedDocuments = [];
       }
     },
-    handleBatchAction(action) {
-      this.showNotification(
-        `Performing "${action}" on ${this.selectedDocuments.length} documents.`,
-        "success"
-      );
-      console.log(action, this.selectedDocuments);
-      // Add API call logic here
+    /**
+     * Handles batch actions like 'ingest' for multiple selected documents.
+     */
+    async handleBatchAction(action) {
+      if (action === "ingest") {
+        if (
+          !window.confirm(
+            `Are you sure you want to ingest ${this.selectedDocuments.length} selected file(s)?`
+          )
+        ) {
+          return;
+        }
+
+        this.isLoading = true; // Use the main dashboard loading overlay
+        try {
+          // Call the service with the array of selected document keys
+          await documentFileService.ingestMultipleFiles(this.selectedDocuments);
+
+          this.showNotification(
+            `${this.selectedDocuments.length} file(s) have been queued for ingestion.`,
+            "success"
+          );
+
+          // Clear the selection after the action is successful
+          this.selectedDocuments = [];
+
+          // Refresh the document list to show the updated statuses
+          await this.loadDocuments();
+        } catch (error) {
+          this.showNotification(
+            "An error occurred during the batch ingestion process.",
+            "error"
+          );
+          console.error("Batch ingest error:", error);
+        } finally {
+          this.isLoading = false;
+        }
+      }
+      // You can add 'else if' blocks for other actions like 'retract' or 'delete' here
     },
     // --- END: DOCUMENT METHODS ---
 

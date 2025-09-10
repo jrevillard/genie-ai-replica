@@ -327,18 +327,26 @@ export default {
         this.showNotification("Failed to save metadata.", "error");
       }
     },
-    async handleIngest() {
-      if (window.confirm("Are you sure you want to ingest this file?")) {
+        /**
+     * Handles the ingestion action for a single file.
+     */
+     async handleIngest() {
+      if (window.confirm("Are you sure you want to ingest this file? This will start the data processing pipeline.")) {
+        this.isLoading = true; // Use the dialog's main loading overlay
         try {
-          await documentFileService.ingestMultipleFiles([this.file.file_id]);
-          this.showNotification("File queued for ingestion.", "success");
-          this.$emit("action-triggered", {
-            action: "ingest",
-            fileId: this.file.file_id,
-          });
+          // Call the new service method for single file ingestion
+          await documentFileService.ingestFile(this.fileId);
+          
+          this.showNotification('File has been successfully queued for ingestion.', 'success');
+          
+          // Emit events to notify the parent component to refresh and close
+          this.$emit("action-triggered", { action: "ingest", fileId: this.fileId });
           this.$emit("close");
+
         } catch (error) {
-          this.showNotification("Failed to start ingestion.", "error");
+          this.showNotification('Failed to start ingestion process.', 'error');
+        } finally {
+          this.isLoading = false;
         }
       }
     },

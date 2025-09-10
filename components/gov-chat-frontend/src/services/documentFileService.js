@@ -112,6 +112,22 @@ const documentFileService = {
     }
   },
 
+    /**
+   * Triggers the ingestion process for a single file.
+   * @param {string} fileId - The ID of the file to ingest.
+   * @returns {Promise<Object>} The confirmation response.
+   */
+    async ingestFile(fileId) {
+      try {
+        // This corresponds to the backend route: POST /api/files/:fileId/ingest
+        const response = await httpService.post(`/files/${fileId}/ingest`);
+        return response.data;
+      } catch (error) {
+        console.error(`Error ingesting file ${fileId}:`, error);
+        throw error;
+      }
+    },
+
   /**
    * Triggers the ingestion process for multiple files.
    * @param {string[]} fileIds - An array of file IDs to ingest.

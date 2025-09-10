@@ -259,59 +259,100 @@ class ServiceCategoryService {
     await this.init();
     try {
       logger.info(`Creating service "${payload.nameEN}" under category ${categoryKey}`);
-
-      // 1. Create the main service document
+  
+      // 1. Get the current maximum order number for services IN THIS CATEGORY
+      const cursor = await this.db.query(aql`
+        FOR edge IN categoryServices
+          FILTER edge._from == ${'serviceCategories/' + categoryKey}
+          COLLECT AGGREGATE maxOrder = MAX(edge.order)
+          RETURN maxOrder
+      `);
+      const maxOrder = await cursor.next() || 0;
+      const newOrder = maxOrder + 1;
+      logger.info(`Determined new service order: ${newOrder}`);
+  
+      // 2. Create the main service document
       const serviceDoc = {
         categoryId: categoryKey,
-        // Add other fields like serviceCode or order if needed
       };
       const newService = await this.services.save(serviceDoc);
       logger.info(`Service document created with key: ${newService._key}`);
-
-      // 2. Create the edge linking category to service
+  
+      // 3. Create the edge with the correct order
       const edgeDoc = {
         _from: `serviceCategories/${categoryKey}`,
         _to: `services/${newService._key}`,
+        order: newOrder // Set the correct order here
       };
       await this.categoryServices.save(edgeDoc);
-      logger.info(`Edge created from category ${categoryKey} to service ${newService._key}`);
+      logger.info(`Edge created from category ${categoryKey} to service ${newService._key} with order ${newOrder}`);
+  
+      // 4. Save all translations
+      await this.updateServiceWithTranslations(newService._key, payload);
+      
+      return newService;
+    } catch (error) {
+      logger.error(`Error creating service under category ${categoryKey}: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
 
-      // 3. Save the primary English translation
+  /**
+   * Updates a single service and its translations.
+   * @param {String} serviceKey - The _key of the service to update.
+   * @param {Object} payload - The service data { nameEN, translations }.
+   * @returns {Promise<Object>} The result of the update operation.
+   */
+  async updateServiceWithTranslations(serviceKey, payload) {
+    await this.init();
+    try {
+      logger.info(`Updating service ${serviceKey} with name "${payload.nameEN}"`);
+
+      // 1. Ensure the service exists (this will throw an error if not found)
+      await this.services.document(serviceKey);
+
+      // 2. Update/create the English translation
       const englishTranslationDoc = {
-        _key: `${newService._key}_EN`,
-        serviceId: newService._key,
+        _key: `${serviceKey}_EN`,
+        serviceId: serviceKey,
         languageCode: 'EN',
         translation: payload.nameEN,
         isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       await this.serviceTranslations.save(englishTranslationDoc, { overwrite: true });
-      logger.info(`Saved English translation for service ${newService._key}`);
+      logger.info(`Upserted English translation for service ${serviceKey}`);
 
-      // 4. Save the other translations
+      // 3. Clear old non-English translations and save the new set
+      await this.db.query(aql`
+      FOR trans IN serviceTranslations
+        FILTER trans.serviceId == ${serviceKey}
+        FILTER trans.languageCode != 'EN'
+        REMOVE trans IN serviceTranslations
+    `);
+
       if (payload.translations && Array.isArray(payload.translations)) {
         for (const trans of payload.translations) {
           if (trans.lang && trans.text) {
             const transLocale = trans.lang.toUpperCase();
             const translationDoc = {
-              _key: `${newService._key}_${transLocale}`,
-              serviceId: newService._key,
+              _key: `${serviceKey}_${transLocale}`,
+              serviceId: serviceKey,
               languageCode: transLocale,
               translation: trans.text,
               isActive: true,
               createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
             };
             await this.serviceTranslations.save(translationDoc, { overwrite: true });
           }
         }
-        logger.info(`Saved ${payload.translations.length} additional translations for service ${newService._key}`);
+        logger.info(`Processed ${payload.translations.length} additional translations for service ${serviceKey}`);
       }
 
-      return newService;
+      return { _key: serviceKey, status: 'updated' };
     } catch (error) {
-      logger.error(`Error creating service under category ${categoryKey}: ${error.message}`, { stack: error.stack });
+      logger.error(`Error updating service ${serviceKey}: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }
@@ -570,6 +611,46 @@ class ServiceCategoryService {
   }
 
   /**
+ * Deletes a single service and its related data (translations, edges).
+ * @param {String} serviceKey - The _key of the service to delete.
+ * @returns {Promise<Object>} A confirmation object.
+ */
+  async deleteService(serviceKey) {
+    await this.init();
+    try {
+      logger.info(`Deleting service ${serviceKey} and all related data`);
+      if (!serviceKey) {
+        throw new Error('Invalid service key provided');
+      }
+
+      // 1. Delete all translations for this service
+      await this.db.query(aql`
+      FOR trans IN serviceTranslations
+        FILTER trans.serviceId == ${serviceKey}
+        REMOVE trans IN serviceTranslations
+    `);
+      logger.info(`Deleted translations for service ${serviceKey}`);
+
+      // 2. Delete the edge connecting the category to this service
+      await this.db.query(aql`
+      FOR edge IN categoryServices
+        FILTER edge._to == ${'services/' + serviceKey}
+        REMOVE edge IN categoryServices
+    `);
+      logger.info(`Deleted edge for service ${serviceKey}`);
+
+      // 3. Delete the service document itself
+      await this.services.remove(serviceKey);
+      logger.info(`Service document ${serviceKey} deleted successfully`);
+
+      return { _key: serviceKey, status: 'deleted' };
+    } catch (error) {
+      logger.error(`Error deleting service ${serviceKey}: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
    * Search categories and services
    * @param {String} searchQuery - Search query string
    * @param {String} locale - Locale code (e.g., 'en', 'fr', 'sw')
@@ -702,6 +783,42 @@ class ServiceCategoryService {
       return translations;
     } catch (error) {
       logger.error(`Error fetching translations for service ${serviceKey}: ${error.message}`, { stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+ * Creates a single new category, calculating its order to be last.
+ * @param {Object} payload - The category data { nameEN, translations }.
+ * @returns {Promise<Object>} The newly created category document.
+ */
+  async createCategory(payload) {
+    await this.init();
+    try {
+      logger.info(`Creating new category "${payload.nameEN}"`);
+
+      // 1. Get the current maximum order number for categories
+      const cursor = await this.db.query(aql`
+      FOR c IN serviceCategories
+        COLLECT AGGREGATE maxOrder = MAX(c.order)
+        RETURN maxOrder
+    `);
+      const maxOrder = await cursor.next() || 0;
+      const newOrder = maxOrder + 1;
+      logger.info(`Determined new category order: ${newOrder}`);
+
+      // 2. Create the category document with the correct order
+      const categoryDoc = {
+        order: newOrder
+      };
+      const newCategory = await this.serviceCategories.save(categoryDoc);
+
+      // 3. Create the English and other translations (same logic as before)
+      await this.updateCategoryWithTranslations(newCategory._key, payload);
+
+      return newCategory;
+    } catch (error) {
+      logger.error(`Error in createCategory: ${error.message}`, { stack: error.stack });
       throw error;
     }
   }

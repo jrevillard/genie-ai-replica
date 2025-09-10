@@ -317,65 +317,43 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
-   * @swagger
-   * /service-categories:
-   *   post:
-   *     summary: Create or update categories
-   *     description: Creates or updates service categories and their services
-   *     tags: [Service Categories]
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - categories
-   *             properties:
-   *               categories:
-   *                 type: array
-   *                 items:
-   *                   type: object
-   *                   properties:
-   *                     catKey:
-   *                       type: string
-   *                     name:
-   *                       type: string
-   *                     children:
-   *                       type: array
-   *                       items:
-   *                         type: string
-   *               locale:
-   *                 type: string
-   *                 default: en
-   *     responses:
-   *       200:
-   *         description: Categories created or updated successfully
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: array
-   *               items:
-   *                 type: object
-   *       400:
-   *         description: Invalid request
-   *       500:
-   *         description: Server error
-   */
+ * @swagger
+ * /service-categories:
+ * post:
+ * summary: Create a new category
+ * description: Creates a new service category with translations
+ * tags: [Service Categories]
+ * requestBody:
+ * required: true
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * nameEN:
+ * type: string
+ * translations:
+ * type: array
+ * responses:
+ * 201:
+ * description: Category created successfully
+ */
   router.post('/', async (req, res) => {
     const start = Date.now();
     try {
-      const { categories, locale = 'en' } = req.body;
-      if (!categories || !Array.isArray(categories)) {
-        logger.warn('Categories array missing or invalid in /service-categories POST');
-        return res.status(400).json({ message: 'Categories array is required' });
+      const payload = req.body;
+      if (!payload || !payload.nameEN) {
+        return res.status(400).json({ message: 'Payload with nameEN is required' });
       }
-      logger.info(`Creating/updating ${categories.length} categories with locale: ${locale}`);
-      const result = await serviceCategoryService.upsertCategories(categories, locale);
-      logger.info(`Upserted ${result.length} categories in ${Date.now() - start}ms`);
-      res.json(result);
+      logger.info(`Creating single category with name: ${payload.nameEN}`);
+
+      // Call the new, dedicated createCategory method
+      const result = await serviceCategoryService.createCategory(payload);
+
+      logger.info(`Category created successfully in ${Date.now() - start}ms`);
+      res.status(201).json(result);
     } catch (error) {
-      logger.error(`Error creating/updating categories: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error creating category: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
       res.status(500).json({ message: error.message });
     }
   });
@@ -417,6 +395,49 @@ module.exports = (serviceCategoryService) => {
     } catch (error) {
       logger.error(`Error deleting category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+ * @swagger
+ * /service-categories/services/{serviceId}:
+ * delete:
+ * summary: Delete a service
+ * description: Deletes a service and its associated translations
+ * tags: [Service Categories]
+ * parameters:
+ * - in: path
+ * name: serviceId
+ * required: true
+ * schema:
+ * type: string
+ * description: The key of the service to delete
+ * responses:
+ * 200:
+ * description: Service deleted successfully
+ * 404:
+ * description: Service not found
+ * 500:
+ * description: Server error
+ */
+  router.delete('/services/:serviceId', async (req, res) => {
+    const start = Date.now();
+    try {
+      const { serviceId } = req.params;
+      logger.info(`Attempting to delete service: ${serviceId}`);
+
+      const result = await serviceCategoryService.deleteService(serviceId);
+
+      logger.info(`Service ${serviceId} deleted successfully in ${Date.now() - start}ms`);
+      res.status(200).json({ message: `Service ${serviceId} deleted successfully` });
+    } catch (error) {
+      logger.error(`Error deleting service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      // Check for not found error from the service if needed, otherwise send 500
+      if (error.code === 404) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
     }
   });
 
@@ -548,6 +569,56 @@ module.exports = (serviceCategoryService) => {
       res.status(200).json(result);
     } catch (error) {
       logger.error(`Error updating category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Add this new route for updating a service
+
+  /**
+   * @swagger
+   * /service-categories/services/{serviceId}:
+   * put:
+   * summary: Update an existing service
+   * description: Updates a service's name and its associated translations
+   * tags: [Service Categories]
+   * parameters:
+   * - in: path
+   * name: serviceId
+   * required: true
+   * schema:
+   * type: string
+   * description: The key of the service to update
+   * requestBody:
+   * required: true
+   * content:
+   * application/json:
+   * schema:
+   * type: object
+   * properties:
+   * nameEN:
+   * type: string
+   * translations:
+   * type: array
+   * responses:
+   * 200:
+   * description: Service updated successfully
+   * 500:
+   * description: Server error
+   */
+  router.put('/services/:serviceId', async (req, res) => {
+    const start = Date.now();
+    try {
+      const { serviceId } = req.params;
+      const payload = req.body;
+
+      logger.info(`Updating service ${serviceId}`);
+      const result = await serviceCategoryService.updateServiceWithTranslations(serviceId, payload);
+      logger.info(`Service ${serviceId} updated successfully in ${Date.now() - start}ms`);
+
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error(`Error updating service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
       res.status(500).json({ message: error.message });
     }
   });

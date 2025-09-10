@@ -40,6 +40,7 @@
           :placeholder="
             translate('link.placeholder', 'https://example.com/article')
           "
+          @keyup.enter="handleSubmit"
         />
         <p class="form-hint">
           {{
@@ -70,8 +71,11 @@
     </div>
   </div>
 </template>
-  
-  <script>
+
+<script>
+import documentFileService from "../services/documentFileService.js";
+import { eventBus } from "../eventBus.js";
+
 export default {
   name: "AddFromLinkDialog",
   emits: ["close", "link-submitted"],
@@ -83,52 +87,66 @@ export default {
     };
   },
   computed: {
+    /**
+     * Uses a more robust regex to validate the URL format.
+     */
     isValidUrl() {
-      // Simple URL validation
-      return this.url.startsWith("http://") || this.url.startsWith("https://");
+      try {
+        const newUrl = new URL(this.url);
+        return newUrl.protocol === "http:" || newUrl.protocol === "https:";
+      } catch (_) {
+        return false;
+      }
     },
   },
   methods: {
     translate(key, fallback) {
-      // In a real app, this would use your i18n library
       return fallback || key;
     },
+    /**
+     * Handles the submission of the URL to the backend service.
+     */
     async handleSubmit() {
-      if (!this.isValidUrl) return;
+      if (!this.isValidUrl) {
+        this.errorMessage =
+          "Please enter a valid URL, including http:// or https://";
+        return;
+      }
+
       this.isLoading = true;
       this.errorMessage = "";
 
-      // In a real app, this would make a POST request to /api/files/upload-link
-      // with the { url: this.url } payload.
-      console.log(`Simulating crawling for URL: ${this.url}`);
+      try {
+        // Call the uploadLink method from the service
+        const response = await documentFileService.uploadLink(this.url);
 
-      // Simulate API call
-      setTimeout(() => {
-        // Simulate a success response based on README.md
-        const success = Math.random() > 0.2; // 80% success rate
-        if (success) {
-          const mockResponse = {
-            success: true,
-            message: "URL crawled and html file saved successfully",
-            data: {
-              file_id: Date.now().toString(),
-              file_name: "Crawled Page.html" /* ... other metadata */,
-            },
-          };
-          this.$emit("link-submitted", mockResponse.data);
-          this.$emit("close");
-        } else {
-          this.errorMessage =
-            "Failed to crawl the URL. Please check the link and try again.";
-        }
+        this.showNotification(
+          response.message || "Link crawled and file saved successfully.",
+          "success"
+        );
+
+        // Emit the new file data back to the parent component
+        this.$emit("link-submitted", response.data);
+        this.$emit("close");
+      } catch (error) {
+        // Display a user-friendly error from the server, or a generic one
+        this.errorMessage =
+          error.response?.data?.message ||
+          "Failed to crawl the URL. Please check the link and try again.";
+        this.showNotification(this.errorMessage, "error");
+        console.error("Error crawling link:", error);
+      } finally {
         this.isLoading = false;
-      }, 2000);
+      }
+    },
+    showNotification(message, type = "success") {
+      eventBus.$emit("notification:show", { message, type });
     },
   },
 };
 </script>
-  
-  <style scoped>
+
+<style scoped>
 /* Using a consistent dialog style */
 .dialog-backdrop {
   position: fixed;

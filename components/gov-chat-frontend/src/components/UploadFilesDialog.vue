@@ -85,8 +85,11 @@
     </div>
   </div>
 </template>
-  
-  <script>
+
+<script>
+import documentFileService from "../services/documentFileService.js";
+import { eventBus } from "../eventBus.js";
+
 export default {
   name: "UploadFilesDialog",
   emits: ["close", "files-uploaded"],
@@ -107,19 +110,82 @@ export default {
     },
     handleFileSelect(event) {
       this.addFiles([...event.target.files]);
+      // Clear the input value to allow selecting the same file again
+      event.target.value = "";
     },
+    /**
+     * Handles the drop event in a robust, cross-browser compatible way.
+     */
     handleDrop(event) {
       this.isDragging = false;
-      this.addFiles([...event.dataTransfer.files]);
-    },
-    addFiles(newFiles) {
-      // Prevent duplicates
-      newFiles.forEach((file) => {
-        if (
-          !this.files.some((f) => f.name === file.name && f.size === file.size)
-        ) {
-          this.files.push(file);
+      // This is critical to prevent the browser from opening the file.
+      event.preventDefault();
+
+      const filesToAdd = [];
+
+      if (event.dataTransfer.items) {
+        // Use a classic for loop for maximum compatibility.
+        for (let i = 0; i < event.dataTransfer.items.length; i++) {
+          const item = event.dataTransfer.items[i];
+          if (item.kind === "file") {
+            const file = item.getAsFile();
+            if (file) {
+              // Ensure the file is not null
+              filesToAdd.push(file);
+            }
+          }
         }
+      } else {
+        // Fallback for older browsers
+        filesToAdd.push(...event.dataTransfer.files);
+      }
+
+      if (filesToAdd.length > 0) {
+        this.addFiles(filesToAdd);
+      } else {
+        // This will now correctly catch any non-file drag-and-drop attempts
+        this.showNotification(
+          "Only files can be dropped. Please check you are dragging a valid file from your computer.",
+          "error"
+        );
+      }
+    },
+
+    // In UploadFilesDialog.vue -> methods
+
+    /**
+     * Validates and adds an array of File objects to the component's list.
+     */
+    addFiles(newFiles) {
+      newFiles.forEach((file) => {
+        // Ensure we are only processing actual File objects
+        if (!(file instanceof File)) {
+          // This is a safeguard, but the main logic is in handleDrop
+          console.warn("Attempted to add a non-file item:", file);
+          return;
+        }
+
+        // Check for unwanted .url extension
+        if (file.name.toLowerCase().endsWith(".url")) {
+          this.showNotification(
+            "Shortcut files (.url) are not supported. Please drag the actual file.",
+            "error"
+          );
+          return;
+        }
+
+        // Check for duplicates
+        if (
+          this.files.some((f) => f.name === file.name && f.size === file.size)
+        ) {
+          this.showNotification(
+            `File "${file.name}" has already been added.`,
+            "info"
+          );
+          return;
+        }
+
+        this.files.push(file);
       });
     },
     removeFile(index) {
@@ -138,28 +204,55 @@ export default {
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     },
+    /**
+     * Handles the file upload process.
+     * Iterates through the selected files, uploading them one by one.
+     */
     async handleUpload() {
       this.isUploading = true;
-      // In a real app, you would use FormData and an HTTP client like Axios
-      // to POST to /api/files/uploads
-      console.log(`Simulating upload for ${this.files.length} files...`);
+      const successfulUploads = [];
 
-      // Simulate API call delay
-      setTimeout(() => {
-        this.isUploading = false;
-        console.log("Upload successful.");
-        this.$emit(
-          "files-uploaded",
-          this.files.map((f) => f.name)
-        );
+      // Use a for...of loop to upload files sequentially
+      for (const file of this.files) {
+        try {
+          // Create a new FormData object for each file
+          const formData = new FormData();
+          formData.append("file", file); // 'file' is the key the backend expects
+
+          // Call the service to upload the file
+          await documentFileService.uploadFile(formData);
+          successfulUploads.push(file.name);
+          this.showNotification(
+            `Successfully uploaded ${file.name}`,
+            "success"
+          );
+        } catch (error) {
+          this.showNotification(`Failed to upload ${file.name}.`, "error");
+          console.error(`Error uploading ${file.name}:`, error);
+          // Continue to the next file even if one fails
+        }
+      }
+
+      this.isUploading = false;
+
+      // If at least one file was uploaded successfully, emit the event
+      if (successfulUploads.length > 0) {
+        this.$emit("files-uploaded", successfulUploads);
+      }
+
+      // Close the dialog only if all files were uploaded successfully
+      if (successfulUploads.length === this.files.length) {
         this.$emit("close");
-      }, 2000);
+      }
+    },
+    showNotification(message, type = "success") {
+      eventBus.$emit("notification:show", { message, type });
     },
   },
 };
 </script>
-  
-  <style scoped>
+
+<style scoped>
 /* Using a consistent dialog style */
 .dialog-backdrop {
   position: fixed;

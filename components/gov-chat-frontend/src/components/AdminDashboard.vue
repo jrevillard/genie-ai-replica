@@ -286,7 +286,7 @@
                     {{
                       translate(
                         "admin.hierarchy.title",
-                        "Knowledge Hierarchy Management"
+                        "Knowledge Hierarchy Management (note: always English - add translations)"
                       )
                     }}
                   </div>
@@ -695,9 +695,29 @@
                     </tr>
                   </thead>
                   <tbody>
+                    <tr v-if="isDocumentsLoading">
+                      <td colspan="6" style="text-align: center; padding: 2rem">
+                        <div class="loading-state">
+                          <div class="loading-spinner-small"></div>
+                          <span>Loading documents...</span>
+                        </div>
+                      </td>
+                    </tr>
+
+                    <tr v-if="!isDocumentsLoading && documents.length === 0">
+                      <td colspan="6" style="text-align: center; padding: 2rem">
+                        {{
+                          translate(
+                            "admin.documents.empty",
+                            "No documents found."
+                          )
+                        }}
+                      </td>
+                    </tr>
+
                     <tr
                       v-for="doc in filteredDocuments"
-                      :key="doc.file_id"
+                      :key="doc._key"
                       @click="viewDocumentDetails(doc.file_id)"
                       class="document-row"
                     >
@@ -705,7 +725,7 @@
                         <input
                           type="checkbox"
                           v-model="selectedDocuments"
-                          :value="doc.file_id"
+                          :value="doc._key"
                         />
                       </td>
                       <td>{{ doc.file_name }}</td>
@@ -715,36 +735,29 @@
                             'status-tag',
                             getStatusClass(doc.dataprep.status),
                           ]"
-                          >{{ doc.dataprep.status }}</span
                         >
+                          {{ doc.dataprep.status }}
+                        </span>
                       </td>
                       <td>
                         <span
                           v-for="label in doc.labels.slice(0, 2)"
                           :key="label"
                           class="label-tag"
-                          >{{ label }}</span
                         >
+                          {{ label }}
+                        </span>
                         <span
                           v-if="doc.labels.length > 2"
                           class="label-tag-more"
-                          >+{{ doc.labels.length - 2 }}</span
                         >
+                          +{{ doc.labels.length - 2 }}
+                        </span>
                       </td>
                       <td>
                         {{ new Date(doc.upload_date).toLocaleDateString() }}
                       </td>
-                      <td>{{ doc.file_size }}</td>
-                    </tr>
-                    <tr v-if="filteredDocuments.length === 0">
-                      <td colspan="6" style="text-align: center; padding: 2rem">
-                        {{
-                          translate(
-                            "admin.documents.empty",
-                            "No documents found."
-                          )
-                        }}
-                      </td>
+                      <td>{{ formatFileSize(doc.file_size) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2236,6 +2249,8 @@ import AddFromLinkDialog from "./AddFromLinkDialog.vue";
 import FileDetailsDialog from "./FileDetailsDialog.vue";
 import { eventBus } from "../eventBus.js";
 import { availableLanguages } from "../config/languageConfig.js";
+import documentFileService from "../services/documentFileService.js";
+import labelService from "../services/labelService.js";
 
 export default {
   components: {
@@ -2435,38 +2450,22 @@ export default {
         translations: [], // Array for translation objects
         parentId: null,
       },
-      documents: [
-        {
-          file_id: "doc-001",
-          file_name: "Annual Budget Report 2025.pdf",
-          file_size: "2.1 MB",
-          upload_date: "2025-09-01T10:00:00Z",
-          labels: ["Finance & Taxation"],
-          dataprep: { status: "ingested" },
-        },
-        {
-          file_id: "doc-002",
-          file_name: "Public Health Guidelines.docx",
-          file_size: "750 KB",
-          upload_date: "2025-08-25T14:30:00Z",
-          labels: ["Healthcare & Social Services"],
-          dataprep: { status: "pending" },
-        },
-        {
-          file_id: "doc-003",
-          file_name: "Archived_Press_Release.html",
-          file_size: "150 KB",
-          upload_date: "2025-07-10T09:00:00Z",
-          labels: [],
-          dataprep: { status: "retracted" },
-        },
-      ],
+      documents: [], // Remove the old hardcoded data and start with an empty array
+      isDocumentsLoading: false,
+      documentPagination: {
+        page: 1,
+        limit: 15, // You can adjust the number of items per page
+        total: 0,
+      },
+      // The existing properties below are already correct
       documentSearchTerm: "",
       documentFilters: {
         status: "all",
       },
       selectedDocuments: [],
-      // --- END: NEW DATA ---
+
+      selectedDocuments: [],
+      // --- END: DOCUMENT and HIERARCHY DATA ---
 
       showUploadDialog: false,
       showLinkDialog: false,
@@ -2502,17 +2501,20 @@ export default {
       return this.userStats.users || [];
     },
 
-    // ... existing computed properties ...
+    /**
+     * Performs client-side filtering on the documents array based on the selected status.
+     */
     filteredDocuments() {
-      return this.documents.filter((doc) => {
-        const matchesSearch = doc.file_name
-          .toLowerCase()
-          .includes(this.documentSearchTerm.toLowerCase());
-        const matchesStatus =
-          this.documentFilters.status === "all" ||
-          doc.dataprep.status === this.documentFilters.status;
-        return matchesSearch && matchesStatus;
-      });
+      const selectedStatus = this.documentFilters.status;
+      if (!this.documents || this.documents.length === 0) {
+        return [];
+      }
+      if (selectedStatus === "all") {
+        return this.documents; // If 'All' is selected, return the full list
+      }
+      return this.documents.filter(
+        (doc) => doc.dataprep && doc.dataprep.status === selectedStatus
+      );
     },
   },
   watch: {
@@ -2525,6 +2527,19 @@ export default {
       if (newTab === "hierarchy" && this.knowledgeHierarchy.length === 0) {
         this.loadKnowledgeHierarchy();
       }
+    },
+
+    documentSearchTerm() {
+      // A debounce would be ideal here in a real app, but this works
+      this.documentPagination.page = 1; // Reset to first page on new search
+      this.loadDocuments();
+    },
+    documentFilters: {
+      handler() {
+        this.documentPagination.page = 1; // Reset to first page on filter change
+        this.loadDocuments();
+      },
+      deep: true,
     },
   },
   created() {
@@ -2688,6 +2703,8 @@ export default {
         this.loadSecurityMetrics();
       } else if (tabId === "users") {
         this.loadUserStats();
+      } else if (tabId === "documents") {
+        this.loadDocuments();
       }
     },
 
@@ -3629,6 +3646,11 @@ export default {
       this.hierarchyForm.translations.splice(index, 1);
     },
 
+    closeHierarchyForm() {
+      this.hierarchyForm.visible = false;
+      this.originalHierarchyFormState = null;
+    },
+
     // Modify cancelHierarchyForm
     cancelHierarchyForm() {
       if (this.isFormDirty) {
@@ -3640,8 +3662,8 @@ export default {
           return; // Stop the action if the user cancels
         }
       }
-      this.hierarchyForm.visible = false;
-      this.originalHierarchyFormState = null; // Reset state
+      // Call the new closing method
+      this.closeHierarchyForm();
     },
 
     async saveHierarchyItem() {
@@ -3682,7 +3704,7 @@ export default {
         }
 
         this.showNotification("Hierarchy item saved successfully.", "success");
-        this.cancelHierarchyForm(); // Close form on success
+        this.closeHierarchyForm(); // Close form on success
 
         // --- 4. REFRESH DATA ---
         await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
@@ -3738,9 +3760,9 @@ export default {
       this.showNotification('"Add from Link" modal would open here.', "info");
     },
     viewDocumentDetails(docId) {
-      // This would open the side panel or a modal with the document's full metadata
       console.log("Viewing details for doc ID:", docId);
-      this.showNotification(`Opening details for document ${docId}.`, "info");
+      this.selectedFileId = docId;
+      this.showDetailsDialog = true;
     },
     getStatusClass(status) {
       if (status === "ingested") return "status-ingested";
@@ -3786,7 +3808,7 @@ export default {
       // In a real application, this would re-fetch the document list from your API
       this.showNotification("Document list refreshed.", "info");
       console.log("Refreshing document list...");
-      // Example: this.loadDocuments();
+      this.loadDocuments();
     },
 
     // Handler for the @files-uploaded event from the UploadFilesDialog
@@ -3822,6 +3844,50 @@ export default {
         "success"
       );
       this.refreshDocuments();
+    },
+
+    async loadDocuments() {
+      this.isDocumentsLoading = true;
+      try {
+        // Start with the required parameters
+        const params = {
+          page: this.documentPagination.page,
+          limit: this.documentPagination.limit,
+        };
+
+        // Conditionally add the search parameter if it has a value
+        if (this.documentSearchTerm && this.documentSearchTerm.trim() !== "") {
+          params.search = this.documentSearchTerm.trim();
+        }
+
+        // The block for adding the 'status' parameter has been intentionally removed.
+        // We will now always fetch all documents and filter them on the client side.
+
+        // Call the service with the correctly built params object
+        const response = await documentFileService.getFiles(params);
+
+        // The documents array is inside the 'data' property
+        this.documents = response.data || [];
+
+        // The pagination info is inside the 'pagination' property
+        if (response.pagination) {
+          this.documentPagination.total = response.pagination.totalFiles || 0;
+          this.documentPagination.page = response.pagination.currentPage || 1;
+        }
+      } catch (error) {
+        this.showNotification("Failed to load documents.", "error");
+        this.documents = [];
+      } finally {
+        this.isDocumentsLoading = false;
+      }
+    },
+
+    formatFileSize(bytes) {
+      if (bytes === 0) return "0 Bytes";
+      const k = 1024;
+      const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     },
   },
 };

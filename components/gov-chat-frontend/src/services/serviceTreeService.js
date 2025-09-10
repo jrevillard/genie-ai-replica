@@ -222,26 +222,15 @@ export default {
  */
   async createCategory(payload) {
     try {
-      // The backend's bulk endpoint expects an object with a 'categories' array.
-      // We will wrap our single payload object in that structure.
-      const apiPayload = {
-        categories: [
-          {
-            name: payload.nameEN, // The backend expects a 'name' property for the English value
-            translations: payload.translations, // Pass the new translations array
-            // The backend will generate catKey and children if not provided
-          }
-        ]
-      };
-
-      const response = await httpService.post('service-categories', apiPayload);
+      // Send the payload directly to our new single-item creation endpoint
+      const response = await httpService.post('service-categories', payload);
       return response.data;
     } catch (error) {
       console.error('Error creating category:', error);
       throw error;
     }
   },
-
+  
   /**
    * Updates an existing category.
    * @param {String} categoryId - The ID of the category to update.

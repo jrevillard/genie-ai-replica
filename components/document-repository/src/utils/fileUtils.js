@@ -14,7 +14,7 @@ const generateUniqueFileId = () => {
   const timestamp = Date.now();
   const uuid = uuidv4().split('-')[0];
   
-  return `${timestamp}-${uuid}`;
+  return `${timestamp}_${uuid}`;
 };
 
 /**

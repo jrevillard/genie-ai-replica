@@ -75,17 +75,27 @@ services:
     build:
       context: .
       dockerfile: document-repository/Dockerfile
+    container_name: doc-repo-dev
     environment:
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
     depends_on:
-      - arango-vector-db
+      - clamav
     ports:
-      - "3000:3000"
+      - "3001:3001"
     networks:
       - chatqna_default
     volumes:
-      - ./document-repository/uploads:/app/uploads
+      - ./document-repository:/app
+      - ./document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
+  
+  clamav:
+    image: mkodockx/docker-clamav:alpine
+    container_name: clamav
+    ports:
+      - "3310:3310" # ClamAV daemon port
+    networks:
+      - chatqna_default
 
 networks:
   chatqna_default:

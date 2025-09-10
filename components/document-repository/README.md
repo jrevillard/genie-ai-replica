@@ -297,9 +297,9 @@ Use the following `curl` commands to interact with the file system backend servi
 **Request**
 
 ```bash
-curl -X POST http://localhost:3000/api/files/upload \
+curl -X POST http://localhost:3001/api/files/upload \
   -H "Authorization: Bearer <accessToken>" \
-  -F "file=@/Users/Desktop/Example.pdf"
+  -F "file=@/Users/scarlettsun/Desktop/ITU/Kenya_Services_Info_0403.md"
 ```
 
 **Response**
@@ -328,7 +328,7 @@ curl -X POST http://localhost:3000/api/files/upload \
 ### Upload Multiple Files (max 5)
 
 ```bash
-curl -X POST http://localhost:3000/api/files/uploads \
+curl -X POST http://localhost:3001/api/files/uploads \
   -H "Authorization: Bearer <accessToken>" \
   -F "files=@/Users/Desktop/Example1.txt" \
   -F "files=@/Users/Desktop/Example2.xlsx" \
@@ -352,10 +352,10 @@ curl -X POST http://localhost:3000/api/files/uploads \
 ### Upload a Link
 
 ```bash
-curl -X POST http://localhost:3000/api/files/upload-link \
+curl -X POST http://localhost:3001/api/files/upload-link \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://ieeeht.org/get-involved/funding-opportunities/genai-for-good/"}'
+  -d '{"url": "https://en.wikipedia.org/wiki/Kenya"}'
 ```
 
 **Response**
@@ -385,8 +385,8 @@ curl -X POST http://localhost:3000/api/files/upload-link \
 **View a file in base64** (for future API integration)
 
 ```bash
-curl http://localhost:3000/api/files/1755357489820-bcbb939a/view \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU1MzQ5MDI2LCJleHAiOjE3NTU0MzU0MjZ9.QdJ5mx8eJNygS8L3nnMglqP-wC23k7Rp7Lj6J35nEKo"
+curl http://localhost:3001/api/files/1755357489820-bcbb939a/view \
+  -H "Authorization: Bearer <accessToken>"
 ```
 
 **Response**
@@ -412,7 +412,7 @@ http://localhost:3000/api/files/1752590647147-8ca95cff/viewbrowser
 Download from the backend server:
 
 ```bash
-curl http://localhost:3000/api/files/1755357489820-bcbb939a/download --output /Users/Desktop/test-download-1.html \
+curl http://localhost:3001/api/files/1755357489820-bcbb939a/download --output /Users/Desktop/test-download-1.html \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -429,7 +429,7 @@ curl http://localhost:3000/api/files/1755357489820-bcbb939a/download --output /U
 ### Download Multiple Files in a ZIP Archive
 
 ```bash
-curl -X POST http://localhost:3000/api/files/downloads \
+curl -X POST http://localhost:3001/api/files/downloads \
   -H "Content-Type: application/json" \
   -o /Users/Desktop/download-files-2.zip \
   -d '{"fileIds":["1755357122708-fc7201fc","1755357329946-94612fe5","1755357329947-47e3aadb"]}' \
@@ -450,7 +450,7 @@ curl -X POST http://localhost:3000/api/files/downloads \
 
 Delete from the backend server:
 ```bash
-curl -X DELETE http://localhost:3000/api/files/1755357329946-94612fe5 \
+curl -X DELETE http://localhost:3001/api/files/1757539201587_1cbcec33 \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -487,7 +487,7 @@ curl -X DELETE http://localhost:3000/api/files \
 ### Get File Metadata by ID
 
 ```bash
-curl -X GET "http://localhost:3000/api/files/1755261342481-8b804597" \
+curl -X GET "http://localhost:3001/api/files/1755261342481-8b804597" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -523,39 +523,39 @@ curl -X GET "http://localhost:3000/api/files/1755261342481-8b804597" \
 💚 Default to return the first 10 files, sorted by `upload_date` in descending order.
 
 ```bash
-curl "http://localhost:3000/api/files" \
+curl "http://localhost:3001/api/files" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
 💚 Get files with pagination and limit:
 ```bash
-curl "http://localhost:3000/api/files?page=2&limit=5" \
+curl "http://localhost:3001/api/files?page=2&limit=5" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
 💚 Get files by mimetype:
 ```bash
-curl "http://localhost:3000/api/files?mimeType=text/html" \
+curl "http://localhost:3001/api/files?mimeType=text/html" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
 💚 Search by file name (case insensitive):
 ```bash
-curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
+curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
 💚 Filter by dataprep status:
 
 ```bash
-curl "http://localhost:3000/api/files?dataprepStatus=pending" \
+curl "http://localhost:3001/api/files?dataprepStatus=pending" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
 💚 Combine filters (e.g., PDF files with 'example' in the name)
 
 ```bash
-curl "http://localhost:3000/api/files?mimeType=text/html&search=world" \
+curl "http://localhost:3001/api/files?mimeType=text/html&search=world" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -578,7 +578,7 @@ curl "http://localhost:3000/api/files?mimeType=text/html&search=world" \
 ### Update File Metadata
 
 ```bash
-curl -X PATCH http://localhost:3000/api/files/1752757770440-ce960082 \
+curl -X PATCH http://localhost:3001/api/files/1752757770440-ce960082 \
   -H "Content-Type: application/json" \
   -d '{"language":"en", "labels":["itu", "ai"], "author":"ITU"}' \
   -H "Authorization: Bearer <accessToken>"
@@ -613,34 +613,34 @@ curl -X PATCH http://localhost:3000/api/files/1752757770440-ce960082 \
 For search files by name, the terminal does not encode non-ASCII characters correctly in the URL. Must percent-encode all characters.
 
 ```bash
-curl "http://localhost:3000/api/files/search?file_type=application/pdf" \
+curl "http://localhost:3001/api/files/search?file_type=application/pdf" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' world)" \
+curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' world)" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' ITU)" \
+curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' ITU)" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?upload_date_from=2025-07-15T14:30:00.092Z&upload_date_to=2025-07-16T14:40:07.092Z" \
+curl "http://localhost:3001/api/files/search?upload_date_from=2025-07-15T14:30:00.092Z&upload_date_to=2025-07-16T14:40:07.092Z" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?labels=one,orange" \
+curl "http://localhost:3001/api/files/search?labels=one,orange" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?author=Google" \
+curl "http://localhost:3001/api/files/search?author=Google" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?status=pending" \
+curl "http://localhost:3001/api/files/search?status=pending" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?language=en" \
+curl "http://localhost:3001/api/files/search?language=en" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_type=text/html&labels=orange" \
+curl "http://localhost:3001/api/files/search?file_type=text/html&labels=orange" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3000/api/files/search?file_name=budget&file_type=text/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en" \
+curl "http://localhost:3001/api/files/search?file_name=budget&file_type=text/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -665,7 +665,7 @@ curl "http://localhost:3000/api/files/search?file_name=budget&file_type=text/htm
 ### Ingest a File
 
 ```bash
-curl -X POST "http://localhost:3000/api/files/1756383765785-24dd4486/ingest" \
+curl -X POST "http://localhost:3001/api/files/1757539493095_97a92e03/ingest" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -678,7 +678,7 @@ curl -X POST "http://localhost:3000/api/files/1756383765785-24dd4486/ingest" \
 ### Retract a File
 
 ```bash
-curl -X POST "http://localhost:3000/api/files/1755082518852-7c90b350/retract" \
+curl -X POST "http://localhost:3001/api/files/1756383765785-24dd4486/retract" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -689,7 +689,7 @@ curl -X POST "http://localhost:3000/api/files/1755082518852-7c90b350/retract" \
 ### Ingest Multiple Files
 
 ```bash
-curl -X POST http://localhost:3000/api/files/ingest \
+curl -X POST http://localhost:3001/api/files/ingest \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"fileIds": ["1755357489820-bcbb939a", "1755083178494-6bc7607a", "1755084048825-3fe82e7b", "1755078348409-c2b7bff9", "1755082518852-7c90b350"]}'
@@ -709,7 +709,7 @@ curl -X POST http://localhost:3000/api/files/ingest \
 ### Retract Multiple Files
 
 ```bash
-curl -X POST http://localhost:3000/api/files/retract \
+curl -X POST http://localhost:3001/api/files/retract \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"fileIds": ["1755082518852-7c90b350", "1755078047177-b7cac673", "1755083821792-8142c703"]}'

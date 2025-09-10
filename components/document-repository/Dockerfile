@@ -52,12 +52,12 @@ RUN [ -f /app/src/shared-lib/logger.js ] || { echo "logger.js missing!"; exit 1;
 RUN [ -f /app/src/shared-lib/db-connection-service.js ] || { echo "db-connection-service.js missing!"; exit 1; }
 
 # Expose the port the app runs on
-EXPOSE 3000 3310
+EXPOSE 3001 3310
 
 # Set environment variables
 ARG ARANGO_PASSWORD
 ENV NODE_ENV=development
-ENV PORT=3000
+ENV PORT=3001
 ENV ARANGO_URL=http://arango-vector-db:8529
 ENV ARANGO_DB=node-services
 ENV ARANGO_USER=root
@@ -66,4 +66,4 @@ ENV UPLOAD_DIR=./uploads
 ENV MAX_FILE_SIZE=5242880
 
 # Start the application
-CMD ["/app/clamav-node.sh"]
+CMD ["bash", "/app/clamav-node.sh"]

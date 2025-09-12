@@ -55,37 +55,38 @@ services:
       - LOG_LEVEL=debug
       - OPEA_HOST=e2e-109-198
       - OPEA_PORT=8888
-      - CONTEXT_OPTION=single-message
+      - CONTEXT_OPTION=conversation-with-context-labels
     env_file:
       - ./gov-chat-backend/.env
     networks:
       - chatqna_default
-    
-  arango-vector-db:
-    image: arangodb:latest
-    ports:
-      - "8529:8529"
-    environment:
-      - ARANGO_ROOT_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
-    networks:
-      - chatqna_default
-    restart: unless-stopped
   
   document-repository:
     build:
       context: .
       dockerfile: document-repository/Dockerfile
+    container_name: doc-repo-dev
     environment:
       - ARANGO_URL=http://arango-vector-db:8529
-      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-default-arango-password}
+      - ARANGO_PASSWORD=test
     depends_on:
-      - arango-vector-db
+      - clamav
     ports:
-      - "3000:3000"
+      - "3001:3001"
     networks:
       - chatqna_default
     volumes:
-      - ./document-repository/uploads:/app/uploads
+      - ./document-repository:/app
+      - ./document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
+      # - ./document-repository/uploads:/app/uploads
+  
+  clamav:
+    image: mkodockx/docker-clamav:alpine
+    container_name: clamav
+    ports:
+      - "3310:3310" # ClamAV daemon port
+    networks:
+      - chatqna_default
 
 networks:
   chatqna_default:

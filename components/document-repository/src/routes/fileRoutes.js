@@ -9,126 +9,428 @@ const router = express.Router();
 router.use(authenticateToken);
 
 /**
- * @route POST /api/files/upload
- * @desc Upload a single file
- * @access Public
- * @body {File} file - The file to upload
- * @body {string} [description] - File description
- * @body {string} [category] - File category (general, data, reports, documents)
- * @body {string[]} [tags] - Array of tags
+ * @swagger
+ * /api/files/upload:
+ *   post:
+ *     summary: Upload a single file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: The file to upload
+ *               description:
+ *                 type: string
+ *                 description: File description
+ *               category:
+ *                 type: string
+ *                 enum: [general, data, reports, documents]
+ *                 description: File category
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of tags
+ *     responses:
+ *       200:
+ *         description: File uploaded successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
  */
 router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
 // router.post('/upload', uploadSingle, fileController.uploadFile);
 
 /**
- * @route POST /api/files/uploads
- * @desc Upload multiple files
- * @access Public
- * @body {File[]} files - Array of files to upload (max 5)
- * @body {string} [description] - Description for all files
- * @body {string} [category] - Category for all files (general, data, reports, documents)
- * @body {string[]} [tags] - Array of tags for all files
+ * @swagger
+ * /api/files/uploads:
+ *   post:
+ *     summary: Upload multiple files
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Array of files to upload (max 5)
+ *               description:
+ *                 type: string
+ *                 description: Description for all files
+ *               category:
+ *                 type: string
+ *                 enum: [general, data, reports, documents]
+ *                 description: Category for all files
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of tags for all files
+ *     responses:
+ *       200:
+ *         description: Files uploaded successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
  */
 router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
 
 
 /**
- * @route POST /api/files/upload-link
- * @desc Upload a link (webpage), crawl the content and save as a file
- * @access Public
- * @body {string} url - The URL to crawl and save
+ * @swagger
+ * /api/files/upload-link:
+ *   post:
+ *     summary: Upload a link (webpage), crawl the content and save as a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: The URL to crawl and save
+ *     responses:
+ *       200:
+ *         description: Link uploaded and processed successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
  */
 router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink);
 
 
 /**
- * @route GET /api/files
- * @desc Get all files with pagination and filtering
- * @access Public
- * @query {number} page - Page number (default: 1)
- * @query {number} limit - Items per page (default: 10, max: 50)
- * @query {string} category - Filter by category
- * @query {string} mimeType - Filter by MIME type
- * @query {string} search - Search in file names and descriptions
+ * @swagger
+ * /api/files:
+ *   get:
+ *     summary: Get all files with pagination and filtering
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 50
+ *         description: Items per page
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Filter by category
+ *       - in: query
+ *         name: mimeType
+ *         schema:
+ *           type: string
+ *         description: Filter by MIME type
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search in file names and descriptions
+ *     responses:
+ *       200:
+ *         description: List of files
+ *       401:
+ *         description: Unauthorized
  */
 router.get('/', fileController.getFiles);
 
 /**
- * Search files by metadata 
- * @route GET /api/files/search
- * @desc Search files
- * @access Public
- * @query {string} q - Search query (required, min: 2 chars, max: 100)
- * @query {number} limit - Number of results (default: 10, max: 50)
- * @query {string} category - Filter by category
- * @query {string} mimeType - Filter by MIME type
+ * @swagger
+ * /api/files/search:
+ *   get:
+ *     summary: Search files by metadata
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *           minLength: 2
+ *           maxLength: 100
+ *         required: true
+ *         description: Search query
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 50
+ *         description: Number of results
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Filter by category
+ *       - in: query
+ *         name: mimeType
+ *         schema:
+ *           type: string
+ *         description: Filter by MIME type
+ *     responses:
+ *       200:
+ *         description: Search results
+ *       401:
+ *         description: Unauthorized
  */
 router.get('/search', fileController.searchMetadata);
 
 /**
- * Get file metadata by ID
- * @route GET /api/files/:metadata
- * @desc Get file by ID
- * @access Public
- * @param {string} id - File ID
+ * @swagger
+ * /api/files/{fileId}:
+ *   get:
+ *     summary: Get file metadata by ID
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File metadata
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
  */
 router.get('/:fileId', fileController.getMetadata);
 
 /**
- * @route GET /api/files/:id/view
- * @desc Get file as base64 for viewing
- * @access Public
- * @param {string} fileId - File ID
+ * @swagger
+ * /api/files/{fileId}/view:
+ *   get:
+ *     summary: Get file as base64 for viewing
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File content in base64
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
  */
 router.get('/:fileId/view', fileController.viewFile);
 
 /**
- * @route GET /api/files/:id/viewbrowser
- * @desc View file in browser (if supported)
- * @access Public
- * @param {string} fileId - File ID
+ * @swagger
+ * /api/files/{fileId}/viewbrowser:
+ *   get:
+ *     summary: View file in browser (if supported)
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File content for browser viewing
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
  */
 router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
 
 /**
- * @route GET /api/files/:id/download
- * @desc Download file by ID
- * @access Public
- * @param {string} fileId - File ID
+ * @swagger
+ * /api/files/{fileId}/download:
+ *   get:
+ *     summary: Download file by ID
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File downloaded successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
  */
 router.get('/:fileId/download', fileController.downloadFile);
 
 /**
- * @route POST /api/files/downloads
- * @desc Download multiple files as a ZIP archive
- * @access Public
- * @body {string[]} fileIds - Array of file IDs to download
+ * @swagger
+ * /api/files/downloads:
+ *   post:
+ *     summary: Download multiple files as a ZIP archive
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fileIds
+ *             properties:
+ *               fileIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of file IDs to download
+ *     responses:
+ *       200:
+ *         description: ZIP archive downloaded successfully
+ *       401:
+ *         description: Unauthorized
  */
 router.post('/downloads', fileController.downloadMultipleFiles);
 
 /**
- * @route DELETE /api/files/:id
- * @desc Delete file by ID
- * @access Public
- * @param {string} id - File ID
+ * @swagger
+ * /api/files/{fileId}:
+ *   delete:
+ *     summary: Delete file by ID
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
  */
 router.delete('/:fileId', fileController.deleteFile);
 
 /**
- * @route DELETE /api/files
- * @desc Delete multiple files by IDs
- * @access Public
- * @body {string[]} fileIds - Array of file IDs to delete
+ * @swagger
+ * /api/files:
+ *   delete:
+ *     summary: Delete multiple files by IDs
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fileIds
+ *             properties:
+ *               fileIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of file IDs to delete
+ *     responses:
+ *       200:
+ *         description: Files deleted successfully
+ *       401:
+ *         description: Unauthorized
  */
 router.delete('/', fileController.deleteMultipleFiles);
 
 /**
- * Update file metadata
- * @route PATCH /api/files/:fileId
- * @desc Update file metadata
- * @access Public
- * @param {string} fileId - File ID
- * @body {Object} updates - JSON object with the fields to update
+ * @swagger
+ * /api/files/{fileId}:
+ *   patch:
+ *     summary: Update file metadata
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               updates:
+ *                 type: object
+ *                 description: JSON object with the fields to update
+ *     responses:
+ *       200:
+ *         description: File metadata updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ *       404:
+ *         description: File not found
  */
 router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
 
@@ -137,9 +439,94 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
 // So this one and related functionalities are commented out and can be modified later if needed
 // router.patch('/metadata/:fileId', fileController.updateMetadataController);
 
+/**
+ * @swagger
+ * /api/files/{fileId}/ingest:
+ *   post:
+ *     summary: Ingest a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File ingested successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ *       404:
+ *         description: File not found
+ */
 router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/retract:
+ *   post:
+ *     summary: Retract a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File retracted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ *       404:
+ *         description: File not found
+ */
 router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
+
+/**
+ * @swagger
+ * /api/files/ingest:
+ *   post:
+ *     summary: Ingest multiple files
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Files ingested successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ */
 router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFiles);
+
+/**
+ * @swagger
+ * /api/files/retract:
+ *   post:
+ *     summary: Retract multiple files
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Files retracted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ */
 router.post('/retract', authorizeRole(['Admin']), fileController.retractMultipleFiles);
 
 module.exports = router;

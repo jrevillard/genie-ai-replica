@@ -5,8 +5,8 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
+
+const { logger } = require('./shared-lib/logger');
 
 // Import middlewares
 const { errorHandler } = require('./middlewares/errorHandler');
@@ -20,11 +20,40 @@ const appConfig = require('./config/appConfig');
 
 const app = express();
 
-// Load Swagger document
-const swaggerDocument = YAML.load(path.join(__dirname, 'docs', 'swagger.yaml'));
+// const YAML = require('yamljs');
+// // Load Swagger document
+// const swaggerDocument = YAML.load(path.join(__dirname, 'docs', 'swagger.yaml'));
 
-// Swagger UI setup
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+// // Swagger UI setup
+// app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
+const swaggerOptions = require('./config/swaggerConfig');
+
+// Generate Swagger specification
+try {
+  const swaggerSpec = swaggerJsdoc(swaggerOptions);
+  logger.info('Swagger specification generated successfully');
+
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+  }));
+
+  app.get('/api-docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+  });
+} catch (error) {
+  logger.error('Failed to initialize Swagger:', {
+    error: error.message,
+    stack: error.stack,
+    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+    errorType: error?.constructor?.name || 'Unknown',
+  });
+}
+
 
 // TODO: [NORMA] should use from shared-lib??
 // Security middleware

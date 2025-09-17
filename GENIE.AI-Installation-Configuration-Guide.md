@@ -30,7 +30,7 @@ For an agricultural support system, you need to combine various interconnected d
 * **Secondary:** "Approved Pesticides & Herbicides," "Chemical Fertilizer Specifications," "Soil Sample Analysis Protocols." These are directly referenced by the crop guide.
 * **Tertiary:** "Regional Weather Data," "Historical Market Prices," "Local Agricultural Equipment Suppliers." This data provides valuable context for decision-making.
 
-![Conceptual Venn Diagram for Agriculture Data Sets](https://i.imgur.com/8aV4i3g.png)
+![Conceptual Venn Diagram for Agriculture Data Sets](https://www.researchgate.net/figure/enn-diagram-of-farmer-practice-and-extension-recommendations-for-common-bean-management_fig3_362691304)
 
 **2. Government Services**
 

@@ -24,8 +24,8 @@ const upload = multer({
   storage: storage,
   limits: {
     fileSize: config.upload.maxFileSize,
-    files: 5, // Maximum 5 files per request
-    fieldSize: 1024 * 1024 // 1MB field size limit
+    files: config.upload.maxFilesUpload, // Maximum 5 files per request
+    fieldSize: config.upload.maxFileSize // 1MB field size limit
   },
   fileFilter: fileFilter
 });
@@ -34,7 +34,7 @@ const upload = multer({
 const uploadSingle = upload.single('file');
 
 // Middleware for multiple file upload
-const uploadMultiple = upload.array('files', 5);
+const uploadMultiple = upload.array('files', config.upload.maxFilesUpload);
 
 // Enhanced file validation middleware
 const validateFiles = async (req, res, next) => {

@@ -15,7 +15,7 @@ const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of file
 // Validation schemas
 const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
-  labels: Joi.array().items(Joi.string().max(50)).max(10).default([]),
+  labels: Joi.array().items(Joi.string()).default([]), // Joi.array().items(Joi.string().max(50)).max(10).default([])
   crawlDate: Joi.date().optional(),
   sourceUrl: Joi.string().uri().optional()
 }); // Schema for file upload validation
@@ -37,7 +37,7 @@ const searchSchema = Joi.object({
 const getFilesSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
-  language: Joi.string().valid('en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
+  language: Joi.string().min(2).max(5).optional(), // Joi.string().valid('en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
   mimeType: Joi.string().optional(),
   search: Joi.string().max(100).optional(),
   dataprepStatus: Joi.string().valid('pending', 'ingested', 'retracted').optional(),
@@ -45,12 +45,12 @@ const getFilesSchema = Joi.object({
 
 const updateFileSchema = Joi.object({
   file_name: Joi.string().max(255).optional(),
-  labels: Joi.array().items(Joi.string().max(50)).max(10).optional(),
+  labels: Joi.array().items(Joi.string()).optional(), // Joi.array().items(Joi.string().max(50)).max(10).optional()
   author: Joi.string().max(200).optional(),
   create_date: Joi.date().optional(),
   crawl_date: Joi.date().optional(),
   source_url: Joi.string().uri().optional(),
-  language: Joi.string().valid('sw', 'en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
+  language: Joi.string().min(2).max(5).optional() // Joi.string().valid('en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
 });
 
 class FileController {

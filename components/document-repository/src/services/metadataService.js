@@ -194,7 +194,7 @@ class MetadataService {
 
             // Update metadata with provided updates. Only update allowed fields.
             // const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url', 'language', 'dataprep'];
-            const allowedFields = ['dataprep'];
+            const allowedFields = ['dataprep', 'chunk_count'];
 
             const updateObj = {};
             for (const key of Object.keys(updates)) {

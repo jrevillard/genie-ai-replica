@@ -1028,6 +1028,7 @@ class FileController {
     });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
+        chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
         dataprep: {
           status: 'ingested',
           ingest_date: new Date().toISOString(),
@@ -1136,6 +1137,7 @@ class FileController {
     const response = await axios.post(dataprepUrl, { fileId: file.file_id });
     if (response.data.success) {
       await metadataService.updateMetadata(fileId, {
+        chunk_count: 0, // Reset chunk count on retract
         dataprep: {
           status: 'retracted',
           ingest_date: file.dataprep.ingest_date || null,

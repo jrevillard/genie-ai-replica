@@ -26,7 +26,7 @@
           >
             <div class="document-header" @click="openDocument(doc)">
               <div class="document-icon">
-                <i :class="documentIconClass(doc.type)"></i>
+                <i :class="documentIconClass(doc)"></i>
               </div>
               <div class="document-info">
                 <div class="document-title">{{ doc.title }}</div>
@@ -50,10 +50,14 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ $t("sidebar.labels") }}:</span>
-                <span class="detail-value small-text">{{ formatLabels(doc) }}</span>
+                <span class="detail-value small-text">{{
+                  formatLabels(doc)
+                }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">{{ $t("sidebar.confidence") }}:</span>
+                <span class="detail-label"
+                  >{{ $t("sidebar.confidence") }}:</span
+                >
                 <span class="detail-value">{{ formatScore(doc.score) }}</span>
               </div>
             </div>
@@ -80,8 +84,7 @@
               @click="toggleFaq(index)"
               :class="{ active: expandedFaqs.includes(index) }"
             >
-              <!-- MODIFIED: Use a span with v-html to render the question's Markdown -->
-              <span class="faq-question-text" v-html="faq.question"></span>
+              <span v-html="faq.question"></span>
               <i
                 class="fas"
                 :class="
@@ -91,7 +94,11 @@
                 "
               ></i>
             </div>
-            <div class="faq-answer" v-if="expandedFaqs.includes(index)" v-html="faq.answer"></div>
+            <div
+              class="faq-answer"
+              v-if="expandedFaqs.includes(index)"
+              v-html="faq.answer"
+            ></div>
           </div>
         </div>
       </div>
@@ -100,9 +107,9 @@
 </template>
 
 <script>
-import authService from '@/services/authService';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import authService from "@/services/authService";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 export default {
   name: "RightSideBarComponent",
@@ -119,7 +126,7 @@ export default {
     relatedDocuments: {
       type: Array,
       default: () => [],
-    }
+    },
   },
 
   data() {
@@ -130,40 +137,53 @@ export default {
     };
   },
 
-  mounted() {
-    this.loadFaqs();
+  created() {
+    this.loadFaqContent();
   },
 
   methods: {
-    async loadFaqs() {
+    async loadFaqContent() {
       try {
-        const response = await fetch('/FAQ.md');
+        const response = await fetch("/FAQ.md");
         if (!response.ok) {
-          throw new Error('Network response was not ok');
+          throw new Error("FAQ.md not found");
         }
-        const markdownText = await response.text();
+        const markdown = await response.text();
+        const tokens = marked.lexer(markdown);
         const faqs = [];
-        const sections = markdownText.split('## ').filter(s => s.trim() !== '');
+        let currentQuestion = null;
+        let currentAnswer = "";
 
-        sections.forEach(section => {
-          const lines = section.trim().split('\n');
-          const questionMarkdown = lines[0].trim();
-          const answerMarkdown = lines.slice(1).join('\n').trim();
-          
-          // MODIFIED: Parse the question as inline markdown to handle bold, etc.
-          const questionHtml = DOMPurify.sanitize(marked.parseInline(questionMarkdown));
-          const answerHtml = DOMPurify.sanitize(marked.parse(answerMarkdown));
-          
-          faqs.push({ question: questionHtml, answer: answerHtml });
+        tokens.forEach((token) => {
+          if (token.type === "heading" && token.depth === 2) {
+            if (currentQuestion) {
+              faqs.push({
+                question: DOMPurify.sanitize(
+                  marked.parseInline(currentQuestion)
+                ),
+                answer: DOMPurify.sanitize(marked.parse(currentAnswer.trim())),
+              });
+            }
+            currentQuestion = token.text;
+            currentAnswer = "";
+          } else if (currentQuestion) {
+            currentAnswer += token.raw;
+          }
         });
+
+        if (currentQuestion) {
+          faqs.push({
+            question: DOMPurify.sanitize(marked.parseInline(currentQuestion)),
+            answer: DOMPurify.sanitize(marked.parse(currentAnswer.trim())),
+          });
+        }
 
         this.frequentlyAskedQuestions = faqs;
       } catch (error) {
-        console.error('Error loading or parsing FAQ.md:', error);
-        this.frequentlyAskedQuestions = [{
-          question: 'Error',
-          answer: 'Could not load the FAQ content. Please try again later.'
-        }];
+        console.error("Failed to load or parse FAQ content:", error);
+        this.frequentlyAskedQuestions = [
+          { question: "Error", answer: "Could not load FAQ content." },
+        ];
       }
     },
 
@@ -180,29 +200,57 @@ export default {
       }
     },
 
+    isExternalUrl(url) {
+      if (!url) return false;
+      const isHttp = url.startsWith("http://") || url.startsWith("https://");
+      const isPlaceholder = url.includes("<HOST>") || url.includes("<PORT>");
+      // A URL is considered external only if it's a valid HTTP link AND not a placeholder.
+      return isHttp && !isPlaceholder;
+    },
+
     async openDocument(doc) {
-      const authToken = this.getAuthToken();
-      if (!authToken) {
-        console.error("Authentication token not found. Unable to open document.");
+      if (this.isExternalUrl(doc.url)) {
+        console.log(`Opening external URL: ${doc.url}`);
+        window.open(doc.url, "_blank");
+        this.$emit("open-document", doc);
         return;
       }
+
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        console.error(
+          "Authentication token not found. Unable to open internal document."
+        );
+        return;
+      }
+
       const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+
       try {
         const response = await fetch(fileUrl, {
           headers: {
-            'Authorization': `Bearer ${authToken}`,
+            Authorization: `Bearer ${authToken}`,
           },
         });
+
         if (!response.ok) {
-          throw new Error(`Network response was not ok: ${response.statusText}`);
+          throw new Error(
+            `Network response was not ok: ${response.statusText}`
+          );
         }
+
         const fileBlob = await response.blob();
         const blobUrl = URL.createObjectURL(fileBlob);
-        window.open(blobUrl, '_blank');
+        window.open(blobUrl, "_blank");
+
         setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+
         this.$emit("open-document", doc);
       } catch (error) {
-        console.error('There was a problem fetching the document:', error);
+        console.error(
+          "There was a problem fetching the internal document:",
+          error
+        );
       }
     },
 
@@ -212,44 +260,63 @@ export default {
     },
 
     getDisplayUrl(doc) {
-      if (!doc || !doc.id) return '';
-      return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+      if (!doc) return "";
+      if (this.isExternalUrl(doc.url)) {
+        return doc.url;
+      }
+      if (doc.id) {
+        return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+      }
+      return doc.url || ""; // Fallback to show the original placeholder if no ID
     },
 
-    documentIconClass(type) {
-      switch (type ? type.toLowerCase() : '') {
-        case "pdf": return "fas fa-file-pdf";
-        case "docx": case "doc": return "fas fa-file-word";
-        case "xlsx": case "xls": return "fas fa-file-excel";
-        case "pptx": case "ppt": return "fas fa-file-powerpoint";
-        case "txt": return "fas fa-file-alt";
-        default: return "fas fa-file";
+    documentIconClass(doc) {
+      if (this.isExternalUrl(doc.url)) {
+        return "fas fa-external-link-alt";
+      }
+      switch ((doc.type || "").toLowerCase()) {
+        case "pdf":
+          return "fas fa-file-pdf";
+        case "docx":
+        case "doc":
+          return "fas fa-file-word";
+        case "xlsx":
+        case "xls":
+          return "fas fa-file-excel";
+        case "pptx":
+        case "ppt":
+          return "fas fa-file-powerpoint";
+        case "txt":
+          return "fas fa-file-alt";
+        default:
+          return "fas fa-file";
       }
     },
 
     formatFileSize(bytes) {
-      if (!bytes) return '0 B';
+      if (!bytes) return "0 B";
       if (bytes < 1024) return bytes + " B";
       if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
       return (bytes / (1024 * 1024)).toFixed(1) + " MB";
     },
 
     formatScore(score) {
-      if (typeof score !== 'number' || isNaN(score)) return this.$t("sidebar.unknown");
-      return (score * 100).toFixed(2) + '%';
+      if (typeof score !== "number" || isNaN(score))
+        return this.$t("sidebar.unknown");
+      return (score * 100).toFixed(2) + "%";
     },
 
     formatLabels(doc) {
       if (!doc.categoryLabel) return this.$t("sidebar.unknown");
-      const services = doc.serviceLabels?.join(', ') || '';
-      return `${doc.categoryLabel}${services ? ':' + services : ''}`;
+      const services = doc.serviceLabels?.join(", ") || "";
+      return `${doc.categoryLabel}${services ? ":" + services : ""}`;
     },
   },
 };
 </script>
 
 <style scoped>
-/* All styles remain the same, with one addition */
+/* Sidebar Styles */
 .sidebar {
   width: 320px;
   background: var(--bg-sidebar, #f8fafc);
@@ -440,12 +507,6 @@ export default {
   align-items: center;
 }
 
-/* NEW: Style for the question text container */
-.faq-question-text {
-  flex-grow: 1;
-  margin-right: 8px;
-}
-
 .faq-question:hover,
 .faq-question.active {
   background: var(--bg-tertiary, #f0f7ff);
@@ -454,6 +515,10 @@ export default {
 .faq-question i {
   font-size: 0.8rem;
   color: var(--text-tertiary, #64748b);
+  transition: transform 0.2s;
+}
+.faq-question.active i {
+  transform: rotate(180deg);
 }
 
 .faq-answer {
@@ -463,6 +528,17 @@ export default {
   background: var(--bg-tertiary, #f8fafc);
   border-top: 1px solid var(--border-light, #e2e8f0);
   line-height: 1.5;
+}
+
+.faq-answer :deep(p:first-child) {
+  margin-top: 0;
+}
+.faq-answer :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.faq-answer :deep(ul),
+.faq-answer :deep(ol) {
+  padding-left: 20px;
 }
 
 .empty-state {
@@ -482,9 +558,11 @@ export default {
     z-index: 100;
     transform: translateX(100%);
   }
+
   .sidebar.visible {
     transform: translateX(0);
   }
+
   .sidebar.collapsed {
     transform: translateX(calc(100% - 50px));
   }

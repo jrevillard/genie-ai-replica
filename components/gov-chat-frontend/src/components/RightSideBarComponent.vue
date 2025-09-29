@@ -10,7 +10,9 @@
       </button>
     </div>
 
+    <!-- Only show these sections when sidebar is not collapsed -->
     <div v-if="!sidebarCollapsed">
+      <!-- Related Documents Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-file-alt"></i>
@@ -61,6 +63,7 @@
           </div>
         </div>
       </div>
+      <!-- FAQ Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-question-circle"></i>
@@ -77,7 +80,8 @@
               @click="toggleFaq(index)"
               :class="{ active: expandedFaqs.includes(index) }"
             >
-              {{ faq.question }}
+              <!-- MODIFIED: Use a span with v-html to render the question's Markdown -->
+              <span class="faq-question-text" v-html="faq.question"></span>
               <i
                 class="fas"
                 :class="
@@ -87,9 +91,7 @@
                 "
               ></i>
             </div>
-            <div class="faq-answer" v-if="expandedFaqs.includes(index)">
-              {{ faq.answer }}
-            </div>
+            <div class="faq-answer" v-if="expandedFaqs.includes(index)" v-html="faq.answer"></div>
           </div>
         </div>
       </div>
@@ -99,6 +101,8 @@
 
 <script>
 import authService from '@/services/authService';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 export default {
   name: "RightSideBarComponent",
@@ -114,7 +118,6 @@ export default {
     },
     relatedDocuments: {
       type: Array,
-      // Placeholder data has been removed as requested
       default: () => [],
     }
   },
@@ -123,33 +126,47 @@ export default {
     return {
       sidebarCollapsed: false,
       expandedFaqs: [],
-      // FAQ data has been restored to its original state
-      frequentlyAskedQuestions: [
-        {
-          question: "How do I reset my account password?",
-          answer:
-            'To reset your password, go to the login page and click "Forgot Password". Follow the instructions sent to your registered email.',
-        },
-        {
-          question: "Where can I find my tax ID number?",
-          answer:
-            "Your tax ID number is listed on your tax registration certificate and on any correspondence from the tax authority.",
-        },
-        {
-          question: "What documents are needed for ID application?",
-          answer:
-            "You need your birth certificate, proof of address (not older than 3 months), two passport photos, and a completed application form.",
-        },
-        {
-          question: "How long does business registration take?",
-          answer:
-            "Standard business registration typically takes 3-5 business days after all required documents have been correctly submitted.",
-        },
-      ],
+      frequentlyAskedQuestions: [],
     };
   },
 
+  mounted() {
+    this.loadFaqs();
+  },
+
   methods: {
+    async loadFaqs() {
+      try {
+        const response = await fetch('/FAQ.md');
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const markdownText = await response.text();
+        const faqs = [];
+        const sections = markdownText.split('## ').filter(s => s.trim() !== '');
+
+        sections.forEach(section => {
+          const lines = section.trim().split('\n');
+          const questionMarkdown = lines[0].trim();
+          const answerMarkdown = lines.slice(1).join('\n').trim();
+          
+          // MODIFIED: Parse the question as inline markdown to handle bold, etc.
+          const questionHtml = DOMPurify.sanitize(marked.parseInline(questionMarkdown));
+          const answerHtml = DOMPurify.sanitize(marked.parse(answerMarkdown));
+          
+          faqs.push({ question: questionHtml, answer: answerHtml });
+        });
+
+        this.frequentlyAskedQuestions = faqs;
+      } catch (error) {
+        console.error('Error loading or parsing FAQ.md:', error);
+        this.frequentlyAskedQuestions = [{
+          question: 'Error',
+          answer: 'Could not load the FAQ content. Please try again later.'
+        }];
+      }
+    },
+
     toggleSidebar() {
       this.sidebarCollapsed = !this.sidebarCollapsed;
       this.$emit("sidebar-toggle", this.sidebarCollapsed);
@@ -169,26 +186,20 @@ export default {
         console.error("Authentication token not found. Unable to open document.");
         return;
       }
-
       const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
-
       try {
         const response = await fetch(fileUrl, {
           headers: {
             'Authorization': `Bearer ${authToken}`,
           },
         });
-
         if (!response.ok) {
           throw new Error(`Network response was not ok: ${response.statusText}`);
         }
-
         const fileBlob = await response.blob();
         const blobUrl = URL.createObjectURL(fileBlob);
         window.open(blobUrl, '_blank');
-
         setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-
         this.$emit("open-document", doc);
       } catch (error) {
         console.error('There was a problem fetching the document:', error);
@@ -206,22 +217,13 @@ export default {
     },
 
     documentIconClass(type) {
-      switch (type.toLowerCase()) {
-        case "pdf":
-          return "fas fa-file-pdf";
-        case "docx":
-        case "doc":
-          return "fas fa-file-word";
-        case "xlsx":
-        case "xls":
-          return "fas fa-file-excel";
-        case "pptx":
-        case "ppt":
-          return "fas fa-file-powerpoint";
-        case "txt":
-          return "fas fa-file-alt";
-        default:
-          return "fas fa-file";
+      switch (type ? type.toLowerCase() : '') {
+        case "pdf": return "fas fa-file-pdf";
+        case "docx": case "doc": return "fas fa-file-word";
+        case "xlsx": case "xls": return "fas fa-file-excel";
+        case "pptx": case "ppt": return "fas fa-file-powerpoint";
+        case "txt": return "fas fa-file-alt";
+        default: return "fas fa-file";
       }
     },
 
@@ -247,7 +249,7 @@ export default {
 </script>
 
 <style scoped>
-/* Sidebar Styles */
+/* All styles remain the same, with one addition */
 .sidebar {
   width: 320px;
   background: var(--bg-sidebar, #f8fafc);
@@ -261,7 +263,6 @@ export default {
 .sidebar.collapsed {
   width: 50px;
   overflow: visible;
-  /* Allow the toggle button to be visible */
 }
 
 .sidebar-header {
@@ -319,7 +320,6 @@ export default {
   color: var(--text-tertiary, #64748b);
 }
 
-/* Document styles */
 .related-documents {
   display: flex;
   flex-direction: column;
@@ -416,7 +416,6 @@ export default {
   font-size: 0.75rem;
 }
 
-/* FAQ styles */
 .faq-list {
   display: flex;
   flex-direction: column;
@@ -439,6 +438,12 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* NEW: Style for the question text container */
+.faq-question-text {
+  flex-grow: 1;
+  margin-right: 8px;
 }
 
 .faq-question:hover,
@@ -468,7 +473,6 @@ export default {
   font-style: italic;
 }
 
-/* Mobile specific adjustments */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -478,17 +482,14 @@ export default {
     z-index: 100;
     transform: translateX(100%);
   }
-
   .sidebar.visible {
     transform: translateX(0);
   }
-
   .sidebar.collapsed {
     transform: translateX(calc(100% - 50px));
   }
 }
 
-/* Additional fixes for dark theme visibility */
 [data-theme="dark"] .section-title,
 html[data-theme="dark"] .section-title {
   color: rgba(255, 255, 255, 0.9) !important;

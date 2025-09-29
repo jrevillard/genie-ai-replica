@@ -10,9 +10,7 @@
       </button>
     </div>
 
-    <!-- Only show these sections when sidebar is not collapsed -->
     <div v-if="!sidebarCollapsed">
-      <!-- Related Documents Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-file-alt"></i>
@@ -30,12 +28,20 @@
               </div>
               <div class="document-info">
                 <div class="document-title">{{ doc.title }}</div>
-                <div class="document-meta">
-                  {{ doc.type }} • {{ formatFileSize(doc.size) }}
+                <div class="document-url-link">
+                  {{ getDisplayUrl(doc) }}
                 </div>
               </div>
             </div>
             <div class="document-details">
+              <div class="detail-item" v-if="doc.documentName">
+                <span class="detail-label">Document Name:</span>
+                <span class="detail-value">{{ doc.documentName }}</span>
+              </div>
+              <div class="detail-item" v-if="doc.fileName">
+                <span class="detail-label">File Name:</span>
+                <span class="detail-value">{{ doc.fileName }}</span>
+              </div>
               <div class="detail-item">
                 <span class="detail-label">{{ $t("sidebar.id") }}:</span>
                 <span class="detail-value">{{ doc.id }}</span>
@@ -55,7 +61,6 @@
           </div>
         </div>
       </div>
-      <!-- FAQ Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-question-circle"></i>
@@ -93,6 +98,8 @@
 </template>
 
 <script>
+import authService from '@/services/authService';
+
 export default {
   name: "RightSideBarComponent",
 
@@ -107,48 +114,8 @@ export default {
     },
     relatedDocuments: {
       type: Array,
-      default: () => [
-        {
-          id: "doc1",
-          title: "Government Services FAQ",
-          type: "PDF",
-          size: 1240000,
-          url: "#",
-          categoryLabel: "General",
-          serviceLabels: ["FAQ", "Services"],
-          score: 0.95,
-        },
-        {
-          id: "doc2",
-          title: "Business Registration Form",
-          type: "DOCX",
-          size: 350000,
-          url: "#",
-          categoryLabel: "Business & Trade",
-          serviceLabels: ["Business Registration"],
-          score: 0.90,
-        },
-        {
-          id: "doc3",
-          title: "Tax Filing Guidelines 2024",
-          type: "PDF",
-          size: 2800000,
-          url: "#",
-          categoryLabel: "Taxation",
-          serviceLabels: ["Filing", "Guidelines"],
-          score: 0.85,
-        },
-        {
-          id: "doc4",
-          title: "ID Application Process",
-          type: "PDF",
-          size: 890000,
-          url: "#",
-          categoryLabel: "Identity & Civil Registration",
-          serviceLabels: ["Birth Registration"],
-          score: 0.92,
-        },
-      ]
+      // Placeholder data has been removed as requested
+      default: () => [],
     }
   },
 
@@ -156,8 +123,7 @@ export default {
     return {
       sidebarCollapsed: false,
       expandedFaqs: [],
-
-      // Sidebar content
+      // FAQ data has been restored to its original state
       frequentlyAskedQuestions: [
         {
           question: "How do I reset my account password?",
@@ -197,10 +163,46 @@ export default {
       }
     },
 
-    openDocument(doc) {
-      // In a real application, this would open the document
-      window.open(doc.url, "_blank");
-      this.$emit("open-document", doc);
+    async openDocument(doc) {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        console.error("Authentication token not found. Unable to open document.");
+        return;
+      }
+
+      const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+
+      try {
+        const response = await fetch(fileUrl, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Network response was not ok: ${response.statusText}`);
+        }
+
+        const fileBlob = await response.blob();
+        const blobUrl = URL.createObjectURL(fileBlob);
+        window.open(blobUrl, '_blank');
+
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+
+        this.$emit("open-document", doc);
+      } catch (error) {
+        console.error('There was a problem fetching the document:', error);
+      }
+    },
+
+    getAuthToken() {
+      const user = authService.getCurrentUser();
+      return user ? user.accessToken : null;
+    },
+
+    getDisplayUrl(doc) {
+      if (!doc || !doc.id) return '';
+      return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
     },
 
     documentIconClass(type) {
@@ -224,6 +226,7 @@ export default {
     },
 
     formatFileSize(bytes) {
+      if (!bytes) return '0 B';
       if (bytes < 1024) return bytes + " B";
       if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
       return (bytes / (1024 * 1024)).toFixed(1) + " MB";
@@ -368,9 +371,17 @@ export default {
   margin-bottom: 2px;
 }
 
-.document-meta {
+.document-url-link {
   font-size: 0.75rem;
-  color: var(--text-muted, #94a3b8);
+  color: var(--accent-color, #4e97d1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.document-header:hover .document-url-link {
+  text-decoration: underline;
 }
 
 .document-details {

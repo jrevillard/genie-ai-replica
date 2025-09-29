@@ -141,7 +141,9 @@
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
             <div v-if="msg.confidenceScore" class="confidence-score">
               <i class="fas fa-brain"></i>
-              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
+              <span
+                >Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span
+              >
             </div>
             <div class="feedback-trigger">
               <button @click="openFeedbackDialog(index)">
@@ -514,35 +516,49 @@ export default {
 
     // *** UPDATED: Use serviceTreeService to load and transform categories ***
     async loadServiceCategories() {
-        try {
-            // Use the service which handles transformation and localization
-            this.serviceCategories = await serviceTreeService.getAllCategories(this.currentLocale);
-            console.log('[ChatBotComponent] Service categories loaded for lookup via serviceTreeService:', this.serviceCategories);
-        } catch (error) {
-            console.error('[ChatBotComponent] Failed to load service categories:', error);
-            notificationService.error('Could not load service categories.');
-        }
+      try {
+        // Use the service which handles transformation and localization
+        this.serviceCategories = await serviceTreeService.getAllCategories(
+          this.currentLocale
+        );
+        console.log(
+          "[ChatBotComponent] Service categories loaded for lookup via serviceTreeService:",
+          this.serviceCategories
+        );
+      } catch (error) {
+        console.error(
+          "[ChatBotComponent] Failed to load service categories:",
+          error
+        );
+        notificationService.error("Could not load service categories.");
+      }
     },
 
     // *** UPDATED: Find category label by its key in the transformed tree data ***
     getCategoryLabelById(id) {
-        if (id === null || id === undefined) {
-            const selectedServices = this.selectedContextItems.map(item => item.serviceKey);
-            if (selectedServices.includes('quickhelp.justChat')) {
-                return 'General';
-            }
-            return null;
+      if (id === null || id === undefined) {
+        const selectedServices = this.selectedContextItems.map(
+          (item) => item.serviceKey
+        );
+        if (selectedServices.includes("quickhelp.justChat")) {
+          return "General";
         }
+        return null;
+      }
 
-        // The service returns `catKey` which corresponds to the numeric ID
-        const category = this.serviceCategories.find(cat => cat.catKey == id.toString());
-        if (category) {
-            // The service already provides the localized name in the `name` property
-            return category.name || `Category ${id}`;
-        }
-        
-        console.warn(`[ChatBotComponent] Category label for ID "${id}" not found.`);
-        return `Category ${id}`; // Fallback
+      // The service returns `catKey` which corresponds to the numeric ID
+      const category = this.serviceCategories.find(
+        (cat) => cat.catKey == id.toString()
+      );
+      if (category) {
+        // The service already provides the localized name in the `name` property
+        return category.name || `Category ${id}`;
+      }
+
+      console.warn(
+        `[ChatBotComponent] Category label for ID "${id}" not found.`
+      );
+      return `Category ${id}`; // Fallback
     },
 
     // Safely translate a key, with mapping for static strings
@@ -747,9 +763,9 @@ export default {
           }
         } else {
           console.log(
-            `Context item ${this.safeTranslate(item.service)} with category ID ${
-              item.category
-            } already exists`
+            `Context item ${this.safeTranslate(
+              item.service
+            )} with category ID ${item.category} already exists`
           );
         }
       } else {
@@ -804,7 +820,7 @@ export default {
             }: ${this.safeTranslate(quickHelpOption.textKey)}`
           );
         } else {
-           this.currentCategoryId = null;
+          this.currentCategoryId = null;
         }
       }
     },
@@ -833,7 +849,9 @@ export default {
         let queryData;
 
         const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
-        console.log(`[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`);
+        console.log(
+          `[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`
+        );
 
         if (contextOption === "conversation-with-labels") {
           const serviceLabels = this.selectedContextItems.map(
@@ -854,7 +872,7 @@ export default {
               language: this.currentLocale.toUpperCase(),
             },
             contextOption: "conversation-with-context-labels",
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           };
         } else {
           queryData = {
@@ -862,7 +880,7 @@ export default {
             sessionId: this.currentSessionId || "new-session",
             text: content,
             contextOption: contextOption,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           };
         }
 
@@ -892,11 +910,15 @@ export default {
             this.relatedDocuments = result.metadata.source_documents.map(
               (doc) => ({
                 id: doc.document_id,
+                // Prioritize document_name, then file_name for the main title
                 title:
+                  doc.document_name ||
+                  doc.file_name ||
                   doc.title ||
-                  `${doc.categoryLabel || "Document"} - ${
-                    doc.serviceLabels?.join(", ") || "Source"
-                  }`,
+                  `Source ${doc.document_id.slice(0, 4)}`,
+                // Pass the new fields through to the child component
+                documentName: doc.document_name,
+                fileName: doc.file_name,
                 type: doc.url?.split(".").pop().toUpperCase() || "LINK",
                 size: 0,
                 url: doc.url,
@@ -2479,12 +2501,12 @@ html[data-theme="dark"] .quick-help-overlay {
 }
 
 [data-theme="dark"] .confidence-score {
-    color: var(--text-tertiary, #a0aec0);
-    background: var(--bg-tertiary, #2d3748);
+  color: var(--text-tertiary, #a0aec0);
+  background: var(--bg-tertiary, #2d3748);
 }
 
 [data-theme="dark"] .feedback-trigger button {
-    background: var(--bg-button-secondary, #2d3748);
-    color: var(--text-button-secondary, #e2e8f0);
+  background: var(--bg-button-secondary, #2d3748);
+  color: var(--text-button-secondary, #e2e8f0);
 }
 </style>

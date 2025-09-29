@@ -664,103 +664,200 @@
                   </div>
                 </div>
 
-                <table class="log-table">
-                  <thead>
-                    <tr>
-                      <th style="width: 40px">
-                        <input type="checkbox" @change="selectAllDocuments" />
-                      </th>
-                      <th>
-                        {{
-                          translate("admin.documents.colFileName", "File Name")
-                        }}
-                      </th>
-                      <th style="width: 120px">
-                        {{ translate("admin.documents.colStatus", "Status") }}
-                      </th>
-                      <th>
-                        {{ translate("admin.documents.colLabels", "Labels") }}
-                      </th>
-                      <th style="width: 150px">
-                        {{
-                          translate(
-                            "admin.documents.colUploadDate",
-                            "Upload Date"
-                          )
-                        }}
-                      </th>
-                      <th style="width: 100px">
-                        {{ translate("admin.documents.colSize", "Size") }}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-if="isDocumentsLoading">
-                      <td colspan="6" style="text-align: center; padding: 2rem">
-                        <div class="loading-state">
-                          <div class="loading-spinner-small"></div>
-                          <span>Loading documents...</span>
-                        </div>
-                      </td>
-                    </tr>
+                <div class="table-container">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th class="col-checkbox">
+                          <input type="checkbox" @change="selectAllDocuments" />
+                        </th>
 
-                    <tr v-if="!isDocumentsLoading && documents.length === 0">
-                      <td colspan="6" style="text-align: center; padding: 2rem">
-                        {{
-                          translate(
-                            "admin.documents.empty",
-                            "No documents found."
-                          )
-                        }}
-                      </td>
-                    </tr>
+                        <th
+                          class="col-main sortable"
+                          @click="sortBy('file_name')"
+                        >
+                          {{
+                            translate(
+                              "admin.documents.colFileName",
+                              "File Name"
+                            )
+                          }}
+                          <span
+                            v-if="sortKey === 'file_name'"
+                            class="sort-arrow"
+                            >{{
+                              sortOrders[sortKey] === "asc" ? "▲" : "▼"
+                            }}</span
+                          >
+                        </th>
 
-                    <tr
-                      v-for="doc in filteredDocuments"
-                      :key="doc._key"
-                      @click="viewDocumentDetails(doc.file_id)"
-                      class="document-row"
-                    >
-                      <td @click.stop>
-                        <input
-                          type="checkbox"
-                          v-model="selectedDocuments"
-                          :value="doc._key"
-                        />
-                      </td>
-                      <td>{{ doc.file_name }}</td>
-                      <td>
-                        <span
-                          :class="[
-                            'status-tag',
-                            getStatusClass(doc.dataprep.status),
-                          ]"
+                        <th
+                          class="col-status sortable"
+                          @click="sortBy('dataprep.status')"
                         >
-                          {{ doc.dataprep.status }}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          v-for="label in doc.labels.slice(0, 2)"
-                          :key="label"
-                          class="label-tag"
+                          {{ translate("admin.documents.colStatus", "Status") }}
+                          <span
+                            v-if="sortKey === 'dataprep.status'"
+                            class="sort-arrow"
+                            >{{
+                              sortOrders[sortKey] === "asc" ? "▲" : "▼"
+                            }}</span
+                          >
+                        </th>
+
+                        <th class="col-labels">
+                          {{ translate("admin.documents.colLabels", "Labels") }}
+                        </th>
+
+                        <th
+                          class="col-date sortable"
+                          @click="sortBy('upload_date')"
                         >
-                          {{ label }}
-                        </span>
-                        <span
-                          v-if="doc.labels.length > 2"
-                          class="label-tag-more"
+                          {{
+                            translate(
+                              "admin.documents.colUploadDate",
+                              "Upload Date"
+                            )
+                          }}
+                          <span
+                            v-if="sortKey === 'upload_date'"
+                            class="sort-arrow"
+                            >{{
+                              sortOrders[sortKey] === "asc" ? "▲" : "▼"
+                            }}</span
+                          >
+                        </th>
+
+                        <th
+                          class="col-size sortable"
+                          @click="sortBy('file_size')"
                         >
-                          +{{ doc.labels.length - 2 }}
-                        </span>
-                      </td>
-                      <td>
-                        {{ new Date(doc.upload_date).toLocaleDateString() }}
-                      </td>
-                      <td>{{ formatFileSize(doc.file_size) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                          {{ translate("admin.documents.colSize", "Size") }}
+                          <span
+                            v-if="sortKey === 'file_size'"
+                            class="sort-arrow"
+                            >{{
+                              sortOrders[sortKey] === "asc" ? "▲" : "▼"
+                            }}</span
+                          >
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-if="isDocumentsLoading">
+                        <td colspan="6" class="table-message">
+                          <div class="loading-state">
+                            <div class="loading-spinner-small"></div>
+                            <span>Loading documents...</span>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr
+                        v-if="
+                          !isDocumentsLoading &&
+                          sortedAndFilteredDocuments.length === 0
+                        "
+                      >
+                        <td colspan="6" class="table-message">
+                          {{
+                            translate(
+                              "admin.documents.empty",
+                              "No documents found."
+                            )
+                          }}
+                        </td>
+                      </tr>
+
+                      <tr
+                        v-for="doc in sortedAndFilteredDocuments"
+                        :key="doc._key"
+                        @click="viewDocumentDetails(doc.file_id)"
+                        class="document-row"
+                      >
+                        <td @click.stop>
+                          <input
+                            type="checkbox"
+                            v-model="selectedDocuments"
+                            :value="doc._key"
+                          />
+                        </td>
+                        <td class="cell-main">{{ doc.file_name }}</td>
+                        <td>
+                          <span
+                            :class="[
+                              'status-tag',
+                              getStatusClass(doc.dataprep.status),
+                            ]"
+                          >
+                            {{ doc.dataprep.status }}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            v-for="label in doc.labels.slice(0, 2)"
+                            :key="label"
+                            class="label-tag"
+                          >
+                            {{ label }}
+                          </span>
+                          <span
+                            v-if="doc.labels.length > 2"
+                            class="label-tag-more"
+                          >
+                            +{{ doc.labels.length - 2 }}
+                          </span>
+                        </td>
+                        <td>
+                          {{ new Date(doc.upload_date).toLocaleDateString() }}
+                        </td>
+                        <td>{{ formatFileSize(doc.file_size) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div
+                  class="pagination"
+                  v-if="documentPagination.total > documentPagination.limit"
+                >
+                  <button
+                    class="page-btn"
+                    :disabled="documentPagination.page <= 1"
+                    @click="
+                      handleDocumentPagination(documentPagination.page - 1)
+                    "
+                  >
+                    « {{ translate("admin.previous", "Previous") }}
+                  </button>
+
+                  <span class="pagination-info">
+                    {{ translate("admin.showing", "Showing") }}
+                    {{
+                      (documentPagination.page - 1) * documentPagination.limit +
+                      1
+                    }}-{{
+                      Math.min(
+                        documentPagination.page * documentPagination.limit,
+                        documentPagination.total
+                      )
+                    }}
+                    {{ translate("admin.of", "of") }}
+                    {{ documentPagination.total }}
+                  </span>
+
+                  <button
+                    class="page-btn"
+                    :disabled="
+                      documentPagination.page * documentPagination.limit >=
+                      documentPagination.total
+                    "
+                    @click="
+                      handleDocumentPagination(documentPagination.page + 1)
+                    "
+                  >
+                    {{ translate("admin.next", "Next") }} »
+                  </button>
+                </div>
               </div>
 
               <div
@@ -2265,6 +2362,15 @@ export default {
   emits: ["close"],
   data() {
     return {
+      // Properties for the Document Management table
+      sortKey: "upload_date", // Default sort column
+      sortOrders: {
+        file_name: "asc",
+        "dataprep.status": "asc",
+        upload_date: "desc", // Default to newest first
+        file_size: "asc",
+      },
+
       // Placeholder for form state
       originalHierarchyFormState: null,
 
@@ -2517,6 +2623,36 @@ export default {
       );
     },
 
+    sortedAndFilteredDocuments() {
+      // Get the currently filtered list
+      const filtered = this.filteredDocuments;
+      if (!this.sortKey) return filtered;
+
+      // Get the current sort direction
+      const order = this.sortOrders[this.sortKey] || "asc";
+      const multiplier = order === "asc" ? 1 : -1;
+
+      // Make a copy and sort it
+      return [...filtered].sort((a, b) => {
+        let valA, valB;
+
+        // Handle nested properties like 'dataprep.status'
+        if (this.sortKey.includes(".")) {
+          const keys = this.sortKey.split(".");
+          valA = a[keys[0]][keys[1]];
+          valB = b[keys[0]][keys[1]];
+        } else {
+          valA = a[this.sortKey];
+          valB = b[this.sortKey];
+        }
+
+        // Comparison logic
+        if (valA < valB) return -1 * multiplier;
+        if (valA > valB) return 1 * multiplier;
+        return 0;
+      });
+    },
+
     showIngestButton() {
       // 1. Don't show if no documents are selected
       if (this.selectedDocuments.length === 0) {
@@ -2592,6 +2728,35 @@ export default {
     window.removeEventListener("themeChange", this.handleThemeChange);
   },
   methods: {
+    /**
+     * Handle document list pagination.
+     * @param {number} newPage - The page number to navigate to.
+     */
+    handleDocumentPagination(newPage) {
+      if (
+        newPage > 0 &&
+        (newPage - 1) * this.documentPagination.limit <
+          this.documentPagination.total
+      ) {
+        this.documentPagination.page = newPage;
+        this.loadDocuments();
+      }
+    },
+
+    /**
+     * Sets the sort key and toggles the sort order.
+     * @param {string} key - The key of the column to sort by.
+     */
+    sortBy(key) {
+      if (this.sortKey === key) {
+        // If clicking the same column, reverse the order
+        this.sortOrders[key] = this.sortOrders[key] === "asc" ? "desc" : "asc";
+      } else {
+        // If clicking a new column, set it as the sort key
+        this.sortKey = key;
+      }
+    },
+
     // Translation method - improved to ensure consistent behavior with SettingsComponent
     translate(key, fallback = "") {
       if (!this.$i18n) return fallback;
@@ -5634,5 +5799,70 @@ input:checked + .slider:before {
 .btn-sm {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem; /* Increased padding for better spacing */
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap; /* Prevent headers from wrapping */
+}
+
+.data-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-section);
+}
+
+/* Style for the main text column to allow wrapping if needed */
+.data-table .cell-main {
+  white-space: normal;
+}
+
+/* Make sortable headers interactive */
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.sortable:hover {
+  background-color: var(--border-color);
+}
+.sort-arrow {
+  margin-left: 5px;
+  color: var(--primary);
+}
+
+/* Column width classes (replace inline styles) */
+.col-checkbox {
+  width: 40px;
+}
+.col-status {
+  width: 120px;
+}
+.col-labels {
+  width: 200px;
+} /* Give labels a bit more space */
+.col-date {
+  width: 150px;
+}
+.col-size {
+  width: 100px;
+}
+.col-main {
+  width: auto;
+} /* Let the main column fill remaining space */
+
+/* Style for empty/loading states */
+.table-message {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-tertiary);
 }
 </style>

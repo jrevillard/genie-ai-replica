@@ -7,13 +7,14 @@ The setup uses Docker Compose to run ArangoDB in a container named `arango-vecto
 **Prerequisites:**
 - Docker and Docker Compose must be installed on your system.
 - Set the environment variable `ARANGO_PASSWORD` (e.g., `export ARANGO_PASSWORD=test`) before starting the container. The provided scripts assume a root password of `test` for simplicity; update them if you use a different password.
+- Check to see that the required docker network chatqna_default exists. If not then create it with: `docker network create chatqna_default`
 
 ## Starting the ArangoDB Server
 
 To start the ArangoDB server in detached mode:
 
 ```
-docker-compose up -d
+docker compose up -d
 ```
 
 This command uses the `compose.yaml` file (which is a Docker Compose configuration file) to launch the service. The container will run ArangoDB version 3.12.4 with the following key configurations:

@@ -26,26 +26,38 @@
           >
             <div class="document-header" @click="openDocument(doc)">
               <div class="document-icon">
-                <i :class="documentIconClass(doc.type)"></i>
+                <i :class="documentIconClass(doc)"></i>
               </div>
               <div class="document-info">
                 <div class="document-title">{{ doc.title }}</div>
-                <div class="document-meta">
-                  {{ doc.type }} • {{ formatFileSize(doc.size) }}
+                <div class="document-url-link">
+                  {{ getDisplayUrl(doc) }}
                 </div>
               </div>
             </div>
             <div class="document-details">
+              <div class="detail-item" v-if="doc.documentName">
+                <span class="detail-label">Document Name:</span>
+                <span class="detail-value">{{ doc.documentName }}</span>
+              </div>
+              <div class="detail-item" v-if="doc.fileName">
+                <span class="detail-label">File Name:</span>
+                <span class="detail-value">{{ doc.fileName }}</span>
+              </div>
               <div class="detail-item">
                 <span class="detail-label">{{ $t("sidebar.id") }}:</span>
                 <span class="detail-value">{{ doc.id }}</span>
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ $t("sidebar.labels") }}:</span>
-                <span class="detail-value small-text">{{ formatLabels(doc) }}</span>
+                <span class="detail-value small-text">{{
+                  formatLabels(doc)
+                }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">{{ $t("sidebar.confidence") }}:</span>
+                <span class="detail-label"
+                  >{{ $t("sidebar.confidence") }}:</span
+                >
                 <span class="detail-value">{{ formatScore(doc.score) }}</span>
               </div>
             </div>
@@ -72,7 +84,7 @@
               @click="toggleFaq(index)"
               :class="{ active: expandedFaqs.includes(index) }"
             >
-              {{ faq.question }}
+              <span v-html="faq.question"></span>
               <i
                 class="fas"
                 :class="
@@ -82,9 +94,11 @@
                 "
               ></i>
             </div>
-            <div class="faq-answer" v-if="expandedFaqs.includes(index)">
-              {{ faq.answer }}
-            </div>
+            <div
+              class="faq-answer"
+              v-if="expandedFaqs.includes(index)"
+              v-html="faq.answer"
+            ></div>
           </div>
         </div>
       </div>
@@ -93,6 +107,10 @@
 </template>
 
 <script>
+import authService from "@/services/authService";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+
 export default {
   name: "RightSideBarComponent",
 
@@ -107,83 +125,68 @@ export default {
     },
     relatedDocuments: {
       type: Array,
-      default: () => [
-        {
-          id: "doc1",
-          title: "Government Services FAQ",
-          type: "PDF",
-          size: 1240000,
-          url: "#",
-          categoryLabel: "General",
-          serviceLabels: ["FAQ", "Services"],
-          score: 0.95,
-        },
-        {
-          id: "doc2",
-          title: "Business Registration Form",
-          type: "DOCX",
-          size: 350000,
-          url: "#",
-          categoryLabel: "Business & Trade",
-          serviceLabels: ["Business Registration"],
-          score: 0.90,
-        },
-        {
-          id: "doc3",
-          title: "Tax Filing Guidelines 2024",
-          type: "PDF",
-          size: 2800000,
-          url: "#",
-          categoryLabel: "Taxation",
-          serviceLabels: ["Filing", "Guidelines"],
-          score: 0.85,
-        },
-        {
-          id: "doc4",
-          title: "ID Application Process",
-          type: "PDF",
-          size: 890000,
-          url: "#",
-          categoryLabel: "Identity & Civil Registration",
-          serviceLabels: ["Birth Registration"],
-          score: 0.92,
-        },
-      ]
-    }
+      default: () => [],
+    },
   },
 
   data() {
     return {
       sidebarCollapsed: false,
       expandedFaqs: [],
-
-      // Sidebar content
-      frequentlyAskedQuestions: [
-        {
-          question: "How do I reset my account password?",
-          answer:
-            'To reset your password, go to the login page and click "Forgot Password". Follow the instructions sent to your registered email.',
-        },
-        {
-          question: "Where can I find my tax ID number?",
-          answer:
-            "Your tax ID number is listed on your tax registration certificate and on any correspondence from the tax authority.",
-        },
-        {
-          question: "What documents are needed for ID application?",
-          answer:
-            "You need your birth certificate, proof of address (not older than 3 months), two passport photos, and a completed application form.",
-        },
-        {
-          question: "How long does business registration take?",
-          answer:
-            "Standard business registration typically takes 3-5 business days after all required documents have been correctly submitted.",
-        },
-      ],
+      frequentlyAskedQuestions: [],
     };
   },
 
+  created() {
+    this.loadFaqContent();
+  },
+
   methods: {
+    async loadFaqContent() {
+      try {
+        const response = await fetch("/FAQ.md");
+        if (!response.ok) {
+          throw new Error("FAQ.md not found");
+        }
+        const markdown = await response.text();
+        const tokens = marked.lexer(markdown);
+        const faqs = [];
+        let currentQuestion = null;
+        let currentAnswer = "";
+
+        tokens.forEach((token) => {
+          if (token.type === "heading" && token.depth === 2) {
+            if (currentQuestion) {
+              faqs.push({
+                question: DOMPurify.sanitize(
+                  marked.parseInline(currentQuestion)
+                ),
+                answer: DOMPurify.sanitize(marked.parse(currentAnswer.trim())),
+              });
+            }
+            currentQuestion = token.text;
+            currentAnswer = "";
+          } else if (currentQuestion) {
+            currentAnswer += token.raw;
+          }
+        });
+
+        if (currentQuestion) {
+          faqs.push({
+            question: DOMPurify.sanitize(marked.parseInline(currentQuestion)),
+            answer: DOMPurify.sanitize(marked.parse(currentAnswer.trim())),
+          });
+        }
+
+        this.frequentlyAskedQuestions = faqs;
+      } catch (error) {
+        console.error("Failed to load or parse FAQ content:", error);
+        this.frequentlyAskedQuestions = [
+          { question: "Error", answer: "Could not load FAQ content." },
+        ];
+      }
+    },
+
     toggleSidebar() {
       this.sidebarCollapsed = !this.sidebarCollapsed;
       this.$emit("sidebar-toggle", this.sidebarCollapsed);
@@ -197,14 +200,81 @@ export default {
       }
     },
 
-    openDocument(doc) {
-      // In a real application, this would open the document
-      window.open(doc.url, "_blank");
-      this.$emit("open-document", doc);
+    isExternalUrl(url) {
+      if (!url) return false;
+      const isHttp = url.startsWith("http://") || url.startsWith("https://");
+      const isPlaceholder = url.includes("<HOST>") || url.includes("<PORT>");
+      // A URL is considered external only if it's a valid HTTP link AND not a placeholder.
+      return isHttp && !isPlaceholder;
     },
 
-    documentIconClass(type) {
-      switch (type.toLowerCase()) {
+    async openDocument(doc) {
+      if (this.isExternalUrl(doc.url)) {
+        console.log(`Opening external URL: ${doc.url}`);
+        window.open(doc.url, "_blank");
+        this.$emit("open-document", doc);
+        return;
+      }
+
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        console.error(
+          "Authentication token not found. Unable to open internal document."
+        );
+        return;
+      }
+
+      const fileUrl = `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+
+      try {
+        const response = await fetch(fileUrl, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Network response was not ok: ${response.statusText}`
+          );
+        }
+
+        const fileBlob = await response.blob();
+        const blobUrl = URL.createObjectURL(fileBlob);
+        window.open(blobUrl, "_blank");
+
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+
+        this.$emit("open-document", doc);
+      } catch (error) {
+        console.error(
+          "There was a problem fetching the internal document:",
+          error
+        );
+      }
+    },
+
+    getAuthToken() {
+      const user = authService.getCurrentUser();
+      return user ? user.accessToken : null;
+    },
+
+    getDisplayUrl(doc) {
+      if (!doc) return "";
+      if (this.isExternalUrl(doc.url)) {
+        return doc.url;
+      }
+      if (doc.id) {
+        return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
+      }
+      return doc.url || ""; // Fallback to show the original placeholder if no ID
+    },
+
+    documentIconClass(doc) {
+      if (this.isExternalUrl(doc.url)) {
+        return "fas fa-external-link-alt";
+      }
+      switch ((doc.type || "").toLowerCase()) {
         case "pdf":
           return "fas fa-file-pdf";
         case "docx":
@@ -224,20 +294,22 @@ export default {
     },
 
     formatFileSize(bytes) {
+      if (!bytes) return "0 B";
       if (bytes < 1024) return bytes + " B";
       if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
       return (bytes / (1024 * 1024)).toFixed(1) + " MB";
     },
 
     formatScore(score) {
-      if (typeof score !== 'number' || isNaN(score)) return this.$t("sidebar.unknown");
-      return (score * 100).toFixed(2) + '%';
+      if (typeof score !== "number" || isNaN(score))
+        return this.$t("sidebar.unknown");
+      return (score * 100).toFixed(2) + "%";
     },
 
     formatLabels(doc) {
       if (!doc.categoryLabel) return this.$t("sidebar.unknown");
-      const services = doc.serviceLabels?.join(', ') || '';
-      return `${doc.categoryLabel}${services ? ':' + services : ''}`;
+      const services = doc.serviceLabels?.join(", ") || "";
+      return `${doc.categoryLabel}${services ? ":" + services : ""}`;
     },
   },
 };
@@ -258,7 +330,6 @@ export default {
 .sidebar.collapsed {
   width: 50px;
   overflow: visible;
-  /* Allow the toggle button to be visible */
 }
 
 .sidebar-header {
@@ -316,7 +387,6 @@ export default {
   color: var(--text-tertiary, #64748b);
 }
 
-/* Document styles */
 .related-documents {
   display: flex;
   flex-direction: column;
@@ -368,9 +438,17 @@ export default {
   margin-bottom: 2px;
 }
 
-.document-meta {
+.document-url-link {
   font-size: 0.75rem;
-  color: var(--text-muted, #94a3b8);
+  color: var(--accent-color, #4e97d1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.document-header:hover .document-url-link {
+  text-decoration: underline;
 }
 
 .document-details {
@@ -405,7 +483,6 @@ export default {
   font-size: 0.75rem;
 }
 
-/* FAQ styles */
 .faq-list {
   display: flex;
   flex-direction: column;
@@ -438,6 +515,10 @@ export default {
 .faq-question i {
   font-size: 0.8rem;
   color: var(--text-tertiary, #64748b);
+  transition: transform 0.2s;
+}
+.faq-question.active i {
+  transform: rotate(180deg);
 }
 
 .faq-answer {
@@ -449,6 +530,17 @@ export default {
   line-height: 1.5;
 }
 
+.faq-answer :deep(p:first-child) {
+  margin-top: 0;
+}
+.faq-answer :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.faq-answer :deep(ul),
+.faq-answer :deep(ol) {
+  padding-left: 20px;
+}
+
 .empty-state {
   text-align: center;
   padding: 16px;
@@ -457,7 +549,6 @@ export default {
   font-style: italic;
 }
 
-/* Mobile specific adjustments */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -477,7 +568,6 @@ export default {
   }
 }
 
-/* Additional fixes for dark theme visibility */
 [data-theme="dark"] .section-title,
 html[data-theme="dark"] .section-title {
   color: rgba(255, 255, 255, 0.9) !important;

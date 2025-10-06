@@ -78,11 +78,7 @@ services:
     volumes:
       - ./document-repository:/app
       - ./document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
-<<<<<<< HEAD
       # - ./document-repository/uploads:/app/uploads
-=======
->>>>>>> d57c3c0ee3970053d04d0c0f0053437fe1bba4ed
-  
   clamav:
     image: mkodockx/docker-clamav:alpine
     container_name: clamav

@@ -1480,9 +1480,9 @@ async function verifyImport(collections, originalData) {
     console.log(`  - ServiceCategories: ${categoryVerifiedCount}/${categorySampleSize} samples found`);
     console.log(`  - Services: ${serviceVerifiedCount}/${serviceSampleSize} samples found`);
     console.log(`  - CategoryServices edges: ${edgeVerifiedCount}/${edgeSampleSize} samples found`);
-    console.log(`  - ServiceCategoryTranslations: ${categoryTranslationVerifiedCount}/${categoryTranslationSampleSize} samples found`);
+    console.log(`  - ServiceCategoryTranslations: ${categoryVerifiedCount}/${categoryTranslationSampleSize} samples found`);
     console.log(`  - ServiceCategoryTranslationsEdge: ${categoryTranslationEdgeVerifiedCount}/${categoryTranslationEdgeSampleSize} samples found`);
-    console.log(`  - ServiceTranslations: ${serviceTranslationVerifiedCount}/${serviceTranslationSampleSize} samples found`);
+    console.log(`  - ServiceTranslations: ${serviceVerifiedCount}/${serviceTranslationSampleSize} samples found`);
     console.log(`  - ServiceTranslationsEdge: ${serviceTranslationEdgeVerifiedCount}/${serviceTranslationEdgeSampleSize} samples found`);
     
     return overallSuccess;
@@ -1619,42 +1619,53 @@ async function main() {
     
     await loadInquirer();
 
+    // --- Define Base Import Config ---
+    const IMPORT_CONFIG = {
+        inputFile: process.env.IMPORT_FILE || './exports/serviceCategoriesAndServices_export_2025-06-19T14-55-00.json',
+        createDatabase: process.env.CREATE_DATABASE !== 'false', // default true
+        createCollection: process.env.CREATE_COLLECTION !== 'false', // default true
+        overwriteExisting: process.env.OVERWRITE_EXISTING === 'true' || false,
+        batchSize: parseInt(process.env.BATCH_SIZE) || 100,
+        validateBeforeImport: process.env.VALIDATE_BEFORE_IMPORT !== 'false', // default true
+        schemaStrict: process.env.SCHEMA_STRICT === 'true' || true // only include original fields
+    };
+
     // --- Interactive Import Config ---
     const answers = await inquirer.prompt([
         {
             type: 'input',
             name: 'inputFile',
             message: 'Enter the path to the import JSON file:',
-            default: process.env.IMPORT_FILE || './exports/serviceCategoriesAndServices_export.json',
+            default: IMPORT_CONFIG.inputFile,
         },
         {
             type: 'confirm',
             name: 'createDatabase',
             message: 'Create the database if it does not exist?',
-            default: (process.env.CREATE_DATABASE !== 'false'),
+            default: IMPORT_CONFIG.createDatabase,
         },
         {
             type: 'confirm',
             name: 'createCollection',
             message: 'Create collections if they do not exist?',
-            default: (process.env.CREATE_COLLECTION !== 'false'),
+            default: IMPORT_CONFIG.createCollection,
         },
         {
             type: 'confirm',
             name: 'validateBeforeImport',
             message: 'Validate the import file before processing?',
-            default: (process.env.VALIDATE_BEFORE_IMPORT !== 'false'),
+            default: IMPORT_CONFIG.validateBeforeImport,
         },
         {
             type: 'number',
             name: 'batchSize',
             message: 'Enter the batch size for import:',
-            default: parseInt(process.env.BATCH_SIZE, 10) || 100,
+            default: IMPORT_CONFIG.batchSize,
         }
     ]);
 
     const importConfig = {
-        ...IMPORT_CONFIG, // Keep other defaults
+        ...IMPORT_CONFIG, // Keep other defaults not prompted for
         ...answers
     };
 

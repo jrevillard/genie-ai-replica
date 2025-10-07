@@ -1,3 +1,5 @@
+> This file and its related label management methods are not used in the current demo. However, they are available as a resource to explore, implement, or modify as needed.
+
 # Document Repository Labelling Design
 
 This document outlines the labelling system for document ingestion, chunking, and retrieval in the document repository and related microservices.

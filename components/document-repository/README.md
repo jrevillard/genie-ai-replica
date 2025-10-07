@@ -1,6 +1,6 @@
 # Document Repository Service
 
-This service provides a backend file system for managing file CRUD + search + ingest&extract operations. It is designed to connect with the frontend located at `/root/chat-ui-vue-app/gov-chat-frontend`.
+This service provides a backend file system for managing file CRUD + search + ingest&extract operations. It is designed to connect with the frontend located at `/gov-chat-frontend`.
 
 ```mermaid
 %%{init: {'theme':'forest'}}%%
@@ -20,7 +20,7 @@ journey
     section Ingestion into / Extract from Knowledge Base
         Admin chooses to ingest file: 5:Admin
         File sent to dataprep service: 4:System
-        File processed. Metadata enriched automatically: 5:System
+        File processed. Metadata updated automatically: 5:System
         Admin chooses to retract file (optional): 5:Admin
         Chunks, entities and relations are deleted: 5:System
 
@@ -38,28 +38,30 @@ config:
 title: Document Repository Service Workflow
 ---
 flowchart TD
- subgraph User_Side["User_Side"]
+subgraph User_Side["User_Side"]
         A["User Uploads File"]
         B["Edit/View Metadata"]
         C["Search Files by Metadata"]
         D["Ingest/Retract File"]
         P["Read/Delete File"]
   end
- subgraph Document_Repository_CPU_Node["Document_Repository_CPU_Node"]
+subgraph Document_Repository_CPU_Node["Document_Repository"]
         E["Security Check ClamAV"]
         O(["File Local Storage"])
         F["Extract Basic Metadata"]
         G(["Metadata in ArangoDB"])
         H["Send File to Dataprep / Delete Chunks, Entities and Relations from Database"]
   end
- subgraph Dataprep_Microservice_GPU_Node["Dataprep_Microservice_GPU_Node"]
+subgraph Dataprep_Microservice_GPU_Node["Dataprep_Microservice"]
         I["Extract Full Text and Language"]
         J["Chunk Text and Embed"]
-        K["Extract Labels if not given"]
+        X["(Optional) Check Chunk Content Toxicity"]
+        Y["Label Each Chunk"]
+        Z["Extract Entities and Relations"]
         L["Update Metadata in ArangoDB"]
-        Q["Knowledge Graph Construction"]
+        Q["Knowledge Graph Construction/Update"]
   end
- subgraph Downstream["Downstream"]
+subgraph Downstream["Downstream"]
         N["Show Source File\nvia Metadata Link"]
         M["LLM Query Answering (Including Retrieval + Textgen)"]
   end
@@ -72,13 +74,14 @@ flowchart TD
     D <--> H
     H <--> I
     I --> J
-    J --> K
-    K --> L
     M --> N
-    L --> M
     P --> O
-    J --> Q
     Q --> M
+    J --> X
+    X --> Y
+    Y --> Z
+    Z --> Q
+    Q --> L
 ```
 
 ## Supported File Types
@@ -90,16 +93,16 @@ The file system supports various file types, including but not limited to:
 
 ## Feature Services
 
-- **Upload Files:** Administrators can upload files from their local computers.
-- **Upload Links:** Administrators can upload website links directly. The content of the webpage will be crawled automatically and saved as a local html file.
+- **Upload Files:** Administrators can upload files from their computers.
+- **Upload Links:** Administrators can upload website links directly. The content of the webpage will be crawled automatically and saved as a html file.
 - **Read Files:** Uploaded files are stored in `/document-repository/uploads` and can be accessed for viewing in browser for all supported file types.
-- **Download Files:** Files can be downloaded to the administrator's local machine.
+- **Download Files:** Files can be downloaded to the administrator's local computer.
 - **Delete Files:** Administrators can remove files from the system.
 - **Virus Scanning:** Files are scanned for viruses before being saved to the file system.
 - **Metadata Extraction and Editing:** Metadata such as file labels and language is extracted and stored for search functionality. See [`README_metadata.md`](./README_metadata.md) for details.
 - **Search Files:** Users can search files by metadata such as file name, type, and labels.
 - **Ingest Files to Dataprep:** Files can be ingested into the dataprep microservice for knowledge graph building and further processing.
-- **Retract Files from Dataprep:** Files can be retracted from the dataprep microservice, which deletes the associated graphs, preventing the files from being used for retrival and answer generation.
+- **Retract Files from Dataprep:** Files can be retracted from the dataprep microservice, which deletes the chunks, entities and relations from the graph, preventing the files from being used for retrival and answer generation.
 
 ## Folder Structure (to be updated)
 
@@ -108,12 +111,15 @@ document-repository/
 ├── src/
 │   ├── controllers/              # Handles HTTP requests
 │   │   ├── fileController.js
+│   │   ├── labelController.js
 │   ├── routes/                   # Express routes
 │   │   ├── fileRoutes.js
+│   │   ├── labelRoutes.js
 │   ├── services/                 # Business logic
 │   │   ├── fileService.js
 │   │   ├── securityService.js
 │   │   ├── metadataService.js
+│   │   ├── labelService.js
 │   ├── utils/                    # Helper functions
 │   │   ├── fileUtils.js
 │   │   ├── virusScanner.js       # Hooks to ClamAV or similar
@@ -122,8 +128,15 @@ document-repository/
 │   │   ├── fileUpload.js         # Multer config
 │   │   ├── errorHandler.js
 │   │   ├── authMiddleware.js
+│   ├── docs/
+│   │   ├── swagger.yaml
+│   ├── shared-lib/
+│   │   ├── db-connection-service.js
+│   │   ├── index.js
+│   │   ├── logger.js
 │   ├── config/
 │   │   ├── appConfig.js
+│   │   ├── swaggerConfig.js
 │   ├── utils/
 │   │   ├── crawler.js
 │   │   ├── fileUtils.js
@@ -136,6 +149,7 @@ document-repository/
 ├── README.md
 ├── README_metadata.md
 ├── README_ingest&retract.md
+├── README_labels_unused.md
 ```
 
 ## Responsibilities
@@ -160,8 +174,7 @@ document-repository/
 
 **Dataprep microservice responsibilities (related to document-repository)**:
 
-* **Metadata extraction (especially for file labels and file language)**
-* **Content safety checks**
+* Content safety checks (optional)
 * Text extraction from files
 * Chunking
 * Embedding
@@ -178,10 +191,10 @@ document-repository/
 | GET    | `/api/files`                          | Get all files with pagination/filtering     | Authenticated   |
 | GET    | `/api/files/search`                   | Search files by metadata                    | Authenticated   |
 | GET    | `/api/files/:metadata`                | Get file metadata by ID                     | Authenticated   |
-| GET    | `/api/files/:fileId/view`             | Get file as base64 for viewing              | Authenticated 🤔|
-| GET    | `/api/files/:fileId/viewbrowser`      | View file in browser (if supported)         | Authenticated 🤔|
-| GET    | `/api/files/:fileId/download`         | Download file by ID                         | Authenticated 🤔|
-| POST   | `/api/files/downloads`                | Download multiple files as a ZIP archive    | Authenticated 🤔|
+| GET    | `/api/files/:fileId/view`             | Get file as base64 for viewing              | Authenticated   |
+| GET    | `/api/files/:fileId/viewbrowser`      | View file in browser (if supported)         | Authenticated   |
+| GET    | `/api/files/:fileId/download`         | Download file by ID                         | Authenticated   |
+| POST   | `/api/files/downloads`                | Download multiple files as a ZIP archive    | Authenticated   |
 | PATCH  | `/api/files/:fileId`                  | Update file metadata                        | Admin only      |
 | DELETE | `/api/files/:fileId`                  | Delete file by ID                           | Authenticated   |
 | DELETE | `/api/files`                          | Delete multiple files by IDs                | Authenticated   |
@@ -520,39 +533,39 @@ curl -X GET "http://localhost:3001/api/files/1755261342481-8b804597" \
 
 ### Get Files (by common metadata fields for simple, fast filtering)
 
-💚 Default to return the first 10 files, sorted by `upload_date` in descending order.
+* Default to return the first 10 files, sorted by `upload_date` in descending order.
 
 ```bash
 curl "http://localhost:3001/api/files" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-💚 Get files with pagination and limit:
+* Get files with pagination and limit:
 ```bash
 curl "http://localhost:3001/api/files?page=2&limit=5" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-💚 Get files by mimetype:
+* Get files by mimetype:
 ```bash
 curl "http://localhost:3001/api/files?mimeType=text/html" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-💚 Search by file name (case insensitive):
+* Search by file name (case insensitive):
 ```bash
 curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-💚 Filter by dataprep status:
+* Filter by dataprep status:
 
 ```bash
 curl "http://localhost:3001/api/files?dataprepStatus=pending" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-💚 Combine filters (e.g., PDF files with 'example' in the name)
+* Combine filters (e.g., PDF files with 'example' in the name)
 
 ```bash
 curl "http://localhost:3001/api/files?mimeType=text/html&search=world" \
@@ -728,7 +741,7 @@ curl -X POST http://localhost:3001/api/files/retract \
 
 ## Security for Access Control
 
-- Common users authenticated as citizens can only read & download files in the `Related Document` panel.
+- Common users authenticated as citizens can only read & download files in the `Related Documents` panel.
 - Users authenticated as administrators can access all the file operations.
 - File access is not restricted to intranet or localhost; remote access is supported.
 
@@ -736,6 +749,7 @@ curl -X POST http://localhost:3001/api/files/retract \
 
 * For metadata-related operations, please see [`README_metadata.md`](./README_metadata.md) for more details.
 * For ingest & retract operations, please see [`README_ingest&retract.md`](./README_ingest&retract.md) for more details.
+* The [`README_labels_unused.md`](./README_labels_unused.md) and its related label management methods are not used in the current demo. However, they are available as a resource to explore, implement, or modify as needed.
 
 ## Extending
 

@@ -1,34 +1,37 @@
 // ArangoDB Service Category & Services Translation Migration Script
 // This script creates new translation collections and migrates existing translation data for both serviceCategories and services
 
-// =============================================================================
-// DATABASE CONNECTION CONFIGURATION
-// =============================================================================
-
-// For running externally with arangojs
 const { Database } = require('arangojs');
+const readline = require('readline');
 
-// Database connection configuration
-const DB_CONFIG = {
-  url: process.env.ARANGO_URL || 'http://localhost:8529',
-  databaseName: process.env.ARANGO_DATABASE || 'test-node-services',
-  auth: {
-    username: process.env.ARANGO_USERNAME || 'root',
-    password: process.env.ARANGO_PASSWORD || 'test'
-  }
-};
-
-// Initialize database connection
+// Global database connection variable
 let db;
 
-async function initializeDatabase() {
+/**
+ * Asks a question in the console and returns the user's answer.
+ * @param {string} query - The question to display to the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise(resolve => rl.question(query, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
+
+async function initializeDatabase(config) {
   try {
-    console.log(`Connecting to ArangoDB at ${DB_CONFIG.url}...`);
+    console.log(`Connecting to ArangoDB at ${config.url}...`);
     
     db = new Database({
-      url: DB_CONFIG.url,
-      databaseName: DB_CONFIG.databaseName,
-      auth: DB_CONFIG.auth
+      url: config.url,
+      databaseName: config.database,
+      auth: config.auth
     });
     
     // Test connection
@@ -567,10 +570,35 @@ async function verifyMigration() {
 // Main execution function
 async function executeTranslationMigration() {
   console.log('=== ArangoDB Service Category & Services Translation Migration ===\n');
+
+  // Read configuration from environment variables, with defaults
+  const config = {
+    url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
+    database: process.env.ARANGO_DATABASE || 'node-services',
+    auth: {
+      username: process.env.ARANGO_USER || 'root',
+      password: process.env.ARANGO_PASSWORD || 'your-database-password'
+    }
+  };
+
+  // --- Confirmation Prompt ---
+  console.log('This script will migrate translation data in an ArangoDB database.');
+  console.log('\nDatabase configuration to be used:');
+  console.log(`  URL:      ${config.url}`);
+  console.log(`  Database: ${config.database}`);
+  console.log(`  User:     ${config.auth.username}`);
+  
+  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+
+  if (answer.toLowerCase() !== 'y') {
+    console.log('Operation cancelled by user. Exiting.');
+    process.exit(0);
+  }
+  // --- End Confirmation Prompt ---
   
   try {
     // Initialize database connection
-    await initializeDatabase();
+    await initializeDatabase(config);
     
     // Step 1: Create translation collections
     await createServiceCategoryTranslationsCollection();
@@ -688,14 +716,17 @@ async function addNewServiceTranslation(serviceKey, languageCode, translation) {
   }
 }
 
-// Execute the migration
-executeTranslationMigration().then(() => {
-  console.log('Migration script completed');
-  process.exit(0);
-}).catch(error => {
-  console.error('Migration script failed:', error);
-  process.exit(1);
-});
+// Execute the migration if the script is run directly
+if (require.main === module) {
+    executeTranslationMigration().then(() => {
+        console.log('Migration script completed');
+        process.exit(0);
+    }).catch(error => {
+        console.error('Migration script failed:', error);
+        process.exit(1);
+    });
+}
+
 
 // Export helper functions for future use
 module.exports = {

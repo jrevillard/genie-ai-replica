@@ -1,90 +1,98 @@
 /**
  * create-translations.js
- * 
- * This script creates translations for service categories and services in an ArangoDB database,
+ * * This script creates translations for service categories and services in an ArangoDB database,
  * inserting them into the `serviceCategoryTranslations` and `serviceTranslations` collections,
  * along with edges in `serviceCategoryTranslationsEdge` and `serviceTranslationsEdge`.
  * It uses the Google Cloud Translate API to translate English (`nameEN`) fields from the
  * `serviceCategories` and `services` collections into the specified target language.
  * Translations and edges are only created if they do not already exist for the target language.
- * 
- * Authentication:
- *   - Uses a Google Cloud service account for server-to-server authentication with the
- *     Google Cloud Translate API.
- *   - Credentials are loaded from a JSON file (default: `google-credentials.json`), which
- *     must be a Google Cloud service account key JSON with an added `apiKey` field.
- *   - Do NOT use an OAuth 2.0 Client ID or client secret, as they are for user-based flows.
- * 
- * Usage:
- *   node create-translations.js <lang>
- * 
- * Parameters:
- *   - lang: Target language code (e.g., EN, FR, SW, ID, en, fr, sw, id). Case-insensitive.
- *     Cannot be EN (English is the source language).
- * 
- * Configuration File:
- *   - File: `google-credentials.json` (override with GOOGLE_CREDENTIALS_PATH env variable)
- *   - Format: Standard Google Cloud service account key JSON with an added `apiKey` field:
- *     {
- *       "type": "service_account",
- *       "project_id": "your-project-id",
- *       "private_key_id": "...",
- *       "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
- *       "client_email": "your-service-account@your-project-id.iam.gserviceaccount.com",
- *       "client_id": "...",
- *       "auth_uri": "...",
- *       "token_uri": "...",
- *       "auth_provider_x509_cert_url": "...",
- *       "client_x509_cert_url": "...",
- *       "universe_domain": "googleapis.com",
- *       "apiKey": "your-api-key"
- *     }
- *   - Obtain credentials:
- *     1. Go to Google Cloud Console > IAM & Admin > Service Accounts.
- *     2. Create a service account with the 'Cloud Translation API User' role (roles/cloudtranslate.user).
- *     3. Download the JSON key file.
- *     4. Add the `apiKey` field by creating an API key in APIs & Services > Credentials > Create Credentials > API Key.
- *     5. Enable the Cloud Translation API in APIs & Services > Library.
- * 
- * Environment Variables (in .env file):
- *   - ARANGO_URL: ArangoDB URL (default: http://localhost:8529)
- *   - ARANGO_DATABASE: Database name (default: genie)
- *   - ARANGO_USERNAME: ArangoDB username (default: root)
- *   - ARANGO_PASSWORD: ArangoDB password (default: test)
- *   - GOOGLE_CREDENTIALS_PATH: Path to Google credentials JSON (default: ./google-credentials.json)
- * 
- * Prerequisites:
- *   - Install dependencies: `npm install arangojs dotenv @google-cloud/translate`
- *   - Ensure ArangoDB collections exist: `serviceCategories`, `services`
- *   - The script will create `serviceCategoryTranslations`, `serviceTranslations`,
- *     `serviceCategoryTranslationsEdge`, and `serviceTranslationsEdge` if they don’t exist
- *   - Create `google-credentials.json` with valid service account credentials and API key
- * 
- * Example:
- *   node create-translations.js ID
- * 
- * Output:
- *   - Logs creation of translations and edges
- *   - Skips existing translations
- *   - Exits with status 0 on success, 1 on failure
- * 
- * Notes:
- *   - Assumes `nameEN` fields in `serviceCategories` and `services` are the source texts.
- *   - Translation keys are formatted as `${categoryKey}_${lang}` and `${serviceKey}_${lang}`.
- *   - Edges link translations to their respective categories/services.
- *   - Handles Google Translate API errors with a fallback placeholder translation.
- *   - Schema aligns with import-service-categories.js, using `serviceCategoryId`, `languageCode`, and `translation`.
- *   - Date/time: Script uses current date/time (e.g., 2025-06-28 21:44 WIB).
+ * * Authentication:
+ * - Uses a Google Cloud service account for server-to-server authentication with the
+ * Google Cloud Translate API.
+ * - Credentials are loaded from a JSON file (default: `google-credentials.json`), which
+ * must be a Google Cloud service account key JSON with an added `apiKey` field.
+ * - Do NOT use an OAuth 2.0 Client ID or client secret, as they are for user-based flows.
+ * * Usage:
+ * node create-translations.js <lang>
+ * * Parameters:
+ * - lang: Target language code (e.g., EN, FR, SW, ID, en, fr, sw, id). Case-insensitive.
+ * Cannot be EN (English is the source language).
+ * * Configuration File:
+ * - File: `google-credentials.json` (override with GOOGLE_CREDENTIALS_PATH env variable)
+ * - Format: Standard Google Cloud service account key JSON with an added `apiKey` field:
+ * {
+ * "type": "service_account",
+ * "project_id": "your-project-id",
+ * "private_key_id": "...",
+ * "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+ * "client_email": "your-service-account@your-project-id.iam.gserviceaccount.com",
+ * "client_id": "...",
+ * "auth_uri": "...",
+ * "token_uri": "...",
+ * "auth_provider_x509_cert_url": "...",
+ * "client_x509_cert_url": "...",
+ * "universe_domain": "googleapis.com",
+ * "apiKey": "your-api-key"
+ * }
+ * - Obtain credentials:
+ * 1. Go to Google Cloud Console > IAM & Admin > Service Accounts.
+ * 2. Create a service account with the 'Cloud Translation API User' role (roles/cloudtranslate.user).
+ * 3. Download the JSON key file.
+ * 4. Add the `apiKey` field by creating an API key in APIs & Services > Credentials > Create Credentials > API Key.
+ * 5. Enable the Cloud Translation API in APIs & Services > Library.
+ * * Environment Variables (in .env file):
+ * - ARANGO_URL: ArangoDB URL (default: http://localhost:8529)
+ * - ARANGO_DATABASE: Database name (default: genie)
+ * - ARANGO_USERNAME: ArangoDB username (default: root)
+ * - ARANGO_PASSWORD: ArangoDB password (default: test)
+ * - GOOGLE_CREDENTIALS_PATH: Path to Google credentials JSON (default: ./google-credentials.json)
+ * * Prerequisites:
+ * - Install dependencies: `npm install arangojs dotenv @google-cloud/translate`
+ * - Ensure ArangoDB collections exist: `serviceCategories`, `services`
+ * - The script will create `serviceCategoryTranslations`, `serviceTranslations`,
+ * `serviceCategoryTranslationsEdge`, and `serviceTranslationsEdge` if they don’t exist
+ * - Create `google-credentials.json` with valid service account credentials and API key
+ * * Example:
+ * node create-translations.js ID
+ * * Output:
+ * - Logs creation of translations and edges
+ * - Skips existing translations
+ * - Exits with status 0 on success, 1 on failure
+ * * Notes:
+ * - Assumes `nameEN` fields in `serviceCategories` and `services` are the source texts.
+ * - Translation keys are formatted as `${categoryKey}_${lang}` and `${serviceKey}_${lang}`.
+ * - Edges link translations to their respective categories/services.
+ * - Handles Google Translate API errors with a fallback placeholder translation.
+ * - Schema aligns with import-service-categories.js, using `serviceCategoryId`, `languageCode`, and `translation`.
+ * - Date/time: Script uses current date/time (e.g., 2025-06-28 21:44 WIB).
  */
 
 const { Database, aql } = require('arangojs');
 const { Translate } = require('@google-cloud/translate').v2;
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 require('dotenv').config();
 
+/**
+ * Asks a question in the console and returns the user's answer.
+ * @param {string} query - The question to display to the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+  
+    return new Promise(resolve => rl.question(query, ans => {
+      rl.close();
+      resolve(ans);
+    }));
+}
+
 class TranslationCreator {
-  constructor() {
+  constructor(dbConfig) {
     // Load Google Cloud credentials from JSON file
     const credentialsPath = process.env.GOOGLE_CREDENTIALS_PATH || './google-credentials.json';
     let credentials;
@@ -115,14 +123,7 @@ class TranslationCreator {
     });
 
     // Initialize ArangoDB connection
-    this.db = new Database({
-      url: process.env.ARANGO_URL || 'http://localhost:8529',
-      databaseName: process.env.ARANGO_DATABASE || 'node-services',
-      auth: {
-        username: process.env.ARANGO_USERNAME || 'root',
-        password: process.env.ARANGO_PASSWORD || 'test'
-      }
-    });
+    this.db = new Database(dbConfig);
   }
 
   /**
@@ -235,7 +236,7 @@ class TranslationCreator {
    */
   async createCategoryTranslations(lang) {
     try {
-      console.log(`Creating category translations for ${lang}...`);
+      console.log(`\nCreating category translations for ${lang}...`);
 
       // Fetch existing English categories
       const categories = await this.db.query(aql`
@@ -254,7 +255,7 @@ class TranslationCreator {
       let inserted = 0;
       for (const category of categories) {
         if (existingTranslations.includes(category._key)) {
-          console.log(`Translation for category ${category.nameEN} (${lang}) already exists, skipping...`);
+          console.log(`- Skipping category "${category.nameEN}": translation for ${lang} already exists.`);
           continue;
         }
 
@@ -270,7 +271,7 @@ class TranslationCreator {
 
         // Insert translation
         await this.categoryTranslations.save(translation);
-        console.log(`Inserted translation for category ${category.nameEN} in ${lang}`);
+        console.log(`  ✓ Translated category "${category.nameEN}" to "${translatedName}"`);
 
         // Create edge
         await this.categoryTranslationsEdge.save({
@@ -278,13 +279,12 @@ class TranslationCreator {
           _to: `serviceCategoryTranslations/${translation._key}`,
           createdAt: new Date().toISOString()
         });
-        console.log(`Created edge for category translation ${category.nameEN} in ${lang}`);
         inserted++;
       }
 
-      console.log(`Inserted ${inserted} new category translations and edges for ${lang}`);
+      console.log(`\n✓ Inserted ${inserted} new category translations and edges for ${lang}.`);
     } catch (error) {
-      console.error(`Error creating category translations for ${lang}:`, error.message);
+      console.error(`✗ Error creating category translations for ${lang}:`, error.message);
       throw error;
     }
   }
@@ -295,7 +295,7 @@ class TranslationCreator {
    */
   async createServiceTranslations(lang) {
     try {
-      console.log(`Creating service translations for ${lang}...`);
+      console.log(`\nCreating service translations for ${lang}...`);
 
       // Fetch existing English services
       const services = await this.db.query(aql`
@@ -314,7 +314,7 @@ class TranslationCreator {
       let inserted = 0;
       for (const service of services) {
         if (existingTranslations.includes(service._key)) {
-          console.log(`Translation for service ${service.nameEN} (${lang}) already exists, skipping...`);
+          console.log(`- Skipping service "${service.nameEN}": translation for ${lang} already exists.`);
           continue;
         }
 
@@ -330,7 +330,7 @@ class TranslationCreator {
 
         // Insert translation
         await this.serviceTranslations.save(translation);
-        console.log(`Inserted translation for service ${service.nameEN} in ${lang}`);
+        console.log(`  ✓ Translated service "${service.nameEN}" to "${translatedName}"`);
 
         // Create edge
         await this.serviceTranslationsEdge.save({
@@ -338,13 +338,12 @@ class TranslationCreator {
           _to: `serviceTranslations/${translation._key}`,
           createdAt: new Date().toISOString()
         });
-        console.log(`Created edge for service translation ${service.nameEN} in ${lang}`);
         inserted++;
       }
 
-      console.log(`Inserted ${inserted} new service translations and edges for ${lang}`);
+      console.log(`\n✓ Inserted ${inserted} new service translations and edges for ${lang}.`);
     } catch (error) {
-      console.error(`Error creating service translations for ${lang}:`, error.message);
+      console.error(`✗ Error creating service translations for ${lang}:`, error.message);
       throw error;
     }
   }
@@ -359,9 +358,9 @@ class TranslationCreator {
       await this.ensureCollections();
       await this.createCategoryTranslations(validLang);
       await this.createServiceTranslations(validLang);
-      console.log(`Translation creation completed for ${validLang}`);
+      console.log(`\n✓ Translation creation completed for ${validLang}.`);
     } catch (error) {
-      console.error('Translation creation failed:', error.message);
+      console.error('✗ Translation creation failed:', error.message);
       process.exit(1);
     }
   }
@@ -375,12 +374,38 @@ async function main() {
     process.exit(1);
   }
 
+    // Read configuration from environment variables, with defaults
+    const dbConfig = {
+        url: process.env.ARANGO_URL || "http://localhost:8529",
+        databaseName: process.env.ARANGO_DATABASE || "node-services",
+        auth: {
+            username: process.env.ARANGO_USER || "root",
+            password: process.env.ARANGO_PASSWORD || "test"
+        }
+    };
+
+    // --- Confirmation Prompt ---
+    console.log('--- Database Translation Creation Script ---');
+    console.log(`This script will translate categories and services into '${lang.toUpperCase()}'.`);
+    console.log('\nDatabase configuration to be used:');
+    console.log(`  URL:      ${dbConfig.url}`);
+    console.log(`  Database: ${dbConfig.databaseName}`);
+    console.log(`  User:     ${dbConfig.auth.username}`);
+
+    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+
+    if (answer.toLowerCase() !== 'y') {
+        console.log('Operation cancelled by user. Exiting.');
+        process.exit(0);
+    }
+    // --- End Confirmation Prompt ---
+
   try {
-    const creator = new TranslationCreator();
+    const creator = new TranslationCreator(dbConfig);
     await creator.run(lang);
     process.exit(0);
   } catch (error) {
-    console.error('Failed to initialize TranslationCreator:', error.message);
+    console.error('✗ Failed to initialize TranslationCreator:', error.message);
     process.exit(1);
   }
 }

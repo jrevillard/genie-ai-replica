@@ -1,21 +1,6 @@
 // Import the ArangoDB driver
 const { Database } = require('arangojs');
-const dotenv = require('dotenv');
-
-// Load environment variables from a .env file
-dotenv.config();
-
-// --- Database Configuration ---
-// Set up your ArangoDB connection details.
-// It's best to use environment variables for security.
-const dbConfig = {
-  url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
-  databaseName: process.env.ARANGO_DATABASE || "node-services", // From your schema file
-  auth: {
-    username: process.env.ARANGO_USER || "root",
-    password: process.env.ARANGO_PASSWORD || "test" // CHANGE THIS or set in .env
-  },
-};
+const readline = require('readline');
 
 // --- User Data ---
 // The user object to be created.
@@ -41,12 +26,55 @@ const managerUser = {
   "role": "User"
 };
 
+/**
+ * Asks a question in the console and returns the user's answer.
+ * @param {string} query - The question to display to the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise(resolve => rl.question(query, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
+
 
 /**
  * Main function to connect to ArangoDB and create the user.
  */
 async function createArangoUser() {
-  console.log("Connecting to ArangoDB...");
+    // Read configuration from environment variables, with defaults
+    const dbConfig = {
+        url: process.env.ARANGO_URL || "http://127.0.0.1:8529",
+        databaseName: process.env.ARANGO_DATABASE || "node-services",
+        auth: {
+          username: process.env.ARANGO_USER || "root",
+          password: process.env.ARANGO_PASSWORD || "your-database-password"
+        },
+    };
+
+    // --- Confirmation Prompt ---
+    console.log('--- Manager User Creation Script ---');
+    console.log('This script will create a genie-ai-manager user in the database.');
+    console.log('\nDatabase configuration to be used:');
+    console.log(`  URL:      ${dbConfig.url}`);
+    console.log(`  Database: ${dbConfig.databaseName}`);
+    console.log(`  User:     ${dbConfig.auth.username}`);
+    
+    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  
+    if (answer.toLowerCase() !== 'y') {
+      console.log('Operation cancelled by user. Exiting.');
+      process.exit(0);
+    }
+    // --- End Confirmation Prompt ---
+
+  console.log("\nConnecting to ArangoDB...");
   const db = new Database(dbConfig);
 
   try {
@@ -90,5 +118,7 @@ async function createArangoUser() {
   }
 }
 
-// Run the script
-createArangoUser();
+// Run the script if executed directly
+if (require.main === module) {
+    createArangoUser();
+}

@@ -1,42 +1,94 @@
+/**
+ * import-service-categories.js
+ *
+ * This script imports a knowledge hierarchy (service categories, services, translations, and edges)
+ * from a JSON file into an ArangoDB database. It is designed to restore a previously exported
+ * structure from `export-service-categories.js`.
+ *
+ * It supports multiple versions of the export format and can handle the creation of the
+ * database and collections if they do not already exist.
+ *
+ * Features:
+ * - Reads database configuration from environment variables with sensible defaults.
+ * - Prompts for user confirmation before making any changes.
+ * - Interactively prompts for import settings, using environment variables as defaults.
+ * - Can create the target database and collections on the fly.
+ * - Validates the structure and integrity of the import file before processing.
+ * - Imports data in batches to handle large datasets efficiently.
+ * - Skips documents or edges that already exist in the target collections to prevent duplicates.
+ * - Performs a verification step after import to ensure data integrity.
+ *
+ * Usage:
+ * node import-service-categories.js
+ *
+ * The script will then guide you through the configuration and confirmation process.
+ *
+ * Environment Variables (in .env file or shell):
+ * - ARANGO_URL: ArangoDB URL (default: http://localhost:8529)
+ * - ARANGO_DATABASE: Database name (default: test-node-services)
+ * - ARANGO_USERNAME: ArangoDB username (default: root)
+ * - ARANGO_PASSWORD: ArangoDB password (default: test)
+ *
+ * - IMPORT_FILE: Path to the JSON file to import.
+ * - CREATE_DATABASE: Set to 'false' to prevent database creation (default: true).
+ * - CREATE_COLLECTION: Set to 'false' to prevent collection creation (default: true).
+ * - VALIDATE_BEFORE_IMPORT: Set to 'false' to skip data validation (default: true).
+ * - BATCH_SIZE: Number of documents to import per batch (default: 100).
+ *
+ * Prerequisites:
+ * - Install dependencies: `npm install arangojs yargs inquirer dotenv`
+ *
+ * Output:
+ * - Logs the entire import process, including validation, creation, and verification steps.
+ * - Provides a final summary of imported, skipped, and errored items.
+ * - Exits with status 0 on success, 1 on failure.
+ */
+
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const path = require('path');
+const readline = require('readline');
 
-// =============================================================================
-// DATABASE CONNECTION CONFIGURATION
-// =============================================================================
+// To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
+let inquirer;
 
-const DB_CONFIG = {
-  url: process.env.ARANGO_URL || 'http://localhost:8529',
-  databaseName: process.env.ARANGO_DATABASE || 'test-node-services',
-  auth: {
-    username: process.env.ARANGO_USERNAME || 'root',
-    password: process.env.ARANGO_PASSWORD || 'test'
-  }
-};
-
-// Import configuration
-const IMPORT_CONFIG = {
-  inputFile: process.env.IMPORT_FILE || './exports/serviceCategoriesAndServices_export_2025-06-19T14-55-00.json',
-  createDatabase: process.env.CREATE_DATABASE !== 'false', // default true
-  createCollection: process.env.CREATE_COLLECTION !== 'false', // default true
-  overwriteExisting: process.env.OVERWRITE_EXISTING === 'true' || false,
-  batchSize: parseInt(process.env.BATCH_SIZE) || 100,
-  validateBeforeImport: process.env.VALIDATE_BEFORE_IMPORT !== 'false', // default true
-  schemaStrict: process.env.SCHEMA_STRICT === 'true' || true // only include original fields
-};
+/**
+ * Asks a question in the console and returns the user's answer.
+ * @param {string} query - The question to display to the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+  
+    return new Promise(resolve => rl.question(query, ans => {
+      rl.close();
+      resolve(ans);
+    }));
+}
 
 let db;
 
+/**
+ * Lazy-loads the inquirer module. This is necessary because inquirer v9+ is an ESM-only module.
+ */
+async function loadInquirer() {
+    if (!inquirer) {
+      inquirer = (await import('inquirer')).default;
+    }
+}
+
 // Initialize database connection
-async function initializeDatabase() {
+async function initializeDatabase(dbConfig) {
   try {
-    console.log(`Connecting to ArangoDB at ${DB_CONFIG.url}...`);
+    console.log(`Connecting to ArangoDB at ${dbConfig.url}...`);
     
     // First connect to system database to check/create target database
     db = new Database({
-      url: DB_CONFIG.url,
-      auth: DB_CONFIG.auth
+      url: dbConfig.url,
+      auth: dbConfig.auth
     });
     
     // Test connection to system database first
@@ -51,37 +103,37 @@ async function initializeDatabase() {
 }
 
 // Create target database if it doesn't exist
-async function ensureTargetDatabase() {
+async function ensureTargetDatabase(dbConfig, importConfig) {
   try {
-    if (!IMPORT_CONFIG.createDatabase) {
+    if (!importConfig.createDatabase) {
       console.log('Skipping database creation (CREATE_DATABASE=false)');
       // Switch to target database
       db = new Database({
-        url: DB_CONFIG.url,
-        databaseName: DB_CONFIG.databaseName,
-        auth: DB_CONFIG.auth
+        url: dbConfig.url,
+        databaseName: dbConfig.databaseName,
+        auth: dbConfig.auth
       });
       return;
     }
     
-    console.log(`Checking if database '${DB_CONFIG.databaseName}' exists...`);
+    console.log(`Checking if database '${dbConfig.databaseName}' exists...`);
     
     const databases = await db.listDatabases();
-    const databaseExists = databases.includes(DB_CONFIG.databaseName);
+    const databaseExists = databases.includes(dbConfig.databaseName);
     
     if (!databaseExists) {
-      console.log(`Creating database '${DB_CONFIG.databaseName}'...`);
-      await db.createDatabase(DB_CONFIG.databaseName);
-      console.log(`✓ Database '${DB_CONFIG.databaseName}' created successfully`);
+      console.log(`Creating database '${dbConfig.databaseName}'...`);
+      await db.createDatabase(dbConfig.databaseName);
+      console.log(`✓ Database '${dbConfig.databaseName}' created successfully`);
     } else {
-      console.log(`✓ Database '${DB_CONFIG.databaseName}' already exists`);
+      console.log(`✓ Database '${dbConfig.databaseName}' already exists`);
     }
     
     // Switch to target database
     db = new Database({
-      url: DB_CONFIG.url,
-      databaseName: DB_CONFIG.databaseName,
-      auth: DB_CONFIG.auth
+      url: dbConfig.url,
+      databaseName: dbConfig.databaseName,
+      auth: dbConfig.auth
     });
     
     const info = await db.get();
@@ -94,7 +146,7 @@ async function ensureTargetDatabase() {
 }
 
 // Create serviceCategories collection
-async function createServiceCategoriesCollection() {
+async function createServiceCategoriesCollection(importConfig) {
   try {
     const collection = db.collection('serviceCategories');
     const exists = await collection.exists();
@@ -104,7 +156,7 @@ async function createServiceCategoriesCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('serviceCategories collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -125,7 +177,7 @@ async function createServiceCategoriesCollection() {
 }
 
 // Create services collection
-async function createServicesCollection() {
+async function createServicesCollection(importConfig) {
   try {
     const collection = db.collection('services');
     const exists = await collection.exists();
@@ -135,7 +187,7 @@ async function createServicesCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('services collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -164,7 +216,7 @@ async function createServicesCollection() {
 }
 
 // Create categoryServices edge collection
-async function createCategoryServicesCollection() {
+async function createCategoryServicesCollection(importConfig) {
   try {
     const collection = db.collection('categoryServices');
     const exists = await collection.exists();
@@ -174,7 +226,7 @@ async function createCategoryServicesCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('categoryServices edge collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -203,7 +255,7 @@ async function createCategoryServicesCollection() {
 }
 
 // Create serviceCategoryTranslations collection
-async function createServiceCategoryTranslationsCollection() {
+async function createServiceCategoryTranslationsCollection(importConfig) {
   try {
     const collection = db.collection('serviceCategoryTranslations');
     const exists = await collection.exists();
@@ -213,7 +265,7 @@ async function createServiceCategoryTranslationsCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('serviceCategoryTranslations collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -256,7 +308,7 @@ async function createServiceCategoryTranslationsCollection() {
 }
 
 // Create serviceCategoryTranslationsEdge collection
-async function createServiceCategoryTranslationsEdgeCollection() {
+async function createServiceCategoryTranslationsEdgeCollection(importConfig) {
   try {
     const collection = db.collection('serviceCategoryTranslationsEdge');
     const exists = await collection.exists();
@@ -266,7 +318,7 @@ async function createServiceCategoryTranslationsEdgeCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('serviceCategoryTranslationsEdge collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -288,7 +340,7 @@ async function createServiceCategoryTranslationsEdgeCollection() {
 }
 
 // Create serviceTranslations collection
-async function createServiceTranslationsCollection() {
+async function createServiceTranslationsCollection(importConfig) {
   try {
     const collection = db.collection('serviceTranslations');
     const exists = await collection.exists();
@@ -298,7 +350,7 @@ async function createServiceTranslationsCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('serviceTranslations collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -341,7 +393,7 @@ async function createServiceTranslationsCollection() {
 }
 
 // Create serviceTranslationsEdge collection
-async function createServiceTranslationsEdgeCollection() {
+async function createServiceTranslationsEdgeCollection(importConfig) {
   try {
     const collection = db.collection('serviceTranslationsEdge');
     const exists = await collection.exists();
@@ -351,7 +403,7 @@ async function createServiceTranslationsEdgeCollection() {
       return collection;
     }
     
-    if (!IMPORT_CONFIG.createCollection) {
+    if (!importConfig.createCollection) {
       throw new Error('serviceTranslationsEdge collection does not exist and CREATE_COLLECTION=false');
     }
     
@@ -373,19 +425,19 @@ async function createServiceTranslationsEdgeCollection() {
 }
 
 // Read and validate import file
-async function readImportFile() {
+async function readImportFile(importConfig) {
   try {
-    console.log(`Reading import file: ${IMPORT_CONFIG.inputFile}`);
+    console.log(`Reading import file: ${importConfig.inputFile}`);
     
     // Check if file exists
     try {
-      await fs.access(IMPORT_CONFIG.inputFile);
+      await fs.access(importConfig.inputFile);
     } catch (error) {
-      throw new Error(`Import file not found: ${IMPORT_CONFIG.inputFile}`);
+      throw new Error(`Import file not found: ${importConfig.inputFile}`);
     }
     
     // Read file content
-    const fileContent = await fs.readFile(IMPORT_CONFIG.inputFile, 'utf8');
+    const fileContent = await fs.readFile(importConfig.inputFile, 'utf8');
     const importData = JSON.parse(fileContent);
     
     console.log('Analyzing import file structure...');
@@ -484,9 +536,9 @@ async function readImportFile() {
 }
 
 // Validate import data
-async function validateImportData(importData) {
+async function validateImportData(importData, importConfig) {
   try {
-    if (!IMPORT_CONFIG.validateBeforeImport) {
+    if (!importConfig.validateBeforeImport) {
       console.log('Skipping data validation (VALIDATE_BEFORE_IMPORT=false)');
       return true;
     }
@@ -770,8 +822,8 @@ async function checkExistingData(collections, importData) {
 }
 
 // Clean document based on schema requirements
-function cleanDocument(doc, collectionName) {
-  if (IMPORT_CONFIG.schemaStrict) {
+function cleanDocument(doc, collectionName, importConfig) {
+  if (importConfig.schemaStrict) {
     if (collectionName === 'serviceCategories') {
       const cleaned = {
         _key: doc._key,
@@ -908,7 +960,7 @@ function cleanDocument(doc, collectionName) {
 }
 
 // Import documents for a single collection
-async function importDocumentsForCollection(collection, documents, collectionName) {
+async function importDocumentsForCollection(collection, documents, collectionName, importConfig) {
   try {
     console.log(`\n=== Starting ${collectionName} import ===`);
     
@@ -982,15 +1034,15 @@ async function importDocumentsForCollection(collection, documents, collectionNam
     }
     
     // Clean documents based on schema requirements
-    const cleanedDocs = documentsToImport.map(doc => cleanDocument(doc, collectionName));
+    const cleanedDocs = documentsToImport.map(doc => cleanDocument(doc, collectionName, importConfig));
     
     console.log(`  - Cleaned sample:`, JSON.stringify(cleanedDocs[0], null, 2));
     
     // Process in batches
-    for (let i = 0; i < cleanedDocs.length; i += IMPORT_CONFIG.batchSize) {
-      const batch = cleanedDocs.slice(i, i + IMPORT_CONFIG.batchSize);
-      const batchNumber = Math.floor(i / IMPORT_CONFIG.batchSize) + 1;
-      const totalBatches = Math.ceil(cleanedDocs.length / IMPORT_CONFIG.batchSize);
+    for (let i = 0; i < cleanedDocs.length; i += importConfig.batchSize) {
+      const batch = cleanedDocs.slice(i, i + importConfig.batchSize);
+      const batchNumber = Math.floor(i / importConfig.batchSize) + 1;
+      const totalBatches = Math.ceil(cleanedDocs.length / importConfig.batchSize);
       
       console.log(`Processing ${collectionName} batch ${batchNumber}/${totalBatches} (${batch.length} documents)...`);
       
@@ -1051,7 +1103,7 @@ async function importDocumentsForCollection(collection, documents, collectionNam
 }
 
 // Import all data
-async function importAllDocuments(collections, importData) {
+async function importAllDocuments(collections, importData, importConfig) {
   try {
     console.log('\n=== Starting import of all collections ===');
     
@@ -1059,43 +1111,50 @@ async function importAllDocuments(collections, importData) {
     const categoriesResult = await importDocumentsForCollection(
       collections.serviceCategories, 
       importData.serviceCategories, 
-      'serviceCategories'
+      'serviceCategories',
+      importConfig
     );
     
     const servicesResult = await importDocumentsForCollection(
       collections.services, 
       importData.services, 
-      'services'
+      'services',
+      importConfig
     );
     
     const categoryServicesResult = await importDocumentsForCollection(
       collections.categoryServices,
       importData.categoryServices,
-      'categoryServices'
+      'categoryServices',
+      importConfig
     );
     
     const serviceCategoryTranslationsResult = await importDocumentsForCollection(
       collections.serviceCategoryTranslations,
       importData.serviceCategoryTranslations,
-      'serviceCategoryTranslations'
+      'serviceCategoryTranslations',
+      importConfig
     );
     
     const serviceCategoryTranslationsEdgeResult = await importDocumentsForCollection(
       collections.serviceCategoryTranslationsEdge,
       importData.serviceCategoryTranslationsEdge,
-      'serviceCategoryTranslationsEdge'
+      'serviceCategoryTranslationsEdge',
+      importConfig
     );
     
     const serviceTranslationsResult = await importDocumentsForCollection(
       collections.serviceTranslations,
       importData.serviceTranslations,
-      'serviceTranslations'
+      'serviceTranslations',
+      importConfig
     );
     
     const serviceTranslationsEdgeResult = await importDocumentsForCollection(
       collections.serviceTranslationsEdge,
       importData.serviceTranslationsEdge,
-      'serviceTranslationsEdge'
+      'serviceTranslationsEdge',
+      importConfig
     );
     
     const totalImported = categoriesResult.importedCount + servicesResult.importedCount + 
@@ -1435,15 +1494,15 @@ async function verifyImport(collections, originalData) {
 }
 
 // Main import function
-async function executeImport() {
+async function executeImport(dbConfig, importConfig) {
   console.log('=== ArangoDB ServiceCategories, Services & Translations Data Import ===\n');
   
   try {
     // Initialize database connection
-    await initializeDatabase();
+    await initializeDatabase(dbConfig);
     
     // Read and validate import file
-    const importData = await readImportFile();
+    const importData = await readImportFile(importConfig);
     
     if (importData.serviceCategories.length === 0 && importData.services.length === 0 && 
         importData.categoryServices.length === 0 && importData.serviceCategoryTranslations.length === 0 &&
@@ -1454,41 +1513,41 @@ async function executeImport() {
     }
     
     // Validate import data
-    const isValid = await validateImportData(importData);
+    const isValid = await validateImportData(importData, importConfig);
     if (!isValid) {
       console.log('✗ Import aborted due to validation errors');
       return false;
     }
     
     // Ensure target database exists
-    await ensureTargetDatabase();
+    await ensureTargetDatabase(dbConfig, importConfig);
     
     // Create collections
     const collections = {
-      serviceCategories: await createServiceCategoriesCollection(),
-      services: await createServicesCollection(),
-      categoryServices: await createCategoryServicesCollection(),
-      serviceCategoryTranslations: await createServiceCategoryTranslationsCollection(),
-      serviceCategoryTranslationsEdge: await createServiceCategoryTranslationsEdgeCollection(),
-      serviceTranslations: await createServiceTranslationsCollection(),
-      serviceTranslationsEdge: await createServiceTranslationsEdgeCollection()
+      serviceCategories: await createServiceCategoriesCollection(importConfig),
+      services: await createServicesCollection(importConfig),
+      categoryServices: await createCategoryServicesCollection(importConfig),
+      serviceCategoryTranslations: await createServiceCategoryTranslationsCollection(importConfig),
+      serviceCategoryTranslationsEdge: await createServiceCategoryTranslationsEdgeCollection(importConfig),
+      serviceTranslations: await createServiceTranslationsCollection(importConfig),
+      serviceTranslationsEdge: await createServiceTranslationsEdgeCollection(importConfig)
     };
     
     // Check for existing data conflicts
-    const { conflicts, canProceed } = await checkExistingData(collections, importData);
+    const { conflicts, canProceed } = await checkExistingData(collections, importData, importConfig);
     if (!canProceed) {
       console.log('✗ Import aborted due to existing data conflicts');
       return false;
     }
     
     // Perform import
-    const importResult = await importAllDocuments(collections, importData);
+    const importResult = await importAllDocuments(collections, importData, importConfig);
     
     // Verify import
-    const verificationSuccess = await verifyImport(collections, importData);
+    const verificationSuccess = await verifyImport(collections, importData, importConfig);
     
     console.log('\n=== Final Import Summary ===');
-    console.log(`✓ Database: ${DB_CONFIG.databaseName}`);
+    console.log(`✓ Database: ${dbConfig.databaseName}`);
     console.log(`✓ ServiceCategories imported: ${importResult.serviceCategories.importedCount}`);
     console.log(`✓ ServiceCategories skipped: ${importResult.serviceCategories.skippedCount}`);
     console.log(`✓ Services imported: ${importResult.services.importedCount}`);
@@ -1533,14 +1592,85 @@ async function executeImport() {
   }
 }
 
+// Main entry point
+async function main() {
+    // --- Database Configuration ---
+    const dbConfig = {
+        url: process.env.ARANGO_URL || 'http://localhost:8529',
+        databaseName: process.env.ARANGO_DATABASE || 'test-node-services',
+        auth: {
+            username: process.env.ARANGO_USERNAME || 'root',
+            password: process.env.ARANGO_PASSWORD || 'test'
+        }
+    };
+
+    // --- User Confirmation ---
+    console.log('The script is configured with the following settings:');
+    console.log(`- ArangoDB URL: ${dbConfig.url}`);
+    console.log(`- Database Name: ${dbConfig.databaseName}`);
+    console.log(`- Username: ${dbConfig.auth.username}`);
+    console.log('--------------------------------------------------');
+    
+    const answer = await askQuestion('Are you sure you want to proceed with these settings? (Y/n) ');
+    if (answer.toLowerCase() !== 'y') {
+        console.log('Operation cancelled by user.');
+        process.exit(0);
+    }
+    
+    await loadInquirer();
+
+    // --- Interactive Import Config ---
+    const answers = await inquirer.prompt([
+        {
+            type: 'input',
+            name: 'inputFile',
+            message: 'Enter the path to the import JSON file:',
+            default: process.env.IMPORT_FILE || './exports/serviceCategoriesAndServices_export.json',
+        },
+        {
+            type: 'confirm',
+            name: 'createDatabase',
+            message: 'Create the database if it does not exist?',
+            default: (process.env.CREATE_DATABASE !== 'false'),
+        },
+        {
+            type: 'confirm',
+            name: 'createCollection',
+            message: 'Create collections if they do not exist?',
+            default: (process.env.CREATE_COLLECTION !== 'false'),
+        },
+        {
+            type: 'confirm',
+            name: 'validateBeforeImport',
+            message: 'Validate the import file before processing?',
+            default: (process.env.VALIDATE_BEFORE_IMPORT !== 'false'),
+        },
+        {
+            type: 'number',
+            name: 'batchSize',
+            message: 'Enter the batch size for import:',
+            default: parseInt(process.env.BATCH_SIZE, 10) || 100,
+        }
+    ]);
+
+    const importConfig = {
+        ...IMPORT_CONFIG, // Keep other defaults
+        ...answers
+    };
+
+
+    executeImport(dbConfig, importConfig).then(success => {
+        process.exit(success ? 0 : 1);
+    }).catch(error => {
+        console.error('Import script crashed:', error);
+        process.exit(1);
+    });
+}
+
+
 // Command line interface
 if (require.main === module) {
-  executeImport().then(success => {
-    process.exit(success ? 0 : 1);
-  }).catch(error => {
-    console.error('Import script crashed:', error);
-    process.exit(1);
-  });
+  main();
 }
 
 module.exports = {

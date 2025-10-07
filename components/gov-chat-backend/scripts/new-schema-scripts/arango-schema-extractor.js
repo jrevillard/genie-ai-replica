@@ -3,13 +3,14 @@
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const path = require('path');
+const readline = require('readline');
 
 class ArangoSchemaExtractor {
   constructor(config) {
     this.db = new Database({
-      url: config.url || 'http://localhost:8529',
+      url: config.url,
       databaseName: config.database,
-      auth: config.auth || { username: 'root', password: '' }
+      auth: config.auth
     });
     this.schema = {
       database: config.database,
@@ -323,25 +324,61 @@ class ArangoSchemaExtractor {
   }
 }
 
-// Usage example
+/**
+ * Helper function to ask a question in the console.
+ * @param {string} query The question to ask the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise(resolve => rl.question(query, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
+
+
+// Main execution block
 async function main() {
+  const outputPath = process.argv[2] || './arango-schema.json';
+
+  // Read configuration from environment variables, with defaults
   const config = {
-    url: 'http://localhost:8529',
-    database: 'node-services',
+    url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
+    database: process.env.ARANGO_DATABASE || 'node-services',
     auth: {
-      username: 'root',
-      password: 'test'
+      username: process.env.ARANGO_USER || 'root',
+      password: process.env.ARANGO_PASSWORD || 'your-database-password'
     }
   };
+
+  // --- Confirmation Prompt ---
+  console.log('--- Database Schema Extractor ---');
+  console.log('This script will extract the schema from an ArangoDB database.');
+  console.log('\nDatabase configuration to be used:');
+  console.log(`  URL:      ${config.url}`);
+  console.log(`  Database: ${config.database}`);
+  console.log(`  User:     ${config.auth.username}`);
+  
+  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+
+  if (answer.toLowerCase() !== 'y') {
+    console.log('Operation cancelled by user. Exiting.');
+    process.exit(0);
+  }
+  // --- End Confirmation Prompt ---
 
   const extractor = new ArangoSchemaExtractor(config);
   
   try {
-    const schema = await extractor.extractSchema();
-    await extractor.saveSchema('./arango-schema.json');
+    await extractor.extractSchema();
+    await extractor.saveSchema(outputPath);
     
-    console.log('\nSchema extraction completed!');
-    console.log('Schema saved to: arango-schema.json');
+    console.log(`\nSchema extraction completed! Schema saved to: ${outputPath}`);
     
   } catch (error) {
     console.error('Schema extraction failed:', error);
@@ -354,3 +391,4 @@ if (require.main === module) {
 }
 
 module.exports = ArangoSchemaExtractor;
+

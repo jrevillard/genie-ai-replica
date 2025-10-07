@@ -21,8 +21,7 @@
  * Usage:
  * - Interactive Mode: node create-knowledge-hierarchy.js
  * - File Mode:        node create-knowledge-hierarchy.js --file <path_to_json_file>
- * 
- * NOTE: disable schema validation for the serviceCategories and Services collection 
+ * * NOTE: disable schema validation for the serviceCategories and Services collection 
  * and the categoryServices edge collection before running the script and enable again afterward
  *
  * JSON File Format for File Mode:
@@ -63,21 +62,32 @@ const fs = require('fs').promises;
 const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
+const readline = require('readline');
 require('dotenv').config();
 
 // To support modern ESM-only packages like inquirer v9+, we will dynamically import it.
 let inquirer;
 
-class HierarchyCreator {
-  constructor() {
-    this.db = new Database({
-      url: process.env.ARANGO_URL || 'http://localhost:8529',
-      databaseName: process.env.ARANGO_DATABASE || 'test-temp',
-      auth: {
-        username: process.env.ARANGO_USERNAME || 'root',
-        password: process.env.ARANGO_PASSWORD || 'test'
-      }
+/**
+ * Asks a question in the console and returns the user's answer.
+ * @param {string} query - The question to display to the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
     });
+  
+    return new Promise(resolve => rl.question(query, ans => {
+      rl.close();
+      resolve(ans);
+    }));
+}
+
+class HierarchyCreator {
+  constructor(dbConfig) {
+    this.db = new Database(dbConfig);
   }
 
   /**
@@ -390,8 +400,34 @@ Please run the schema creation script first to set up the database structure:
 }
 
 async function main() {
+    // Read configuration from environment variables, with defaults
+    const dbConfig = {
+        url: process.env.ARANGO_URL || "http://localhost:8529",
+        databaseName: process.env.ARANGO_DATABASE || "test-temp",
+        auth: {
+            username: process.env.ARANGO_USER || "root",
+            password: process.env.ARANGO_PASSWORD || "test"
+        }
+    };
+
+    // --- Confirmation Prompt ---
+    console.log('--- Knowledge Hierarchy Creation Script ---');
+    console.log('This script will create service categories and services in the database.');
+    console.log('\nDatabase configuration to be used:');
+    console.log(`  URL:      ${dbConfig.url}`);
+    console.log(`  Database: ${dbConfig.databaseName}`);
+    console.log(`  User:     ${dbConfig.auth.username}`);
+
+    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+
+    if (answer.toLowerCase() !== 'y') {
+        console.log('Operation cancelled by user. Exiting.');
+        process.exit(0);
+    }
+    // --- End Confirmation Prompt ---
+
   try {
-    const creator = new HierarchyCreator();
+    const creator = new HierarchyCreator(dbConfig);
     await creator.run();
     process.exit(0);
   } catch (error) {

@@ -2,6 +2,7 @@
 
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
+const readline = require('readline');
 
 // Redirect all console output to both console and log file
 let logBuffer = [];
@@ -35,10 +36,11 @@ console.warn = function(...args) {
 
 class ArangoSchemaCreator {
   constructor(config) {
+    this.databaseName = config.database; // Store for logging
     this.db = new Database({
-      url: config.url || 'http://localhost:8529',
-      databaseName: config.database,
-      auth: config.auth || { username: 'root', password: '' }
+      url: config.url,
+      databaseName: this.databaseName,
+      auth: config.auth
     });
   }
 
@@ -48,63 +50,41 @@ class ArangoSchemaCreator {
   }
 
   convertSchemaFormat(schema) {
-    // Convert from extracted format to ArangoDB format
-    // Remove "optional" properties and handle them correctly
-    function processProperties(properties, parentRequired = []) {
-      if (!properties || typeof properties !== 'object') return { properties, required: parentRequired };
+    // This function recursively cleans the schema rule to remove non-standard properties like "optional".
+    function processProperties(properties) {
+      if (!properties || typeof properties !== 'object') return properties;
       
       const newProperties = {};
-      const required = [...parentRequired];
       
       for (const [key, value] of Object.entries(properties)) {
         const newValue = { ...value };
         
-        // Remove the optional flag and handle required status
-        if (newValue.optional === true) {
-          delete newValue.optional;
-          // Don't add to required if it's optional
-        } else {
-          // Add to required if not optional and not already there
-          if (!required.includes(key)) {
-            required.push(key);
-          }
-        }
-        
-        // Remove other non-standard properties
+        // Remove non-standard properties used for our custom format
+        delete newValue.optional;
         delete newValue.default;
         
-        // Process nested objects
+        // Recurse into nested objects
         if (newValue.type === 'object' && newValue.properties) {
-          const nested = processProperties(newValue.properties, []);
-          newValue.properties = nested.properties;
-          if (nested.required && nested.required.length > 0) {
-            newValue.required = nested.required;
-          }
+          newValue.properties = processProperties(newValue.properties);
         }
         
-        // Process array items
-        if (newValue.type === 'array' && newValue.items) {
-          if (newValue.items.type === 'object' && newValue.items.properties) {
-            const nested = processProperties(newValue.items.properties, []);
-            newValue.items.properties = nested.properties;
-            if (nested.required && nested.required.length > 0) {
-              newValue.items.required = nested.required;
-            }
-          }
+        // Recurse into array items if they are objects
+        if (newValue.type === 'array' && newValue.items && newValue.items.type === 'object' && newValue.items.properties) {
+          newValue.items.properties = processProperties(newValue.items.properties);
         }
         
         newProperties[key] = newValue;
       }
       
-      return { properties: newProperties, required };
+      return newProperties;
     }
     
-    const result = { ...schema };
+    // Deep clone the original schema rule to avoid modifying it
+    const result = JSON.parse(JSON.stringify(schema));
     
+    // Process properties to clean them up, but leave the 'required' array as is.
     if (result.properties) {
-      const processed = processProperties(result.properties, result.required || []);
-      result.properties = processed.properties;
-      result.required = processed.required;
+      result.properties = processProperties(result.properties);
     }
     
     return result;
@@ -116,7 +96,7 @@ class ArangoSchemaCreator {
   }
 
   async createSchema(schema) {
-    console.log(`Creating schema for database: ${schema.database}`);
+    console.log(`Creating schema for database: ${this.databaseName}`);
     
     try {
       await this.createCollections(schema.collections);
@@ -168,33 +148,26 @@ class ArangoSchemaCreator {
         if (collectionSchema.properties.schema && collectionSchema.properties.schema.rule) {
           try {
             console.log(`  Processing schema for ${collectionSchema.name}`);
-            console.log(`  Original schema:`, JSON.stringify(collectionSchema.properties.schema.rule, null, 2));
             
             // Convert schema format to ArangoDB format
-            const convertedSchema = this.convertSchemaFormat(collectionSchema.properties.schema.rule);
-            console.log(`  Converted schema:`, JSON.stringify(convertedSchema, null, 2));
+            const convertedSchemaRule = this.convertSchemaFormat(collectionSchema.properties.schema.rule);
+            console.log(`  Converted schema rule:`, JSON.stringify(convertedSchemaRule, null, 2));
             
-            // ArangoDB expects schema to be wrapped in a rule object
             options.schema = {
-              rule: convertedSchema,
+              rule: convertedSchemaRule,
               level: collectionSchema.properties.schema.level || "none",
               message: collectionSchema.properties.schema.message || "Document does not match schema"
             };
             
-            console.log(`  Final schema options:`, JSON.stringify(options.schema, null, 2));
             console.log(`  Adding schema validation to ${collectionSchema.name}`);
-            console.log(`  Schema rule applied with ${Object.keys(convertedSchema.properties || {}).length} properties`);
-            console.log(`  Required fields: ${(convertedSchema.required || []).join(', ')}`);
           } catch (schemaError) {
             console.error(`  Schema conversion failed for ${collectionSchema.name}: ${schemaError.message}`);
-            console.error(`  Schema error stack: ${schemaError.stack}`);
             console.log(`  Creating collection without schema validation`);
           }
         } else {
           console.log(`  No schema validation for ${collectionSchema.name}`);
         }
 
-        console.log(`  Creating collection with options:`, JSON.stringify(options, null, 2));
         await collection.create(options);
         console.log(`Created collection: ${collectionSchema.name}`);
       } catch (error) {
@@ -216,6 +189,12 @@ class ArangoSchemaCreator {
       const collection = this.db.collection(collectionSchema.name);
       
       for (const indexSchema of collectionSchema.indexes) {
+        // Skip creating edge indexes as ArangoDB manages them automatically
+        if (indexSchema.type === 'edge') {
+          console.log(`Skipping managed edge index on ${collectionSchema.name}`);
+          continue;
+        }
+
         try {
           const indexOptions = {
             type: indexSchema.type,
@@ -248,33 +227,23 @@ class ArangoSchemaCreator {
 
   async createGraphs(graphs) {
     console.log('Creating graphs...');
-    
+    if (!graphs || !Array.isArray(graphs)) return;
+
     for (const graphSchema of graphs) {
       try {
-        const options = {
-          edgeDefinitions: Array.isArray(graphSchema.edgeDefinitions) ? graphSchema.edgeDefinitions : [],
-          orphanCollections: Array.isArray(graphSchema.orphanCollections) ? graphSchema.orphanCollections : []
-        };
-
-        // Add smart graph options if available
+        const graph = this.db.graph(graphSchema.name);
+        const edgeDefs = Array.isArray(graphSchema.edgeDefinitions) ? graphSchema.edgeDefinitions : [];
+        const orphanColls = Array.isArray(graphSchema.orphanCollections) ? graphSchema.orphanCollections : [];
+        
+        const graphOptions = {};
         if (graphSchema.isSmart) {
-          options.isSmart = true;
-          if (graphSchema.options.smartGraphAttribute) {
-            options.smartGraphAttribute = graphSchema.options.smartGraphAttribute;
-          }
-          if (graphSchema.options.numberOfShards) {
-            options.numberOfShards = graphSchema.options.numberOfShards;
-          }
-          if (graphSchema.options.replicationFactor) {
-            options.replicationFactor = graphSchema.options.replicationFactor;
-          }
-          if (graphSchema.options.minReplicationFactor) {
-            options.minReplicationFactor = graphSchema.options.minReplicationFactor;
-          }
+            graphOptions.isSmart = true;
+            if (graphSchema.options) {
+                graphOptions.options = graphSchema.options;
+            }
         }
 
-        const graph = this.db.graph(graphSchema.name);
-        await graph.create(options);
+        await graph.create({ edgeDefinitions: edgeDefs, orphanCollections: orphanColls, ...graphOptions });
         console.log(`Created graph: ${graphSchema.name}`);
       } catch (error) {
         if (error.code === 1925) { // Graph already exists
@@ -288,6 +257,7 @@ class ArangoSchemaCreator {
 
   async createViews(views) {
     console.log('Creating views...');
+    if (!views || !Array.isArray(views)) return;
     
     for (const viewSchema of views) {
       try {
@@ -306,7 +276,8 @@ class ArangoSchemaCreator {
 
   async createAnalyzers(analyzers) {
     console.log('Creating analyzers...');
-    
+    if (!analyzers || !Array.isArray(analyzers)) return;
+
     for (const analyzerSchema of analyzers) {
       try {
         await this.db.request({
@@ -332,6 +303,7 @@ class ArangoSchemaCreator {
 
   async createFunctions(functions) {
     console.log('Creating AQL functions...');
+    if (!functions || !Array.isArray(functions)) return;
     
     for (const functionSchema of functions) {
       try {
@@ -356,18 +328,52 @@ class ArangoSchemaCreator {
   }
 }
 
-// Usage example
+/**
+ * Helper function to ask a question in the console.
+ * @param {string} query The question to ask the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise(resolve => rl.question(query, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
+
+// Main execution block
 async function main() {
   const schemaPath = process.argv[2] || './arango-schema.json';
   
+  // Read configuration from environment variables, with defaults
   const config = {
-    url: 'http://localhost:8529',
-    database: 'test-temp',
+    url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
+    database: process.env.ARANGO_DATABASE || 'node-services',
     auth: {
-      username: 'root',
-      password: 'test'
+      username: process.env.ARANGO_USER || 'root',
+      password: process.env.ARANGO_PASSWORD || 'your-database-password'
     }
   };
+
+  // --- Confirmation Prompt ---
+  console.log('--- Database Schema Creator ---');
+  console.log('This script will apply a schema to an ArangoDB database.');
+  console.log('\nDatabase configuration to be used:');
+  console.log(`  URL:      ${config.url}`);
+  console.log(`  Database: ${config.database}`);
+  console.log(`  User:     ${config.auth.username}`);
+  
+  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+
+  if (answer.toLowerCase() !== 'y') {
+    console.log('Operation cancelled by user. Exiting.');
+    process.exit(0);
+  }
+  // --- End Confirmation Prompt ---
 
   const creator = new ArangoSchemaCreator(config);
   
@@ -388,3 +394,4 @@ if (require.main === module) {
 }
 
 module.exports = ArangoSchemaCreator;
+

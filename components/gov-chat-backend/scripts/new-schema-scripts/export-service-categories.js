@@ -1,19 +1,24 @@
 const { Database } = require('arangojs');
 const fs = require('fs').promises;
 const path = require('path');
+const readline = require('readline');
 
-// =============================================================================
-// DATABASE CONNECTION CONFIGURATION
-// =============================================================================
-
-const DB_CONFIG = {
-  url: process.env.ARANGO_URL || 'http://localhost:8529',
-  databaseName: process.env.ARANGO_DATABASE || 'node-services',
-  auth: {
-    username: process.env.ARANGO_USERNAME || 'root',
-    password: process.env.ARANGO_PASSWORD || 'test'
-  }
-};
+/**
+ * Asks a question in the console and returns the user's answer.
+ * @param {string} query - The question to display to the user.
+ * @returns {Promise<string>} The user's answer.
+ */
+function askQuestion(query) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+  
+    return new Promise(resolve => rl.question(query, ans => {
+      rl.close();
+      resolve(ans);
+    }));
+}
 
 // Export configuration
 const EXPORT_CONFIG = {
@@ -26,14 +31,14 @@ const EXPORT_CONFIG = {
 let db;
 
 // Initialize database connection
-async function initializeDatabase() {
+async function initializeDatabase(dbConfig) {
   try {
-    console.log(`Connecting to ArangoDB at ${DB_CONFIG.url}...`);
+    console.log(`Connecting to ArangoDB at ${dbConfig.url}...`);
     
     db = new Database({
-      url: DB_CONFIG.url,
-      databaseName: DB_CONFIG.databaseName,
-      auth: DB_CONFIG.auth
+      url: dbConfig.url,
+      databaseName: dbConfig.databaseName,
+      auth: dbConfig.auth
     });
     
     // Test connection
@@ -196,7 +201,7 @@ async function ensureExportDirectory() {
 }
 
 // Export all collections data
-async function exportServiceCategoriesAndServices() {
+async function exportServiceCategoriesAndServices(dbConfig) {
   try {
     console.log('Starting export of all collections...');
     
@@ -448,8 +453,8 @@ async function exportServiceCategoriesAndServices() {
     const exportData = {
       metadata: {
         exportDate: new Date().toISOString(),
-        sourceDatabase: DB_CONFIG.databaseName,
-        sourceUrl: DB_CONFIG.url,
+        sourceDatabase: dbConfig.databaseName,
+        sourceUrl: dbConfig.url,
         collections: [
           'serviceCategories',
           'services',
@@ -611,7 +616,7 @@ async function exportServiceCategoriesAndServices() {
 }
 
 // Generate export summary
-async function generateExportSummary(exportResult) {
+async function generateExportSummary(exportResult, dbConfig) {
   try {
     console.log('Generating export summary...');
     
@@ -620,8 +625,8 @@ async function generateExportSummary(exportResult) {
       timestamp: new Date().toISOString(),
       config: EXPORT_CONFIG,
       database: {
-        url: DB_CONFIG.url,
-        name: DB_CONFIG.databaseName
+        url: dbConfig.url,
+        name: dbConfig.databaseName
       }
     };
     
@@ -838,12 +843,12 @@ async function validateExportedData(filePath) {
 }
 
 // Main export function
-async function executeExport() {
+async function executeExport(dbConfig) {
   console.log('=== ArangoDB ServiceCategories, Services & Translations Data Export ===\n');
   
   try {
     // Initialize database connection
-    await initializeDatabase();
+    await initializeDatabase(dbConfig);
     
     // Validate all collections exist
     const collections = await validateCollections();
@@ -857,14 +862,14 @@ async function executeExport() {
     await ensureExportDirectory();
     
     // Perform export of all collections
-    const exportResult = await exportServiceCategoriesAndServices();
+    const exportResult = await exportServiceCategoriesAndServices(dbConfig);
     
     // Validate exported data
     const isValid = await validateExportedData(exportResult.filePath);
     
     if (isValid) {
       // Generate summary
-      await generateExportSummary(exportResult);
+      await generateExportSummary(exportResult, dbConfig);
     }
     
     console.log('\n=== Export Summary ===');
@@ -892,14 +897,43 @@ async function executeExport() {
   }
 }
 
+// Main entry point
+async function main() {
+    // --- Database Configuration ---
+    const dbConfig = {
+        url: process.env.ARANGO_URL || 'http://localhost:8529',
+        databaseName: process.env.ARANGO_DATABASE || 'node-services',
+        auth: {
+            username: process.env.ARANGO_USERNAME || 'root',
+            password: process.env.ARANGO_PASSWORD || 'test'
+        }
+    };
+
+    // --- User Confirmation ---
+    console.log('The script is configured with the following settings:');
+    console.log(`- ArangoDB URL: ${dbConfig.url}`);
+    console.log(`- Database Name: ${dbConfig.databaseName}`);
+    console.log(`- Username: ${dbConfig.auth.username}`);
+    console.log(`- Output Directory: ${EXPORT_CONFIG.outputDir}`);
+    console.log('--------------------------------------------------');
+    
+    const answer = await askQuestion('Are you sure you want to proceed with these settings? (Y/n) ');
+    if (answer.toLowerCase() !== 'y') {
+        console.log('Operation cancelled by user.');
+        process.exit(0);
+    }
+
+    executeExport(dbConfig).then(success => {
+        process.exit(success ? 0 : 1);
+    }).catch(error => {
+        console.error('Export script crashed:', error);
+        process.exit(1);
+    });
+}
+
 // Command line interface
 if (require.main === module) {
-  executeExport().then(success => {
-    process.exit(success ? 0 : 1);
-  }).catch(error => {
-    console.error('Export script crashed:', error);
-    process.exit(1);
-  });
+  main();
 }
 
 module.exports = {

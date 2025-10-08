@@ -12,20 +12,13 @@ const axios = require('axios');
 // Constants
 const MAX_FILES_UPLOAD = config.upload.maxFilesUpload; // Maximum number of files that can be uploaded at once
 
-// Validation schemas
+// Schema for file upload validation
 const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
-  labels: Joi.array().items(Joi.string()).default([]), // Joi.array().items(Joi.string().max(50)).max(10).default([])
+  labels: Joi.array().items(Joi.string()).default([]),
   crawlDate: Joi.date().optional(),
   sourceUrl: Joi.string().uri().optional()
-}); // Schema for file upload validation
-// This schema validates the request body for file uploads, ensuring required fields are present and correctly formatted
-// It includes optional fields for author, labels, crawl date, and source URL.
-// Labels are processed to ensure they are an array of strings, with a maximum of 10 labels allowed.
-// The schema also allows for a default label of 'general' if no labels are provided.
-// The author field is optional and can be a string up to 200 characters.
-// The crawl date is optional and must be a valid date if provided.
-// The source URL is optional and must be a valid URI if provided.
+});
 
 const searchSchema = Joi.object({
   q: Joi.string().min(2).max(100).required(),
@@ -37,7 +30,7 @@ const searchSchema = Joi.object({
 const getFilesSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
-  language: Joi.string().min(2).max(5).optional(), // Joi.string().valid('en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
+  language: Joi.string().min(2).max(5).optional(),
   mimeType: Joi.string().optional(),
   search: Joi.string().max(100).optional(),
   dataprepStatus: Joi.string().valid('pending', 'ingested', 'retracted').optional(),
@@ -45,12 +38,12 @@ const getFilesSchema = Joi.object({
 
 const updateFileSchema = Joi.object({
   file_name: Joi.string().max(255).optional(),
-  labels: Joi.array().items(Joi.string()).optional(), // Joi.array().items(Joi.string().max(50)).max(10).optional()
+  labels: Joi.array().items(Joi.string()).optional(),
   author: Joi.string().max(200).optional(),
   create_date: Joi.date().optional(),
   crawl_date: Joi.date().optional(),
   source_url: Joi.string().uri().optional(),
-  language: Joi.string().min(2).max(5).optional() // Joi.string().valid('en', 'fr', 'de', 'es', 'it', 'zh', 'ja', 'ko').optional(),
+  language: Joi.string().min(2).max(5).optional()
 });
 
 class FileController {
@@ -63,14 +56,11 @@ class FileController {
     this.uploadFile = this.uploadFile.bind(this);
     this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
     this.getFiles = this.getFiles.bind(this);
-    // this.getFileById = this.getFileById.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
-    this.processFile = this.processFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
     this.updateFile = this.updateFile.bind(this);
     this.searchMetadata = this.searchMetadata.bind(this);
     this.getMetadata = this.getMetadata.bind(this);
-    // this.updateMetadataController = this.updateMetadataController.bind(this);
     this.ingestFile = this.ingestFile.bind(this);
     this.retractFile = this.retractFile.bind(this);
     this.ingestMultipleFiles = this.ingestMultipleFiles.bind(this);
@@ -89,13 +79,10 @@ class FileController {
     try {
       let labels = body.labels;
       
-      // Handle string input
       if (typeof labels === 'string') {
         try {
-          // Try to parse as JSON first
           labels = JSON.parse(labels);
         } catch (e) {
-          // If JSON parsing fails, treat as comma-separated string
           labels = labels.split(',').map(label => label.trim());
         }
       }
@@ -244,12 +231,12 @@ class FileController {
 
     // retrieve file from database and search actual file on disk
     const file = await metadataService.getMetadataById(fileId);
-    logger.debug(`🧪 [FILE-CONTROLLER] Retrieved file: ${JSON.stringify(file, null, 2)}`);
+    logger.debug(`[FILE-CONTROLLER] Retrieved file: ${JSON.stringify(file, null, 2)}`);
     const fileExtension = path.extname(file.file_name).slice(1);
-    logger.debug(`🧪 [FILE-CONTROLLER] File extension: ${fileExtension}`);
+    logger.debug(`[FILE-CONTROLLER] File extension: ${fileExtension}`);
     const fileNameOnDisk = file.file_id + '.' + fileExtension;
     const filePath = file.storage_path || path.join(config.upload.uploadDir, fileNameOnDisk);
-    logger.debug(`🧪 [FILE-CONTROLLER] filePath: ${filePath}`);
+    logger.debug(`[FILE-CONTROLLER] filePath: ${filePath}`);
 
     // Check if file exists
     try {
@@ -261,7 +248,6 @@ class FileController {
         message: 'The physical file does not exist'
       };
     }
-
     return { file, filePath };
   }
 
@@ -393,48 +379,6 @@ class FileController {
     }
   }
 
-  // /**
-  //  * Get file by ID
-  //  * @param {Object} req - Express request object
-  //  * @param {Object} res - Express response object
-  //  */
-  // async getFileById(req, res) {
-  //   try {
-  //     const { id } = req.params;
-
-  //     if (!id) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         error: 'Missing file ID',
-  //         message: 'File ID is required'
-  //       });
-  //     }
-
-  //     const file = await fileService.getFileById(id);
-
-  //     res.json({
-  //       success: true,
-  //       message: 'File retrieved successfully',
-  //       data: file
-  //     });
-  //   } catch (error) {
-  //     logger.error('Get file by ID error:', error);
-      
-  //     if (error.message === 'File not found') {
-  //       return res.status(404).json({
-  //         success: false,
-  //         error: 'File not found',
-  //         message: 'The requested file does not exist'
-  //       });
-  //     }
-
-  //     res.status(500).json({
-  //       success: false,
-  //       error: 'Failed to retrieve file',
-  //       message: 'An error occurred while retrieving the file'
-  //     });
-  //   }
-  // }
 
   /**
    * Download file
@@ -529,7 +473,7 @@ class FileController {
       const { fileId } = req.params;
       const { file, base64String } = await this._getFileBase64(fileId);
 
-      // construct response with file file information and base64 string
+      // construct response with file information and base64 string
       res.json({
         success: true,
         message: 'File retrieved successfully',
@@ -589,6 +533,7 @@ class FileController {
       });
     }
   }
+
 
   /**
    * Delete file by ID
@@ -680,6 +625,7 @@ class FileController {
     }
   }
 
+
   /**
    * Update file metadata
    * @param {Object} req - Express request object
@@ -689,7 +635,7 @@ class FileController {
     try {
       const { fileId } = req.params;
 
-      logger.debug(`[FILE-CONTROLLER] Update File Request: ${JSON.stringify(req.body, null, 2)}`); // Log the request body for debugging
+      logger.debug(`[FILE-CONTROLLER] Update File Request: ${JSON.stringify(req.body, null, 2)}`);
 
       if (!fileId) {
         return res.status(400).json({
@@ -765,63 +711,6 @@ class FileController {
     }
   }
 
-  /**
-   * Process file with dataprep service
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  async processFile(req, res) {
-    try {
-      const { id } = req.params;
-
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing file ID',
-          message: 'File ID is required'
-        });
-      }
-
-      // NOTE: file processing is not implemented yet
-      // TODO: [HIGH] Implement file processing
-      // const result = await fileService.processFile(id);
-
-      res.json({
-        success: true,
-        message: 'File processed successfully',
-        data: {
-          id: id,
-          status: 'processed',
-          processedAt: new Date().toISOString(),
-          processingResult: 'not implemented yet' // response from data prep service
-        }
-      });
-    } catch (error) {
-      logger.error('Process file error:', error);
-      
-      if (error.message === 'File not found') {
-        return res.status(404).json({
-          success: false,
-          error: 'File not found',
-          message: 'The requested file does not exist'
-        });
-      }
-      
-      if (error.message === 'File has already been processed') {
-        return res.status(400).json({
-          success: false,
-          error: 'File already processed',
-          message: error.message
-        });
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Processing failed',
-        message: 'An error occurred while processing the file'
-      });
-    }
-  }
 
   /**
    * Search files
@@ -859,6 +748,7 @@ class FileController {
       });
     }
   }
+
 
   /**
    * Search file by metadata
@@ -938,6 +828,7 @@ class FileController {
     }
   }
 
+
   /**
    * Get file metadata by file_id
    */
@@ -976,37 +867,6 @@ class FileController {
     }
   }
 
-  //   /**
-//    * Update file metadata
-//    */
-//   async updateMetadataController(req, res) {
-//     try {
-//       const { fileId } = req.params;
-
-//       if (!fileId) {
-//         return res.status(400).json({
-//           success: false,
-//           error: 'Missing file ID',
-//           message: 'File ID is required'
-//         });
-//       }
-
-//       const updatedMetadata = await metadataService.updateMetadata(fileId, req.body);
-
-//       res.json({
-//         success: true,
-//         message: 'Metadata updated successfully',
-//         data: updatedMetadata
-//       });
-//     } catch (error) {
-//       logger.error('Update metadata error:', error);
-//       res.status(500).json({
-//         success: false,
-//         error: error.message || 'Failed to update metadata',
-//       });
-//     }
-//   }
-
 
   // --- Helper for ingesting a single file ---
 
@@ -1016,14 +876,14 @@ class FileController {
       return { success: false, error: 'File has already been ingested' };
     }
     const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
-    logger.debug(`🤠 [FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
+    logger.debug(`[FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
     const response = await axios.post(dataprepUrl, {
       fileId: file.file_id,
       fileName: file.file_name,
       fileType: file.file_type,
-      fileLabels:file.labels, // 🏷️🏷️🏷️🏷️🏷️🏷️
+      fileLabels:file.labels,
       uploadDate: file.upload_date,
-      storagePath: file.storage_path, // 🗂️🗂️🗂️🗂️🗂️🗂️
+      storagePath: file.storage_path,
       fileBase64: base64String,
     });
     if (response.data.success) {
@@ -1079,51 +939,6 @@ class FileController {
       res.status(500).json({ success: false, error: error.message });
     }
   }
-
-  // /**
-  //  * Ingest file into dataprep service
-  //  * @param {Object} req - Express request object
-  //  * @param {Object} res - Express response object
-  //  */
-  // async ingestFile(req, res) {
-  // try {
-  //   const { fileId } = req.params;
-  //   const { file, base64String } = await this._getFileBase64(fileId);
-
-  //   // Send file info to dataprep microservice
-  //   const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.ingestPath}`;
-  //   logger.debug(`🤠 [FILE-CONTROLLER] Sending file to dataprep service at ${dataprepUrl}`);
-  //   const response = await axios.post(dataprepUrl, {
-  //     fileId: file.file_id,
-  //     fileName: file.file_name,
-  //     fileType: file.file_type,
-  //     uploadDate: file.upload_date,
-  //     fileBase64: base64String, // any other necessary file metadata can be added here? fileName, fileType, etc.
-  //   });
-
-  //   if (response.data.success) {
-  //     // Update metadata
-  //     await metadataService.updateMetadata(fileId, {
-  //       dataprep: {
-  //         status: 'ingested',
-  //         ingest_date: new Date().toISOString(),
-  //         retract_date: file.dataprep.retract_date || null // Preserve existing retract date if any
-  //       }
-  //     });
-  //     return res.json({ success: true, message: 'File ingested successfully' });
-  //   } else {
-  //     logger.error('Dataprep ingest failed:', response.data);
-  //     return res.status(500).json({ success: false, error: 'Data prep failed.', details: response.data });
-  //   }
-  // } catch (error) {
-  //   logger.error('Ingest file error:', error);
-  //   if (error.response) {
-  //   logger.error('Response data:', error.response.data);
-  //   logger.error('Response status:', error.response.status);
-  //   }
-  //   res.status(500).json({ success: false, error: error.message });
-  // }
-  // }
   
 
   // --- Helper for retracting a single file ---
@@ -1149,7 +964,6 @@ class FileController {
       return { success: false, error: response.data };
     }
   }
-
 
   // --- Single file retract ---
   async retractFile(req, res) {
@@ -1192,41 +1006,6 @@ class FileController {
       res.status(500).json({ success: false, error: error.message });
     }
   }
-
-
-  // /**
-  //  * Retract file from dataprep service
-  //  * @param {Object} req - Express request object
-  //  * @param {Object} res - Express response object
-  //  */
-  // async retractFile(req, res) {
-  // try {
-  //   const { fileId } = req.params;
-  //   const file = await metadataService.getMetadataById(fileId);
-  //   if (!file) return res.status(404).json({ success: false, error: 'File not found' });
-
-  //   // Send retract request to dataprep microservice
-  //   const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}${config.dataprep.retractPath}`; // Replace with actual URL/port
-  //   const response = await axios.post(dataprepUrl, { fileId: file.file_id });
-
-  //   if (response.data.success) {
-  //     // Update metadata
-  //     await metadataService.updateMetadata(fileId, {
-  //       dataprep: {
-  //         status: 'retracted',
-  //         ingest_date: file.dataprep.ingest_date || null, // Preserve existing ingest date if any
-  //         retract_date: new Date().toISOString()
-  //       }
-  //     });
-  //     return res.json({ success: true, message: 'File retracted successfully' });
-  //   } else {
-  //     return res.status(500).json({ success: false, error: 'Dataprep retract failed', details: response.data });
-  //   }
-  // } catch (error) {
-  //   logger.error('Retract file error:', error);
-  //   res.status(500).json({ success: false, error: error.message });
-  // }
-  // }
 }
 
 

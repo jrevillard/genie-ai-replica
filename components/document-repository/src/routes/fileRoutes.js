@@ -48,7 +48,6 @@ router.use(authenticateToken);
  *         description: Forbidden - Admin role required
  */
 router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
-// router.post('/upload', uploadSingle, fileController.uploadFile);
 
 /**
  * @swagger
@@ -93,7 +92,6 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  */
 router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
 
-
 /**
  * @swagger
  * /api/files/upload-link:
@@ -123,7 +121,6 @@ router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController
  *         description: Forbidden - Admin role required
  */
 router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink);
-
 
 /**
  * @swagger
@@ -433,11 +430,6 @@ router.delete('/', fileController.deleteMultipleFiles);
  *         description: File not found
  */
 router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
-
-// Update file metadata by fileId
-// This endpoint has similar functionality to the one above (PATCH /:fileId)
-// So this one and related functionalities are commented out and can be modified later if needed
-// router.patch('/metadata/:fileId', fileController.updateMetadataController);
 
 /**
  * @swagger

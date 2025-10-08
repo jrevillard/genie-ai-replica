@@ -1,6 +1,5 @@
 const multer = require('multer');
 const config = require('../config/appConfig');
-// const { validateFileType } = require('../utils/mimeTypes');
 
 // Configure multer storage
 const storage = multer.memoryStorage();
@@ -24,8 +23,8 @@ const upload = multer({
   storage: storage,
   limits: {
     fileSize: config.upload.maxFileSize,
-    files: config.upload.maxFilesUpload, // Maximum 5 files per request
-    fieldSize: config.upload.maxFileSize // 1MB field size limit
+    files: config.upload.maxFilesUpload, 
+    fieldSize: config.upload.maxFileSize
   },
   fileFilter: fileFilter
 });
@@ -48,7 +47,7 @@ const validateFiles = async (req, res, next) => {
 
     const files = req.files || [req.file];
     
-    // Validate each file
+    // TODO: Validate each file
     for (const file of files) {
       // const validation = await validateFileType(file);
       // if (!validation.isValid) {

@@ -33,7 +33,7 @@ class SecurityService {
     return await dbService.getConnection('default');
   }
 
-  /*
+  /**
    * Converts a buffer to a stream
    * @param {Buffer} buffer - Buffer to convert
    * @returns {Readable} Stream
@@ -113,10 +113,10 @@ class SecurityService {
       const decoded = jwt.verify(token, appConfig.security.jwtSecret);
       
       // return toke
-      logger.debug(`[SECURITY SERVICE] ✅ Token successfully decoded ${JSON.stringify(decoded)}`)      
+      logger.debug(`[SECURITY SERVICE] Token successfully decoded ${JSON.stringify(decoded)}`)      
       return decoded;
     } catch (error) {
-      logger.error(`[SECURITY SERVICE] ❌ Token verification error: ${error.message}`, { stack: error.stack });
+      logger.error(`[SECURITY SERVICE] Token verification error: ${error.message}`, { stack: error.stack });
       return null;
     }
   }
@@ -128,15 +128,15 @@ class SecurityService {
       const db = await this.getDb();
       const user = await db.collection('users').document(userId);
       if (!user) {
-        logger.warn(`[SECURITY SERVICE] ⚠️ User not found: ${userId}`);
+        logger.warn(`[SECURITY SERVICE] User not found: ${userId}`);
         return null;
       }
 
       // return user
-      logger.info(`[SECURITY SERVICE] ✅ User found: ${userId}`);
+      logger.info(`[SECURITY SERVICE] User found: ${userId}`);
       return user;
     } catch (error) {
-      logger.error(`[SECURITY SERVICE] ❌ Error getting user by ID: ${error.message}`, { stack: error.stack });
+      logger.error(`[SECURITY SERVICE] Error getting user by ID: ${error.message}`, { stack: error.stack });
       return null;
     }
   }

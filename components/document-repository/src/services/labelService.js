@@ -117,7 +117,7 @@ class LabelService {
     if (labelData.parentId) {
       try{
         const parentLabel = await db.collection(this.collectionName).document(labelData.parentId);
-        logger.info('🧪 Parent Label:' + JSON.stringify(parentLabel));
+        logger.info('Parent Label:' + JSON.stringify(parentLabel));
         if (!parentLabel || parentLabel.level !== 'category') {
           throw new Error('Invalid parentId: Parent must be a category label.');
         }

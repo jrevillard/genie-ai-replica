@@ -1,12 +1,11 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
 const { logger } = require('../shared-lib/logger');
 const dbService = require('../shared-lib/db-connection-service');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
-const Crawler = require('../utils/crawler'); // Assuming you have a crawler utility to fetch webpage content
+const Crawler = require('../utils/crawler'); // having a crawler utility to fetch webpage content
 
 
 // Import services
@@ -14,7 +13,6 @@ const securityService = require('./securityService');
 
 // Import utils
 const appConfig = require('../config/appConfig');
-const { config } = require('dotenv');
 
 class FileService {
   constructor() {
@@ -30,6 +28,7 @@ class FileService {
     return await dbService.getConnection('files');
   }
 
+  
   /**
    * Upload and process a file
    * @param {Object} fileData - File data from multer
@@ -56,7 +55,7 @@ class FileService {
         throw new Error(`File type ${mimeType} or extension ${fileExtension} is not allowed`);
       }
 
-      // Validate file size (default: 50MB)
+      // Validate file size
       const maxFileSize = appConfig.upload.maxFileSize;
       if (fileData.size > maxFileSize) {
         throw new Error(`File size exceeds maximum allowed size of ${maxFileSize} bytes`);
@@ -82,7 +81,7 @@ class FileService {
       await fs.writeFile(filePath, fileData.buffer);
 
       // TODO: Review Fix createdDate
-      // - the date is not correct, it's the date when the file was written to the disk in the server
+      // - Currently it is the date when the file was written to the disk in the server
       // - expected: the date when the file was created on the client side
       // - limitation: HTTP file uploads don't preserve filesystem metadata
       // - option 1: current solution, use the date when the file was written to the disk in the server
@@ -167,7 +166,7 @@ class FileService {
       }
     }
 
-    const ext = fileType === 'md' ? '.md' : '.html'; // ? and : means if fileType is 'md' then use .md else use .html
+    const ext = fileType === 'md' ? '.md' : '.html'; //if fileType is 'md' then use .md else use .html
     const fileName = `${title}${ext}`;
     const filePath = path.join(this.uploadDir, fileName);
 
@@ -182,7 +181,7 @@ class FileService {
     await fs.writeFile(filePath, content);
 
     // Prepare fileData object similar to multer
-    const stats = await fs.stat(filePath); // Get file stats
+    const stats = await fs.stat(filePath);
     const fileData = {
       originalname: fileName,
       mimetype: fileType === 'md' ? 'text/markdown' : 'text/html',
@@ -190,7 +189,7 @@ class FileService {
       buffer: Buffer.from(content)
     };
 
-    // 4. Call uploadFile to handle security, metadata, etc.
+    // Call uploadFile to handle security, metadata, etc.
     const fileInfo = {
       sourceUrl: url,
       labels: [],
@@ -200,7 +199,7 @@ class FileService {
     };
     const uploadedFile = await this.uploadFile(fileData, fileInfo);
 
-    //5. Delete the originally downloaded html file
+    // Delete the originally downloaded html file
     try {
       await fs.unlink(filePath);
       logger.debug(`[FILE-SERVICE] Deleted temp file: ${filePath}`);
@@ -211,30 +210,6 @@ class FileService {
     return uploadedFile;
   }
 
-
-  // /**
-  //  * Get file by ID
-  //  * @param {string} fileId - File ID
-  //  * @returns {Object} File record
-  //  */
-  // async getFileById(fileId) {
-  //   logger.debug(`[FILE-SERVICE] Getting file by ID: ${fileId}`);
-  //   try {
-  //     const db = await this.getDb();
-  //     // const file = await db.collection('files').document(fileId);
-  //     const file = await db.query(`
-  //       FOR file IN files
-  //       FILTER file.file_id == @fileId
-  //       RETURN file
-  //     `, { fileId }).then(cursor => cursor.next()); 
-  //     return file;
-  //   } catch (error) {
-  //     if (error.code === 404) {
-  //       throw new Error('File not found');
-  //     }
-  //     throw error;
-  //   }
-  // }
 
   /**
    * Get all files with pagination
@@ -262,7 +237,6 @@ class FileService {
       }
       if (search) {
         filters.push('CONTAINS(LOWER(file.file_name), LOWER(@search))');
-        // filters.push('CONTAINS(file.file_name, @search)');
         bindVars.search = search;
       }
       if (dataprepStatus) {
@@ -303,6 +277,7 @@ class FileService {
     }
   }
 
+
   /**
    * Delete file by ID
    * @param {string} fileId - File ID
@@ -314,7 +289,6 @@ class FileService {
       const file = await metadataService.getMetadataById(fileId);
       if (!file) {
         throw new Error(`File record not found in database: ${fileId}`);
-        return false;
       }
       
       // prepare file path for deletion
@@ -325,11 +299,10 @@ class FileService {
       // Check if file exists on disk
       try {
         await fs.access(filePath);
-        logger.info(`🗂️ File found on disk: ${filePath}`);
+        logger.info(`File found on disk: ${filePath}`);
       } catch (error) {
-        logger.warn(`🗂️ File not found on disk: ${filePath}`);
+        logger.warn(`File not found on disk: ${filePath}`);
         throw new Error(`File not found on disk: ${filePath}`);
-        return false;
       }
       
       // Delete metadata first and keep a backup
@@ -338,17 +311,16 @@ class FileService {
       try {
         metadataBackup = { ...file }; // Create a backup of the metadata
         deletedMetadata = await metadataService.deleteMetadata(fileId);
-        logger.info(`🧪 Metadata deleted for file ${fileId}`);
+        logger.info(`Metadata deleted for file ${fileId}`);
       } catch (error) {
         logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
         throw new Error(`File deleted but failed to delete metadata for file ${fileId}`);
-        return false;
       }
 
       // Delete the physical file from disk
       try {
         await fs.unlink(filePath);
-        logger.info(`🗑️ File deleted from disk: ${filePath}`);
+        logger.info(`File deleted from disk: ${filePath}`);
         return true;
       } catch (error) {
         logger.error(`File deleted from metadata but failed to delete physical file: ${error.message}`);
@@ -356,7 +328,7 @@ class FileService {
         if (deletedMetadata && metadataBackup) {
           try {
             await metadataService.addMetadata(filePath, metadataBackup);
-            logger.info(`🔄 Metadata restored for file ${fileId}`);
+            logger.info(`Metadata restored for file ${fileId}`);
           } catch (restoreError) {
             logger.error(`Failed to restore metadata for file ${fileId}: ${restoreError.message}`);
             return false; // Return false if restoration fails
@@ -367,53 +339,9 @@ class FileService {
     } catch (error) {
       logger.error(`Error deleting file: ${error}`);
       throw error;
-      return false;
     }
   }
 
-  /**
-   * Process a file (sending file to data prep service)
-   * @param {string} fileId - ID of the file to process
-   * @returns {Promise<Object>} Processing result
-   */
-  async processFile(fileId) {
-    try {
-      const db = await this.getDb();
-      const fileRecord = await db.collection('files').firstExample({ id: fileId });
-      
-      if (!fileRecord) {
-        throw new Error(`File not found: ${fileId}`);
-      }
-
-      // Check if file exists
-      try {
-        await fs.access(fileRecord.filePath);
-      } catch (error) {
-        throw new Error(`File not found on disk: ${fileRecord.filePath}`);
-      }
-
-      // TODO: [HIGH] Send file to data prep service
-      // - send file to data prep service
-      // - wait for data prep service to process the file
- 
-      // Update file record
-      const updates = {
-        processed: true,
-        processedAt: new Date().toISOString(),
-      };
-
-      await db.collection('files').update(fileRecord._key, updates);
-      logger.info(`File processed successfully: ${fileId}`);
-
-      return {
-        ...fileRecord,
-        ...updates
-      };
-    } catch (error) {
-      logger.error(`Error processing file: ${error}`);
-      throw error;
-    }
-  }
 
   /**
    * Search files
@@ -461,7 +389,8 @@ class FileService {
     }
   }
 
-    /**
+
+  /**
    * Get file statistics
    * @returns {Object} File statistics
    */
@@ -484,7 +413,6 @@ class FileService {
           )
         }
       `).then(cursor => cursor.next());
-
       return stats;
     } catch (error) {
       logger.error(`Error getting file stats: ${error}`);

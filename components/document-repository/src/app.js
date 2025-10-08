@@ -13,19 +13,12 @@ const { errorHandler } = require('./middlewares/errorHandler');
 
 // Import routes
 const fileRoutes = require('./routes/fileRoutes');
-const labelRoutes = require('./routes/labelRoutes'); // Import label routes
+const labelRoutes = require('./routes/labelRoutes');
 
 // Import config
 const appConfig = require('./config/appConfig');
 
 const app = express();
-
-// const YAML = require('yamljs');
-// // Load Swagger document
-// const swaggerDocument = YAML.load(path.join(__dirname, 'docs', 'swagger.yaml'));
-
-// // Swagger UI setup
-// app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
@@ -144,7 +137,7 @@ app.get('/api', (req, res) => {
 
 // API routes
 app.use('/api/files', fileRoutes);
-app.use('/api/labels', labelRoutes); // Use label routes
+app.use('/api/labels', labelRoutes);
 
 // Serve uploaded files (with security considerations)
 app.use('/uploads', express.static(uploadDir, {

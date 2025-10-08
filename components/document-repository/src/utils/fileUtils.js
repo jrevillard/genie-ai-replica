@@ -1,4 +1,4 @@
-// NOTE: some of the functionalities are not called by any other file at the moment
+// NOTE: The functionalities in this file are not called by any other file at the moment
 // TODO: [NORMAL] Move common funtion related to file to this utils folder
 // some file operation implementation in fileService.js should be moved here
 

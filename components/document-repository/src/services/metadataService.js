@@ -40,17 +40,18 @@ async function extractMetadata(filePath, fileInfo = {}) {
     };
 
     // File-type-specific metadata extraction
-    // Could be removed to keep metadata schema consistent for all file types
-    if (mimeType === 'application/pdf') {
-        baseMeta.page_count = await getPdfPageCount(filePath);
-    }
-    else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        baseMeta.word_count = await getDocxWordCount(filePath);
-    }
-    else if (mimeType.startsWith('text/')) {
-        baseMeta.line_count = await getTxtLineCount(filePath);
-        baseMeta.word_count = await getTxtWordCount(filePath);
-    }
+    // Currently they are removed to keep metadata schema consistent for all file types
+    // Could be added later for all mimeTypes
+    // if (mimeType === 'application/pdf') {
+    //     baseMeta.page_count = await getPdfPageCount(filePath);
+    // }
+    // else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    //     baseMeta.word_count = await getDocxWordCount(filePath);
+    // }
+    // else if (mimeType.startsWith('text/')) {
+    //     baseMeta.line_count = await getTxtLineCount(filePath);
+    //     baseMeta.word_count = await getTxtWordCount(filePath);
+    // }
 
     return baseMeta;
 }

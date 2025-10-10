@@ -130,8 +130,8 @@ class AdminDashboardService {
       const lastMonthAnalytics = await lastMonthAnalyticsCursor.next();
       logger.debug(`Last month's analytics data: ${JSON.stringify(lastMonthAnalytics)}`);
 
-      uptimeTrend = lastMonthAnalytics 
-        ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2) 
+      uptimeTrend = lastMonthAnalytics
+        ? (parseFloat(systemUptime) - lastMonthAnalytics.uptime).toFixed(2)
         : 0;
       logger.debug(`Uptime Trend Calculation: currentUptime=${systemUptime}, lastMonthUptime=${lastMonthAnalytics?.uptime || 0}, uptimeTrend=${uptimeTrend}%`);
 
@@ -154,8 +154,8 @@ class AdminDashboardService {
       const previousMau = previousUniqueUsers.length;
       logger.debug(`Previous MAUs (from ${twoMonthsAgoDate} to ${oneMonthAgoDate}): ${previousMau}`);
 
-      activeUsersTrend = previousMau 
-        ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2) 
+      activeUsersTrend = previousMau
+        ? (((activeUsersValue - previousMau) / previousMau) * 100).toFixed(2)
         : 0;
       logger.debug(`MAUs Trend Calculation: currentMAUs=${activeUsersValue}, previousMAUs=${previousMau}, activeUsersTrend=${activeUsersTrend}%`);
 
@@ -180,8 +180,8 @@ class AdminDashboardService {
       const lastMonthAvgTime = await lastMonthQueriesCursor.next() || 0;
       logger.debug(`Last month's average response time (in milliseconds): ${lastMonthAvgTime}`);
 
-      responseTimeTrend = lastMonthAvgTime 
-        ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2) 
+      responseTimeTrend = lastMonthAvgTime
+        ? (((queriesStats.avgTime - lastMonthAvgTime) / lastMonthAvgTime) * 100).toFixed(2)
         : 0;
       logger.debug(`Response Time Trend Calculation: currentAvgTime=${queriesStats.avgTime}, lastMonthAvgTime=${lastMonthAvgTime}, responseTimeTrend=${responseTimeTrend}%`);
 
@@ -196,8 +196,8 @@ class AdminDashboardService {
       const lastMonthErrorRate = await lastMonthErrorRateCursor.next() || 0;
       logger.debug(`Last month's error rate: ${lastMonthErrorRate}`);
 
-      errorRateTrend = lastMonthErrorRate 
-        ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2) 
+      errorRateTrend = lastMonthErrorRate
+        ? (parseFloat(errorRate) - lastMonthErrorRate).toFixed(2)
         : 0;
       logger.debug(`Error Rate Trend Calculation: currentErrorRate=${errorRate}, lastMonthErrorRate=${lastMonthErrorRate}, errorRateTrend=${errorRateTrend}%`);
 
@@ -334,7 +334,7 @@ class AdminDashboardService {
             logger.warn(`Could not read speed for interface ${iface}`);
           }
           const bandwidthUsage = Math.min(
-            Math.round((totalBytes * 8) / (interfaceSpeed * 1000 * 1000 / 8) * 100), 
+            Math.round((totalBytes * 8) / (interfaceSpeed * 1000 * 1000 / 8) * 100),
             100
           );
           totalBandwidthUsage += bandwidthUsage;
@@ -344,7 +344,7 @@ class AdminDashboardService {
         }
       }
 
-      const averageBandwidthUsage = interfacesChecked > 0 
+      const averageBandwidthUsage = interfacesChecked > 0
         ? Math.round(totalBandwidthUsage / interfacesChecked)
         : 0;
       logger.debug(`Network bandwidth usage: ${averageBandwidthUsage}%`);
@@ -1167,15 +1167,16 @@ class AdminDashboardService {
       throw new Error('Database not initialized. Call init() first.');
     }
     logger.info(`Searching users with options: ${JSON.stringify(options)}`);
-    
+
     try {
       let { term = '', field = 'all', limit = 20, offset = 0 } = options;
-      
-      limit = Number.isInteger(limit) && limit > 0 ? limit : 20;
-      offset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
-      
+
+      // Correctly parse string query parameters to numbers
+      limit = parseInt(limit, 10) || 20;
+      offset = parseInt(offset, 10) || 0;
+
       let countQuery, usersQuery, queryParams;
-      
+
       if (term) {
         queryParams = {};
         let filterCondition;
@@ -1210,7 +1211,7 @@ class AdminDashboardService {
             `;
             break;
         }
-        
+
         countQuery = `
           RETURN LENGTH(
             FOR u IN users
@@ -1218,7 +1219,7 @@ class AdminDashboardService {
               RETURN 1
           )
         `;
-        
+
         usersQuery = `
           FOR u IN users
             FILTER ${filterCondition}
@@ -1345,7 +1346,7 @@ class ResourceUsageMonitor {
         const { stdout } = await exec('cat /proc/net/dev');
         const lines = stdout.split('\n').slice(2);
         let totalBytes = 0;
-        
+
         lines.forEach(line => {
           if (line.trim()) {
             const parts = line.trim().split(/\s+/);

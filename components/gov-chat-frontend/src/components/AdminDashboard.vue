@@ -3197,22 +3197,8 @@ export default {
 
     // Load user stats
     async loadUserStats() {
-      try {
-        this.isLoading = true;
-        const response = await adminDashboardService.getUserStats();
-        console.log("loadUserStats response:", response);
-        if (response) {
-          this.userStats = response;
-          console.log("Assigned userStats:", this.userStats);
-        } else {
-          console.warn("No data received from getUserStats");
-        }
-      } catch (error) {
-        console.error("Error loading user stats:", error);
-        this.showNotification("Failed to load user statistics", "error");
-      } finally {
-        this.isLoading = false;
-      }
+      // This now acts as a trigger for the initial, full, paginated user list.
+      await this.searchUsers();
     },
 
     // System diagnostics
@@ -3470,36 +3456,34 @@ export default {
      * Search users from the server
      */
     async searchUsers() {
+      this.isSearchingUsers = true;
       try {
-        this.isSearchingUsers = true;
-        if (this.userSearchTerm.trim()) {
-          const response = await adminDashboardService.searchUsers({
-            term: this.userSearchTerm,
-            field: this.userSearchField,
-            limit: this.userSearchLimit,
-            offset: this.userSearchOffset,
-          });
-          console.log("searchUsers response:", response);
-          if (response && response.data) {
-            this.userSearchResults = [...(response.data.users || [])]; // Create new array for reactivity
-            this.userSearchTotal = response.data.total || 0;
-            console.log("Assigned userSearchResults:", this.userSearchResults);
-            console.log("Assigned userSearchTotal:", this.userSearchTotal);
-            this.showNotification(
-              this.translate(
-                "admin.userSearch.resultsFound",
-                `Found ${this.userSearchTotal} users matching "${this.userSearchTerm}"`
-              ),
-              "info"
-            );
-          } else {
-            console.warn("No data received from searchUsers");
-            this.userSearchResults = [];
-            this.userSearchTotal = 0;
+        // On initial load (no search term, first page), fetch the detailed stats.
+        if (this.userSearchOffset === 0 && !this.userSearchTerm) {
+          // This call specifically gets the active/new/total user counts
+          const statsResponse = await adminDashboardService.getUserStats();
+          if (statsResponse) {
+            this.userStats.totalUsers = statsResponse.totalUsers;
+            this.userStats.activeUsers = statsResponse.activeUsers;
+            this.userStats.newUsers = statsResponse.newUsers;
           }
+        }
+
+        // This call gets the paginated list of users for the table
+        const searchResponse = await adminDashboardService.searchUsers({
+          term: this.userSearchTerm,
+          field: this.userSearchField,
+          limit: this.userSearchLimit,
+          offset: this.userSearchOffset,
+        });
+
+        if (searchResponse && searchResponse.data) {
+          this.userSearchResults = [...(searchResponse.data.users || [])];
+          this.userSearchTotal = searchResponse.data.total || 0;
         } else {
-          this.resetUserSearch();
-          this.loadUserStats();
+          console.warn("No data received from searchUsers");
+          this.userSearchResults = [];
+          this.userSearchTotal = 0;
         }
       } catch (error) {
         console.error("Error searching users:", error);
@@ -3523,6 +3507,7 @@ export default {
       this.userSearchResults = null;
       this.userSearchTotal = 0;
       this.userSearchOffset = 0;
+      this.searchUsers(); // Re-run the search to show all users
     },
 
     /**

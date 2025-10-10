@@ -475,7 +475,7 @@ const cspOptions = {
     styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
-    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "https://e2e-82-109.ssdcloudindia.net:*", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org", "wss://genie-ai.itu.int:443", "ws://localhost:8090"],
+    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "http://localhost:*", "https://e2e-82-109.ssdcloudindia.net:*", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org", "wss://genie-ai.itu.int:443", "ws://localhost:8090"],
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -507,7 +507,8 @@ try {
 
 // Set up CORS with a specific origin
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'https://e2e-82-109.ssdcloudindia.net',
+//  origin: process.env.CORS_ORIGIN || 'https://e2e-82-109.ssdcloudindia.net',
+  origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

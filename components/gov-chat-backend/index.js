@@ -452,7 +452,9 @@ try {
   });
 }
 
-// Set up a strict CSP policy with relaxed rules
+// --- HELMET CSP (Content Security Policy from Environment Variables) ---
+const connectSrcUrls = (process.env.CSP_CONNECT_SRC || "'self' http://localhost:8090 ws://localhost:8090").split(' ');
+
 const cspOptions = {
   directives: {
     defaultSrc: ["'self'"],
@@ -460,17 +462,7 @@ const cspOptions = {
     styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
-    connectSrc: [
-      "'self'",
-      "http://localhost:8090", // Vue dev server
-      "ws://localhost:8090",   // Vue dev server WS
-      "*.ssdcloudindia.net",   // Allow any ssdcloudindia.net subdomain
-      "wss://*.ssdcloudindia.net", // Allow WS to any ssdcloudindia.net subdomain
-      "https://api.open-meteo.com",
-      "https://ipapi.co",
-      "https://nominatim.openstreetmap.org",
-      "wss://genie-ai.itu.int:443"
-    ],
+    connectSrc: connectSrcUrls, // <-- This now reads from the environment variable
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -480,7 +472,7 @@ const cspOptions = {
   reportOnly: false
 };
 
-// Apply helmet with updated CSP
+// Apply helmet with the new, dynamically configured CSP
 try {
   app.use(helmet({
     contentSecurityPolicy: cspOptions,
@@ -490,7 +482,7 @@ try {
       includeSubDomains: true
     }
   }));
-  logger.info('Helmet middleware applied with CSP');
+  logger.info('Helmet middleware applied with CSP from environment variables');
 } catch (error) {
   logger.error('Failed to apply helmet middleware:', {
     error: error.message,

@@ -57,6 +57,7 @@ services:
       - OPEA_PORT=8888
       - CONTEXT_OPTION=conversation-with-context-labels
       - CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
+      - CSP_CONNECT_SRC='self'' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'
     env_file:
       - ./gov-chat-backend/.env
     networks:

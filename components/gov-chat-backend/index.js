@@ -13,7 +13,7 @@ const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./sh
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 8090; // Changed to 8090
+const PORT = process.env.PORT || 3000; // Corrected default port
 
 // Initialize WebSocket server
 const server = require('http').createServer(app);
@@ -74,10 +74,10 @@ app.set('trust proxy', 1); // Trust the first proxy (Kong)
 const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 try {
   if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(UploadsDir, { recursive: true });
-    logger.info(`Created uploads directory: ${UploadsDir}`);
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    logger.info(`Created uploads directory: ${uploadsDir}`);
   } else {
-    logger.debug(`Uploads directory already exists: ${UploadsDir}`);
+    logger.debug(`Uploads directory already exists: ${uploadsDir}`);
   }
 } catch (error) {
   logger.error('Failed to create uploads directory:', {
@@ -88,25 +88,10 @@ try {
   });
 }
 
-// CORS middleware with explicit origin
-app.use((req, res, next) => {
-  try {
-    res.setHeader('Access-Control-Allow-Origin', 'https://e2e-82-109.ssdcloudindia.net');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    next();
-  } catch (error) {
-    logger.error('CORS middleware error:', {
-      error: error.message,
-      stack: error.stack,
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    res.status(500).json({ message: 'CORS configuration error' });
-  }
-});
+//
+// MANUAL CORS MIDDLEWARE REMOVED FROM HERE TO PREVENT CONFLICTS.
+// ALL CORS LOGIC IS NOW HANDLED BY THE 'cors' PACKAGE BELOW.
+//
 
 // Debug middleware for IP and request details
 app.use((req, res, next) => {
@@ -172,7 +157,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || 'http://localhost:8090/api', // Updated to 8090
+        url: process.env.API_URL || `http://localhost:${PORT}/api`, // Corrected port
         description: 'Development server'
       }
     ],
@@ -475,7 +460,17 @@ const cspOptions = {
     styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
-    connectSrc: ["'self'", "wss://e2e-82-109.ssdcloudindia.net:8090", "http://localhost:8090", "https://e2e-82-109.ssdcloudindia.net:*", "https://api.open-meteo.com", "https://ipapi.co", "https://nominatim.openstreetmap.org", "wss://genie-ai.itu.int:443", "ws://localhost:8090"],
+    connectSrc: [
+      "'self'", 
+      "http://localhost:8090", // Vue dev server
+      "ws://localhost:8090",   // Vue dev server WS
+      "*.ssdcloudindia.net",   // Allow any ssdcloudindia.net subdomain
+      "wss://*.ssdcloudindia.net", // Allow WS to any ssdcloudindia.net subdomain
+      "https://api.open-meteo.com", 
+      "https://ipapi.co", 
+      "https://nominatim.openstreetmap.org", 
+      "wss://genie-ai.itu.int:443"
+    ],
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -505,10 +500,35 @@ try {
   });
 }
 
-// Set up CORS with a specific origin
+// --- CORS BEST PRACTICE (Single Source of Truth) ---
+const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
 const corsOptions = {
-//  origin: process.env.CORS_ORIGIN || 'https://e2e-82-109.ssdcloudindia.net',
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: function (origin, callback) {
+    // This function checks if the incoming request origin is on our allowlist.
+    // The list can contain strings (for exact matches) or regex patterns.
+
+    // Allow server-to-server requests (like Postman) which have no origin.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Check if the request's origin is in our allowlist.
+    const isAllowed = allowlist.some(allowedOrigin => {
+      // If an item in our list starts and ends with '/', treat it as a regex.
+      if (allowedOrigin.startsWith('/') && allowedOrigin.endsWith('/')) {
+        const regex = new RegExp(allowedOrigin.slice(1, -1));
+        return regex.test(origin);
+      }
+      // Otherwise, treat it as a normal string for an exact match.
+      return origin === allowedOrigin;
+    });
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error(`This origin (${origin}) is not allowed by CORS`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -927,7 +947,7 @@ async function startApp() {
     logger.info('Services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize services:', {
-      error: options.error,
+      error: error.message, // Corrected from options.error
       stack: error.stack,
       rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
       errorType: error?.constructor?.name || 'Unknown'

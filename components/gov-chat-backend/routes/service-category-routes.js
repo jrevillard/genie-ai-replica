@@ -8,9 +8,7 @@ module.exports = (serviceCategoryService) => {
     logger.error('Invalid serviceCategoryService provided to service-category-routes');
     throw new Error('serviceCategoryService is required with getAllCategoriesWithServices');
   }
-  logger.debug('serviceCategory-routes initialized with serviceCategoryService', {
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(m => m !== 'constructor')
-  });
+  logger.debug('serviceCategory-routes initialized with serviceCategoryService');
 
   router.use(authMiddleware.authenticate);
 
@@ -29,7 +27,7 @@ module.exports = (serviceCategoryService) => {
    *           default: en
    *         description: Language locale for category and service names
    *     responses:
-   *       200:
+   *       '200':
    *         description: List of categories with services
    *         content:
    *           application/json:
@@ -46,7 +44,7 @@ module.exports = (serviceCategoryService) => {
    *                     type: array
    *                     items:
    *                       type: string
-   *       500:
+   *       '500':
    *         description: Server error
    */
   router.get('/categories', async (req, res) => {
@@ -64,31 +62,30 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
-* @swagger
-* /service-categories/categories/detailed:
-* get:
-* summary: Get all categories with detailed services for admin
-* description: Retrieves all categories with their associated services as objects (including keys)
-* tags: [Service Categories]
-* parameters:
-* - in: query
-* name: locale
-* schema:
-* type: string
-* default: en
-* description: Language locale for category and service names
-* responses:
-* 200:
-* description: List of categories with detailed service objects
-* 500:
-* description: Server error
-*/
+   * @swagger
+   * /service-categories/categories/detailed:
+   *   get:
+   *     summary: Get all categories with detailed services for admin
+   *     description: Retrieves all categories with their associated services as objects (including keys)
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: query
+   *         name: locale
+   *         schema:
+   *           type: string
+   *           default: en
+   *         description: Language locale for category and service names
+   *     responses:
+   *       '200':
+   *         description: List of categories with detailed service objects
+   *       '500':
+   *         description: Server error
+   */
   router.get('/categories/detailed', async (req, res) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
       logger.info(`Fetching all DETAILED service categories with locale: ${locale}`);
-      // Call the NEW service method
       const categories = await serviceCategoryService.getAdminAllCategoriesWithServices(locale);
       logger.info(`Fetched ${categories.length} detailed categories in ${Date.now() - start}ms`);
       res.json(categories);
@@ -119,7 +116,7 @@ module.exports = (serviceCategoryService) => {
    *           default: en
    *         description: Language locale for category and service names
    *     responses:
-   *       200:
+   *       '200':
    *         description: Category with services
    *         content:
    *           application/json:
@@ -134,9 +131,9 @@ module.exports = (serviceCategoryService) => {
    *                   type: array
    *                   items:
    *                     type: string
-   *       404:
+   *       '404':
    *         description: Category not found
-   *       500:
+   *       '500':
    *         description: Server error
    */
   router.get('/categories/:categoryId', async (req, res) => {
@@ -159,38 +156,38 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
- * @swagger
- * /service-categories/{categoryId}/translations:
- * get:
- * summary: Get all translations for a category
- * description: Retrieves all available translations for a specific service category
- * tags: [Service Categories]
- * parameters:
- * - in: path
- * name: categoryId
- * required: true
- * schema:
- * type: string
- * description: The key of the category
- * responses:
- * 200:
- * description: A list of translation objects
- * content:
- * application/json:
- * schema:
- * type: array
- * items:
- * type: object
- * properties:
- * lang:
- * type: string
- * example: "FR"
- * text:
- * type: string
- * example: "Santé et services sociaux"
- * 500:
- * description: Server error
- */
+   * @swagger
+   * /service-categories/{categoryId}/translations:
+   *   get:
+   *     summary: Get all translations for a category
+   *     description: Retrieves all available translations for a specific service category
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: path
+   *         name: categoryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The key of the category
+   *     responses:
+   *       '200':
+   *         description: A list of translation objects
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: array
+   *               items:
+   *                 type: object
+   *                 properties:
+   *                   lang:
+   *                     type: string
+   *                     example: "FR"
+   *                   text:
+   *                     type: string
+   *                     example: "Santé et services sociaux"
+   *       '500':
+   *         description: Server error
+   */
   router.get('/:categoryId/translations', async (req, res) => {
     const start = Date.now();
     try {
@@ -208,22 +205,22 @@ module.exports = (serviceCategoryService) => {
   /**
    * @swagger
    * /service-categories/services/{serviceId}/translations:
-   * get:
-   * summary: Get all translations for a service
-   * description: Retrieves all available translations for a specific service
-   * tags: [Service Categories]
-   * parameters:
-   * - in: path
-   * name: serviceId
-   * required: true
-   * schema:
-   * type: string
-   * description: The key of the service
-   * responses:
-   * 200:
-   * description: A list of translation objects
-   * 500:
-   * description: Server error
+   *   get:
+   *     summary: Get all translations for a service
+   *     description: Retrieves all available translations for a specific service
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: path
+   *         name: serviceId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The key of the service
+   *     responses:
+   *       '200':
+   *         description: A list of translation objects
+   *       '500':
+   *         description: Server error
    */
   router.get('/services/:serviceId/translations', async (req, res) => {
     const start = Date.now();
@@ -260,7 +257,7 @@ module.exports = (serviceCategoryService) => {
    *           default: en
    *         description: Language locale for search results
    *     responses:
-   *       200:
+   *       '200':
    *         description: Search results
    *         content:
    *           application/json:
@@ -293,9 +290,9 @@ module.exports = (serviceCategoryService) => {
    *                         type: string
    *                       categoryName:
    *                         type: string
-   *       400:
+   *       '400':
    *         description: Missing search query
-   *       500:
+   *       '500':
    *         description: Server error
    */
   router.get('/search', async (req, res) => {
@@ -317,27 +314,29 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
- * @swagger
- * /service-categories:
- * post:
- * summary: Create a new category
- * description: Creates a new service category with translations
- * tags: [Service Categories]
- * requestBody:
- * required: true
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * nameEN:
- * type: string
- * translations:
- * type: array
- * responses:
- * 201:
- * description: Category created successfully
- */
+   * @swagger
+   * /service-categories:
+   *   post:
+   *     summary: Create a new category
+   *     description: Creates a new service category with translations
+   *     tags: [Service Categories]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               nameEN:
+   *                 type: string
+   *               translations:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *     responses:
+   *       '201':
+   *         description: Category created successfully
+   */
   router.post('/', async (req, res) => {
     const start = Date.now();
     try {
@@ -346,10 +345,7 @@ module.exports = (serviceCategoryService) => {
         return res.status(400).json({ message: 'Payload with nameEN is required' });
       }
       logger.info(`Creating single category with name: ${payload.nameEN}`);
-
-      // Call the new, dedicated createCategory method
       const result = await serviceCategoryService.createCategory(payload);
-
       logger.info(`Category created successfully in ${Date.now() - start}ms`);
       res.status(201).json(result);
     } catch (error) {
@@ -373,11 +369,11 @@ module.exports = (serviceCategoryService) => {
    *           type: string
    *         description: Category key
    *     responses:
-   *       200:
+   *       '200':
    *         description: Category deleted successfully
-   *       404:
+   *       '404':
    *         description: Category not found
-   *       500:
+   *       '500':
    *         description: Server error
    */
   router.delete('/:categoryId', async (req, res) => {
@@ -399,40 +395,38 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
- * @swagger
- * /service-categories/services/{serviceId}:
- * delete:
- * summary: Delete a service
- * description: Deletes a service and its associated translations
- * tags: [Service Categories]
- * parameters:
- * - in: path
- * name: serviceId
- * required: true
- * schema:
- * type: string
- * description: The key of the service to delete
- * responses:
- * 200:
- * description: Service deleted successfully
- * 404:
- * description: Service not found
- * 500:
- * description: Server error
- */
+   * @swagger
+   * /service-categories/services/{serviceId}:
+   *   delete:
+   *     summary: Delete a service
+   *     description: Deletes a service and its associated translations
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: path
+   *         name: serviceId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The key of the service to delete
+   *     responses:
+   *       '200':
+   *         description: Service deleted successfully
+   *       '404':
+   *         description: Service not found
+   *       '500':
+   *         description: Server error
+   */
   router.delete('/services/:serviceId', async (req, res) => {
     const start = Date.now();
     try {
       const { serviceId } = req.params;
       logger.info(`Attempting to delete service: ${serviceId}`);
-
       const result = await serviceCategoryService.deleteService(serviceId);
-
       logger.info(`Service ${serviceId} deleted successfully in ${Date.now() - start}ms`);
       res.status(200).json({ message: `Service ${serviceId} deleted successfully` });
-    } catch (error) {
+    } catch (error)
+      {
       logger.error(`Error deleting service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-      // Check for not found error from the service if needed, otherwise send 500
       if (error.code === 404) {
         res.status(404).json({ message: error.message });
       } else {
@@ -449,7 +443,7 @@ module.exports = (serviceCategoryService) => {
    *     description: Initializes the system with default categories and services
    *     tags: [Service Categories]
    *     responses:
-   *       200:
+   *       '200':
    *         description: Default categories initialized successfully
    *         content:
    *           application/json:
@@ -460,7 +454,7 @@ module.exports = (serviceCategoryService) => {
    *                   type: string
    *                 categoriesCreated:
    *                   type: integer
-   *       500:
+   *       '500':
    *         description: Server error
    */
   router.post('/init', async (req, res) => {
@@ -477,48 +471,46 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
- * @swagger
- * /service-categories/{categoryId}/services:
- * post:
- * summary: Create a new service for a category
- * description: Creates a new service with translations under a specific category
- * tags: [Service Categories]
- * parameters:
- * - in: path
- * name: categoryId
- * required: true
- * schema:
- * type: string
- * description: The key of the parent category
- * requestBody:
- * required: true
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * nameEN:
- * type: string
- * translations:
- * type: array
- * items:
- * type: object
- * responses:
- * 201:
- * description: Service created successfully
- * 500:
- * description: Server error
- */
+   * @swagger
+   * /service-categories/{categoryId}/services:
+   *   post:
+   *     summary: Create a new service for a category
+   *     description: Creates a new service with translations under a specific category
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: path
+   *         name: categoryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The key of the parent category
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               nameEN:
+   *                 type: string
+   *               translations:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *     responses:
+   *       '201':
+   *         description: Service created successfully
+   *       '500':
+   *         description: Server error
+   */
   router.post('/:categoryId/services', async (req, res) => {
     const start = Date.now();
     try {
       const { categoryId } = req.params;
-      const payload = req.body; // { nameEN, translations }
-
+      const payload = req.body;
       logger.info(`Creating service for category ${categoryId}`);
       const newService = await serviceCategoryService.createServiceWithTranslations(categoryId, payload);
       logger.info(`Service created successfully for category ${categoryId} in ${Date.now() - start}ms`);
-
       res.status(201).json(newService);
     } catch (error) {
       logger.error(`Error creating service for category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
@@ -527,45 +519,46 @@ module.exports = (serviceCategoryService) => {
   });
 
   /**
- * @swagger
- * /service-categories/{categoryId}:
- * put:
- * summary: Update an existing category
- * description: Updates a category's name and translations
- * tags: [Service Categories]
- * parameters:
- * - in: path
- * name: categoryId
- * required: true
- * schema:
- * type: string
- * requestBody:
- * required: true
- * content:
- * application/json:
- * schema:
- * type: object
- * properties:
- * nameEN:
- * type: string
- * translations:
- * type: array
- * responses:
- * 200:
- * description: Category updated successfully
- * 500:
- * description: Server error
- */
+   * @swagger
+   * /service-categories/{categoryId}:
+   *   put:
+   *     summary: Update an existing category
+   *     description: Updates a category's name and translations
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: path
+   *         name: categoryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The key of the category to update
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               nameEN:
+   *                 type: string
+   *               translations:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *     responses:
+   *       '200':
+   *         description: Category updated successfully
+   *       '500':
+   *         description: Server error
+   */
   router.put('/:categoryId', async (req, res) => {
     const start = Date.now();
     try {
       const { categoryId } = req.params;
       const payload = req.body;
-
       logger.info(`Updating category ${categoryId}`);
       const result = await serviceCategoryService.updateCategoryWithTranslations(categoryId, payload);
       logger.info(`Category ${categoryId} updated successfully in ${Date.now() - start}ms`);
-
       res.status(200).json(result);
     } catch (error) {
       logger.error(`Error updating category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
@@ -573,49 +566,47 @@ module.exports = (serviceCategoryService) => {
     }
   });
 
-  // Add this new route for updating a service
-
   /**
    * @swagger
    * /service-categories/services/{serviceId}:
-   * put:
-   * summary: Update an existing service
-   * description: Updates a service's name and its associated translations
-   * tags: [Service Categories]
-   * parameters:
-   * - in: path
-   * name: serviceId
-   * required: true
-   * schema:
-   * type: string
-   * description: The key of the service to update
-   * requestBody:
-   * required: true
-   * content:
-   * application/json:
-   * schema:
-   * type: object
-   * properties:
-   * nameEN:
-   * type: string
-   * translations:
-   * type: array
-   * responses:
-   * 200:
-   * description: Service updated successfully
-   * 500:
-   * description: Server error
+   *   put:
+   *     summary: Update an existing service
+   *     description: Updates a service's name and its associated translations
+   *     tags: [Service Categories]
+   *     parameters:
+   *       - in: path
+   *         name: serviceId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The key of the service to update
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               nameEN:
+   *                 type: string
+   *               translations:
+   *                 type: array
+   *                 items:
+   *                   type: object
+   *     responses:
+   *       '200':
+   *         description: Service updated successfully
+   *       '500':
+   *         description: Server error
    */
   router.put('/services/:serviceId', async (req, res) => {
     const start = Date.now();
     try {
       const { serviceId } = req.params;
       const payload = req.body;
-
       logger.info(`Updating service ${serviceId}`);
       const result = await serviceCategoryService.updateServiceWithTranslations(serviceId, payload);
       logger.info(`Service ${serviceId} updated successfully in ${Date.now() - start}ms`);
-
       res.status(200).json(result);
     } catch (error) {
       logger.error(`Error updating service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });

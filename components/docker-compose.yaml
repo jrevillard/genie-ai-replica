@@ -42,7 +42,7 @@ services:
       - EMAIL_PASSWORD=gLp+Ek)Vf)
       - EMAIL_FROM=noreply@genie-ai.itu.int
       - APP_NAME=Genie AI
-      - FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net/
+      - FRONTEND_URL=https://genie-ai.itu.int/
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=node-services
       - ARANGO_USER=root
@@ -56,6 +56,7 @@ services:
       - OPEA_HOST=e2e-109-198
       - OPEA_PORT=8888
       - CONTEXT_OPTION=conversation-with-context-labels
+      - CORS_ALLOWED_ORIGINS=http://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
     env_file:
       - ./gov-chat-backend/.env
     networks:
@@ -78,6 +79,7 @@ services:
     volumes:
       - ./document-repository:/app
       - ./document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
+      # - ./document-repository/uploads:/app/uploads
   
   clamav:
     image: mkodockx/docker-clamav:alpine

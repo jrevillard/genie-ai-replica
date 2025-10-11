@@ -56,7 +56,7 @@ services:
       - OPEA_HOST=e2e-109-198
       - OPEA_PORT=8888
       - CONTEXT_OPTION=conversation-with-context-labels
-      - CORS_ALLOWED_ORIGINS=http://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
+      - CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
     env_file:
       - ./gov-chat-backend/.env
     networks:

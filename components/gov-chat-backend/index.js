@@ -461,14 +461,14 @@ const cspOptions = {
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
     connectSrc: [
-      "'self'", 
+      "'self'",
       "http://localhost:8090", // Vue dev server
       "ws://localhost:8090",   // Vue dev server WS
       "*.ssdcloudindia.net",   // Allow any ssdcloudindia.net subdomain
       "wss://*.ssdcloudindia.net", // Allow WS to any ssdcloudindia.net subdomain
-      "https://api.open-meteo.com", 
-      "https://ipapi.co", 
-      "https://nominatim.openstreetmap.org", 
+      "https://api.open-meteo.com",
+      "https://ipapi.co",
+      "https://nominatim.openstreetmap.org",
       "wss://genie-ai.itu.int:443"
     ],
     frameSrc: ["'none'"],
@@ -500,19 +500,25 @@ try {
   });
 }
 
-// --- CORS BEST PRACTICE (Single Source of Truth) ---
+// --- CORS BEST PRACTICE (Single source of truth with DEBUGGING) ---
 const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
+logger.debug('CORS allowlist configured:', { allowlist }); // Log the allowlist on startup
+console.log("allowlist:" + allowlist);
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // This function checks if the incoming request origin is on our allowlist.
-    // The list can contain strings (for exact matches) or regex patterns.
+    // 1. Log every incoming CORS check
+    logger.debug('--- CORS CHECK ---', {
+      'Request Origin': origin || 'No Origin (e.g., Postman, server-to-server)',
+    });
 
     // Allow server-to-server requests (like Postman) which have no origin.
     if (!origin) {
+      logger.debug('CORS Allowed: No origin provided.');
       return callback(null, true);
     }
 
-    // Check if the request's origin is in our allowlist.
+    // 2. Check if the request's origin is on our allowlist
     const isAllowed = allowlist.some(allowedOrigin => {
       // If an item in our list starts and ends with '/', treat it as a regex.
       if (allowedOrigin.startsWith('/') && allowedOrigin.endsWith('/')) {
@@ -523,33 +529,31 @@ const corsOptions = {
       return origin === allowedOrigin;
     });
 
+    // 3. Log the result and either allow or deny the request
     if (isAllowed) {
+      logger.debug(`CORS Allowed: Origin "${origin}" is in the allowlist.`);
       callback(null, true);
     } else {
+      logger.error(`CORS Denied: Origin "${origin}" is NOT in the allowlist.`);
       callback(new Error(`This origin (${origin}) is not allowed by CORS`));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Credentials'],
-  preflightContinue: false,
   optionsSuccessStatus: 204
 };
 
 try {
   app.use(cors(corsOptions));
-  app.options('*', cors(corsOptions));
-  logger.info('CORS middleware applied');
+  app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+  logger.info('CORS middleware applied with debugging');
 } catch (error) {
   logger.error('Failed to apply CORS middleware:', {
     error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
+    stack: error.stack
   });
 }
-
 // Apply security middleware
 try {
   SecurityMiddleware.applySecurityMiddleware(app);

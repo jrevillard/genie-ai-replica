@@ -1552,13 +1552,11 @@ export default {
   height: 100%;
   z-index: 9999;
   /* Set default colors for light mode regardless of theme detection */
-  background-color: #ffffff;
   color: #333333;
 }
 
 /* Apply theme variables only as overrides */
 .user-profile-modal[data-themed="true"] {
-  background-color: var(--dialog-background, #ffffff);
   color: var(--dialog-text-color, #333333);
 }
 

@@ -1,5 +1,5 @@
 {
-  "database": "node-services",
+  "database": "test-mcfront",
   "collections": [
     {
       "name": "categoryServices",

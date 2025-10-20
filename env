@@ -1,0 +1,91 @@
+# ========= GENERAL =========
+LOGFLAG=true
+no_proxy=noproxy
+http_proxy=
+https_proxy=
+
+# ========= GOV-CHAT-BACKEND =========
+ARANGO_USERNAME=root
+COMPRESS_BACKUPS=true
+LOG_LEVEL=debug
+JWT_SECRET=UJeFROw+yRJeVOPiUTgdcXzlE2eukTfATZPxBfPkptQLZs+ER+iuSA1BIXiJtw1sS181kiRqdncodVZOWD4sfA==
+JWT_EXPIRES_IN=24h
+OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
+# PORT=3000
+API_PREFIX=/api
+MAX_FILE_SIZE=5242880
+SESSION_SECRET=default-session-secret
+SESSION_EXPIRATION_TIME=1800000
+EMAIL_HOST=smtp.itu.ch
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=genie-ai
+EMAIL_PASSWORD=gLp+Ek)Vf)
+EMAIL_FROM=noreply@genie-ai.itu.int
+APP_NAME=Genie AI
+FRONTEND_URL=http://localhost/
+BACKUP_DIR=./database_backups
+MAX_BACKUPS=5
+BACKUP_FORMAT=json
+OPEA_HOST=chatqna-xeon-backend-server
+OPEA_PORT=8888
+CONTEXT_OPTION=conversation-with-context-labels
+
+# ========= AUTH KEYS =========
+HUGGINGFACEHUB_API_TOKEN=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
+VLLM_API_KEY=eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJBV2QyR2lmQVRFT2wtRExhdFF0Qi1GRGRXVHRDdzlONUZWYWpXR2EwTjRzIn0.eyJleHAiOjE3NDQzNDA2OTcsImlhdCI6MTc0MzAwMTQ5NywianRpIjoiMDU5ZDg1YTUtYTlmOC00NTBhLTg5ODktYjRhYTJkZDczZDA0IiwiaXNzIjoiaHR0cHM6Ly9pbmZlcmVuY2UtYXBpLmNsb3VkLmRlbnZyZGF0YS5jb20vcmVhbGzL21hc3RlciIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJkMGJjYjQ3Zi1lYTI4LTQ1YjQtYjQyOS0zNGExMjAzMWVlOTkiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ1bl9pdHVfUHJlZXRoaV92cnMiLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtbWFzdGVyIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBjdXN0b21fbW9kZWxfbGxhbWFfM184QiBlbWFpbCIsImNsaWVudEhvc3QiOiIxMC4yMzMuOTIuMTU4IiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJzZXJ2aWNlLWFjY291bnQtdW5faXR1X3ByZWV0aGlfdnJzIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIzMy45Mi4xNTgiLCJjbGllbnRfaWQiOiJ1bl9pdHVfUHJlZXRoaV92cnMifQ.S9KcGTwc8MIK7vTm9NrWGM0hGcxdRDD6XEhu5E3zJCHQNJLaVDzJv_CC-jDwPYMPK4fHV0AsRXBstJUDDG0DFsFDDYr9z0rhwCgVVCX36m2WS7E9mOPoLzOFW-Rp8evfLOr2xbF0PtU7eeSbTP6g0zou1MA0BMJVq86EkMDwDgH41Ns4frAHuM0nKzbzMDqHtLbuF8Ey_EzAmbnzB5xYHICV2AEqN6sd_G_Zgbf9fA6NL801_3ebtHgH5QIjz92KyrNCqG8fZSWrfpuXOSfgfwMyfMBn7QhSqW5ZkhkxTcQDEDKZEsbmNhHHQx-M_bSt3MemnVRB-4JpprJ6W6yBWA
+
+# ========= ARANGODB =========
+ARANGO_PASSWORD=test
+ARANGO_DB_NAME=genie-backend
+ARANGO_URL=http://arango-vector-db:8529
+ARANGO_USER=root
+
+# ========= FRONTEND & BACKEND SHARED CONFIG =========
+VUE_APP_API_URL=/api
+VUE_PROXY_HOST=kong:8010
+VUE_APP_CSP_CONNECT_SRC="'self' http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+CSP_CONNECT_SRC='self' http://locahost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net
+CORS_ALLOWED_ORIGINS=http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
+
+# ========= DATAPREP =========
+DATAPREP_CHUNK_SIZE=500
+DATAPREP_CHUNK_OVERLAP=50
+DATAPREP_ARANGO_INSERT_ASYNC=false
+DATAPREP_ARANGO_USE_GRAPH_NAME=true
+DATAPREP_NODE_PROPERTIES=
+DATAPREP_RELATIONSHIP_PROPERTIES=
+DATAPREP_OPENAI_CHAT_ENABLED=true
+DATAPREP_OPENAI_EMBED_ENABLED=true
+DATAPREP_EMBED_NODES=true
+DATAPREP_EMBED_RELATIONSHIPS=true
+DATAPREP_EMBED_SOURCE_DOCUMENTS=true
+DATAPREP_ARANGO_GRAPH_NAME=graph_el_salvador
+
+# ========= RETRIEVER =========
+RETRIEVER_ARANGO_GRAPH_NAME=graph_el_salvador
+RETRIEVER_ARANGO_SEARCH_START=node
+RETRIEVER_ARANGO_SEARCH_MODE=hybrid
+RETRIEVER_ARANGO_TRAVERSAL_ENABLED=true
+RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH=3
+RETRIEVER_ARANGO_USE_APPROX_SEARCH=false
+RETRIEVER_SUMMARIZER_ENABLED=false
+RETRIEVER_OPENAI_CHAT_ENABLED=true
+RETRIEVER_OPENAI_EMBED_ENABLED=true
+RETRIEVER_OPENAI_EMBED_MODEL=text-embedding-3-small
+ARANGO_FILTER_STRATEGY=OR
+
+# ========= VLLM =========
+VLLM_ENDPOINT=http://vllm:80
+
+# ========= MODELS =========
+EMBEDDING_MODEL_ID=BAAI/bge-base-en-v1.5
+RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
+LLM_MODEL_ID=meta-llama/Llama-3.3-70B-Instruct
+TEI_EMBED_MODEL=BAAI/bge-base-en-v1.5
+
+# ========= TELEMETRY (optional) =========
+JAEGER_IP=127.0.0.1
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=grpc://127.0.0.1:4317
+TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
+

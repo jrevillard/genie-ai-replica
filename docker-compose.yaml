@@ -1,4 +1,3 @@
-
 # Ports Overview:
 # 8090 - gov chat frontend
 # 3000 - gov chat backend
@@ -21,22 +20,101 @@
 # 6666 - http-service (for auth token retrieval)
 
 name: genieai_mvp
+
+volumes:
+  kong_data:
+  mongo_data:
+  nginx_certs:
+  nginx_conf:
+
 services:
 
+  # Note: after starting this service, execute the following commands:
+  #       docker compose exec kong-database psql -U kong postgres
+  #       CREATE DATABASE kong;
+  #       ALTER USER kong WITH PASSWORD 'k1ngk0ng';
+  #       GRANT ALL PRIVILEGES ON DATABASE kong TO kong;
+  kong-database:
+    image: postgres:13
+    restart: unless-stopped
+    networks:
+      - genieai_network
+    command: postgres -c hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: k1ngk0ng
+    ports:
+      - "5432:5432"
+    volumes:
+      - kong_data:/var/lib/postgresql/data
+      - ./api-gateway-solution/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "kong"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Note: before starting up kong you need to create the scheme with this command:
+  #       docker compose run --rm kong kong migrations bootstrap
+  kong:
+    image: kong:latest
+    restart: unless-stopped
+    networks:
+      - genieai_network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: k1ngk0ng
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+      KONG_DNS_RESOLVER: "127.0.0.11"
+      KONG_DNS_ORDER: "LAST,A,AAAA,CNAME"
+    ports:
+      - "8010:8010"  # Note that I had to change this port to 8010 because vLLM runs on 8000
+      - "8443:8443"
+      - "8001:8001"
+    volumes:
+      - ./api-gateway-solution/kong_logs:/var/log/kong
+
+  # Note: before firing up all the other services, teh kong configuration needs to be adapted and loaded
+  #       1) Modify the addresses of the node:
+  #          vi api-gateway-solution/new-config/kong_config.json
+  #            -- modify the "host": "e2e-109-51" for the "express-api" service to "host": "backend"
+  #            -- it still runs on port 3000 so no problem
+  #            -- modify the "host": "e2e-109-51" for the document-repository service to "host": "document-repository"i
+  #            -- it still runs on port 3001 so no problem
+  #       2) Prepare to apply the configuration to Kong
+  #          cd api-gateway-solution/new-config/
+  #          chmod +x manage-kong-config.sh
+  #          vi manage-kong-config.sh
+  #            -- modify the KONG_PUBLIC_URL to match the config change KONG_PUBLIC_URL="http://localhost:8010"
+  #       3) Install jq
+  #          apt update
+  #          apt install jq
+  #       4) Apply the configuration to Kong
+  #          ./manage-kong-config.sh -a
   frontend:
-    build: ./components/gov-chat-frontend
+    build:
+      context: ./components/gov-chat-frontend
+      args:
+        - VUE_APP_API_URL=${VUE_APP_API_URL}
+        - VUE_PROXY_HOST=${VUE_PROXY_HOST}
+        - VUE_APP_CSP_CONNECT_SRC=${VUE_APP_CSP_CONNECT_SRC}
     restart: unless-stopped
     ports:
       - "8090:8090"
-    environment:
-      - NODE_ENV=production
-      - VUE_APP_API_URL=http://localhost:3000/api
-      - VUE_APP_CSP_CONNECT_SRC='self' http://localhost:3000 ws://localhost:8090 wss://localhost:8090 wss://genie-ai.itu.int:443 ws://e2e-g2-109.ssdcloudindia.net:443 wss://e2e-g2-109.ssdcloudindia.net:443 https://genie-ai.itu.int https://e2e-g2-109.ssdcloudindia.net'
     depends_on:
       - backend
     networks:
       - genieai_network
-  
 
   backend:
     build:
@@ -50,6 +128,11 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./components/gov-chat-backend/Uploads:/app/Uploads
+    env_file:
+      - .env
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -68,7 +151,7 @@ services:
       - APP_NAME=Genie AI
       - FRONTEND_URL=http://localhost/
       - ARANGO_URL=http://arango-vector-db:8529
-      - ARANGO_DB=genie-frontend 
+      - ARANGO_DB=genie-frontend
       - ARANGO_USER=root
       - ARANGO_PASSWORD=test
       - BACKUP_DIR=./database_backups
@@ -80,14 +163,12 @@ services:
       - OPEA_HOST=chatqna-xeon-backend-server
       - OPEA_PORT=8888
       - CONTEXT_OPTION=conversation-with-context-labels
-      - CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
-      - CSP_CONNECT_SRC='self'' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'
-    env_file:
-      - .env
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CSP_CONNECT_SRC="'self' http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+
     networks:
       - genieai_network
 
-  
   document-repository:
     build:
       context: ./components
@@ -95,7 +176,10 @@ services:
     container_name: doc-repo-dev
     environment:
       - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_DB_NAME=genie-frontend
       - ARANGO_PASSWORD=test
+    env_file:
+      - .env
     depends_on:
       - clamav
     ports:
@@ -105,16 +189,15 @@ services:
     volumes:
       - ./components/document-repository:/app
       - ./components/document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
-  
+      - /app/node_modules
 
   clamav:
     image: mkodockx/docker-clamav:alpine
     container_name: clamav
     ports:
-      - "3310:3310" # ClamAV daemon port
+      - "3310:3310"  # ClamAV daemon port
     networks:
       - genieai_network
-
 
   arango-vector-db:
     image: arangodb/arangodb:3.12.4
@@ -125,17 +208,32 @@ services:
       - /root/arango_data:/var/lib/arangodb3
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
-      ARANGO_USER: ${ARANGO_USER}
-      ARANGO_DATABASE: ${ARANGO_DATABASE}
-      ARANGO_URL: ${ARANGO_URL}
-      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
-
-    # "https://docs.arangodb.com/3.12/components/arangodb-server/options/"
     command: ["--experimental-vector-index=true"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
     networks:
       - genieai_network
-      # - chatqna_default
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./api-gateway-solution/nginx/conf:/etc/nginx/conf.d
+      - ./api-gateway-solution/nginx/certs:/etc/nginx/certs
+      - nginx_conf:/etc/nginx
+      - nginx_certs:/etc/ssl/private
+    networks:
+      - genieai_network
+    depends_on:
+      - kong
 
   http-service:
     build:
@@ -155,9 +253,9 @@ services:
 
   dataprep-arango-service:
     build:
-      context: ./opea/GenAIComps 
+      context: ./opea/GenAIComps
       dockerfile: comps/dataprep/src/Dockerfile
-    image: dataprep-dev:latest # image: ${REGISTRY:-opea}/dataprep:${TAG:-latest}
+    image: dataprep-dev:latest
     container_name: dataprep-arango-dev
     depends_on:
       arango-vector-db:
@@ -165,45 +263,22 @@ services:
       embedding:
         condition: service_started
       vllm:
-        condition: service_started
+        condition: service_healthy
       guardrail:
         condition: service_started
     volumes:
       - ./opea/GenAIComps/comps:/home/user/comps
     ports:
       - "6007:5000"
+    env_file:
+      - .env
     environment:
       DATAPREP_COMPONENT_NAME: "OPEA_DATAPREP_ARANGODB"
-      no_proxy: ${no_proxy}
-      http_proxy: ${http_proxy}
-      https_proxy: ${https_proxy}
       VLLM_ENDPOINT: http://vllm:8000
-      VLLM_MODEL_ID: ibm-granite/granite-3.3-2b-instruct # ${LLM_MODEL_ID}
       TEI_EMBEDDING_ENDPOINT: http://embedding:6000
-      TEI_EMBED_MODEL: ${TEI_EMBED_MODEL}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
-      GUARDRAIL_ENABLED: "false"
-      DOC_REPO_URL: http://localhost:3001 # Not used for current version. Might be helpful if directly calling Document Repository APIs
-      HUGGINGFACEHUB_API_TOKEN: ${HUGGINGFACEHUB_API_TOKEN}
       E2E_CPU_URL: http://localhost:3000
-      ARANGO_URL: http://arango-vector-db:8529 # http://e2e-109-198:8529 # changed from the original CPU node http://e2e-109-51:8529
-      ARANGO_USERNAME: ${ARANGO_USERNAME}
-      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
-      ARANGO_DB_NAME: ${ARANGO_DB_NAME}
-      ARANGO_GRAPH_NAME: ${DATAPREP_ARANGO_GRAPH_NAME}
-      ARANGO_INSERT_ASYNC: ${DATAPREP_ARANGO_INSERT_ASYNC}
-      ARANGO_USE_GRAPH_NAME: ${DATAPREP_ARANGO_USE_GRAPH_NAME}
-      CHUNK_SIZE: ${DATAPREP_CHUNK_SIZE}
-      CHUNK_OVERLAP: ${DATAPREP_CHUNK_OVERLAP}
-      EMBED_SOURCE_DOCUMENTS: ${DATAPREP_EMBED_SOURCE_DOCUMENTS}
-      EMBED_NODES: ${DATAPREP_EMBED_NODES}
-      EMBED_RELATIONSHIPS: ${DATAPREP_EMBED_RELATIONSHIPS}
-      NODE_PROPERTIES: ${DATAPREP_NODE_PROPERTIES}
-      RELATIONSHIP_PROPERTIES: ${DATAPREP_RELATIONSHIP_PROPERTIES}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_CHAT_ENABLED: ${DATAPREP_OPENAI_CHAT_ENABLED}
-      OPENAI_EMBED_ENABLED: ${DATAPREP_OPENAI_EMBED_ENABLED}
-      LOGFLAG: ${LOGFLAG}
+      ARANGO_URL: http://arango-vector-db:8529
       GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
     networks:
       - genieai_network
@@ -212,9 +287,9 @@ services:
 
   retriever-arango-service:
     build:
-      context: ./opea/GenAIComps 
+      context: ./opea/GenAIComps
       dockerfile: comps/retrievers/src/Dockerfile
-    image: retriever-dev:latest # image: ${REGISTRY:-opea}/retriever:${TAG:-latest}
+    image: retriever-dev:latest
     container_name: retriever-arango-dev
     depends_on:
       arango-vector-db:
@@ -226,95 +301,72 @@ services:
     ipc: host
     volumes:
       - ./opea/GenAIComps/comps:/home/user/comps
+    env_file:
+      - .env
     environment:
       RETRIEVER_COMPONENT_NAME: "OPEA_RETRIEVER_ARANGODB"
-      no_proxy: ${no_proxy}
-      http_proxy: ${http_proxy}
-      https_proxy: ${https_proxy}
-      VLLM_API_KEY: ${VLLM_API_KEY}
-      VLLM_ENDPOINT: http://vllm:8000 # Only used for Result Summarization
-      VLLM_MODEL_ID: ibm-granite/granite-3.3-2b-instruct # ${LLM_MODEL_ID}
-      ARANGO_URL: http://arango-vector-db:8529 # http://e2e-109-198:8529
-      ARANGO_USERNAME: ${ARANGO_USERNAME}
-      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
-      ARANGO_DB_NAME: ${ARANGO_DB_NAME}
-      ARANGO_GRAPH_NAME: ${RETRIEVER_ARANGO_GRAPH_NAME}
-      ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START}
-      ARANGO_SEARCH_MODE: ${RETRIEVER_ARANGO_SEARCH_MODE}
-      ARANGO_TRAVERSAL_ENABLED: ${RETRIEVER_ARANGO_TRAVERSAL_ENABLED}
-      ARANGO_TRAVERSAL_MAX_DEPTH: ${RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH}
-      ARANGO_USE_APPROX_SEARCH: ${RETRIEVER_ARANGO_USE_APPROX_SEARCH}
-      ARANGO_FILTER_STRATEGY: ${ARANGO_FILTER_STRATEGY}
+      VLLM_ENDPOINT: http://vllm:8000
+      ARANGO_URL: http://arango-vector-db:8529
       TEI_EMBEDDING_ENDPOINT: http://embedding:6000
-      TEI_EMBED_MODEL: ${TEI_EMBED_MODEL}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_EMBED_MODEL: ${RETRIEVER_OPENAI_EMBED_MODEL}
-      OPENAI_EMBED_ENABLED: ${RETRIEVER_OPENAI_EMBED_ENABLED}
-      OPENAI_CHAT_ENABLED: ${RETRIEVER_OPENAI_CHAT_ENABLED}
-      SUMMARIZER_ENABLED: ${RETRIEVER_SUMMARIZER_ENABLED}
-      HUGGINGFACEHUB_API_TOKEN: ${HUGGINGFACEHUB_API_TOKEN}
-      LOGFLAG: ${LOGFLAG}
     networks:
       - genieai_network
     restart: "no"
 
   chatqna-xeon-backend-server:
     build:
-      context: ./opea 
+      context: ./opea
       dockerfile: ./ChatQnA/Dockerfile_genieai
-    image: chatqna-genieai:latest # image: ${REGISTRY:-opea}/chatqna:${TAG:-latest}
+    image: chatqna-genieai:latest
     container_name: chatqna-xeon-backend-server
     volumes:
       - ./opea:/app
     working_dir: /app/ChatQnA
     depends_on:
-      - embedding
-      - retriever-arango-service
-      - reranker
-      - vllm
+      vllm:
+        condition: service_healthy
+      embedding:
+        condition: service_started
+      retriever-arango-service:
+        condition: service_started
+      reranker:
+        condition: service_started
     ports:
       - "8888:8888"
+    env_file:
+      - .env
     environment:
-      - no_proxy=${no_proxy}
-      - https_proxy=${https_proxy}
-      - http_proxy=${http_proxy}
-      - CHATQNA_TYPE=CHATQNA_MACDAVID # Update .sh file 
-      - MEGA_SERVICE_HOST_IP=chatqna-xeon-backend-server
-      - EMBEDDING_SERVER_HOST_IP=tei
-      - EMBEDDING_SERVER_PORT=80
-      - RETRIEVER_SERVICE_HOST_IP=retriever-arango-service
-      - RETRIEVER_SERVICE_PORT=7000
-      - RERANK_SERVER_HOST_IP=tei_reranker
-      - RERANK_SERVER_PORT=80
-      - LLM_SERVER_HOST_IP=vllm
-      - LLM_SERVER_PORT=8000
-      - LLM_MODEL=ibm-granite/granite-3.3-2b-instruct # ${LLM_MODEL_ID}
-      - LLM_TRANS_MODEL=google/gemma-3-1b-it
-      - GUARDRAIL_SERVICE_HOST_IP=guardrail
-      - GUARDRAIL_SERVICE_PORT=9090
-      - TRANSLATION_SERVICE_HOST_IP=vllm-translation-guardrail
-      - TRANSLATION_SERVICE_PORT=9031
-      - LOGFLAG=${LOGFLAG}
-      - RETRIEVER_ARANGO_SEARCH_START=${RETRIEVER_ARANGO_SEARCH_START}
-      - DOC_REPO_URL=http://localhost:3001
-      - GET_AUTH_TOKEN_URL=http://http-service:6666/get-token
+      CHATQNA_TYPE: CHATQNA_MACDAVID
+      MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
+      EMBEDDING_SERVER_HOST_IP: tei
+      EMBEDDING_SERVER_PORT: 80
+      RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
+      RETRIEVER_SERVICE_PORT: 7000
+      RERANK_SERVER_HOST_IP: tei_reranker
+      RERANK_SERVER_PORT: 80
+      LLM_SERVER_HOST_IP: vllm
+      LLM_SERVER_PORT: 8000
+      GUARDRAIL_SERVICE_HOST_IP: guardrail
+      GUARDRAIL_SERVICE_PORT: 9090
+      TRANSLATION_SERVICE_HOST_IP: vllm-translation-guardrail
+      TRANSLATION_SERVICE_PORT: 9031
+      DOC_REPO_URL: http://localhost:3001
+      GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
     networks:
       - genieai_network
     ipc: "host"
     restart: "no"
 
   chatqna-xeon-ui-server:
-    image: ${REGISTRY:-opea}/chatqna-ui:${TAG:-latest}
+    image: opea/chatqna-ui:latest
     container_name: chatqna-xeon-ui-server
     depends_on:
       - chatqna-xeon-backend-server
     ports:
       - "5173:5173"
+    env_file:
+      - .env
     environment:
-      - no_proxy=${no_proxy}
-      - https_proxy=${https_proxy}
-      - http_proxy=${http_proxy}
-      - UPLOAD_FILE_BASE_URL=http://localhost:6007/v1/dataprep/ingest
+      UPLOAD_FILE_BASE_URL: http://localhost:6007/v1/dataprep/ingest
     ipc: "host"
     networks:
       - genieai_network
@@ -327,7 +379,7 @@ services:
       start_period: 10s
 
   chatqna-xeon-nginx-server:
-    image: ${REGISTRY:-opea}/nginx:${TAG:-latest}
+    image: opea/nginx:latest
     container_name: chatqna-xeon-nginx-server
     depends_on:
       chatqna-xeon-backend-server:
@@ -336,24 +388,23 @@ services:
         condition: service_healthy
     ports:
       - "${NGINX_PORT:-80}:80"
+    env_file:
+      - .env
     environment:
-      - no_proxy=${no_proxy}
-      - https_proxy=${https_proxy}
-      - http_proxy=${http_proxy}
-      - FRONTEND_SERVICE_IP=chatqna-xeon-ui-server
-      - FRONTEND_SERVICE_PORT=5173
-      - BACKEND_SERVICE_NAME=chatqna
-      - BACKEND_SERVICE_IP=chatqna-xeon-backend-server
-      - BACKEND_SERVICE_PORT=8888
-      - DATAPREP_SERVICE_IP=dataprep-arango-service
-      - DATAPREP_SERVICE_PORT=5000
+      FRONTEND_SERVICE_IP: chatqna-xeon-ui-server
+      FRONTEND_SERVICE_PORT: 5173
+      BACKEND_SERVICE_NAME: chatqna
+      BACKEND_SERVICE_IP: chatqna-xeon-backend-server
+      BACKEND_SERVICE_PORT: 8888
+      DATAPREP_SERVICE_IP: dataprep-arango-service
+      DATAPREP_SERVICE_PORT: 5000
     ipc: "host"
     networks:
       - genieai_network
     restart: "no"
 
   vllm:
-    container_name: vllm-vllm-2 # Consider re-naming once everything is validated
+    container_name: vllm-vllm-2
     image: vllm/vllm-openai:latest
     deploy:
       resources:
@@ -372,12 +423,20 @@ services:
       --dtype=half
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
+      - VLLM_USE_FLASHINFER_SAMPLER=0
     volumes:
       - /root/.cache/huggingface:/root/.cache/huggingface
     networks:
       - genieai_network
     ipc: "host"
     restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   textgen:
     container_name: llm-textgen
@@ -465,10 +524,6 @@ services:
       - "7000:80"
     volumes:
       - "${DATA_PATH:-./data}:/data"
-      - /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1
-      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
-      - /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/usr/lib/x86_64-linux-gnu/libcudart.so.11.0
-    shm_size: 2g
     deploy:
       resources:
         reservations:
@@ -516,10 +571,6 @@ services:
       - "7100:80"
     volumes:
       - "${DATA_PATH:-./data}:/data"
-      - /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1
-      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
-      - /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/usr/lib/x86_64-linux-gnu/libcudart.so.11.0
-    shm_size: 2g
     deploy:
       resources:
         reservations:
@@ -547,11 +598,11 @@ services:
       dockerfile: comps/rerankings/src/Dockerfile
     volumes:
       - ./opea/GenAIComps/comps:/home/user/comps
+    env_file:
+      - .env
     environment:
       - RERANKER_MODEL_ENDPOINT=http://tei_reranker:80
       - TEI_RERANKING_ENDPOINT=http://tei_reranker:80
-      - RERANKER_MODEL_ID=bge-reranker-base
-      - LOGFLAG=${LOGFLAG}
     ports:
       - "6100:8000"
     ipc: "host"

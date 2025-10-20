@@ -1,10 +1,22 @@
 // vue.config.js
 const { DefinePlugin } = require('webpack');
 
-// Read the CSP connect-src from an environment variable.
-// This allows us to configure it in docker-compose.yaml for different environments.
-// It includes a safe default for local development.
+// ==============================================================================
+// DEBUGGING CODE STARTS HERE
+// ==============================================================================
+console.log("\n\n\n============================================================");
+console.log("!!! VUE.CONFIG.JS IS LOADING. CHECKING ENV VARS... !!!");
+console.log("============================================================");
+console.log(`process.env.VUE_APP_API_URL IS: [${process.env.VUE_APP_API_URL}]`);
+console.log(`process.env.VUE_APP_CSP_CONNECT_SRC IS: [${process.env.VUE_APP_CSP_CONNECT_SRC}]`);
+console.log(`process.env.VUE_PROXY_HOST IS: [${process.env.VUE_PROXY_HOST}]`);
+console.log("============================================================\n\n\n");
+// ==============================================================================
+// DEBUGGING CODE ENDS HERE
+// ==============================================================================
+
 const cspConnectSrc = process.env.VUE_APP_CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:8090";
+const vueProxyHost = process.env.VUE_PROXY_HOST || "localhost:3000";
 
 module.exports = {
   devServer: {
@@ -12,25 +24,30 @@ module.exports = {
     port: 8090,
     allowedHosts: 'all',
     headers: {
-      // Use the dynamically configured CSP
       'Content-Security-Policy': `default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${cspConnectSrc}; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:;`
     },
     host: '0.0.0.0',
     client: {
       webSocketURL: 'auto://0.0.0.0:0/ws'
     },
-    // The proxy is not needed if your app calls the full URL directly, but is kept for reference.
     proxy: {
       '/api': {
-        target: 'http://localhost:3000', // Should point to your backend service
+        target: 'http://'+ vueProxyHost,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:3000', // Should point to your backend service
+        target: 'ws://'+ vueProxyHost,
         ws: true,
         changeOrigin: true,
       }
     }
+  },
+  // *** ADD THIS TO DISABLE CACHE-LOADER ***
+  chainWebpack: config => {
+    config.module.rule('vue').uses.delete('cache-loader');
+    config.module.rule('js').uses.delete('cache-loader');
+    config.module.rule('ts').uses.delete('cache-loader');
+    config.module.rule('tsx').uses.delete('cache-loader');
   },
   configureWebpack: {
     resolve: {
@@ -50,7 +67,6 @@ module.exports = {
         Buffer: ['buffer', 'Buffer'],
         process: 'process/browser'
       }),
-      // This makes environment variables available in your Vue app code
       new DefinePlugin({
         'process.env': {
           VUE_APP_API_URL: JSON.stringify(process.env.VUE_APP_API_URL)
@@ -59,3 +75,5 @@ module.exports = {
     ]
   }
 };
+console.log('DEBUG: Final constructed CSP string:');
+console.log(module.exports.devServer.headers['Content-Security-Policy']);

@@ -4,6 +4,7 @@
 # 3001 - doc repo dev
 # 3310 - clamav
 # 80 - default OPEA UI nginx server (chatqna-xeon-nginx-server)
+# 443 - nginx server for the frontside (separate service named nginx)
 # 5173 - default OPEA UI frontend (chatqna-xeon-ui-server)
 # 6000 - embedding wrapper
 # 6007 - dataprep API endpoint

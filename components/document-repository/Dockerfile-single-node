@@ -34,6 +34,8 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm install --verbose --fetch-timeout 600000 || \
     npm install --prefer-offline || \
     npm ci
+RUN ls -la /app/node_modules | head -n 20  # List first 20 items in node_modules (should include 'dotenv')
+RUN npm list dotenv  # Confirm dotenv is installed
 
 # Copy app source
 COPY document-repository/src/ ./src/

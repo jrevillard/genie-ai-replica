@@ -4,6 +4,25 @@ no_proxy=noproxy
 http_proxy=
 https_proxy=
 
+# ========= KONG DATABASE =========
+POSTGRES_USER=kong
+POSTGRES_DB=kong
+POSTGRES_PASSWORD=k1ngk0ng
+
+
+# ========== KONG ===================
+KONG_DATABASE=postgres
+KONG_PG_HOST=kong-database
+KONG_PG_USER=kong
+KONG_PG_PASSWORD=k1ngk0ng
+KONG_PROXY_ACCESS_LOG=/dev/stdout
+KONG_ADMIN_ACCESS_LOG=/dev/stdout
+KONG_PROXY_ERROR_LOG=/dev/stderr
+KONG_ADMIN_ERROR_LOG=/dev/stderr
+KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
+KONG_DNS_RESOLVER="127.0.0.11"
+KONG_DNS_ORDER="LAST,A,AAAA,CNAME"
+
 # ========= GOV-CHAT-BACKEND =========
 ARANGO_USERNAME=root
 COMPRESS_BACKUPS=true
@@ -11,7 +30,7 @@ LOG_LEVEL=debug
 JWT_SECRET=UJeFROw+yRJeVOPiUTgdcXzlE2eukTfATZPxBfPkptQLZs+ER+iuSA1BIXiJtw1sS181kiRqdncodVZOWD4sfA==
 JWT_EXPIRES_IN=24h
 OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
-# PORT=3000
+PORT=3000
 API_PREFIX=/api
 MAX_FILE_SIZE=5242880
 SESSION_SECRET=default-session-secret
@@ -30,13 +49,18 @@ BACKUP_FORMAT=json
 OPEA_HOST=chatqna-xeon-backend-server
 OPEA_PORT=8888
 CONTEXT_OPTION=conversation-with-context-labels
+NODE_ENV=production
+CORS_ORIGIN=http://localhost/
+
 
 # ========= AUTH KEYS =========
 HUGGINGFACEHUB_API_TOKEN=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
+HUGGING_FACE_HUB_TOKEN=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
 VLLM_API_KEY=eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJBV2QyR2lmQVRFT2wtRExhdFF0Qi1GRGRXVHRDdzlONUZWYWpXR2EwTjRzIn0.eyJleHAiOjE3NDQzNDA2OTcsImlhdCI6MTc0MzAwMTQ5NywianRpIjoiMDU5ZDg1YTUtYTlmOC00NTBhLTg5ODktYjRhYTJkZDczZDA0IiwiaXNzIjoiaHR0cHM6Ly9pbmZlcmVuY2UtYXBpLmNsb3VkLmRlbnZyZGF0YS5jb20vcmVhbGzL21hc3RlciIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJkMGJjYjQ3Zi1lYTI4LTQ1YjQtYjQyOS0zNGExMjAzMWVlOTkiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ1bl9pdHVfUHJlZXRoaV92cnMiLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtbWFzdGVyIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBjdXN0b21fbW9kZWxfbGxhbWFfM184QiBlbWFpbCIsImNsaWVudEhvc3QiOiIxMC4yMzMuOTIuMTU4IiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJzZXJ2aWNlLWFjY291bnQtdW5faXR1X3ByZWV0aGlfdnJzIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIzMy45Mi4xNTgiLCJjbGllbnRfaWQiOiJ1bl9pdHVfUHJlZXRoaV92cnMifQ.S9KcGTwc8MIK7vTm9NrWGM0hGcxdRDD6XEhu5E3zJCHQNJLaVDzJv_CC-jDwPYMPK4fHV0AsRXBstJUDDG0DFsFDDYr9z0rhwCgVVCX36m2WS7E9mOPoLzOFW-Rp8evfLOr2xbF0PtU7eeSbTP6g0zou1MA0BMJVq86EkMDwDgH41Ns4frAHuM0nKzbzMDqHtLbuF8Ey_EzAmbnzB5xYHICV2AEqN6sd_G_Zgbf9fA6NL801_3ebtHgH5QIjz92KyrNCqG8fZSWrfpuXOSfgfwMyfMBn7QhSqW5ZkhkxTcQDEDKZEsbmNhHHQx-M_bSt3MemnVRB-4JpprJ6W6yBWA
 
 # ========= ARANGODB =========
 ARANGO_PASSWORD=test
+ARANGO_DB=genie-frontend
 ARANGO_DB_NAME=genie-backend
 ARANGO_URL=http://arango-vector-db:8529
 ARANGO_USER=root
@@ -47,6 +71,8 @@ VUE_PROXY_HOST=kong:8010
 VUE_APP_CSP_CONNECT_SRC="'self' http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
 CSP_CONNECT_SRC='self' http://locahost https://localhost http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net
 CORS_ALLOWED_ORIGINS=http://localhost,https://localhost,http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
+
+
 
 # ========= DATAPREP =========
 DATAPREP_CHUNK_SIZE=500

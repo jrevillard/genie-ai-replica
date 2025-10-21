@@ -4,7 +4,6 @@
 # 3001 - doc repo dev
 # 3310 - clamav
 # 80 - default OPEA UI nginx server (chatqna-xeon-nginx-server)
-# 443 - nginx server for the frontside (separate service named nginx)
 # 5173 - default OPEA UI frontend (chatqna-xeon-ui-server)
 # 6000 - embedding wrapper
 # 6007 - dataprep API endpoint
@@ -41,10 +40,8 @@ services:
     networks:
       - genieai_network
     command: postgres -c hba_file=/etc/postgresql/pg_hba.conf
-    environment:
-      POSTGRES_USER: kong
-      POSTGRES_DB: kong
-      POSTGRES_PASSWORD: k1ngk0ng
+    env_file:
+      .env
     ports:
       - "5432:5432"
     volumes:
@@ -66,6 +63,8 @@ services:
     depends_on:
       kong-database:
         condition: service_healthy
+    env_file:
+      .env
     environment:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-database
@@ -135,37 +134,37 @@ services:
       arango-vector-db:
         condition: service_healthy
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - API_PREFIX=/api
+      #- NODE_ENV=production
+      #- PORT=3000
+      #- API_PREFIX=/api
       #- UPLOAD_DIR=./Uploads
-      - MAX_FILE_SIZE=5242880
+      #- MAX_FILE_SIZE=5242880
       - SESSION_SECRET=${SESSION_SECRET:-default-session-secret}
-      - SESSION_EXPIRATION_TIME=1800000
-      - CORS_ORIGIN=http://localhost/
-      - EMAIL_HOST=smtp.itu.ch
-      - EMAIL_PORT=587
-      - EMAIL_SECURE=false
-      - EMAIL_USER=genie-ai
-      - EMAIL_PASSWORD=gLp+Ek)Vf) # Need to remove before publishing (also in the other files)
-      - EMAIL_FROM=noreply@genie-ai.itu.int
-      - APP_NAME=Genie AI
-      - FRONTEND_URL=http://localhost/
-      - ARANGO_URL=http://arango-vector-db:8529
-      - ARANGO_DB=genie-frontend
-      - ARANGO_USER=root
-      - ARANGO_PASSWORD=test
-      - BACKUP_DIR=./database_backups
-      - MAX_BACKUPS=5
-      - BACKUP_FORMAT=json
+      #- SESSION_EXPIRATION_TIME=1800000
+      #- CORS_ORIGIN=http://localhost/
+      #- EMAIL_HOST=smtp.itu.ch
+      #- EMAIL_PORT=587
+      #- EMAIL_SECURE=false
+      #- EMAIL_USER=genie-ai
+      #- EMAIL_PASSWORD=gLp+Ek)Vf) # Need to remove before publishing (also in the other files)
+      #- EMAIL_FROM=noreply@genie-ai.itu.int
+      #- APP_NAME=Genie AI
+      #- FRONTEND_URL=http://localhost/
+      #- ARANGO_URL=http://arango-vector-db:8529
+      #- ARANGO_DB=genie-frontend
+      #- ARANGO_USER=root
+      #- ARANGO_PASSWORD=test
+      #- BACKUP_DIR=./database_backups
+      #- MAX_BACKUPS=5
+      #- BACKUP_FORMAT=json
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
-      - JWT_EXPIRES_IN=24h
-      - LOG_LEVEL=debug
-      - OPEA_HOST=chatqna-xeon-backend-server
-      - OPEA_PORT=8888
-      - CONTEXT_OPTION=conversation-with-context-labels
+      #- JWT_EXPIRES_IN=24h
+      #- LOG_LEVEL=debug
+      #- OPEA_HOST=chatqna-xeon-backend-server
+      #- OPEA_PORT=8888
+      #- CONTEXT_OPTION=conversation-with-context-labels
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - CSP_CONNECT_SRC="'self' http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
+      #- CSP_CONNECT_SRC="'self' http://localhost:8010 https://localhost:8010 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
 
     networks:
       - genieai_network
@@ -184,13 +183,12 @@ services:
     depends_on:
       - clamav
     ports:
-      - "3001:3001"
+      - "3001:3000"
     networks:
       - genieai_network
     volumes:
-      - ./components/document-repository:/app
+      #- ./components/document-repository:/app
       - ./components/document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
-      - /app/node_modules
 
   clamav:
     image: mkodockx/docker-clamav:alpine
@@ -439,21 +437,6 @@ services:
       retries: 20
       start_period: 30s
 
-  textgen:
-    container_name: llm-textgen
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/llms/src/text-generation/Dockerfile
-    environment:
-      - LLM_ENDPOINT=http://vllm:8000
-      - LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
-    ports:
-      - "9000:9000"
-    ipc: "host"
-    networks:
-      - genieai_network
-    restart: unless-stopped
-
   vllm-translation-guardrail:
     container_name: vllm-vllm-translation-guardrail
     image: vllm/vllm-openai:latest
@@ -496,21 +479,6 @@ services:
       - GUARDRAILS_COMPONENT_NAME=OPEA_GEMMA_GUARD
     ports:
       - "9090:9090"
-    ipc: "host"
-    networks:
-      - genieai_network
-    restart: "no"
-
-  translation:
-    container_name: llm-translation
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/llms/src/translation-generation/Dockerfile
-    environment:
-      - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
-      - LLM_MODEL_ID=gemma-3-1b-it
-    ports:
-      - "9030:9030"
     ipc: "host"
     networks:
       - genieai_network

@@ -2916,17 +2916,17 @@ export default {
     async loadSystemHealth() {
       try {
         this.isLoading = true;
-        const response = await adminDashboardService.getSystemHealth();
+        // Get the data object directly from the service
+        const data = await adminDashboardService.getSystemHealth();
 
-        if (response && response.data && response.data.data) {
-          const data = response.data.data;
-
+        // Check if the data and its 'metrics' property exist
+        if (data && data.metrics) {
           // Update metrics
           this.metrics = {
             systemUptime: data.metrics.systemUptime,
             avgResponseTime: data.metrics.avgResponseTime,
             errorRate: data.metrics.errorRate,
-            monthlyActiveUsers: data.metrics.monthlyActiveUsers, // Ensure this matches the backend field
+            monthlyActiveUsers: data.metrics.monthlyActiveUsers,
           };
 
           // Update health services
@@ -2938,6 +2938,10 @@ export default {
             label: this.getResourceLabel(id),
             value: data.resourceUsage[id],
           }));
+        } else {
+          // Log a warning if data is missing, which helps in debugging
+          console.warn("Received invalid system health data:", data);
+          this.showNotification("Failed to parse system health data", "error");
         }
       } catch (error) {
         console.error("Error loading system health:", error);

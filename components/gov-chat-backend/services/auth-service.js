@@ -192,6 +192,19 @@ class AuthService {
       if (!isPasswordValid) throw new Error('Invalid password');
       if (user.disabled === true) throw new Error('This account has been disabled');
       if (!user.emailVerified) throw new Error('Email not verified');
+
+      // --- FIX ADDED HERE ---
+      // Create a session record for analytics and session management
+      // This will either retrieve an existing active session or create a new one.
+      try {
+        await this.sessionService.getOrCreateSession(user._key);
+        logger.info(`Session created or retrieved for user: ${user._key}`);
+      } catch (sessionError) {
+        // Log the error but don't fail the login
+        logger.error(`Failed to create session for user ${user._key}: ${sessionError.message}`, { stack: sessionError.stack });
+      }
+      // --- END OF FIX ---
+
       const accessToken = this.generateToken(user);
       const refreshToken = this.generateRefreshToken(user._key, user.tokenVersion || 0); // Include tokenVersion
       await this.users.update(user._key, {

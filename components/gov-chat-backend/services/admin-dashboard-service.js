@@ -164,7 +164,7 @@ class AdminDashboardService {
         FOR q IN queries
         FILTER q.timestamp >= @startDate
         COLLECT AGGREGATE 
-        avgTime = AVERAGE(q.responseTime * 1000), 
+        avgTime = AVERAGE(q.responseTime), 
         count = COUNT()
         RETURN { avgTime, count }`, { startDate });
       const queriesStats = await queriesCursor.next() || { avgTime: 0, count: 0 };

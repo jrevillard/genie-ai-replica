@@ -272,6 +272,7 @@ services:
     environment:
       DATAPREP_COMPONENT_NAME: "OPEA_DATAPREP_ARANGODB"
       VLLM_ENDPOINT: http://vllm:8000
+      VLLM_MODEL_ID: ibm-granite/granite-3.3-2b-instruct # I added this as it seems to be the problem. It is in the .env file but seems to be a problem
       TEI_EMBEDDING_ENDPOINT: http://embedding:6000
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       E2E_CPU_URL: http://localhost:3000

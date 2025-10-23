@@ -828,7 +828,6 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
-
       this.chatMessages.push({
         sender: "user",
         content,
@@ -839,25 +838,20 @@ export default {
       this.showQuickHelp = false;
       this.isLoading = true;
       this.relatedDocuments = [];
-
       try {
         const useConversationContext = this.selectedContextItems.length > 0;
         const contextOption = useConversationContext
           ? "conversation-with-labels"
           : "single-message";
-
         let queryData;
-
         const categoryLabel = this.getCategoryLabelById(this.currentCategoryId);
         console.log(
           `[ChatBotComponent] Resolved Category ID "${this.currentCategoryId}" to Label "${categoryLabel}"`
         );
-
         if (contextOption === "conversation-with-labels") {
           const serviceLabels = this.selectedContextItems.map(
             (item) => item.service
           );
-
           queryData = {
             conversationId: this.conversationId,
             userId: this.$store.getters.currentUser?._key || "anonymous",
@@ -883,22 +877,19 @@ export default {
             timestamp: new Date().toISOString(),
           };
         }
-
         console.log(
           "Submitting query with data:",
           JSON.stringify(queryData, null, 2)
         );
         const result = await chatbotService.submitQuery(queryData);
         console.log("Query result:", result);
-
         const botMessage = {
           sender: "bot",
           content: result.response || this.translate("chatbot.processingError"),
-          queryId: result._key,
+          queryId: result.queryId,
           timestamp: new Date().toISOString(),
           isSaved: false,
         };
-
         if (result.metadata) {
           if (result.metadata.confidence_score) {
             botMessage.confidenceScore = result.metadata.confidence_score;
@@ -929,16 +920,11 @@ export default {
             );
           }
         }
-
         this.chatMessages.push(botMessage);
-
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
         }
-        await chatbotService.markQueryAsAnswered(
-          result._key,
-          result.responseTime
-        );
+        // Removed duplicate markQueryAsAnswered call (handled in submitQuery)
       } catch (error) {
         console.error("Error sending query:", error);
         this.chatMessages.push({

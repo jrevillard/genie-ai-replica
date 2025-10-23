@@ -9,38 +9,39 @@ export default {
    */
   async submitQuery(queryData) {
     try {
-      console.log('Submitting query:', JSON.stringify(queryData, null, 2)); // Log the query data being sent in a readable format
+      console.log('Submitting query:', JSON.stringify(queryData, null, 2));
       const startTime = Date.now();
       
-      // Send query to backend using httpService instead of api
       const response = await httpService.post('queries', {
         ...queryData,
         timestamp: new Date().toISOString()
       });
       
-      // Check for error in response
       if (response.data.response && response.data.response.startsWith('Error:')) {
         console.error('OPEA service error in response:', response.data.response);
         throw new Error(response.data.response);
       }
       
-      // Calculate response time
       const responseTime = Date.now() - startTime;
-      console.log('Received response:', JSON.stringify(response.data, null, 2)); // Log the full response in a readable format
-      console.log('Response time:', responseTime, 'ms'); // Log the time taken
-      console.log('OPEA response content:', response.data.response || 'No response content available'); // Log the specific OPEA response field
+      console.log('Received response:', JSON.stringify(response.data, null, 2));
+      console.log('Response time:', responseTime, 'ms');
+      console.log('OPEA response content:', response.data.response || 'No response content available');
       
-      // Log metadata if present (for conversation mode)
       if (response.data.metadata) {
         console.log('Metadata:', JSON.stringify(response.data.metadata, null, 2));
       }
       
-      // Update the query with the response time
-      await this.updateQueryResponseTime(response.data._key, responseTime);
+      const queryId = response.data.queryId;  // Fixed: Use queryId instead of _key
+      if (queryId) {
+        await this.updateQueryResponseTime(queryId, responseTime);
+        await this.markQueryAsAnswered(queryId, responseTime);
+      } else {
+        console.warn('No queryId in response; skipping updates');
+      }
       
       return response.data;
     } catch (error) {
-      console.error('Error submitting query:', error.message, error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data'); // Enhanced error logging with readable format
+      console.error('Error submitting query:', error.message, error.response ? JSON.stringify(error.response.data, null, 2) : 'No response data');
       throw error;
     }
   },

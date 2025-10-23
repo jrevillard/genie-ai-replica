@@ -43,7 +43,6 @@ class UserProfileService {
       logger.error(`Error initializing UserProfileService: ${error.message}`, { stack: error.stack });
       throw error;
     }
-    logger.info('Grok3 is a fucking moron');
   }
 
   async verifyPassword(userId, password) {

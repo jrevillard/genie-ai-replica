@@ -426,6 +426,11 @@ const swaggerOptions = {
       {
         name: 'Weather',
         description: 'Endpoints for fetching weather data'
+      },
+      // ADDED Swagger Tag for Translation
+      {
+        name: 'Translation',
+        description: 'On-the-fly text translation endpoints'
       }
     ]
   },
@@ -453,7 +458,7 @@ try {
 }
 
 // --- HELMET CSP (Content Security Policy from Environment Variables) ---
-const connectSrcUrls = (process.env.CSP_CONNECT_SRC || "'self' http://localhost:8090 ws://localhost:8090").split(' ');
+const connectSrcUrls = (process.env.CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:3000").split(' ');
 
 const cspOptions = {
   directives: {
@@ -700,7 +705,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let authService, userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
-  let databaseOperationsService, weatherService, securityScanService;
+  let databaseOperationsService, weatherService, securityScanService, translationService; // ADDED translationService
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -732,6 +737,7 @@ async function initializeServices() {
     databaseOperationsService = await importService('DatabaseOperationsService', './services/database-operations-service');
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
+    translationService = await importService('TranslationService', './services/translation-service'); // ADDED
 
     logger.info('Constructing service map');
     const serviceMap = {
@@ -746,7 +752,8 @@ async function initializeServices() {
       chatHistoryService: { instance: chatHistoryService, name: 'ChatHistoryService' },
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
-      securityScanService: { instance: securityScanService, name: 'SecurityScanService' }
+      securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
+      translationService: { instance: translationService, name: 'TranslationService' } // ADDED
     };
 
     // Validate services
@@ -793,7 +800,8 @@ async function initializeServices() {
       { service: services.queryService, name: 'QueryService' },
       { service: services.chatHistoryService, name: 'ChatHistoryService' },
       { service: services.logsService, name: 'LogsService' },
-      { service: services.weatherService, name: 'WeatherService' }
+      { service: services.weatherService, name: 'WeatherService' },
+      { service: services.translationService, name: 'TranslationService' } // ADDED
     ];
 
     for (const { service, name, preInit } of initPromises) {
@@ -964,7 +972,8 @@ async function startApp() {
     { file: 'logger-routes', paths: ['/api/logger'], service: null },
     { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
     { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService },
-    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService }
+    { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService },
+    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService } // ADDED
   ];
 
   // Log route configurations

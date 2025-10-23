@@ -1,14 +1,14 @@
-2025-10-09T12:03:08.543Z: LOG: --- Database Schema Creator ---
-2025-10-09T12:03:08.543Z: LOG: This script will apply a schema to an ArangoDB database.
-2025-10-09T12:03:08.543Z: LOG: 
+2025-10-07T07:19:03.508Z: LOG: --- Database Schema Creator ---
+2025-10-07T07:19:03.509Z: LOG: This script will apply a schema to an ArangoDB database.
+2025-10-07T07:19:03.509Z: LOG: 
 Database configuration to be used:
-2025-10-09T12:03:08.543Z: LOG:   URL:      http://127.0.0.1:8529
-2025-10-09T12:03:08.543Z: LOG:   Database: test-mactest
-2025-10-09T12:03:08.543Z: LOG:   User:     root
-2025-10-09T12:03:16.897Z: LOG: Creating schema for database: test-mactest
-2025-10-09T12:03:16.898Z: LOG: Creating collections...
-2025-10-09T12:03:16.898Z: LOG:   Processing schema for categoryServices
-2025-10-09T12:03:16.898Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:03.509Z: LOG:   URL:      http://127.0.0.1:8529
+2025-10-07T07:19:03.509Z: LOG:   Database: genie-ai-frontend
+2025-10-07T07:19:03.509Z: LOG:   User:     root
+2025-10-07T07:19:07.942Z: LOG: Creating schema for database: genie-ai-frontend
+2025-10-07T07:19:07.942Z: LOG: Creating collections...
+2025-10-07T07:19:07.943Z: LOG:   Processing schema for categoryServices
+2025-10-07T07:19:07.943Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_from": {
@@ -26,12 +26,47 @@ Database configuration to be used:
     "_to"
   ]
 }
-2025-10-09T12:03:16.898Z: LOG:   Adding schema validation to categoryServices
-2025-10-09T12:03:16.907Z: LOG: Created collection: categoryServices
-2025-10-09T12:03:16.907Z: LOG:   No schema validation for userConversations
-2025-10-09T12:03:16.909Z: LOG: Created collection: userConversations
-2025-10-09T12:03:16.909Z: LOG:   Processing schema for userFolders
-2025-10-09T12:03:16.909Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.943Z: LOG:   Adding schema validation to categoryServices
+2025-10-07T07:19:07.951Z: LOG: Created collection: categoryServices
+2025-10-07T07:19:07.951Z: LOG:   Processing schema for services
+2025-10-07T07:19:07.952Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "categoryId": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string"
+    },
+    "nameSW": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "categoryId",
+    "nameEN",
+    "order"
+  ]
+}
+2025-10-07T07:19:07.952Z: LOG:   Adding schema validation to services
+2025-10-07T07:19:07.954Z: LOG: Created collection: services
+2025-10-07T07:19:07.954Z: LOG:   No schema validation for userConversations
+2025-10-07T07:19:07.956Z: LOG: Created collection: userConversations
+2025-10-07T07:19:07.956Z: LOG:   Processing schema for userFolders
+2025-10-07T07:19:07.956Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_from": {
@@ -59,12 +94,10 @@ Database configuration to be used:
     "role"
   ]
 }
-2025-10-09T12:03:16.909Z: LOG:   Adding schema validation to userFolders
-2025-10-09T12:03:16.910Z: LOG: Created collection: userFolders
-2025-10-09T12:03:16.910Z: LOG:   No schema validation for conversationCategories
-2025-10-09T12:03:16.911Z: LOG: Created collection: conversationCategories
-2025-10-09T12:03:16.911Z: LOG:   Processing schema for events
-2025-10-09T12:03:16.912Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.956Z: LOG:   Adding schema validation to userFolders
+2025-10-07T07:19:07.958Z: LOG: Created collection: userFolders
+2025-10-07T07:19:07.958Z: LOG:   Processing schema for folders
+2025-10-07T07:19:07.958Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_key": {
@@ -73,29 +106,191 @@ Database configuration to be used:
     "userId": {
       "type": "string"
     },
-    "eventType": {
+    "name": {
       "type": "string"
     },
-    "timestamp": {
-      "type": "string"
-    },
-    "details": {
-      "type": "object"
+    "order": {
+      "type": "number"
     }
   },
   "required": [
     "_key",
     "userId",
-    "eventType",
-    "timestamp"
+    "name"
+  ],
+  "additionalProperties": true
+}
+2025-10-07T07:19:07.958Z: LOG:   Adding schema validation to folders
+2025-10-07T07:19:07.959Z: LOG: Created collection: folders
+2025-10-07T07:19:07.959Z: LOG:   Processing schema for analytics
+2025-10-07T07:19:07.959Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string"
+    },
+    "endDate": {
+      "type": "string"
+    },
+    "totalQueries": {
+      "type": "number"
+    },
+    "uniqueUsers": {
+      "type": "number"
+    },
+    "averageResponseTime": {
+      "type": "number"
+    },
+    "satisfactionRate": {
+      "type": "number"
+    },
+    "queryDistribution": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "topQueries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "lastUpdated": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "period",
+    "startDate",
+    "endDate",
+    "totalQueries",
+    "lastUpdated"
   ]
 }
-2025-10-09T12:03:16.912Z: LOG:   Adding schema validation to events
-2025-10-09T12:03:16.913Z: LOG: Created collection: events
-2025-10-09T12:03:16.913Z: LOG:   No schema validation for userSessions
-2025-10-09T12:03:16.914Z: LOG: Created collection: userSessions
-2025-10-09T12:03:16.914Z: LOG:   Processing schema for messages
-2025-10-09T12:03:16.914Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.959Z: LOG:   Adding schema validation to analytics
+2025-10-07T07:19:07.960Z: LOG: Created collection: analytics
+2025-10-07T07:19:07.960Z: LOG:   No schema validation for verificationTokens
+2025-10-07T07:19:07.962Z: LOG: Created collection: verificationTokens
+2025-10-07T07:19:07.962Z: LOG:   Processing schema for serviceCategories
+2025-10-07T07:19:07.962Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "nameEN": {
+      "type": "string"
+    },
+    "nameFR": {
+      "type": "string"
+    },
+    "nameSW": {
+      "type": "string"
+    },
+    "order": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_key",
+    "nameEN",
+    "order"
+  ]
+}
+2025-10-07T07:19:07.962Z: LOG:   Adding schema validation to serviceCategories
+2025-10-07T07:19:07.963Z: LOG: Created collection: serviceCategories
+2025-10-07T07:19:07.963Z: LOG:   No schema validation for queryCategories
+2025-10-07T07:19:07.965Z: LOG: Created collection: queryCategories
+2025-10-07T07:19:07.965Z: LOG:   Processing schema for serviceCategoryTranslations
+2025-10-07T07:19:07.965Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "serviceCategoryId": {
+      "type": "string"
+    },
+    "languageCode": {
+      "type": "string"
+    },
+    "translation": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "serviceCategoryId",
+    "languageCode",
+    "translation"
+  ]
+}
+2025-10-07T07:19:07.965Z: LOG:   Adding schema validation to serviceCategoryTranslations
+2025-10-07T07:19:07.966Z: LOG: Created collection: serviceCategoryTranslations
+2025-10-07T07:19:07.967Z: LOG:   Processing schema for queryMessages
+2025-10-07T07:19:07.967Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "responseType": {
+      "type": "string"
+    },
+    "confidenceScore": {
+      "type": "number"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to",
+    "responseType",
+    "createdAt"
+  ]
+}
+2025-10-07T07:19:07.967Z: LOG:   Adding schema validation to queryMessages
+2025-10-07T07:19:07.968Z: LOG: Created collection: queryMessages
+2025-10-07T07:19:07.968Z: LOG:   Processing schema for messages
+2025-10-07T07:19:07.968Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_key": {
@@ -132,51 +327,50 @@ Database configuration to be used:
     "sequence"
   ]
 }
-2025-10-09T12:03:16.914Z: LOG:   Adding schema validation to messages
-2025-10-09T12:03:16.915Z: LOG: Created collection: messages
-2025-10-09T12:03:16.915Z: LOG:   Processing schema for serviceCategoryTranslations
-2025-10-09T12:03:16.915Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.968Z: LOG:   Adding schema validation to messages
+2025-10-07T07:19:07.970Z: LOG: Created collection: messages
+2025-10-07T07:19:07.970Z: LOG:   No schema validation for sessionQueries
+2025-10-07T07:19:07.971Z: LOG: Created collection: sessionQueries
+2025-10-07T07:19:07.971Z: LOG:   Processing schema for events
+2025-10-07T07:19:07.971Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_key": {
       "type": "string"
     },
-    "serviceCategoryId": {
+    "userId": {
       "type": "string"
     },
-    "languageCode": {
+    "eventType": {
       "type": "string"
     },
-    "translation": {
+    "timestamp": {
       "type": "string"
     },
-    "isActive": {
-      "type": "boolean"
-    },
-    "createdAt": {
-      "type": "string"
-    },
-    "updatedAt": {
-      "type": "string"
+    "details": {
+      "type": "object"
     }
   },
   "required": [
     "_key",
-    "serviceCategoryId",
-    "languageCode",
-    "translation"
+    "userId",
+    "eventType",
+    "timestamp"
   ]
 }
-2025-10-09T12:03:16.915Z: LOG:   Adding schema validation to serviceCategoryTranslations
-2025-10-09T12:03:16.916Z: LOG: Created collection: serviceCategoryTranslations
-2025-10-09T12:03:16.916Z: LOG:   Processing schema for folderConversations
-2025-10-09T12:03:16.916Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.971Z: LOG:   Adding schema validation to events
+2025-10-07T07:19:07.972Z: LOG: Created collection: events
+2025-10-07T07:19:07.972Z: LOG:   Processing schema for serviceTranslationsEdge
+2025-10-07T07:19:07.972Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_from": {
       "type": "string"
     },
     "_to": {
+      "type": "string"
+    },
+    "createdAt": {
       "type": "string"
     }
   },
@@ -185,10 +379,10 @@ Database configuration to be used:
     "_to"
   ]
 }
-2025-10-09T12:03:16.916Z: LOG:   Adding schema validation to folderConversations
-2025-10-09T12:03:16.918Z: LOG: Created collection: folderConversations
-2025-10-09T12:03:16.918Z: LOG:   Processing schema for users
-2025-10-09T12:03:16.918Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.972Z: LOG:   Adding schema validation to serviceTranslationsEdge
+2025-10-07T07:19:07.973Z: LOG: Created collection: serviceTranslationsEdge
+2025-10-07T07:19:07.973Z: LOG:   Processing schema for users
+2025-10-07T07:19:07.973Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_key": {
@@ -486,225 +680,18 @@ Database configuration to be used:
     "encPassword"
   ]
 }
-2025-10-09T12:03:16.918Z: LOG:   Adding schema validation to users
-2025-10-09T12:03:16.920Z: LOG: Created collection: users
-2025-10-09T12:03:16.920Z: LOG:   No schema validation for graphql_appearsIn
-2025-10-09T12:03:16.921Z: LOG: Created collection: graphql_appearsIn
-2025-10-09T12:03:16.921Z: LOG:   No schema validation for files
-2025-10-09T12:03:16.921Z: LOG: Created collection: files
-2025-10-09T12:03:16.921Z: LOG:   Processing schema for analytics
-2025-10-09T12:03:16.922Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_key": {
-      "type": "string"
-    },
-    "period": {
-      "type": "string"
-    },
-    "startDate": {
-      "type": "string"
-    },
-    "endDate": {
-      "type": "string"
-    },
-    "totalQueries": {
-      "type": "number"
-    },
-    "uniqueUsers": {
-      "type": "number"
-    },
-    "averageResponseTime": {
-      "type": "number"
-    },
-    "satisfactionRate": {
-      "type": "number"
-    },
-    "queryDistribution": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "categoryId": {
-            "type": "string"
-          },
-          "count": {
-            "type": "number"
-          }
-        }
-      }
-    },
-    "topQueries": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string"
-          },
-          "count": {
-            "type": "number"
-          }
-        }
-      }
-    },
-    "lastUpdated": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "_key",
-    "period",
-    "startDate",
-    "endDate",
-    "totalQueries",
-    "lastUpdated"
-  ]
-}
-2025-10-09T12:03:16.922Z: LOG:   Adding schema validation to analytics
-2025-10-09T12:03:16.923Z: LOG: Created collection: analytics
-2025-10-09T12:03:16.923Z: LOG:   Processing schema for folders
-2025-10-09T12:03:16.923Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_key": {
-      "type": "string"
-    },
-    "userId": {
-      "type": "string"
-    },
-    "name": {
-      "type": "string"
-    },
-    "order": {
-      "type": "number"
-    }
-  },
-  "required": [
-    "_key",
-    "userId",
-    "name"
-  ],
-  "additionalProperties": true
-}
-2025-10-09T12:03:16.923Z: LOG:   Adding schema validation to folders
-2025-10-09T12:03:16.924Z: LOG: Created collection: folders
-2025-10-09T12:03:16.924Z: LOG:   No schema validation for graphql_friends
-2025-10-09T12:03:16.924Z: LOG: Created collection: graphql_friends
-2025-10-09T12:03:16.924Z: LOG:   Processing schema for passwordResetTokens
-2025-10-09T12:03:16.924Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_key": {
-      "type": "string"
-    },
-    "userId": {
-      "type": "string"
-    },
-    "token": {
-      "type": "string"
-    },
-    "expiresAt": {
-      "type": "string"
-    },
-    "used": {
-      "type": "boolean"
-    },
-    "createdAt": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "_key",
-    "userId",
-    "token",
-    "expiresAt",
-    "createdAt"
-  ]
-}
-2025-10-09T12:03:16.924Z: LOG:   Adding schema validation to passwordResetTokens
-2025-10-09T12:03:16.926Z: LOG: Created collection: passwordResetTokens
-2025-10-09T12:03:16.926Z: LOG:   Processing schema for services
-2025-10-09T12:03:16.926Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_key": {
-      "type": "string"
-    },
-    "categoryId": {
-      "type": "string"
-    },
-    "nameEN": {
-      "type": "string"
-    },
-    "nameFR": {
-      "type": "string"
-    },
-    "nameSW": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string"
-    },
-    "order": {
-      "type": "number"
-    }
-  },
-  "required": [
-    "_key",
-    "categoryId",
-    "nameEN",
-    "order"
-  ]
-}
-2025-10-09T12:03:16.926Z: LOG:   Adding schema validation to services
-2025-10-09T12:03:16.927Z: LOG: Created collection: services
-2025-10-09T12:03:16.927Z: LOG:   No schema validation for queryCategories
-2025-10-09T12:03:16.928Z: LOG: Created collection: queryCategories
-2025-10-09T12:03:16.928Z: LOG:   No schema validation for verificationTokens
-2025-10-09T12:03:16.928Z: LOG: Created collection: verificationTokens
-2025-10-09T12:03:16.929Z: LOG:   Processing schema for queryMessages
-2025-10-09T12:03:16.929Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.973Z: LOG:   Adding schema validation to users
+2025-10-07T07:19:07.975Z: LOG: Created collection: users
+2025-10-07T07:19:07.975Z: LOG:   No schema validation for queries
+2025-10-07T07:19:07.976Z: LOG: Created collection: queries
+2025-10-07T07:19:07.976Z: LOG:   Processing schema for folderConversations
+2025-10-07T07:19:07.976Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_from": {
       "type": "string"
     },
     "_to": {
-      "type": "string"
-    },
-    "responseType": {
-      "type": "string"
-    },
-    "confidenceScore": {
-      "type": "number"
-    },
-    "createdAt": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "_from",
-    "_to",
-    "responseType",
-    "createdAt"
-  ]
-}
-2025-10-09T12:03:16.929Z: LOG:   Adding schema validation to queryMessages
-2025-10-09T12:03:16.929Z: LOG: Created collection: queryMessages
-2025-10-09T12:03:16.929Z: LOG:   No schema validation for analyticsMetrics
-2025-10-09T12:03:16.930Z: LOG: Created collection: analyticsMetrics
-2025-10-09T12:03:16.930Z: LOG:   Processing schema for serviceCategoryTranslationsEdge
-2025-10-09T12:03:16.930Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_from": {
-      "type": "string"
-    },
-    "_to": {
-      "type": "string"
-    },
-    "createdAt": {
       "type": "string"
     }
   },
@@ -713,74 +700,16 @@ Database configuration to be used:
     "_to"
   ]
 }
-2025-10-09T12:03:16.930Z: LOG:   Adding schema validation to serviceCategoryTranslationsEdge
-2025-10-09T12:03:16.931Z: LOG: Created collection: serviceCategoryTranslationsEdge
-2025-10-09T12:03:16.931Z: LOG:   No schema validation for graphql_characters
-2025-10-09T12:03:16.932Z: LOG: Created collection: graphql_characters
-2025-10-09T12:03:16.932Z: LOG:   No schema validation for queries
-2025-10-09T12:03:16.933Z: LOG: Created collection: queries
-2025-10-09T12:03:16.933Z: LOG:   Processing schema for serviceTranslations
-2025-10-09T12:03:16.933Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_key": {
-      "type": "string"
-    },
-    "serviceId": {
-      "type": "string"
-    },
-    "languageCode": {
-      "type": "string"
-    },
-    "translation": {
-      "type": "string"
-    },
-    "isActive": {
-      "type": "boolean"
-    },
-    "createdAt": {
-      "type": "string"
-    },
-    "updatedAt": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "_key",
-    "serviceId",
-    "languageCode",
-    "translation"
-  ]
-}
-2025-10-09T12:03:16.933Z: LOG:   Adding schema validation to serviceTranslations
-2025-10-09T12:03:16.934Z: LOG: Created collection: serviceTranslations
-2025-10-09T12:03:16.934Z: LOG:   No schema validation for weatherRequests
-2025-10-09T12:03:16.935Z: LOG: Created collection: weatherRequests
-2025-10-09T12:03:16.935Z: LOG:   Processing schema for serviceTranslationsEdge
-2025-10-09T12:03:16.935Z: LOG:   Converted schema rule: {
-  "type": "object",
-  "properties": {
-    "_from": {
-      "type": "string"
-    },
-    "_to": {
-      "type": "string"
-    },
-    "createdAt": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "_from",
-    "_to"
-  ]
-}
-2025-10-09T12:03:16.935Z: LOG:   Adding schema validation to serviceTranslationsEdge
-2025-10-09T12:03:16.936Z: LOG: Created collection: serviceTranslationsEdge
-2025-10-09T12:03:16.936Z: LOG:   No schema validation for sessionQueries
-2025-10-09T12:03:16.937Z: LOG: Created collection: sessionQueries
-2025-10-09T12:03:16.937Z: LOG:   Processing schema for conversations
-2025-10-09T12:03:16.937Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.976Z: LOG:   Adding schema validation to folderConversations
+2025-10-07T07:19:07.977Z: LOG: Created collection: folderConversations
+2025-10-07T07:19:07.977Z: LOG:   No schema validation for graphql_appearsIn
+2025-10-07T07:19:07.977Z: LOG: Created collection: graphql_appearsIn
+2025-10-07T07:19:07.977Z: LOG:   No schema validation for weatherRequests
+2025-10-07T07:19:07.978Z: LOG: Created collection: weatherRequests
+2025-10-07T07:19:07.978Z: LOG:   No schema validation for graphql_episodes
+2025-10-07T07:19:07.979Z: LOG: Created collection: graphql_episodes
+2025-10-07T07:19:07.979Z: LOG:   Processing schema for conversations
+2025-10-07T07:19:07.979Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_key": {
@@ -827,92 +756,164 @@ Database configuration to be used:
     "isArchived"
   ]
 }
-2025-10-09T12:03:16.937Z: LOG:   Adding schema validation to conversations
-2025-10-09T12:03:16.938Z: LOG: Created collection: conversations
-2025-10-09T12:03:16.938Z: LOG:   No schema validation for graphql_episodes
-2025-10-09T12:03:16.938Z: LOG: Created collection: graphql_episodes
-2025-10-09T12:03:16.938Z: LOG:   Processing schema for serviceCategories
-2025-10-09T12:03:16.938Z: LOG:   Converted schema rule: {
+2025-10-07T07:19:07.979Z: LOG:   Adding schema validation to conversations
+2025-10-07T07:19:07.980Z: LOG: Created collection: conversations
+2025-10-07T07:19:07.980Z: LOG:   No schema validation for graphql_friends
+2025-10-07T07:19:07.981Z: LOG: Created collection: graphql_friends
+2025-10-07T07:19:07.981Z: LOG:   No schema validation for sessions
+2025-10-07T07:19:07.982Z: LOG: Created collection: sessions
+2025-10-07T07:19:07.982Z: LOG:   Processing schema for passwordResetTokens
+2025-10-07T07:19:07.982Z: LOG:   Converted schema rule: {
   "type": "object",
   "properties": {
     "_key": {
       "type": "string"
     },
-    "nameEN": {
+    "userId": {
       "type": "string"
     },
-    "nameFR": {
+    "token": {
       "type": "string"
     },
-    "nameSW": {
+    "expiresAt": {
       "type": "string"
     },
-    "order": {
-      "type": "number"
+    "used": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
     }
   },
   "required": [
     "_key",
-    "nameEN",
-    "order"
+    "userId",
+    "token",
+    "expiresAt",
+    "createdAt"
   ]
 }
-2025-10-09T12:03:16.938Z: LOG:   Adding schema validation to serviceCategories
-2025-10-09T12:03:16.939Z: LOG: Created collection: serviceCategories
-2025-10-09T12:03:16.939Z: LOG:   No schema validation for sessions
-2025-10-09T12:03:16.940Z: LOG: Created collection: sessions
-2025-10-09T12:03:16.940Z: LOG: Creating indexes...
-2025-10-09T12:03:16.940Z: LOG: Skipping managed edge index on categoryServices
-2025-10-09T12:03:16.942Z: LOG: Created index on categoryServices: createdAt
-2025-10-09T12:03:16.942Z: LOG: Skipping managed edge index on userConversations
-2025-10-09T12:03:16.943Z: LOG: Created index on userConversations: createdAt
-2025-10-09T12:03:16.943Z: LOG: Skipping managed edge index on userFolders
-2025-10-09T12:03:16.944Z: LOG: Created index on userFolders: createdAt
-2025-10-09T12:03:16.944Z: LOG: Skipping managed edge index on conversationCategories
-2025-10-09T12:03:16.945Z: LOG: Created index on conversationCategories: createdAt
-2025-10-09T12:03:16.946Z: LOG: Created index on events: createdAt
-2025-10-09T12:03:16.946Z: LOG: Skipping managed edge index on userSessions
-2025-10-09T12:03:16.947Z: LOG: Created index on userSessions: userId, createdAt
-2025-10-09T12:03:16.948Z: LOG: Created index on messages: createdAt
-2025-10-09T12:03:16.949Z: LOG: Created index on serviceCategoryTranslations: createdAt
-2025-10-09T12:03:16.949Z: LOG: Skipping managed edge index on folderConversations
-2025-10-09T12:03:16.949Z: LOG: Created index on folderConversations: createdAt
-2025-10-09T12:03:16.950Z: LOG: Created index on users: email
-2025-10-09T12:03:16.951Z: LOG: Created index on users: createdAt
-2025-10-09T12:03:16.952Z: LOG: Created index on users: loginName
-2025-10-09T12:03:16.953Z: LOG: Created index on users: email
-2025-10-09T12:03:16.953Z: LOG: Skipping managed edge index on graphql_appearsIn
-2025-10-09T12:03:16.954Z: LOG: Created index on graphql_appearsIn: createdAt
-2025-10-09T12:03:16.955Z: LOG: Created index on files: createdAt
-2025-10-09T12:03:16.956Z: LOG: Created index on analytics: createdAt
-2025-10-09T12:03:16.956Z: LOG: Created index on folders: createdAt
-2025-10-09T12:03:16.957Z: LOG: Skipping managed edge index on graphql_friends
-2025-10-09T12:03:16.957Z: LOG: Created index on graphql_friends: createdAt
-2025-10-09T12:03:16.958Z: LOG: Created index on passwordResetTokens: createdAt
-2025-10-09T12:03:16.959Z: LOG: Created index on services: categoryId, order
-2025-10-09T12:03:16.959Z: LOG: Skipping managed edge index on queryCategories
-2025-10-09T12:03:16.960Z: LOG: Created index on queryCategories: createdAt
-2025-10-09T12:03:16.961Z: LOG: Created index on verificationTokens: createdAt
-2025-10-09T12:03:16.961Z: LOG: Skipping managed edge index on queryMessages
-2025-10-09T12:03:16.962Z: LOG: Created index on queryMessages: createdAt
-2025-10-09T12:03:16.962Z: LOG: Created index on analyticsMetrics: createdAt
-2025-10-09T12:03:16.962Z: LOG: Skipping managed edge index on serviceCategoryTranslationsEdge
-2025-10-09T12:03:16.963Z: LOG: Created index on serviceCategoryTranslationsEdge: createdAt
-2025-10-09T12:03:16.964Z: LOG: Created index on graphql_characters: createdAt
-2025-10-09T12:03:16.965Z: LOG: Created index on queries: createdAt
-2025-10-09T12:03:16.966Z: LOG: Created index on serviceTranslations: createdAt
-2025-10-09T12:03:16.967Z: LOG: Created index on weatherRequests: createdAt
-2025-10-09T12:03:16.967Z: LOG: Skipping managed edge index on serviceTranslationsEdge
-2025-10-09T12:03:16.968Z: LOG: Created index on serviceTranslationsEdge: createdAt
-2025-10-09T12:03:16.968Z: LOG: Skipping managed edge index on sessionQueries
-2025-10-09T12:03:16.968Z: LOG: Created index on sessionQueries: createdAt
-2025-10-09T12:03:16.969Z: LOG: Created index on conversations: createdAt
-2025-10-09T12:03:16.970Z: LOG: Created index on graphql_episodes: createdAt
-2025-10-09T12:03:16.971Z: LOG: Created index on serviceCategories: catCode, order
-2025-10-09T12:03:16.972Z: LOG: Created index on sessions: userId, createdAt
-2025-10-09T12:03:16.972Z: LOG: Creating graphs...
-2025-10-09T12:03:16.972Z: ERROR: Error creating graph Graph: edgeDefinitions.map is not a function
-2025-10-09T12:03:16.972Z: LOG: Creating views...
-2025-10-09T12:03:16.972Z: LOG: Creating analyzers...
-2025-10-09T12:03:16.973Z: LOG: Creating AQL functions...
-2025-10-09T12:03:16.973Z: LOG: Schema creation completed successfully
+2025-10-07T07:19:07.982Z: LOG:   Adding schema validation to passwordResetTokens
+2025-10-07T07:19:07.983Z: LOG: Created collection: passwordResetTokens
+2025-10-07T07:19:07.983Z: LOG:   No schema validation for userSessions
+2025-10-07T07:19:07.984Z: LOG: Created collection: userSessions
+2025-10-07T07:19:07.985Z: LOG:   Processing schema for serviceCategoryTranslationsEdge
+2025-10-07T07:19:07.985Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_from": {
+      "type": "string"
+    },
+    "_to": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_from",
+    "_to"
+  ]
+}
+2025-10-07T07:19:07.985Z: LOG:   Adding schema validation to serviceCategoryTranslationsEdge
+2025-10-07T07:19:07.986Z: LOG: Created collection: serviceCategoryTranslationsEdge
+2025-10-07T07:19:07.986Z: LOG:   No schema validation for conversationCategories
+2025-10-07T07:19:07.987Z: LOG: Created collection: conversationCategories
+2025-10-07T07:19:07.987Z: LOG:   Processing schema for serviceTranslations
+2025-10-07T07:19:07.987Z: LOG:   Converted schema rule: {
+  "type": "object",
+  "properties": {
+    "_key": {
+      "type": "string"
+    },
+    "serviceId": {
+      "type": "string"
+    },
+    "languageCode": {
+      "type": "string"
+    },
+    "translation": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_key",
+    "serviceId",
+    "languageCode",
+    "translation"
+  ]
+}
+2025-10-07T07:19:07.987Z: LOG:   Adding schema validation to serviceTranslations
+2025-10-07T07:19:07.988Z: LOG: Created collection: serviceTranslations
+2025-10-07T07:19:07.988Z: LOG:   No schema validation for graphql_characters
+2025-10-07T07:19:07.989Z: LOG: Created collection: graphql_characters
+2025-10-07T07:19:07.989Z: LOG:   No schema validation for analyticsMetrics
+2025-10-07T07:19:07.990Z: LOG: Created collection: analyticsMetrics
+2025-10-07T07:19:07.990Z: LOG: Creating indexes...
+2025-10-07T07:19:07.990Z: LOG: Skipping managed edge index on categoryServices
+2025-10-07T07:19:07.991Z: LOG: Created index on categoryServices: createdAt
+2025-10-07T07:19:07.993Z: LOG: Created index on services: categoryId, order
+2025-10-07T07:19:07.993Z: LOG: Skipping managed edge index on userConversations
+2025-10-07T07:19:07.994Z: LOG: Created index on userConversations: createdAt
+2025-10-07T07:19:07.994Z: LOG: Skipping managed edge index on userFolders
+2025-10-07T07:19:07.995Z: LOG: Created index on userFolders: createdAt
+2025-10-07T07:19:07.996Z: LOG: Created index on folders: createdAt
+2025-10-07T07:19:07.997Z: LOG: Created index on analytics: createdAt
+2025-10-07T07:19:07.998Z: LOG: Created index on verificationTokens: createdAt
+2025-10-07T07:19:07.998Z: LOG: Created index on serviceCategories: catCode, order
+2025-10-07T07:19:07.998Z: LOG: Skipping managed edge index on queryCategories
+2025-10-07T07:19:07.999Z: LOG: Created index on queryCategories: createdAt
+2025-10-07T07:19:08.000Z: LOG: Created index on serviceCategoryTranslations: serviceCategoryId, languageCode
+2025-10-07T07:19:08.001Z: LOG: Created index on serviceCategoryTranslations: serviceCategoryId
+2025-10-07T07:19:08.002Z: LOG: Created index on serviceCategoryTranslations: languageCode
+2025-10-07T07:19:08.003Z: LOG: Created index on serviceCategoryTranslations: createdAt
+2025-10-07T07:19:08.003Z: LOG: Skipping managed edge index on queryMessages
+2025-10-07T07:19:08.004Z: LOG: Created index on queryMessages: createdAt
+2025-10-07T07:19:08.005Z: LOG: Created index on messages: createdAt
+2025-10-07T07:19:08.005Z: LOG: Skipping managed edge index on sessionQueries
+2025-10-07T07:19:08.006Z: LOG: Created index on sessionQueries: createdAt
+2025-10-07T07:19:08.007Z: LOG: Created index on events: createdAt
+2025-10-07T07:19:08.007Z: LOG: Skipping managed edge index on serviceTranslationsEdge
+2025-10-07T07:19:08.008Z: LOG: Created index on users: email
+2025-10-07T07:19:08.009Z: LOG: Created index on users: createdAt
+2025-10-07T07:19:08.010Z: LOG: Created index on users: loginName
+2025-10-07T07:19:08.011Z: LOG: Created index on users: email
+2025-10-07T07:19:08.012Z: LOG: Created index on queries: createdAt
+2025-10-07T07:19:08.012Z: LOG: Skipping managed edge index on folderConversations
+2025-10-07T07:19:08.013Z: LOG: Created index on folderConversations: createdAt
+2025-10-07T07:19:08.013Z: LOG: Skipping managed edge index on graphql_appearsIn
+2025-10-07T07:19:08.014Z: LOG: Created index on graphql_appearsIn: createdAt
+2025-10-07T07:19:08.014Z: LOG: Created index on weatherRequests: createdAt
+2025-10-07T07:19:08.015Z: LOG: Created index on graphql_episodes: createdAt
+2025-10-07T07:19:08.016Z: LOG: Created index on conversations: createdAt
+2025-10-07T07:19:08.016Z: LOG: Skipping managed edge index on graphql_friends
+2025-10-07T07:19:08.017Z: LOG: Created index on graphql_friends: createdAt
+2025-10-07T07:19:08.018Z: LOG: Created index on sessions: userId, createdAt
+2025-10-07T07:19:08.019Z: LOG: Created index on passwordResetTokens: createdAt
+2025-10-07T07:19:08.019Z: LOG: Skipping managed edge index on userSessions
+2025-10-07T07:19:08.020Z: LOG: Created index on userSessions: userId, createdAt
+2025-10-07T07:19:08.020Z: LOG: Skipping managed edge index on serviceCategoryTranslationsEdge
+2025-10-07T07:19:08.020Z: LOG: Skipping managed edge index on conversationCategories
+2025-10-07T07:19:08.021Z: LOG: Created index on conversationCategories: createdAt
+2025-10-07T07:19:08.021Z: LOG: Created index on serviceTranslations: serviceId, languageCode
+2025-10-07T07:19:08.023Z: LOG: Created index on serviceTranslations: serviceId
+2025-10-07T07:19:08.023Z: LOG: Created index on serviceTranslations: languageCode
+2025-10-07T07:19:08.024Z: LOG: Created index on serviceTranslations: createdAt
+2025-10-07T07:19:08.025Z: LOG: Created index on graphql_characters: createdAt
+2025-10-07T07:19:08.026Z: LOG: Created index on analyticsMetrics: createdAt
+2025-10-07T07:19:08.026Z: LOG: Creating graphs...
+2025-10-07T07:19:08.026Z: ERROR: Error creating graph Graph: edgeDefinitions.map is not a function
+2025-10-07T07:19:08.026Z: LOG: Creating views...
+2025-10-07T07:19:08.026Z: LOG: Creating analyzers...
+2025-10-07T07:19:08.027Z: LOG: Creating AQL functions...
+2025-10-07T07:19:08.027Z: LOG: Schema creation completed successfully

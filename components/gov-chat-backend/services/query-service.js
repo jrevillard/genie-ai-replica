@@ -206,25 +206,49 @@ class QueryService {
         logger.info(`[DEBUG] Validation PASSED: sessionId is present (${queryData.sessionId}).`);
       }
 
+      // --- FIX: START messages VALIDATION ---
       if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
-        logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty.');
-        missingFields.push('messages');
+        // Fallback: Check for the legacy 'text' field
+        if (queryData.text) {
+          logger.warn('[DEBUG] Validation: messages array is missing. Synthesizing from legacy "text" field.');
+          // Create the messages array from the text field
+          queryData.messages = [{ role: 'user', content: queryData.text }];
+          logger.info(`[DEBUG] Validation PASSED: messages array synthesized with 1 item.`);
+        } else {
+          // Only fail if BOTH messages and text are missing
+          logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.');
+          missingFields.push('messages');
+        }
       } else {
         logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
       }
+      // --- FIX: END messages VALIDATION ---
 
+
+      // --- FIX: START context VALIDATION ---
       if (!queryData.context) {
-        logger.warn('[DEBUG] Validation FAILED: context object is missing.');
-        missingFields.push('context');
+        logger.warn('[DEBUG] Validation: context object is missing. Supplying default context.');
+        // Create a default context object
+        queryData.context = { categoryLabel: 'General', serviceLabels: [] };
+        logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
       } else {
         logger.info('[DEBUG] Validation PASSED: context object is present.');
+        
+        // Also validate the internals of the provided context
         if (!Array.isArray(queryData.context.serviceLabels)) {
-          logger.warn('[DEBUG] Validation FAILED: context.serviceLabels is not an array.');
-          missingFields.push('context.serviceLabels');
+          logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.');
+          queryData.context.serviceLabels = [];
         } else {
           logger.info(`[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`);
         }
+        
+        if (!queryData.context.categoryLabel) {
+           logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
+           queryData.context.categoryLabel = 'General';
+        }
       }
+      // --- FIX: END context VALIDATION ---
+
 
       if (missingFields.length > 0) {
         const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;

@@ -352,10 +352,10 @@ async function main() {
   // Read configuration from environment variables, with defaults
   const config = {
     url: process.env.ARANGO_URL || 'http://127.0.0.1:8529',
-    database: process.env.ARANGO_DATABASE || 'test-mcfront',
+    database: process.env.ARANGO_DATABASE || 'node-services',
     auth: {
       username: process.env.ARANGO_USER || 'root',
-      password: process.env.ARANGO_PASSWORD || 'test'
+      password: process.env.ARANGO_PASSWORD || 'your-database-password'
     }
   };
 

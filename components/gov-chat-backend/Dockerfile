@@ -11,7 +11,6 @@ WORKDIR /app
 
 COPY gov-chat-backend/package*.json ./
 COPY shared/lib ./shared-lib
-RUN echo "--- Verifying contents of security-headers.js during build ---" && cat ./shared-lib/security-headers.js
 RUN ls -l /app/shared-lib && \
     test -f /app/shared-lib/security-headers.js && echo "security-headers.js found" || echo "security-headers.js missing" && \
     test -f /app/shared-lib/security-middleware.js && echo "security-middleware.js found" || echo "security-middleware.js missing"

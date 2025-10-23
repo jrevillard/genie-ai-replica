@@ -8,7 +8,7 @@
 export ARANGO_URL="http://127.0.0.1:8529"
 
 # The name of the database to connect to.
-export ARANGO_DATABASE="genie-frontend"
+export ARANGO_DATABASE="node-services"
 #export ARANGO_DATABASE="node-services"
 
 # The username for the database connection.

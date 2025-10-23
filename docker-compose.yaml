@@ -1,23 +1,25 @@
 # Ports Overview:
-# 8090 - gov chat frontend
-# 3000 - gov chat backend
-# 3001 - doc repo dev
-# 3310 - clamav
-# 80 - default OPEA UI nginx server (chatqna-xeon-nginx-server)
-# 5173 - default OPEA UI frontend (chatqna-xeon-ui-server)
-# 6000 - embedding wrapper
-# 6007 - dataprep API endpoint
-# 6100 - reranker wrapper
-# 7000 - TEI (embedding inference server)
-# 7025 - retriever-arango-dev
-# 7100 - TEI reranker (inference server)
-# 8000 - vLLM (main LLM server)
-# 8888 - chatqna backend server
-# 9000 - textgen wrapper
-# 9030 - translation wrapper
-# 9031 - vllm-translation-guardrail (guarded LLM)
-# 9090 - guardrail (guard logic endpoint)
-# 6666 - http-service (for auth token retrieval)
+# 8090:8090 - gov chat frontend
+# 3000:3000 - gov chat backend
+# 3001:3000 - doc-repo-dev
+# 8010:8010, 8443:8443, 8001:8001 - kong 
+# 5432:5432 - kong-database
+# 3310:3310 - clamav
+# 443:443 - nginx (for the frontend)
+# 8529:8529 - arango-vector-db (arangodb database)
+# 80:80 - chatqna-xeon-nginx-server (default OPEA UI nginx server)
+# 5173:5173 - chatqna-xeon-ui-server (default OPEA UI frontend)
+# 6000:6000 - embedding (embedding wrapper)
+# 6007:5000 - dataprep-arango-dev (dataprep API endpoint)
+# 6100:8000 - reranker (reranker wrapper)
+# 7000:80 - tei-embedding-serving (embedding inference server)
+# 7025:7025 - retriever-arango-dev
+# 7100:80 - tei-reranker-serving (inference server)
+# 8000:8000 - vllm-vllm-2 (main LLM server)
+# 8888:8888 - chatqna-xeon-backend-server (chatqna backend server)
+# 9031:9031 - vllm-vllm-translation-guardrail (translation LLM)
+# 9090:9090 - llm-guardrail (guard logic endpoint)
+# 6666:6666 - http-service (for auth token retrieval)
 
 name: genieai_mvp
 
@@ -53,7 +55,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Note: before starting up kong you need to create the scheme with this command:
+  # Note: before starting up kong you need to create the schema with this command:
   #       docker compose run --rm kong kong migrations bootstrap
   kong:
     image: kong:latest
@@ -65,18 +67,18 @@ services:
         condition: service_healthy
     env_file:
       .env
-    environment:
-      KONG_DATABASE: postgres
-      KONG_PG_HOST: kong-database
-      KONG_PG_USER: kong
-      KONG_PG_PASSWORD: k1ngk0ng
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_ADMIN_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
-      KONG_DNS_RESOLVER: "127.0.0.11"
-      KONG_DNS_ORDER: "LAST,A,AAAA,CNAME"
+    #environment:
+      #KONG_DATABASE: postgres
+      #KONG_PG_HOST: kong-database
+      #KONG_PG_USER: kong
+      #KONG_PG_PASSWORD: k1ngk0ng
+      #KONG_PROXY_ACCESS_LOG: /dev/stdout
+      #KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      #KONG_PROXY_ERROR_LOG: /dev/stderr
+      #KONG_ADMIN_ERROR_LOG: /dev/stderr
+      #KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+      #KONG_DNS_RESOLVER: "127.0.0.11"
+      #KONG_DNS_ORDER: "LAST,A,AAAA,CNAME"
     ports:
       - "8010:8010"  # Note that I had to change this port to 8010 because vLLM runs on 8000
       - "8443:8443"
@@ -84,18 +86,12 @@ services:
     volumes:
       - ./api-gateway-solution/kong_logs:/var/log/kong
 
-  # Note: before firing up all the other services, teh kong configuration needs to be adapted and loaded
+  # Note: before firing up all the other services, the kong configuration needs to be adapted and loaded
   #       1) Modify the addresses of the node:
-  #          vi api-gateway-solution/new-config/kong_config.json
-  #            -- modify the "host": "e2e-109-51" for the "express-api" service to "host": "backend"
-  #            -- it still runs on port 3000 so no problem
-  #            -- modify the "host": "e2e-109-51" for the document-repository service to "host": "document-repository"i
-  #            -- it still runs on port 3001 so no problem
+  #          cp api-gateway-solution/new-config/kong_config.json-single-node  api-gateway-solution/new-config/kong_config.json
   #       2) Prepare to apply the configuration to Kong
   #          cd api-gateway-solution/new-config/
   #          chmod +x manage-kong-config.sh
-  #          vi manage-kong-config.sh
-  #            -- modify the KONG_PUBLIC_URL to match the config change KONG_PUBLIC_URL="http://localhost:8010"
   #       3) Install jq
   #          apt update
   #          apt install jq
@@ -174,9 +170,9 @@ services:
       context: ./components
       dockerfile: document-repository/Dockerfile
     container_name: doc-repo-dev
-    environment:
+    #environment:
       #- ARANGO_URL=http://arango-vector-db:8529
-      - ARANGO_DB_NAME=genie-frontend
+      #- ARANGO_DB_NAME=genie-frontend
       #- ARANGO_PASSWORD=test
     env_file:
       - .env
@@ -188,6 +184,7 @@ services:
       - genieai_network
     volumes:
       - ./components/document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
+      - ./components/document-repository/uploads:/app/uploads
 
   clamav:
     image: mkodockx/docker-clamav:alpine

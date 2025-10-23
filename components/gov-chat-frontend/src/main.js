@@ -232,6 +232,12 @@ app.config.globalProperties.$setLocale = function (locale) {
 // Mount the app
 app.mount('#app')
 
+// *** ADD THIS DEBUG BLOCK ***
+console.log('DEBUG: Runtime VUE_APP_CSP_CONNECT_SRC:', process.env.VUE_APP_CSP_CONNECT_SRC);
+// Log effective CSP if set via meta (dev server uses header, so this may be null; check Network tab manually)
+const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+console.log('DEBUG: CSP from meta tag (if any):', cspMeta ? cspMeta.content : 'None - Check Network headers');
+
 // Log active locale after mount (development only)
 if (process.env.NODE_ENV === 'development') {
   console.log("Active locale (after mount):", i18n.global.locale)

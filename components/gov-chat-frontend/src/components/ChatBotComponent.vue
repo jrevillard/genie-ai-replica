@@ -69,34 +69,27 @@
 
       <!-- System Status Panel -->
       <div class="system-status-panel">
-        <div class="status-indicator" :class="{ online: systemStatus.online }">
-          <div class="status-dot"></div>
-          <span>{{
-            systemStatus.online
-              ? translate("status.online")
-              : translate("status.offline")
-          }}</span>
+        <div class="status-left">
+          <div class="status-indicator" :class="{ online: systemStatus.online }">
+            <div class="status-dot"></div>
+            <span>{{
+              systemStatus.online
+                ? translate("status.online")
+                : translate("status.offline")
+            }}</span>
+          </div>
+          <div v-if="!systemStatus.online && systemStatus.errorMessage" class="status-error-message">
+             {{ systemStatus.errorMessage }}
+          </div>
         </div>
         <div class="status-metrics">
           <div class="metric">
             <span class="metric-label">{{
-              translate("status.responseTime")
+              translate("status.lastResponseTime")
             }}</span>
             <span class="metric-value"
-              >{{ systemStatus.avgResponseTime }}ms</span
+              >{{ systemStatus.lastResponseTime !== null ? systemStatus.lastResponseTime + 'ms' : 'N/A' }}</span
             >
-          </div>
-          <div class="metric">
-            <span class="metric-label">{{
-              translate("status.queueLength")
-            }}</span>
-            <span class="metric-value">{{ systemStatus.requestQueue }}</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">{{ translate("status.uptime") }}</span>
-            <span class="metric-value">{{
-              formatUptime(systemStatus.uptime)
-            }}</span>
           </div>
         </div>
       </div>
@@ -353,9 +346,8 @@ export default {
       chatHistoryService: chatHistoryService,
       systemStatus: {
         online: true,
-        avgResponseTime: 283,
-        requestQueue: 0,
-        uptime: 3659,
+        lastResponseTime: null, // Replaced avgResponseTime
+        errorMessage: "", // Added for error messages
         lastUpdated: new Date(),
       },
       quickHelpButtons: [],
@@ -478,20 +470,7 @@ export default {
     this.loadQuickHelpButtons();
     this.loadServiceCategories(); // Fetch categories on mount
 
-    this.statusUpdateInterval = setInterval(() => {
-      this.systemStatus.uptime += 30;
-      this.systemStatus.avgResponseTime = Math.max(
-        200,
-        Math.floor(
-          this.systemStatus.avgResponseTime + (Math.random() * 20 - 10)
-        )
-      );
-      this.systemStatus.requestQueue = Math.max(
-        0,
-        Math.floor(Math.random() * 3)
-      );
-      this.systemStatus.lastUpdated = new Date();
-    }, 30000);
+    // Removed the statusUpdateInterval
     this.updateDialogTexts();
   },
 
@@ -499,9 +478,7 @@ export default {
     eventBus.$off("treeNodeSelected", this.handleTreeNodeSelected);
     eventBus.$off("open-chat", this.loadChatFromHistory);
     eventBus.$off("chat-deleted"); // Clean up the chat-deleted listener
-    if (this.statusUpdateInterval) {
-      clearInterval(this.statusUpdateInterval);
-    }
+    // Removed clearInterval
     eventBus.$off("load-conversation");
   },
 
@@ -644,18 +621,7 @@ export default {
       return documentTheme || bodyTheme || "light";
     },
 
-    formatUptime(seconds) {
-      const days = Math.floor(seconds / 86400);
-      const hours = Math.floor((seconds % 86400) / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      if (days > 0) {
-        return `${days}d ${hours}h`;
-      } else if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-      } else {
-        return `${minutes}m`;
-      }
-    },
+    // formatUptime method removed
 
     handleSidebarToggle(collapsed) {
       console.log("Sidebar collapsed state:", collapsed);
@@ -828,6 +794,7 @@ export default {
     async sendMessage() {
       const content = this.newMessage.trim();
       if (!content) return;
+
       this.chatMessages.push({
         sender: "user",
         content,
@@ -838,6 +805,9 @@ export default {
       this.showQuickHelp = false;
       this.isLoading = true;
       this.relatedDocuments = [];
+
+      const startTime = performance.now(); // Start timing
+
       try {
         const useConversationContext = this.selectedContextItems.length > 0;
         const contextOption = useConversationContext
@@ -881,7 +851,17 @@ export default {
           "Submitting query with data:",
           JSON.stringify(queryData, null, 2)
         );
+
         const result = await chatbotService.submitQuery(queryData);
+
+        // --- Success State Update ---
+        const endTime = performance.now();
+        this.systemStatus.lastResponseTime = Math.round(endTime - startTime);
+        this.systemStatus.online = true;
+        this.systemStatus.errorMessage = "";
+        this.systemStatus.lastUpdated = new Date();
+        // --------------------------
+
         console.log("Query result:", result);
         const botMessage = {
           sender: "bot",
@@ -926,6 +906,14 @@ export default {
         }
         // Removed duplicate markQueryAsAnswered call (handled in submitQuery)
       } catch (error) {
+        // --- Error State Update ---
+        this.systemStatus.lastResponseTime = null; // No successful response time
+        this.systemStatus.online = false;
+        this.systemStatus.errorMessage =
+          error.message || this.translate("chatbot.processingError");
+        this.systemStatus.lastUpdated = new Date();
+        // ------------------------
+
         console.error("Error sending query:", error);
         this.chatMessages.push({
           sender: "bot",
@@ -1816,6 +1804,16 @@ export default {
   align-items: center;
   justify-content: space-between;
   font-size: 0.85rem;
+  min-height: 45px; /* Added for consistency */
+}
+
+.status-left {
+  display: flex;
+  flex-direction: column; /* Stack status and error */
+  align-items: flex-start;
+  gap: 4px; /* Space between status and error */
+  flex: 1; /* Allow error message to take space */
+  overflow: hidden; /* Prevent long errors from breaking layout */
 }
 
 .status-indicator {
@@ -1830,6 +1828,10 @@ export default {
   color: var(--status-operational, #10b981);
 }
 
+.status-indicator:not(.online) {
+  color: var(--status-error, #ef4444); /* Red color for offline */
+}
+
 .status-dot {
   width: 10px;
   height: 10px;
@@ -1841,9 +1843,25 @@ export default {
   background-color: var(--status-operational, #10b981);
 }
 
+.status-indicator:not(.online) .status-dot {
+  background-color: var(--status-error, #ef4444); /* Red color for offline */
+}
+
+.status-error-message {
+  font-size: 0.75rem;
+  color: var(--status-error, #ef4444);
+  font-weight: 500;
+  margin-left: 18px; /* Align with status text */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .status-metrics {
   display: flex;
   gap: 20px;
+  padding-left: 16px; /* Add space between error and metric */
 }
 
 .metric {

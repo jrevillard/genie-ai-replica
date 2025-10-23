@@ -69,7 +69,9 @@ module.exports = {
       }),
       new DefinePlugin({
         'process.env': {
-          VUE_APP_API_URL: JSON.stringify(process.env.VUE_APP_API_URL)
+          VUE_APP_API_URL: JSON.stringify(process.env.VUE_APP_API_URL),
+          VUE_APP_CSP_CONNECT_SRC: JSON.stringify(process.env.VUE_APP_CSP_CONNECT_SRC),
+          VUE_PROXY_HOST: JSON.stringify(process.env.VUE_PROXY_HOST)
         }
       })
     ]

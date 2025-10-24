@@ -10,9 +10,7 @@
       </button>
     </div>
 
-    <!-- Only show these sections when sidebar is not collapsed -->
     <div v-if="!sidebarCollapsed">
-      <!-- Related Documents Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-file-alt"></i>
@@ -67,7 +65,6 @@
           </div>
         </div>
       </div>
-      <!-- FAQ Section -->
       <div class="sidebar-section">
         <h4 class="section-title">
           <i class="fas fa-question-circle"></i>
@@ -137,8 +134,13 @@ export default {
     };
   },
 
-  created() {
-    this.loadFaqContent();
+  watch: {
+    currentLocale: {
+      handler() {
+        this.loadFaqContent();
+      },
+      immediate: true,
+    },
   },
 
   methods: {
@@ -148,7 +150,12 @@ export default {
         if (!response.ok) {
           throw new Error("FAQ.md not found");
         }
-        const markdown = await response.text();
+        let markdown = await response.text();
+
+        if (this.currentLocale !== "en") {
+          markdown = await this.translateMarkdown(markdown);
+        }
+
         const tokens = marked.lexer(markdown);
         const faqs = [];
         let currentQuestion = null;
@@ -184,6 +191,39 @@ export default {
         this.frequentlyAskedQuestions = [
           { question: "Error", answer: "Could not load FAQ content." },
         ];
+      }
+    },
+
+    async translateMarkdown(markdown) {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        console.error("No auth token found, cannot translate FAQ.");
+        return markdown; // Fallback to English
+      }
+
+      try {
+        const response = await fetch("/api/translate/markdown", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            markdown,
+            source_lang: "en",
+            target_lang: this.currentLocale,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.translated_markdown;
+      } catch (error) {
+        console.error("Translation failed:", error);
+        return markdown; // Fallback to English
       }
     },
 
@@ -268,29 +308,6 @@ export default {
         return `${window.location.origin}/api/files/${doc.id}/viewbrowser`;
       }
       return doc.url || ""; // Fallback to show the original placeholder if no ID
-    },
-
-    documentIconClass(doc) {
-      if (this.isExternalUrl(doc.url)) {
-        return "fas fa-external-link-alt";
-      }
-      switch ((doc.type || "").toLowerCase()) {
-        case "pdf":
-          return "fas fa-file-pdf";
-        case "docx":
-        case "doc":
-          return "fas fa-file-word";
-        case "xlsx":
-        case "xls":
-          return "fas fa-file-excel";
-        case "pptx":
-        case "ppt":
-          return "fas fa-file-powerpoint";
-        case "txt":
-          return "fas fa-file-alt";
-        default:
-          return "fas fa-file";
-      }
     },
 
     formatFileSize(bytes) {

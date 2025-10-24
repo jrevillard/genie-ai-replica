@@ -28,6 +28,9 @@ services:
       - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
     environment:
+      - TRANSLATION_THREADS=4
+      - TRANSLATION_BATCHES=5
+      - TRANSLATION_CACHE=on
       - NODE_ENV=production
       - PORT=3000
       - API_PREFIX=/api

@@ -51,6 +51,10 @@ OPEA_PORT=8888
 CONTEXT_OPTION=conversation-with-context-labels
 NODE_ENV=production
 CORS_ORIGIN=http://localhost/
+TRANSLATION_THREADS=4
+TRANSLATION_BATCHES=5
+TRANSLATION_CACHE="on"
+
 
 # ========= HTTP-SERVICE ======
 AUTH_SERVICE_URL="https://localhost/"

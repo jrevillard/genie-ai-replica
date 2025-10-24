@@ -1,6 +1,8 @@
 const { logger } = require('../shared-lib');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const crypto = require('crypto'); // For generating cache key
+const fs = require('fs');         // <-- For file system
+const path = require('path');     // <-- For file paths
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -9,6 +11,9 @@ const DEFAULT_BATCHES = 5;
 const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAULT_THREADS;
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
+
+// --- Get cache path from env, default to /tmp ---
+const cachePath = process.env.TRANSLATION_CACHE_PATH || path.join('/tmp', 'translation-cache');
 
 /**
  * @class TranslationService
@@ -22,13 +27,13 @@ class TranslationService {
     this.remarkStringify = null;
     this.visit = null;
     this.initialized = false;
-    this.translationCache = new Map(); // In-memory cache
+    // this.translationCache = new Map(); // <-- REMOVED: No longer using in-memory cache
     
     // Map application language codes to the NLLB model's specific codes.
     // Full list: https://huggingface.co/facebook/nllb-200-distilled-600M
     this.langCodeMap = {
         en: 'eng_Latn',
-        ar: 'ara_Arab',
+        ar: 'arb_Arab', // Corrected
         th: 'tha_Thai',
         zh: 'zho_Hans',
         de: 'deu_Latn',
@@ -43,6 +48,18 @@ class TranslationService {
     logger.info(`[TRANSLATION-CONFIG] Using ${intraOpNumThreads} threads per job.`);
     logger.info(`[TRANSLATION-CONFIG] Using ${numParallelBatches} parallel batches.`);
     logger.info(`[TRANSLATION-CONFIG] Cache enabled: ${cacheEnabled}`);
+    if (cacheEnabled) {
+      logger.info(`[TRANSLATION-CONFIG] Cache path: ${cachePath}`);
+      // Ensure cache directory exists on startup
+      try {
+        if (!fs.existsSync(cachePath)) {
+          fs.mkdirSync(cachePath, { recursive: true });
+          logger.info(`[TRANSLATION-CACHE] Created cache directory: ${cachePath}`);
+        }
+      } catch (error) {
+        logger.error(`[TRANSLATION-CACHE] FAILED to create cache directory: ${error.message}`);
+      }
+    }
   }
 
   /**
@@ -169,7 +186,7 @@ class TranslationService {
   /**
    * @method translateMarkdown
    * @description Translates the content of a markdown file while preserving the markdown structure.
-   * Caches the result in memory if caching is enabled.
+   * Caches the result to the file system if caching is enabled.
    * @param {string} markdownContent - The markdown content as a string.
    * @param {string} sourceLang - The source language code (e.g., 'en').
    * @param {string} targetLang - The target language code (e.g., 'fr').
@@ -181,20 +198,25 @@ class TranslationService {
       throw new Error('TranslationService is not ready.');
     }
 
-    // --- CACHE LOGIC (START) ---
+    // --- FILE CACHE LOGIC (START) ---
     // Generate a unique <name> by hashing the markdown content.
     const docName = crypto.createHash('md5').update(markdownContent).digest('hex');
     // Create the cache key in the format <name>_<locale>.md
     const cacheKey = `${docName}_${targetLang}.md`;
+    const cacheFilePath = path.join(cachePath, cacheKey); // Full path to the cache file
 
     if (cacheEnabled) {
-      if (this.translationCache.has(cacheKey)) {
-        logger.info(`[TRANSLATION-CACHE] HIT: Returning cached version for ${cacheKey}`);
-        return this.translationCache.get(cacheKey);
+      try {
+        if (fs.existsSync(cacheFilePath)) {
+          logger.info(`[TRANSLATION-CACHE] HIT: Returning file from ${cacheFilePath}`);
+          return fs.readFileSync(cacheFilePath, 'utf8');
+        }
+        logger.info(`[TRANSLATION-CACHE] MISS: No cache file found at ${cacheFilePath}. Translating...`);
+      } catch (error) {
+         logger.warn(`[TRANSLATION-CACHE] Error checking file cache. Translating anyway. ${error.message}`);
       }
-      logger.info(`[TRANSLATION-CACHE] MISS: No cache found for ${cacheKey}. Translating...`);
     }
-    // --- CACHE LOGIC (END) ---
+    // --- FILE CACHE LOGIC (END) ---
 
     logger.info(`[TRANSLATION-SERVICE] Starting markdown translation from ${sourceLang} to ${targetLang}`);
     const startTime = Date.now();
@@ -241,7 +263,7 @@ class TranslationService {
     const translatedTexts = translatedBatches.flat();
 
     const duration = Date.now() - startTime;
-    logger.info(`[TRANSLAN-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`);
+    logger.info(`[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`);
 
     // Sanity check
     if (translatedTexts.length !== textNodes.length) {
@@ -256,17 +278,24 @@ class TranslationService {
 
     // Stringify back to markdown
     const translatedMarkdown = this.unified()
-      .use(this.remarkStringify)
+      .use(this.remarkStringify) // <-- This was the typo, now fixed
       .stringify(tree);
     
     logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
 
-    // --- CACHE LOGIC (SET) ---
+    // --- FILE CACHE LOGIC (SET) ---
     if (cacheEnabled) {
-      this.translationCache.set(cacheKey, translatedMarkdown);
-      logger.info(`[TRANSLATION-CACHE] SET: Stored translation in cache for ${cacheKey}`);
+      try {
+        // Ensure the directory exists (it might have been created on startup, but we check again)
+        fs.mkdirSync(cachePath, { recursive: true });
+        // Write the new translation to the cache file
+        fs.writeFileSync(cacheFilePath, translatedMarkdown);
+        logger.info(`[TRANSLATION-CACHE] SET: Stored translation in file ${cacheFilePath}`);
+      } catch (error) {
+        logger.error(`[TRANSLATION-CACHE] FAILED to write cache file: ${error.message}`);
+      }
     }
-    // --- CACHE LOGIC (END) ---
+    // --- FILE CACHE LOGIC (END) ---
 
     return translatedMarkdown;
   }

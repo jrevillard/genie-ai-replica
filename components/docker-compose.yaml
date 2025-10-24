@@ -27,10 +27,12 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
+      - ./gov-chat-backend/translation-cache:/cache/translations
     environment:
       - TRANSLATION_THREADS=4
       - TRANSLATION_BATCHES=5
       - TRANSLATION_CACHE=on
+      - TRANSLATION_CACHE_PATH=/cache/translations
       - NODE_ENV=production
       - PORT=3000
       - API_PREFIX=/api

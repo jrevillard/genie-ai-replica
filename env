@@ -54,7 +54,7 @@ CORS_ORIGIN=http://localhost/
 TRANSLATION_THREADS=4
 TRANSLATION_BATCHES=5
 TRANSLATION_CACHE="on"
-
+TRANSLATION_CACHE_PATH=/cache/translations
 
 # ========= HTTP-SERVICE ======
 AUTH_SERVICE_URL="https://localhost/"

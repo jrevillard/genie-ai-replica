@@ -124,6 +124,7 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./components/gov-chat-backend/Uploads:/app/Uploads
+      - ./components/gov-chat-backend/translation-cache:/cache/translations
     env_file:
       - .env
     depends_on:

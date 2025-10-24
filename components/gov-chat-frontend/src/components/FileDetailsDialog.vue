@@ -1,13 +1,11 @@
 <template>
   <div class="dialog-backdrop" @click="$emit('close')"></div>
   <div class="dialog-container">
-    <!-- 1. Loading State -->
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-spinner"></div>
       <span>{{ translate("details.loading", "Loading File Details...") }}</span>
     </div>
 
-    <!-- 2. Main Content (displays after loading is complete) -->
     <template v-if="!isLoading && file">
       <div class="dialog-header">
         <h2 class="dialog-title">
@@ -36,7 +34,6 @@
       </div>
 
       <div class="dialog-body">
-        <!-- 3. Editable Metadata Section -->
         <div class="form-section">
           <div class="form-group">
             <label for="file-name">{{
@@ -72,7 +69,6 @@
           <div class="form-group">
             <label>{{ translate("details.labels", "Labels") }}</label>
 
-            <!-- Requirement: "Select All" Checkbox -->
             <div class="select-all-container">
               <input
                 type="checkbox"
@@ -116,7 +112,6 @@
           </div>
         </div>
 
-        <!-- 4. Static Info Section -->
         <div class="info-section">
           <div class="info-item">
             <span class="info-label">{{
@@ -134,6 +129,24 @@
             <span class="info-label">File Type</span>
             <span>{{ file.file_type }}</span>
           </div>
+
+          <div class="info-item" v-if="fileViewUrl">
+            <span class="info-label">{{
+              translate("details.viewFile", "View File")
+            }}</span>
+            <a
+              href="#"
+              @click.prevent="handleViewFile"
+              rel="noopener noreferrer"
+              class="file-view-link"
+            >
+              {{
+                isExternalUrl(file.source_url)
+                  ? translate("details.visitLink", "Visit External Link")
+                  : translate("details.openFile", "Open file in new tab")
+              }}
+            </a>
+          </div>
           <div class="info-item">
             <span class="info-label">File Size</span>
             <span>{{ formatFileSize(file.file_size) }}</span>
@@ -149,7 +162,6 @@
         </div>
       </div>
 
-      <!-- 5. Footer with Conditional Actions -->
       <div class="dialog-footer">
         <button
           class="btn btn-danger"
@@ -247,6 +259,31 @@ export default {
           : []
       );
     },
+
+    /**
+     * START: UPDATED COMPUTED PROPERTY
+     * Dynamically determines the correct URL for viewing the file, based on
+     * logic from RightSideBarComponent.
+     */
+    fileViewUrl() {
+      if (!this.file) return null;
+
+      // Check if source_url is a valid, external URL (for ingested webpages)
+      if (this.isExternalUrl(this.file.source_url)) {
+        return this.file.source_url;
+      }
+      
+      // For internal files, build the API link to the browser viewer
+      if (this.file.file_id) {
+        return `/api/files/${this.file.file_id}/viewbrowser`;
+      }
+      
+      // Fallback to source_url (which might be a placeholder or empty)
+      return this.file.source_url || null;
+    },
+    /**
+     * END: UPDATED COMPUTED PROPERTY
+     */
   },
   watch: {
     fileId: {
@@ -283,6 +320,22 @@ export default {
     translate(key, fallback) {
       return fallback || key;
     },
+    
+    /**
+     * START: NEW HELPER METHOD
+     * Copied from RightSideBarComponent to check for valid external URLs.
+     */
+    isExternalUrl(url) {
+      if (!url) return false;
+      const isHttp = url.startsWith("http://") || url.startsWith("https://");
+      const isPlaceholder = url.includes("<HOST>") || url.includes("<PORT>");
+      // A URL is considered external only if it's a valid HTTP link AND not a placeholder.
+      return isHttp && !isPlaceholder;
+    },
+    /**
+     * END: NEW HELPER METHOD
+     */
+
     async fetchData(id) {
       this.isLoading = true;
       this.isHierarchyLoading = true;
@@ -327,7 +380,64 @@ export default {
         this.showNotification("Failed to save metadata.", "error");
       }
     },
-        /**
+
+    /**
+     * START: UPDATED METHOD
+     * Handles viewing the file by checking if it's an external URL first.
+     */
+    async handleViewFile() {
+      // 1. Check if source_url is a valid external URL (like an ingested webpage)
+      //    This logic comes from RightSideBarComponent.
+      if (this.isExternalUrl(this.file.source_url)) {
+        console.log(`Opening external source URL: ${this.file.source_url}`);
+        window.open(this.file.source_url, '_blank');
+        return;
+      }
+
+      // 2. If not external, proceed with fetching the internal file via API
+      let token = null;
+      try {
+        // Get the user data object from localStorage (adjust 'user' if your key is different)
+        const userDataString = localStorage.getItem('user'); 
+        
+        if (userDataString) {
+          const userData = JSON.parse(userDataString);
+          token = userData.accessToken; 
+        }
+
+        if (!token) {
+          this.showNotification('Authentication token not found in user data.', 'error');
+          return;
+        }
+
+        // this.fileViewUrl will be "/api/files/.../viewbrowser"
+        const response = await fetch(this.fileViewUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+        }
+
+        // The 'viewbrowser' endpoint returns the file directly
+        const blob = await response.blob();
+        
+        // Create a blob URL and open it.
+        const fileURL = URL.createObjectURL(blob);
+        window.open(fileURL, '_blank');
+
+      } catch (error) {
+        console.error('Error viewing file:', error);
+        this.showNotification('Could not load file for viewing.', 'error');
+      }
+    },
+    /**
+     * END: UPDATED METHOD
+     */
+
+    /**
      * Handles the ingestion action for a single file.
      */
      async handleIngest() {
@@ -623,5 +733,18 @@ export default {
   background-color: rgba(100, 116, 139, 0.1);
   color: #64748b;
 }
-</style>
 
+/* START: ADDED LINK STYLE */
+.file-view-link {
+  color: var(--primary-link-color, #3b82f6);
+  text-decoration: none;
+  font-weight: 500;
+  word-break: break-all;
+  cursor: pointer; /* Added cursor pointer */
+}
+.file-view-link:hover {
+  text-decoration: underline;
+  color: var(--primary-link-hover, #2563eb);
+}
+/* END: ADDED LINK STYLE */
+</style>

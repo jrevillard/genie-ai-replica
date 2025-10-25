@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'Usuarios Activos Mensuales (MAU)',
     fromLastMonth: 'del mes pasado',
     today: 'Hoy',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'Salud del Sistema',
+      hierarchy: 'Jerarquía de Conocimiento', // NEW
+      documents: 'Gestión de Documentos', // NEW
       database: 'Base de Datos',
       logs: 'Registros',
       security: 'Seguridad',
       users: 'Usuarios'
     },
+    // --- NEW KEYS ---
+    contentManagement: "GESTIÓN DE CONTENIDO",
+    knowledgeHierarchy: "Jerarquía de Conocimiento",
+    documentManagement: "Gestión de Documentos",
+    noLogsFound: "No se encontraron registros para hoy",
+    invalidLogsResponse: "Estructura de respuesta de resumen de registros no válida",
+    logsSummaryError: "Error al cargar el resumen de registros",
+    buttons: {
+      save: "Guardar",
+      cancel: "Cancelar",
+      switch: "Cambiar de todos modos",
+      discard: "Descartar"
+    },
+    confirm: {
+      defaultTitle: "Confirmar",
+      defaultMessage: "¿Está seguro?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'Estado de Salud del Sistema',
     runDiagnostics: 'Ejecutar Diagnósticos',
     resourceUsage: 'Uso de Recursos',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'Número de Línea',
       lineNumbers: 'Números de Línea',
       showLess: 'Mostrar Menos',
-      showMore: 'Mostrar Todos los Problemas'
+      showMore: 'Mostrar Todos los Problemas',
+      // --- NEW KEY ---
+      lastScanJustNow: "Justo ahora"
     },
     userEdit: {
       title: 'Editar Usuario',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'Error enviando restablecimiento de contraseña',
       logoutForced: 'El usuario ha sido desconectado',
       logoutFailed: 'Falló el forzado de cierre de sesión',
-      errorForcingLogout: 'Error forzando cierre de sesión'
+      errorForcingLogout: 'Error forzando cierre de sesión',
+      // --- NEW KEY ---
+      userUpdated: "Usuario actualizado correctamente"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: 'Gestión de la Jerarquía de Conocimiento (nota: siempre en inglés - añadir traducciones)',
+      addCategory: 'Añadir Nueva Categoría',
+      loading: 'Cargando Jerarquía...',
+      addService: 'Añadir Servicio',
+      editCategory: 'Editar Categoría',
+      deleteCategory: 'Eliminar Categoría',
+      editService: 'Editar Servicio',
+      deleteService: 'Eliminar Servicio',
+      empty: 'No se encontraron categorías. Haga clic en "Añadir Nueva Categoría" para comenzar.',
+      formTitleCreateCategory: 'Crear Nueva Categoría',
+      formTitleAddService: 'Añadir Servicio a "{categoryName}"',
+      formTitleEditCategory: 'Editar Categoría: "{itemName}"',
+      formTitleEditService: 'Editar Servicio: "{itemName}"',
+      nameEnLabel: 'Nombre (Inglés)',
+      translationsTitle: 'Traducciones para Visualización',
+      loadingTranslations: 'Cargando traducciones...',
+      selectLang: 'Seleccionar Idioma',
+      translationPlaceholder: 'Introducir traducción',
+      deleteTranslation: 'Eliminar Traducción',
+      addTranslation: '+ Añadir Traducción',
+      saveSuccess: 'Elemento de jerarquía guardado correctamente.',
+      saveError: 'Error al guardar el elemento de jerarquía.',
+      loadError: 'Error al cargar la jerarquía de conocimiento.',
+      loadTranslationsError: 'Error al cargar las traducciones.',
+      confirmCancelTitle: 'Cambios no guardados',
+      confirmCancelEdit: 'Tiene cambios no guardados que se perderán. ¿Está seguro de que desea cambiar de pestaña?',
+      confirmDeleteTitleCategory: '¿Eliminar Categoría?',
+      confirmDeleteTitleService: '¿Eliminar Servicio?',
+      confirmDeleteCategory: '¿Está seguro de que desea eliminar la Categoría "{itemName}"? Esta acción no se puede deshacer.',
+      confirmDeleteService: '¿Está seguro de que desea eliminar el Servicio "{itemName}"? Esta acción no se puede deshacer.',
+      deleteSuccessCategory: 'Categoría eliminada correctamente.',
+      deleteSuccessService: 'Servicio eliminado correctamente.',
+      deleteErrorCategory: 'Error al eliminar la Categoría.',
+      deleteErrorService: 'Error al eliminar el Servicio.',
+      duplicateLangError: 'Se encontraron idiomas duplicados en las traducciones. Por favor, elimínelos.'
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: 'Gestión de Documentos',
+      addLink: 'Añadir desde Enlace',
+      uploadFiles: 'Subir Archivos',
+      searchPlaceholder: 'Buscar por nombre de archivo...',
+      allStatuses: 'Todos los Estados',
+      statusPending: 'Pendiente',
+      statusIngested: 'Ingerido',
+      statusRetracted: 'Retractado',
+      ingestSelected: 'Ingerir Seleccionados',
+      colFileName: 'Nombre de Archivo',
+      colStatus: 'Estado',
+      colLabels: 'Etiquetas',
+      colUploadDate: 'Fecha de Subida',
+      colSize: 'Tamaño',
+      loading: 'Cargando documentos...',
+      empty: 'No se encontraron documentos.',
+      loadError: 'Error al cargar documentos.',
+      confirmIngestTitle: 'Confirmar Ingestión por Lotes',
+      ingest: 'Ingerir',
+      confirmIngestSelected: '¿Está seguro de que desea ingerir {count} archivo(s) seleccionado(s)?',
+      ingestQueuedSuccess: '{count} archivo(s) ha(n) sido puesto(s) en cola para ingestión.',
+      ingestQueuedError: 'Ocurrió un error durante el proceso de ingestión por lotes.',
+      uploadSuccessMultiple: '{count} archivo(s) subido(s) correctamente.',
+      linkSubmitSuccess: 'Se ha rastreado y guardado "{fileName}" correctamente.',
+      actionSuccess: 'La acción "{action}" en el archivo {fileId} fue exitosa.',
+      metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.'
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,8 @@ export default {
     create: 'Crear',
     save: 'Guardar',
     move: 'Mover',
-    delete: 'Eliminar'
+    delete: 'Eliminar',
+    ok: 'Aceptar' // NEW KEY
   },
   feedback: {
     title: 'Retroalimentación',

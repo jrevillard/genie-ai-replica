@@ -748,7 +748,12 @@
                         <td colspan="6" class="table-message">
                           <div class="loading-state">
                             <div class="loading-spinner-small"></div>
-                            <span>Loading documents...</span>
+                            <span>{{
+                              translate(
+                                "admin.documents.loading",
+                                "Loading documents..."
+                              )
+                            }}</span>
                           </div>
                         </td>
                       </tr>
@@ -1762,16 +1767,23 @@
                       <div class="recommendation-item severity-medium">
                         <div class="recommendation-header">
                           <span class="severity-indicator medium"></span>
-                          <span class="recommendation-title"
-                            >Security Probe Attempts Detected</span
-                          >
+                          <span class="recommendation-title">{{
+                            translate(
+                              "admin.security.securityProbeAttempts",
+                              "Security Probe Attempts Detected"
+                            )
+                          }}</span>
                         </div>
                         <div class="recommendation-description">
                           {{
                             securityDetails.vulnerabilityDetails.medium.length
                           }}
-                          attempts to access sensitive files or endpoints
-                          detected
+                          {{
+                            translate(
+                              "admin.security.sensitiveFileAccess",
+                              "attempts to access sensitive files or endpoints detected"
+                            )
+                          }}
                         </div>
                         <div class="recommendation-action">
                           <strong
@@ -1782,9 +1794,12 @@
                               )
                             }}:</strong
                           >
-                          Consider implementing rate limiting, IP blocking for
-                          persistent offenders, and ensure proper server
-                          hardening is in place
+                          {{
+                            translate(
+                              "admin.security.rateLimitRecommendation",
+                              "Consider implementing rate limiting, IP blocking for persistent offenders, and ensure proper server hardening is in place"
+                            )
+                          }}
                         </div>
                       </div>
                       <div
@@ -1798,9 +1813,12 @@
                       >
                         <div class="recommendation-header">
                           <span class="severity-indicator medium"></span>
-                          <span class="recommendation-title"
-                            >Environment File Access Attempts</span
-                          >
+                          <span class="recommendation-title">{{
+                            translate(
+                              "admin.security.envFileAccess",
+                              "Environment File Access Attempts"
+                            )
+                          }}</span>
                         </div>
                         <div class="recommendation-description">
                           {{
@@ -1809,7 +1827,12 @@
                                 v.description && v.description.includes(".env")
                             ).length
                           }}
-                          attempts to access .env files detected
+                          {{
+                            translate(
+                              "admin.security.envFileAccessDesc",
+                              "attempts to access .env files detected"
+                            )
+                          }}
                         </div>
                         <div class="recommendation-action">
                           <strong
@@ -1820,9 +1843,12 @@
                               )
                             }}:</strong
                           >
-                          Ensure environment files are not accessible from web
-                          directories and server configurations properly block
-                          access to sensitive files
+                          {{
+                            translate(
+                              "admin.security.envFileRecommendation",
+                              "Ensure environment files are not accessible from web directories and server configurations properly block access to sensitive files"
+                            )
+                          }}
                         </div>
                       </div>
                       <div
@@ -1836,9 +1862,12 @@
                       >
                         <div class="recommendation-header">
                           <span class="severity-indicator medium"></span>
-                          <span class="recommendation-title"
-                            >Git Repository Access Attempts</span
-                          >
+                          <span class="recommendation-title">{{
+                            translate(
+                              "admin.security.gitRepoAccess",
+                              "Git Repository Access Attempts"
+                            )
+                          }}</span>
                         </div>
                         <div class="recommendation-description">
                           {{
@@ -1847,7 +1876,12 @@
                                 v.description && v.description.includes(".git")
                             ).length
                           }}
-                          attempts to access Git repository files detected
+                          {{
+                            translate(
+                              "admin.security.gitRepoAccessDesc",
+                              "attempts to access Git repository files detected"
+                            )
+                          }}
                         </div>
                         <div class="recommendation-action">
                           <strong
@@ -1858,8 +1892,12 @@
                               )
                             }}:</strong
                           >
-                          Make sure .git directories are properly secured and
-                          not accessible from the web
+                          {{
+                            translate(
+                              "admin.security.gitRepoRecommendation",
+                              "Make sure .git directories are properly secured and not accessible from the web"
+                            )
+                          }}
                         </div>
                       </div>
                     </div>
@@ -2331,6 +2369,17 @@
       @file-updated="handleFileUpdated"
       @action-triggered="handleFileAction"
     />
+
+    <ConfirmDialog
+      :visible="confirmDialogState.visible"
+      :title="confirmDialogState.title"
+      :message="confirmDialogState.message"
+      :confirmText="confirmDialogState.confirmText"
+      :cancelText="confirmDialogState.cancelText"
+      :theme="currentTheme"
+      @confirm="confirmDialogState.onConfirm"
+      @cancel="confirmDialogState.onCancel"
+    />
   </div>
 </template>
 
@@ -2344,6 +2393,7 @@ import UserEditDialog from "./UserEditDialog.vue";
 import UploadFilesDialog from "./UploadFilesDialog.vue";
 import AddFromLinkDialog from "./AddFromLinkDialog.vue";
 import FileDetailsDialog from "./FileDetailsDialog.vue";
+import ConfirmDialog from "./ConfirmDialog.vue"; // IMPORT ConfirmDialog
 import { eventBus } from "../eventBus.js";
 import { availableLanguages } from "../config/languageConfig.js";
 import documentFileService from "../services/documentFileService.js";
@@ -2357,6 +2407,7 @@ export default {
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
+    ConfirmDialog, // REGISTER ConfirmDialog
   },
   name: "AdminDashboard",
   emits: ["close"],
@@ -2577,6 +2628,17 @@ export default {
       showLinkDialog: false,
       showDetailsDialog: false,
       selectedFileId: null,
+
+      // --- ADDED: State for ConfirmDialog ---
+      confirmDialogState: {
+        visible: false,
+        title: "",
+        message: "",
+        confirmText: "OK",
+        cancelText: "Cancel",
+        onConfirm: () => {},
+        onCancel: () => {},
+      },
     };
   },
   computed: {
@@ -2728,6 +2790,60 @@ export default {
     window.removeEventListener("themeChange", this.handleThemeChange);
   },
   methods: {
+    // --- ADDED: Methods for ConfirmDialog ---
+    /**
+     * Shows a confirmation dialog.
+     * @param {object} options - Dialog options.
+     * @param {string} options.title - The dialog title.
+     * @param {string} options.message - The dialog message.
+     * @param {string} [options.confirmText='OK'] - The confirm button text.
+     * @param {string} [options.cancelText='Cancel'] - The cancel button text.
+     * @param {function} options.onConfirm - Callback function if confirmed.
+     * @param {function} [options.onCancel] - Callback function if canceled.
+     */
+    showConfirmDialog({
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm,
+      onCancel,
+    }) {
+      this.confirmDialogState = {
+        visible: true,
+        title: title || this.translate("admin.confirm.defaultTitle", "Confirm"),
+        message:
+          message ||
+          this.translate("admin.confirm.defaultMessage", "Are you sure?"),
+        confirmText: confirmText || this.translate("common.ok", "OK"),
+        cancelText: cancelText || this.translate("common.cancel", "Cancel"),
+        onConfirm: () => {
+          if (onConfirm) onConfirm();
+          this.resetConfirmDialog();
+        },
+        onCancel: () => {
+          if (onCancel) onCancel();
+          this.resetConfirmDialog();
+        },
+      };
+    },
+
+    /**
+     * Resets the confirmation dialog state to hide it.
+     */
+    resetConfirmDialog() {
+      this.confirmDialogState = {
+        visible: false,
+        title: "",
+        message: "",
+        confirmText: "OK",
+        cancelText: "Cancel",
+        onConfirm: () => {},
+        onCancel: () => {},
+      };
+    },
+    // --- END: Methods for ConfirmDialog ---
+
     /**
      * Handle document list pagination.
      * @param {number} newPage - The page number to navigate to.
@@ -2759,17 +2875,21 @@ export default {
 
     // Translation method - improved to ensure consistent behavior with SettingsComponent
     translate(key, fallback = "") {
-      if (!this.$i18n) return fallback;
+      if (!this.$i18n) {
+        // console.warn(`[AdminDashboard] $i18n not available. Using fallback for: ${key}`);
+        return fallback;
+      }
       try {
         // Force the correct locale
         const translation = this.$i18n.t(key, { locale: this.currentLocale });
         // Return fallback if the key is returned (meaning no translation found)
         if (translation === key) {
+          // console.warn(`[AdminDashboard] No translation for key: ${key}. Using fallback.`);
           return fallback || key;
         }
         return translation;
       } catch (e) {
-        console.error("Translation error:", e);
+        console.error(`[AdminDashboard] Translation error for key ${key}:`, e);
         return fallback || key;
       }
     },
@@ -2861,13 +2981,29 @@ export default {
     setActiveTab(tabId) {
       // Step 1: Guard against unsaved changes before doing anything else
       if (this.activeTab === "hierarchy" && this.isFormDirty) {
-        if (
-          !window.confirm(
+        // MODIFIED: Use ConfirmDialog
+        this.showConfirmDialog({
+          title: this.translate(
+            "admin.hierarchy.confirmCancelTitle",
+            "Unsaved Changes"
+          ),
+          message: this.translate(
+            "admin.hierarchy.confirmCancelEdit",
             "You have unsaved changes that will be lost. Are you sure you want to switch tabs?"
-          )
-        ) {
-          return; // Stop the tab switch if the user cancels
-        }
+          ),
+          confirmText: this.translate("admin.buttons.switch", "Switch Anyway"),
+          cancelText: this.translate("common.cancel", "Cancel"),
+          onConfirm: () => {
+            // User confirmed, proceed with tab switch
+            this.activeTab = tabId;
+            this.originalHierarchyFormState = null; // Reset form state
+            this.loadDataForTab(tabId); // Load data for the new tab
+          },
+          onCancel: () => {
+            // User canceled, do nothing
+          },
+        });
+        return; // Stop the original flow
       }
 
       // Step 2: Proceed with the tab switch
@@ -2879,6 +3015,11 @@ export default {
       this.originalHierarchyFormState = null; // Reset form state when leaving the hierarchy tab
 
       // Step 3: Load the necessary data for the newly selected tab
+      this.loadDataForTab(tabId);
+    },
+
+    // --- ADDED: Helper to load data based on tab ID ---
+    loadDataForTab(tabId) {
       if (tabId === "database") {
         this.loadDatabaseStats();
       } else if (tabId === "logs") {
@@ -2893,6 +3034,11 @@ export default {
         this.loadUserStats();
       } else if (tabId === "documents") {
         this.loadDocuments();
+      } else if (
+        tabId === "hierarchy" &&
+        this.knowledgeHierarchy.length === 0
+      ) {
+        this.loadKnowledgeHierarchy();
       }
     },
 
@@ -3048,12 +3194,14 @@ export default {
       }
     },
 
-    // Security operations
+    // Security operations (This is a corrected/combined version)
     async runSecurityScan() {
       console.log(
         "[AdminDashboard] Starting runSecurityScan, isLoading:",
         this.isLoading
       );
+      if (this.isLoading && this.currentOperation === "runSecurityScan") return; // Prevent double-click
+
       this.isLoading = true;
       this.currentOperation = "runSecurityScan";
 
@@ -3062,12 +3210,35 @@ export default {
         console.log("[AdminDashboard] Security scan API response:", response);
 
         if (response.success) {
-          await Promise.all([
-            this.loadSecurityMetrics(),
-            this.loadSecurityDetails(),
-          ]);
+          console.log(
+            "[AdminDashboard] Security scan completed successfully:",
+            response.data
+          );
+          await this.loadSecurityDetails(); // This fetches all necessary details
+          this.securityMetrics.lastScan = this.translate(
+            "admin.security.lastScanJustNow",
+            "Just now"
+          ); // Update last scan time
+          // Update vulnerability counts from the detailed response
+          if (
+            this.securityDetails &&
+            this.securityDetails.vulnerabilityDetails
+          ) {
+            this.securityMetrics.vulnerabilities = {
+              critical:
+                this.securityDetails.vulnerabilityDetails.critical.length,
+              medium: this.securityDetails.vulnerabilityDetails.medium.length,
+              low: this.securityDetails.vulnerabilityDetails.low.length,
+            };
+          }
           this.$forceUpdate();
-          console.log("[AdminDashboard] Security scan completed successfully");
+          this.showNotification(
+            this.translate(
+              "admin.operations.runSecurityScan.success",
+              "Security scan completed successfully"
+            ),
+            "success"
+          );
         } else {
           throw new Error(response.message || "Security scan failed");
         }
@@ -3078,7 +3249,13 @@ export default {
         );
       } catch (error) {
         console.error("[AdminDashboard] Error running security scan:", error);
-        console.error("[AdminDashboard] Failed to run security scan");
+        this.showNotification(
+          this.translate(
+            "admin.operations.runSecurityScan.error",
+            "Failed to run security scan"
+          ),
+          "error"
+        );
       } finally {
         this.isLoading = false;
         this.currentOperation = null;
@@ -3128,8 +3305,8 @@ export default {
         this.showNotification(
           this.translate(
             "admin.logSearch.resultsFound",
-            `Found ${results.length} log entries`
-          ),
+            `Found {count} log entries`
+          ).replace("{count}", results.length), // Added placeholder replacement
           "success"
         );
 
@@ -3173,6 +3350,7 @@ export default {
               low: 0,
             },
           };
+          // Also load the details when metrics are loaded
           await this.loadSecurityDetails();
         } else {
           console.warn(
@@ -3216,18 +3394,7 @@ export default {
     // Load all dashboard data
     async loadInitialData() {
       this.loadSystemHealth();
-      if (this.activeTab === "database") {
-        this.loadDatabaseStats();
-      } else if (this.activeTab === "logs") {
-        this.loadLogsSummary();
-        this.loadLogs();
-      } else if (this.activeTab === "security") {
-        this.loadSecurityMetrics();
-      } else if (this.activeTab === "users") {
-        this.loadUserStats();
-      } else if (this.activeTab === "hierarchy") {
-        this.loadKnowledgeHierarchy();
-      }
+      this.loadDataForTab(this.activeTab); // Call the helper
     },
 
     // Load database statistics
@@ -3629,47 +3796,6 @@ export default {
       }
     },
 
-    // Run security scan with progress indication and results display
-    async runSecurityScan() {
-      console.log(
-        "[AdminDashboard] Starting runSecurityScan, isLoading:",
-        this.isLoading
-      );
-      if (this.isLoading) return;
-      try {
-        this.isLoading = true;
-        this.currentOperation = "securityScan";
-        console.log(
-          "[AdminDashboard] Initiating security scan via adminDashboardService"
-        );
-        const response = await adminDashboardService.runSecurityScan();
-        console.log("[AdminDashboard] Security scan response:", response);
-        if (response.success) {
-          console.log(
-            "[AdminDashboard] Security scan completed successfully:",
-            response.data
-          );
-          await this.loadSecurityDetails();
-        } else {
-          console.error(
-            "[AdminDashboard] Security scan failed:",
-            response.data.message
-          );
-        }
-      } catch (error) {
-        console.error("[AdminDashboard] Error running security scan:", error);
-      } finally {
-        this.isLoading = false;
-        this.currentOperation = null;
-        console.log(
-          "[AdminDashboard] runSecurityScan complete, isLoading:",
-          this.isLoading,
-          "currentOperation:",
-          this.currentOperation
-        );
-      }
-    },
-
     // Get color for the usage bar based on value
     getSecurityBarColor(value) {
       if (value < 10) return "usage-low";
@@ -3718,7 +3844,7 @@ export default {
         // The API returns a simple structure; adapt it for the UI.
         // A dedicated admin endpoint should return the full object with translations.
         this.knowledgeHierarchy = categories.map((cat) => ({
-          _key: cat.catKey,
+          _key: cat.catKey, // Use _key from service
           nameEN: cat.name,
           translations: [], // TODO: Your API should eventually return this data
           services: (cat.children || []).map((service) => ({
@@ -3729,7 +3855,13 @@ export default {
           })),
         }));
       } catch (error) {
-        this.showNotification("Failed to load knowledge hierarchy.", "error");
+        this.showNotification(
+          this.translate(
+            "admin.hierarchy.loadError",
+            "Failed to load knowledge hierarchy."
+          ),
+          "error"
+        );
         console.error(error);
       } finally {
         this.isHierarchyLoading = false;
@@ -3737,37 +3869,60 @@ export default {
     },
 
     showAddCategoryForm() {
+      // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
         mode: "createCategory",
-        title: "Create New Category",
+        title: this.translate(
+          "admin.hierarchy.formTitleCreateCategory",
+          "Create New Category"
+        ),
         _key: null,
         nameEN: "",
         translations: [{ lang: "", text: "" }],
         parentId: null,
       };
+      // Store the initial state for the unsaved changes check
+      this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
     },
 
     showAddServiceForm(category) {
+      // MODIFIED: Use translate method for title
       this.hierarchyForm = {
         visible: true,
         mode: "createService",
-        title: `Add Service to "${category.nameEN}"`,
+        title: this.translate(
+          "admin.hierarchy.formTitleAddService",
+          'Add Service to "{categoryName}"'
+        ).replace("{categoryName}", category.nameEN),
         _key: null,
         nameEN: "",
         translations: [{ lang: "", text: "" }],
         parentId: category._key,
       };
+      // Store the initial state for the unsaved changes check
+      this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
     },
 
     async showEditForm(item, parentCategory = null) {
       const isCategory = !parentCategory;
 
+      // MODIFIED: Use translate method for title
+      const titleKey = isCategory
+        ? "admin.hierarchy.formTitleEditCategory"
+        : "admin.hierarchy.formTitleEditService";
+      const fallbackTitle = `Edit ${isCategory ? "Category" : "Service"}: "${
+        item.nameEN
+      }"`;
+
       // Step 1: Immediately show the form with basic info
       this.hierarchyForm = {
         visible: true,
         mode: isCategory ? "editCategory" : "editService",
-        title: `Edit ${isCategory ? "Category" : "Service"}: "${item.nameEN}"`,
+        title: this.translate(titleKey, fallbackTitle).replace(
+          "{itemName}",
+          item.nameEN
+        ),
         _key: item._key,
         nameEN: item.nameEN,
         translations: [], // Start with an empty array
@@ -3805,7 +3960,13 @@ export default {
         // Step 4: Store the initial state for the unsaved changes check
         this.originalHierarchyFormState = JSON.stringify(this.hierarchyForm);
       } catch (error) {
-        this.showNotification("Failed to load translations.", "error");
+        this.showNotification(
+          this.translate(
+            "admin.hierarchy.loadTranslationsError",
+            "Failed to load translations."
+          ),
+          "error"
+        );
         // Ensure there's at least one empty row on error
         if (this.hierarchyForm.translations.length === 0) {
           this.hierarchyForm.translations.push({ lang: "", text: "" });
@@ -3831,16 +3992,28 @@ export default {
     // Modify cancelHierarchyForm
     cancelHierarchyForm() {
       if (this.isFormDirty) {
-        if (
-          !window.confirm(
+        // MODIFIED: Use ConfirmDialog
+        this.showConfirmDialog({
+          title: this.translate(
+            "admin.hierarchy.confirmCancelTitle",
+            "Unsaved Changes"
+          ),
+          message: this.translate(
+            "admin.hierarchy.confirmCancelEdit",
             "You have unsaved changes. Are you sure you want to cancel?"
-          )
-        ) {
-          return; // Stop the action if the user cancels
-        }
+          ),
+          confirmText: this.translate("admin.buttons.discard", "Discard"),
+          cancelText: this.translate("common.cancel", "Cancel"),
+          onConfirm: () => {
+            this.closeHierarchyForm(); // User confirmed
+          },
+          onCancel: () => {
+            // User canceled, do nothing
+          },
+        });
+      } else {
+        this.closeHierarchyForm();
       }
-      // Call the new closing method
-      this.closeHierarchyForm();
     },
 
     async saveHierarchyItem() {
@@ -3853,7 +4026,11 @@ export default {
       // Check for duplicate languages
       if (new Set(langCodes).size !== langCodes.length) {
         this.showNotification(
-          "Duplicate languages found in translations. Please remove them.",
+          // MODIFIED: Use new i18n key
+          this.translate(
+            "admin.hierarchy.duplicateLangError",
+            "Duplicate languages found in translations. Please remove them."
+          ),
           "error"
         );
         return;
@@ -3880,14 +4057,28 @@ export default {
           await serviceTreeService.updateService(_key, payload);
         }
 
-        this.showNotification("Hierarchy item saved successfully.", "success");
+        this.showNotification(
+          // MODIFIED: Use new i18n key
+          this.translate(
+            "admin.hierarchy.saveSuccess",
+            "Hierarchy item saved successfully."
+          ),
+          "success"
+        );
         this.closeHierarchyForm(); // Close form on success
 
         // --- 4. REFRESH DATA ---
         await this.loadKnowledgeHierarchy(); // Refresh the admin dashboard tree
         eventBus.$emit("knowledge-hierarchy-updated"); // Emit global event for other components
       } catch (error) {
-        this.showNotification("Failed to save hierarchy item.", "error");
+        this.showNotification(
+          // MODIFIED: Use new i18n key
+          this.translate(
+            "admin.hierarchy.saveError",
+            "Failed to save hierarchy item."
+          ),
+          "error"
+        );
         console.error(error);
       } finally {
         this.isLoading = false;
@@ -3898,44 +4089,72 @@ export default {
       const isCategory = !parentCategory;
       const type = isCategory ? "Category" : "Service";
 
-      // Use window.confirm to get user confirmation
-      if (
-        window.confirm(
-          `Are you sure you want to delete the ${type} "${item.nameEN}"? This action cannot be undone.`
-        )
-      ) {
-        this.isLoading = true;
-        try {
-          // Conditionally call the correct delete method from the service
-          if (isCategory) {
-            await serviceTreeService.deleteCategory(item._key);
-          } else {
-            await serviceTreeService.deleteService(item._key);
+      // MODIFIED: Use new i18n keys for ConfirmDialog
+      const titleKey = isCategory
+        ? "admin.hierarchy.confirmDeleteTitleCategory"
+        : "admin.hierarchy.confirmDeleteTitleService";
+      const messageKey = isCategory
+        ? "admin.hierarchy.confirmDeleteCategory"
+        : "admin.hierarchy.confirmDeleteService";
+      const defaultTitle = `Delete ${type}?`;
+      const defaultMessage = `Are you sure you want to delete the ${type} "${item.nameEN}"? This action cannot be undone.`;
+
+      this.showConfirmDialog({
+        title: this.translate(titleKey, defaultTitle),
+        message: this.translate(messageKey, defaultMessage).replace(
+          "{itemName}",
+          item.nameEN
+        ),
+        confirmText: this.translate("common.delete", "Delete"),
+        cancelText: this.translate("common.cancel", "Cancel"),
+        onConfirm: async () => {
+          // User confirmed, proceed with deletion
+          this.isLoading = true;
+          try {
+            // Conditionally call the correct delete method from the service
+            if (isCategory) {
+              await serviceTreeService.deleteCategory(item._key);
+            } else {
+              await serviceTreeService.deleteService(item._key);
+            }
+
+            // MODIFIED: Use new i18n keys for notification
+            const successKey = isCategory
+              ? "admin.hierarchy.deleteSuccessCategory"
+              : "admin.hierarchy.deleteSuccessService";
+            this.showNotification(
+              this.translate(successKey, `${type} deleted successfully.`),
+              "success"
+            );
+
+            // Refresh the data in the admin panel and the main application
+            await this.loadKnowledgeHierarchy();
+            eventBus.$emit("knowledge-hierarchy-updated");
+          } catch (error) {
+            // MODIFIED: Use new i18n keys for notification
+            const errorKey = isCategory
+              ? "admin.hierarchy.deleteErrorCategory"
+              : "admin.hierarchy.deleteErrorService";
+            this.showNotification(
+              this.translate(errorKey, `Failed to delete ${type}.`),
+              "error"
+            );
+            console.error(error);
+          } finally {
+            this.isLoading = false;
           }
-
-          this.showNotification(`${type} deleted successfully.`, "success");
-
-          // Refresh the data in the admin panel and the main application
-          await this.loadKnowledgeHierarchy();
-          eventBus.$emit("knowledge-hierarchy-updated");
-        } catch (error) {
-          this.showNotification(`Failed to delete ${type}.`, "error");
-          console.error(error);
-        } finally {
-          this.isLoading = false;
-        }
-      }
+        },
+        onCancel: () => {
+          // User canceled, do nothing
+        },
+      });
     },
 
     // --- START: NEW METHODS FOR DOCUMENTS ---
-    uploadFiles() {
-      // This would typically open a file upload modal component
-      this.showNotification("Upload modal would open here.", "info");
-    },
-    addFromLink() {
-      // This would open a modal to input a URL
-      this.showNotification('"Add from Link" modal would open here.', "info");
-    },
+    // uploadFiles() is now just the action to show the dialog (see below)
+
+    // addFromLink() is now just the action to show the dialog (see below)
+
     viewDocumentDetails(docId) {
       console.log("Viewing details for doc ID:", docId);
       this.selectedFileId = docId;
@@ -3949,7 +4168,10 @@ export default {
     },
     selectAllDocuments(event) {
       if (event.target.checked) {
-        this.selectedDocuments = this.filteredDocuments.map((d) => d.file_id);
+        // MODIFICATION: Select based on _key, not file_id
+        this.selectedDocuments = this.sortedAndFilteredDocuments.map(
+          (d) => d._key
+        );
       } else {
         this.selectedDocuments = [];
       }
@@ -3959,38 +4181,60 @@ export default {
      */
     async handleBatchAction(action) {
       if (action === "ingest") {
-        if (
-          !window.confirm(
-            `Are you sure you want to ingest ${this.selectedDocuments.length} selected file(s)?`
-          )
-        ) {
-          return;
-        }
+        // MODIFIED: Use ConfirmDialog
+        const count = this.selectedDocuments.length;
+        this.showConfirmDialog({
+          title: this.translate(
+            "admin.documents.confirmIngestTitle",
+            "Confirm Batch Ingestion"
+          ),
+          message: this.translate(
+            "admin.documents.confirmIngestSelected",
+            `Are you sure you want to ingest ${count} selected file(s)?`
+          ).replace("{count}", count),
+          confirmText: this.translate("admin.documents.ingest", "Ingest"),
+          cancelText: this.translate("common.cancel", "Cancel"),
+          onConfirm: async () => {
+            // User confirmed, proceed with batch ingest
+            this.isLoading = true; // Use the main dashboard loading overlay
+            try {
+              // Call the service with the array of selected document keys
+              await documentFileService.ingestMultipleFiles(
+                this.selectedDocuments
+              );
 
-        this.isLoading = true; // Use the main dashboard loading overlay
-        try {
-          // Call the service with the array of selected document keys
-          await documentFileService.ingestMultipleFiles(this.selectedDocuments);
+              this.showNotification(
+                // MODIFIED: Use new i18n key
+                this.translate(
+                  "admin.documents.ingestQueuedSuccess",
+                  `{count} file(s) have been queued for ingestion.`
+                ).replace("{count}", count),
+                "success"
+              );
 
-          this.showNotification(
-            `${this.selectedDocuments.length} file(s) have been queued for ingestion.`,
-            "success"
-          );
+              // Clear the selection after the action is successful
+              this.selectedDocuments = [];
 
-          // Clear the selection after the action is successful
-          this.selectedDocuments = [];
-
-          // Refresh the document list to show the updated statuses
-          await this.loadDocuments();
-        } catch (error) {
-          this.showNotification(
-            "An error occurred during the batch ingestion process.",
-            "error"
-          );
-          console.error("Batch ingest error:", error);
-        } finally {
-          this.isLoading = false;
-        }
+              // Refresh the document list to show the updated statuses
+              await this.loadDocuments();
+            } catch (error) {
+              this.showNotification(
+                // MODIFIED: Use new i18n key
+                this.translate(
+                  "admin.documents.ingestQueuedError",
+                  "An error occurred during the batch ingestion process."
+                ),
+                "error"
+              );
+              console.error("Batch ingest error:", error);
+            } finally {
+              this.isLoading = false;
+            }
+          },
+          onCancel: () => {
+            // User canceled, do nothing
+          },
+        });
       }
       // You can add 'else if' blocks for other actions like 'retract' or 'delete' here
     },
@@ -4015,15 +4259,19 @@ export default {
     // This is a new method to refresh the document list after an action
     refreshDocuments() {
       // In a real application, this would re-fetch the document list from your API
-      this.showNotification("Document list refreshed.", "info");
+      // this.showNotification("Document list refreshed.", "info"); // Notification is now more specific
       console.log("Refreshing document list...");
       this.loadDocuments();
     },
 
     // Handler for the @files-uploaded event from the UploadFilesDialog
     handleFilesUploaded(uploadedFiles) {
+      // MODIFIED: Use new i18n key
       this.showNotification(
-        `${uploadedFiles.length} file(s) uploaded successfully.`,
+        this.translate(
+          "admin.documents.uploadSuccessMultiple",
+          `{count} file(s) uploaded successfully.`
+        ).replace("{count}", uploadedFiles.length),
         "success"
       );
       this.refreshDocuments();
@@ -4031,8 +4279,12 @@ export default {
 
     // Handler for the @link-submitted event from the AddFromLinkDialog
     handleLinkSubmitted(newFile) {
+      // MODIFIED: Use new i18n key
       this.showNotification(
-        `Successfully crawled and saved "${newFile.file_name}".`,
+        this.translate(
+          "admin.documents.linkSubmitSuccess",
+          `Successfully crawled and saved "{fileName}".`
+        ).replace("{fileName}", newFile.file_name),
         "success"
       );
       this.refreshDocuments();
@@ -4040,16 +4292,26 @@ export default {
 
     // Handler for events from the FileDetailsDialog
     handleFileAction(payload) {
+      // MODIFIED: Use new i18n key
       this.showNotification(
-        `Action "${payload.action}" on file ${payload.fileId} was successful.`,
+        this.translate(
+          "admin.documents.actionSuccess",
+          `Action "{action}" on file {fileId} was successful.`
+        )
+          .replace("{action}", payload.action)
+          .replace("{fileId}", payload.fileId),
         "success"
       );
       this.refreshDocuments();
     },
 
     handleFileUpdated(payload) {
+      // MODIFIED: Use new i18n key
       this.showNotification(
-        `Metadata for file ${payload.fileId} was updated.`,
+        this.translate(
+          "admin.documents.metadataUpdateSuccess",
+          `Metadata for file {fileId} was updated.`
+        ).replace("{fileId}", payload.fileId),
         "success"
       );
       this.refreshDocuments();
@@ -4084,7 +4346,13 @@ export default {
           this.documentPagination.page = response.pagination.currentPage || 1;
         }
       } catch (error) {
-        this.showNotification("Failed to load documents.", "error");
+        this.showNotification(
+          this.translate(
+            "admin.documents.loadError",
+            "Failed to load documents."
+          ),
+          "error"
+        );
         this.documents = [];
       } finally {
         this.isDocumentsLoading = false;
@@ -4101,7 +4369,6 @@ export default {
   },
 };
 </script>
-
 
 <style scoped>
 /* Base variables */

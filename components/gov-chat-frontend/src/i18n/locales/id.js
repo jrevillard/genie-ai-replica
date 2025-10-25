@@ -232,11 +232,31 @@ export default {
     today: 'Hari Ini',
     tabs: {
       overview: 'Kesehatan Sistem',
+      hierarchy: 'Hierarki Pengetahuan', // NEW
+      documents: 'Manajemen Dokumen', // NEW
       database: 'Database',
       logs: 'Log',
       security: 'Keamanan',
       users: 'Pengguna'
     },
+    // --- NEW KEYS ---
+    contentManagement: "MANAJEMEN KONTEN",
+    knowledgeHierarchy: "Hierarki Pengetahuan",
+    documentManagement: "Manajemen Dokumen",
+    noLogsFound: "Tidak ada log yang ditemukan hari ini",
+    invalidLogsResponse: "Struktur respons ringkasan log tidak valid",
+    logsSummaryError: "Gagal memuat ringkasan log",
+    buttons: {
+      save: "Simpan",
+      cancel: "Batal",
+      switch: "Tetap Pindahkan",
+      discard: "Buang"
+    },
+    confirm: {
+      defaultTitle: "Konfirmasi",
+      defaultMessage: "Apakah Anda yakin?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'Status Kesehatan Sistem',
     runDiagnostics: 'Jalankan Diagnostik',
     resourceUsage: 'Penggunaan Sumber Daya',
@@ -439,7 +459,9 @@ export default {
       lineNumber: 'Nomor Baris',
       lineNumbers: 'Nomor Baris',
       showLess: 'Tampilkan Lebih Sedikit',
-      showMore: 'Tampilkan Semua Masalah'
+      showMore: 'Tampilkan Semua Masalah',
+      // --- NEW KEY ---
+      lastScanJustNow: "Baru saja"
     },
     userEdit: {
       title: 'Ubah Pengguna',
@@ -479,7 +501,76 @@ export default {
       errorSendingReset: 'Kesalahan mengirim atur ulang kata sandi',
       logoutForced: 'Pengguna telah logout',
       logoutFailed: 'Gagal memaksa logout',
-      errorForcingLogout: 'Kesalahan memaksa logout'
+      errorForcingLogout: 'Kesalahan memaksa logout',
+      // --- NEW KEY ---
+      userUpdated: "Pengguna berhasil diperbarui"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "Manajemen Hierarki Pengetahuan (catatan: selalu dalam Bahasa Inggris - tambahkan terjemahan)",
+      addCategory: "Tambah Kategori Baru",
+      loading: "Memuat Hierarki...",
+      addService: "Tambah Layanan",
+      editCategory: "Ubah Kategori",
+      deleteCategory: "Hapus Kategori",
+      editService: "Ubah Layanan",
+      deleteService: "Hapus Layanan",
+      empty: 'Tidak ada kategori ditemukan. Klik "Tambah Kategori Baru" untuk memulai.',
+      formTitleCreateCategory: "Buat Kategori Baru",
+      formTitleAddService: 'Tambah Layanan ke "{categoryName}"',
+      formTitleEditCategory: 'Ubah Kategori: "{itemName}"',
+      formTitleEditService: 'Ubah Layanan: "{itemName}"',
+      nameEnLabel: "Nama (Inggris)",
+      translationsTitle: "Terjemahan untuk Tampilan",
+      loadingTranslations: "Memuat terjemahan...",
+      selectLang: "Pilih Bahasa",
+      translationPlaceholder: "Masukkan terjemahan",
+      deleteTranslation: "Hapus Terjemahan",
+      addTranslation: "+ Tambah Terjemahan",
+      saveSuccess: "Item hierarki berhasil disimpan.",
+      saveError: "Gagal menyimpan item hierarki.",
+      loadError: "Gagal memuat hierarki pengetahuan.",
+      loadTranslationsError: "Gagal memuat terjemahan.",
+      confirmCancelTitle: "Perubahan Belum Disimpan",
+      confirmCancelEdit: "Anda memiliki perubahan yang belum disimpan yang akan hilang. Apakah Anda yakin ingin pindah tab?",
+      confirmDeleteTitleCategory: "Hapus Kategori?",
+      confirmDeleteTitleService: "Hapus Layanan?",
+      confirmDeleteCategory: 'Apakah Anda yakin ingin menghapus Kategori "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+      confirmDeleteService: 'Apakah Anda yakin ingin menghapus Layanan "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+      deleteSuccessCategory: "Kategori berhasil dihapus.",
+      deleteSuccessService: "Layanan berhasil dihapus.",
+      deleteErrorCategory: "Gagal menghapus Kategori.",
+      deleteErrorService: "Gagal menghapus Layanan.",
+      duplicateLangError: "Ditemukan bahasa duplikat dalam terjemahan. Harap hapus."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "Manajemen Dokumen",
+      addLink: "Tambah dari Tautan",
+      uploadFiles: "Unggah File",
+      searchPlaceholder: "Cari berdasarkan nama file...",
+      allStatuses: "Semua Status",
+      statusPending: "Tertunda",
+      statusIngested: "Terserap",
+      statusRetracted: "Ditarik",
+      ingestSelected: "Proses Pilihan",
+      colFileName: "Nama File",
+      colStatus: "Status",
+      colLabels: "Label",
+      colUploadDate: "Tanggal Unggah",
+      colSize: "Ukuran",
+      loading: "Memuat dokumen...",
+      empty: "Tidak ada dokumen ditemukan.",
+      loadError: "Gagal memuat dokumen.",
+      confirmIngestTitle: "Konfirmasi Pemrosesan Batch",
+      ingest: "Proses",
+      confirmIngestSelected: "Apakah Anda yakin ingin memproses {count} file yang dipilih?",
+      ingestQueuedSuccess: "{count} file telah dimasukkan ke antrian untuk diproses.",
+      ingestQueuedError: "Terjadi kesalahan selama proses pemrosesan batch.",
+      uploadSuccessMultiple: "{count} file berhasil diunggah.",
+      linkSubmitSuccess: 'Berhasil merayapi dan menyimpan "{fileName}".',
+      actionSuccess: 'Tindakan "{action}" pada file {fileId} berhasil.',
+      metadataUpdateSuccess: "Metadata untuk file {fileId} telah diperbarui."
     }
   },
   passwordResetConfirm: {
@@ -1376,7 +1467,8 @@ export default {
     create: 'Buat',
     save: 'Simpan',
     move: 'Pindahkan',
-    delete: 'Hapus'
+    delete: 'Hapus',
+    ok: 'OK' // NEW KEY
   },
   feedback: {
     title: 'Umpan Balik',
@@ -1407,6 +1499,7 @@ export default {
     submit: 'Kirim',
     cancel: 'Batal'
   },
+  // --- NEW OBJECTS ---
   upload: {
     alt: 'Unggah'
   },

@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'Monthly Active Users (MAU)',
     fromLastMonth: 'from last month',
     today: 'Today',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'System Health',
+      hierarchy: 'Knowledge Hierarchy',
+      documents: 'Document Management',
       database: 'Database',
       logs: 'Logs',
       security: 'Security',
       users: 'Users'
     },
+    // --- NEW KEYS ---
+    contentManagement: "CONTENT MANAGEMENT",
+    knowledgeHierarchy: "Knowledge Hierarchy",
+    documentManagement: "Document Management",
+    noLogsFound: "No logs found for today",
+    invalidLogsResponse: "Invalid logs summary response structure",
+    logsSummaryError: "Failed to load logs summary",
+    buttons: {
+      save: "Save",
+      cancel: "Cancel",
+      switch: "Switch Anyway",
+      discard: "Discard"
+    },
+    confirm: {
+      defaultTitle: "Confirm",
+      defaultMessage: "Are you sure?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'System Health Status',
     runDiagnostics: 'Run Diagnostics',
     resourceUsage: 'Resource Usage',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'Line Number',
       lineNumbers: 'Line Numbers',
       showLess: 'Show Less',
-      showMore: 'Show All Issues'
+      showMore: 'Show All Issues',
+      // --- NEW KEY ---
+      lastScanJustNow: "Just now"
     },
     userEdit: {
       title: 'Edit User',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'Error sending password reset',
       logoutForced: 'User has been logged out',
       logoutFailed: 'Failed to force logout',
-      errorForcingLogout: 'Error forcing logout'
+      errorForcingLogout: 'Error forcing logout',
+      // --- NEW KEY ---
+      userUpdated: "User updated successfully"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "Knowledge Hierarchy Management (note: always English - add translations)",
+      addCategory: "Add New Category",
+      loading: "Loading Hierarchy...",
+      addService: "Add Service",
+      editCategory: "Edit Category",
+      deleteCategory: "Delete Category",
+      editService: "Edit Service",
+      deleteService: "Delete Service",
+      empty: 'No categories found. Click "Add New Category" to start.',
+      formTitleCreateCategory: "Create New Category",
+      formTitleAddService: "Add Service to \"{categoryName}\"",
+      formTitleEditCategory: "Edit Category: \"{itemName}\"",
+      formTitleEditService: "Edit Service: \"{itemName}\"",
+      nameEnLabel: "Name (English)",
+      translationsTitle: "Translations for Display",
+      loadingTranslations: "Loading translations...",
+      selectLang: "Select Language",
+      translationPlaceholder: "Enter translation",
+      deleteTranslation: "Delete Translation",
+      addTranslation: "+ Add Translation",
+      saveSuccess: "Hierarchy item saved successfully.",
+      saveError: "Failed to save hierarchy item.",
+      loadError: "Failed to load knowledge hierarchy.",
+      loadTranslationsError: "Failed to load translations.",
+      confirmCancelTitle: "Unsaved Changes",
+      confirmCancelEdit: "You have unsaved changes. Are you sure you want to cancel?",
+      confirmDeleteTitleCategory: "Delete Category?",
+      confirmDeleteTitleService: "Delete Service?",
+      confirmDeleteCategory: "Are you sure you want to delete the Category \"{itemName}\"? This action cannot be undone.",
+      confirmDeleteService: "Are you sure you want to delete the Service \"{itemName}\"? This action cannot be undone.",
+      deleteSuccessCategory: "Category deleted successfully.",
+      deleteSuccessService: "Service deleted successfully.",
+      deleteErrorCategory: "Failed to delete Category.",
+      deleteErrorService: "Failed to delete Service.",
+      duplicateLangError: "Duplicate languages found in translations. Please remove them."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "Document Management",
+      addLink: "Add from Link",
+      uploadFiles: "Upload Files",
+      searchPlaceholder: "Search by file name...",
+      allStatuses: "All Statuses",
+      statusPending: "Pending",
+      statusIngested: "Ingested",
+      statusRetracted: "Retracted",
+      ingestSelected: "Ingest Selected",
+      colFileName: "File Name",
+      colStatus: "Status",
+      colLabels: "Labels",
+      colUploadDate: "Upload Date",
+      colSize: "Size",
+      loading: "Loading documents...",
+      empty: "No documents found.",
+      loadError: "Failed to load documents.",
+      confirmIngestTitle: "Confirm Batch Ingestion",
+      ingest: "Ingest",
+      confirmIngestSelected: "Are you sure you want to ingest {count} selected file(s)?",
+      ingestQueuedSuccess: "{count} file(s) have been queued for ingestion.",
+      ingestQueuedError: "An error occurred during the batch ingestion process.",
+      uploadSuccessMultiple: "{count} file(s) uploaded successfully.",
+      linkSubmitSuccess: "Successfully crawled and saved \"{fileName}\".",
+      actionSuccess: "Action \"{action}\" on file {fileId} was successful.",
+      metadataUpdateSuccess: "Metadata for file {fileId} was updated."
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,9 @@ export default {
     create: 'Create',
     save: 'Save',
     move: 'Move',
-    delete: 'Delete'
+    delete: 'Delete',
+    // --- NEW KEY ---
+    ok: 'OK'
   },
   feedback: {
     title: 'Feedback',

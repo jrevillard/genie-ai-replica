@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'Utilisateurs Actifs Mensuels (UAM)',
     fromLastMonth: 'depuis le mois dernier',
     today: 'Aujourd\'hui',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'État du système',
+      hierarchy: 'Hiérarchie des connaissances', // NEW
+      documents: 'Gestion de documents', // NEW
       database: 'Base de données',
       logs: 'Journaux',
       security: 'Sécurité',
       users: 'Utilisateurs'
     },
+    // --- NEW KEYS ---
+    contentManagement: "GESTION DE CONTENU",
+    knowledgeHierarchy: "Hiérarchie des connaissances",
+    documentManagement: "Gestion de documents",
+    noLogsFound: "Aucun journal trouvé pour aujourd'hui",
+    invalidLogsResponse: "Structure de réponse du résumé des journaux invalide",
+    logsSummaryError: "Échec du chargement du résumé des journaux",
+    buttons: {
+      save: "Enregistrer",
+      cancel: "Annuler",
+      switch: "Changer quand même",
+      discard: "Ignorer"
+    },
+    confirm: {
+      defaultTitle: "Confirmer",
+      defaultMessage: "Êtes-vous sûr ?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'État de santé du système',
     runDiagnostics: 'Exécuter les diagnostics',
     resourceUsage: 'Utilisation des ressources',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'Numéro de ligne',
       lineNumbers: 'Numéros de ligne',
       showLess: 'Afficher moins',
-      showMore: 'Afficher tous les problèmes'
+      showMore: 'Afficher tous les problèmes',
+      // --- NEW KEY ---
+      lastScanJustNow: "À l'instant"
     },
     userEdit: {
       title: 'Modifier l\'utilisateur',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'Erreur lors de l\'envoi de la réinitialisation du mot de passe',
       logoutForced: 'L\'utilisateur a été déconnecté',
       logoutFailed: 'Échec de la déconnexion forcée de l\'utilisateur',
-      errorForcingLogout: 'Erreur lors de la déconnexion forcée de l\'utilisateur'
+      errorForcingLogout: 'Erreur lors de la déconnexion forcée de l\'utilisateur',
+      // --- NEW KEY ---
+      userUpdated: "Utilisateur mis à jour avec succès"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "Gestion de la hiérarchie des connaissances (note : toujours en anglais - ajouter les traductions)",
+      addCategory: "Ajouter une nouvelle catégorie",
+      loading: "Chargement de la hiérarchie...",
+      addService: "Ajouter un service",
+      editCategory: "Modifier la catégorie",
+      deleteCategory: "Supprimer la catégorie",
+      editService: "Modifier le service",
+      deleteService: "Supprimer le service",
+      empty: 'Aucune catégorie trouvée. Cliquez sur "Ajouter une nouvelle catégorie" pour commencer.',
+      formTitleCreateCategory: "Créer une nouvelle catégorie",
+      formTitleAddService: 'Ajouter un service à "{categoryName}"',
+      formTitleEditCategory: 'Modifier la catégorie : "{itemName}"',
+      formTitleEditService: 'Modifier le service : "{itemName}"',
+      nameEnLabel: "Nom (Anglais)",
+      translationsTitle: "Traductions pour l'affichage",
+      loadingTranslations: "Chargement des traductions...",
+      selectLang: "Sélectionner la langue",
+      translationPlaceholder: "Entrer la traduction",
+      deleteTranslation: "Supprimer la traduction",
+      addTranslation: "+ Ajouter une traduction",
+      saveSuccess: "Élément de hiérarchie enregistré avec succès.",
+      saveError: "Échec de l'enregistrement de l'élément de hiérarchie.",
+      loadError: "Échec du chargement de la hiérarchie des connaissances.",
+      loadTranslationsError: "Échec du chargement des traductions.",
+      confirmCancelTitle: "Modifications non enregistrées",
+      confirmCancelEdit: "Vous avez des modifications non enregistrées qui seront perdues. Êtes-vous sûr de vouloir changer d'onglet ?",
+      confirmDeleteTitleCategory: "Supprimer la catégorie ?",
+      confirmDeleteTitleService: "Supprimer le service ?",
+      confirmDeleteCategory: 'Êtes-vous sûr de vouloir supprimer la catégorie "{itemName}" ? Cette action est irréversible.',
+      confirmDeleteService: 'Êtes-vous sûr de vouloir supprimer le service "{itemName}" ? Cette action est irréversible.',
+      deleteSuccessCategory: "Catégorie supprimée avec succès.",
+      deleteSuccessService: "Service supprimé avec succès.",
+      deleteErrorCategory: "Échec de la suppression de la catégorie.",
+      deleteErrorService: "Échec de la suppression du service.",
+      duplicateLangError: "Langues en double trouvées dans les traductions. Veuillez les supprimer."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "Gestion de documents",
+      addLink: "Ajouter depuis un lien",
+      uploadFiles: "Télécharger des fichiers",
+      searchPlaceholder: "Rechercher par nom de fichier...",
+      allStatuses: "Tous les statuts",
+      statusPending: "En attente",
+      statusIngested: "Ingéré",
+      statusRetracted: "Rétracté",
+      ingestSelected: "Ingérer la sélection",
+      colFileName: "Nom du fichier",
+      colStatus: "Statut",
+      colLabels: "Étiquettes",
+      colUploadDate: "Date de téléchargement",
+      colSize: "Taille",
+      loading: "Chargement des documents...",
+      empty: "Aucun document trouvé.",
+      loadError: "Échec du chargement des documents.",
+      confirmIngestTitle: "Confirmer l'ingestion par lot",
+      ingest: "Ingérer",
+      confirmIngestSelected: "Êtes-vous sûr de vouloir ingérer {count} fichier(s) sélectionné(s) ?",
+      ingestQueuedSuccess: "{count} fichier(s) ont été mis en file d'attente pour ingestion.",
+      ingestQueuedError: "Une erreur s'est produite lors du processus d'ingestion par lot.",
+      uploadSuccessMultiple: "{count} fichier(s) téléchargé(s) avec succès.",
+      linkSubmitSuccess: '"{fileName}" a été exploré et enregistré avec succès.',
+      actionSuccess: 'L\'action "{action}" sur le fichier {fileId} a réussi.',
+      metadataUpdateSuccess: "Les métadonnées du fichier {fileId} ont été mises à jour."
     }
   },
   passwordResetConfirm: {
@@ -1376,7 +1468,8 @@ export default {
     create: 'Créer',
     save: 'Enregistrer',
     move: 'Déplacer',
-    delete: 'Supprimer'
+    delete: 'Supprimer',
+    ok: 'OK' // NEW KEY
   },
   feedback: {
     title: 'Commentaires',
@@ -1407,6 +1500,7 @@ export default {
     submit: 'Envoyer',
     cancel: 'Annuler'
   },
+  // --- NEW OBJECTS ---
   upload: {
     alt: 'Télécharger'
   },

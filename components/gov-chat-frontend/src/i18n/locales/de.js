@@ -38,7 +38,7 @@ export default {
     'TD': 'Tschad',
     'CL': 'Chile',
     'CN': 'China',
-    'CO': 'Kolumbien',
+    'CO': 'Kolombien',
     'KM': 'Komoren',
     'CG': 'Kongo',
     'CD': 'Kongo, Demokratische Republik',
@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'Monatlich aktive Benutzer (MAU)',
     fromLastMonth: 'vom letzten Monat',
     today: 'Heute',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'Systemzustand',
+      hierarchy: 'Wissenshierarchie', // NEW
+      documents: 'Dokumentenverwaltung', // NEW
       database: 'Datenbank',
       logs: 'Protokolle',
       security: 'Sicherheit',
       users: 'Benutzer'
     },
+    // --- NEW KEYS ---
+    contentManagement: "INHALTSVERWALTUNG",
+    knowledgeHierarchy: "Wissenshierarchie",
+    documentManagement: "Dokumentenverwaltung",
+    noLogsFound: "Heute keine Protokolle gefunden",
+    invalidLogsResponse: "Ungültige Antwortstruktur der Protokollzusammenfassung",
+    logsSummaryError: "Fehler beim Laden der Protokollzusammenfassung",
+    buttons: {
+      save: "Speichern",
+      cancel: "Abbrechen",
+      switch: "Trotzdem wechseln",
+      discard: "Verwerfen"
+    },
+    confirm: {
+      defaultTitle: "Bestätigen",
+      defaultMessage: "Sind Sie sicher?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'Systemzustandsstatus',
     runDiagnostics: 'Diagnose ausführen',
     resourceUsage: 'Ressourcennutzung',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'Zeilennummer',
       lineNumbers: 'Zeilennummern',
       showLess: 'Weniger anzeigen',
-      showMore: 'Alle Probleme anzeigen'
+      showMore: 'Alle Probleme anzeigen',
+      // --- NEW KEY ---
+      lastScanJustNow: "Gerade eben"
     },
     userEdit: {
       title: 'Benutzer bearbeiten',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'Fehler beim Senden des Passwort-Zurücksetzens',
       logoutForced: 'Benutzer wurde abgemeldet',
       logoutFailed: 'Fehler beim Erzwingen der Abmeldung',
-      errorForcingLogout: 'Fehler beim Erzwingen der Abmeldung'
+      errorForcingLogout: 'Fehler beim Erzwingen der Abmeldung',
+      // --- NEW KEY ---
+      userUpdated: "Benutzer erfolgreich aktualisiert"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: 'Wissenshierarchie-Verwaltung (Hinweis: immer Englisch - Übersetzungen hinzufügen)',
+      addCategory: 'Neue Kategorie hinzufügen',
+      loading: 'Hierarchie wird geladen...',
+      addService: 'Dienst hinzufügen',
+      editCategory: 'Kategorie bearbeiten',
+      deleteCategory: 'Kategorie löschen',
+      editService: 'Dienst bearbeiten',
+      deleteService: 'Dienst löschen',
+      empty: 'Keine Kategorien gefunden. Klicken Sie auf "Neue Kategorie hinzufügen", um zu beginnen.',
+      formTitleCreateCategory: 'Neue Kategorie erstellen',
+      formTitleAddService: 'Dienst zu "{categoryName}" hinzufügen',
+      formTitleEditCategory: 'Kategorie bearbeiten: "{itemName}"',
+      formTitleEditService: 'Dienst bearbeiten: "{itemName}"',
+      nameEnLabel: 'Name (Englisch)',
+      translationsTitle: 'Übersetzungen zur Anzeige',
+      loadingTranslations: 'Übersetzungen werden geladen...',
+      selectLang: 'Sprache auswählen',
+      translationPlaceholder: 'Übersetzung eingeben',
+      deleteTranslation: 'Übersetzung löschen',
+      addTranslation: '+ Übersetzung hinzufügen',
+      saveSuccess: 'Hierarchieelement erfolgreich gespeichert.',
+      saveError: 'Fehler beim Speichern des Hierarchieelements.',
+      loadError: 'Fehler beim Laden der Wissenshierarchie.',
+      loadTranslationsError: 'Fehler beim Laden der Übersetzungen.',
+      confirmCancelTitle: 'Ungespeicherte Änderungen',
+      confirmCancelEdit: 'Sie haben ungespeicherte Änderungen, die verloren gehen. Möchten Sie wirklich wechseln?',
+      confirmDeleteTitleCategory: 'Kategorie löschen?',
+      confirmDeleteTitleService: 'Dienst löschen?',
+      confirmDeleteCategory: 'Sind Sie sicher, dass Sie die Kategorie "{itemName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
+      confirmDeleteService: 'Sind Sie sicher, dass Sie den Dienst "{itemName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
+      deleteSuccessCategory: 'Kategorie erfolgreich gelöscht.',
+      deleteSuccessService: 'Dienst erfolgreich gelöscht.',
+      deleteErrorCategory: 'Fehler beim Löschen der Kategorie.',
+      deleteErrorService: 'Fehler beim Löschen des Dienstes.',
+      duplicateLangError: 'Doppelte Sprachen in den Übersetzungen gefunden. Bitte entfernen Sie sie.'
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: 'Dokumentenverwaltung',
+      addLink: 'Von Link hinzufügen',
+      uploadFiles: 'Dateien hochladen',
+      searchPlaceholder: 'Suche nach Dateinamen...',
+      allStatuses: 'Alle Status',
+      statusPending: 'Ausstehend',
+      statusIngested: 'Aufgenommen',
+      statusRetracted: 'Zurückgezogen',
+      ingestSelected: 'Ausgewählte aufnehmen',
+      colFileName: 'Dateiname',
+      colStatus: 'Status',
+      colLabels: 'Etiketten',
+      colUploadDate: 'Hochladedatum',
+      colSize: 'Größe',
+      loading: 'Dokumente werden geladen...',
+      empty: 'Keine Dokumente gefunden.',
+      loadError: 'Fehler beim Laden der Dokumente.',
+      confirmIngestTitle: 'Batch-Aufnahme bestätigen',
+      ingest: 'Aufnehmen',
+      confirmIngestSelected: 'Sind Sie sicher, dass Sie {count} ausgewählte Datei(en) aufnehmen möchten?',
+      ingestQueuedSuccess: '{count} Datei(en) wurden zur Aufnahme in die Warteschlange gestellt.',
+      ingestQueuedError: 'Während des Batch-Aufnahmeprozesses ist ein Fehler aufgetreten.',
+      uploadSuccessMultiple: '{count} Datei(en) erfolgreich hochgeladen.',
+      linkSubmitSuccess: 'Erfolgreich gecrawlt und "{fileName}" gespeichert.',
+      actionSuccess: 'Aktion "{action}" für Datei {fileId} war erfolgreich.',
+      metadataUpdateSuccess: 'Metadaten für Datei {fileId} wurden aktualisiert.'
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,8 @@ export default {
     create: 'Erstellen',
     save: 'Speichern',
     move: 'Verschieben',
-    delete: 'Löschen'
+    delete: 'Löschen',
+    ok: 'OK' // NEW KEY
   },
   feedback: {
     title: 'Feedback',
@@ -1409,6 +1502,7 @@ export default {
     submit: 'Senden',
     cancel: 'Abbrechen'
   },
+  // --- NEW OBJECTS ---
   upload: {
     alt: 'Hochladen'
   },

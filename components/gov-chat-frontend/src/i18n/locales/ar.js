@@ -232,11 +232,31 @@ export default {
     today: 'اليوم',
     tabs: {
       overview: 'صحة النظام',
+      hierarchy: 'هرمية المعرفة', // NEW
+      documents: 'إدارة المستندات', // NEW
       database: 'قاعدة البيانات',
       logs: 'السجلات',
       security: 'الأمان',
       users: 'المستخدمون'
     },
+    // --- NEW KEYS ---
+    contentManagement: "إدارة المحتوى",
+    knowledgeHierarchy: "هرمية المعرفة",
+    documentManagement: "إدارة المستندات",
+    noLogsFound: "لم يتم العثور على سجلات لليوم",
+    invalidLogsResponse: "هيكل استجابة ملخص السجلات غير صالح",
+    logsSummaryError: "فشل تحميل ملخص السجلات",
+    buttons: {
+      save: "حفظ",
+      cancel: "إلغاء",
+      switch: "التبديل على أي حال",
+      discard: "تجاهل"
+    },
+    confirm: {
+      defaultTitle: "تأكيد",
+      defaultMessage: "هل أنت متأكد؟"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'حالة صحة النظام',
     runDiagnostics: 'تشغيل التشخيص',
     resourceUsage: 'استخدام الموارد',
@@ -439,7 +459,9 @@ export default {
       lineNumber: 'رقم السطر',
       lineNumbers: 'أرقام الأسطر',
       showLess: 'إظهار أقل',
-      showMore: 'إظهار جميع المشكلات'
+      showMore: 'إظهار جميع المشكلات',
+      // --- NEW KEY ---
+      lastScanJustNow: "الآن"
     },
     userEdit: {
       title: 'تعديل المستخدم',
@@ -479,7 +501,76 @@ export default {
       errorSendingReset: 'خطأ في إرسال إعادة تعيين كلمة المرور',
       logoutForced: 'تم تسجيل خروج المستخدم',
       logoutFailed: 'فشل فرض تسجيل الخروج',
-      errorForcingLogout: 'خطأ في فرض تسجيل الخروج'
+      errorForcingLogout: 'خطأ في فرض تسجيل الخروج',
+      // --- NEW KEY ---
+      userUpdated: "تم تحديث المستخدم بنجاح"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "إدارة هرمية المعرفة (ملاحظة: دائماً باللغة الإنجليزية - أضف ترجمات)",
+      addCategory: "إضافة فئة جديدة",
+      loading: "جاري تحميل الهرمية...",
+      addService: "إضافة خدمة",
+      editCategory: "تعديل الفئة",
+      deleteCategory: "حذف الفئة",
+      editService: "تعديل الخدمة",
+      deleteService: "حذف الخدمة",
+      empty: 'لم يتم العثور على فئات. انقر فوق "إضافة فئة جديدة" للبدء.',
+      formTitleCreateCategory: "إنشاء فئة جديدة",
+      formTitleAddService: 'إضافة خدمة إلى "{categoryName}"',
+      formTitleEditCategory: 'تعديل الفئة: "{itemName}"',
+      formTitleEditService: 'تعديل الخدمة: "{itemName}"',
+      nameEnLabel: "الاسم (الإنجليزية)",
+      translationsTitle: "ترجمات للعرض",
+      loadingTranslations: "جاري تحميل الترجمات...",
+      selectLang: "اختر اللغة",
+      translationPlaceholder: "أدخل الترجمة",
+      deleteTranslation: "حذف الترجمة",
+      addTranslation: "+ إضافة ترجمة",
+      saveSuccess: "تم حفظ عنصر الهرمية بنجاح.",
+      saveError: "فشل حفظ عنصر الهرمية.",
+      loadError: "فشل تحميل هرمية المعرفة.",
+      loadTranslationsError: "فشل تحميل الترجمات.",
+      confirmCancelTitle: "تغييرات غير محفوظة",
+      confirmCancelEdit: "لديك تغييرات غير محفوظة سيتم فقدانها. هل أنت متأكد أنك تريد التبديل؟",
+      confirmDeleteTitleCategory: "حذف الفئة؟",
+      confirmDeleteTitleService: "حذف الخدمة؟",
+      confirmDeleteCategory: 'هل أنت متأكد أنك تريد حذف الفئة "{itemName}"؟ لا يمكن التراجع عن هذا الإجراء.',
+      confirmDeleteService: 'هل أنت متأكد أنك تريد حذف الخدمة "{itemName}"؟ لا يمكن التراجع عن هذا الإجراء.',
+      deleteSuccessCategory: "تم حذف الفئة بنجاح.",
+      deleteSuccessService: "تم حذف الخدمة بنجاح.",
+      deleteErrorCategory: "فشل حذف الفئة.",
+      deleteErrorService: "فشل حذف الخدمة.",
+      duplicateLangError: "تم العثور على لغات مكررة في الترجمات. يرجى إزالتها."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "إدارة المستندات",
+      addLink: "إضافة من رابط",
+      uploadFiles: "تحميل الملفات",
+      searchPlaceholder: "البحث حسب اسم الملف...",
+      allStatuses: "جميع الحالات",
+      statusPending: "قيد الانتظار",
+      statusIngested: "تم الاستيعاب",
+      statusRetracted: "تم السحب",
+      ingestSelected: "استيعاب المختار",
+      colFileName: "اسم الملف",
+      colStatus: "الحالة",
+      colLabels: "العلامات",
+      colUploadDate: "تاريخ الرفع",
+      colSize: "الحجم",
+      loading: "جاري تحميل المستندات...",
+      empty: "لم يتم العثور على مستندات.",
+      loadError: "فشل تحميل المستندات.",
+      confirmIngestTitle: "تأكيد الاستيعاب الدفعي",
+      ingest: "استيعاب",
+      confirmIngestSelected: "هل أنت متأكد أنك تريد استيعاب {count} ملف(ات) مختارة؟",
+      ingestQueuedSuccess: "تم وضع {count} ملف(ات) في قائمة الانتظار للاستيعاب.",
+      ingestQueuedError: "حدث خطأ أثناء عملية الاستيعاب الدفعي.",
+      uploadSuccessMultiple: "تم تحميل {count} ملف(ات) بنجاح.",
+      linkSubmitSuccess: 'تم الزحف وحفظ "{fileName}" بنجاح.',
+      actionSuccess: 'الإجراء "{action}" على الملف {fileId} كان ناجحًا.',
+      metadataUpdateSuccess: "تم تحديث البيانات الوصفية للملف {fileId}."
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1469,8 @@ export default {
     create: 'إنشاء',
     save: 'حفظ',
     move: 'نقل',
-    delete: 'حذف'
+    delete: 'حذف',
+    ok: 'موافق' // NEW KEY
   },
   feedback: {
     title: 'التعليق',

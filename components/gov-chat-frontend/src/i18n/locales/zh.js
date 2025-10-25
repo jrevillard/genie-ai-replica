@@ -1408,5 +1408,67 @@ export default {
     additionalComments: '额外评论...',
     submit: '提交',
     cancel: '取消'
+  },
+  upload: {
+    alt: '上传'
+  },
+  details: {
+    loading: '正在加载文件详细信息...',
+    title: '文件详情',
+    close: '关闭',
+    fileName: '文件名',
+    author: '作者',
+    labels: '标签',
+    selectAll: '全选',
+    loadingLabels: '正在加载标签...',
+    status: '状态',
+    fileId: '文件ID',
+    fileType: '文件类型',
+    viewFile: '查看文件',
+    visitLink: '访问外部链接',
+    openFile: '在新标签页中打开文件',
+    fileSize: '文件大小',
+    uploadDate: '上传日期',
+    hash: 'SHA256 哈希值',
+    buttons: {
+      saveMetadata: '保存元数据',
+      retract: '撤回',
+      ingest: '提取'
+    },
+    notifications: {
+      loadError: '加载文件详细信息失败。',
+      validationError: '文件名和作者为必填项。',
+      saveSuccess: '元数据更新成功。',
+      saveError: '保存元数据失败。',
+      tokenError: '在用户数据中未找到身份验证令牌。',
+      viewError: '无法加载文件进行查看。',
+      ingestSuccess: '文件已成功排队等待提取。',
+      ingestError: '启动提取过程失败。',
+      retractSuccess: '文件已成功撤回。',
+      retractError: '撤回文件失败。',
+      deleteSuccess: '文件删除成功。',
+      deleteError: '删除文件失败。'
+    },
+    confirm: {
+      ingest: '您确定要提取此文件吗？这将启动数据处理流程。',
+      retract: '您确定要撤回此文件吗？',
+      delete: '您确定要永久删除此文件吗？此操作无法撤销。'
+    }
+  },
+  uploadDialog: {
+    title: '上传文件',
+    dropzone: '将文件拖放到此处，或点击选择',
+    allowedTypesLabel: '允许类型:',
+    buttonUpload: '上传 {count} 个文件', // Needs pluralization rules
+    remove: '移除',
+    uploading: '上传中...',
+    notifications: {
+      dropError: '只能拖放文件。请检查您是否从计算机拖动了有效文件。',
+      typeNotAllowed: '不允许的文件类型 "{extension}"。',
+      shortcutUnsupported: '不支持快捷方式文件 (.url)。请拖动实际文件。',
+      duplicate: '文件 "{fileName}" 已添加。',
+      uploadSuccess: '成功上传 {fileName}',
+      uploadFailed: '上传 {fileName} 失败。'
+    }
   }
 }

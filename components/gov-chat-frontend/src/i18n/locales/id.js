@@ -1406,5 +1406,67 @@ export default {
     additionalComments: 'Komentar tambahan...',
     submit: 'Kirim',
     cancel: 'Batal'
+  },
+  upload: {
+    alt: 'Unggah'
+  },
+  details: {
+    loading: 'Memuat Detail File...',
+    title: 'Detail File',
+    close: 'Tutup',
+    fileName: 'Nama File',
+    author: 'Penulis',
+    labels: 'Label',
+    selectAll: 'Pilih Semua',
+    loadingLabels: 'Memuat label...',
+    status: 'Status',
+    fileId: 'ID File',
+    fileType: 'Tipe File',
+    viewFile: 'Lihat File',
+    visitLink: 'Kunjungi Tautan Eksternal',
+    openFile: 'Buka file di tab baru',
+    fileSize: 'Ukuran File',
+    uploadDate: 'Tanggal Unggah',
+    hash: 'Hash SHA256',
+    buttons: {
+      saveMetadata: 'Simpan Metadata',
+      retract: 'Tarik Kembali',
+      ingest: 'Proses'
+    },
+    notifications: {
+      loadError: 'Gagal memuat detail file.',
+      validationError: 'Nama File dan Penulis wajib diisi.',
+      saveSuccess: 'Metadata berhasil diperbarui.',
+      saveError: 'Gagal menyimpan metadata.',
+      tokenError: 'Token otentikasi tidak ditemukan di data pengguna.',
+      viewError: 'Tidak dapat memuat file untuk ditampilkan.',
+      ingestSuccess: 'File telah berhasil dimasukkan antrian untuk diproses.',
+      ingestError: 'Gagal memulai proses ingest.',
+      retractSuccess: 'File telah berhasil ditarik kembali.',
+      retractError: 'Gagal menarik kembali file.',
+      deleteSuccess: 'File berhasil dihapus.',
+      deleteError: 'Gagal menghapus file.'
+    },
+    confirm: {
+      ingest: 'Apakah Anda yakin ingin memproses file ini? Ini akan memulai alur pemrosesan data.',
+      retract: 'Apakah Anda yakin ingin menarik kembali file ini?',
+      delete: 'Apakah Anda yakin ingin menghapus file ini secara permanen? Tindakan ini tidak dapat dibatalkan.'
+    }
+  },
+  uploadDialog: {
+    title: 'Unggah File',
+    dropzone: 'Seret & lepas file di sini, atau klik untuk memilih',
+    allowedTypesLabel: 'Tipe yang diizinkan:',
+    buttonUpload: 'Unggah {count} File', // Pluralization might need adjustment for Indonesian rules
+    remove: 'Hapus',
+    uploading: 'Mengunggah...',
+    notifications: {
+      dropError: 'Hanya file yang bisa dilepaskan. Harap periksa apakah Anda menyeret file yang valid dari komputer Anda.',
+      typeNotAllowed: 'Tipe file "{extension}" tidak diizinkan.',
+      shortcutUnsupported: 'File pintasan (.url) tidak didukung. Harap seret file yang sebenarnya.',
+      duplicate: 'File "{fileName}" sudah ditambahkan.',
+      uploadSuccess: 'Berhasil mengunggah {fileName}',
+      uploadFailed: 'Gagal mengunggah {fileName}.'
+    }
   }
 }

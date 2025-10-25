@@ -1406,5 +1406,67 @@ export default {
     additionalComments: 'Commentaires supplémentaires...',
     submit: 'Envoyer',
     cancel: 'Annuler'
+  },
+  upload: {
+    alt: 'Télécharger'
+  },
+  details: {
+    loading: 'Chargement des détails du fichier...',
+    title: 'Détails du fichier',
+    close: 'Fermer',
+    fileName: 'Nom du fichier',
+    author: 'Auteur',
+    labels: 'Étiquettes',
+    selectAll: 'Tout sélectionner',
+    loadingLabels: 'Chargement des étiquettes...',
+    status: 'Statut',
+    fileId: 'ID du fichier',
+    fileType: 'Type de fichier',
+    viewFile: 'Voir le fichier',
+    visitLink: 'Visiter le lien externe',
+    openFile: 'Ouvrir le fichier dans un nouvel onglet',
+    fileSize: 'Taille du fichier',
+    uploadDate: 'Date de téléchargement',
+    hash: 'Hachage SHA256',
+    buttons: {
+      saveMetadata: 'Enregistrer les métadonnées',
+      retract: 'Rétracter',
+      ingest: 'Ingérer'
+    },
+    notifications: {
+      loadError: 'Échec du chargement des détails du fichier.',
+      validationError: 'Le nom du fichier et l\'auteur sont requis.',
+      saveSuccess: 'Métadonnées mises à jour avec succès.',
+      saveError: 'Échec de l\'enregistrement des métadonnées.',
+      tokenError: 'Jeton d\'authentification introuvable dans les données utilisateur.',
+      viewError: 'Impossible de charger le fichier pour l\'affichage.',
+      ingestSuccess: 'Le fichier a été mis en file d\'attente pour ingestion avec succès.',
+      ingestError: 'Échec du démarrage du processus d\'ingestion.',
+      retractSuccess: 'Le fichier a été rétracté avec succès.',
+      retractError: 'Échec de la rétractation du fichier.',
+      deleteSuccess: 'Fichier supprimé avec succès.',
+      deleteError: 'Échec de la suppression du fichier.'
+    },
+    confirm: {
+      ingest: 'Êtes-vous sûr de vouloir ingérer ce fichier ? Cela lancera le pipeline de traitement des données.',
+      retract: 'Êtes-vous sûr de vouloir rétracter ce fichier ?',
+      delete: 'Êtes-vous sûr de vouloir supprimer définitivement ce fichier ? Cette action est irréversible.'
+    }
+  },
+  uploadDialog: {
+    title: 'Télécharger des fichiers',
+    dropzone: 'Glissez et déposez des fichiers ici, ou cliquez pour sélectionner',
+    allowedTypesLabel: 'Types autorisés :',
+    buttonUpload: 'Télécharger {count} fichier(s)', // Adapt pluralization if needed
+    remove: 'Supprimer',
+    uploading: 'Téléchargement...',
+    notifications: {
+      dropError: 'Seuls les fichiers peuvent être déposés. Veuillez vérifier que vous faites glisser un fichier valide depuis votre ordinateur.',
+      typeNotAllowed: 'Le type de fichier "{extension}" n\'est pas autorisé.',
+      shortcutUnsupported: 'Les fichiers raccourcis (.url) ne sont pas pris en charge. Veuillez faire glisser le fichier réel.',
+      duplicate: 'Le fichier "{fileName}" a déjà été ajouté.',
+      uploadSuccess: '{fileName} téléchargé avec succès',
+      uploadFailed: 'Échec du téléchargement de {fileName}.'
+    }
   }
 }

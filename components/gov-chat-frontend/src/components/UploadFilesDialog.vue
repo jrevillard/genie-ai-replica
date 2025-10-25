@@ -3,18 +3,18 @@
   <div class="dialog-container">
     <div class="dialog-header">
       <h2 class="dialog-title">
-        {{ translate("upload.title", "Upload Files") }}
+        {{ translate("uploadDialog.title", "Upload Files") }}
       </h2>
       <button
         class="dialog-close-btn"
         @click="$emit('close')"
-        :aria-label="translate('upload.close', 'Close')"
+        :aria-label="translate('details.close', 'Close')"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
           height="24"
-          viewBox="0 0 24 24"
+          viewBox="0 0 24"
           fill="none"
           stroke="currentColor"
           stroke-width="2"
@@ -36,7 +36,6 @@
         @click="openFileDialog"
         :class="{ 'drag-over': isDragging }"
       >
-        <!-- The 'accept' attribute tells the browser to pre-filter files in the selection dialog -->
         <input
           type="file"
           ref="fileInput"
@@ -48,14 +47,13 @@
         <p>
           {{
             translate(
-              "upload.dropzone",
+              "uploadDialog.dropzone",
               "Drag & drop files here, or click to select"
             )
           }}
         </p>
       </div>
-      <!-- Hint for allowed file types -->
-      <p class="form-hint">Allowed types: {{ allowedExtensions.join(", ") }}</p>
+      <p class="form-hint">{{ translate('uploadDialog.allowedTypesLabel', 'Allowed types:') }} {{ allowedExtensions.join(", ") }}</p>
 
       <div class="file-list-container" v-if="files.length > 0">
         <ul class="file-list">
@@ -63,7 +61,7 @@
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file.size) }}</span>
             <button class="remove-file-btn" @click="removeFile(index)">
-              {{ translate("upload.remove", "Remove") }}
+              {{ translate("uploadDialog.remove", "Remove") }}
             </button>
           </li>
         </ul>
@@ -72,7 +70,7 @@
 
     <div class="dialog-footer">
       <button class="btn btn-outline" @click="$emit('close')">
-        {{ translate("buttons.cancel", "Cancel") }}
+        {{ translate("common.cancel", "Cancel") }}
       </button>
       <button
         class="btn btn-primary"
@@ -80,10 +78,10 @@
         :disabled="files.length === 0 || isUploading"
       >
         <span v-if="isUploading">{{
-          translate("upload.uploading", "Uploading...")
+          translate("uploadDialog.uploading", "Uploading...")
         }}</span>
         <span v-else>{{
-          translate("upload.uploadAll", `Upload ${files.length} File(s)`)
+          translate("uploadDialog.buttonUpload", `Upload {count} File(s)`).replace('{count}', files.length)
         }}</span>
       </button>
     </div>
@@ -102,7 +100,6 @@ export default {
       files: [],
       isDragging: false,
       isUploading: false,
-      // Requirement: Define the list of allowed file extensions
       allowedExtensions: [
         ".pdf",
         ".doc",
@@ -116,9 +113,18 @@ export default {
     };
   },
   methods: {
+    // --- ADDED: Translation Method ---
     translate(key, fallback) {
+      if (this.$i18n && this.$i18n.t) {
+        const translation = this.$i18n.t(key);
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      }
       return fallback || key;
     },
+    // --- Existing Methods ---
     openFileDialog() {
       this.$refs.fileInput.click();
     },
@@ -146,52 +152,45 @@ export default {
       if (droppedFiles.length > 0) {
         this.addFiles(droppedFiles);
       } else {
+        // UPDATED
         this.showNotification(
-          "Only files can be dropped. Please check you are dragging a valid file from your computer.",
+          this.translate('uploadDialog.notifications.dropError', "Only files can be dropped. Please check you are dragging a valid file from your computer."),
           "error"
         );
       }
     },
-    /**
-     * Validates and adds files to the list.
-     */
     addFiles(newFiles) {
       newFiles.forEach((file) => {
-        // --- START: NEW VALIDATION LOGIC ---
-
-        // 1. Get the file extension
         const extension = "." + file.name.split(".").pop().toLowerCase();
 
-        // 2. Check if the extension is in the allowed list
         if (!this.allowedExtensions.includes(extension)) {
+          // UPDATED
           this.showNotification(
-            `File type "${extension}" is not allowed.`,
-            "error"
-          );
-          return; // Skip this file
-        }
-
-        // 3. Check for .url shortcuts (existing logic)
-        if (file.name.toLowerCase().endsWith(".url")) {
-          this.showNotification(
-            "Shortcut files (.url) are not supported. Please drag the actual file.",
+            this.translate('uploadDialog.notifications.typeNotAllowed', `File type "{extension}" is not allowed.`).replace('{extension}', extension),
             "error"
           );
           return;
         }
 
-        // 4. Check for duplicates (existing logic)
+        if (file.name.toLowerCase().endsWith(".url")) {
+          // UPDATED
+          this.showNotification(
+            this.translate('uploadDialog.notifications.shortcutUnsupported', "Shortcut files (.url) are not supported. Please drag the actual file."),
+            "error"
+          );
+          return;
+        }
+
         if (
           this.files.some((f) => f.name === file.name && f.size === file.size)
         ) {
+          // UPDATED
           this.showNotification(
-            `File "${file.name}" has already been added.`,
+            this.translate('uploadDialog.notifications.duplicate', `File "{fileName}" has already been added.`).replace('{fileName}', file.name),
             "info"
           );
           return;
         }
-
-        // --- END: NEW VALIDATION LOGIC ---
 
         this.files.push(file);
       });
@@ -221,12 +220,16 @@ export default {
           formData.append("file", file);
           await documentFileService.uploadFile(formData);
           successfulUploads.push(file.name);
+          // UPDATED
           this.showNotification(
-            `Successfully uploaded ${file.name}`,
+            this.translate('uploadDialog.notifications.uploadSuccess', `Successfully uploaded {fileName}`).replace('{fileName}', file.name),
             "success"
           );
         } catch (error) {
-          this.showNotification(`Failed to upload ${file.name}.`, "error");
+          // UPDATED
+          this.showNotification(
+            this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace('{fileName}', file.name),
+            "error");
           console.error(`Error uploading ${file.name}:`, error);
         }
       }
@@ -234,7 +237,8 @@ export default {
       if (successfulUploads.length > 0) {
         this.$emit("files-uploaded", successfulUploads);
       }
-      if (successfulUploads.length === this.files.length) {
+      // Only close if ALL files were uploaded successfully
+      if (successfulUploads.length === this.files.length && this.files.length > 0) {
         this.$emit("close");
       }
     },
@@ -246,7 +250,7 @@ export default {
 </script>
 
 <style scoped>
-/* Using a consistent dialog style */
+/* Styles are identical to the provided file and omitted here for brevity */
 .dialog-backdrop {
   position: fixed;
   top: 0;
@@ -372,17 +376,23 @@ export default {
   flex-grow: 1;
   font-size: 0.9rem;
   color: var(--text-primary);
+  /* Added for better truncation */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 1rem;
 }
 .file-size {
   font-size: 0.8rem;
   color: var(--text-tertiary);
   margin: 0 1rem;
+  white-space: nowrap; /* Prevent size wrapping */
 }
 .remove-file-btn {
   color: var(--danger, #ef4444);
   background: none;
   border: none;
   cursor: pointer;
+  padding: 0.2rem; /* Add padding for easier clicking */
 }
 </style>
-

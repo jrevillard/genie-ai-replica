@@ -1408,5 +1408,67 @@ export default {
     additionalComments: 'Comentarios adicionales...',
     submit: 'Enviar',
     cancel: 'Cancelar'
+  },
+  upload: {
+    alt: 'Subir'
+  },
+  details: {
+    loading: 'Cargando detalles del archivo...',
+    title: 'Detalles del archivo',
+    close: 'Cerrar',
+    fileName: 'Nombre del archivo',
+    author: 'Autor',
+    labels: 'Etiquetas',
+    selectAll: 'Seleccionar todo',
+    loadingLabels: 'Cargando etiquetas...',
+    status: 'Estado',
+    fileId: 'ID del archivo',
+    fileType: 'Tipo de archivo',
+    viewFile: 'Ver archivo',
+    visitLink: 'Visitar enlace externo',
+    openFile: 'Abrir archivo en nueva pestaña',
+    fileSize: 'Tamaño del archivo',
+    uploadDate: 'Fecha de subida',
+    hash: 'Hash SHA256',
+    buttons: {
+      saveMetadata: 'Guardar metadatos',
+      retract: 'Retractar',
+      ingest: 'Ingerir'
+    },
+    notifications: {
+      loadError: 'Error al cargar los detalles del archivo.',
+      validationError: 'El nombre del archivo y el autor son obligatorios.',
+      saveSuccess: 'Metadatos actualizados correctamente.',
+      saveError: 'Error al guardar los metadatos.',
+      tokenError: 'No se encontró el token de autenticación en los datos del usuario.',
+      viewError: 'No se pudo cargar el archivo para su visualización.',
+      ingestSuccess: 'El archivo se ha puesto en cola para su ingestión correctamente.',
+      ingestError: 'Error al iniciar el proceso de ingestión.',
+      retractSuccess: 'El archivo ha sido retractado correctamente.',
+      retractError: 'Error al retractar el archivo.',
+      deleteSuccess: 'Archivo eliminado correctamente.',
+      deleteError: 'Error al eliminar el archivo.'
+    },
+    confirm: {
+      ingest: '¿Está seguro de que desea ingerir este archivo? Esto iniciará el proceso de tratamiento de datos.',
+      retract: '¿Está seguro de que desea retractar este archivo?',
+      delete: '¿Está seguro de que desea eliminar permanentemente este archivo? Esta acción no se puede deshacer.'
+    }
+  },
+  uploadDialog: {
+    title: 'Subir Archivos',
+    dropzone: 'Arrastre y suelte archivos aquí, o haga clic para seleccionar',
+    allowedTypesLabel: 'Tipos permitidos:',
+    buttonUpload: 'Subir {count} Archivo(s)',
+    remove: 'Eliminar',
+    uploading: 'Subiendo...',
+    notifications: {
+      dropError: 'Solo se pueden soltar archivos. Por favor, verifique que está arrastrando un archivo válido desde su computadora.',
+      typeNotAllowed: 'El tipo de archivo "{extension}" no está permitido.',
+      shortcutUnsupported: 'Los archivos de acceso directo (.url) no son compatibles. Por favor, arrastre el archivo real.',
+      duplicate: 'El archivo "{fileName}" ya ha sido agregado.',
+      uploadSuccess: '{fileName} subido con éxito',
+      uploadFailed: 'Falló la subida de {fileName}.'
+    }
   }
 }

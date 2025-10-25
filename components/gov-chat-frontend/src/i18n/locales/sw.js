@@ -1408,5 +1408,67 @@ export default {
     additionalComments: 'Maoni ya ziada...',
     submit: 'Wasilisha',
     cancel: 'Ghairi'
+  },
+  upload: {
+    alt: 'Pakia'
+  },
+  details: {
+    loading: 'Inapakia Maelezo ya Faili...',
+    title: 'Maelezo ya Faili',
+    close: 'Funga',
+    fileName: 'Jina la Faili',
+    author: 'Mwandishi',
+    labels: 'Lebo',
+    selectAll: 'Chagua Zote',
+    loadingLabels: 'Inapakia lebo...',
+    status: 'Hali',
+    fileId: 'Kitambulisho cha Faili',
+    fileType: 'Aina ya Faili',
+    viewFile: 'Tazama Faili',
+    visitLink: 'Tembelea Kiungo cha Nje',
+    openFile: 'Fungua faili kwenye kichupo kipya',
+    fileSize: 'Ukubwa wa Faili',
+    uploadDate: 'Tarehe ya Kupakia',
+    hash: 'Hashi ya SHA256',
+    buttons: {
+      saveMetadata: 'Hifadhi Metadata',
+      retract: 'Ondoa',
+      ingest: 'Chakata'
+    },
+    notifications: {
+      loadError: 'Imeshindwa kupakia maelezo ya faili.',
+      validationError: 'Jina la Faili na Mwandishi yanahitajika.',
+      saveSuccess: 'Metadata imesasishwa kikamilifu.',
+      saveError: 'Imeshindwa kuhifadhi metadata.',
+      tokenError: 'Tokeni ya uthibitishaji haipatikani kwenye data ya mtumiaji.',
+      viewError: 'Haikuweza kupakia faili kwa kutazamwa.',
+      ingestSuccess: 'Faili imewekwa kwenye foleni ya kuchakatwa kikamilifu.',
+      ingestError: 'Imeshindwa kuanzisha mchakato wa uchakataji.',
+      retractSuccess: 'Faili imeondolewa kikamilifu.',
+      retractError: 'Imeshindwa kuondoa faili.',
+      deleteSuccess: 'Faili imefutwa kikamilifu.',
+      deleteError: 'Imeshindwa kufuta faili.'
+    },
+    confirm: {
+      ingest: 'Una uhakika unataka kuchakata faili hii? Hii itaanza mchakato wa data.',
+      retract: 'Una uhakika unataka kuondoa faili hii?',
+      delete: 'Una uhakika unataka kufuta faili hii kabisa? Kitendo hiki hakiwezi kutenduliwa.'
+    }
+  },
+  uploadDialog: {
+    title: 'Pakia Faili',
+    dropzone: 'Buruta na udondoshe faili hapa, au bofya kuchagua',
+    allowedTypesLabel: 'Aina zinazoruhusiwa:',
+    buttonUpload: 'Pakia Faili {count}', // Adjust for Swahili plural rules if needed
+    remove: 'Ondoa',
+    uploading: 'Inapakia...',
+    notifications: {
+      dropError: 'Faili pekee ndizo zinaweza kudondoshwa. Tafadhali hakikisha unaburuta faili halali kutoka kwa kompyuta yako.',
+      typeNotAllowed: 'Aina ya faili "{extension}" hairuhusiwi.',
+      shortcutUnsupported: 'Faili za njia za mkato (.url) hazitumiki. Tafadhali buruta faili halisi.',
+      duplicate: 'Faili "{fileName}" tayari imeongezwa.',
+      uploadSuccess: 'Imefanikiwa kupakia {fileName}',
+      uploadFailed: 'Imeshindwa kupakia {fileName}.'
+    }
   }
 }

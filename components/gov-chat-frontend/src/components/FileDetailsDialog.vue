@@ -83,7 +83,7 @@
 
             <div class="labels-container">
               <div v-if="isHierarchyLoading" class="loading-state-small">
-                Loading labels...
+                {{ translate("details.loadingLabels", "Loading labels...") }}
               </div>
               <div
                 v-for="category in knowledgeHierarchy"
@@ -122,11 +122,15 @@
             </span>
           </div>
           <div class="info-item">
-            <span class="info-label">File ID</span>
+            <span class="info-label">{{
+              translate("details.fileId", "File ID")
+            }}</span>
             <span>{{ file.file_id }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">File Type</span>
+            <span class="info-label">{{
+              translate("details.fileType", "File Type")
+            }}</span>
             <span>{{ file.file_type }}</span>
           </div>
 
@@ -148,15 +152,21 @@
             </a>
           </div>
           <div class="info-item">
-            <span class="info-label">File Size</span>
+            <span class="info-label">{{
+              translate("details.fileSize", "File Size")
+            }}</span>
             <span>{{ formatFileSize(file.file_size) }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">Upload Date</span>
+            <span class="info-label">{{
+              translate("details.uploadDate", "Upload Date")
+            }}</span>
             <span>{{ new Date(file.upload_date).toLocaleString() }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">SHA256 Hash</span>
+            <span class="info-label">{{
+              translate("details.hash", "SHA256 Hash")
+            }}</span>
             <span class="info-hash">{{ file.file_hash }}</span>
           </div>
         </div>
@@ -168,18 +178,18 @@
           @click="handleDelete"
           :disabled="file.dataprep.status === 'ingested'"
         >
-          {{ translate("buttons.delete", "Delete") }}
+          {{ translate("common.delete", "Delete") }}
         </button>
         <div class="footer-actions">
           <button class="btn btn-outline" @click="$emit('close')">
-            {{ translate("buttons.cancel", "Cancel") }}
+            {{ translate("common.cancel", "Cancel") }}
           </button>
           <button
             class="btn btn-secondary"
             @click="handleSave"
             :disabled="isSaveDisabled"
           >
-            {{ translate("buttons.save", "Save Metadata") }}
+            {{ translate("details.buttons.saveMetadata", "Save Metadata") }}
           </button>
           <button :class="mainAction.class" @click="mainAction.handler">
             {{ mainAction.text }}
@@ -235,13 +245,13 @@ export default {
       const status = this.file.dataprep.status;
       if (status === "ingested") {
         return {
-          text: this.translate("buttons.retract", "Retract"),
+          text: this.translate("details.buttons.retract", "Retract"),
           class: "btn btn-warning",
           handler: this.handleRetract,
         };
       }
       return {
-        text: this.translate("buttons.ingest", "Ingest"),
+        text: this.translate("details.buttons.ingest", "Ingest"),
         class: "btn btn-success",
         handler: this.handleIngest,
       };
@@ -317,7 +327,20 @@ export default {
     },
   },
   methods: {
+    /**
+     * UPDATED: Uses this.$i18n.t() for translation, matching AdminDashboard.vue
+     */
     translate(key, fallback) {
+      // Check if $i18n is available
+      if (this.$i18n && this.$i18n.t) {
+        const translation = this.$i18n.t(key);
+        // Fallback if key is not found
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      }
+      // Fallback if $i18n is not configured
       return fallback || key;
     },
     
@@ -354,7 +377,13 @@ export default {
 
         this.knowledgeHierarchy = hierarchyData;
       } catch (error) {
-        this.showNotification("Failed to load file details.", "error");
+        this.showNotification(
+          this.translate(
+            "details.notifications.loadError",
+            "Failed to load file details."
+          ),
+          "error"
+        );
         this.$emit("close");
       } finally {
         this.isLoading = false;
@@ -363,7 +392,13 @@ export default {
     },
     async handleSave() {
       if (this.isSaveDisabled) {
-        this.showNotification("File Name and Author are required.", "error");
+        this.showNotification(
+          this.translate(
+            "details.notifications.validationError",
+            "File Name and Author are required."
+          ),
+          "error"
+        );
         return;
       }
       const updates = {
@@ -373,11 +408,23 @@ export default {
       };
       try {
         await documentFileService.updateFile(this.fileId, updates);
-        this.showNotification("Metadata updated successfully.", "success");
+        this.showNotification(
+          this.translate(
+            "details.notifications.saveSuccess",
+            "Metadata updated successfully."
+          ),
+          "success"
+        );
         this.$emit("file-updated", { fileId: this.fileId, ...updates });
         this.$emit("close");
       } catch (error) {
-        this.showNotification("Failed to save metadata.", "error");
+        this.showNotification(
+          this.translate(
+            "details.notifications.saveError",
+            "Failed to save metadata."
+          ),
+          "error"
+        );
       }
     },
 
@@ -406,7 +453,13 @@ export default {
         }
 
         if (!token) {
-          this.showNotification('Authentication token not found in user data.', 'error');
+          this.showNotification(
+            this.translate(
+              "details.notifications.tokenError",
+              "Authentication token not found in user data."
+            ),
+            "error"
+          );
           return;
         }
 
@@ -430,7 +483,13 @@ export default {
 
       } catch (error) {
         console.error('Error viewing file:', error);
-        this.showNotification('Could not load file for viewing.', 'error');
+        this.showNotification(
+          this.translate(
+            "details.notifications.viewError",
+            "Could not load file for viewing."
+          ),
+          "error"
+        );
       }
     },
     /**
@@ -441,56 +500,109 @@ export default {
      * Handles the ingestion action for a single file.
      */
      async handleIngest() {
-      if (window.confirm("Are you sure you want to ingest this file? This will start the data processing pipeline.")) {
+      if (
+        window.confirm(
+          this.translate(
+            "details.confirm.ingest",
+            "Are you sure you want to ingest this file? This will start the data processing pipeline."
+          )
+        )
+      ) {
         this.isLoading = true; // Use the dialog's main loading overlay
         try {
           // Call the new service method for single file ingestion
           await documentFileService.ingestFile(this.fileId);
           
-          this.showNotification('File has been successfully queued for ingestion.', 'success');
+          this.showNotification(
+            this.translate(
+              "details.notifications.ingestSuccess",
+              "File has been successfully queued for ingestion."
+            ),
+            "success"
+          );
           
           // Emit events to notify the parent component to refresh and close
           this.$emit("action-triggered", { action: "ingest", fileId: this.fileId });
           this.$emit("close");
 
         } catch (error) {
-          this.showNotification('Failed to start ingestion process.', 'error');
+          this.showNotification(
+            this.translate(
+              "details.notifications.ingestError",
+              "Failed to start ingestion process."
+            ),
+            "error"
+          );
         } finally {
           this.isLoading = false;
         }
       }
     },
     async handleRetract() {
-      if (window.confirm("Are you sure you want to retract this file?")) {
+      if (
+        window.confirm(
+          this.translate(
+            "details.confirm.retract",
+            "Are you sure you want to retract this file?"
+          )
+        )
+      ) {
         try {
           await documentFileService.retractMultipleFiles([this.file.file_id]);
-          this.showNotification("File has been retracted.", "success");
+          this.showNotification(
+            this.translate(
+              "details.notifications.retractSuccess",
+              "File has been retracted."
+            ),
+            "success"
+          );
           this.$emit("action-triggered", {
             action: "retract",
             fileId: this.file.file_id,
           });
           this.$emit("close");
         } catch (error) {
-          this.showNotification("Failed to retract file.", "error");
+          this.showNotification(
+            this.translate(
+              "details.notifications.retractError",
+              "Failed to retract file."
+            ),
+            "error"
+          );
         }
       }
     },
     async handleDelete() {
       if (
         window.confirm(
-          "Are you sure you want to permanently delete this file? This action cannot be undone."
+          this.translate(
+            "details.confirm.delete",
+            "Are you sure you want to permanently delete this file? This action cannot be undone."
+          )
         )
       ) {
         try {
           await documentFileService.deleteFile(this.file.file_id);
-          this.showNotification("File deleted successfully.", "success");
+          this.showNotification(
+            this.translate(
+              "details.notifications.deleteSuccess",
+              "File deleted successfully."
+            ),
+            "success"
+          );
           this.$emit("action-triggered", {
             action: "delete",
             fileId: this.file.file_id,
           });
           this.$emit("close");
         } catch (error) {
-          this.showNotification("Failed to delete file.", "error");
+          this.showNotification(
+            this.translate(
+              "details.notifications.deleteError",
+              "Failed to delete file."
+            ),
+            "error"
+          );
         }
       }
     },
@@ -515,6 +627,7 @@ export default {
 </script>
 
 <style scoped>
+/* Styles are identical to the provided file and omitted here for brevity */
 .dialog-backdrop {
   position: fixed;
   top: 0;
@@ -733,8 +846,6 @@ export default {
   background-color: rgba(100, 116, 139, 0.1);
   color: #64748b;
 }
-
-/* START: ADDED LINK STYLE */
 .file-view-link {
   color: var(--primary-link-color, #3b82f6);
   text-decoration: none;
@@ -746,5 +857,4 @@ export default {
   text-decoration: underline;
   color: var(--primary-link-hover, #2563eb);
 }
-/* END: ADDED LINK STYLE */
 </style>

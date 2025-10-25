@@ -1408,5 +1408,67 @@ export default {
     additionalComments: 'Additional comments...',
     submit: 'Submit',
     cancel: 'Cancel'
+  },
+  upload: {
+    alt: 'Upload'
+  },
+  details: {
+    loading: 'Loading File Details...',
+    title: 'File Details',
+    close: 'Close',
+    fileName: 'File Name',
+    author: 'Author',
+    labels: 'Labels',
+    selectAll: 'Select All',
+    loadingLabels: 'Loading labels...',
+    status: 'Status',
+    fileId: 'File ID',
+    fileType: 'File Type',
+    viewFile: 'View File',
+    visitLink: 'Visit External Link',
+    openFile: 'Open file in new tab',
+    fileSize: 'File Size',
+    uploadDate: 'Upload Date',
+    hash: 'SHA256 Hash',
+    buttons: {
+      saveMetadata: 'Save Metadata',
+      retract: 'Retract',
+      ingest: 'Ingest'
+    },
+    notifications: {
+      loadError: 'Failed to load file details.',
+      validationError: 'File Name and Author are required.',
+      saveSuccess: 'Metadata updated successfully.',
+      saveError: 'Failed to save metadata.',
+      tokenError: 'Authentication token not found in user data.',
+      viewError: 'Could not load file for viewing.',
+      ingestSuccess: 'File has been successfully queued for ingestion.',
+      ingestError: 'Failed to start ingestion process.',
+      retractSuccess: 'File has been retracted.',
+      retractError: 'Failed to retract file.',
+      deleteSuccess: 'File deleted successfully.',
+      deleteError: 'Failed to delete file.'
+    },
+    confirm: {
+      ingest: 'Are you sure you want to ingest this file? This will start the data processing pipeline.',
+      retract: 'Are you sure you want to retract this file?',
+      delete: 'Are you sure you want to permanently delete this file? This action cannot be undone.'
+    }
+  },
+  uploadDialog: {
+    title: 'Upload Files',
+    dropzone: 'Drag & drop files here, or click to select',
+    allowedTypesLabel: 'Allowed types:',
+    buttonUpload: 'Upload {count} File(s)',
+    remove: 'Remove',
+    uploading: 'Uploading...',
+    notifications: {
+      dropError: 'Only files can be dropped. Please check you are dragging a valid file from your computer.',
+      typeNotAllowed: 'File type "{extension}" is not allowed.',
+      shortcutUnsupported: 'Shortcut files (.url) are not supported. Please drag the actual file.',
+      duplicate: 'File "{fileName}" has already been added.',
+      uploadSuccess: 'Successfully uploaded {fileName}',
+      uploadFailed: 'Failed to upload {fileName}.'
+    }
   }
 }

@@ -210,7 +210,7 @@ export default {
     backToLogin: 'العودة إلى تسجيل الدخول'
   },
   admin: {
-    huduma: 'Huduma AI',
+    huduma: 'Genie AI',
     dashboard: 'لوحة التحكم',
     system: 'النظام',
     settings: 'الإعدادات',
@@ -483,7 +483,7 @@ export default {
     }
   },
   passwordResetConfirm: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'إنشاء كلمة مرور جديدة',
     tokenLabel: 'رمز إعادة التعيين',
     tokenPlaceholder: 'أدخل رمز إعادة التعيين',
@@ -523,7 +523,7 @@ export default {
     }
   },
   passwordReset: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     resetPassword: 'إعادة تعيين كلمة المرور الخاصة بك',
     emailLabel: 'عنوان البريد الإلكتروني',
     emailPlaceholder: 'أدخل بريدك الإلكتروني',
@@ -538,7 +538,7 @@ export default {
     checkEmail: 'يرجى التحقق من بريدك الإلكتروني للحصول على مزيد من التعليمات.'
   },
   register: {
-    appTitle: "Huduma AI",
+    appTitle: "Genie AI",
     createAccount: "إنشاء حساب جديد",
     username: "اسم المستخدم",
     usernamePlaceholder: "أدخل اسم المستخدم",
@@ -575,7 +575,7 @@ export default {
     networkError: 'خطأ في الشبكة. يرجى التحقق من اتصالك والمحاولة مرة أخرى.'
   },
   login: {
-    appTitle: 'Huduma AI',
+    appTitle: 'Genie AI',
     username: 'اسم المستخدم',
     password: 'كلمة المرور',
     loginButton: 'تسجيل الدخول',
@@ -712,7 +712,7 @@ export default {
     satisfactionRate: 'معدل الرضا',
     satisfactionAnalysis: 'تحليل رضا المستخدم'
   },
-  brandName: 'Huduma AI: مساعدك الحكومي الرقمي',
+  brandName: 'Genie AI: مساعدك الحكومي الرقمي',
   nav: {
     systemStatus: 'حالة النظام',
     menu: 'القائمة',
@@ -1408,5 +1408,67 @@ export default {
     additionalComments: 'تعليقات إضافية...',
     submit: 'إرسال',
     cancel: 'إلغاء'
+  },
+  upload: {
+    alt: 'تحميل'
+  },
+  details: {
+    loading: 'جاري تحميل تفاصيل الملف...',
+    title: 'تفاصيل الملف',
+    close: 'إغلاق',
+    fileName: 'اسم الملف',
+    author: 'المؤلف',
+    labels: 'العلامات',
+    selectAll: 'تحديد الكل',
+    loadingLabels: 'جاري تحميل العلامات...',
+    status: 'الحالة',
+    fileId: 'معرف الملف',
+    fileType: 'نوع الملف',
+    viewFile: 'عرض الملف',
+    visitLink: 'زيارة رابط خارجي',
+    openFile: 'فتح الملف في علامة تبويب جديدة',
+    fileSize: 'حجم الملف',
+    uploadDate: 'تاريخ الرفع',
+    hash: 'تجزئة SHA256',
+    buttons: {
+      saveMetadata: 'حفظ البيانات الوصفية',
+      retract: 'سحب',
+      ingest: 'استيعاب'
+    },
+    notifications: {
+      loadError: 'فشل تحميل تفاصيل الملف.',
+      validationError: 'اسم الملف والمؤلف مطلوبان.',
+      saveSuccess: 'تم تحديث البيانات الوصفية بنجاح.',
+      saveError: 'فشل حفظ البيانات الوصفية.',
+      tokenError: 'لم يتم العثور على رمز المصادقة في بيانات المستخدم.',
+      viewError: 'لم يمكن تحميل الملف للعرض.',
+      ingestSuccess: 'تم وضع الملف في قائمة الانتظار للاستيعاب بنجاح.',
+      ingestError: 'فشل بدء عملية الاستيعاب.',
+      retractSuccess: 'تم سحب الملف بنجاح.',
+      retractError: 'فشل سحب الملف.',
+      deleteSuccess: 'تم حذف الملف بنجاح.',
+      deleteError: 'فشل حذف الملف.'
+    },
+    confirm: {
+      ingest: 'هل أنت متأكد أنك تريد استيعاب هذا الملف؟ سيبدأ هذا عملية معالجة البيانات.',
+      retract: 'هل أنت متأكد أنك تريد سحب هذا الملف؟',
+      delete: 'هل أنت متأكد أنك تريد حذف هذا الملف نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.'
+    }
+  },
+  uploadDialog: {
+    title: 'تحميل الملفات',
+    dropzone: 'اسحب وأفلت الملفات هنا، أو انقر للاختيار',
+    allowedTypesLabel: 'الأنواع المسموح بها:',
+    buttonUpload: 'تحميل {count} ملف (ملفات)',
+    remove: 'إزالة',
+    uploading: 'جاري الرفع...',
+    notifications: {
+      dropError: 'يمكن إفلات الملفات فقط. يرجى التحقق من أنك تسحب ملفًا صالحًا من جهاز الكمبيوتر الخاص بك.',
+      typeNotAllowed: 'نوع الملف "{extension}" غير مسموح به.',
+      shortcutUnsupported: 'ملفات الاختصار (.url) غير مدعومة. يرجى سحب الملف الفعلي.',
+      duplicate: 'تمت إضافة الملف "{fileName}" بالفعل.',
+      uploadSuccess: 'تم تحميل {fileName} بنجاح',
+      uploadFailed: 'فشل تحميل {fileName}.'
+    }
   }
 }

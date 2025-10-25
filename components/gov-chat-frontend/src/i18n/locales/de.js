@@ -1408,5 +1408,67 @@ export default {
     additionalComments: 'Zusätzliche Kommentare...',
     submit: 'Senden',
     cancel: 'Abbrechen'
+  },
+  upload: {
+    alt: 'Hochladen'
+  },
+  details: {
+    loading: 'Dateidetails werden geladen...',
+    title: 'Dateidetails',
+    close: 'Schließen',
+    fileName: 'Dateiname',
+    author: 'Autor',
+    labels: 'Etiketten',
+    selectAll: 'Alle auswählen',
+    loadingLabels: 'Etiketten werden geladen...',
+    status: 'Status',
+    fileId: 'Datei-ID',
+    fileType: 'Dateityp',
+    viewFile: 'Datei anzeigen',
+    visitLink: 'Externen Link besuchen',
+    openFile: 'Datei in neuem Tab öffnen',
+    fileSize: 'Dateigröße',
+    uploadDate: 'Hochladedatum',
+    hash: 'SHA256-Hash',
+    buttons: {
+      saveMetadata: 'Metadaten speichern',
+      retract: 'Zurückziehen',
+      ingest: 'Aufnehmen'
+    },
+    notifications: {
+      loadError: 'Fehler beim Laden der Dateidetails.',
+      validationError: 'Dateiname und Autor sind erforderlich.',
+      saveSuccess: 'Metadaten erfolgreich aktualisiert.',
+      saveError: 'Fehler beim Speichern der Metadaten.',
+      tokenError: 'Authentifizierungstoken in Benutzerdaten nicht gefunden.',
+      viewError: 'Datei konnte nicht zur Ansicht geladen werden.',
+      ingestSuccess: 'Datei wurde erfolgreich zur Aufnahme in die Warteschlange gestellt.',
+      ingestError: 'Fehler beim Starten des Aufnahmeprozesses.',
+      retractSuccess: 'Datei wurde erfolgreich zurückgezogen.',
+      retractError: 'Fehler beim Zurückziehen der Datei.',
+      deleteSuccess: 'Datei erfolgreich gelöscht.',
+      deleteError: 'Fehler beim Löschen der Datei.'
+    },
+    confirm: {
+      ingest: 'Möchten Sie diese Datei wirklich aufnehmen? Dies startet die Datenverarbeitungspipeline.',
+      retract: 'Möchten Sie diese Datei wirklich zurückziehen?',
+      delete: 'Möchten Sie diese Datei wirklich dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.'
+    }
+  },
+  uploadDialog: {
+    title: 'Dateien hochladen',
+    dropzone: 'Dateien hierher ziehen & ablegen, oder klicken zum Auswählen',
+    allowedTypesLabel: 'Erlaubte Typen:',
+    buttonUpload: 'Lade {count} Datei(en) hoch',
+    remove: 'Entfernen',
+    uploading: 'Hochladen...',
+    notifications: {
+      dropError: 'Nur Dateien können abgelegt werden. Bitte prüfen Sie, ob Sie eine gültige Datei von Ihrem Computer ziehen.',
+      typeNotAllowed: 'Dateityp "{extension}" ist nicht erlaubt.',
+      shortcutUnsupported: 'Verknüpfungsdateien (.url) werden nicht unterstützt. Bitte ziehen Sie die eigentliche Datei.',
+      duplicate: 'Datei "{fileName}" wurde bereits hinzugefügt.',
+      uploadSuccess: '{fileName} erfolgreich hochgeladen',
+      uploadFailed: 'Fehler beim Hochladen von {fileName}.'
+    }
   }
 }

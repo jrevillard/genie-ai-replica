@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: '月活跃用户 (MAU)',
     fromLastMonth: '比上月',
     today: '今天',
+    // --- UPDATED TABS ---
     tabs: {
       overview: '系统健康',
+      hierarchy: '知识层级', // NEW
+      documents: '文档管理', // NEW
       database: '数据库',
       logs: '日志',
       security: '安全',
       users: '用户'
     },
+    // --- NEW KEYS ---
+    contentManagement: "内容管理",
+    knowledgeHierarchy: "知识层级",
+    documentManagement: "文档管理",
+    noLogsFound: "今天未找到日志",
+    invalidLogsResponse: "无效的日志摘要响应结构",
+    logsSummaryError: "加载日志摘要失败",
+    buttons: {
+      save: "保存",
+      cancel: "取消",
+      switch: "仍然切换",
+      discard: "放弃"
+    },
+    confirm: {
+      defaultTitle: "确认",
+      defaultMessage: "您确定吗？"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: '系统健康状态',
     runDiagnostics: '运行诊断',
     resourceUsage: '资源使用',
@@ -439,7 +460,9 @@ export default {
       lineNumber: '行号',
       lineNumbers: '行号',
       showLess: '显示较少',
-      showMore: '显示所有问题'
+      showMore: '显示所有问题',
+      // --- NEW KEY ---
+      lastScanJustNow: "刚才"
     },
     userEdit: {
       title: '编辑用户',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: '发送密码重置出错',
       logoutForced: '用户已被登出',
       logoutFailed: '强制登出失败',
-      errorForcingLogout: '强制登出出错'
+      errorForcingLogout: '强制登出出错',
+      // --- NEW KEY ---
+      userUpdated: "用户更新成功"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "知识层级管理 (注意: 始终为英文 - 添加翻译)",
+      addCategory: "添加新类别",
+      loading: "正在加载层级...",
+      addService: "添加服务",
+      editCategory: "编辑类别",
+      deleteCategory: "删除类别",
+      editService: "编辑服务",
+      deleteService: "删除服务",
+      empty: '未找到类别。点击 "添加新类别" 开始。',
+      formTitleCreateCategory: "创建新类别",
+      formTitleAddService: '向 "{categoryName}" 添加服务',
+      formTitleEditCategory: '编辑类别: "{itemName}"',
+      formTitleEditService: '编辑服务: "{itemName}"',
+      nameEnLabel: "名称 (英文)",
+      translationsTitle: "用于显示的翻译",
+      loadingTranslations: "正在加载翻译...",
+      selectLang: "选择语言",
+      translationPlaceholder: "输入翻译",
+      deleteTranslation: "删除翻译",
+      addTranslation: "+ 添加翻译",
+      saveSuccess: "层级项保存成功。",
+      saveError: "保存层级项失败。",
+      loadError: "加载知识层级失败。",
+      loadTranslationsError: "加载翻译失败。",
+      confirmCancelTitle: "未保存的更改",
+      confirmCancelEdit: "您有未保存的更改。确定要取消吗？",
+      confirmDeleteTitleCategory: "删除类别？",
+      confirmDeleteTitleService: "删除服务？",
+      confirmDeleteCategory: '您确定要删除类别 "{itemName}" 吗？此操作无法撤销。',
+      confirmDeleteService: '您确定要删除服务 "{itemName}" 吗？此操作无法撤销。',
+      deleteSuccessCategory: "类别删除成功。",
+      deleteSuccessService: "服务删除成功。",
+      deleteErrorCategory: "删除类别失败。",
+      deleteErrorService: "删除服务失败。",
+      duplicateLangError: "翻译中发现重复语言。请移除它们。"
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "文档管理",
+      addLink: "从链接添加",
+      uploadFiles: "上传文件",
+      searchPlaceholder: "按文件名搜索...",
+      allStatuses: "所有状态",
+      statusPending: "待处理",
+      statusIngested: "已提取",
+      statusRetracted: "已撤回",
+      ingestSelected: "提取选中项",
+      colFileName: "文件名",
+      colStatus: "状态",
+      colLabels: "标签",
+      colUploadDate: "上传日期",
+      colSize: "大小",
+      loading: "正在加载文档...",
+      empty: "未找到文档。",
+      loadError: "加载文档失败。",
+      confirmIngestTitle: "确认批量提取",
+      ingest: "提取",
+      confirmIngestSelected: "您确定要提取选中的 {count} 个文件吗？",
+      ingestQueuedSuccess: "{count} 个文件已加入提取队列。",
+      ingestQueuedError: "批量提取过程中发生错误。",
+      uploadSuccessMultiple: "{count} 个文件上传成功。",
+      linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
+      actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
+      metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。'
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,8 @@ export default {
     create: '创建',
     save: '保存',
     move: '移动',
-    delete: '删除'
+    delete: '删除',
+    ok: '确定' // NEW KEY
   },
   feedback: {
     title: '反馈',

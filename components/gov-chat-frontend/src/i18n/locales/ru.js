@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'Ежемесячные активные пользователи (MAU)',
     fromLastMonth: 'с прошлого месяца',
     today: 'Сегодня',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'Состояние системы',
+      hierarchy: 'Иерархия знаний', // NEW
+      documents: 'Управление документами', // NEW
       database: 'База данных',
       logs: 'Журналы',
       security: 'Безопасность',
       users: 'Пользователи'
     },
+    // --- NEW KEYS ---
+    contentManagement: "УПРАВЛЕНИЕ КОНТЕНТОМ",
+    knowledgeHierarchy: "Иерархия знаний",
+    documentManagement: "Управление документами",
+    noLogsFound: "Журналы за сегодня не найдены",
+    invalidLogsResponse: "Недопустимая структура ответа сводки журналов",
+    logsSummaryError: "Не удалось загрузить сводку журналов",
+    buttons: {
+      save: "Сохранить",
+      cancel: "Отмена",
+      switch: "Все равно переключить",
+      discard: "Отменить"
+    },
+    confirm: {
+      defaultTitle: "Подтвердить",
+      defaultMessage: "Вы уверены?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'Статус состояния системы',
     runDiagnostics: 'Запустить диагностику',
     resourceUsage: 'Использование ресурсов',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'Номер строки',
       lineNumbers: 'Номера строк',
       showLess: 'Показать меньше',
-      showMore: 'Показать все проблемы'
+      showMore: 'Показать все проблемы',
+      // --- NEW KEY ---
+      lastScanJustNow: "Только что"
     },
     userEdit: {
       title: 'Редактировать пользователя',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'Ошибка при отправке сброса пароля',
       logoutForced: 'Пользователь был принудительно выведен из системы',
       logoutFailed: 'Не удалось принудительно вывести из системы',
-      errorForcingLogout: 'Ошибка при принудительном выходе'
+      errorForcingLogout: 'Ошибка при принудительном выходе',
+      // --- NEW KEY ---
+      userUpdated: "Пользователь успешно обновлен"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "Управление иерархией знаний (примечание: всегда на английском - добавить переводы)",
+      addCategory: "Добавить новую категорию",
+      loading: "Загрузка иерархии...",
+      addService: "Добавить услугу",
+      editCategory: "Редактировать категорию",
+      deleteCategory: "Удалить категорию",
+      editService: "Редактировать услугу",
+      deleteService: "Удалить услугу",
+      empty: 'Категории не найдены. Нажмите "Добавить новую категорию", чтобы начать.',
+      formTitleCreateCategory: "Создать новую категорию",
+      formTitleAddService: 'Добавить услугу в "{categoryName}"',
+      formTitleEditCategory: 'Редактировать категорию: "{itemName}"',
+      formTitleEditService: 'Редактировать услугу: "{itemName}"',
+      nameEnLabel: "Название (Английский)",
+      translationsTitle: "Переводы для отображения",
+      loadingTranslations: "Загрузка переводов...",
+      selectLang: "Выберите язык",
+      translationPlaceholder: "Введите перевод",
+      deleteTranslation: "Удалить перевод",
+      addTranslation: "+ Добавить перевод",
+      saveSuccess: "Элемент иерархии успешно сохранен.",
+      saveError: "Не удалось сохранить элемент иерархии.",
+      loadError: "Не удалось загрузить иерархию знаний.",
+      loadTranslationsError: "Не удалось загрузить переводы.",
+      confirmCancelTitle: "Несохраненные изменения",
+      confirmCancelEdit: "У вас есть несохраненные изменения. Вы уверены, что хотите отменить?",
+      confirmDeleteTitleCategory: "Удалить категорию?",
+      confirmDeleteTitleService: "Удалить услугу?",
+      confirmDeleteCategory: 'Вы уверены, что хотите удалить категорию "{itemName}"? Это действие необратимо.',
+      confirmDeleteService: 'Вы уверены, что хотите удалить услугу "{itemName}"? Это действие необратимо.',
+      deleteSuccessCategory: "Категория успешно удалена.",
+      deleteSuccessService: "Услуга успешно удалена.",
+      deleteErrorCategory: "Не удалось удалить категорию.",
+      deleteErrorService: "Не удалось удалить услугу.",
+      duplicateLangError: "В переводах найдены дублирующиеся языки. Пожалуйста, удалите их."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "Управление документами",
+      addLink: "Добавить по ссылке",
+      uploadFiles: "Загрузить файлы",
+      searchPlaceholder: "Поиск по имени файла...",
+      allStatuses: "Все статусы",
+      statusPending: "Ожидание",
+      statusIngested: "Обработано",
+      statusRetracted: "Изъято",
+      ingestSelected: "Обработать выбранные",
+      colFileName: "Имя файла",
+      colStatus: "Статус",
+      colLabels: "Метки",
+      colUploadDate: "Дата загрузки",
+      colSize: "Размер",
+      loading: "Загрузка документов...",
+      empty: "Документы не найдены.",
+      loadError: "Не удалось загрузить документы.",
+      confirmIngestTitle: "Подтвердить пакетную обработку",
+      ingest: "Обработать",
+      confirmIngestSelected: "Вы уверены, что хотите обработать {count} выбранный(х) файл(ов)?",
+      ingestQueuedSuccess: "{count} файл(ов) добавлен(ы) в очередь на обработку.",
+      ingestQueuedError: "Произошла ошибка во время процесса пакетной обработки.",
+      uploadSuccessMultiple: "{count} файл(ов) успешно загружен(ы).",
+      linkSubmitSuccess: 'Успешно просканировано и сохранено "{fileName}".',
+      actionSuccess: 'Действие "{action}" с файлом {fileId} прошло успешно.',
+      metadataUpdateSuccess: 'Метаданные для файла {fileId} обновлены.'
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,8 @@ export default {
     create: 'Создать',
     save: 'Сохранить',
     move: 'Переместить',
-    delete: 'Удалить'
+    delete: 'Удалить',
+    ok: 'ОК' // NEW KEY
   },
   feedback: {
     title: 'Отзыв',

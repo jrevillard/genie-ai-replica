@@ -231,13 +231,34 @@ export default {
     monthlyActiveUsers: 'Usuários Ativos Mensais (MAU)',
     fromLastMonth: 'do mês passado',
     today: 'Hoje',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'Saúde do Sistema',
+      hierarchy: 'Hierarquia de Conhecimento', // NEW
+      documents: 'Gerenciamento de Documentos', // NEW
       database: 'Banco de Dados',
       logs: 'Logs',
       security: 'Segurança',
       users: 'Usuários'
     },
+    // --- NEW KEYS ---
+    contentManagement: "GERENCIAMENTO DE CONTEÚDO",
+    knowledgeHierarchy: "Hierarquia de Conhecimento",
+    documentManagement: "Gerenciamento de Documentos",
+    noLogsFound: "Nenhum log encontrado para hoje",
+    invalidLogsResponse: "Estrutura de resposta do resumo de logs inválida",
+    logsSummaryError: "Falha ao carregar o resumo de logs",
+    buttons: {
+      save: "Salvar",
+      cancel: "Cancelar",
+      switch: "Mudar Mesmo Assim",
+      discard: "Descartar"
+    },
+    confirm: {
+      defaultTitle: "Confirmar",
+      defaultMessage: "Você tem certeza?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'Status de Saúde do Sistema',
     runDiagnostics: 'Executar Diagnósticos',
     resourceUsage: 'Uso de Recursos',
@@ -440,7 +461,9 @@ export default {
       lineNumber: 'Número da Linha',
       lineNumbers: 'Números das Linhas',
       showLess: 'Mostrar Menos',
-      showMore: 'Mostrar Todos os Problemas'
+      showMore: 'Mostrar Todos os Problemas',
+      // --- NEW KEY ---
+      lastScanJustNow: "Agora mesmo"
     },
     userEdit: {
       title: 'Editar Usuário',
@@ -480,7 +503,76 @@ export default {
       errorSendingReset: 'Erro ao enviar redefinição de senha',
       logoutForced: 'Usuário foi desconectado',
       logoutFailed: 'Falha ao forçar logout',
-      errorForcingLogout: 'Erro ao forçar logout'
+      errorForcingLogout: 'Erro ao forçar logout',
+      // --- NEW KEY ---
+      userUpdated: "Usuário atualizado com sucesso"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "Gerenciamento da Hierarquia de Conhecimento (nota: sempre em inglês - adicionar traduções)",
+      addCategory: "Adicionar Nova Categoria",
+      loading: "Carregando Hierarquia...",
+      addService: "Adicionar Serviço",
+      editCategory: "Editar Categoria",
+      deleteCategory: "Excluir Categoria",
+      editService: "Editar Serviço",
+      deleteService: "Excluir Serviço",
+      empty: 'Nenhuma categoria encontrada. Clique em "Adicionar Nova Categoria" para começar.',
+      formTitleCreateCategory: "Criar Nova Categoria",
+      formTitleAddService: 'Adicionar Serviço a "{categoryName}"',
+      formTitleEditCategory: 'Editar Categoria: "{itemName}"',
+      formTitleEditService: 'Editar Serviço: "{itemName}"',
+      nameEnLabel: "Nome (Inglês)",
+      translationsTitle: "Traduções para Exibição",
+      loadingTranslations: "Carregando traduções...",
+      selectLang: "Selecionar Idioma",
+      translationPlaceholder: "Inserir tradução",
+      deleteTranslation: "Excluir Tradução",
+      addTranslation: "+ Adicionar Tradução",
+      saveSuccess: "Item da hierarquia salvo com sucesso.",
+      saveError: "Falha ao salvar o item da hierarquia.",
+      loadError: "Falha ao carregar a hierarquia de conhecimento.",
+      loadTranslationsError: "Falha ao carregar as traduções.",
+      confirmCancelTitle: "Alterações Não Salvas",
+      confirmCancelEdit: "Você tem alterações não salvas. Tem certeza de que deseja cancelar?",
+      confirmDeleteTitleCategory: "Excluir Categoria?",
+      confirmDeleteTitleService: "Excluir Serviço?",
+      confirmDeleteCategory: 'Tem certeza de que deseja excluir a Categoria "{itemName}"? Esta ação não pode ser desfeita.',
+      confirmDeleteService: 'Tem certeza de que deseja excluir o Serviço "{itemName}"? Esta ação não pode ser desfeita.',
+      deleteSuccessCategory: "Categoria excluída com sucesso.",
+      deleteSuccessService: "Serviço excluído com sucesso.",
+      deleteErrorCategory: "Falha ao excluir a Categoria.",
+      deleteErrorService: "Falha ao excluir o Serviço.",
+      duplicateLangError: "Idiomas duplicados encontrados nas traduções. Por favor, remova-os."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "Gerenciamento de Documentos",
+      addLink: "Adicionar de Link",
+      uploadFiles: "Carregar Arquivos",
+      searchPlaceholder: "Buscar por nome do arquivo...",
+      allStatuses: "Todos os Status",
+      statusPending: "Pendente",
+      statusIngested: "Ingerido",
+      statusRetracted: "Retirado",
+      ingestSelected: "Ingerir Selecionados",
+      colFileName: "Nome do Arquivo",
+      colStatus: "Status",
+      colLabels: "Etiquetas",
+      colUploadDate: "Data de Upload",
+      colSize: "Tamanho",
+      loading: "Carregando documentos...",
+      empty: "Nenhum documento encontrado.",
+      loadError: "Falha ao carregar documentos.",
+      confirmIngestTitle: "Confirmar Ingestão em Lote",
+      ingest: "Ingerir",
+      confirmIngestSelected: "Tem certeza de que deseja ingerir {count} arquivo(s) selecionado(s)?",
+      ingestQueuedSuccess: "{count} arquivo(s) foram enfileirados para ingestão.",
+      ingestQueuedError: "Ocorreu um erro durante o processo de ingestão em lote.",
+      uploadSuccessMultiple: "{count} arquivo(s) carregados com sucesso.",
+      linkSubmitSuccess: 'Rastreado e salvo "{fileName}" com sucesso.',
+      actionSuccess: 'Ação "{action}" no arquivo {fileId} foi bem-sucedida.',
+      metadataUpdateSuccess: "Metadados do arquivo {fileId} foram atualizados."
     }
   },
   passwordResetConfirm: {
@@ -1379,7 +1471,9 @@ export default {
     create: 'Criar',
     save: 'Salvar',
     move: 'Mover',
-    delete: 'Excluir'
+    delete: 'Excluir',
+    // --- NEW KEY ---
+    ok: 'OK'
   },
   feedback: {
     title: 'Feedback',

@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'ผู้ใช้ที่ใช้งานรายเดือน (MAU)',
     fromLastMonth: 'จากเดือนที่แล้ว',
     today: 'วันนี้',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'สุขภาพระบบ',
+      hierarchy: 'ลำดับชั้นความรู้', // NEW
+      documents: 'การจัดการเอกสาร', // NEW
       database: 'ฐานข้อมูล',
       logs: 'บันทึก',
       security: 'ความปลอดภัย',
       users: 'ผู้ใช้'
     },
+    // --- NEW KEYS ---
+    contentManagement: "การจัดการเนื้อหา",
+    knowledgeHierarchy: "ลำดับชั้นความรู้",
+    documentManagement: "การจัดการเอกสาร",
+    noLogsFound: "ไม่พบบันทึกสำหรับวันนี้",
+    invalidLogsResponse: "โครงสร้างการตอบสนองสรุปบันทึกไม่ถูกต้อง",
+    logsSummaryError: "ล้มเหลวในการโหลดสรุปบันทึก",
+    buttons: {
+      save: "บันทึก",
+      cancel: "ยกเลิก",
+      switch: "สลับอยู่ดี",
+      discard: "ยกเลิก"
+    },
+    confirm: {
+      defaultTitle: "ยืนยัน",
+      defaultMessage: "คุณแน่ใจหรือไม่?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'สถานะสุขภาพระบบ',
     runDiagnostics: 'รันการวินิจฉัย',
     resourceUsage: 'การใช้งานทรัพยากร',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'หมายเลขบรรทัด',
       lineNumbers: 'หมายเลขบรรทัด',
       showLess: 'แสดงน้อยลง',
-      showMore: 'แสดงปัญหาทั้งหมด'
+      showMore: 'แสดงปัญหาทั้งหมด',
+      // --- NEW KEY ---
+      lastScanJustNow: "เมื่อสักครู่"
     },
     userEdit: {
       title: 'แก้ไขผู้ใช้',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'ข้อผิดพลาดในการส่งรีเซ็ตรหัสผ่าน',
       logoutForced: 'ผู้ใช้ถูกออกจากระบบแล้ว',
       logoutFailed: 'ล้มเหลวในการบังคับออกจากระบบ',
-      errorForcingLogout: 'ข้อผิดพลาดในการบังคับออกจากระบบ'
+      errorForcingLogout: 'ข้อผิดพลาดในการบังคับออกจากระบบ',
+      // --- NEW KEY ---
+      userUpdated: "อัปเดตผู้ใช้สำเร็จ"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "การจัดการลำดับชั้นความรู้ (หมายเหตุ: ภาษาอังกฤษเสมอ - เพิ่มการแปล)",
+      addCategory: "เพิ่มหมวดหมู่ใหม่",
+      loading: "กำลังโหลดลำดับชั้น...",
+      addService: "เพิ่มบริการ",
+      editCategory: "แก้ไขหมวดหมู่",
+      deleteCategory: "ลบหมวดหมู่",
+      editService: "แก้ไขบริการ",
+      deleteService: "ลบบริการ",
+      empty: 'ไม่พบหมวดหมู่ คลิก "เพิ่มหมวดหมู่ใหม่" เพื่อเริ่มต้น',
+      formTitleCreateCategory: "สร้างหมวดหมู่ใหม่",
+      formTitleAddService: 'เพิ่มบริการใน "{categoryName}"',
+      formTitleEditCategory: 'แก้ไขหมวดหมู่: "{itemName}"',
+      formTitleEditService: 'แก้ไขบริการ: "{itemName}"',
+      nameEnLabel: "ชื่อ (ภาษาอังกฤษ)",
+      translationsTitle: "การแปลสำหรับแสดงผล",
+      loadingTranslations: "กำลังโหลดการแปล...",
+      selectLang: "เลือกภาษา",
+      translationPlaceholder: "ป้อนการแปล",
+      deleteTranslation: "ลบการแปล",
+      addTranslation: "+ เพิ่มการแปล",
+      saveSuccess: "บันทึกรายการลำดับชั้นสำเร็จ",
+      saveError: "ล้มเหลวในการบันทึกรายการลำดับชั้น",
+      loadError: "ล้มเหลวในการโหลดลำดับชั้นความรู้",
+      loadTranslationsError: "ล้มเหลวในการโหลดการแปล",
+      confirmCancelTitle: "การเปลี่ยนแปลงที่ยังไม่ได้บันทึก",
+      confirmCancelEdit: "คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการยกเลิกหรือไม่?",
+      confirmDeleteTitleCategory: "ลบหมวดหมู่?",
+      confirmDeleteTitleService: "ลบบริการ?",
+      confirmDeleteCategory: 'คุณแน่ใจว่าต้องการลบหมวดหมู่ "{itemName}" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
+      confirmDeleteService: 'คุณแน่ใจว่าต้องการลบบริการ "{itemName}" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
+      deleteSuccessCategory: "ลบหมวดหมู่สำเร็จ",
+      deleteSuccessService: "ลบบริการสำเร็จ",
+      deleteErrorCategory: "ล้มเหลวในการลบหมวดหมู่",
+      deleteErrorService: "ล้มเหลวในการลบบริการ",
+      duplicateLangError: "พบภาษาซ้ำในการแปล โปรดลบออก"
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "การจัดการเอกสาร",
+      addLink: "เพิ่มจากลิงก์",
+      uploadFiles: "อัปโหลดไฟล์",
+      searchPlaceholder: "ค้นหาตามชื่อไฟล์...",
+      allStatuses: "สถานะทั้งหมด",
+      statusPending: "รอดำเนินการ",
+      statusIngested: "นำเข้าข้อมูลแล้ว",
+      statusRetracted: "ดึงกลับแล้ว",
+      ingestSelected: "นำเข้าข้อมูลที่เลือก",
+      colFileName: "ชื่อไฟล์",
+      colStatus: "สถานะ",
+      colLabels: "ป้ายกำกับ",
+      colUploadDate: "วันที่อัปโหลด",
+      colSize: "ขนาด",
+      loading: "กำลังโหลดเอกสาร...",
+      empty: "ไม่พบเอกสาร",
+      loadError: "ล้มเหลวในการโหลดเอกสาร",
+      confirmIngestTitle: "ยืนยันการนำเข้าข้อมูลเป็นชุด",
+      ingest: "นำเข้าข้อมูล",
+      confirmIngestSelected: "คุณแน่ใจว่าต้องการนำเข้าไฟล์ที่เลือก {count} ไฟล์หรือไม่?",
+      ingestQueuedSuccess: "ไฟล์ {count} ไฟล์ถูกจัดคิวเพื่อนำเข้าข้อมูลแล้ว",
+      ingestQueuedError: "เกิดข้อผิดพลาดระหว่างกระบวนการนำเข้าข้อมูลเป็นชุด",
+      uploadSuccessMultiple: "อัปโหลดไฟล์ {count} ไฟล์สำเร็จ",
+      linkSubmitSuccess: 'รวบรวมข้อมูลและบันทึก "{fileName}" สำเร็จ',
+      actionSuccess: 'การดำเนินการ "{action}" กับไฟล์ {fileId} สำเร็จ',
+      metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว'
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,8 @@ export default {
     create: 'สร้าง',
     save: 'บันทึก',
     move: 'ย้าย',
-    delete: 'ลบ'
+    delete: 'ลบ',
+    ok: 'ตกลง' // NEW KEY
   },
   feedback: {
     title: 'ความคิดเห็น',

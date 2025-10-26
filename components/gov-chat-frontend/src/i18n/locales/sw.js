@@ -230,13 +230,34 @@ export default {
     monthlyActiveUsers: 'Watumiaji Hai wa Kila Mwezi (WAM)',
     fromLastMonth: 'kutoka mwezi uliopita',
     today: 'Leo',
+    // --- UPDATED TABS ---
     tabs: {
       overview: 'Afya ya Mfumo',
+      hierarchy: 'Uongozi wa Maarifa', // NEW
+      documents: 'Usimamizi wa Nyaraka', // NEW
       database: 'Hifadhidata',
       logs: 'Kumbukumbu',
       security: 'Usalama',
       users: 'Watumiaji'
     },
+    // --- NEW KEYS ---
+    contentManagement: "USIMAMIZI WA MAUDHUI",
+    knowledgeHierarchy: "Uongozi wa Maarifa",
+    documentManagement: "Usimamizi wa Nyaraka",
+    noLogsFound: "Hakuna kumbukumbu zilizopatikana leo",
+    invalidLogsResponse: "Muundo batili wa muhtasari wa kumbukumbu",
+    logsSummaryError: "Imeshindwa kupakia muhtasari wa kumbukumbu",
+    buttons: {
+      save: "Hifadhi",
+      cancel: "Ghairi",
+      switch: "Badilisha Hata Hivyo",
+      discard: "Tupa"
+    },
+    confirm: {
+      defaultTitle: "Thibitisha",
+      defaultMessage: "Una uhakika?"
+    },
+    // --- END NEW KEYS ---
     systemHealthStatus: 'Hali ya Afya ya Mfumo',
     runDiagnostics: 'Endesha Uchunguzi',
     resourceUsage: 'Matumizi ya Rasilimali',
@@ -439,7 +460,9 @@ export default {
       lineNumber: 'Nambari ya Mstari',
       lineNumbers: 'Nambari za Mistari',
       showLess: 'Onyesha Kidogo',
-      showMore: 'Onyesha Masuala Yote'
+      showMore: 'Onyesha Masuala Yote',
+      // --- NEW KEY ---
+      lastScanJustNow: "Muda mfupi uliopita"
     },
     userEdit: {
       title: 'Hariri Mtumiaji',
@@ -479,7 +502,76 @@ export default {
       errorSendingReset: 'Hitilafu katika kutuma barua pepe ya kurekebisha nenosiri',
       logoutForced: 'Mtumiaji ameondolewa',
       logoutFailed: 'Imeshindwa kumtoa mtumiaji',
-      errorForcingLogout: 'Hitilafu katika kutoa mtumiaji kwa lazima'
+      errorForcingLogout: 'Hitilafu katika kutoa mtumiaji kwa lazima',
+      // --- NEW KEY ---
+      userUpdated: "Mtumiaji amesasishwa kwa mafanikio"
+    },
+    // --- NEW OBJECT ---
+    hierarchy: {
+      title: "Usimamizi wa Uongozi wa Maarifa (dondoo: daima kwa Kiingereza - ongeza tafsiri)",
+      addCategory: "Ongeza Kitengo Kipya",
+      loading: "Inapakia Uongozi...",
+      addService: "Ongeza Huduma",
+      editCategory: "Hariri Kitengo",
+      deleteCategory: "Futa Kitengo",
+      editService: "Hariri Huduma",
+      deleteService: "Futa Huduma",
+      empty: 'Hakuna vitengo vilivyopatikana. Bofya "Ongeza Kitengo Kipya" ili kuanza.',
+      formTitleCreateCategory: "Unda Kitengo Kipya",
+      formTitleAddService: 'Ongeza Huduma kwa "{categoryName}"',
+      formTitleEditCategory: 'Hariri Kitengo: "{itemName}"',
+      formTitleEditService: 'Hariri Huduma: "{itemName}"',
+      nameEnLabel: "Jina (Kiingereza)",
+      translationsTitle: "Tafsiri za Kuonyesha",
+      loadingTranslations: "Inapakia tafsiri...",
+      selectLang: "Chagua Lugha",
+      translationPlaceholder: "Ingiza tafsiri",
+      deleteTranslation: "Futa Tafsiri",
+      addTranslation: "+ Ongeza Tafsiri",
+      saveSuccess: "Kipengee cha uongozi kimehifadhiwa kwa mafanikio.",
+      saveError: "Imeshindwa kuhifadhi kipengee cha uongozi.",
+      loadError: "Imeshindwa kupakia uongozi wa maarifa.",
+      loadTranslationsError: "Imeshindwa kupakia tafsiri.",
+      confirmCancelTitle: "Mabadiliko Yasiyohifadhiwa",
+      confirmCancelEdit: "Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kughairi?",
+      confirmDeleteTitleCategory: "Futa Kitengo?",
+      confirmDeleteTitleService: "Futa Huduma?",
+      confirmDeleteCategory: 'Una uhakika unataka kufuta Kitengo "{itemName}"? Kitendo hiki hakiwezi kutenduliwa.',
+      confirmDeleteService: 'Una uhakika unataka kufuta Huduma "{itemName}"? Kitendo hiki hakiwezi kutenduliwa.',
+      deleteSuccessCategory: "Kitengo kimefutwa kwa mafanikio.",
+      deleteSuccessService: "Huduma imefutwa kwa mafanikio.",
+      deleteErrorCategory: "Imeshindwa kufuta Kitengo.",
+      deleteErrorService: "Imeshindwa kufuta Huduma.",
+      duplicateLangError: "Lugha zinazojirudia zimepatikana kwenye tafsiri. Tafadhali ziondoe."
+    },
+    // --- NEW OBJECT ---
+    documents: {
+      title: "Usimamizi wa Nyaraka",
+      addLink: "Ongeza kutoka kwa Kiungo",
+      uploadFiles: "Pakia Faili",
+      searchPlaceholder: "Tafuta kwa jina la faili...",
+      allStatuses: "Hali Zote",
+      statusPending: "Inasubiri",
+      statusIngested: "Imeingizwa",
+      statusRetracted: "Imeondolewa",
+      ingestSelected: "Ingiza Zilizochaguliwa",
+      colFileName: "Jina la Faili",
+      colStatus: "Hali",
+      colLabels: "Lebo",
+      colUploadDate: "Tarehe ya Kupakia",
+      colSize: "Ukubwa",
+      loading: "Inapakia nyaraka...",
+      empty: "Hakuna nyaraka zilizopatikana.",
+      loadError: "Imeshindwa kupakia nyaraka.",
+      confirmIngestTitle: "Thibitisha Uingizaji wa Kundi",
+      ingest: "Ingiza",
+      confirmIngestSelected: "Una uhakika unataka kuingiza faili {count} zilizochaguliwa?",
+      ingestQueuedSuccess: "Faili {count} zimewekwa kwenye foleni ya kuingizwa.",
+      ingestQueuedError: "Hitilafu imetokea wakati wa mchakato wa uingizaji wa kundi.",
+      uploadSuccessMultiple: "Faili {count} zimepakiwa kwa mafanikio.",
+      linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi "{fileName}".',
+      actionSuccess: 'Kitendo "{action}" kwenye faili {fileId} kimefanikiwa.',
+      metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.'
     }
   },
   passwordResetConfirm: {
@@ -1378,7 +1470,8 @@ export default {
     create: 'Unda',
     save: 'Hifadhi',
     move: 'Hamisha',
-    delete: 'Futa'
+    delete: 'Futa',
+    ok: 'SAWA' // NEW KEY
   },
   feedback: {
     title: 'Maoni',
@@ -1402,7 +1495,7 @@ export default {
       1: 'Haina msaada',
       2: 'Msaada Kidogo',
       3: 'Msaada wa Wastani',
-      4: 'Msaada Sana',
+      44: 'Msaada Sana',
       5: 'Inabadilisha Maisha'
     },
     additionalComments: 'Maoni ya ziada...',

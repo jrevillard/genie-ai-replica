@@ -132,7 +132,7 @@
                 @click.prevent="setActiveTab('security')"
               >
                 <i>🔒</i>
-                <span>{{ translate("admin.security", "Security") }}</span>
+                <span>{{ translate("admin.tabs.security", "Security") }}</span>
               </a>
             </li>
           </ul>

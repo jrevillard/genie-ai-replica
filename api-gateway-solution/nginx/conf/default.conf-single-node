@@ -17,6 +17,9 @@ server {
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
+    # set a 50MB file size limit
+    client_max_body_size 50m;
+
     # This is the crucial fix for Docker DNS resolution
     resolver 127.0.0.11 valid=10s;
 

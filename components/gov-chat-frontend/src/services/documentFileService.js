@@ -157,6 +157,22 @@ const documentFileService = {
       throw error;
     }
   },
+
+  /**
+   * NEW: Gets all ingestion logs for a specific file.
+   * @param {string} fileId - The ID of the file.
+   * @returns {Promise<Object>} The API response containing the list of logs.
+   */
+  async getIngestionLogs(fileId) {
+    try {
+      // This corresponds to the backend route: GET /api/files/:fileId/ingestion-log
+      const response = await httpService.get(`/files/${fileId}/ingestion-log`);
+      return response.data; // Assumes backend returns { success: true, data: [...] }
+    } catch (error) {
+      console.error(`Error fetching ingestion logs for file ${fileId}:`, error);
+      throw error;
+    }
+  },
 };
 
 export default documentFileService;

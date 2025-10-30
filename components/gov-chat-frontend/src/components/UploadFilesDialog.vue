@@ -100,11 +100,10 @@ export default {
       files: [],
       isDragging: false,
       isUploading: false,
+      // MODIFIED per Spec 4.2
       allowedExtensions: [
         ".pdf",
-        ".doc",
         ".docx",
-        ".xls",
         ".xlsx",
         ".md",
         ".html",
@@ -228,7 +227,7 @@ export default {
         } catch (error) {
           // UPDATED
           this.showNotification(
-            this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace('{fileName}', file.name),
+            (error.response?.data?.message || this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace('{fileName}', file.name)),
             "error");
           console.error(`Error uploading ${file.name}:`, error);
         }

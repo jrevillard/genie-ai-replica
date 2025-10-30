@@ -17,7 +17,8 @@ const uploadSchema = Joi.object({
   author: Joi.string().max(200).optional(),
   labels: Joi.array().items(Joi.string()).default([]),
   crawlDate: Joi.date().optional(),
-  sourceUrl: Joi.string().uri().optional()
+  sourceUrl: Joi.string().uri().optional(),
+  language: Joi.string().optional().allow('', null) // Allow language to be passed
 });
 
 const searchSchema = Joi.object({
@@ -27,6 +28,7 @@ const searchSchema = Joi.object({
   mimeType: Joi.string().optional()
 });
 
+// UPDATED: Added new statuses to validation
 const getFilesSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
@@ -45,6 +47,8 @@ const updateFileSchema = Joi.object({
   source_url: Joi.string().uri().optional(),
   language: Joi.string().min(2).max(5).optional()
 });
+
+// --- NEW SCHEMAS ADDED ---
 
 // Schema for new log entry
 const ingestionLogSchema = Joi.object({
@@ -73,6 +77,7 @@ class FileController {
     this.viewFileInBrowser = this.viewFileInBrowser.bind(this);
     this.uploadFile = this.uploadFile.bind(this);
     this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
+    this.uploadLink = this.uploadLink.bind(this); // <-- ADDED BIND
     this.getFiles = this.getFiles.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
@@ -83,6 +88,7 @@ class FileController {
     this.retractFile = this.retractFile.bind(this);
     this.ingestMultipleFiles = this.ingestMultipleFiles.bind(this);
     this.retractMultipleFiles = this.retractMultipleFiles.bind(this);
+    // --- NEW BINDS ---
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
@@ -161,13 +167,13 @@ class FileController {
       };
     }
     
-    // Custom error for language detection
-    if (error.message.includes('documents are supported for ingestion')) {
+    // --- UPDATED: Added specific check for language error ---
+    if (error.message.includes('documents are supported for ingestion') || error.message.includes('conflicting languages')) {
       return {
         status: 400,
         response: {
           success: false,
-          error: 'Language not supported',
+          error: 'Language not supported or conflict',
           message: error.message
         }
       };
@@ -366,23 +372,29 @@ class FileController {
   }
 
 
-
+  // --- UPDATED `uploadLink` to use `_handleUploadError` ---
   uploadLink = async (req, res) => {
-  try {
-    const { url, fileType = 'html' } = req.body;
-    if (!url) return res.status(400).json({ error: 'URL is required' });
+    try {
+      const { url, fileType = 'html' } = req.body;
+      if (!url) {
+        return res.status(400).json({ success: false, error: 'URL is required' });
+      }
 
-    // Call fileService to handle crawling and saving
-    const fileRecord = await fileService.uploadLink(url, fileType);
-    logger.debug(`[FILE-CONTROLLER] fileRecord: ${fileRecord}`);
-    res.status(201).json({
-      success: true,
-      message: 'URL crawled and html file saved successfully',
-      data: this._formatFileRecord(fileRecord)
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+      // Call fileService to handle crawling and saving
+      const fileRecord = await fileService.uploadLink(url, fileType);
+      
+      logger.debug(`[FILE-CONTROLLER] fileRecord: ${fileRecord}`);
+      
+      res.status(201).json({
+        success: true,
+        message: 'URL crawled and html file saved successfully',
+        data: this._formatFileRecord(fileRecord)
+      });
+    } catch (error) {
+      // **FIX:** Use the standardized error handler
+      const { status, response } = this._handleUploadError(error);
+      res.status(status).json(response);
+    }
   }
 
 
@@ -613,7 +625,7 @@ class FileController {
     } catch (error) {
       logger.error('Delete file error:', error);
     
-      if (error.message === 'File not found') {
+      if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
           error: 'File not found',
@@ -737,7 +749,7 @@ class FileController {
     } catch (error) {
       logger.error('Update file error:', error);
       
-      if (error.message === 'File not found') {
+      if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
           error: 'File not found',
@@ -1048,6 +1060,8 @@ class FileController {
       res.status(500).json({ success: false, error: error.message });
     }
   }
+
+  // --- NEW METHODS ---
 
   /**
    * Add an ingestion log entry

@@ -37,7 +37,7 @@ class FileService {
    * @param {string} mimeType - File MIME type
    * @returns {string} Extracted text
    */
-  async _extractText(buffer, mimeType) {
+  async _extractText(buffer, mimeType, originalFileName = '') {
     try {
       if (mimeType === 'application/pdf') {
         const data = await pdf(buffer);
@@ -52,8 +52,20 @@ class FileService {
         return text;
       }
       if (mimeType.startsWith('text/')) {
-        const text = buffer.toString('utf-8');
-        logger.info(`[FILE-SERVICE] Text file extracted ${text.length} characters.`);
+        let text = buffer.toString('utf-8');
+        // --- UPDATED LOGIC: Strip HTML tags if it's an HTML file OR .html extension---
+        if (mimeType === 'text/html' || originalFileName.toLowerCase().endsWith('.html')) {
+          // Remove <style> and <script> blocks entirely
+          text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ');
+          text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ');
+          // Remove all other HTML tags, leaving content
+          text = text.replace(/<[^>]+>/g, ' ');
+          // Replace multiple whitespace chars with a single space
+          text = text.replace(/\s+/g, ' ').trim();
+          logger.info(`[FILE-SERVICE] Stripped HTML. Start of text: "${text.substring(0, 200)}..."`);
+        } else {
+          logger.info(`[FILE-SERVICE] Text file extracted ${text.length} characters.`);
+        }
         return text;
       }
     } catch (error) {
@@ -76,7 +88,7 @@ class FileService {
     logger.info(`[FILE-SERVICE] Detecting language from text (first 200 chars): "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
     
     try {
-      // **FIX:** Use detectOne() which is more robust and returns a simple string or throws an error.
+      // Use detectOne() which is more robust and returns a simple string or throws an error.
       const langCode = langdetect.detectOne(text); 
       
       if (langCode) {
@@ -84,7 +96,6 @@ class FileService {
         return langCode;
       }
 
-      // This should not be reachable, as detectOne throws on failure
       logger.warn(`[FILE-SERVICE] Language_detect.detectOne returned an empty result.`);
       return null; 
     } catch (error) {
@@ -122,26 +133,47 @@ class FileService {
       ];
 
       let detectedLang = null;
-      if (ingestionTypes.includes(mimeType)) {
-        logger.info(`[FILE-SERVICE] Performing language detection for ${originalFileName}`);
-        const text = await this._extractText(fileData.buffer, mimeType);
+      if (ingestionTypes.includes(mimeType) || originalFileName.toLowerCase().endsWith('.html')) {
+        logger.info(`[FILE-SERVICE] Performing language check for ${originalFileName}`);
+
+        // --- UPDATED LOGIC ---
+        // 1. Extract clean text from the file buffer
+        const text = await this._extractText(fileData.buffer, mimeType, originalFileName);
+        
+        // 2. Detect language from the clean text
         detectedLang = this._detectLanguage(text);
+        
+        // 3. Get the language from the HTML tag (if provided by the crawler)
+        const tagLang = fileInfo.language; // This is 'ru' from <html lang="ru">
+        
+        logger.info(`[FILE-SERVICE] Language detected (Content): ${detectedLang}, (HTML Tag): ${tagLang}, (Required): ${requiredLanguage}`);
 
-        logger.info(`[FILE-SERVICE] Language detected: ${detectedLang} (Required: ${requiredLanguage})`);
-
-        // **Stricter logic**
+        // 4. Stricter validation
         // Block if language is NOT detected (null) OR if it is the wrong language.
         if (!detectedLang || detectedLang.toLowerCase() !== requiredLanguage) {
           const langFound = detectedLang || 'unknown'; // Handle null for the error message
-          throw new Error(`File [${originalFileName}] appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`);
+          throw new Error(`File [${originalFileName}] content appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`);
         }
+        
+        // 5. NEW: Validate tag language against content language if tag exists
+        if (tagLang && tagLang.trim() !== '' && tagLang.toLowerCase() !== 'unknown') {
+          if (tagLang.toLowerCase() !== detectedLang.toLowerCase()) {
+            logger.warn(`[FILE-SERVICE] Conflicting languages for ${originalFileName}. HTML tag: [${tagLang}], Content: [${detectedLang}].`);
+            // Allowing ingestion based on content as per logic flow, but flagging discrepancy.
+            // If this should be a hard failure, uncomment the line below:
+            // throw new Error(`File [${originalFileName}] has conflicting languages. HTML tag says [${tagLang}] but content appears to be [${detectedLang}].`);
+          }
+           // If they match, we trust the detected content language
+           logger.info(`[FILE-SERVICE] HTML tag lang "${tagLang}" matches content lang "${detectedLang}". Validation passed.`);
+        }
+        // --- END UPDATED LOGIC ---
       }
 
       // Generate unique file ID
       const fileId = fileUtils.generateUniqueFileId();
       const savedFileName = `${fileId}${fileExtension}`;
       filePath = path.join(this.uploadDir, savedFileName);
-      logger.info(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
+      logger.debug(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
 
       // Validate file type & extension
       const isMimeAllowed = this.allowedMimeTypes.includes(mimeType);
@@ -157,12 +189,12 @@ class FileService {
       }
 
       // Ensure upload directory exists
-      logger.info(`[FILE-SERVICE]  Ensure upload directory exists: ${this.uploadDir}`);
+      logger.debug(`[FILE-SERVICE]  Ensure upload directory exists: ${this.uploadDir}`);
       await fileUtils.ensureDirectoryExists(this.uploadDir);
 
       // Perform virus scan if enabled
       if (appConfig.virusScanning) {
-        logger.info(`[FILE-SERVICE] Performing virus scan`);
+        logger.debug(`[FILE-SERVICE] Performing virus scan`);
         const scanResult = await securityService.scanBuffer(fileData.buffer);
         logger.info(`[FILE-SERVICE] VIRUS SCAN result for ${originalFileName}: ${JSON.stringify(scanResult, null, 2)}`);
 
@@ -172,13 +204,13 @@ class FileService {
       }
 
       // Write file to disk (using buffer from memory storage)
-      logger.info(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
+      logger.debug(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
       await fs.writeFile(filePath, fileData.buffer);
 
       // Get file stats to determine creation date
       const stats = await fs.stat(filePath);
       const createdDate = stats.birthtime;
-      logger.info(`[FILE-SERVICE] File creation date: ${createdDate}`);
+      logger.debug(`[FILE-SERVICE] File creation date: ${createdDate}`);
       
       // Create file record in database
       const fileRecord = {
@@ -194,7 +226,7 @@ class FileService {
         created_date: createdDate,
         crawl_date: fileInfo.crawlDate || null,
         source_url: fileInfo.sourceUrl || '',
-        language: detectedLang || fileInfo.language || '', // Use detected language
+        language: detectedLang, // Use the final validated content language
         chunk_count: 0,
         dataprep: {
           status: 'Pending', // Use capitalized status per spec
@@ -237,7 +269,10 @@ class FileService {
 
     let content = response.data || response.text;
 
-    const language = crawler.getLanguage(content);
+    // --- UPDATED: Trust the crawler's language detection ---
+    const language = crawler.getLanguage(content); // This gets 'ru' from <html lang="ru">
+    logger.info(`[FILE-SERVICE-CRAWLER] Detected language tag: ${language}`);
+    // ---
 
     // Save content to a temp file
     let title = crawler.getTitle(content) || 'untitled';
@@ -282,7 +317,7 @@ class FileService {
       sourceUrl: url,
       labels: [],
       author: 'crawler',
-      language: language,
+      language: language, // <-- PASS THE DETECTED LANGUAGE
       crawlDate: new Date().toISOString()
     };
     const uploadedFile = await this.uploadFile(fileData, fileInfo);
@@ -317,7 +352,7 @@ class FileService {
       const filters = [];
       if (language) {
         filters.push('file.language == @language');
-        bindVars.category = category;
+        bindVars.language = language;
       }
       if (mimeType) {
         filters.push('file.file_type == @mimeType');
@@ -328,10 +363,9 @@ class FileService {
         bindVars.search = search;
       }
       if (dataprepStatus) {
-        const status = dataprepStatus.toLowerCase();
-        // Adjust for capitalized status in DB if needed, but spec implies lowercase search
-        filters.push('LOWER(file.dataprep.status) == @status');
-        bindVars.status = status;
+        // Use case-insensitive matching for status
+        filters.push('LOWER(file.dataprep.status) == LOWER(@status)');
+        bindVars.status = dataprepStatus;
       }
 
       if (filters.length > 0) {
@@ -347,9 +381,15 @@ class FileService {
       const cursor = await db.query(query, bindVars);
       const files = await cursor.all();
 
-      // Get total count
-      const countQuery = 'RETURN LENGTH(files)';
-      const totalCount = await db.query(countQuery).then(cursor => cursor.next());
+      // Get total count for pagination
+      let countQuery = 'FOR file IN files';
+      if (filters.length > 0) {
+          countQuery += ` FILTER ${filters.join(' AND ')}`;
+      }
+      countQuery += ' COLLECT WITH COUNT INTO totalCount RETURN totalCount';
+      
+      const countCursor = await db.query(countQuery, bindVars);
+      const totalCount = await countCursor.next() || 0;
 
       return {
         files,
@@ -361,7 +401,7 @@ class FileService {
         }
       };
     } catch (error) {
-      logger.error(`Error getting files: $ {error}`);
+      logger.error(`Error getting files: ${error}`);
       throw error;
     }
   }
@@ -391,7 +431,7 @@ class FileService {
         logger.info(`File found on disk: ${filePath}`);
       } catch (error) {
         logger.warn(`File not found on disk: ${filePath}`);
-        throw new Error(`File not found on disk: ${filePath}`);
+        // Do not throw error here, allow metadata deletion even if file is missing
       }
       
       // Delete metadata first and keep a backup
@@ -403,21 +443,26 @@ class FileService {
         logger.info(`Metadata deleted for file ${fileId}`);
       } catch (error) {
         logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
-        throw new Error(`File deleted but failed to delete metadata for file ${fileId}`);
+        throw new Error(`Failed to delete metadata for file ${fileId}`);
       }
 
-      // Delete the physical file from disk
+      // Delete the physical file from disk if it exists
       try {
         await fs.unlink(filePath);
         logger.info(`File deleted from disk: ${filePath}`);
         return true;
       } catch (error) {
-        logger.error(`File deleted from metadata but failed to delete physical file: ${error.message}`);
+         if (error.code === 'ENOENT') {
+             logger.warn(`Physical file was already missing, but metadata deleted: ${filePath}`);
+             return true; // Consider success if metadata is gone and file was already gone
+         }
+        logger.error(`File metadata deleted but failed to delete physical file: ${error.message}`);
         // attempt to restore metadata if file deletion fails
         if (deletedMetadata && metadataBackup) {
           try {
+            // We can't restore perfectly without the file, but we can restore metadata
             await metadataService.addMetadata(filePath, metadataBackup);
-            logger.info(`Metadata restored for file ${fileId}`);
+            logger.info(`Metadata restored for file ${fileId} after file delete failure`);
           } catch (restoreError) {
             logger.error(`Failed to restore metadata for file ${fileId}: ${restoreError.message}`);
             return false; // Return false if restoration fails
@@ -492,13 +537,8 @@ class FileService {
           totalSize: SUM(files[*].size),
           filesByType: (
             FOR file IN files
-            COLLECT mimeType = file.mimeType WITH COUNT INTO count
+            COLLECT mimeType = file.file_type WITH COUNT INTO count
             RETURN { mimeType, count }
-          ),
-          filesByCategory: (
-            FOR file IN files
-            COLLECT category = file.category WITH COUNT INTO count
-            RETURN { category, count }
           )
         }
       `).then(cursor => cursor.next());

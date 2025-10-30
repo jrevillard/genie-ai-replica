@@ -3,12 +3,12 @@
   <div class="dialog-container">
     <div class="dialog-header">
       <h2 class="dialog-title">
-        {{ translate("link.title", "Add from Link") }}
+        {{ translate("admin.documents.addLink", "Add from Link") }}
       </h2>
       <button
         class="dialog-close-btn"
         @click="$emit('close')"
-        :aria-label="translate('link.close', 'Close')"
+        :aria-label="translate('common.close', 'Close')"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -56,7 +56,7 @@
 
     <div class="dialog-footer">
       <button class="btn btn-outline" @click="$emit('close')">
-        {{ translate("buttons.cancel", "Cancel") }}
+        {{ translate("common.cancel", "Cancel") }}
       </button>
       <button
         class="btn btn-primary"
@@ -100,7 +100,16 @@ export default {
     },
   },
   methods: {
+    // --- UPDATED: Swapped to full i18n-safe translate method ---
     translate(key, fallback) {
+      if (this.$i18n && this.$i18n.t) {
+        const translation = this.$i18n.t(key);
+        // Fallback if key is not found
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      }
       return fallback || key;
     },
     /**
@@ -108,8 +117,11 @@ export default {
      */
     async handleSubmit() {
       if (!this.isValidUrl) {
-        this.errorMessage =
-          "Please enter a valid URL, including http:// or https://";
+        // UPDATED: i18n
+        this.errorMessage = this.translate(
+          "link.validation.invalidUrl",
+          "Please enter a valid URL, including http:// or https://"
+        );
         return;
       }
 
@@ -120,21 +132,43 @@ export default {
         // Call the uploadLink method from the service
         const response = await documentFileService.uploadLink(this.url);
 
+        // UPDATED: Use specific success message from locale file
+        const fileName = response.data?.file_name || 'the file';
         this.showNotification(
-          response.message || "Link crawled and file saved successfully.",
+          this.translate('admin.documents.linkSubmitSuccess', 'Successfully crawled and saved "{fileName}".').replace('{fileName}', fileName),
           "success"
         );
 
         // Emit the new file data back to the parent component
-        this.$emit("link-submitted", response.data);
+        // response.data from documentFileService is the response.data from axios,
+        // which the controller wraps in { success, message, data }
+        this.$emit("link-submitted", response.data); 
         this.$emit("close");
       } catch (error) {
-        // Display a user-friendly error from the server, or a generic one
-        this.errorMessage =
-          error.response?.data?.message ||
-          "Failed to crawl the URL. Please check the link and try again.";
-        this.showNotification(this.errorMessage, "error");
-        console.error("Error crawling link:", error);
+        // --- THIS IS THE KEY FIX ---
+        // Robustly extract the specific error message from the backend.
+        // We check multiple locations, as the format can vary.
+        const backendMessage =
+          error.response?.data?.message || // 1. Check for { message: "..." } in data
+          (typeof error.response?.data === 'string' ? error.response.data : null) || // 2. Check if data *is* the message string
+          error.message || // 3. Check the top-level error message
+          this.translate( // 4. Fallback to generic i18n message
+            "link.errors.generic",
+            "Failed to crawl the URL. Please check the link and try again."
+          );
+
+        this.errorMessage = backendMessage; // Show in the dialog
+        this.showNotification(backendMessage, "error"); // Show in the toast
+        
+        // --- UPDATED CONSOLE LOG ---
+        // Log the specific message being shown and the full error for debugging
+        console.error("Error crawling link. Displayed message:", backendMessage);
+        console.error("Full error object for debugging:", error);
+        if (error.response) {
+          console.error("Error response data:", error.response.data);
+        }
+        // --- END FIX ---
+        
       } finally {
         this.isLoading = false;
       }

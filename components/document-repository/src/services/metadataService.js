@@ -5,13 +5,13 @@
 // Support metadata deletion when a file is deleted.
 // Manually Updating existing metadata; Validating user-provided metadata (optional but helpful)
 
-const fs = require('fs').promises; // For async file operations
+const fs = require('fs').promises; // Using promises for async file operations
 const path = require('path');
 const mime = require('mime-types'); // For MIME type detection
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount, getFileHash } = require('../utils/fileUtils'); // Utility to ensure directory exists
-const dbService = require('../shared-lib/db-connection-service');
-const { logger } = require('../shared-lib/logger');
+const { logger } = require('../../../shared/lib/logger');
+const dbService = require('../../../shared/lib/db-connection-service');
 
 
 async function extractMetadata(filePath, fileInfo = {}) {
@@ -40,25 +40,25 @@ async function extractMetadata(filePath, fileInfo = {}) {
     };
 
     // File-type-specific metadata extraction
-    // Currently they are removed to keep metadata schema consistent for all file types
-    // Could be added later for all mimeTypes
-    // if (mimeType === 'application/pdf') {
-    //     baseMeta.page_count = await getPdfPageCount(filePath);
-    // }
-    // else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    //     baseMeta.word_count = await getDocxWordCount(filePath);
-    // }
-    // else if (mimeType.startsWith('text/')) {
-    //     baseMeta.line_count = await getTxtLineCount(filePath);
-    //     baseMeta.word_count = await getTxtWordCount(filePath);
-    // }
+
+    if (mimeType === 'application/pdf') {
+        baseMeta.page_count = await getPdfPageCount(filePath);
+    }
+    else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        baseMeta.word_count = await getDocxWordCount(filePath);
+    }
+    else if (mimeType.startsWith('text/')) {
+        baseMeta.line_count = await getTxtLineCount(filePath);
+        baseMeta.word_count = await getTxtWordCount(filePath);
+    }
+    // Add more file type as needed
 
     return baseMeta;
 }
 
-
 class MetadataService {
     // 1. Extract and store metadata (one JSON file per document)
+    
     async getDb() {
         return await dbService.getConnection('files');
     }
@@ -132,7 +132,7 @@ class MetadataService {
             }
             query += ' SORT file.upload_date DESC RETURN file';
 
-            logger.debug(`Searching metadata with query: ${query} and bindVars: ${JSON.stringify(bindVars)}`);
+            logger.debug(`🧪Searching metadata with query: ${query} and bindVars: ${JSON.stringify(bindVars)}`);
 
             const cursor = await db.query(query, bindVars);
             return await cursor.all();
@@ -193,6 +193,7 @@ class MetadataService {
             }
 
             // Update metadata with provided updates. Only update allowed fields.
+            // const allowedFields = ['filename', 'labels', 'author', 'create_date', 'crawl_date', 'source_url', 'language', 'dataprep'];
             const allowedFields = ['dataprep', 'chunk_count'];
 
             const updateObj = {};
@@ -229,5 +230,6 @@ class MetadataService {
     }
 }
 
-module.exports = new MetadataService();
+module.exports = new MetadataService(); // Export an instance of MetadataService for use in other modules
+
 

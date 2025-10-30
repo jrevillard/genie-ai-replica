@@ -1,6 +1,6 @@
 # Document Repository Service
 
-This service provides a backend file system for managing file CRUD + search + ingest&extract operations. It is designed to connect with the frontend located at `/gov-chat-frontend`.
+This service provides a backend file system for managing file CRUD + search + ingest&extract operations. It is designed to connect with the frontend located at `/root/chat-ui-vue-app/gov-chat-frontend`.
 
 ```mermaid
 %%{init: {'theme':'forest'}}%%
@@ -20,7 +20,7 @@ journey
     section Ingestion into / Extract from Knowledge Base
         Admin chooses to ingest file: 5:Admin
         File sent to dataprep service: 4:System
-        File processed. Metadata updated automatically: 5:System
+        File processed. Metadata enriched automatically: 5:System
         Admin chooses to retract file (optional): 5:Admin
         Chunks, entities and relations are deleted: 5:System
 
@@ -38,30 +38,28 @@ config:
 title: Document Repository Service Workflow
 ---
 flowchart TD
-subgraph User_Side["User_Side"]
+ subgraph User_Side["User_Side"]
         A["User Uploads File"]
         B["Edit/View Metadata"]
         C["Search Files by Metadata"]
         D["Ingest/Retract File"]
         P["Read/Delete File"]
   end
-subgraph Document_Repository_CPU_Node["Document_Repository"]
+ subgraph Document_Repository_CPU_Node["Document_Repository_CPU_Node"]
         E["Security Check ClamAV"]
         O(["File Local Storage"])
         F["Extract Basic Metadata"]
         G(["Metadata in ArangoDB"])
         H["Send File to Dataprep / Delete Chunks, Entities and Relations from Database"]
   end
-subgraph Dataprep_Microservice_GPU_Node["Dataprep_Microservice"]
+ subgraph Dataprep_Microservice_GPU_Node["Dataprep_Microservice_GPU_Node"]
         I["Extract Full Text and Language"]
         J["Chunk Text and Embed"]
-        X["(Optional) Check Chunk Content Toxicity"]
-        Y["Label Each Chunk"]
-        Z["Extract Entities and Relations"]
+        K["Extract Labels if not given"]
         L["Update Metadata in ArangoDB"]
-        Q["Knowledge Graph Construction/Update"]
+        Q["Knowledge Graph Construction"]
   end
-subgraph Downstream["Downstream"]
+ subgraph Downstream["Downstream"]
         N["Show Source File\nvia Metadata Link"]
         M["LLM Query Answering (Including Retrieval + Textgen)"]
   end
@@ -74,14 +72,13 @@ subgraph Downstream["Downstream"]
     D <--> H
     H <--> I
     I --> J
+    J --> K
+    K --> L
     M --> N
+    L --> M
     P --> O
+    J --> Q
     Q --> M
-    J --> X
-    X --> Y
-    Y --> Z
-    Z --> Q
-    Q --> L
 ```
 
 ## Supported File Types
@@ -93,16 +90,16 @@ The file system supports various file types, including but not limited to:
 
 ## Feature Services
 
-- **Upload Files:** Administrators can upload files from their computers.
-- **Upload Links:** Administrators can upload website links directly. The content of the webpage will be crawled automatically and saved as a html file.
+- **Upload Files:** Administrators can upload files from their local computers.
+- **Upload Links:** Administrators can upload website links directly. The content of the webpage will be crawled automatically and saved as a local html file.
 - **Read Files:** Uploaded files are stored in `/document-repository/uploads` and can be accessed for viewing in browser for all supported file types.
-- **Download Files:** Files can be downloaded to the administrator's local computer.
+- **Download Files:** Files can be downloaded to the administrator's local machine.
 - **Delete Files:** Administrators can remove files from the system.
 - **Virus Scanning:** Files are scanned for viruses before being saved to the file system.
 - **Metadata Extraction and Editing:** Metadata such as file labels and language is extracted and stored for search functionality. See [`README_metadata.md`](./README_metadata.md) for details.
 - **Search Files:** Users can search files by metadata such as file name, type, and labels.
 - **Ingest Files to Dataprep:** Files can be ingested into the dataprep microservice for knowledge graph building and further processing.
-- **Retract Files from Dataprep:** Files can be retracted from the dataprep microservice, which deletes the chunks, entities and relations from the graph, preventing the files from being used for retrival and answer generation.
+- **Retract Files from Dataprep:** Files can be retracted from the dataprep microservice, which deletes the associated graphs, preventing the files from being used for retrival and answer generation.
 
 ## Folder Structure (to be updated)
 
@@ -111,15 +108,12 @@ document-repository/
 ├── src/
 │   ├── controllers/              # Handles HTTP requests
 │   │   ├── fileController.js
-│   │   ├── labelController.js
 │   ├── routes/                   # Express routes
 │   │   ├── fileRoutes.js
-│   │   ├── labelRoutes.js
 │   ├── services/                 # Business logic
 │   │   ├── fileService.js
 │   │   ├── securityService.js
 │   │   ├── metadataService.js
-│   │   ├── labelService.js
 │   ├── utils/                    # Helper functions
 │   │   ├── fileUtils.js
 │   │   ├── virusScanner.js       # Hooks to ClamAV or similar
@@ -128,15 +122,8 @@ document-repository/
 │   │   ├── fileUpload.js         # Multer config
 │   │   ├── errorHandler.js
 │   │   ├── authMiddleware.js
-│   ├── docs/
-│   │   ├── swagger.yaml
-│   ├── shared-lib/
-│   │   ├── db-connection-service.js
-│   │   ├── index.js
-│   │   ├── logger.js
 │   ├── config/
 │   │   ├── appConfig.js
-│   │   ├── swaggerConfig.js
 │   ├── utils/
 │   │   ├── crawler.js
 │   │   ├── fileUtils.js
@@ -149,7 +136,6 @@ document-repository/
 ├── README.md
 ├── README_metadata.md
 ├── README_ingest&retract.md
-├── README_labels_unused.md
 ```
 
 ## Responsibilities
@@ -174,7 +160,8 @@ document-repository/
 
 **Dataprep microservice responsibilities (related to document-repository)**:
 
-* Content safety checks (optional)
+* **Metadata extraction (especially for file labels and file language)**
+* **Content safety checks**
 * Text extraction from files
 * Chunking
 * Embedding
@@ -191,10 +178,10 @@ document-repository/
 | GET    | `/api/files`                          | Get all files with pagination/filtering     | Authenticated   |
 | GET    | `/api/files/search`                   | Search files by metadata                    | Authenticated   |
 | GET    | `/api/files/:metadata`                | Get file metadata by ID                     | Authenticated   |
-| GET    | `/api/files/:fileId/view`             | Get file as base64 for viewing              | Authenticated   |
-| GET    | `/api/files/:fileId/viewbrowser`      | View file in browser (if supported)         | Authenticated   |
-| GET    | `/api/files/:fileId/download`         | Download file by ID                         | Authenticated   |
-| POST   | `/api/files/downloads`                | Download multiple files as a ZIP archive    | Authenticated   |
+| GET    | `/api/files/:fileId/view`             | Get file as base64 for viewing              | Authenticated 🤔|
+| GET    | `/api/files/:fileId/viewbrowser`      | View file in browser (if supported)         | Authenticated 🤔|
+| GET    | `/api/files/:fileId/download`         | Download file by ID                         | Authenticated 🤔|
+| POST   | `/api/files/downloads`                | Download multiple files as a ZIP archive    | Authenticated 🤔|
 | PATCH  | `/api/files/:fileId`                  | Update file metadata                        | Admin only      |
 | DELETE | `/api/files/:fileId`                  | Delete file by ID                           | Authenticated   |
 | DELETE | `/api/files`                          | Delete multiple files by IDs                | Authenticated   |
@@ -311,7 +298,7 @@ Use the following `curl` commands to interact with the file system backend servi
 
 ```bash
 curl -X POST http://localhost:3001/api/files/upload \
-  -H "Authorization: Bearer <accessToken>" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU4MTExMDYzLCJleHAiOjE3NTgxOTc0NjN9.C-Tm0l7HlixWFQ_ldUGVCJL50AxMykB0ku0sL7-03Dg" \
   -F "file=@/Users/scarlettsun/Desktop/ITU/Kenya_Services_Info_0403.md"
 ```
 
@@ -342,12 +329,12 @@ curl -X POST http://localhost:3001/api/files/upload \
 
 ```bash
 curl -X POST http://localhost:3001/api/files/uploads \
-  -H "Authorization: Bearer <accessToken>" \
-  -F "files=@/Users/Desktop/Example1.txt" \
-  -F "files=@/Users/Desktop/Example2.xlsx" \
-  -F "files=@/Users/Desktop/Example3.docx" \
-  -F "files=@/Users/Desktop/Example4.md" \
-  -F "files=@/Users/Desktop/Example5.pdf"
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU4NTQ1MzYwLCJleHAiOjE3NTg2MzE3NjB9.n_TDxcAU1aNuYUkGgCGt-yLWW2HtyJSwm7JO1gAGXDI" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/txtai.txt" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/Sample_criteria.xlsx" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/EMBEDDING MODEL TESTS.docx" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/test doc - About ITU.md" \
+  -F "files=@/Users/scarlettsun/Desktop/ITU/ExamplePDF.pdf"
 ```
 
 **Response**
@@ -365,10 +352,10 @@ curl -X POST http://localhost:3001/api/files/uploads \
 ### Upload a Link
 
 ```bash
-curl -X POST http://localhost:3001/api/files/upload-link \
-  -H "Authorization: Bearer <accessToken>" \
+curl -X POST http://91.203.132.51:3001/api/files/upload-link \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU4NjE5NTM0LCJleHAiOjE3NTg3MDU5MzR9.25eKu5MDTo78xDqukiSoNc-muHczAR484zHnDd_XcYM" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://en.wikipedia.org/wiki/Kenya"}'
+  -d '{"url": "https://www.masaimara.travel/kenya-tourism-facts-questions.php"}'
 ```
 
 **Response**
@@ -398,8 +385,8 @@ curl -X POST http://localhost:3001/api/files/upload-link \
 **View a file in base64** (for future API integration)
 
 ```bash
-curl http://localhost:3001/api/files/1755357489820-bcbb939a/view \
-  -H "Authorization: Bearer <accessToken>"
+curl http://localhost:3001/api/files/1757251102005-1fb77a38/view \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU3MjQ3OTk0LCJleHAiOjE3NTczMzQzOTR9.O2cIbDjPC1Sll0fjf8Jg99vIy827ImqwKk-2GvnPTbI"
 ```
 
 **Response**
@@ -425,7 +412,7 @@ http://localhost:3000/api/files/1752590647147-8ca95cff/viewbrowser
 Download from the backend server:
 
 ```bash
-curl http://localhost:3001/api/files/1755357489820-bcbb939a/download --output /Users/Desktop/test-download-1.html \
+curl http://localhost:3000/api/files/1755357489820-bcbb939a/download --output /Users/Desktop/test-download-1.html \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -442,7 +429,7 @@ curl http://localhost:3001/api/files/1755357489820-bcbb939a/download --output /U
 ### Download Multiple Files in a ZIP Archive
 
 ```bash
-curl -X POST http://localhost:3001/api/files/downloads \
+curl -X POST http://localhost:3000/api/files/downloads \
   -H "Content-Type: application/json" \
   -o /Users/Desktop/download-files-2.zip \
   -d '{"fileIds":["1755357122708-fc7201fc","1755357329946-94612fe5","1755357329947-47e3aadb"]}' \
@@ -463,8 +450,8 @@ curl -X POST http://localhost:3001/api/files/downloads \
 
 Delete from the backend server:
 ```bash
-curl -X DELETE http://localhost:3001/api/files/1757539201587_1cbcec33 \
-  -H "Authorization: Bearer <accessToken>"
+curl -X DELETE http://localhost:3001/api/files/1757251229251-04009bee \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU3MjQ3OTk0LCJleHAiOjE3NTczMzQzOTR9.O2cIbDjPC1Sll0fjf8Jg99vIy827ImqwKk-2GvnPTbI"
 ```
 
 **Response**
@@ -500,7 +487,7 @@ curl -X DELETE http://localhost:3000/api/files \
 ### Get File Metadata by ID
 
 ```bash
-curl -X GET "http://localhost:3001/api/files/1755261342481-8b804597" \
+curl -X GET "http://localhost:3000/api/files/1755261342481-8b804597" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -533,42 +520,42 @@ curl -X GET "http://localhost:3001/api/files/1755261342481-8b804597" \
 
 ### Get Files (by common metadata fields for simple, fast filtering)
 
-* Default to return the first 10 files, sorted by `upload_date` in descending order.
+💚 Default to return the first 10 files, sorted by `upload_date` in descending order.
 
 ```bash
-curl "http://localhost:3001/api/files" \
+curl "http://localhost:3000/api/files" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-* Get files with pagination and limit:
+💚 Get files with pagination and limit:
 ```bash
-curl "http://localhost:3001/api/files?page=2&limit=5" \
+curl "http://localhost:3000/api/files?page=2&limit=5" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-* Get files by mimetype:
+💚 Get files by mimetype:
 ```bash
-curl "http://localhost:3001/api/files?mimeType=text/html" \
+curl "http://localhost:3000/api/files?mimeType=text/html" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-* Search by file name (case insensitive):
+💚 Search by file name (case insensitive):
 ```bash
-curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' 世界)" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-* Filter by dataprep status:
+💚 Filter by dataprep status:
 
 ```bash
-curl "http://localhost:3001/api/files?dataprepStatus=pending" \
+curl "http://localhost:3000/api/files?dataprepStatus=pending" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-* Combine filters (e.g., PDF files with 'example' in the name)
+💚 Combine filters (e.g., PDF files with 'example' in the name)
 
 ```bash
-curl "http://localhost:3001/api/files?mimeType=text/html&search=world" \
+curl "http://localhost:3000/api/files?mimeType=text/html&search=world" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -591,10 +578,10 @@ curl "http://localhost:3001/api/files?mimeType=text/html&search=world" \
 ### Update File Metadata
 
 ```bash
-curl -X PATCH http://localhost:3001/api/files/1752757770440-ce960082 \
+curl -X PATCH http://localhost:3001/api/files/1757503121248_e9714a8b \
   -H "Content-Type: application/json" \
-  -d '{"language":"en", "labels":["itu", "ai"], "author":"ITU"}' \
-  -H "Authorization: Bearer <accessToken>"
+  -d '{"labels":["Healthcare & Social Services", "Social Assistance", "Medical Services", "Healthcare Programs", "Housing & Urban Development", "Housing Programs", "Social Security & Pensions", "Retirement benefits", "Pension fund management", "Survivor benefits", "Disability pensions", "Culture & Recreation", "Arts & Culture", "Business & Trade", "Business Registration", "Small Business Support", "Education & Learning", "Adult Learning", "Transportation & Mobility", "Aviation", "Identity & Civil Registration", "Passport Services", "Driver Services", "Immigration & Citizenship", "Immigration Services", "Citizenship Applications", "Visas", "Refugee Programs"]}' \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU4ODE1MDc1LCJleHAiOjE3NTg5MDE0NzV9.ELCKgAyEFD5RAaDuIP08nNs2Qj6bDphFwM4ng5tw_ZI"
 ```
 
 
@@ -626,34 +613,34 @@ curl -X PATCH http://localhost:3001/api/files/1752757770440-ce960082 \
 For search files by name, the terminal does not encode non-ASCII characters correctly in the URL. Must percent-encode all characters.
 
 ```bash
-curl "http://localhost:3001/api/files/search?file_type=application/pdf" \
+curl "http://localhost:3000/api/files/search?file_type=application/pdf" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' world)" \
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' world)" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' ITU)" \
+curl "http://localhost:3000/api/files/search?file_name=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' ITU)" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?upload_date_from=2025-07-15T14:30:00.092Z&upload_date_to=2025-07-16T14:40:07.092Z" \
+curl "http://localhost:3000/api/files/search?upload_date_from=2025-07-15T14:30:00.092Z&upload_date_to=2025-07-16T14:40:07.092Z" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?labels=one,orange" \
+curl "http://localhost:3000/api/files/search?labels=one,orange" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?author=Google" \
+curl "http://localhost:3000/api/files/search?author=Google" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?status=pending" \
+curl "http://localhost:3000/api/files/search?status=pending" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?language=en" \
+curl "http://localhost:3000/api/files/search?language=en" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?file_type=text/html&labels=orange" \
+curl "http://localhost:3000/api/files/search?file_type=text/html&labels=orange" \
   -H "Authorization: Bearer <accessToken>"
 
-curl "http://localhost:3001/api/files/search?file_name=budget&file_type=text/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en" \
+curl "http://localhost:3000/api/files/search?file_name=budget&file_type=text/html&upload_date_from=2024-06-01T00:00:00Z&upload_date_to=2024-06-30T23:59:59Z&labels=finance,orange&author=Anonymous&status=pending&language=en" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
@@ -678,8 +665,8 @@ curl "http://localhost:3001/api/files/search?file_name=budget&file_type=text/htm
 ### Ingest a File
 
 ```bash
-curl -X POST "http://localhost:3001/api/files/1757539493095_97a92e03/ingest" \
-  -H "Authorization: Bearer <accessToken>"
+curl -X POST "http://localhost:3001/api/files/1758628363216_b733de82/ingest" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU4NjE5NTM0LCJleHAiOjE3NTg3MDU5MzR9.25eKu5MDTo78xDqukiSoNc-muHczAR484zHnDd_XcYM"
 ```
 
 **Response**
@@ -691,8 +678,8 @@ curl -X POST "http://localhost:3001/api/files/1757539493095_97a92e03/ingest" \
 ### Retract a File
 
 ```bash
-curl -X POST "http://localhost:3001/api/files/1756383765785-24dd4486/retract" \
-  -H "Authorization: Bearer <accessToken>"
+curl -X POST "http://localhost:3001/api/files/1758549442205_fd5f5359/retract" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTUyIiwiaWF0IjoxNzU4NTQ1MzYwLCJleHAiOjE3NTg2MzE3NjB9.n_TDxcAU1aNuYUkGgCGt-yLWW2HtyJSwm7JO1gAGXDI"
 ```
 
 ```json
@@ -702,7 +689,7 @@ curl -X POST "http://localhost:3001/api/files/1756383765785-24dd4486/retract" \
 ### Ingest Multiple Files
 
 ```bash
-curl -X POST http://localhost:3001/api/files/ingest \
+curl -X POST http://localhost:3000/api/files/ingest \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"fileIds": ["1755357489820-bcbb939a", "1755083178494-6bc7607a", "1755084048825-3fe82e7b", "1755078348409-c2b7bff9", "1755082518852-7c90b350"]}'
@@ -722,7 +709,7 @@ curl -X POST http://localhost:3001/api/files/ingest \
 ### Retract Multiple Files
 
 ```bash
-curl -X POST http://localhost:3001/api/files/retract \
+curl -X POST http://localhost:3000/api/files/retract \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"fileIds": ["1755082518852-7c90b350", "1755078047177-b7cac673", "1755083821792-8142c703"]}'
@@ -741,7 +728,7 @@ curl -X POST http://localhost:3001/api/files/retract \
 
 ## Security for Access Control
 
-- Common users authenticated as citizens can only read & download files in the `Related Documents` panel.
+- Common users authenticated as citizens can only read & download files in the `Related Document` panel.
 - Users authenticated as administrators can access all the file operations.
 - File access is not restricted to intranet or localhost; remote access is supported.
 
@@ -749,7 +736,6 @@ curl -X POST http://localhost:3001/api/files/retract \
 
 * For metadata-related operations, please see [`README_metadata.md`](./README_metadata.md) for more details.
 * For ingest & retract operations, please see [`README_ingest&retract.md`](./README_ingest&retract.md) for more details.
-* The [`README_labels_unused.md`](./README_labels_unused.md) and its related label management methods are not used in the current demo. However, they are available as a resource to explore, implement, or modify as needed.
 
 ## Extending
 

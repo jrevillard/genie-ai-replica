@@ -6,7 +6,7 @@
 
 Expose an endpoint (e.g. `POST /api/files/:fileId/ingest`) that:
 1. Finds the file and its metadata.
-2. Sends the file and certain metadata to the dataprep microservice (via HTTP request, e.g. using `axios`).
+2. Sends the file (or its path, or a download URL) and metadata to the dataprep microservice (via HTTP request, e.g. using `axios`).
 3. Waits for a response from dataprep (success/failure).
 4. On success, updates the file’s metadata:
 * dataprep.status = "ingested"
@@ -26,18 +26,17 @@ Expose an endpoint (e.g. `POST /api/files/:fileId/retract`) that:
 
 **Ingest**
 
-* Receives the file and metadata.
-* Performs text extraction, chunking and embedding of the file content.
-* Calls guardrail microservices for content checking for each chunk (optional)
+* Receives the file (or file path/URL) and metadata.
+* Performs text extraction and chunking of the file content.
+* Call guardrail microservices for content checking for each chunk
     * If fails, return an error response.
-    * If successful, start the next step.
-* Labels each chunk with the pre-defined service and category labels.
-* Performs entity and relation extraction for each chunk.
-* Stores results in related collections (SOURCE, ENTITY, HAS_SOURCE, LINKS_TO).
-* Returns a success/failure response.
+    * If successful:
+        * Performs embedding, entity and relation extraction for each chunk.
+        * Stores results in its own collections (chunks, embeddings, entities, relations).
+        * Returns a success/failure response.
 
 **Retract**
 
-* Receives a file ID.
-* Deletes all related chunks, entities, and relations from the database.
+* Receives a file ID (or other identifier).
+* Deletes all related chunks, embeddings, entities, and relations from its database.
 * Returns a success/failure response.

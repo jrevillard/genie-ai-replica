@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
-const { logger } = require('./shared-lib/logger');
+const { logger } = require('../../shared/lib/logger');
 
 // Import middlewares
 const { errorHandler } = require('./middlewares/errorHandler');
@@ -72,6 +72,9 @@ app.use(cors({
 }));
 
 // TODO: [NORMA] should use from shared-lib??
+// **FIX:** Trust the proxy to allow rate limiting based on X-Forwarded-For
+app.set('trust proxy', 1); 
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: appConfig.rateLimitMax || 100, // limit each IP to 100 requests per windowMs

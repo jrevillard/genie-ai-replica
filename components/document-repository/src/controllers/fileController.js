@@ -4,7 +4,7 @@ const config = require('../config/appConfig');
 const Joi = require('joi');
 const path = require('path');
 const fs = require('fs').promises;
-const { logger } = require('../shared-lib/logger');
+const { logger } = require('../../../shared/lib/logger');
 const { log, error } = require('console');
 const archiver = require('archiver');
 const axios = require('axios');
@@ -33,7 +33,7 @@ const getFilesSchema = Joi.object({
   language: Joi.string().min(2).max(5).optional(),
   mimeType: Joi.string().optional(),
   search: Joi.string().max(100).optional(),
-  dataprepStatus: Joi.string().valid('pending', 'ingested', 'retracted').optional(),
+  dataprepStatus: Joi.string().valid('pending', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted').optional(),
 });
 
 const updateFileSchema = Joi.object({
@@ -45,6 +45,24 @@ const updateFileSchema = Joi.object({
   source_url: Joi.string().uri().optional(),
   language: Joi.string().min(2).max(5).optional()
 });
+
+// Schema for new log entry
+const ingestionLogSchema = Joi.object({
+  level: Joi.string().valid('INFO', 'WARN', 'ERROR').required(),
+  stage: Joi.string().required(),
+  message: Joi.string().required(),
+});
+
+// Schema for status update from OPEA
+const updateStatusSchema = Joi.object({
+  dataprep: Joi.object({
+    status: Joi.string().valid('Pending', 'Ingesting', 'Ingested', 'Ingested with Warnings', 'Ingestion Error', 'Retracted').required(),
+    ingest_date: Joi.string().isoDate().optional().allow(null, ''),
+    retract_date: Joi.string().isoDate().optional().allow(null, ''),
+  }).required(),
+  chunk_count: Joi.number().integer().min(0).optional(),
+});
+
 
 class FileController {
   constructor() {
@@ -65,6 +83,9 @@ class FileController {
     this.retractFile = this.retractFile.bind(this);
     this.ingestMultipleFiles = this.ingestMultipleFiles.bind(this);
     this.retractMultipleFiles = this.retractMultipleFiles.bind(this);
+    this.addIngestionLog = this.addIngestionLog.bind(this);
+    this.getIngestionLogs = this.getIngestionLogs.bind(this);
+    this.updateFileStatus = this.updateFileStatus.bind(this);
   }
 
   /**
@@ -140,6 +161,18 @@ class FileController {
       };
     }
     
+    // Custom error for language detection
+    if (error.message.includes('documents are supported for ingestion')) {
+      return {
+        status: 400,
+        response: {
+          success: false,
+          error: 'Language not supported',
+          message: error.message
+        }
+      };
+    }
+
     if (error.message.includes('File type') && error.message.includes('not allowed')) {
       return {
         status: 400,
@@ -232,6 +265,15 @@ class FileController {
     // retrieve file from database and search actual file on disk
     const file = await metadataService.getMetadataById(fileId);
     logger.debug(`[FILE-CONTROLLER] Retrieved file: ${JSON.stringify(file, null, 2)}`);
+    
+    if (!file) {
+      throw {
+        status: 404,
+        error: 'File not found',
+        message: 'File metadata not found in database'
+      };
+    }
+
     const fileExtension = path.extname(file.file_name).slice(1);
     logger.debug(`[FILE-CONTROLLER] File extension: ${fileExtension}`);
     const fileNameOnDisk = file.file_id + '.' + fileExtension;
@@ -1004,6 +1046,100 @@ class FileController {
     } catch (error) {
       logger.error('Retract multiple files error:', error);
       res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Add an ingestion log entry
+   */
+  async addIngestionLog(req, res) {
+    try {
+      const { fileId } = req.params;
+      const { error, value } = ingestionLogSchema.validate(req.body);
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+      }
+
+      const logEntry = await fileService.addIngestionLog(fileId, value);
+      res.status(201).json({
+        success: true,
+        message: 'Log entry created',
+        data: logEntry
+      });
+
+    } catch (error) {
+      logger.error('Add ingestion log error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to add log entry',
+        message: error.message
+      });
+    }
+  }
+
+  /**
+   * Get all ingestion logs for a file
+   */
+  async getIngestionLogs(req, res) {
+    try {
+      const { fileId } = req.params;
+      const logs = await fileService.getIngestionLogs(fileId);
+      res.json({
+        success: true,
+        message: 'Logs retrieved successfully',
+        data: logs,
+        resultCount: logs.length
+      });
+    } catch (error) {
+      logger.error('Get ingestion logs error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve logs',
+        message: error.message
+      });
+    }
+  }
+
+  /**
+   * Update file status (called by OPEA service)
+   */
+  async updateFileStatus(req, res) {
+    try {
+      const { fileId } = req.params;
+      const { error, value } = updateStatusSchema.validate(req.body);
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+      }
+      
+      // Use metadataService.updateMetadata to safely update allowed fields
+      const updatedFile = await metadataService.updateMetadata(fileId, value);
+
+      res.json({
+        success: true,
+        message: 'File status updated successfully',
+        data: updatedFile
+      });
+
+    } catch (error) {
+      logger.error('Update file status error:', error);
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update file status',
+        message: error.message
+      });
     }
   }
 }

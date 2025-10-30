@@ -1,6 +1,6 @@
-// NOTE: The functionalities in this file are not called by any other file at the moment
+// NOTE: this shared functionality is not called by any other file at the moment
 // TODO: [NORMAL] Move common funtion related to file to this utils folder
-// some file operation implementation in fileService.js should be moved here
+// - some file operation implementation in fileService.js should be moved here
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -86,6 +86,7 @@ const getFileMetadata = async (filePath, originalFilename, mimeType) => {
       modifiedAt: stats.mtime,
       originalName: originalFilename,
       mimeType: mimeType
+      // category: getFileCategory(mimeType)
     };
   } catch (error) {
     throw new Error(`Failed to get file metadata: ${error.message}`);
@@ -110,7 +111,7 @@ const getTxtLineCount = async (filePath) => {
     const content = await fs.readFile(filePath, 'utf8');
     return content.split('\n').length;
   } catch {
-    return null;
+    return null; // Return null if file reading fails
   }
 };
 
@@ -123,7 +124,7 @@ const getTxtWordCount = async (filePath) => {
     return content.split(/\s+/).filter(word => word.length > 0).length;
   }
   catch {
-    return null;
+    return null; // Return null if file reading fails
   }
 };
 
@@ -135,7 +136,7 @@ const getPdfPageCount = async (filePath) => {
     return data.numpages || null;
   } catch (error) {
     console.error(`Failed to extract PDF page count: ${error.message}`);
-    return null;
+    return null; // Return null if extraction fails
   }
 };
 
@@ -146,7 +147,7 @@ const getDocxWordCount = async (filePath) => {
     return content.split(/\s+/).filter(word => word.length > 0).length;
   } catch (error) {
     console.error(`Failed to extract DOCX word count: ${error.message}`);
-    return null;
+    return null; // Return null if extraction fails
   }
 };
 

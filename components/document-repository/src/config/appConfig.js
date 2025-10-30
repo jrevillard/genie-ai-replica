@@ -6,7 +6,7 @@ const config = {
 
   // Database configuration
   database: {
-    url: process.env.ARANGO_URL || 'http://localhost:8529',
+    url: process.env.ARANGO_URL || 'http://91.203.132.51:8529',
     username: process.env.ARANGO_USERNAME || 'root',
     password: process.env.ARANGO_PASSWORD || 'test',
     databaseName: process.env.ARANGO_DB_NAME || 'node-services'
@@ -35,10 +35,10 @@ const config = {
       'text/plain',  // text files .txt
       'application/octet-stream' // generic binary files - temporary adding it to solve docx, xlsx, md upload issues
     ],
-    allowedExtensions: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.md', '.html', '.txt']
+    allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
+    requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
   },
 
-  // Label configuration (not used currently)
   labels: {
     allowedLevels: ['category', 'service'], // Allowed levels for labels
     allowedStatuses: ['pending', 'active'] // Allowed statuses for labels
@@ -63,6 +63,7 @@ const config = {
     quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED || false, // False: Don't quarantine, Path: Moves files to this place.
     debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false, // Whether or not to log info/debug/error msgs to the console
     socket: process.env.CLAMSCAN_SOCKET || false, // Socket file for connecting via TCP
+    // socket: process.env.CLAMSCAN_SOCKET || "/opt/homebrew/var/run/clamav/clamd.sock",
     host: process.env.CLAMSCAN_HOST || '127.0.0.1', // IP of host to connect to TCP interface
     port: process.env.CLAMSCAN_PORT || 3310, // Port of host to use when connecting via TCP interface
     timeout: process.env.CLAMSCAN_TIMEOUT || 60000, // Timeout for scanning files

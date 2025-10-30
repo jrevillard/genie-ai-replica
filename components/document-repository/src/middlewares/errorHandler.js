@@ -1,4 +1,4 @@
-const { logger } = require('../shared-lib/logger');
+const { logger } = require('../../../shared/lib/logger');
 const config = require('../config/appConfig');
 
 /**

@@ -1,7 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const appConfig = require('./config/appConfig');
-const { logger } = require('./shared-lib/logger');
+const { logger } = require('../../shared/lib/logger');
 
 const PORT = appConfig.port || process.env.PORT || 3001;
 const HOST = appConfig.host || process.env.HOST || '0.0.0.0';

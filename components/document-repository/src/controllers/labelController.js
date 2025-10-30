@@ -1,5 +1,5 @@
 const labelService = require('../services/labelService');
-const { logger } = require('../shared-lib/logger');
+const { logger } = require('../../../shared/lib/logger');
 
 
 // Get a label by its _key (the id)

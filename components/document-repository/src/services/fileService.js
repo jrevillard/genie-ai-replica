@@ -1,11 +1,14 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
-const { logger } = require('../shared-lib/logger');
-const dbService = require('../shared-lib/db-connection-service');
+const { logger } = require('../../../shared/lib/logger');
+const dbService = require('../../../shared/lib/db-connection-service');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler'); // having a crawler utility to fetch webpage content
+const langdetect = require('langdetect');
+const pdf = require('pdf-parse');
+const mammoth = require('mammoth');
 
 
 // Import services
@@ -28,6 +31,69 @@ class FileService {
     return await dbService.getConnection('files');
   }
 
+  /**
+   * Extracts text content from a file buffer based on MIME type
+   * @param {Buffer} buffer - File buffer
+   * @param {string} mimeType - File MIME type
+   * @returns {string} Extracted text
+   */
+  async _extractText(buffer, mimeType) {
+    try {
+      if (mimeType === 'application/pdf') {
+        const data = await pdf(buffer);
+        const text = data.text || '';
+        logger.debug(`[FILE-SERVICE] pdf-parse extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+        return text;
+      }
+      if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const { value } = await mammoth.extractRawText({ buffer });
+        const text = value || '';
+        logger.debug(`[FILE-SERVICE] mammoth extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+        return text;
+      }
+      if (mimeType.startsWith('text/')) {
+        const text = buffer.toString('utf-8');
+        logger.debug(`[FILE-SERVICE] Text file extracted ${text.length} characters.`);
+        return text;
+      }
+    } catch (error) {
+      logger.error(`[FILE-SERVICE] Text extraction failed for mimeType ${mimeType}: ${error.message}`);
+    }
+    return ''; // Return empty string if no text extracted or type not supported
+  }
+
+  /**
+   * Detects language from text.
+   * @param {string} text - Text to analyze
+   * @returns {string} ISO language code (e.g., 'en') or null
+   */
+  _detectLanguage(text) {
+    if (!text || text.trim().length < 20) { // Don't detect on very short strings
+      logger.warn(`[FILE-SERVICE] Language detection skipped: Text is too short (${text ? text.length : 0} chars)`);
+      return null;
+    }
+    
+    logger.debug(`[FILE-SERVICE] Detecting language from text (first 200 chars): "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+    
+    try {
+      // **FIX:** Use detectOne() which is more robust and returns a simple string or throws an error.
+      const langCode = langdetect.detectOne(text); 
+      
+      if (langCode) {
+        logger.debug(`[FILE-SERVICE] Language_detect result: ${langCode}`);
+        return langCode;
+      }
+
+      // This should not be reachable, as detectOne throws on failure
+      logger.warn(`[FILE-SERVICE] Language_detect.detectOne returned an empty result.`);
+      return null; 
+    } catch (error) {
+      // langdetect throws an error if no language features are found
+      logger.warn(`[FILE-SERVICE] Language detection failed (no language features found or error): ${error.message}`);
+      return null;
+    }
+  }
+
   
   /**
    * Upload and process a file
@@ -39,16 +105,45 @@ class FileService {
     
     let filePath;
     try {
+      const originalFileName = fileData.originalname;
+      const mimeType = mime.lookup(originalFileName) || fileData.mimetype;
+      const fileExtension = path.extname(originalFileName).toLowerCase();
+
+      // Perform Language Detection (Spec Sec 4.1)
+      const requiredLanguage = (appConfig.upload.requiredIngestionLanguage || 'en').toLowerCase();
+      
+      // Only check supported types for ingestion
+      const ingestionTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/markdown',
+        'text/html',
+        'text/plain'
+      ];
+
+      let detectedLang = null;
+      if (ingestionTypes.includes(mimeType)) {
+        logger.debug(`[FILE-SERVICE] Performing language detection for ${originalFileName}`);
+        const text = await this._extractText(fileData.buffer, mimeType);
+        detectedLang = this._detectLanguage(text);
+
+        logger.debug(`[FILE-SERVICE] Language detected: ${detectedLang} (Required: ${requiredLanguage})`);
+
+        // **Stricter logic**
+        // Block if language is NOT detected (null) OR if it is the wrong language.
+        if (!detectedLang || detectedLang.toLowerCase() !== requiredLanguage) {
+          const langFound = detectedLang || 'unknown'; // Handle null for the error message
+          throw new Error(`File [${originalFileName}] appears to be in [${langFound}]. Only [${requiredLanguage.toUpperCase()}] documents are supported for ingestion.`);
+        }
+      }
+
       // Generate unique file ID
       const fileId = fileUtils.generateUniqueFileId();
-      const originalFileName = fileData.originalname;
-      const fileExtension = path.extname(originalFileName).toLowerCase();
       const savedFileName = `${fileId}${fileExtension}`;
       filePath = path.join(this.uploadDir, savedFileName);
       logger.debug(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
 
       // Validate file type & extension
-      const mimeType = mime.lookup(originalFileName) || fileData.mimetype;
       const isMimeAllowed = this.allowedMimeTypes.includes(mimeType);
       const isExtensionAllowed = this.allowedExtensions.includes(fileExtension);
       if (!(isMimeAllowed && isExtensionAllowed)) {
@@ -80,13 +175,6 @@ class FileService {
       logger.debug(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
       await fs.writeFile(filePath, fileData.buffer);
 
-      // TODO: Review Fix createdDate
-      // - Currently it is the date when the file was written to the disk in the server
-      // - expected: the date when the file was created on the client side
-      // - limitation: HTTP file uploads don't preserve filesystem metadata
-      // - option 1: current solution, use the date when the file was written to the disk in the server
-      // - option 2: frontend should provide the created_date by extracting it from the file metadata
-
       // Get file stats to determine creation date
       const stats = await fs.stat(filePath);
       const createdDate = stats.birthtime;
@@ -106,10 +194,10 @@ class FileService {
         created_date: createdDate,
         crawl_date: fileInfo.crawlDate || null,
         source_url: fileInfo.sourceUrl || '',
-        language: fileInfo.language || '',
+        language: detectedLang || fileInfo.language || '', // Use detected language
         chunk_count: 0,
         dataprep: {
-          status: 'pending',
+          status: 'Pending', // Use capitalized status per spec
           ingest_date: '',
           retract_date: ''
         }
@@ -241,7 +329,8 @@ class FileService {
       }
       if (dataprepStatus) {
         const status = dataprepStatus.toLowerCase();
-        filters.push('file.dataprep.status == @status');
+        // Adjust for capitalized status in DB if needed, but spec implies lowercase search
+        filters.push('LOWER(file.dataprep.status) == @status');
         bindVars.status = status;
       }
 
@@ -387,7 +476,7 @@ class FileService {
       logger.error(`Error searching files: ${error}`);
       throw error;
     }
-  }
+}
 
 
   /**
@@ -416,6 +505,55 @@ class FileService {
       return stats;
     } catch (error) {
       logger.error(`Error getting file stats: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Add an ingestion log entry to the ingestion_log collection
+   * @param {string} fileId - The ID of the file
+   * @param {Object} logData - { level, stage, message }
+   * @returns {Object} The saved log entry
+   */
+  async addIngestionLog(fileId, logData) {
+    try {
+      const db = await this.getDb();
+      const logEntry = {
+        file_id: fileId,
+        timestamp: new Date().toISOString(),
+        level: logData.level,
+        stage: logData.stage,
+        message: logData.message
+      };
+      
+      const result = await db.collection('ingestion_log').save(logEntry, { returnNew: true });
+      logger.debug(`[FILE-SERVICE] Ingestion log added for ${fileId}: ${logData.message}`);
+      return result.new;
+    } catch (error) {
+      logger.error(`Error adding ingestion log for file ${fileId}: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all ingestion logs for a file, sorted by timestamp
+   * @param {string} fileId - The ID of the file
+   * @returns {Array} List of log entries
+   */
+  async getIngestionLogs(fileId) {
+    try {
+      const db = await this.getDb();
+      const query = `
+        FOR log IN ingestion_log
+        FILTER log.file_id == @fileId
+        SORT log.timestamp ASC
+        RETURN log
+      `;
+      const cursor = await db.query(query, { fileId });
+      const logs = await cursor.all();
+      return logs;
+    } catch (error) {
+      logger.error(`Error getting ingestion logs for file ${fileId}: ${error}`);
       throw error;
     }
   }

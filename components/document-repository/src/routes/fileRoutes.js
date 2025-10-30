@@ -48,6 +48,7 @@ router.use(authenticateToken);
  *         description: Forbidden - Admin role required
  */
 router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
+// router.post('/upload', uploadSingle, fileController.uploadFile);
 
 /**
  * @swagger
@@ -92,6 +93,7 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  */
 router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
 
+
 /**
  * @swagger
  * /api/files/upload-link:
@@ -121,6 +123,7 @@ router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController
  *         description: Forbidden - Admin role required
  */
 router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink);
+
 
 /**
  * @swagger
@@ -431,6 +434,11 @@ router.delete('/', fileController.deleteMultipleFiles);
  */
 router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
 
+// Update file metadata by fileId
+// This endpoint has similar functionality to the one above (PATCH /:fileId)
+// So this one and related functionalities are commented out and can be modified later if needed
+// router.patch('/metadata/:fileId', fileController.updateMetadataController);
+
 /**
  * @swagger
  * /api/files/{fileId}/ingest:
@@ -520,5 +528,66 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *         description: Forbidden - Admin role required
  */
 router.post('/retract', authorizeRole(['Admin']), fileController.retractMultipleFiles);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/ingestion-log:
+ *   get:
+ *     summary: Get all ingestion log entries for a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *           required: true
+ *           description: File ID
+ *     responses:
+ *       200:
+ *         description: List of log entries
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.getIngestionLogs);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/status:
+ *   patch:
+ *     summary: Update file ingestion status and chunk count (for internal/OPEA use)
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *           required: true
+ *           description: File ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *       application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           dataprep:
+ *           type: object
+ *         properties:
+ *           status:
+ *           type: string
+ *           enum: [Pending, Ingesting, Ingested, Ingested with Warnings, Ingestion Error, Retracted]
+ *           chunk_count:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: File status updated successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch('/:fileId/status', authorizeRole(['Admin']), fileController.updateFileStatus);
 
 module.exports = router;

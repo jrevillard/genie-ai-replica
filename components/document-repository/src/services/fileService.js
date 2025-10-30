@@ -42,18 +42,18 @@ class FileService {
       if (mimeType === 'application/pdf') {
         const data = await pdf(buffer);
         const text = data.text || '';
-        logger.debug(`[FILE-SERVICE] pdf-parse extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+        logger.info(`[FILE-SERVICE] pdf-parse extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
         return text;
       }
       if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         const { value } = await mammoth.extractRawText({ buffer });
         const text = value || '';
-        logger.debug(`[FILE-SERVICE] mammoth extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+        logger.info(`[FILE-SERVICE] mammoth extracted ${text.length} characters. Start of text: "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
         return text;
       }
       if (mimeType.startsWith('text/')) {
         const text = buffer.toString('utf-8');
-        logger.debug(`[FILE-SERVICE] Text file extracted ${text.length} characters.`);
+        logger.info(`[FILE-SERVICE] Text file extracted ${text.length} characters.`);
         return text;
       }
     } catch (error) {
@@ -73,14 +73,14 @@ class FileService {
       return null;
     }
     
-    logger.debug(`[FILE-SERVICE] Detecting language from text (first 200 chars): "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
+    logger.info(`[FILE-SERVICE] Detecting language from text (first 200 chars): "${text.substring(0, 200).replace(/\s+/g, ' ')}..."`);
     
     try {
       // **FIX:** Use detectOne() which is more robust and returns a simple string or throws an error.
       const langCode = langdetect.detectOne(text); 
       
       if (langCode) {
-        logger.debug(`[FILE-SERVICE] Language_detect result: ${langCode}`);
+        logger.info(`[FILE-SERVICE] Language_detect result: ${langCode}`);
         return langCode;
       }
 
@@ -123,11 +123,11 @@ class FileService {
 
       let detectedLang = null;
       if (ingestionTypes.includes(mimeType)) {
-        logger.debug(`[FILE-SERVICE] Performing language detection for ${originalFileName}`);
+        logger.info(`[FILE-SERVICE] Performing language detection for ${originalFileName}`);
         const text = await this._extractText(fileData.buffer, mimeType);
         detectedLang = this._detectLanguage(text);
 
-        logger.debug(`[FILE-SERVICE] Language detected: ${detectedLang} (Required: ${requiredLanguage})`);
+        logger.info(`[FILE-SERVICE] Language detected: ${detectedLang} (Required: ${requiredLanguage})`);
 
         // **Stricter logic**
         // Block if language is NOT detected (null) OR if it is the wrong language.
@@ -141,7 +141,7 @@ class FileService {
       const fileId = fileUtils.generateUniqueFileId();
       const savedFileName = `${fileId}${fileExtension}`;
       filePath = path.join(this.uploadDir, savedFileName);
-      logger.debug(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
+      logger.info(`[FILE-SERVICE] Save file ${originalFileName} into ${savedFileName}`);
 
       // Validate file type & extension
       const isMimeAllowed = this.allowedMimeTypes.includes(mimeType);
@@ -157,12 +157,12 @@ class FileService {
       }
 
       // Ensure upload directory exists
-      logger.debug(`[FILE-SERVICE]  Ensure upload directory exists: ${this.uploadDir}`);
+      logger.info(`[FILE-SERVICE]  Ensure upload directory exists: ${this.uploadDir}`);
       await fileUtils.ensureDirectoryExists(this.uploadDir);
 
       // Perform virus scan if enabled
       if (appConfig.virusScanning) {
-        logger.debug(`[FILE-SERVICE] Performing virus scan`);
+        logger.info(`[FILE-SERVICE] Performing virus scan`);
         const scanResult = await securityService.scanBuffer(fileData.buffer);
         logger.info(`[FILE-SERVICE] VIRUS SCAN result for ${originalFileName}: ${JSON.stringify(scanResult, null, 2)}`);
 
@@ -172,13 +172,13 @@ class FileService {
       }
 
       // Write file to disk (using buffer from memory storage)
-      logger.debug(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
+      logger.info(`[FILE-SERVICE]  Write file to disk: ${filePath}`);
       await fs.writeFile(filePath, fileData.buffer);
 
       // Get file stats to determine creation date
       const stats = await fs.stat(filePath);
       const createdDate = stats.birthtime;
-      logger.debug(`[FILE-SERVICE] File creation date: ${createdDate}`);
+      logger.info(`[FILE-SERVICE] File creation date: ${createdDate}`);
       
       // Create file record in database
       const fileRecord = {
@@ -476,7 +476,7 @@ class FileService {
       logger.error(`Error searching files: ${error}`);
       throw error;
     }
-}
+  }
 
 
   /**

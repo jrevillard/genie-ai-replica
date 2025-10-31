@@ -66,7 +66,9 @@
           </li>
         </ul>
       </div>
-    </div>
+
+      <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+      </div>
 
     <div class="dialog-footer">
       <button class="btn btn-outline" @click="$emit('close')">
@@ -100,6 +102,7 @@ export default {
       files: [],
       isDragging: false,
       isUploading: false,
+      errorMessage: "", // --- ADDED ---
       // MODIFIED per Spec 4.2
       allowedExtensions: [
         ".pdf",
@@ -128,11 +131,13 @@ export default {
       this.$refs.fileInput.click();
     },
     handleFileSelect(event) {
+      this.errorMessage = ""; // --- ADDED ---
       this.addFiles([...event.target.files]);
       event.target.value = "";
     },
     handleDrop(event) {
       this.isDragging = false;
+      this.errorMessage = ""; // --- ADDED ---
       event.preventDefault();
       const droppedFiles = [];
       if (event.dataTransfer.items) {
@@ -151,32 +156,32 @@ export default {
       if (droppedFiles.length > 0) {
         this.addFiles(droppedFiles);
       } else {
-        // UPDATED
-        this.showNotification(
-          this.translate('uploadDialog.notifications.dropError', "Only files can be dropped. Please check you are dragging a valid file from your computer."),
-          "error"
-        );
+        // --- UPDATED ---
+        const errorMsg = this.translate('uploadDialog.notifications.dropError', "Only files can be dropped. Please check you are dragging a valid file from your computer.");
+        this.errorMessage = errorMsg; // --- ADDED ---
+        this.showNotification(errorMsg, "error");
       }
     },
     addFiles(newFiles) {
+      // Clear previous validation errors when adding new files
+      this.errorMessage = ""; // --- ADDED ---
+
       newFiles.forEach((file) => {
         const extension = "." + file.name.split(".").pop().toLowerCase();
 
         if (!this.allowedExtensions.includes(extension)) {
-          // UPDATED
-          this.showNotification(
-            this.translate('uploadDialog.notifications.typeNotAllowed', `File type "{extension}" is not allowed.`).replace('{extension}', extension),
-            "error"
-          );
+          // --- UPDATED ---
+          const errorMsg = this.translate('uploadDialog.notifications.typeNotAllowed', `File type "{extension}" is not allowed.`).replace('{extension}', extension);
+          this.errorMessage = errorMsg; // --- ADDED ---
+          this.showNotification(errorMsg, "error");
           return;
         }
 
         if (file.name.toLowerCase().endsWith(".url")) {
-          // UPDATED
-          this.showNotification(
-            this.translate('uploadDialog.notifications.shortcutUnsupported', "Shortcut files (.url) are not supported. Please drag the actual file."),
-            "error"
-          );
+          // --- UPDATED ---
+          const errorMsg = this.translate('uploadDialog.notifications.shortcutUnsupported', "Shortcut files (.url) are not supported. Please drag the actual file.");
+          this.errorMessage = errorMsg; // --- ADDED ---
+          this.showNotification(errorMsg, "error");
           return;
         }
 
@@ -196,6 +201,7 @@ export default {
     },
     removeFile(index) {
       this.files.splice(index, 1);
+      this.errorMessage = ""; // --- ADDED ---
     },
     onDragOver() {
       this.isDragging = true;
@@ -212,7 +218,9 @@ export default {
     },
     async handleUpload() {
       this.isUploading = true;
+      this.errorMessage = ""; // --- ADDED ---
       const successfulUploads = [];
+
       for (const file of this.files) {
         try {
           const formData = new FormData();
@@ -225,11 +233,24 @@ export default {
             "success"
           );
         } catch (error) {
-          // UPDATED
-          this.showNotification(
-            (error.response?.data?.message || this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace('{fileName}', file.name)),
-            "error");
-          console.error(`Error uploading ${file.name}:`, error);
+          // --- THIS IS THE KEY FIX ---
+          // Robustly extract the specific error message from the backend.
+          const backendMessage =
+            error.response?.data?.message || // 1. Check for { message: "..." } in data
+            (typeof error.response?.data === 'string' ? error.response.data : null) || // 2. Check if data *is* the message string
+            error.message || // 3. Check the top-level error message
+            this.translate('uploadDialog.notifications.uploadFailed', `Failed to upload {fileName}.`).replace('{fileName}', file.name); // 4. Fallback
+
+          // --- UPDATED ---
+          this.errorMessage = backendMessage; // --- ADDED: Show error in the dialog box
+          this.showNotification(backendMessage, "error");
+          
+          console.error(`Error uploading ${file.name}. Displayed message:`, backendMessage);
+          console.error(`Full error object for ${file.name}:`, error);
+          if (error.response) {
+            console.error("Error response data:", error.response.data);
+          }
+          // --- END FIX ---
         }
       }
       this.isUploading = false;
@@ -393,5 +414,14 @@ export default {
   border: none;
   cursor: pointer;
   padding: 0.2rem; /* Add padding for easier clicking */
+}
+
+/* --- ADDED: Error Message Style --- */
+.error-message {
+  margin-top: 1rem;
+  color: var(--danger, #ef4444);
+  background-color: rgba(239, 68, 68, 0.1);
+  padding: 0.75rem;
+  border-radius: 4px;
 }
 </style>

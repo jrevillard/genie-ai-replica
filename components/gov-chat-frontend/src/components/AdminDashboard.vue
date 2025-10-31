@@ -4162,6 +4162,10 @@ export default {
     },
     getStatusClass(status) {
       if (status === "ingested") return "status-ingested";
+      if (status === "Ingesting") return "status-ingesting";
+      if (status === "Ingested with Warnings")
+        return "status-ingested-with-warnings"; 
+      if (status === "Ingestion Error") return "status-ingestion-error";
       if (status === "pending") return "status-pending";
       if (status === "retracted") return "status-retracted";
       return "";
@@ -5993,9 +5997,21 @@ input:checked + .slider:before {
   background-color: rgba(16, 185, 129, 0.1);
   color: var(--success);
 }
-.status-pending {
+.status-ingesting {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--primary);
+}
+.status-ingested-with-warnings {
   background-color: rgba(245, 158, 11, 0.1);
   color: var(--warning);
+}
+.status-ingestion-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+.status-pending {
+  background-color: rgba(22, 72, 144, 0.1); 
+  color: var(--secondary);
 }
 .status-retracted {
   background-color: rgba(100, 116, 139, 0.1);

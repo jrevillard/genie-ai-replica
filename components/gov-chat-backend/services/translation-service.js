@@ -1,7 +1,7 @@
 const { logger } = require('../shared-lib');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const crypto = require('crypto'); // For generating cache key
-const Redis = require('ioredis'); // <-- ADDED: For Redis cache
+const Redis = require('ioredis');  // For Redis cache
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -27,7 +27,7 @@ class TranslationService {
     this.remarkStringify = null;
     this.visit = null;
     this.initialized = false;
-    this.cacheClient = null; // <-- ADDED: For Redis client
+    this.cacheClient = null; // For Redis client
     
     // Map application language codes to the NLLB model's specific codes.
     // Full list: https://huggingface.co/facebook/nllb-200-distilled-600M
@@ -52,7 +52,7 @@ class TranslationService {
     if (cacheEnabled) {
       logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${redisHost}:${redisPort}`);
       
-      // --- MODIFIED: Initialize Redis Client ---
+      // Initialize Redis Client
       this.cacheClient = new Redis({
         host: redisHost,
         port: redisPort,
@@ -72,7 +72,6 @@ class TranslationService {
       this.cacheClient.on('connect', () => {
         logger.info('[TRANSLATION-CACHE] Connected to Redis successfully.');
       });
-      // --- END MODIFICATION ---
     }
   }
 
@@ -200,7 +199,7 @@ class TranslationService {
   /**
    * @method translateMarkdown
    * @description Translates the content of a markdown file while preserving the markdown structure.
-   * Caches the result to Redis if caching is enabled.
+   * Caches the result to Redis permanently if caching is enabled.
    * @param {string} markdownContent - The markdown content as a string.
    * @param {string} sourceLang - The source language code (e.g., 'en').
    * @param {string} targetLang - The target language code (e.g., 'fr').
@@ -282,6 +281,7 @@ class TranslationService {
     // Sanity check
     if (translatedTexts.length !== textNodes.length) {
         logger.error(`[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`);
+        // This is the corrected syntax
         throw new Error('Translation failed due to text count mismatch.');
     }
 
@@ -292,7 +292,7 @@ class TranslationService {
 
     // Stringify back to markdown
     const translatedMarkdown = this.unified()
-      .use(this.remarkStringify) // <-- This was the typo, now fixed
+      .use(this.remarkStringify)
       .stringify(tree);
     
     logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
@@ -300,11 +300,9 @@ class TranslationService {
     // --- REDIS CACHE LOGIC (SET) ---
     if (cacheEnabled && this.cacheClient) {
       try {
-        // Set an expiration time (e.g., 7 days) to auto-evict old data
-        const EXPIRATION_IN_SECONDS = 7 * 24 * 60 * 60; 
-
-        await this.cacheClient.set(cacheKey, translatedMarkdown, 'EX', EXPIRATION_IN_SECONDS);
-        logger.info(`[TRANSLATION-CACHE] SET: Stored translation in Redis key ${cacheKey}`);
+        // This command now sets the key permanently, with no expiration.
+        await this.cacheClient.set(cacheKey, translatedMarkdown);
+        logger.info(`[TRANSLATION-CACHE] SET: Stored translation PERMANENTLY in Redis key ${cacheKey}`);
       } catch (error) {
         logger.error(`[TRANSLATION-CACHE] FAILED to write cache to Redis: ${error.message}`);
       }

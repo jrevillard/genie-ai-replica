@@ -1,5 +1,7 @@
 version: '3.8'
 
+volumes:
+  redis_data:
 services:
   frontend:
     build: ./gov-chat-frontend
@@ -15,6 +17,23 @@ services:
     networks:
       - chatqna_default
 
+  redis-cache:
+    image: redis:7-alpine
+    container_name: redis-cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379" # Optional: Expose on host for debugging
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatqna_default
+
   backend:
     build:
       context: .
@@ -27,7 +46,6 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./gov-chat-backend/Uploads:/app/Uploads
-      - ./gov-chat-backend/translation-cache:/cache/translations
     environment:
       - TRANSLATION_THREADS=4
       - TRANSLATION_BATCHES=5
@@ -64,8 +82,13 @@ services:
       - CONTEXT_OPTION=conversation-with-context-labels
       - CORS_ALLOWED_ORIGINS=http://localhost:8090,https://localhost:8090,https://genie-ai.itu.int,/^https?:\/\/.*\.ssdcloudindia\.net$$/
       - CSP_CONNECT_SRC='self' http://localhost:3000 http://localhost:8090 ws://localhost:8090 wss://*.ssdcloudindia.net *.ssdcloudindia.net https://api.open-meteo.com https://ipapi.co https://nominatim.openstreetmap.org wss://genie-ai.itu.int:443'
+      - TRANSLATION_CACHE_HOST=redis-cache
+      - TRANSLATION_CACHE_PORT=6379
     env_file:
       - ./gov-chat-backend/.env
+    depends_on:
+      redis-cache:
+        condition: service_healthy
     networks:
       - chatqna_default
   

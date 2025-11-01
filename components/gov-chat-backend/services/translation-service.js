@@ -1,8 +1,7 @@
 const { logger } = require('../shared-lib');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const crypto = require('crypto'); // For generating cache key
-const fs = require('fs');         // <-- For file system
-const path = require('path');     // <-- For file paths
+const Redis = require('ioredis'); // <-- ADDED: For Redis cache
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -12,8 +11,9 @@ const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAU
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
 
-// --- Get cache path from env, default to /tmp ---
-const cachePath = process.env.TRANSLATION_CACHE_PATH || path.join('/tmp', 'translation-cache');
+// --- Get Redis cache settings from env ---
+const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
+const redisPort = parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379;
 
 /**
  * @class TranslationService
@@ -27,7 +27,7 @@ class TranslationService {
     this.remarkStringify = null;
     this.visit = null;
     this.initialized = false;
-    // this.translationCache = new Map(); // <-- REMOVED: No longer using in-memory cache
+    this.cacheClient = null; // <-- ADDED: For Redis client
     
     // Map application language codes to the NLLB model's specific codes.
     // Full list: https://huggingface.co/facebook/nllb-200-distilled-600M
@@ -48,17 +48,31 @@ class TranslationService {
     logger.info(`[TRANSLATION-CONFIG] Using ${intraOpNumThreads} threads per job.`);
     logger.info(`[TRANSLATION-CONFIG] Using ${numParallelBatches} parallel batches.`);
     logger.info(`[TRANSLATION-CONFIG] Cache enabled: ${cacheEnabled}`);
+
     if (cacheEnabled) {
-      logger.info(`[TRANSLATION-CONFIG] Cache path: ${cachePath}`);
-      // Ensure cache directory exists on startup
-      try {
-        if (!fs.existsSync(cachePath)) {
-          fs.mkdirSync(cachePath, { recursive: true });
-          logger.info(`[TRANSLATION-CACHE] Created cache directory: ${cachePath}`);
-        }
-      } catch (error) {
-        logger.error(`[TRANSLATION-CACHE] FAILED to create cache directory: ${error.message}`);
-      }
+      logger.info(`[TRANSLATION-CONFIG] Cache connecting to Redis at ${redisHost}:${redisPort}`);
+      
+      // --- MODIFIED: Initialize Redis Client ---
+      this.cacheClient = new Redis({
+        host: redisHost,
+        port: redisPort,
+        // Optional: Add retry logic
+        retryStrategy(times) {
+          const delay = Math.min(times * 500, 2000);
+          return delay;
+        },
+        maxRetriesPerRequest: 3,
+        // Prevent hanging if Redis is down on startup
+        enableOfflineQueue: false, 
+      });
+
+      this.cacheClient.on('error', (err) => {
+        logger.error(`[TRANSLATION-CACHE] Redis client error: ${err.message}`);
+      });
+      this.cacheClient.on('connect', () => {
+        logger.info('[TRANSLATION-CACHE] Connected to Redis successfully.');
+      });
+      // --- END MODIFICATION ---
     }
   }
 
@@ -186,7 +200,7 @@ class TranslationService {
   /**
    * @method translateMarkdown
    * @description Translates the content of a markdown file while preserving the markdown structure.
-   * Caches the result to the file system if caching is enabled.
+   * Caches the result to Redis if caching is enabled.
    * @param {string} markdownContent - The markdown content as a string.
    * @param {string} sourceLang - The source language code (e.g., 'en').
    * @param {string} targetLang - The target language code (e.g., 'fr').
@@ -198,25 +212,25 @@ class TranslationService {
       throw new Error('TranslationService is not ready.');
     }
 
-    // --- FILE CACHE LOGIC (START) ---
+    // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
     const docName = crypto.createHash('md5').update(markdownContent).digest('hex');
-    // Create the cache key in the format <name>_<locale>.md
-    const cacheKey = `${docName}_${targetLang}.md`;
-    const cacheFilePath = path.join(cachePath, cacheKey); // Full path to the cache file
+    // Create the cache key in the format <prefix>:<name>:<locale>
+    const cacheKey = `translation:${docName}:${targetLang}`;
 
-    if (cacheEnabled) {
+    if (cacheEnabled && this.cacheClient) {
       try {
-        if (fs.existsSync(cacheFilePath)) {
-          logger.info(`[TRANSLATION-CACHE] HIT: Returning file from ${cacheFilePath}`);
-          return fs.readFileSync(cacheFilePath, 'utf8');
+        const cachedResult = await this.cacheClient.get(cacheKey);
+        if (cachedResult) {
+          logger.info(`[TRANSLATION-CACHE] HIT: Returning from Redis key ${cacheKey}`);
+          return cachedResult;
         }
-        logger.info(`[TRANSLATION-CACHE] MISS: No cache file found at ${cacheFilePath}. Translating...`);
+        logger.info(`[TRANSLATION-CACHE] MISS: No cache in Redis for key ${cacheKey}. Translating...`);
       } catch (error) {
-         logger.warn(`[TRANSLATION-CACHE] Error checking file cache. Translating anyway. ${error.message}`);
+         logger.warn(`[TRANSLATION-CACHE] Redis GET error. Translating anyway. ${error.message}`);
       }
     }
-    // --- FILE CACHE LOGIC (END) ---
+    // --- REDIS CACHE LOGIC (END) ---
 
     logger.info(`[TRANSLATION-SERVICE] Starting markdown translation from ${sourceLang} to ${targetLang}`);
     const startTime = Date.now();
@@ -283,19 +297,19 @@ class TranslationService {
     
     logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
 
-    // --- FILE CACHE LOGIC (SET) ---
-    if (cacheEnabled) {
+    // --- REDIS CACHE LOGIC (SET) ---
+    if (cacheEnabled && this.cacheClient) {
       try {
-        // Ensure the directory exists (it might have been created on startup, but we check again)
-        fs.mkdirSync(cachePath, { recursive: true });
-        // Write the new translation to the cache file
-        fs.writeFileSync(cacheFilePath, translatedMarkdown);
-        logger.info(`[TRANSLATION-CACHE] SET: Stored translation in file ${cacheFilePath}`);
+        // Set an expiration time (e.g., 7 days) to auto-evict old data
+        const EXPIRATION_IN_SECONDS = 7 * 24 * 60 * 60; 
+
+        await this.cacheClient.set(cacheKey, translatedMarkdown, 'EX', EXPIRATION_IN_SECONDS);
+        logger.info(`[TRANSLATION-CACHE] SET: Stored translation in Redis key ${cacheKey}`);
       } catch (error) {
-        logger.error(`[TRANSLATION-CACHE] FAILED to write cache file: ${error.message}`);
+        logger.error(`[TRANSLATION-CACHE] FAILED to write cache to Redis: ${error.message}`);
       }
     }
-    // --- FILE CACHE LOGIC (END) ---
+    // --- REDIS CACHE LOGIC (END) ---
 
     return translatedMarkdown;
   }

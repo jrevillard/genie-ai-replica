@@ -123,7 +123,7 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379" # Optional: Expose on host for debugging
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
     volumes:
       - redis_data:/data
     healthcheck:

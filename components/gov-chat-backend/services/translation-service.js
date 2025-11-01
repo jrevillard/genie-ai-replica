@@ -14,6 +14,7 @@ const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
 // --- Get Redis cache settings from env ---
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
 const redisPort = parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379;
+const redisPassword = process.env.TRANSLATION_CACHE_PASSWORD || null;
 
 /**
  * @class TranslationService
@@ -56,6 +57,7 @@ class TranslationService {
       this.cacheClient = new Redis({
         host: redisHost,
         port: redisPort,
+        password: redisPassword,
         // Optional: Add retry logic
         retryStrategy(times) {
           const delay = Math.min(times * 500, 2000);

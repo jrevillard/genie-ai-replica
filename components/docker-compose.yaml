@@ -59,11 +59,13 @@ services:
       context: .
       dockerfile: document-repository/Dockerfile
     container_name: doc-repo-dev
-    environment:
-      - ARANGO_URL=http://arango-vector-db:8529
-      - ARANGO_PASSWORD=test
-      - DOCUMENT_INGESTION_LANGUAGE=en
-      - VIRUS_SCANNING=true
+    env_file:
+      - ./document-repository/.env
+        #environment:
+        #- ARANGO_URL=http://arango-vector-db:8529
+        #- ARANGO_PASSWORD=test
+        #- DOCUMENT_INGESTION_LANGUAGE=en
+        #- VIRUS_SCANNING=true
     depends_on:
       - clamav
     ports:

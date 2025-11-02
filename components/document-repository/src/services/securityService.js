@@ -3,8 +3,8 @@ const NodeClam = require('clamscan');
 const { Readable } = require('stream');
 
 const appConfig= require('../config/appConfig');
-const { logger } = require('../../../shared/lib/logger');
-const dbService = require('../../../shared/lib/db-connection-service');
+const { logger } = require('../../shared-lib');
+const { dbService } = require('../../shared-lib');
 
 
 class SecurityService {

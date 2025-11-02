@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379" # Optional: Expose on host for debugging
-    command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "!@#$5678"
+    command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "!@#$$5678"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -51,7 +51,7 @@ services:
       - TRANSLATION_BATCHES=5
       - TRANSLATION_CACHE=on
       - TRANSLATION_CACHE_PATH=/cache/translations
-      - TRANSLATION_CACHE_PASSWORD=!@#$5678
+      - TRANSLATION_CACHE_PASSWORD=!@#$$5678
       - NODE_ENV=production
       - PORT=3000
       - API_PREFIX=/api
@@ -110,10 +110,7 @@ services:
     networks:
       - chatqna_default
     volumes:
-      - ./document-repository:/app
       - ./logs:/app/logs
-      - ./document-repository/scripts/clamav-node.sh:/app/clamav-node.sh
-      # - ./document-repository/uploads:/app/uploads
   
   clamav:
     # image: mkodockx/docker-clamav:alpine

@@ -10,8 +10,8 @@ const path = require('path');
 const mime = require('mime-types'); // For MIME type detection
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 const { getPdfPageCount, getDocxWordCount, getTxtLineCount, getTxtWordCount, getFileHash } = require('../utils/fileUtils'); // Utility to ensure directory exists
-const { logger } = require('../../../shared/lib/logger');
-const dbService = require('../../../shared/lib/db-connection-service');
+const { logger } = require('../../shared-lib');
+const { dbService } = require('../../shared-lib');
 
 
 async function extractMetadata(filePath, fileInfo = {}) {

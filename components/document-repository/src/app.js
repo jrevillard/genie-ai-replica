@@ -5,8 +5,7 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
-
-const { logger } = require('../../shared/lib/logger');
+const { logger } = require('../shared-lib');
 
 // Import middlewares
 const { errorHandler } = require('./middlewares/errorHandler');

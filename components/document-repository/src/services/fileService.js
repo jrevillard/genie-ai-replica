@@ -1,8 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const mime = require('mime-types');
-const { logger } = require('../../../shared/lib/logger');
-const dbService = require('../../../shared/lib/db-connection-service');
+const { logger } = require('../../shared-lib');
+const { dbService } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler'); // having a crawler utility to fetch webpage content

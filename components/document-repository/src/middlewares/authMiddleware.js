@@ -1,4 +1,4 @@
-const { logger } = require('../../../shared/lib/logger');
+const { logger } = require('../../shared-lib');
 const securityService = require('../services/securityService');
 
 const authenticateToken = async (req, res, next) => {

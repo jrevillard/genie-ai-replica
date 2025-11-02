@@ -1,16 +1,16 @@
 # Use Node.js 22.14.0 as the base image
 FROM node:22.14.0
 
-# Install system dependencies required for clamscan and other packages
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y clamav clamav-daemon && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Configure freshclam to not notify clamd during initial update
+# Configure freshclam
 RUN sed -i 's/^NotifyClamd/#NotifyClamd/' /etc/clamav/freshclam.conf
 
-# Update clamd.conf to use TCP instead of socket
+# Configure clamd
 RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
     && sed -i 's/^FixStaleSocket /#FixStaleSocket /' /etc/clamav/clamd.conf \
     && sed -i 's/^LocalSocketGroup /#LocalSocketGroup /' /etc/clamav/clamd.conf \
@@ -21,40 +21,38 @@ RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
 # Create app directory
 WORKDIR /app
 
-# Copy startup script
-COPY document-repository/scripts/clamav-node.sh ./
-RUN chmod +x clamav-node.sh
+# --- FIX: Match the backend's working logic ---
 
-# Copy package files
+# 1. Copy files needed for 'npm install'
 COPY document-repository/package*.json ./
+COPY shared/lib ./shared-lib
 
-# --- FIX ---
-# Copy shared-lib to the /shared/lib/ directory at the container's root.
-# Your code (e.g., /app/src/app.js) uses require('../../shared/lib/logger'),
-# which resolves to /shared/lib/logger.js.
-COPY shared/lib/ /shared/lib/
-
-# Install app dependencies
+# 2. Run 'npm install'
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm install --verbose --fetch-timeout 600000 || \
     npm install --prefer-offline || \
     npm ci
+RUN rm -rf /app/node_modules/shared-lib
 
-# Copy app source
+# 3. Copy the rest of the application source
 COPY document-repository/src/ ./src/
+COPY document-repository/scripts/clamav-node.sh ./
+RUN chmod +x clamav-node.sh
+
+# --- End of fix ---
 
 # Create directories for uploads and logs
 RUN mkdir -p uploads logs
 
-# Debug: List contents of directories and check for files in the *correct* path
+# Debug: Run tests *after* all steps are complete
 RUN ls -la /app && \
-    ls -la /shared/lib
-RUN [ -f /shared/lib/logger.js ] || \
+    ls -la /app/shared-lib
+RUN [ -f /app/shared-lib/logger.js ] || \
     { echo "logger.js missing!"; exit 1; }
-RUN [ -f /shared/lib/db-connection-service.js ] || \
+RUN [ -f /app/shared-lib/db-connection-service.js ] || \
     { echo "db-connection-service.js missing!"; exit 1; }
 
-# Expose the port the app runs on
+# Expose ports
 EXPOSE 3001 3310
 
 # Set environment variables

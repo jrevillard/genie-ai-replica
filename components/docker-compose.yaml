@@ -61,11 +61,6 @@ services:
     container_name: doc-repo-dev
     env_file:
       - ./document-repository/.env
-        #environment:
-        #- ARANGO_URL=http://arango-vector-db:8529
-        #- ARANGO_PASSWORD=test
-        #- DOCUMENT_INGESTION_LANGUAGE=en
-        #- VIRUS_SCANNING=true
     depends_on:
       - clamav
     ports:
@@ -76,7 +71,6 @@ services:
       - ./logs:/app/logs
   
   clamav:
-    # image: mkodockx/docker-clamav:alpine
     image: clamav/clamav
     container_name: clamav
     ports:

@@ -42,7 +42,7 @@
           {{ translate("details.tabs.details", "Details") }}
         </button>
         <button
-          v-if="file.dataprep.status !== 'Pending'"
+          v-if="file.dataprep.status?.toLowerCase() !== 'pending'"
           :class="['tab-btn', { active: activeTab === 'ingestionLog' }]"
           @click="switchToLogTab"
         >
@@ -240,7 +240,7 @@
               <button
                 class="btn btn-danger"
                 @click="handleKillDocument"
-                :disabled="file.dataprep.status !== 'Ingesting'"
+                :disabled="file.dataprep.status?.toLowerCase() !== 'ingesting'"
               >
                 {{
                   translate("details.log.killDocument", "Kill This Document")
@@ -249,7 +249,7 @@
               <button
                 class="btn btn-danger"
                 @click="handleKillProcess"
-                :disabled="file.dataprep.status !== 'Ingesting'"
+                :disabled="file.dataprep.status?.toLowerCase() !== 'ingesting'"
               >
                 {{
                   translate("details.log.killProcess", "Kill Ingestion Process")
@@ -306,7 +306,7 @@
         <button
           class="btn btn-danger"
           @click="handleDelete"
-          :disabled="file.dataprep.status === 'ingested'"
+          :disabled="file.dataprep.status?.toLowerCase() === 'ingested'"
         >
           {{ translate("common.delete", "Delete") }}
         </button>
@@ -412,16 +412,19 @@ export default {
     isMetadataEditable() {
       // Per spec, metadata is editable unless 'Ingested'.
       // Allow editing for 'Pending', 'Retracted', 'Ingestion Error', 'Ingested with Warnings'
-      return this.file && this.file.dataprep.status !== "Ingested";
+      // UPDATED: Use toLowerCase() for reliable comparison
+      return this.file && this.file.dataprep.status?.toLowerCase() !== "ingested";
     },
     mainAction() {
       if (!this.file) return {};
-      const status = this.file.dataprep.status;
+      // UPDATED: Use toLowerCase() for reliable comparison
+      const status = this.file.dataprep.status ? this.file.dataprep.status.toLowerCase() : '';
       
       // Spec 4.2: Ingest button disabled if no labels
       const hasLabels = this.editableFile.labels.length > 0;
       
-      if (status === "Ingested" || status === "Ingested with Warnings") {
+      // UPDATED: Check lowercase statuses
+      if (status === "ingested" || status === "ingested with warnings") {
         return {
           text: this.translate("details.buttons.retract", "Retract"),
           class: "btn btn-warning",
@@ -537,7 +540,8 @@ export default {
         this.englishKnowledgeHierarchy = englishHierarchyResponse;
 
         // If file status is not pending, fetch logs immediately
-        if (this.file.dataprep.status !== "Pending") {
+        // UPDATED: Use toLowerCase() for reliable comparison
+        if (this.file.dataprep.status?.toLowerCase() !== "pending") {
           this.fetchIngestionLogs();
         }
 
@@ -741,6 +745,7 @@ export default {
             "Could not load file for viewing."
           ) + ` Error: ${error.message}`,
           "error"
+
         );
       }
     },
@@ -1007,12 +1012,15 @@ export default {
     // --- Util Methods ---
     getStatusClass(status) {
       // Added new states from Sec 3.1
-      if (status === "Ingested") return "status-ingested";
-      if (status === "Pending") return "status-pending";
-      if (status === "Retracted") return "status-retracted";
-      if (status === "Ingesting") return "status-ingesting";
-      if (status === "Ingestion Error") return "status-error";
-      if (status === "Ingested with Warnings") return "status-warn";
+      // UPDATED: Use toLowerCase() for reliable comparison
+      const lowerStatus = status ? status.toLowerCase() : '';
+
+      if (lowerStatus === "ingested") return "status-ingested";
+      if (lowerStatus === "pending") return "status-pending";
+      if (lowerStatus === "retracted") return "status-retracted";
+      if (lowerStatus === "ingesting") return "status-ingesting";
+      if (lowerStatus === "ingestion error") return "status-error";
+      if (lowerStatus === "ingested with warnings") return "status-warn";
       return "status-pending"; // Default
     },
     formatFileSize(bytes) {

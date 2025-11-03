@@ -16,7 +16,7 @@ class SecurityService {
       clamdscan: {
         socket: appConfig.clamscan.socket,
         port: appConfig.clamscan.port,
-        timeout: appConfig.clamscan.timeout,
+        timeout: parseInt(appConfig.clamscan.timeout, 10) || 60000,
         localFallback: appConfig.clamscan.localFallback,
         path: appConfig.clamscan.path,
         active: appConfig.clamscan.active

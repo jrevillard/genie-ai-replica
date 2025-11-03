@@ -13,8 +13,10 @@ const config = {
   },
 
   dataprep: {
-    host: process.env.DATAPREP_HOST || 'http://91.203.132.198', // to be replaced with the actual host
-    port: process.env.DATAPREP_PORT || '6007', // to be replaced with the actual port
+    host: process.env.DATAPREP_HOST || 'http://91.203.132.198', 
+    port: process.env.DATAPREP_PORT || '6007', 
+
+    // This needs to be changed as it cannot be deployed on Kubernetes like this; David F
     ingestPath: '/v1/dataprep/ingest_file',
     retractPath: '/v1/dataprep/retract_file'
   },
@@ -59,17 +61,29 @@ const config = {
 
   // ClamAV configuration using clamscan library
   clamscan: {
-    removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false, // If true, removes infected files
-    quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED || false, // False: Don't quarantine, Path: Moves files to this place.
-    debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false, // Whether or not to log info/debug/error msgs to the console
-    socket: process.env.CLAMSCAN_SOCKET || false, // Socket file for connecting via TCP
-    // socket: process.env.CLAMSCAN_SOCKET || "/opt/homebrew/var/run/clamav/clamd.sock",
-    host: process.env.CLAMSCAN_HOST || '127.0.0.1', // IP of host to connect to TCP interface
-    port: process.env.CLAMSCAN_PORT || 3310, // Port of host to use when connecting via TCP interface
-    timeout: process.env.CLAMSCAN_TIMEOUT || 60000, // Timeout for scanning files
-    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true, // Use local preferred binary to scan if socket/tcp fails
-    path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan', // Path to the clamdscan binary on your server
-    active: process.env.CLAMSCAN_ACTIVE === 'true' || true, // If true, this module will consider using the clamdscan binary
+    removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
+    
+    // FIX: Check for the string 'false' or use the env var as a path
+    quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED === 'false' 
+      ? false 
+      : (process.env.CLAMSCAN_QUARANTINE_INFECTED || false),
+      
+    debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false,
+    
+    // FIX: Use a strict === 'true' check, as 'false' string is truthy
+    socket: process.env.CLAMSCAN_SOCKET === 'true' || false,
+    
+    host: process.env.CLAMSCAN_HOST || '127.0.0.1',
+    
+    // FIX: Convert port string to a number
+    port: parseInt(process.env.CLAMSCAN_PORT, 10) || 3310,
+    
+    // FIX: Convert timeout string to a number
+    timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
+    
+    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK === 'true' || true,
+    path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
+    active: process.env.CLAMSCAN_ACTIVE === 'true' || true,
   },
 
   // Logging configuration

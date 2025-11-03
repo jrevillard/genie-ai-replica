@@ -532,6 +532,53 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
 /**
  * @swagger
  * /api/files/{fileId}/ingestion-log:
+ *   post:
+ *     summary: Add an ingestion log entry for a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: File ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - level
+ *               - message
+ *             properties:
+ *               level:
+ *                 type: string
+ *                 enum: [info, warn, error, debug]
+ *                 description: Log level
+ *               message:
+ *                 type: string
+ *                 description: The log message
+ *               stage:
+ *                 type: string
+ *                 description: The ingestion stage (e.g., 'dataprep', 'embedding')
+ *     responses:
+ *       201:
+ *         description: Log entry added successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ *       404:
+ *         description: File not found
+ */
+router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.addIngestionLog);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/ingestion-log:
  *   get:
  *     summary: Get all ingestion log entries for a file
  *     tags: [Files]
@@ -542,8 +589,8 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *         name: fileId
  *         schema:
  *           type: string
- *           required: true
- *           description: File ID
+ *         required: true
+ *         description: File ID
  *     responses:
  *       200:
  *         description: List of log entries
@@ -565,23 +612,23 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.ge
  *         name: fileId
  *         schema:
  *           type: string
- *           required: true
- *           description: File ID
+ *         required: true
+ *         description: File ID
  *     requestBody:
  *       required: true
  *       content:
- *       application/json:
- *       schema:
- *         type: object
- *         properties:
- *           dataprep:
- *           type: object
- *         properties:
- *           status:
- *           type: string
- *           enum: [Pending, Ingesting, Ingested, Ingested with Warnings, Ingestion Error, Retracted]
- *           chunk_count:
- *           type: integer
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               dataprep:
+ *                 type: object
+ *                 properties:
+ *                   status:
+ *                     type: string
+ *                     enum: [Pending, Ingesting, Ingested, Ingested with Warnings, Ingestion Error, Retracted]
+ *                   chunk_count:
+ *                     type: integer
  *     responses:
  *       200:
  *         description: File status updated successfully

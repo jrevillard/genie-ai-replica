@@ -2,6 +2,7 @@ version: '3.8'
 
 volumes:
   redis_data:
+  doc_repo_uploads: {}
 services:
   frontend:
     build: ./gov-chat-frontend
@@ -69,6 +70,7 @@ services:
       - chatqna_default
     volumes:
       - ./logs:/app/logs
+      - doc_repo_uploads:/app/uploads
   
   clamav:
     image: clamav/clamav

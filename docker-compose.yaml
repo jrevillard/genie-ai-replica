@@ -27,6 +27,7 @@ volumes:
   nginx_certs:
   nginx_conf:
   redis_data:
+  doc_repo_uploads: {}
 
 services:
 
@@ -217,6 +218,7 @@ services:
       - genieai_network
     volumes:
       - ./logs:/app/logs
+      - doc_repo_uploads:/app/uploads
 
   clamav:
     #image: mkodockx/docker-clamav:alpine

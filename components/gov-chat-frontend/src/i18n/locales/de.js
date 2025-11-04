@@ -554,6 +554,11 @@ export default {
       statusPending: 'Ausstehend',
       statusIngested: 'Aufgenommen',
       statusRetracted: 'Zurückgezogen',
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "In Aufnahme",
+      statusError: "Aufnahmefehler",
+      statusWarning: "Aufgenommen m. Warnungen",
+      // ---
       ingestSelected: 'Ausgewählte aufnehmen',
       colFileName: 'Dateiname',
       colStatus: 'Status',
@@ -1471,7 +1476,12 @@ export default {
     save: 'Speichern',
     move: 'Verschieben',
     delete: 'Löschen',
-    ok: 'OK' // NEW KEY
+    // --- NEW KEYS ADDED ---
+    ok: 'OK',
+    ingest: 'Aufnehmen',
+    retract: 'Zurückziehen',
+    loading: 'Laden...',
+    refresh: 'Aktualisieren'
   },
   feedback: {
     title: 'Feedback',
@@ -1524,6 +1534,23 @@ export default {
     fileSize: 'Dateigröße',
     uploadDate: 'Hochladedatum',
     hash: 'SHA256-Hash',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "Details",
+      ingestionLog: "Aufnahmeprotokoll"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "Abbruch-Aktionen:",
+      killDocument: "Dieses Dokument abbrechen",
+      killProcess: "Aufnahmeprozess abbrechen",
+      timestamp: "Zeitstempel",
+      level: "Ebene",
+      stage: "Phase",
+      message: "Nachricht",
+      loadingLogs: "Protokolle werden geladen...",
+      noLogs: "Keine Protokolle gefunden."
+    },
     buttons: {
       saveMetadata: 'Metadaten speichern',
       retract: 'Zurückziehen',
@@ -1541,12 +1568,27 @@ export default {
       retractSuccess: 'Datei wurde erfolgreich zurückgezogen.',
       retractError: 'Fehler beim Zurückziehen der Datei.',
       deleteSuccess: 'Datei erfolgreich gelöscht.',
-      deleteError: 'Fehler beim Löschen der Datei.'
+      deleteError: 'Fehler beim Löschen der Datei.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "Bitte wählen Sie mindestens ein Etikett vor der Aufnahme aus.",
+      ingestSaving: "Speichere Metadaten vor der Aufnahme...",
+      ingestSaveFailed: "Metadaten konnten nicht gespeichert werden. Aufnahme abgebrochen.",
+      logError: "Fehler beim Abrufen der Aufnahmeprotokolle.",
+      killDocSent: "Abbruchanforderung für dieses Dokument wurde gesendet.",
+      killProcSent: "Abbruchanforderung für den Aufnahmeprozess wurde gesendet."
     },
     confirm: {
       ingest: 'Möchten Sie diese Datei wirklich aufnehmen? Dies startet die Datenverarbeitungspipeline.',
       retract: 'Möchten Sie diese Datei wirklich zurückziehen?',
-      delete: 'Möchten Sie diese Datei wirklich dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.'
+      delete: 'Möchten Sie diese Datei wirklich dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "Aufnahme bestätigen",
+      retractTitle: "Zurückziehen bestätigen",
+      deleteTitle: "Löschen bestätigen",
+      killDocTitle: "Dokumentaufnahme abbrechen",
+      killDoc: "Sind Sie sicher, dass Sie die Aufnahmeaufgabe für DIESES Dokument abbrechen möchten? Das System wird versuchen, einen ordnungsgemäßen Rollback durchzuführen.",
+      killProcTitle: "GESAMTEN Aufnahmeprozess abbrechen",
+      killProc: "WARNUNG: Dies bricht den gesamten Backend-Aufnahmedienst ab und betrifft ALLE derzeit in Bearbeitung befindlichen Dateien. Sind Sie absolut sicher?"
     }
   },
   uploadDialog: {

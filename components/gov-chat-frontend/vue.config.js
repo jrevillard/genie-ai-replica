@@ -28,7 +28,8 @@ module.exports = {
     },
     host: '0.0.0.0',
     client: {
-      webSocketURL: 'auto://0.0.0.0:0/ws'
+      webSocketURL: 'auto://0.0.0.0:0/ws',
+      webSocketTransport: 'ws',
     },
     proxy: {
       '/api': {

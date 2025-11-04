@@ -553,6 +553,11 @@ export default {
       statusPending: "قيد الانتظار",
       statusIngested: "تم الاستيعاب",
       statusRetracted: "تم السحب",
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "قيد الاستيعاب",
+      statusError: "خطأ في الاستيعاب",
+      statusWarning: "تم الاستيعاب مع تحذيرات",
+      // ---
       ingestSelected: "استيعاب المختار",
       colFileName: "اسم الملف",
       colStatus: "الحالة",
@@ -1470,7 +1475,12 @@ export default {
     save: 'حفظ',
     move: 'نقل',
     delete: 'حذف',
-    ok: 'موافق' // NEW KEY
+    // --- NEW KEYS ADDED ---
+    ok: 'موافق',
+    ingest: 'استيعاب',
+    retract: 'سحب',
+    loading: 'جاري التحميل...',
+    refresh: 'تحديث'
   },
   feedback: {
     title: 'التعليق',
@@ -1522,6 +1532,23 @@ export default {
     fileSize: 'حجم الملف',
     uploadDate: 'تاريخ الرفع',
     hash: 'تجزئة SHA256',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "التفاصيل",
+      ingestionLog: "سجل الاستيعاب"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "إجراءات الإنهاء:",
+      killDocument: "إنهاء هذا المستند",
+      killProcess: "إنهاء عملية الاستيعاب",
+      timestamp: "الطابع الزمني",
+      level: "المستوى",
+      stage: "المرحلة",
+      message: "الرسالة",
+      loadingLogs: "جاري تحميل السجلات...",
+      noLogs: "لم يتم العثور على سجلات."
+    },
     buttons: {
       saveMetadata: 'حفظ البيانات الوصفية',
       retract: 'سحب',
@@ -1539,12 +1566,27 @@ export default {
       retractSuccess: 'تم سحب الملف بنجاح.',
       retractError: 'فشل سحب الملف.',
       deleteSuccess: 'تم حذف الملف بنجاح.',
-      deleteError: 'فشل حذف الملف.'
+      deleteError: 'فشل حذف الملف.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "يرجى اختيار علامة واحدة على الأقل قبل الاستيعاب.",
+      ingestSaving: "جاري حفظ البيانات الوصفية قبل الاستيعاب...",
+      ingestSaveFailed: "فشل حفظ البيانات الوصفية. تم إلغاء الاستيعاب.",
+      logError: "فشل جلب سجلات الاستيعاب.",
+      killDocSent: "تم إرسال طلب إنهاء لهذا المستند.",
+      killProcSent: "تم إرسال طلب إنهاء لعملية الاستيعاب."
     },
     confirm: {
       ingest: 'هل أنت متأكد أنك تريد استيعاب هذا الملف؟ سيبدأ هذا عملية معالجة البيانات.',
       retract: 'هل أنت متأكد أنك تريد سحب هذا الملف؟',
-      delete: 'هل أنت متأكد أنك تريد حذف هذا الملف نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.'
+      delete: 'هل أنت متأكد أنك تريد حذف هذا الملف نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "تأكيد الاستيعاب",
+      retractTitle: "تأكيد السحب",
+      deleteTitle: "تأكيد الحذف",
+      killDocTitle: "إنهاء استيعاب المستند",
+      killDoc: "هل أنت متأكد من أنك تريد إنهاء مهمة الاستيعاب لهذا المستند؟ ستحاول العملية التراجع بأمان.",
+      killProcTitle: "إنهاء عملية الاستيعاب بأكملها",
+      killProc: "تحذير: سيؤدي هذا إلى إنهاء خدمة الاستيعاب الخلفية بأكملها، مما يؤثر على جميع الملفات قيد المعالجة حاليًا. هل أنت متأكد تمامًا؟"
     }
   },
   uploadDialog: {

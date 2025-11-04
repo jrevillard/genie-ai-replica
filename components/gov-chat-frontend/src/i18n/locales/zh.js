@@ -554,6 +554,11 @@ export default {
       statusPending: "待处理",
       statusIngested: "已提取",
       statusRetracted: "已撤回",
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "提取中",
+      statusError: "提取错误",
+      statusWarning: "已提取(有警告)",
+      // ---
       ingestSelected: "提取选中项",
       colFileName: "文件名",
       colStatus: "状态",
@@ -1471,7 +1476,12 @@ export default {
     save: '保存',
     move: '移动',
     delete: '删除',
-    ok: '确定' // NEW KEY
+    // --- NEW KEYS ADDED ---
+    ok: '确定',
+    ingest: '提取',
+    retract: '撤回',
+    loading: '加载中...',
+    refresh: '刷新'
   },
   feedback: {
     title: '反馈',
@@ -1523,6 +1533,23 @@ export default {
     fileSize: '文件大小',
     uploadDate: '上传日期',
     hash: 'SHA256 哈希值',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "详情",
+      ingestionLog: "提取日志"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "终止操作:",
+      killDocument: "终止此文档",
+      killProcess: "终止提取过程",
+      timestamp: "时间戳",
+      level: "级别",
+      stage: "阶段",
+      message: "消息",
+      loadingLogs: "正在加载日志...",
+      noLogs: "未找到日志。"
+    },
     buttons: {
       saveMetadata: '保存元数据',
       retract: '撤回',
@@ -1540,12 +1567,27 @@ export default {
       retractSuccess: '文件已成功撤回。',
       retractError: '撤回文件失败。',
       deleteSuccess: '文件删除成功。',
-      deleteError: '删除文件失败。'
+      deleteError: '删除文件失败。',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "提取前请至少选择一个标签。",
+      ingestSaving: "提取前正在保存元数据...",
+      ingestSaveFailed: "保存元数据失败。提取已取消。",
+      logError: "获取提取日志失败。",
+      killDocSent: "已发送此文档的终止请求。",
+      killProcSent: "已发送提取过程的终止请求。"
     },
     confirm: {
       ingest: '您确定要提取此文件吗？这将启动数据处理流程。',
       retract: '您确定要撤回此文件吗？',
-      delete: '您确定要永久删除此文件吗？此操作无法撤销。'
+      delete: '您确定要永久删除此文件吗？此操作无法撤销。',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "确认提取",
+      retractTitle: "确认撤回",
+      deleteTitle: "确认删除",
+      killDocTitle: "终止文档提取",
+      killDoc: "您确定要终止此文档的提取任务吗？系统将尝试安全回滚。",
+      killProcTitle: "终止所有提取过程",
+      killProc: "警告：这将终止整个后端提取服务，影响当前正在处理的所有文件。您确定吗？"
     }
   },
   uploadDialog: {

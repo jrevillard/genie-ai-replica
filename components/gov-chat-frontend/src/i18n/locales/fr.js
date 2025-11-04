@@ -554,6 +554,11 @@ export default {
       statusPending: "En attente",
       statusIngested: "Ingéré",
       statusRetracted: "Rétracté",
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "Ingestion en cours",
+      statusError: "Erreur d'ingestion",
+      statusWarning: "Ingéré avec avertissements",
+      // ---
       ingestSelected: "Ingérer la sélection",
       colFileName: "Nom du fichier",
       colStatus: "Statut",
@@ -1469,7 +1474,12 @@ export default {
     save: 'Enregistrer',
     move: 'Déplacer',
     delete: 'Supprimer',
-    ok: 'OK' // NEW KEY
+    // --- NEW KEYS ADDED ---
+    ok: 'OK',
+    ingest: 'Ingérer',
+    retract: 'Rétracter',
+    loading: 'Chargement...',
+    refresh: 'Actualiser'
   },
   feedback: {
     title: 'Commentaires',
@@ -1522,6 +1532,23 @@ export default {
     fileSize: 'Taille du fichier',
     uploadDate: 'Date de téléchargement',
     hash: 'Hachage SHA256',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "Détails",
+      ingestionLog: "Journal d'ingestion"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "Actions d'arrêt :",
+      killDocument: "Arrêter ce document",
+      killProcess: "Arrêter le processus d'ingestion",
+      timestamp: "Horodatage",
+      level: "Niveau",
+      stage: "Étape",
+      message: "Message",
+      loadingLogs: "Chargement des journaux...",
+      noLogs: "Aucun journal trouvé."
+    },
     buttons: {
       saveMetadata: 'Enregistrer les métadonnées',
       retract: 'Rétracter',
@@ -1539,12 +1566,27 @@ export default {
       retractSuccess: 'Le fichier a été rétracté avec succès.',
       retractError: 'Échec de la rétractation du fichier.',
       deleteSuccess: 'Fichier supprimé avec succès.',
-      deleteError: 'Échec de la suppression du fichier.'
+      deleteError: 'Échec de la suppression du fichier.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "Veuillez sélectionner au moins une étiquette avant l'ingestion.",
+      ingestSaving: "Enregistrement des métadonnées avant ingestion...",
+      ingestSaveFailed: "Échec de l'enregistrement des métadonnées. Ingestion annulée.",
+      logError: "Échec de la récupération des journaux d'ingestion.",
+      killDocSent: "La demande d'arrêt pour ce document a été envoyée.",
+      killProcSent: "La demande d'arrêt pour le processus d'ingestion a été envoyée."
     },
     confirm: {
       ingest: 'Êtes-vous sûr de vouloir ingérer ce fichier ? Cela lancera le pipeline de traitement des données.',
       retract: 'Êtes-vous sûr de vouloir rétracter ce fichier ?',
-      delete: 'Êtes-vous sûr de vouloir supprimer définitivement ce fichier ? Cette action est irréversible.'
+      delete: 'Êtes-vous sûr de vouloir supprimer définitivement ce fichier ? Cette action est irréversible.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "Confirmer l'ingestion",
+      retractTitle: "Confirmer la rétractation",
+      deleteTitle: "Confirmer la suppression",
+      killDocTitle: "Arrêter l'ingestion du document",
+      killDoc: "Êtes-vous sûr de vouloir arrêter la tâche d'ingestion pour CE document ? Le processus tentera un retour en arrière propre.",
+      killProcTitle: "Arrêter TOUT le processus d'ingestion",
+      killProc: "AVERTISSEMENT : Cela arrêtera l'ensemble du service d'ingestion backend, affectant TOUS les fichiers en cours de traitement. Êtes-vous absolument sûr ?"
     }
   },
   uploadDialog: {

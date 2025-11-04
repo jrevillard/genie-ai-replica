@@ -122,7 +122,10 @@ const adminDashboardService = {
    */
   async runDiagnostics() {
     try {
-      return await httpService.post('admin/diagnostics');
+      // Get the full response
+      const response = await httpService.post('admin/diagnostics');
+      // Return only the data payload, as expected by the component
+      return response.data;
     } catch (error) {
       console.error('Error running diagnostics:', error);
       throw error;

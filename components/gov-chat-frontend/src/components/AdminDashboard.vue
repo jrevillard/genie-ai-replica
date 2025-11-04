@@ -3511,6 +3511,16 @@ export default {
 
         // Show success notification
         if (result && result.success) {
+          // Case 1: Standard success (e.g., { success: true, ... })
+          this.showNotification(
+            this.translate(
+              `admin.operations.${operation}.success`,
+              `Operation ${operation} completed successfully`
+            ),
+            "success"
+          );
+        } else if (result === undefined || result === null) {
+          // Case 2: Success with an empty body (e.g., 200 OK from diagnostics)
           this.showNotification(
             this.translate(
               `admin.operations.${operation}.success`,
@@ -3519,6 +3529,7 @@ export default {
             "success"
           );
         } else {
+          // Case 3: A failure response (e.g., { success: false, message: '...' })
           throw new Error(result.message || `Failed to ${operation}`);
         }
 
@@ -4164,7 +4175,7 @@ export default {
       if (status === "ingested") return "status-ingested";
       if (status === "Ingesting") return "status-ingesting";
       if (status === "Ingested with Warnings")
-        return "status-ingested-with-warnings"; 
+        return "status-ingested-with-warnings";
       if (status === "Ingestion Error") return "status-ingestion-error";
       if (status === "pending") return "status-pending";
       if (status === "retracted") return "status-retracted";
@@ -6010,7 +6021,7 @@ input:checked + .slider:before {
   color: var(--danger);
 }
 .status-pending {
-  background-color: rgba(22, 72, 144, 0.1); 
+  background-color: rgba(22, 72, 144, 0.1);
   color: var(--secondary);
 }
 .status-retracted {

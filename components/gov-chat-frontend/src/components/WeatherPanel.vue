@@ -21,7 +21,6 @@
     </div>
     
     <div v-else class="weather-content">
-      <!-- Current Weather -->
       <div class="current-weather">
         <div class="current-icon">
           <i :class="getWeatherIcon(currentWeather.condition)"></i>
@@ -40,7 +39,6 @@
         </div>
       </div>
       
-      <!-- Daily Forecast -->
       <div class="forecast-list">
         <div v-for="(day, index) in formattedForecast" :key="index" class="forecast-day">
           <div class="day-name">{{ day.formattedDate }}</div>
@@ -59,8 +57,10 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex'; // FIX: Import Vuex getters
 import weatherService from '@/services/weatherService'; // Adjust path as needed
-import authService from '@/services/authService'; // Adjust path as needed
+// FIX: No longer need authService, will get user from Vuex store
+// import authService from '@/services/authService'; 
 
 export default {
   name: 'WeatherPanel',
@@ -68,7 +68,7 @@ export default {
   data() {
     return {
       location: null,
-      isLoading: true,
+      isLoading: true, // Start in loading state until auth is checked
       errorKey: null,
       currentWeather: {
         temperature: 0,
@@ -81,6 +81,9 @@ export default {
   },
   
   computed: {
+    // FIX: Map isAuthenticated and user getters from Vuex store
+    ...mapGetters(['isAuthenticated', 'user']),
+
     weatherTitle() {
       return this.$t('sidebar.weatherTitle');
     },
@@ -106,19 +109,46 @@ export default {
   watch: {
     '$i18n.locale': {
       handler() {
-        this.getWeather();
+        // Only refresh if already authenticated
+        if (this.isAuthenticated) {
+          this.getWeather();
+        }
         this.$forceUpdate();
       },
-      immediate: true
+      // Do not use immediate: true here, let the auth watcher handle it
+    },
+
+    // FIX: Add a watcher for authentication
+    isAuthenticated: {
+      handler(isAuthed) {
+        if (isAuthed) {
+          // User is authenticated, NOW we can get the weather
+          this.getWeather();
+        } else {
+          // User is not authenticated (e.g., logged out)
+          this.isLoading = false;
+          this.errorKey = 'weatherAuthRequired'; // You may need to add this translation key
+          this.location = null;
+        }
+      },
+      immediate: true // Check auth state immediately when component loads
     }
   },
   
   created() {
-    this.getWeather();
+    // FIX: Removed this.getWeather() from here.
+    // The isAuthenticated watcher will now handle the initial call.
   },
   
   methods: {
     async getWeather() {
+      // Extra safety check
+      if (!this.isAuthenticated) {
+        this.isLoading = false;
+        this.errorKey = 'weatherAuthRequired';
+        return;
+      }
+
       this.isLoading = true;
       this.errorKey = null;
       this.location = null;
@@ -129,8 +159,9 @@ export default {
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
           });
           const { latitude, longitude } = position.coords;
-          const user = await authService.getCurrentUser(); // Fetch user from authService
-          const userId = user?._key || null;
+          
+          // FIX: Get userId from the Vuex store 'user' object
+          const userId = this.user?._key || null;
           const locale = this.$i18n.locale;
 
           const weatherData = await weatherService.getWeather({ latitude, longitude, userId, locale });
@@ -149,7 +180,11 @@ export default {
     },
     
     async refreshWeather() {
-      await this.getWeather();
+      // The watcher will prevent this from running if not authed,
+      // but an explicit check is good practice.
+      if (this.isAuthenticated) {
+        await this.getWeather();
+      }
     },
     
     formatDay(date) {
@@ -197,6 +232,7 @@ export default {
 </script>
 
 <style scoped>
+/* Styles remain unchanged */
 .weather-panel {
   margin-top: 15px;
   background-color: var(--bg-card);

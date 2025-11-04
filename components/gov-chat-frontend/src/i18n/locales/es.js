@@ -554,6 +554,11 @@ export default {
       statusPending: 'Pendiente',
       statusIngested: 'Ingerido',
       statusRetracted: 'Retractado',
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "Ingiriendo",
+      statusError: "Error de Ingestión",
+      statusWarning: "Ingerido con Advertencias",
+      // ---
       ingestSelected: 'Ingerir Seleccionados',
       colFileName: 'Nombre de Archivo',
       colStatus: 'Estado',
@@ -672,7 +677,7 @@ export default {
     password: 'Contraseña',
     loginButton: 'Iniciar Sesión',
     or: 'o',
-    savedAccounts: 'Cuentas Guardadas',
+    savedAccounts: 'Cuentas GuardADAS',
     loginSuccess: 'Inicio de sesión exitoso',
     loginError: 'Inicio de sesión fallido. Por favor, verifique sus credenciales.',
     googleLogin: 'Continuar con Google',
@@ -1471,7 +1476,12 @@ export default {
     save: 'Guardar',
     move: 'Mover',
     delete: 'Eliminar',
-    ok: 'Aceptar' // NEW KEY
+    // --- NEW KEYS ADDED ---
+    ok: 'Aceptar',
+    ingest: 'Ingerir',
+    retract: 'Retractar',
+    loading: 'Cargando...',
+    refresh: 'Actualizar'
   },
   feedback: {
     title: 'Retroalimentación',
@@ -1523,6 +1533,23 @@ export default {
     fileSize: 'Tamaño del archivo',
     uploadDate: 'Fecha de subida',
     hash: 'Hash SHA256',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "Detalles",
+      ingestionLog: "Registro de Ingestión"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "Acciones de Detención:",
+      killDocument: "Detener este Documento",
+      killProcess: "Detener Proceso de Ingestión",
+      timestamp: "Marca de Tiempo",
+      level: "Nivel",
+      stage: "Etapa",
+      message: "Mensaje",
+      loadingLogs: "Cargando registros...",
+      noLogs: "No se encontraron registros."
+    },
     buttons: {
       saveMetadata: 'Guardar metadatos',
       retract: 'Retractar',
@@ -1540,12 +1567,27 @@ export default {
       retractSuccess: 'El archivo ha sido retractado correctamente.',
       retractError: 'Error al retractar el archivo.',
       deleteSuccess: 'Archivo eliminado correctamente.',
-      deleteError: 'Error al eliminar el archivo.'
+      deleteError: 'Error al eliminar el archivo.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "Por favor, seleccione al menos una etiqueta antes de ingerir.",
+      ingestSaving: "Guardando metadatos antes de la ingestión...",
+      ingestSaveFailed: "Error al guardar metadatos. Ingestión cancelada.",
+      logError: "Error al obtener los registros de ingestión.",
+      killDocSent: "Se ha enviado la solicitud de detención para este documento.",
+      killProcSent: "Se ha enviado la solicitud de detención para el proceso de ingestión."
     },
     confirm: {
       ingest: '¿Está seguro de que desea ingerir este archivo? Esto iniciará el proceso de tratamiento de datos.',
       retract: '¿Está seguro de que desea retractar este archivo?',
-      delete: '¿Está seguro de que desea eliminar permanentemente este archivo? Esta acción no se puede deshacer.'
+      delete: '¿Está seguro de que desea eliminar permanentemente este archivo? Esta acción no se puede deshacer.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "Confirmar Ingestión",
+      retractTitle: "Confirmar Retracción",
+      deleteTitle: "Confirmar Eliminación",
+      killDocTitle: "Detener Ingestión de Documento",
+      killDoc: "¿Está seguro de que desea detener la tarea de ingestión para ESTE documento? El proceso intentará una anulación segura.",
+      killProcTitle: "Detener TODO el Proceso de Ingestión",
+      killProc: "ADVERTENCIA: Esto detendrá todo el servicio de ingestión de backend, afectando a TODOS los archivos que se están procesando actualmente. ¿Está absolutamente seguro?"
     }
   },
   uploadDialog: {

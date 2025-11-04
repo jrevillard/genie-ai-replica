@@ -553,6 +553,11 @@ export default {
       statusPending: "Tertunda",
       statusIngested: "Terserap",
       statusRetracted: "Ditarik",
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "Sedang Diproses",
+      statusError: "Kesalahan Pemrosesan",
+      statusWarning: "Terserap dengan Peringatan",
+      // ---
       ingestSelected: "Proses Pilihan",
       colFileName: "Nama File",
       colStatus: "Status",
@@ -1468,7 +1473,12 @@ export default {
     save: 'Simpan',
     move: 'Pindahkan',
     delete: 'Hapus',
-    ok: 'OK' // NEW KEY
+    // --- NEW KEYS ADDED ---
+    ok: 'OK',
+    ingest: 'Proses',
+    retract: 'Tarik Kembali',
+    loading: 'Memuat...',
+    refresh: 'Segarkan'
   },
   feedback: {
     title: 'Umpan Balik',
@@ -1521,6 +1531,23 @@ export default {
     fileSize: 'Ukuran File',
     uploadDate: 'Tanggal Unggah',
     hash: 'Hash SHA256',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "Detail",
+      ingestionLog: "Log Pemrosesan"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "Tindakan Penghentian:",
+      killDocument: "Hentikan Dokumen Ini",
+      killProcess: "Hentikan Proses Pemrosesan",
+      timestamp: "Cap Waktu",
+      level: "Level",
+      stage: "Tahap",
+      message: "Pesan",
+      loadingLogs: "Memuat log...",
+      noLogs: "Tidak ada log ditemukan."
+    },
     buttons: {
       saveMetadata: 'Simpan Metadata',
       retract: 'Tarik Kembali',
@@ -1538,12 +1565,27 @@ export default {
       retractSuccess: 'File telah berhasil ditarik kembali.',
       retractError: 'Gagal menarik kembali file.',
       deleteSuccess: 'File berhasil dihapus.',
-      deleteError: 'Gagal menghapus file.'
+      deleteError: 'Gagal menghapus file.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "Harap pilih setidaknya satu label sebelum memproses.",
+      ingestSaving: "Menyimpan metadata sebelum pemrosesan...",
+      ingestSaveFailed: "Gagal menyimpan metadata. Pemrosesan dibatalkan.",
+      logError: "Gagal mengambil log pemrosesan.",
+      killDocSent: "Permintaan penghentian untuk dokumen ini telah dikirim.",
+      killProcSent: "Permintaan penghentian untuk proses pemrosesan telah dikirim."
     },
     confirm: {
       ingest: 'Apakah Anda yakin ingin memproses file ini? Ini akan memulai alur pemrosesan data.',
       retract: 'Apakah Anda yakin ingin menarik kembali file ini?',
-      delete: 'Apakah Anda yakin ingin menghapus file ini secara permanen? Tindakan ini tidak dapat dibatalkan.'
+      delete: 'Apakah Anda yakin ingin menghapus file ini secara permanen? Tindakan ini tidak dapat dibatalkan.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "Konfirmasi Pemrosesan",
+      retractTitle: "Konfirmasi Penarikan",
+      deleteTitle: "Konfirmasi Penghapusan",
+      killDocTitle: "Hentikan Pemrosesan Dokumen",
+      killDoc: "Apakah Anda yakin ingin menghentikan tugas pemrosesan untuk DOKUMEN INI? Proses akan mencoba pembatalan yang aman.",
+      killProcTitle: "Hentikan SELURUH Proses Pemrosesan",
+      killProc: "PERINGATAN: Ini akan menghentikan seluruh layanan pemrosesan backend, mempengaruhi SEMUA file yang sedang diproses. Apakah Anda benar-benar yakin?"
     }
   },
   uploadDialog: {

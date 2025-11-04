@@ -554,6 +554,11 @@ export default {
       statusPending: "Pending",
       statusIngested: "Ingested",
       statusRetracted: "Retracted",
+      // --- NEW STATUSES ---
+      statusIngesting: "Ingesting",
+      statusError: "Ingestion Error",
+      statusWarning: "Ingested with Warnings",
+      // ---
       ingestSelected: "Ingest Selected",
       colFileName: "File Name",
       colStatus: "Status",
@@ -1471,8 +1476,12 @@ export default {
     save: 'Save',
     move: 'Move',
     delete: 'Delete',
-    // --- NEW KEY ---
-    ok: 'OK'
+    // --- NEW KEYS ADDED ---
+    ok: 'OK',
+    ingest: 'Ingest',
+    retract: 'Retract',
+    loading: 'Loading...',
+    refresh: 'Refresh'
   },
   feedback: {
     title: 'Feedback',
@@ -1524,6 +1533,23 @@ export default {
     fileSize: 'File Size',
     uploadDate: 'Upload Date',
     hash: 'SHA256 Hash',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "Details",
+      ingestionLog: "Ingestion Log"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "Kill Actions:",
+      killDocument: "Kill This Document",
+      killProcess: "Kill Ingestion Process",
+      timestamp: "Timestamp",
+      level: "Level",
+      stage: "Stage",
+      message: "Message",
+      loadingLogs: "Loading logs...",
+      noLogs: "No logs found."
+    },
     buttons: {
       saveMetadata: 'Save Metadata',
       retract: 'Retract',
@@ -1541,12 +1567,27 @@ export default {
       retractSuccess: 'File has been retracted.',
       retractError: 'Failed to retract file.',
       deleteSuccess: 'File deleted successfully.',
-      deleteError: 'Failed to delete file.'
+      deleteError: 'Failed to delete file.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "Please select at least one label before ingesting.",
+      ingestSaving: "Saving metadata before ingestion...",
+      ingestSaveFailed: "Failed to save metadata. Ingestion cancelled.",
+      logError: "Failed to fetch ingestion logs.",
+      killDocSent: "Kill request for this document has been sent.",
+      killProcSent: "Kill request for the ingestion process has been sent."
     },
     confirm: {
       ingest: 'Are you sure you want to ingest this file? This will start the data processing pipeline.',
       retract: 'Are you sure you want to retract this file?',
-      delete: 'Are you sure you want to permanently delete this file? This action cannot be undone.'
+      delete: 'Are you sure you want to permanently delete this file? This action cannot be undone.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "Confirm Ingestion",
+      retractTitle: "Confirm Retraction",
+      deleteTitle: "Confirm Deletion",
+      killDocTitle: "Kill Document Ingestion",
+      killDoc: "Are you sure you want to kill the ingestion task for THIS document? The process will attempt a graceful rollback.",
+      killProcTitle: "Kill ENTIRE Ingestion Process",
+      killProc: "WARNING: This will kill the entire backend ingestion service, affecting ALL files currently processing. Are you absolutely sure?"
     }
   },
   uploadDialog: {

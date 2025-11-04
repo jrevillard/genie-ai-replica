@@ -555,6 +555,11 @@ export default {
       statusPending: "Pendente",
       statusIngested: "Ingerido",
       statusRetracted: "Retirado",
+      // --- NEW STATUSES ADDED ---
+      statusIngesting: "Ingerindo",
+      statusError: "Erro de Ingestão",
+      statusWarning: "Ingerido com Avisos",
+      // ---
       ingestSelected: "Ingerir Selecionados",
       colFileName: "Nome do Arquivo",
       colStatus: "Status",
@@ -1472,8 +1477,12 @@ export default {
     save: 'Salvar',
     move: 'Mover',
     delete: 'Excluir',
-    // --- NEW KEY ---
-    ok: 'OK'
+    // --- NEW KEYS ADDED ---
+    ok: 'OK',
+    ingest: 'Ingerir',
+    retract: 'Retirar',
+    loading: 'Carregando...',
+    refresh: 'Atualizar'
   },
   feedback: {
     title: 'Feedback',
@@ -1525,6 +1534,23 @@ export default {
     fileSize: 'Tamanho do Ficheiro',
     uploadDate: 'Data de Carregamento',
     hash: 'Hash SHA256',
+    // --- NEW: TABS ---
+    tabs: {
+      details: "Detalhes",
+      ingestionLog: "Log de Ingestão"
+    },
+    // --- NEW: LOG TAB ---
+    log: {
+      killActions: "Ações de Interrupção:",
+      killDocument: "Interromper Este Documento",
+      killProcess: "Interromper Processo de Ingestão",
+      timestamp: "Carimbo de Tempo",
+      level: "Nível",
+      stage: "Estágio",
+      message: "Mensagem",
+      loadingLogs: "A carregar logs...",
+      noLogs: "Nenhum log encontrado."
+    },
     buttons: {
       saveMetadata: 'Guardar Metadados',
       retract: 'Retirar',
@@ -1542,12 +1568,27 @@ export default {
       retractSuccess: 'Ficheiro retirado com sucesso.',
       retractError: 'Falha ao retirar o ficheiro.',
       deleteSuccess: 'Ficheiro eliminado com sucesso.',
-      deleteError: 'Falha ao eliminar o ficheiro.'
+      deleteError: 'Falha ao eliminar o ficheiro.',
+      // --- NEW NOTIFICATIONS ---
+      ingestLabelRequired: "Por favor, selecione pelo menos uma etiqueta antes de ingerir.",
+      ingestSaving: "A guardar metadados antes da ingestão...",
+      ingestSaveFailed: "Falha ao guardar metadados. Ingestão cancelada.",
+      logError: "Falha ao obter os logs de ingestão.",
+      killDocSent: "Pedido de interrupção para este documento enviado.",
+      killProcSent: "Pedido de interrupção para o processo de ingestão enviado."
     },
     confirm: {
       ingest: 'Tem a certeza que quer ingerir este ficheiro? Isto iniciará o pipeline de processamento de dados.',
       retract: 'Tem a certeza de que quer retirar este ficheiro?',
-      delete: 'Tem a certeza de que quer eliminar permanentemente este ficheiro? Esta ação não pode ser anulada.'
+      delete: 'Tem a certeza de que quer eliminar permanentemente este ficheiro? Esta ação não pode ser anulada.',
+      // --- NEW CONFIRMATIONS ---
+      ingestTitle: "Confirmar Ingestão",
+      retractTitle: "Confirmar Retirada",
+      deleteTitle: "Confirmar Exclusão",
+      killDocTitle: "Interromper Ingestão do Documento",
+      killDoc: "Tem a certeza de que quer interromper a tarefa de ingestão para ESTE documento? O processo tentará uma reversão segura.",
+      killProcTitle: "Interromper TODO o Processo de Ingestão",
+      killProc: "AVISO: Isto irá interromper todo o serviço de ingestão de backend, afetando TODOS os ficheiros atualmente em processamento. Tem a certeza absoluta?"
     }
   },
   uploadDialog: {

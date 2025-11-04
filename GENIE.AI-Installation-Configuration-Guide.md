@@ -72,14 +72,14 @@ To deliver an accurate, trustworthy, and useful RAG solution, the underlying dat
 **Supported Formats:**
 
 * Web pages (.html, via URL links)  
-* Documents (.pdf, .doc, .docx)  - .doc may be removed as it is legacy and problematic (converting to .docx or .pdf is recommended)
-* Spreadsheets (.xls, .xlsx)  - we suggest that .xls and .xlsx are also avoided as we may elect to remove them too (problematic)
+* Documents (.pdf, .doc, .docx) \- .doc may be removed as it is legacy and problematic (converting to .docx or .pdf is recommended)  
+* Spreadsheets (.xls, .xlsx) \- we suggest that .xls and .xlsx are also avoided as we may elect to remove them too (problematic)  
 * Markdown (.md)  
 * Plain Text (.txt)
 
 **Curation Best Practices:**
 
-1. **Source Vetting:** Always prioritize authoritative and official sources. For government services, this means official government websites and publications. For healthcare, use peer-reviewed medical journals, clinical guidelines from recognized health organizations, and regulatory bodies. You will need a team of experts to validate and curate this knowledge and it will need to be agreed and signed-off before ingestion.
+1. **Source Vetting:** Always prioritize authoritative and official sources. For government services, this means official government websites and publications. For healthcare, use peer-reviewed medical journals, clinical guidelines from recognized health organizations, and regulatory bodies. You will need a team of experts to validate and curate this knowledge and it will need to be agreed and signed-off before ingestion.  
 2. **Data Cleaning:**  
    * **Standardize Terminology:** Ensure consistent use of terms (e.g., "Type 2 Diabetes" vs. "T2D").  
    * **Remove Duplicates & Noise:** Eliminate redundant documents, boilerplate text (headers, footers, irrelevant ads), and artifacts from the conversion process.  
@@ -89,7 +89,7 @@ To deliver an accurate, trustworthy, and useful RAG solution, the underlying dat
 **Verification Workflow:**
 
 1. **Subject Matter Expert (SME) Review:** This is the most critical step. Once data is curated, it must be reviewed by experts in the relevant domain. An agronomist should verify the crop data, and a doctor should verify the healthcare guidelines. SMEs check for factual accuracy, completeness, and relevance.  
-2. **Version Control:** Your knowledge base is not static. Regulations, guidelines, and data change. Implement a system to track document versions and schedule regular reviews (e.g., annually) to update or retire outdated information. The sources for these documents should be version controlled.
+2. **Version Control:** Your knowledge base is not static. Regulations, guidelines, and data change. Implement a system to track document versions and schedule regular reviews (e.g., annually) to update or retire outdated information. The sources for these documents should be version controlled.  
 3. **Establish a Feedback Loop:** The GENIE.AI framework includes capabilities for users to provide feedback on responses. This user feedback is an invaluable, continuous source of verification. A process must be in place to review flagged responses, trace them back to the source document, and make corrections as needed.
 
 By following this rigorous process of designing, curating, and verifying your data, you will build a robust and reliable knowledge base that allows GENIE.AI to perform at its full potential.
@@ -106,50 +106,54 @@ You have two primary methods for accomplishing this: using the provided command-
 
 This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows. The scripts provide a powerful way to manage the database schema and its content.
 
-##### **Option A: Setting Up a New GENIE.AI Instance from Scratch** (recommended)
+##### **Option A: Setting Up a New GENIE.AI Instance from Scratch (recommended)**
 
 This workflow is for when you are creating a brand-new knowledge base (the normal case).
 
 Step 2.1.1: Create the Database Schema  
-First, create the database itself along with all the necessary collections, indexes, and graphs. The arango-schema-creator.js script uses a predefined arango-schema.json file to build this structure. This can be done in the ArangoDB console (http://localhost:8529/)
+First, create the database itself along with all the necessary collections, indexes, and graphs. The arango-schema-creator.js script uses a predefined arango-schema.json file to build this structure. This can be done in the ArangoDB console (http://localhost:8529/)  
+Bash
 
 Bash
 
-\# Set the name for your new database  
+\# Set the name for your new database    
 export ARANGO\_DATABASE="genie-ai-new-use-case" 
 
-\# Run the script with the schema definition file from the gov-chat-backend/scripts/new-schema-scripts folder
+\# Run the script with the schema definition file from the gov-chat-backend/scripts/new-schema-scripts folder  
 node arango-schema-creator.js ./arango-schema.json
 
-Step 2.1.2: Populate the English Knowledge Hierarchy
-There are 2 options for this : 1 - script based (documented directly below) and 2 - Using the Admin Dashboard (documented further below)
+Step 2.1.2: Populate the English Knowledge Hierarchy  
+There are 2 options for this : 1 \- script based (documented directly below) and 2 \- Using the Admin Dashboard (documented further below)  
 Next, populate the serviceCategories and services collections with your English labels. The create-knowledge-hierarchy.js script can be run in two ways:  
 ⚠️ IMPORTANT: Disable Schema Validation First\!  
 Before running this script, you must temporarily disable schema validation on the serviceCategories, services, and categoryServices collections to prevent errors. You can do this in the ArangoDB web UI under each collection's "Settings" tab by setting the Validation Level to "none". Remember to re-enable it after the script succeeds. The latest version of the schema has this already disabled for all collections. The scripts can handle either interactive or file modes.
 
-* **Interactive Mode:** The script will prompt you to enter categories and services one by one.  
+* Interactive Mode: The script will prompt you to enter categories and services one by one.  
+  Bash  
   Bash  
   node create-knowledge-hierarchy.js
 
-* **File Mode:** Provide a simple JSON file containing your hierarchy. This is recommended for automated setups.  
+* File Mode: Provide a simple JSON file containing your hierarchy. This is recommended for automated setups.  
   Bash  
-  \# Example my-hierarchy.json  
-  \# \[  
-  \#   { "category": "Emergency Services", "services": \["Ambulance Dispatch", "Emergency Room Locations"\] }  
+  Bash  
+  \# Example my-hierarchy.json    
+  \# \[    
+  \#   { "category": "Emergency Services", "services": \["Ambulance Dispatch", "Emergency Room Locations"\] }    
   \# \]
 
   node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
-Step 2.1.3: Generate Language Translations  (one of the hassles with scripts)
+Step 2.1.3: Generate Language Translations (one of the hassles with scripts)  
 Finally, use the create-translations.js script to automatically translate the English labels into your desired languages using the Google Cloud Translate API.
 
 * **Prerequisites:** You must have a google-credentials.json file configured with a service account key and an API key. The Cloud Translation API must be enabled in your Google Cloud project.  
-* **Usage:** Run the script for each language you need to support.  
+* Usage: Run the script for each language you need to support.  
   Bash  
-  \# Create French translations  
+  Bash  
+  \# Create French translations    
   node create-translations.js FR
 
-  \# Create Swahili translations  
+  \# Create Swahili translations    
   node create-translations.js SW
 
 ##### **Option B: Migrating or Cloning an Existing GENIE.AI Instance**
@@ -159,16 +163,18 @@ This workflow is used when you have a pre-existing, populated GENIE.AI database 
 Step 2.1.1: Extract Schema and Export Data (from Source DB)  
 On your source system, run the extraction and export scripts.
 
-1. **Extract Schema:**  
+1. Extract Schema:  
    Bash  
-   \# Point to your source database  
-   export ARANGO\_DATABASE="genie-ai-source"  
+   Bash  
+   \# Point to your source database    
+   export ARANGO\_DATABASE="genie-ai-source"    
    node arango-schema-extractor.js
 
    This produces an arango-schema.json file.  
-2. **Export Data:**  
+2. Export Data:  
    Bash  
-   \# Still pointing to the source database  
+   Bash  
+   \# Still pointing to the source database    
    node export-service-categories.js
 
    This produces a comprehensive JSON file in the /exports directory containing all hierarchy and translation data. Note the timestamped filename for the next step.
@@ -176,17 +182,19 @@ On your source system, run the extraction and export scripts.
 Step 2.1.2: Create Database and Import Data (on Target DB)  
 On your target system, use the files generated above.
 
-1. **Create Schema:** Use the arango-schema.json from the source to create an identical database structure.  
+1. Create Schema: Use the arango-schema.json from the source to create an identical database structure.  
    Bash  
-   \# Point to your new target database  
-   export ARANGO\_DATABASE="genie-ai-production"  
+   Bash  
+   \# Point to your new target database    
+   export ARANGO\_DATABASE="genie-ai-production"    
    node arango-schema-creator.js ./arango-schema.json
 
-2. **Import Data:** Use the import-service-categories.js script to populate the new database.⚠️ IMPORTANT: Disable Schema Validation First\!  
+2. Import Data: Use the import-service-categories.js script to populate the new database.⚠️ IMPORTANT: Disable Schema Validation First\!  
    Just as with the scratch setup, you must disable schema validation for the relevant collections in the new target database before importing.  
    Bash  
-   \# Point to the new database and the exported file  
-   export ARANGO\_DATABASE="genie-ai-production"  
+   Bash  
+   \# Point to the new database and the exported file    
+   export ARANGO\_DATABASE="genie-ai-production"    
    export IMPORT\_FILE="./exports/serviceCategoriesAndServices\_export\_... .json"
 
    node import-service-categories.js
@@ -213,6 +221,132 @@ Navigate to the Document Management tab. The process is as follows:
 
 ---
 
-### **Next Steps**
+### **Step 3: Application Setup and Deployment**
 
-Once your database is created and populated with both a knowledge hierarchy and ingested documents using one of the methods above, the knowledge base of your GENIE.AI instance is officially established. The next steps will involve pulling the application code, configuring the environment to connect to this database, and starting the services.
+Once your database is created and populated (Step 2), you are ready to configure and run the application services. This section covers cloning the repository, setting up the core environment variables, and launching the stack using Docker Compose.
+
+#### **3.1 Cloning the Repository**
+
+First, obtain the application source code. The repository is available from the following locations. Clone the one you have access to:
+
+* **Public Replica:** https://gitlab.com/fordendk/genie-ai-replica  
+* **Internal UNICC GitLab Server:** (Check with your administrator for the internal repository URL)
+
+Clone the repository to your local machine (using the public replica as an example):
+
+Bash
+
+git clone https://gitlab.com/fordendk/genie-ai-replica  
+cd genie-ai-replica
+
+#### **3.2 Environment Configuration**
+
+The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository. You must create this file (e.g., by copying an existing .env.example) and populate it with your specific settings.
+
+The following tables document the key variables found in the .env file, grouped by the service they configure. 1
+
+**Kong (API Gateway) & Database** 2
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| POSTGRES\_USER | Username for the Kong database. | kong |
+| POSTGRES\_DB | Name of the Kong database. | kong |
+| POSTGRES\_PASSWORD | Password for the Kong database. | k1ngk0ng |
+| KONG\_DATABASE | Tells Kong which database type to use. | postgres |
+| KONG\_PG\_HOST | Hostname for the Kong database service. | kong-database |
+| KONG\_ADMIN\_LISTEN | Kong admin API listen address. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
+| KONG\_DNS\_RESOLVER | DNS resolver for Kong (e.g., Docker's internal). | 127.0.0.11 |
+
+**Frontend & Backend (Shared)** 3
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API. | /api |
+| VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
+| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. | 'self' http://locahost... |
+| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. | http://localhost,https://localhost... |
+
+**Backend Service** 4
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| NODE\_ENV | Sets the application environment. | production |
+| BACKEND\_PORT | Internal port the Node.js app listens on. | 3000 |
+| API\_PREFIX | Global prefix for all API routes. | /api |
+| JWT\_SECRET | Secret key for signing JSON Web Tokens. | UJeFROw+yRJeVOPiUTgdcXzl... |
+| JWT\_EXPIRES\_IN | Expiration time for JWTs. | 24h |
+| TRANSLATION\_CACHE\_HOST | Redis host for translation caching. | redis-cache |
+| TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
+| EMAIL\_HOST | SMTP server for sending emails. | smtp.itu.ch |
+| EMAIL\_USER | SMTP username. | genie-ai |
+| EMAIL\_PASSWORD | SMTP password. | gLp+Ek)Vf) |
+| OPEA\_HOST | Hostname for the OPEA backend service. | chatqna-xeon-backend-server |
+
+**ArangoDB (Knowledge Base)** 5
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| ARANGO\_PASSWORD | Root password for ArangoDB. | test |
+| ARANGO\_DB\_NAME | Database name used by the backend. | genie-backend |
+| ARANGO\_DB | Database name used by the frontend. | genie-frontend |
+| ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
+| ARANGO\_USER | Username for ArangoDB. | root |
+| ARANGO\_USERNAME | Username for ArangoDB. | root |
+
+**Document Repository Service** 6
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| DOC\_REPO\_PORT | Internal port for the document service. | 3001 |
+| DATAPREP\_HOST | Hostname for the Dataprep service. | http://localhost |
+| DATAPREP\_PORT | Port for the Dataprep service. | 6007 |
+| MAX\_FILE\_SIZE | Maximum file upload size in bytes (e.g., 50MB). | 52428800 |
+| VIRUS\_SCANNING | Enable/disable ClamAV virus scanning. | true |
+| CLAMSCAN\_HOST | Hostname for the ClamAV service. | 127.0.0.1 |
+| CLAMSCAN\_PORT | Port for the ClamAV service. | 3310 |
+
+**Dataprep & Retriever Services** 7
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| DATAPREP\_CHUNK\_SIZE | Size of document chunks for ingestion. | 500 |
+| DATAPREP\_CHUNK\_OVERLAP | Overlap between document chunks. | 50 |
+| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for Dataprep to write to. | graph\_el\_salvador |
+| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for Retriever to read from. | graph\_el\_salvador |
+| RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
+| ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (e.g., OR, AND). | OR |
+
+**Models & External APIs** 8
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face. | hf\_YnXMHAtvTTVfwZJIYxKrEC... |
+| VLLM\_API\_KEY | API key for the VLLM service. | eyJhbGciOiJSUzI1NiIsInR5cCIg... |
+| VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:80 |
+| EMBEDDING\_MODEL\_ID | Model ID for embeddings. | BAAI/bge-base-en-v1.5 |
+| RERANKER\_MODEL\_ID | Model ID for reranking. | BAAI/bge-reranker-v2-m3 |
+| LLM\_MODEL\_ID | Model ID for the main language model. | meta-llama/Llama-3.3-70B-Instruct |
+| TEI\_EMBED\_MODEL | Model ID for TEI embeddings. | BAAI/bge-base-en-v1.5 |
+
+#### **3.3 Running the Application with Docker Compose**
+
+The repository includes a docker-compose.yaml file configured for a single-node deployment. It orchestrates all the necessary services, including the backend, frontend, databases (Postgres, ArangoDB, Redis), and AI model services.
+
+1. **Install Prerequisites:** Ensure you have **Docker** and **Docker Compose** installed on your server.  
+2. **Navigate to Directory:** Change into the root directory of the cloned repository where the docker-compose.yaml file is located.  
+3. **Verify Configuration:** Double-check that your .env file (see Step 3.2) is present and correctly configured with all necessary passwords, API keys, and hostnames.  
+4. **Start the Services:** Run the following command to build the images (if not already built) and start all services in detached mode (in the background).  
+   Bash  
+   docker-compose up \-d
+
+5. **Monitor Logs:** To view the logs from all running services in real-time, you can use:  
+   Bash  
+   docker-compose logs \-f
+
+   To follow the logs for a specific service (e.g., the backend):  
+   Bash  
+   docker-compose logs \-f backend
+
+6. **Stop the Services:** To stop and remove all the containers defined in the stack, run:  
+   Bash  
+   docker-compose down  

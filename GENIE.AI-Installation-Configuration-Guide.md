@@ -251,7 +251,7 @@ The following tables document the key variables found in the .env file, grouped 
 | :---- | :---- | :---- |
 | POSTGRES\_USER | Username for the Kong database. | kong |
 | POSTGRES\_DB | Name of the Kong database. | kong |
-| POSTGRES\_PASSWORD | Password for the Kong database. | k1ngk0ng |
+| POSTGRES\_PASSWORD | Password for the Kong database. | your-kong-db-password |
 | KONG\_DATABASE | Tells Kong which database type to use. | postgres |
 | KONG\_PG\_HOST | Hostname for the Kong database service. | kong-database |
 | KONG\_ADMIN\_LISTEN | Kong admin API listen address. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
@@ -279,7 +279,7 @@ The following tables document the key variables found in the .env file, grouped 
 | TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
 | EMAIL\_HOST | SMTP server for sending emails. | smtp.itu.ch |
 | EMAIL\_USER | SMTP username. | genie-ai |
-| EMAIL\_PASSWORD | SMTP password. | gLp+Ek)Vf) |
+| EMAIL\_PASSWORD | SMTP password. | your-password |
 | OPEA\_HOST | Hostname for the OPEA backend service. | chatqna-xeon-backend-server |
 
 **ArangoDB (Knowledge Base)** 5

@@ -1,5 +1,3 @@
----
-
 # **GENIE.AI Installation and Configuration Guide**
 
 ### **Introduction**

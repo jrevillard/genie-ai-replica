@@ -1,18 +1,22 @@
+---
+
 # **GENIE.AI Installation and Configuration Guide**
 
 ### **Introduction**
 
-Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspects. Our suggestion is that you establish an MVP with the framework by simply curating the data, defining the knowledge hioerarchy, configuraing your quickhelp buttons with prompts and then labelling and ingesting your curated data prior to modifying any code.
+Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labelling and ingesting your curated data prior to modifying any code.
+
+For a high-level understanding of the system before beginning, please refer to the [**Architecture Overview**](https://osaips.atlassian.net/wiki/external/N2U5ZjkwM2FhOTgyNDZlZjk3MWRlODY5Mzk5OTBhNjE).
 
 ---
 
-### **Step 1: Data Curation and Knowledge Hierarchy**
+### **Step 1: Data Curation and Knowledge Hierarchy (Conceptual Design)**
 
 Before any data is ingested into GENIE.AI, you must first establish the scope of knowledge for your application and organize it logically. This process involves a strategic design of your knowledge core, the curation and verification of source documents, and the creation of a multi-level labeling system that serves as the knowledge hierarchy within the framework's user interface (i.e., the Knowledge Hierarchy on the left sidebar).
 
 #### **1.1 Designing the Knowledge Core with Domain Analysis**
 
-A powerful RAG solution is built on a well-designed data model. We recommend using a conceptual Venn diagram exercise with your subject matter experts to map your information landscape. This helps visualize the relationships between different data sets and define the boundaries of your knowledge base. I will also help you to craft your labelling strategy.
+A powerful RAG solution is built on a well-designed data model. We recommend using a conceptual Venn diagram exercise with your subject matter experts to map your information landscape. This helps visualize the relationships between different data sets and define the boundaries of your knowledge base.
 
 This process involves identifying three tiers of data:
 
@@ -24,23 +28,17 @@ This process involves identifying three tiers of data:
 
 **1\. Agriculture**
 
-For an agricultural support system, you need to combine various interconnected domains.
-
 * **Primary:** "Corn Crop Management Guide." This is the core document farmers need.  
 * **Secondary:** "Approved Pesticides & Herbicides," "Chemical Fertilizer Specifications," "Soil Sample Analysis Protocols." These are directly referenced by the crop guide.  
 * **Tertiary:** "Regional Weather Data," "Historical Market Prices," "Local Agricultural Equipment Suppliers." This data provides valuable context for decision-making.
 
 **2\. Government Services**
 
-For a citizen portal helping with passport applications.
-
 * **Primary:** "Official Passport Application Process & Forms."  
 * **Secondary:** "Schedule of Fees & Payment Options," "Civil Registry Database (for birth certificate verification)."  
 * **Tertiary:** "List of Authorized Photo Studios," "Post Office Locations & Operating Hours."
 
 **3\. Healthcare**
-
-For a patient portal providing information on a specific medical condition.
 
 * **Primary:** "Clinical Guidelines for Type 2 Diabetes Management."  
 * **Secondary:** "Pharmaceutical Database (Metformin, Insulin dosages)," "Nutritional & Dietary Plans for Diabetics."  
@@ -96,156 +94,48 @@ By following this rigorous process of designing, curating, and verifying your da
 
 ---
 
-### **Step 2: Database Setup and Knowledge Base Population**
+### **Step 2: Prerequisites**
 
-After completing the data analysis and curation in Step 1, the next phase is to create the physical database and populate it with your defined knowledge hierarchy and source documents. This step makes the conceptual structure a reality that the GENIE.AI application can connect to.
+Before attempting installation, ensure your infrastructure meets the necessary requirements.
 
-You have two primary methods for accomplishing this: using the provided command-line scripts for automated or bulk operations, or using the Admin Dashboard for a manual, visual approach.
+#### **2.1 Hardware Requirements**
 
-#### **Method 1: Using the Database Setup Scripts**
+GENIE.AI requires significant computational resources, particularly for AI model inference (LLMs, embeddings, rerankers).
 
-This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows. The scripts provide a powerful way to manage the database schema and its content.
+* Please refer to the [**T-Shirt Sizing Guide**](https://osaips.atlassian.net/wiki/external/ODg2YmZmZTJjNGMyNGQzYzgwZWUzNTk2NWI3NjdiMDk) to determine the appropriate hardware for your deployment scale.
 
-##### **Option A: Setting Up a New GENIE.AI Instance from Scratch (recommended)**
+#### **2.2 Software Prerequisites**
 
-This workflow is for when you are creating a brand-new knowledge base (the normal case).
-
-Step 2.1.1: Create the Database Schema  
-First, create the database itself along with all the necessary collections, indexes, and graphs. The arango-schema-creator.js script uses a predefined arango-schema.json file to build this structure. This can be done in the ArangoDB console (http://localhost:8529/)  
-Bash
-
-Bash
-
-\# Set the name for your new database    
-export ARANGO\_DATABASE="genie-ai-new-use-case" 
-
-\# Run the script with the schema definition file from the gov-chat-backend/scripts/new-schema-scripts folder  
-node arango-schema-creator.js ./arango-schema.json
-
-Step 2.1.2: Populate the English Knowledge Hierarchy  
-There are 2 options for this : 1 \- script based (documented directly below) and 2 \- Using the Admin Dashboard (documented further below)  
-Next, populate the serviceCategories and services collections with your English labels. The create-knowledge-hierarchy.js script can be run in two ways:  
-⚠️ IMPORTANT: Disable Schema Validation First\!  
-Before running this script, you must temporarily disable schema validation on the serviceCategories, services, and categoryServices collections to prevent errors. You can do this in the ArangoDB web UI under each collection's "Settings" tab by setting the Validation Level to "none". Remember to re-enable it after the script succeeds. The latest version of the schema has this already disabled for all collections. The scripts can handle either interactive or file modes.
-
-* Interactive Mode: The script will prompt you to enter categories and services one by one.  
-  Bash  
-  Bash  
-  node create-knowledge-hierarchy.js
-
-* File Mode: Provide a simple JSON file containing your hierarchy. This is recommended for automated setups.  
-  Bash  
-  Bash  
-  \# Example my-hierarchy.json    
-  \# \[    
-  \#   { "category": "Emergency Services", "services": \["Ambulance Dispatch", "Emergency Room Locations"\] }    
-  \# \]
-
-  node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
-
-Step 2.1.3: Generate Language Translations (one of the hassles with scripts)  
-Finally, use the create-translations.js script to automatically translate the English labels into your desired languages using the Google Cloud Translate API.
-
-* **Prerequisites:** You must have a google-credentials.json file configured with a service account key and an API key. The Cloud Translation API must be enabled in your Google Cloud project.  
-* Usage: Run the script for each language you need to support.  
-  Bash  
-  Bash  
-  \# Create French translations    
-  node create-translations.js FR
-
-  \# Create Swahili translations    
-  node create-translations.js SW
-
-##### **Option B: Migrating or Cloning an Existing GENIE.AI Instance**
-
-This workflow is used when you have a pre-existing, populated GENIE.AI database that you want to transfer to a new environment.
-
-Step 2.1.1: Extract Schema and Export Data (from Source DB)  
-On your source system, run the extraction and export scripts.
-
-1. Extract Schema:  
-   Bash  
-   Bash  
-   \# Point to your source database    
-   export ARANGO\_DATABASE="genie-ai-source"    
-   node arango-schema-extractor.js
-
-   This produces an arango-schema.json file.  
-2. Export Data:  
-   Bash  
-   Bash  
-   \# Still pointing to the source database    
-   node export-service-categories.js
-
-   This produces a comprehensive JSON file in the /exports directory containing all hierarchy and translation data. Note the timestamped filename for the next step.
-
-Step 2.1.2: Create Database and Import Data (on Target DB)  
-On your target system, use the files generated above.
-
-1. Create Schema: Use the arango-schema.json from the source to create an identical database structure.  
-   Bash  
-   Bash  
-   \# Point to your new target database    
-   export ARANGO\_DATABASE="genie-ai-production"    
-   node arango-schema-creator.js ./arango-schema.json
-
-2. Import Data: Use the import-service-categories.js script to populate the new database.⚠️ IMPORTANT: Disable Schema Validation First\!  
-   Just as with the scratch setup, you must disable schema validation for the relevant collections in the new target database before importing.  
-   Bash  
-   Bash  
-   \# Point to the new database and the exported file    
-   export ARANGO\_DATABASE="genie-ai-production"    
-   export IMPORT\_FILE="./exports/serviceCategoriesAndServices\_export\_... .json"
-
-   node import-service-categories.js
-
-#### **Method 2: Using the Admin Dashboard**
-
-This method is ideal for users who prefer a visual interface, for making incremental changes after an initial setup, or for less technical administrators.
-
-Step 2.2.1: Create and Manage the Knowledge Hierarchy  
-Navigate to the Knowledge Hierarchy tab in the GENIE.AI Admin Dashboard. From here you can:
-
-* **Add Categories:** Click the **"+ Add New Category"** button to create a new top-level entry.  
-* **Add Services:** Hover over a category and click the **plus icon** to add a nested service.  
-* **Edit and Delete:** Use the pencil and trash icons that appear on hover to modify or remove any category or service.  
-* **Manage Translations:** When adding or editing an item, a form will appear allowing you to input the primary English name (nameEN) and add multiple display translations for different languages in a table.
-
-Step 2.2.2: Upload and Ingest Documents  
-Navigate to the Document Management tab. The process is as follows:
-
-1. **Upload:** Click **"+ Upload Files"** or **"+ Add from Link"** to add a new document to the repository. The document's status will initially be "Pending".  
-2. **Apply Labels:** Click on the newly uploaded document in the list. A detail panel will slide out.  
-3. **Select Labels:** In the "Labels" field, use the multi-select dropdown to browse the knowledge hierarchy you just created. Select all relevant categories and services that apply to this document.  
-4. **Ingest:** Click the **"Ingest"** button. This triggers the backend data preparation pipeline, which chunks the document, creates vector embeddings, and associates each chunk with the labels you selected. The document's status will update to "Ingested".
+* **Docker & Docker Compose:** Required for orchestrating the containerized services.  
+* **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
+  * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.
 
 ---
 
-### **Step 3: Application Setup and Deployment**
+### **Step 3: Base Installation**
 
-Once your database is created and populated (Step 2), you are ready to configure and run the application services. This section covers cloning the repository, setting up the core environment variables, and launching the stack using Docker Compose.
+You must complete one of these base installations before configuring the application services.
 
-#### **3.1 Cloning the Repository**
+#### **Option A: Single-Node Installation (MVP/Dev)**
 
-First, obtain the application source code. The repository is available from the following locations. Clone the one you have access to:
+This method deploys all services onto a single host using Docker Compose.
 
-* **Public Replica:** https://gitlab.com/fordendk/genie-ai-replica  
-* **Internal UNICC GitLab Server:** (Check with your administrator for the internal repository URL)
+1\. Clone the Repository  
+Clone the appropriate repository to your local machine:
 
-Clone the repository to your local machine (using the public replica as an example):
+* *Public Replica:* https://gitlab.com/fordendk/genie-ai-replica  
+* *Internal UNICC GitLab:* (Check with administrator)
 
 Bash
 
 git clone https://gitlab.com/fordendk/genie-ai-replica  
 cd genie-ai-replica
 
-#### **3.2 Environment Configuration**
+2\. Environment Configuration (.env)  
+The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository. You must create this file (e.g., by copying an existing .env.example) and populate it with your specific settings.  
+The following tables document the key variables found in the .env file, grouped by the service they configure.
 
-The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository. You must create this file (e.g., by copying an existing .env.example) and populate it with your specific settings.
-
-The following tables document the key variables found in the .env file, grouped by the service they configure. 1
-
-**Kong (API Gateway) & Database** 2
+**Kong (API Gateway) & Database**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -257,7 +147,7 @@ The following tables document the key variables found in the .env file, grouped 
 | KONG\_ADMIN\_LISTEN | Kong admin API listen address. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
 | KONG\_DNS\_RESOLVER | DNS resolver for Kong (e.g., Docker's internal). | 127.0.0.11 |
 
-**Frontend & Backend (Shared)** 3
+**Frontend & Backend (Shared)**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -266,7 +156,7 @@ The following tables document the key variables found in the .env file, grouped 
 | CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. | 'self' http://locahost... |
 | CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. | http://localhost,https://localhost... |
 
-**Backend Service** 4
+**Backend Service**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -282,7 +172,7 @@ The following tables document the key variables found in the .env file, grouped 
 | EMAIL\_PASSWORD | SMTP password. | your-password |
 | OPEA\_HOST | Hostname for the OPEA backend service. | chatqna-xeon-backend-server |
 
-**ArangoDB (Knowledge Base)** 5
+**ArangoDB (Knowledge Base)**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -293,7 +183,7 @@ The following tables document the key variables found in the .env file, grouped 
 | ARANGO\_USER | Username for ArangoDB. | root |
 | ARANGO\_USERNAME | Username for ArangoDB. | root |
 
-**Document Repository Service** 6
+**Document Repository Service**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -305,7 +195,7 @@ The following tables document the key variables found in the .env file, grouped 
 | CLAMSCAN\_HOST | Hostname for the ClamAV service. | 127.0.0.1 |
 | CLAMSCAN\_PORT | Port for the ClamAV service. | 3310 |
 
-**Dataprep & Retriever Services** 7
+**Dataprep & Retriever Services**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -316,7 +206,7 @@ The following tables document the key variables found in the .env file, grouped 
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
 | ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (e.g., OR, AND). | OR |
 
-**Models & External APIs** 8
+**Models & External APIs**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -328,25 +218,169 @@ The following tables document the key variables found in the .env file, grouped 
 | LLM\_MODEL\_ID | Model ID for the main language model. | meta-llama/Llama-3.3-70B-Instruct |
 | TEI\_EMBED\_MODEL | Model ID for TEI embeddings. | BAAI/bge-base-en-v1.5 |
 
-#### **3.3 Running the Application with Docker Compose**
+3\. Launch Services  
+Use the provided docker-compose.yaml to start the stack. This will spin up core services including Kong, Postgres, ArangoDB, Redis, Nginx, and the AI services (vLLM, TEI, etc.).
 
-The repository includes a docker-compose.yaml file configured for a single-node deployment. It orchestrates all the necessary services, including the backend, frontend, databases (Postgres, ArangoDB, Redis), and AI model services.
+Bash
 
-1. **Install Prerequisites:** Ensure you have **Docker** and **Docker Compose** installed on your server.  
-2. **Navigate to Directory:** Change into the root directory of the cloned repository where the docker-compose.yaml file is located.  
-3. **Verify Configuration:** Double-check that your .env file (see Step 3.2) is present and correctly configured with all necessary passwords, API keys, and hostnames.  
-4. **Start the Services:** Run the following command to build the images (if not already built) and start all services in detached mode (in the background).  
+docker-compose up \-d
+
+⚠️ IMPORTANT: EXPECTED ERRORS  
+At this stage, while the containers are running, they are not yet configured. If you inspect the logs now, you will see many critical errors related to missing databases (ArangoDB), unconfigured routes (Kong), and unreachable upstreams (Nginx).  
+**This is normal. Do NOT attempt to debug these errors yet.**
+
+Proceed immediately to **Step 4** to complete the necessary infrastructure configuration.
+
+#### **Option B: Three-Node Installation (Production)**
+
+*(TBD \- Documentation for the Bastion, Infrastructure, and AI node split architecture is currently under development.)*
+
+---
+
+### **Step 4: Infrastructure Configuration**
+
+Once the base services are running (Step 3), you must configure the core infrastructure components before the system is usable.
+
+#### **4.1 ArangoDB Database Initialization**
+
+While the arango-vector-db service is running, the specific application databases must be created.
+
+1. Access the ArangoDB web interface at http://localhost:8529 (login with root and the password defined in your .env).  
+2. Create the necessary databases as defined in your environment variables (default: genie-backend and genie-frontend).
+
+#### **4.2 Kong API Gateway Configuration**
+
+Kong requires specific initialization and configuration to route traffic correctly.
+
+1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:  
    Bash  
+   docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"  
+   docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"  
+   docker compose run \--rm kong kong migrations bootstrap
+
+2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script.  
+   *For **Single-Node** installation:*  
+   Bash  
+   cd api-gateway-solution/new-config/  
+   cp kong-config.json.single-node kong\_config.json  
+   chmod \+x manage-kong-config.sh  
+   ./manage-kong-config.sh \-a
+
+   *(For Three-Node installation, simply run ./manage-kong-config.sh \-a as kong\_config.json is the default).*
+
+#### **4.3 Nginx Configuration**
+
+Nginx acts as the reverse proxy and SSL termination point.
+
+1. Navigate to api-gateway-solution/nginx.  
+2. Select the appropriate configuration file:  
+   * For **Single-Node**, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
+   * For **Three-Node**, use: default.conf.  
+3. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
+
+---
+
+### **Step 5: Knowledge Base Population & User Setup**
+
+With the infrastructure configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts.
+
+#### **Method 1: Automated Script Approach (Recommended for Initial Setup)**
+
+This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
+
+5.1 Prepare Script Environment  
+You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials.
+
+Bash
+
+cd components/gov-chat-backend/scripts/new-schema-scripts  
+source set-env.sh
+
+5.2 Create Database Schema  
+Use the arango-schema-creator.js script to generate the collections, indexes, and graphs.
+
+Bash
+
+\# Ensure you are still in the new-schema-scripts directory and environment is set  
+node arango-schema-creator.js ./arango-schema.json
+
+5.3 Create Initial User Accounts  
+You must create the default Admin and Manager accounts. These are required for the application to load correctly and for full integration with the Document Repository.
+
+Bash
+
+\# Create the Admin account  
+node create-genie-ai-admin-account.js
+
+\# Create the Manager account  
+node create-genie-ai-manager.js
+
+**Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
+
+5.4 Populate Hierarchy  
+Use the create-knowledge-hierarchy.js script to import your Category/Service structure.
+
+* *Note:* Ensure schema validation is temporarily disabled on serviceCategories, services, and categoryServices collections if using an older schema version.
+
+Bash
+
+\# Return to parent scripts directory if hierarchy file is there, or adjust path.  
+cd ..  
+node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
+
+5.5 Generate Translations  
+(Optional) Use create-translations.js to auto-generate labels for other supported languages (requires Google Cloud credentials).
+
+#### **Method 2: Manual Admin Dashboard Approach**
+
+This method is ideal for users who prefer a visual interface, or for making incremental changes after an initial setup. This can be done after you have completed **Step 6** and logged into the application.
+
+---
+
+### **Step 6: Final Verification and Launch**
+
+After all configuration steps are complete, you must restart the services to ensure they pick up the new configurations and verify the system is healthy.
+
+1. **Restart Services:**  
+   Bash  
+   docker-compose down  
    docker-compose up \-d
 
-5. **Monitor Logs:** To view the logs from all running services in real-time, you can use:  
+2. Verify Service Health:  
+   Check that all containers are running and healthy.  
+   Bash  
+   docker ps
+
+   *Look for (healthy) status next to critical services like kong, kong-database, vllm, and arango-vector-db.*  
+3. Check Logs for Errors:  
+   Inspect the logs again to ensure no new critical errors have appeared after the restart.  
    Bash  
    docker-compose logs \-f
 
-   To follow the logs for a specific service (e.g., the backend):  
-   Bash  
-   docker-compose logs \-f backend
+4. Initial Login:  
+   Access the application in your browser (e.g., https://localhost or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
+   * **Username:** Admin  
+   * **Password:** ADMINadmin
 
-6. **Stop the Services:** To stop and remove all the containers defined in the stack, run:  
-   Bash  
-   docker-compose down  
+---
+
+### **Step 7: Post-Launch Configuration (Manual Dashboard)**
+
+Once you have logged in as Admin, you can use the visual dashboard to manage your knowledge base.
+
+#### **7.1 Manage the Knowledge Hierarchy**
+
+Navigate to the **Knowledge Hierarchy** tab in the Admin Dashboard.
+
+* **Add Categories:** Click "+ Add New Category" for top-level entries.  
+* **Add Services:** Hover over a category and click the plus icon for nested services.  
+* **Edit/Delete:** Use hover icons to modify entries.  
+* **Translations:** Use the form to add display translations for different languages.
+
+#### **7.2 Upload and Ingest Documents**
+
+Navigate to the **Document Management** tab.
+
+1. **Upload:** Click "+ Upload Files" or "+ Add from Link". Status will be "Pending".  
+2. **Apply Labels:** Click the document, and use the "Labels" multi-select dropdown to apply relevant categories/services from your hierarchy.  
+3. **Ingest:** Click "Ingest" to trigger chunking, embedding, and storage. Status will update to "Ingested".

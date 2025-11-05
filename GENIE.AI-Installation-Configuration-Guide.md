@@ -2,25 +2,25 @@
 
 ### **Introduction**
 
-Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labelling and ingesting your curated data prior to modifying any code.
+Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an initial MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labelling and ingesting your curated data prior to modifying any code. This way, you will get used to how the framework operates, before you delve into deeper issues and extensions. This approach can also be used to deliver a rapid solution to a RAG problem, without any coding at all (just implementing a knowledge base design and the associated configuration). The application title and theme can also be modified by configuration in JSON without changing code. The suggested appraoch for this is to utilize something like ChatGOT, Gemini Pro or Grok etc. to build a new configuration for color theme and title etc. This can be done in minutes.
 
-For a high-level understanding of the system before beginning, please refer to the [**Architecture Overview**](https://osaips.atlassian.net/wiki/external/N2U5ZjkwM2FhOTgyNDZlZjk3MWRlODY5Mzk5OTBhNjE).
+For a high-level understanding of the system architecture before beginning any work, please refer to the [**Architecture Overview**](https://osaips.atlassian.net/wiki/external/N2U5ZjkwM2FhOTgyNDZlZjk3MWRlODY5Mzk5OTBhNjE). This will give you an insight into most of the high level components and how they are assembled.
 
 ---
 
 ### **Step 1: Data Curation and Knowledge Hierarchy (Conceptual Design)**
 
-Before any data is ingested into GENIE.AI, you must first establish the scope of knowledge for your application and organize it logically. This process involves a strategic design of your knowledge core, the curation and verification of source documents, and the creation of a multi-level labeling system that serves as the knowledge hierarchy within the framework's user interface (i.e., the Knowledge Hierarchy on the left sidebar).
+Before any data is ingested into GENIE.AI, you must first establish the scope of knowledge for your application and organize it logically. This process involves a strategic design of your knowledge core, the curation and verification of source documents, and the creation of an assoicated two-level labeling system that serves as the knowledge hierarchy within the framework's user interface (i.e., the Knowledge Hierarchy displayed on the left sidebar). Ingested data is tagged with these labels, and queries can also select the same labels, which enhanced RAG accuracy as we have utilized labeling as part of the hybrid-retrieval strategy for RAG at the backend.
 
 #### **1.1 Designing the Knowledge Core with Domain Analysis**
 
-A powerful RAG solution is built on a well-designed data model. We recommend using a conceptual Venn diagram exercise with your subject matter experts to map your information landscape. This helps visualize the relationships between different data sets and define the boundaries of your knowledge base.
+A powerful RAG solution is built on a well-designed data model. We recommend using a conceptual Venn diagram exercise with your subject matter experts to map your information landscape before you even start. This helps you visualize the relationships between different data sets and define the boundaries of your knowledge base. It helps you to identify the specific data sets you need and to ascertain the specific relationships between these data sets.
 
 This process involves identifying three tiers of data:
 
-* **Primary Data Sets (Core):** This is the essential information that directly addresses the most critical and frequent user queries. It forms the central circles of your diagram.  
-* **Secondary Data Sets (Supporting):** This data provides necessary context and is often required to give a complete answer. It is the second ring of your diagram circles and it overlaps significantly with the primary set.  
-* **Tertiary Data Sets (Peripheral):** This information is supplementary and enhances the user's understanding, but may not be essential for every query. It has a minor overlap with the primary and secondary sets in specific areas.
+* **Primary Data Sets (Core):** This is the essential information that directly addresses the most critical and frequent user queries. It forms the central circles of your diagram - this totally depends on the scope of your solution. You can address as many facets of this central core set of data as required to serve the specific use case that you have in mind.  
+* **Secondary Data Sets (Supporting):** This data provides necessary context and is often required to give a more complete answer. It is the second ring of your diagram circles and it overlaps significantly with the primary set. There could also be many bubbles in this secondary tier.
+* **Tertiary Data Sets (Peripheral):** This information is supplementary/peripheral and enhances the user's understanding, but may not be essential for every query. It has a minor overlap with the primary and secondary sets in specific areas. The Venn diagram is your best allie to get this right up front.
 
 **Example Domain Analysis using Venn Diagrams:**
 
@@ -44,17 +44,19 @@ This process involves identifying three tiers of data:
 
 #### **1.2 Impact on the Labeling System Design**
 
-This domain analysis directly informs the structure of your 2-level labeling system. The clear relationships and boundaries identified in the Venn diagrams translate naturally into a logical hierarchy.
+This domain analysis directly informs the structure of your 2-level labeling system. The clear relationships and boundaries identified in the Venn diagrams translate naturally into a logical hierarchy. We suggest that you also use an AI-driven approach to assemble the labeling system design. You can use any of the common RAG tools like ChatGPT, Gemini or Grok for example to accomplish this in minutes. Once this is done, you will need to verify it with subject matter experts to ensure that it meets the needs of indexing the required data sets.
 
 * **Categories (Level 1\)** often emerge from the overarching themes that group your primary and secondary data sets. For example, in Agriculture, the primary set "Corn Crop Management" and secondary sets like "Pesticides" and "Fertilizers" all fall under the logical **Category** of Crop Management.  
 * **Services/Topics (Level 2\)** are the primary, secondary, and even tertiary data sets themselves. They become the specific, actionable knowledge points within a category.
 
-Tier-Based Design Strategy:  
+**Tier-Based Design Strategy:**  
 To translate your data tiers into a functional hierarchy, apply the following strategy:
 
 1. **Primary Data MUST have dedicated labels:** Every primary data set represents a core user need and must have a distinct, clear Service (Level 2\) label.  
 2. **Secondary Data usually needs dedicated labels:** These should generally have their own Service (Level 2\) labels, typically grouped under the same Category (Level 1\) as the primary data they support.  
 3. **Group Tertiary Data to avoid clutter:** Avoid creating granular labels for every piece of tertiary data. Instead, group them into broader "Reference" or "General Information" Service labels. This prevents the hierarchy from becoming overwhelming while still making the data accessible.
+
+**AVOID USING THE SAME LABELS FOR SERVICES IN MULTIPLE CATEGORIES**
 
 **Common Sense Design Principles:**
 
@@ -62,7 +64,7 @@ To translate your data tiers into a functional hierarchy, apply the following st
 * **Mutually Exclusive, Collectively Exhaustive (MECE):** Aim for categories that don't overlap significantly. While documents can have multiple labels, the hierarchy itself should be clean and logical.  
 * **Strict 2-Level Limit:** GENIE.AI uses a shallow hierarchy. Do not try to force a third level by creating overly complex names (e.g., avoid Crops \- Corn \- Pests \- Beetles; instead use Category: Crop Management, Service: Pest Control).
 
-Applying this to the Agriculture example:
+**Applying this to the Agriculture example:**
 
 | Category (Level 1\) | Service/Topic (Level 2\) | Data Source Origin |
 | :---- | :---- | :---- |
@@ -80,15 +82,22 @@ To deliver an accurate, trustworthy, and useful RAG solution, the underlying dat
 
 **Supported Formats:**
 
-* Web pages (.html, via URL links)  
-* Documents (.pdf, .doc, .docx) \- .doc may be removed as it is legacy and problematic (converting to .docx or .pdf is recommended)  
-* Spreadsheets (.xls, .xlsx) \- we suggest that .xls and .xlsx are also avoided as we may elect to remove them too (problematic)  
+* Web pages (.html, via URL links) - note that depth of crawling for web sites can be controlled as well as the language accepted.
+* Documents (.pdf, .docx) \- .doc HAS been removed as it is legacy and problematic (conversion to .docx or .pdf is recommended)  
+* Spreadsheets (.xlsx) \- .xls has been removed for the same problametic legacyt reasons. You can use .xlsx sparingly. We suggest this is done sparingly as there are limitations related to multiple tabs and some of the other salient aspects of spreadsheets (such as calculations and charts etc.) that are problematic.  
 * Markdown (.md)  
 * Plain Text (.txt)
 
+**Supported Language for Ingestion**
+* GENIE-AI is set up to support a single language for ingestion purposes.
+* The single language is configurable - our default configuration is EN.
+* File uploads will be constrained to the single configured language (by language detection).
+* Language detection technology is not perfect (especially with URL links)... you can always convert the required information to a supported file type.
+* Translations are performed on the fly in and out of the backend by an LLM (also configurable).
+
 **Curation Best Practices:**
 
-1. **Source Vetting:** Always prioritize authoritative and official sources. For government services, this means official government websites and publications. For healthcare, use peer-reviewed medical journals, clinical guidelines from recognized health organizations, and regulatory bodies. You will need a team of experts to validate and curate this knowledge and it will need to be agreed and signed-off before ingestion.  
+1. **Source Vetting:** Always prioritize authoritative and official sources. For government services, this means official government websites and publications. For healthcare, use peer-reviewed medical journals, clinical guidelines from recognized health organizations, and regulatory bodies. **You will need a team of experts to validate and curate this knowledge and it will need to be agreed and signed-off before ingestion.**
 2. **Data Cleaning:**  
    * **Standardize Terminology:** Ensure consistent use of terms (e.g., "Type 2 Diabetes" vs. "T2D").  
    * **Remove Duplicates & Noise:** Eliminate redundant documents, boilerplate text (headers, footers, irrelevant ads), and artifacts from the conversion process.  
@@ -98,7 +107,7 @@ To deliver an accurate, trustworthy, and useful RAG solution, the underlying dat
 **Verification Workflow:**
 
 1. **Subject Matter Expert (SME) Review:** This is the most critical step. Once data is curated, it must be reviewed by experts in the relevant domain. An agronomist should verify the crop data, and a doctor should verify the healthcare guidelines. SMEs check for factual accuracy, completeness, and relevance.  
-2. **Version Control:** Your knowledge base is not static. Regulations, guidelines, and data change. Implement a system to track document versions and schedule regular reviews (e.g., annually) to update or retire outdated information. The sources for these documents should be version controlled.  
+2. **Version Control:** Your knowledge base is not static. Regulations, guidelines, and data change. Implement a system to track document versions and schedule regular reviews (e.g., annually) to update or retire outdated information. The sources for these documents should be version controlled. Note that documents can be retracted and ingested again as and when they change.  
 3. **Establish a Feedback Loop:** The GENIE.AI framework includes capabilities for users to provide feedback on responses. This user feedback is an invaluable, continuous source of verification. A process must be in place to review flagged responses, trace them back to the source document, and make corrections as needed.
 
 By following this rigorous process of designing, curating, and verifying your data, you will build a robust and reliable knowledge base that allows GENIE.AI to perform at its full potential.
@@ -111,12 +120,13 @@ Before attempting installation, ensure your infrastructure meets the necessary r
 
 #### **2.1 Hardware Requirements**
 
-GENIE.AI requires significant computational resources, particularly for AI model inference (LLMs, embeddings, rerankers).
+GENIE.AI requires significant computational resources, particularly for AI model inference (LLMs, embeddings, rerankers). This is critical and the solution will potentially not even run without the required resources.
 
-* Please refer to the [**T-Shirt Sizing Guide**](https://osaips.atlassian.net/wiki/external/ODg2YmZmZTJjNGMyNGQzYzgwZWUzNTk2NWI3NjdiMDk) to determine the appropriate hardware for your deployment scale.
+* Please refer to the [**T-Shirt Sizing Guide**](https://osaips.atlassian.net/wiki/external/ODg2YmZmZTJjNGMyNGQzYzgwZWUzNTk2NWI3NjdiMDk) to determine the appropriate hardware for your deployment scale. Even for development and MVP work, you will need to meet the minimum requirements outlined in the small tee shirt size.
 
 #### **2.2 Software Prerequisites**
 
+* **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.
 * **Docker & Docker Compose:** Required for orchestrating the containerized services.  
 * **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
   * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.
@@ -125,7 +135,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 ### **Step 3: Base Installation**
 
-You must complete one of these base installations before configuring the application services.
+You must complete one of these base docker compose based installations before configuring the application services (single node or three node) - Kubernetes will be added later:
 
 #### **Option A: Single-Node Installation (MVP/Dev)**
 
@@ -143,7 +153,7 @@ git clone https://gitlab.com/fordendk/genie-ai-replica
 cd genie-ai-replica
 
 2\. Environment Configuration (.env)  
-The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository. You must create this file (e.g., by copying an existing .env.example) and populate it with your specific settings.  
+The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.  
 The following tables document the key variables found in the .env file, grouped by the service they configure.
 
 **Kong (API Gateway) & Database**
@@ -164,20 +174,26 @@ The following tables document the key variables found in the .env file, grouped 
 | :---- | :---- | :---- |
 | VUE\_APP\_API\_URL | Path for the frontend to reach the backend API. | /api |
 | VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
-| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. | 'self' http://locahost... |
-| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. | http://localhost,https://localhost... |
+| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. You must understand CSP policy to modify this for your environment | 'self' http://locahost... |
+| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. Again, you need to understand CORS to modify this. | http://localhost,https://localhost... |
 
 **Backend Service**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| NODE\_ENV | Sets the application environment. | production |
+| NODE\_ENV | Sets the application environment. | development or production |
 | BACKEND\_PORT | Internal port the Node.js app listens on. | 3000 |
 | API\_PREFIX | Global prefix for all API routes. | /api |
 | JWT\_SECRET | Secret key for signing JSON Web Tokens. | UJeFROw+yRJeVOPiUTgdcXzl... |
 | JWT\_EXPIRES\_IN | Expiration time for JWTs. | 24h |
 | TRANSLATION\_CACHE\_HOST | Redis host for translation caching. | redis-cache |
 | TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
+| TRANSLATION_THREADS | The number of threads for the node.js translation service | 4 |
+| TRANSLATION_BATCHES | The number of batches for the node.js translation service | 5 |
+| TRANSLATION_CACHE | Switch on translation caching | on or off |
+| TRANSLATION_CACHE_PATH | The path of the tranlsation cache | /cache/translations | 
+| TRANSLATION_CACHE_PASSWORD | The password for the Redis cache | Must equal the password in the redis-cach container startup command: command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "!@#$$5678" | 
+
 | EMAIL\_HOST | SMTP server for sending emails. | smtp.itu.ch |
 | EMAIL\_USER | SMTP username. | genie-ai |
 | EMAIL\_PASSWORD | SMTP password. | your-password |
@@ -244,7 +260,7 @@ Proceed immediately to **Step 4** to complete the necessary infrastructure confi
 
 #### **Option B: Three-Node Installation (Production)**
 
-*(TBD \- Documentation for the Bastion, Infrastructure, and AI node split architecture is currently under development.)*
+*(TBD \- Documentation for the Bastion, Infrastructure, and AI node split architecture has been developed but not documented yet.)*
 
 ---
 

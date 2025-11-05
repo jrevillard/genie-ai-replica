@@ -49,6 +49,19 @@ This domain analysis directly informs the structure of your 2-level labeling sys
 * **Categories (Level 1\)** often emerge from the overarching themes that group your primary and secondary data sets. For example, in Agriculture, the primary set "Corn Crop Management" and secondary sets like "Pesticides" and "Fertilizers" all fall under the logical **Category** of Crop Management.  
 * **Services/Topics (Level 2\)** are the primary, secondary, and even tertiary data sets themselves. They become the specific, actionable knowledge points within a category.
 
+Tier-Based Design Strategy:  
+To translate your data tiers into a functional hierarchy, apply the following strategy:
+
+1. **Primary Data MUST have dedicated labels:** Every primary data set represents a core user need and must have a distinct, clear Service (Level 2\) label.  
+2. **Secondary Data usually needs dedicated labels:** These should generally have their own Service (Level 2\) labels, typically grouped under the same Category (Level 1\) as the primary data they support.  
+3. **Group Tertiary Data to avoid clutter:** Avoid creating granular labels for every piece of tertiary data. Instead, group them into broader "Reference" or "General Information" Service labels. This prevents the hierarchy from becoming overwhelming while still making the data accessible.
+
+**Common Sense Design Principles:**
+
+* **User-Centric Naming:** Labels should reflect *user intent*, not internal organizational structures. A user looking for "Pesticides" does not care which government sub-department manages them.  
+* **Mutually Exclusive, Collectively Exhaustive (MECE):** Aim for categories that don't overlap significantly. While documents can have multiple labels, the hierarchy itself should be clean and logical.  
+* **Strict 2-Level Limit:** GENIE.AI uses a shallow hierarchy. Do not try to force a third level by creating overly complex names (e.g., avoid Crops \- Corn \- Pests \- Beetles; instead use Category: Crop Management, Service: Pest Control).
+
 Applying this to the Agriculture example:
 
 | Category (Level 1\) | Service/Topic (Level 2\) | Data Source Origin |
@@ -56,8 +69,8 @@ Applying this to the Agriculture example:
 | **Crop Management** | Corn Planting & Harvest Guide | Primary |
 |  | Soil Health and Fertilization | Secondary |
 |  | Pest and Disease Control | Secondary |
-| **Market & Logistics** | Historical Market Prices | Tertiary |
-|  | Approved Equipment Suppliers | Tertiary |
+| **Market & Logistics** | Historical Market Prices | Tertiary (Grouped) |
+|  | Approved Equipment Suppliers | Tertiary (Grouped) |
 
 This method ensures your knowledge hierarchy is not arbitrary but is a direct reflection of how the information is interrelated, making the system more intuitive for both the AI and the end-user.
 
@@ -382,3 +395,4 @@ Navigate to the **Document Management** tab.
 1. **Upload:** Click "+ Upload Files" or "+ Add from Link". Status will be "Pending".  
 2. **Apply Labels:** Click the document, and use the "Labels" multi-select dropdown to apply relevant categories/services from your hierarchy.  
 3. **Ingest:** Click "Ingest" to trigger chunking, embedding, and storage. Status will update to "Ingested".
+

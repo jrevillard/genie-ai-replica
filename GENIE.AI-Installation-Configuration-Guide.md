@@ -135,41 +135,41 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 Bash
 
-# 1. Update and install prerequisites
+##### 1. Update and install prerequisites
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
 
-# 2. Add Docker's official GPG key
+##### 2. Add Docker's official GPG key
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-# 3. Set up the official Docker repository
+##### 3. Set up the official Docker repository
 echo \
   "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# 4. Install Docker Engine
-# (This also removes conflicting older versions like docker.io if present)
+##### 4. Install Docker Engine
+###### (This also removes conflicting older versions like docker.io if present)
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# 5. Start and enable the Docker daemon
-# (Necessary if the installer fails to start it automatically)
+##### 5. Start and enable the Docker daemon
+###### (Necessary if the installer fails to start it automatically)
 sudo systemctl start docker
 sudo systemctl enable docker
 
-# 6. Grant your user standard Docker permissions
+##### 6. Grant your user standard Docker permissions
 sudo usermod -aG docker $USER
 newgrp docker
 
-# 7. Verify Docker
+##### 7. Verify Docker
 docker run hello-world
 
 ---
 
-#### **2.4 Install Node.js on Every Host** 
+#### **2.4 Install Node.js on Every Host and Verify** 
 
 Bash
 

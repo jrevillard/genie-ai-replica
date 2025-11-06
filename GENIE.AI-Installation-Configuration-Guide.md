@@ -18,8 +18,8 @@ A powerful RAG solution is built on a well-designed data model. We recommend usi
 
 This process involves identifying three tiers of data:
 
-* **Primary Data Sets (Core):** This is the essential information that directly addresses the most critical and frequent user queries. It forms the central circles of your diagram - this totally depends on the scope of your solution. You can address as many facets of this central core set of data as required to serve the specific use case that you have in mind.  
-* **Secondary Data Sets (Supporting):** This data provides necessary context and is often required to give a more complete answer. It is the second ring of your diagram circles and it overlaps significantly with the primary set. There could also be many bubbles in this secondary tier.
+* **Primary Data Sets (Core):** This is the essential information that directly addresses the most critical and frequent user queries. It forms the central circles of your diagram \- this totally depends on the scope of your solution. You can address as many facets of this central core set of data as required to serve the specific use case that you have in mind.  
+* **Secondary Data Sets (Supporting):** This data provides necessary context and is often required to give a more complete answer. It is the second ring of your diagram circles and it overlaps significantly with the primary set. There could also be many bubbles in this secondary tier.  
 * **Tertiary Data Sets (Peripheral):** This information is supplementary/peripheral and enhances the user's understanding, but may not be essential for every query. It has a minor overlap with the primary and secondary sets in specific areas. The Venn diagram is your best allie to get this right up front.
 
 **Example Domain Analysis using Venn Diagrams:**
@@ -49,8 +49,7 @@ This domain analysis directly informs the structure of your 2-level labeling sys
 * **Categories (Level 1\)** often emerge from the overarching themes that group your primary and secondary data sets. For example, in Agriculture, the primary set "Corn Crop Management" and secondary sets like "Pesticides" and "Fertilizers" all fall under the logical **Category** of Crop Management.  
 * **Services/Topics (Level 2\)** are the primary, secondary, and even tertiary data sets themselves. They become the specific, actionable knowledge points within a category.
 
-**Tier-Based Design Strategy:**  
-To translate your data tiers into a functional hierarchy, apply the following strategy:
+**Tier-Based Design Strategy:** To translate your data tiers into a functional hierarchy, apply the following strategy:
 
 1. **Primary Data MUST have dedicated labels:** Every primary data set represents a core user need and must have a distinct, clear Service (Level 2\) label.  
 2. **Secondary Data usually needs dedicated labels:** These should generally have their own Service (Level 2\) labels, typically grouped under the same Category (Level 1\) as the primary data they support.  
@@ -82,24 +81,24 @@ To deliver an accurate, trustworthy, and useful RAG solution, the underlying dat
 
 **Supported Formats:**
 
-* Web pages (.html, via URL links) - note that depth of crawling for web sites can be controlled as well as the language accepted.
+* Web pages (.html, via URL links) \- note that depth of crawling for web sites can be controlled as well as the language accepted.  
 * Documents (.pdf, .docx) \- .doc HAS been removed as it is legacy and problematic (conversion to .docx or .pdf is recommended)  
 * Spreadsheets (.xlsx) \- .xls has been removed for the same problametic legacyt reasons. You can use .xlsx sparingly. We suggest this is done sparingly as there are limitations related to multiple tabs and some of the other salient aspects of spreadsheets (such as calculations and charts etc.) that are problematic.  
 * Markdown (.md)  
 * Plain Text (.txt)
 
 **Supported Language for Ingestion**
-* GENIE-AI is set up to support a single language for ingestion purposes.
-* The single language is configurable - our default configuration is EN.
-* File uploads will be constrained to the single configured language (by language detection).
-* Language detection technology is not perfect (especially with URL links)... you can always convert the required information to a supported file type.
+
+* GENIE-AI is set up to support a single language for ingestion purposes.  
+* The single language is configurable \- our default configuration is EN.  
+* File uploads will be constrained to the single configured language (by language detection).  
+* Language detection technology is not perfect (especially with URL links)... you can always convert the required information to a supported file type.  
 * Translations are performed on the fly in and out of the backend by an LLM (also configurable).
 
 **Curation Best Practices:**
 
-1. **Source Vetting:** Always prioritize authoritative and official sources. For government services, this means official government websites and publications. For healthcare, use peer-reviewed medical journals, clinical guidelines from recognized health organizations, and regulatory bodies. **You will need a team of experts to validate and curate this knowledge and it will need to be agreed and signed-off before ingestion.**
-2. **Data Cleaning:**  
-   * **Standardize Terminology:** Ensure consistent use of terms (e.g., "Type 2 Diabetes" vs. "T2D").  
+1. **Source Vetting:** Always prioritize authoritative and official sources. For government services, this means official government websites and publications. For healthcare, use peer-reviewed medical journals, clinical guidelines from recognized health organizations, and regulatory bodies. **You will need a team of experts to validate and curate this knowledge and it will need to be agreed and signed-off before ingestion.**  
+2. **Data Cleaning:** \* **Standardize Terminology:** Ensure consistent use of terms (e.g., "Type 2 Diabetes" vs. "T2D").  
    * **Remove Duplicates & Noise:** Eliminate redundant documents, boilerplate text (headers, footers, irrelevant ads), and artifacts from the conversion process.  
    * **Verify OCR Accuracy:** When converting scanned PDFs, manually review the resulting text for Optical Character Recognition (OCR) errors, as these can introduce factual inaccuracies.  
 3. **Logical Chunking:** Ensure that data is ingested and split into semantically meaningful chunks. A chunk should ideally represent a complete idea or paragraph. A split in the middle of a sentence can cause the system to lose context.
@@ -126,7 +125,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 #### **2.2 Software Prerequisites**
 
-* **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.
+* **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.  
 * **Docker & Docker Compose:** Required for orchestrating the containerized services.  
 * **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
   * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.
@@ -135,25 +134,27 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 ### **Step 3: Base Installation**
 
-You must complete one of these base docker compose based installations before configuring the application services (single node or three node) - Kubernetes will be added later. The way that the 2 docker compose based deployent options are organized in the repository is as follows:
+You must complete one of these base docker compose based installations before configuring the application services (single node or three node) \- Kubernetes will be added later. The way that the 2 docker compose based deployent options are organized in the repository is as follows:
 
-repository-root/
-├── docker-compose.yaml           # Single-node docker compose deployment model
-├── env                           # .env file for the single-node docker compose
-├── components/
-│   ├── docker-compose.yaml       # Docker compose for infrastructure tier (three node model)
-│   ├── gov-chat-backend/
-│   │   └── env                   # .env file for the node.js backend service
-│   ├── gov-chat-frontend/
-│   │   └── env                   # .env file for the Vue 3 application
-│   └── document-repository/
-│       └── env                   # .env file for the document repository service
-├── api-gateway-solution/
-│   ├── docker-compose.yaml       # Docker compose for bastion host tier
-│   └── env                       # .env file for the bastion tier
-└── opea/
-    ├── docker-compose.yaml       # Docker compose for customized GENIE.AI OPEA
-    └── env                       # .env file for the OPEA tier
+Plaintext
+
+repository-root/  
+├── docker-compose.yaml           \# Single-node docker compose deployment model  
+├── env                           \# .env file for the single-node docker compose  
+├── components/  
+│   ├── docker-compose.yaml       \# Docker compose for infrastructure tier (three node model)  
+│   ├── gov-chat-backend/  
+│   │   └── env                   \# .env file for the node.js backend service  
+│   ├── gov-chat-frontend/  
+│   │   └── env                   \# .env file for the Vue 3 application  
+│   └── document-repository/  
+│       └── env                   \# .env file for the document repository service  
+├── api-gateway-solution/  
+│   ├── docker-compose.yaml       \# Docker compose for bastion host tier  
+│   └── env                       \# .env file for the bastion tier  
+└── opea/  
+    ├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
+    └── env                       \# .env file for the OPEA tier
 
 Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
 
@@ -161,19 +162,22 @@ Following are the details for configuring both the single-node deployment model 
 
 This method deploys all services onto a single host using Docker Compose.
 
-1\. Clone the Repository  
+1\. Clone the Repository
+
 Clone the appropriate repository to your local machine:
 
-* *Public Replica:* https://gitlab.com/fordendk/genie-ai-replica  
+* *Public Replica:* [https://gitlab.com/fordendk/genie-ai-replica](https://gitlab.com/fordendk/genie-ai-replica)  
 * *Internal UNICC GitLab:* (Check with administrator)
 
 Bash
 
-git clone https://gitlab.com/fordendk/genie-ai-replica  
+git clone https://gitlab.com/fordendk/genie-ai-replica    
 cd genie-ai-replica
 
-2\. Environment Configuration (.env)  
-The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.  
+2\. Environment Configuration (.env)
+
+The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.
+
 The following tables document the key variables found in the .env file, grouped by the service they configure.
 
 **Kong (API Gateway) & Database**
@@ -208,12 +212,11 @@ The following tables document the key variables found in the .env file, grouped 
 | JWT\_EXPIRES\_IN | Expiration time for JWTs. | 24h |
 | TRANSLATION\_CACHE\_HOST | Redis host for translation caching. | redis-cache |
 | TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
-| TRANSLATION_THREADS | The number of threads for the node.js translation service | 4 |
-| TRANSLATION_BATCHES | The number of batches for the node.js translation service | 5 |
-| TRANSLATION_CACHE | Switch on translation caching | on or off |
-| TRANSLATION_CACHE_PATH | The path of the tranlsation cache | /cache/translations | 
-| TRANSLATION_CACHE_PASSWORD | The password for the Redis cache | Must equal the password in the redis-cach container startup command: command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "!@#$$5678" | 
-
+| TRANSLATION\_THREADS | The number of threads for the node.js translation service | 4 |
+| TRANSLATION\_BATCHES | The number of batches for the node.js translation service | 5 |
+| TRANSLATION\_CACHE | Switch on translation caching | on or off |
+| TRANSLATION\_CACHE\_PATH | The path of the tranlsation cache | /cache/translations |
+| TRANSLATION\_CACHE\_PASSWORD | The password for the Redis cache | Must equal the password in the redis-cach container startup command: command: redis-server \--appendonly yes \--maxmemory-policy noeviction \--requirepass "\!@\#$$5678" |
 | EMAIL\_HOST | SMTP server for sending emails. | smtp.itu.ch |
 | EMAIL\_USER | SMTP username. | genie-ai |
 | EMAIL\_PASSWORD | SMTP password. | your-password |
@@ -265,15 +268,18 @@ The following tables document the key variables found in the .env file, grouped 
 | LLM\_MODEL\_ID | Model ID for the main language model. | meta-llama/Llama-3.3-70B-Instruct |
 | TEI\_EMBED\_MODEL | Model ID for TEI embeddings. | BAAI/bge-base-en-v1.5 |
 
-3\. Launch Services  
+3\. Launch Services
+
 Use the provided docker-compose.yaml to start the stack. This will spin up core services including Kong, Postgres, ArangoDB, Redis, Nginx, and the AI services (vLLM, TEI, etc.).
 
 Bash
 
 docker-compose up \-d
 
-⚠️ IMPORTANT: EXPECTED ERRORS  
-At this stage, while the containers are running, they are not yet configured. If you inspect the logs now, you will see many critical errors related to missing databases (ArangoDB), unconfigured routes (Kong), and unreachable upstreams (Nginx).  
+⚠️ IMPORTANT: EXPECTED ERRORS
+
+At this stage, while the containers are running, they are not yet configured. If you inspect the logs now, you will see many critical errors related to missing databases (ArangoDB), unconfigured routes (Kong), and unreachable upstreams (Nginx).
+
 **This is normal. Do NOT attempt to debug these errors yet.**
 
 Proceed immediately to **Step 4** to complete the necessary infrastructure configuration.
@@ -299,83 +305,87 @@ While the arango-vector-db service is running, the specific application database
 
 Kong requires specific initialization and configuration to route traffic correctly.
 
-1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:  
-   Bash  
-   docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"  
-   docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"  
-   docker compose run \--rm kong kong migrations bootstrap
+1. **Initialize Database:** Execute these commands to prepare the Kong postgres database:
+
+Bash
+
+docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"  
+docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"  
+docker compose run \--rm kong kong migrations bootstrap
 
 2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script.  
-   *For **Single-Node** installation:*  
-   Bash  
+   For Single-Node installation: \`\`\`bash  
    cd api-gateway-solution/new-config/  
    cp kong-config.json.single-node kong\_config.json  
    chmod \+x manage-kong-config.sh  
    ./manage-kong-config.sh \-a
 
-   *(For Three-Node installation, simply run ./manage-kong-config.sh \-a as kong\_config.json is the default).*
+   \*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default).\*
 
-#### **4.3 Nginx Configuration**
+\#\#\#\# \*\*4.3 Nginx Configuration\*\*
 
 Nginx acts as the reverse proxy and SSL termination point.
 
-1. Navigate to api-gateway-solution/nginx.  
-2. Select the appropriate configuration file:  
-   * For **Single-Node**, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
-   * For **Three-Node**, use: default.conf.  
-3. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
+1\. Navigate to api-gateway-solution/nginx.    
+2\. Select the appropriate configuration file:    
+   \* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).    
+   \* For \*\*Three-Node\*\*, use: default.conf.    
+3\. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
 
----
+\---
 
-### **Step 5: Knowledge Base Population & User Setup**
+\#\#\# \*\*Step 5: Knowledge Base Population & User Setup\*\*
 
 With the infrastructure configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts.
 
-#### **Method 1: Automated Script Approach (Recommended for Initial Setup)**
+\#\#\#\# \*\*Method 1: Automated Script Approach (Recommended for Initial Setup)\*\*
 
 This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
 
-5.1 Prepare Script Environment  
+5.1 Prepare Script Environment    
 You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials.
 
-Bash
-
-cd components/gov-chat-backend/scripts/new-schema-scripts  
+\`\`\`bash  
+cd components/gov-chat-backend/scripts/new-schema-scripts    
 source set-env.sh
 
-5.2 Create Database Schema  
+5.2 Create Database Schema
+
 Use the arango-schema-creator.js script to generate the collections, indexes, and graphs.
 
 Bash
 
-\# Ensure you are still in the new-schema-scripts directory and environment is set  
+\# Ensure you are still in the new-schema-scripts directory and environment is set    
 node arango-schema-creator.js ./arango-schema.json
 
-5.3 Create Initial User Accounts  
+5.3 Create Initial User Accounts
+
 You must create the default Admin and Manager accounts. These are required for the application to load correctly and for full integration with the Document Repository.
 
 Bash
 
-\# Create the Admin account  
+\# Create the Admin account    
 node create-genie-ai-admin-account.js
 
-\# Create the Manager account  
+\# Create the Manager account    
 node create-genie-ai-manager.js
 
 **Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
 
-5.4 Populate Hierarchy  
+5.4 Populate Hierarchy
+
 Use the create-knowledge-hierarchy.js script to import your Category/Service structure.
 
 * *Note:* Ensure schema validation is temporarily disabled on serviceCategories, services, and categoryServices collections if using an older schema version.
 
 Bash
 
-\# Return to parent scripts directory if hierarchy file is there, or adjust path.  
-cd ..  
+\# Return to parent scripts directory if hierarchy file is there, or adjust path.    
+cd ..    
 node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
-5.5 Generate Translations  
+5.5 Generate Translations
+
 (Optional) Use create-translations.js to auto-generate labels for other supported languages (requires Google Cloud credentials).
 
 #### **Method 2: Manual Admin Dashboard Approach**
@@ -388,21 +398,22 @@ This method is ideal for users who prefer a visual interface, or for making incr
 
 After all configuration steps are complete, you must restart the services to ensure they pick up the new configurations and verify the system is healthy.
 
-1. **Restart Services:**  
-   Bash  
+1. Restart Services: \`\`\`bash  
    docker-compose down  
    docker-compose up \-d
 
-2. Verify Service Health:  
-   Check that all containers are running and healthy.  
-   Bash  
-   docker ps
+2\. Verify Service Health:    
+   Check that all containers are running and healthy.    
+\`\`\`bash  
+docker ps
 
-   *Look for (healthy) status next to critical services like kong, kong-database, vllm, and arango-vector-db.*  
-3. Check Logs for Errors:  
-   Inspect the logs again to ensure no new critical errors have appeared after the restart.  
-   Bash  
-   docker-compose logs \-f
+*Look for (healthy) status next to critical services like kong, kong-database, vllm, and arango-vector-db.* 3\. Check Logs for Errors:
+
+Inspect the logs again to ensure no new critical errors have appeared after the restart.
+
+Bash
+
+docker-compose logs \-f
 
 4. Initial Login:  
    Access the application in your browser (e.g., https://localhost or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
@@ -431,4 +442,3 @@ Navigate to the **Document Management** tab.
 1. **Upload:** Click "+ Upload Files" or "+ Add from Link". Status will be "Pending".  
 2. **Apply Labels:** Click the document, and use the "Labels" multi-select dropdown to apply relevant categories/services from your hierarchy.  
 3. **Ingest:** Click "Ingest" to trigger chunking, embedding, and storage. Status will update to "Ingested".
-

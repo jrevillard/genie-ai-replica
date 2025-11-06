@@ -274,7 +274,7 @@ Use the provided docker-compose.yaml to start the stack. This will spin up core 
 
 Bash
 
-docker-compose up \-d
+docker-compose up \--build \-d
 
 ⚠️ IMPORTANT: EXPECTED ERRORS
 
@@ -286,7 +286,25 @@ Proceed immediately to **Step 4** to complete the necessary infrastructure confi
 
 #### **Option B: Three-Node Installation (Production)**
 
-*(TBD \- Documentation for the Bastion, Infrastructure, and AI node split architecture has been developed but not documented yet.)*
+**Option B** is a three node architecture. This style of architecture is recommended for production docker compose based deployments as it separates the concerns for each tier into separate nodes as follows:
+
+1. **Bastion Node**: this host runs nginx as a reverse proxy, kong and the API gateway and keycloak for implementation of 3rd party identity services.
+2. **Infrastructure Node**: this host runs all the application infrastructure services (ArangoDB, node.js backend, Vue 3 frontend, redis-cache, document-repository and clamav).
+3. **AI/GPU Node**: this host runs the customized OPEA microservices backend.
+
+Refer to the diagram above for the various docker-compose.yaml and associated .env files. Setting this up is simply a case of setting up the three hosts with the required operating system and dependencies and then configuring each of the components (the default configurations in the example env files should be mostly correct but will require adjustments for your host names and DNS etc.).
+
+**Steps:**
+1. Set up the virtual hosts as per the instructions with the required capacity
+2. Clone the repository to each node as per Option A.
+3. Set up your configurations as outlined in Option A above and adjust for the three node environment on each node.
+4. Bring up the environment
+
+Bash
+
+docker-compose up \--build \-d
+
+5. Proceed as per Option A. then go to **Step 4: Infrastructure Configuration**
 
 ---
 

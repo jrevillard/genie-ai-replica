@@ -129,6 +129,57 @@ GENIE.AI requires significant computational resources, particularly for AI model
 * **Docker & Docker Compose:** Required for orchestrating the containerized services.  
 * **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
   * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.
+* **Node.js:** Required for the JavaScript components
+
+#### **2.3 Install and Verify Docker on Every Host**
+
+Bash
+
+# 1. Update and install prerequisites
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+
+# 2. Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# 3. Set up the official Docker repository
+echo \
+  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# 4. Install Docker Engine
+# (This also removes conflicting older versions like docker.io if present)
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# 5. Start and enable the Docker daemon
+# (Necessary if the installer fails to start it automatically)
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# 6. Grant your user standard Docker permissions
+sudo usermod -aG docker $USER
+newgrp docker
+
+# 7. Verify Docker
+docker run hello-world
+
+---
+
+#### **2.4 Install Node.js on Every Host** 
+
+Bash
+
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+
+sudo apt-get install -y nodejs
+
+node -v
+
+npm -v
 
 ---
 

@@ -137,23 +137,23 @@ GENIE.AI requires significant computational resources, particularly for AI model
 
 You must complete one of these base docker compose based installations before configuring the application services (single node or three node) - Kubernetes will be added later. The way that the 2 docker compose based deployent options are organized in the repository is as follows:
 
-repository-root
-   |--docker-compose.yaml           ... this is the single-node docker compose deployment model
-   |--env                           ... this is the .env file for the single-node docker compose
-   |--components
-      |--docker-compose.yaml        ... this is the docker compose for the infrastructure tier of the three node deployment model
-      |--gov-chat-backend
-         |--env                     ... this is the .env file for the node.js backend service
-      |--gov-chat-frontend
-         |--env                     ... this is the env file for the Vue 3 application
-      |--document-repository
-         |--env                     ... this is the .env file for the document repository service
-   |--api-gateway-solution
-      |--docker-compose.yaml        ... this is the docker compose for the bastion host tier of the three node deployment
-      |--env                        ... this is the .env file for the bastion tier
-   |--opea
-      |--docker-compose.yaml        ... this is the docker compose for the customized GENIE.AI OPEA for the three node deployment model
-      |--env                        ... this is the .env file for the OPEA tier
+repository-root/
+├── docker-compose.yaml           # Single-node docker compose deployment model
+├── env                           # .env file for the single-node docker compose
+├── components/
+│   ├── docker-compose.yaml       # Docker compose for infrastructure tier (three node model)
+│   ├── gov-chat-backend/
+│   │   └── env                   # .env file for the node.js backend service
+│   ├── gov-chat-frontend/
+│   │   └── env                   # .env file for the Vue 3 application
+│   └── document-repository/
+│       └── env                   # .env file for the document repository service
+├── api-gateway-solution/
+│   ├── docker-compose.yaml       # Docker compose for bastion host tier
+│   └── env                       # .env file for the bastion tier
+└── opea/
+    ├── docker-compose.yaml       # Docker compose for customized GENIE.AI OPEA
+    └── env                       # .env file for the OPEA tier
 
 Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
 

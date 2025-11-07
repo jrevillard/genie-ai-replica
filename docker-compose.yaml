@@ -142,13 +142,12 @@ services:
         condition: service_healthy
       redis-cache:
         condition: service_healthy
-
     environment:
       - SESSION_SECRET=${SESSION_SECRET:-default-session-secret}
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC}
-      - PORT=$(BACKEND_PORT)
+      - PORT=${BACKEND_PORT}
     networks:
       - genieai_network
 
@@ -158,7 +157,7 @@ services:
       dockerfile: document-repository/Dockerfile
     container_name: doc-repo-dev
     environment:
-      PORT=$(DOC_REPO_PORT)
+      - PORT=${DOC_REPO_PORT}
     env_file:
       - .env
     depends_on:

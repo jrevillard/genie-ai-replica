@@ -1,0 +1,28 @@
+# ======== Stage 1: The OPEA Base ========
+ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+ARG OPEA_VERSION="v1.3"
+FROM alpine/git:latest AS opea_base
+
+WORKDIR /src
+RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+
+# ======== Final Stage: Assembly ========
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Step A: Copy the base OPEA microservice code
+COPY --from=opea_base /src/comps/third_parties/httpservices/ /app/
+
+# Step B: Copy and Run the Dependency Patch
+COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirements.txt
+
+# Step C: Install *fixed* dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Step D: "Overlay" your custom GENIE-AI files
+# (This service has no custom .py files, so we skip this)
+
+# Step E: Run the OPEA entry point
+CMD ["python", "main.py"]

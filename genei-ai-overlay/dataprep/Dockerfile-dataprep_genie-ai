@@ -1,0 +1,42 @@
+Dockerfile
+
+
+# ======== Stage 1: The OPEA Base ========
+# This stage clones the external OPEA repository at a specific version.
+ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+ARG OPEA_VERSION="v1.3" # This tag can be changed to upgrade OPEA
+FROM alpine/git:latest AS opea_base
+
+WORKDIR /src
+# Clone only the specified branch/tag, with no history for speed
+RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+
+# ======== Final Stage: Assembly ========
+# This is the final production image.
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Step A: Copy the base OPEA microservice code from Stage 1
+# This copies arangodb.py, main.py, requirements.txt, etc.
+COPY --from=opea_base /src/comps/dataprep/src/ /app/
+
+# Step B: Copy and Run the Dependency Patch
+# This removes unused, broken dependencies (pathway, graspologic)
+COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirements.txt
+
+# Step C: Install *fixed* dependencies
+# This will now succeed by skipping the unused packages
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Step D: "Overlay" our custom GENIE-AI files
+# These paths are relative to the build context (our repo root)
+# 1. Copy our new subclass (Section 2.1)
+COPY genie-ai-overlay/dataprep/genie-ai_dataprep.py /app/src/genie-ai_dataprep.py
+# 2. Overwrite OPEA's entry point with our new one
+COPY genie-ai-overlay/dataprep/main-dataprep_genie-ai.py /app/main.py
+
+# Step E: Run the new GENIE-AI entry point
+# We are running main.py, which we successfully overwrote in Step D
+CMD ["python", "main.py"]

@@ -1,0 +1,30 @@
+# ======== Stage 1: The OPEA Base ========
+# This stage is identical and will be cached by Docker
+ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+ARG OPEA_VERSION="v1.3"
+FROM alpine/git:latest AS opea_base
+
+WORKDIR /src
+RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+
+# ======== Final Stage: Assembly ========
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Step A: Copy the base OPEA microservice code
+COPY --from=opea_base /src/comps/retrievers/src/ /app/
+
+# Step B: Copy and Run the Dependency Patch
+COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirements.txt
+
+# Step C: Install *fixed* dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Step D: "Overlay" our custom GENIE-AI files
+COPY genie-ai-overlay/retriever/genie-ai_retriever.py /app/src/genie-ai_retriever.py
+COPY genie-ai-overlay/retriever/main-retriever_genie-ai.py /app/main.py
+
+# Step E: Run the new GENIE-AI entry point
+CMD ["python", "main.py"]

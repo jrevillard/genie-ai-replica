@@ -1,6 +1,3 @@
-Dockerfile
-
-
 # ======== Stage 1: The OPEA Base ========
 # This stage clones the external OPEA repository at a specific version.
 ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIComps.git"

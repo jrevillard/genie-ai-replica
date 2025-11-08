@@ -374,9 +374,13 @@ Once the base services are running (Step 3), you must configure the core infrast
 While the arango-vector-db service is running, the specific application databases must be created.
 
 1. Access the ArangoDB web interface at http://localhost:8529 (login with root and the password defined in your .env).  
-2. Create the necessary databases as defined in your environment variables (default: genie-backend and genie-frontend).
+2. Create the necessary databases as defined in your environment variables (default: genie-ai) - ensure both the frontend and backend services use the same database.
 
-#### **4.2 Kong API Gateway Configuration**
+#### **4.2 NGINX and Kong API Gateway Configuration**
+
+There are Nginx default.conf files available for both three-node and single-node deployments:
+1. For three-node deployments, use the default default.conf and modify the upstream addresses
+2. for single-node deployments, use the default.conf-single-node
 
 Kong requires specific initialization and configuration to route traffic correctly.
 
@@ -387,15 +391,46 @@ Bash
 docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"  
 docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"  
 docker compose run \--rm kong kong migrations bootstrap
+docker compose kong restart
 
-2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script.  
+2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script (ensure that curl and jq are installed).  
    For Single-Node installation: \`\`\`bash  
    cd api-gateway-solution/new-config/  
-   cp kong-config.json.single-node kong\_config.json  
-   chmod \+x manage-kong-config.sh  
+   cp kong\_config.json-single-node kong\_config.json  
+   chmod \+x manage-kong-config.sh 
+   sudo apt update
+   sudo apt install jq
    ./manage-kong-config.sh \-a
 
    \*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default).\*
+
+Enter the correct hosts and expect the following output:
+
+Bash
+
+govstack@bb-ai-gpu-01:\~/genie-ai-replica-single-node/api-gateway-solution/new-config$ ./manage-kong-config.sh \-a  
+This script will configure your Kong instance.  
+Please provide the required connection details.
+
+\--- Kong Admin API Details \---  
+Enter Kong host \[default: localhost\]:   
+Enter Kong admin port \[default: 8001\]: 
+
+\--- Backend Service Details \---  
+Enter 'express-api' service host \[default: localhost\]: backend  
+Enter 'express-api' service port \[default: 3000\]: 
+
+Enter 'document-repository' service host \[default: localhost\]: document-repository  
+Enter 'document-repository' service port \[default: 3001\]: 
+
+\[2025-11-08 14:12:02\] Applying configuration from kong\_config.json  
+\[2025-11-08 14:12:02\] Using Kong Admin API at: http://localhost:8001  
+\[2025-11-08 14:12:02\] Setting 'express-api' to: backend:3000  
+\[2025-11-08 14:12:02\] Setting 'document-repository' to: document-repository:3001  
+\[2025-11-08 14:12:02\] Processing service: express-api  
+\[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
+...  
+   
 
 \#\#\#\# \*\*4.3 Nginx Configuration\*\*
 
@@ -418,10 +453,11 @@ With the infrastructure configured, you can now instantiate the knowledge hierar
 This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
 
 5.1 Prepare Script Environment    
-You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials.
+You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set_env.sh script for the correct database environment
 
 \`\`\`bash  
 cd components/gov-chat-backend/scripts/new-schema-scripts    
+chmod \+x set-env.sh
 source set-env.sh
 
 5.2 Create Database Schema
@@ -431,6 +467,7 @@ Use the arango-schema-creator.js script to generate the collections, indexes, an
 Bash
 
 \# Ensure you are still in the new-schema-scripts directory and environment is set    
+npm install arangojs
 node arango-schema-creator.js ./arango-schema.json
 
 5.3 Create Initial User Accounts
@@ -443,7 +480,7 @@ Bash
 node create-genie-ai-admin-account.js
 
 \# Create the Manager account    
-node create-genie-ai-manager.js
+node create-genie-ai-manager-account.js
 
 **Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
 

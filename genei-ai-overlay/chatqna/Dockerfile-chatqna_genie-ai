@@ -1,0 +1,34 @@
+# ======== Stage 1: The OPEA Example Base ========
+# This stage clones the orchestration layer
+ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIExamples.git"
+ARG OPEA_VERSION="main" # OPEA v1.3 era used the 'main' branch
+FROM alpine/git:latest AS opea_example_base
+
+WORKDIR /src
+RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+
+# ======== Final Stage: Assembly ========
+# This is the final production image.
+FROM opea/comps-base:latest
+WORKDIR /app
+
+# Step A: Copy the base OPEA ChatQnA code
+COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
+
+# Step B: Copy and Run the Dependency Patch
+COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+# Note: The requirements file is in a different location for this service
+RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/ChatQnA/requirements.txt
+
+# Step C: Install *fixed* dependencies
+RUN pip install --no-cache-dir -r /app/ChatQnA/requirements.txt
+# Install extra dependencies from our original Dockerfile_genieai
+RUN pip install langdetect transformers
+
+# Step D: "Overlay" our custom GENIE-AI "glue" files
+COPY genie-ai-overlay/chatqna/genie-ai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
+COPY genie-ai-overlay/chatqna/genie-ai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
+COPY genie-ai-overlay/chatqna/main-chatqna_genie-ai.py /app/ChatQnA/src/main.py
+
+# Step E: Run our new GENIE-AI entry point
+CMD ["python", "/app/ChatQnA/src/main.py"]

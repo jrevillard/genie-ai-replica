@@ -51,12 +51,12 @@ SESSION_SECRET=default-session-secret
 SESSION_EXPIRATION_TIME=1800000
 CORS_ORIGIN=http://localhost/
 
-EMAIL_HOST=smtp.itu.ch
-EMAIL_PORT=587
+EMAIL_HOST=<your-smtp-host>
+EMAIL_PORT=<your-smtp-port>
 EMAIL_SECURE=false
-EMAIL_USER=genie-ai
-EMAIL_PASSWORD=gLp+Ek)Vf)
-EMAIL_FROM=noreply@genie-ai.itu.int
+EMAIL_USER=<your-email-user>
+EMAIL_PASSWORD=<your-smtp-password... quoted if it contains special characters>
+EMAIL_FROM=noreply@<your-domain-name>
 
 APP_NAME=Genie AI
 FRONTEND_URL=http://localhost/

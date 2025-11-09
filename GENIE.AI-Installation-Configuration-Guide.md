@@ -274,9 +274,10 @@ The following tables document the key variables found in the .env file, grouped 
 | TRANSLATION\_CACHE | Switch on translation caching | on or off |
 | TRANSLATION\_CACHE\_PATH | The path of the tranlsation cache | /cache/translations |
 | TRANSLATION\_CACHE\_PASSWORD | The password for the Redis cache | Must equal the password in the redis-cach container startup command: command: redis-server \--appendonly yes \--maxmemory-policy noeviction \--requirepass "\!@\#$$5678" |
-| EMAIL\_HOST | SMTP server for sending emails. | smtp.itu.ch |
-| EMAIL\_USER | SMTP username. | genie-ai |
-| EMAIL\_PASSWORD | SMTP password. | your-password |
+| EMAIL\_HOST | SMTP server for sending emails. | <your-smtp-host> |
+| EMAIL\_USER | SMTP username. | <your-email-user> |
+| EMAIL\_PASSWORD | SMTP password. | <your-email-password> |
+| EMAIL\_FROM | noreply email address | noreply@<your-domain-name> |
 | OPEA\_HOST | Hostname for the OPEA backend service. | chatqna-xeon-backend-server |
 
 **ArangoDB (Knowledge Base)**

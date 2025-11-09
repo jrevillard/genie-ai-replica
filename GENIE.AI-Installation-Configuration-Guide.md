@@ -253,7 +253,7 @@ The following tables document the key variables found in the .env file, grouped 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API. | /api |
+| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API (must be accessible to the browser). | https://localhost/api |
 | VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
 | CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. You must understand CSP policy to modify this for your environment | 'self' http://locahost... |
 | CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. Again, you need to understand CORS to modify this. | http://localhost,https://localhost... |

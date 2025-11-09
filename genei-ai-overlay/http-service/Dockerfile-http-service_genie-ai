@@ -21,6 +21,10 @@ RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirem
 # Step C: Install *fixed* dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Step C.1: Install GENIE-AI specific dependencies
+# This adds the http client library needed for auth calls
+RUN pip install --no-cache-dir aiohttp
+
 # Step D: "Overlay" your custom GENIE-AI files
 # (This service has no custom .py files, so we skip this)
 

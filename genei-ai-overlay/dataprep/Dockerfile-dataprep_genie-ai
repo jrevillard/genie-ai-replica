@@ -17,6 +17,8 @@ WORKDIR /app
 # Step A: Copy the base OPEA microservice code from Stage 1
 # This copies arangodb.py, main.py, requirements.txt, etc.
 COPY --from=opea_base /src/comps/dataprep/src/ /app/
+# **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
+**COPY --from=opea_base /src/comps/cores/ /app/comps/cores/**
 
 # Step B: Copy and Run the Dependency Patch
 # This removes unused, broken dependencies (pathway, graspologic)
@@ -33,6 +35,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY genie-ai-overlay/dataprep/genie-ai_dataprep.py /app/src/genie-ai_dataprep.py
 # 2. Overwrite OPEA's entry point with our new one
 COPY genie-ai-overlay/dataprep/main-dataprep_genie-ai.py /app/main.py
+# 3. Overwrite the OPEA API protocol with our custom version
+COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/api_protocol.py
 
 # Step E: Run the new GENIE-AI entry point
 # We are running main.py, which we successfully overwrote in Step D

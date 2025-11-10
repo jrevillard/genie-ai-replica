@@ -487,24 +487,6 @@ services:
     networks:
       - genieai_network
     restart: "no"
-
-  translation:
-    container_name: llm-translation
-    # Corrected: Pulling the pre-built, versioned image
-    # Note: OPEA v1.3 uses the 'llm-textgen' image for translation-generation - needs assessment and testing Roman
-    image: opea/llm-textgen:v1.3
-    environment:
-      - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
-      - LLM_MODEL_ID=gemma-3-1b-it
-      # This CMD override is necessary to start the translation service
-    command: python -m opea.comps.llms.translation_generation
-    ports:
-      - "9030:9030"
-    ipc: "host"
-    networks:
-      - genieai_network
-    restart: "no"
-
   tei:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7

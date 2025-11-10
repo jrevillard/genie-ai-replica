@@ -481,22 +481,6 @@ services:
     networks:
       - genieai_network
     restart: "no"
-
-  translation:
-    container_name: llm-translation
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/llms/src/translation-generation/Dockerfile
-    environment:
-      - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
-      - LLM_MODEL_ID=gemma-3-1b-it
-    ports:
-      - "9030:9030"
-    ipc: "host"
-    networks:
-      - genieai_network
-    restart: "no"
-
   tei:
     image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving

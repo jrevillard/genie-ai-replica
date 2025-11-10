@@ -4,6 +4,8 @@ no_proxy=noproxy
 http_proxy=
 https_proxy=
 
+OPEA_VERSION=v1.3
+
 # ========= KONG DATABASE SERVICE CONFIG =========
 POSTGRES_USER=kong
 POSTGRES_DB=kong
@@ -59,7 +61,7 @@ EMAIL_PASSWORD=<your-smtp-password... quoted if it contains special characters>
 EMAIL_FROM=noreply@<your-domain-name>
 
 APP_NAME=Genie AI
-FRONTEND_URL=http://localhost/
+FRONTEND_URL=https://localhost/
 
 BACKUP_DIR=./database_backups
 MAX_BACKUPS=5

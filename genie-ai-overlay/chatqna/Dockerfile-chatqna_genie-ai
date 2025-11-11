@@ -4,6 +4,9 @@ ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIExamples.git"
 ARG OPEA_VERSION="v1.3" 
 FROM alpine/git:latest AS opea_example_base
 
+ARG OPEA_REPO_URL
+ARG OPEA_VERSION
+
 WORKDIR /src
 RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 

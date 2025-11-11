@@ -29,4 +29,4 @@ RUN pip install --no-cache-dir aiohttp
 # (This service has no custom .py files, so we skip this)
 
 # Step E: Run the OPEA entry point
-CMD ["python", "main.py"]
+CMD ["python", "http_service.py"]

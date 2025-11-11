@@ -26,9 +26,9 @@ RUN pip install --no-cache-dir -r /app/ChatQnA/requirements.txt
 RUN pip install langdetect transformers
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files
-COPY genie-ai-overlay/chatqna/genie-ai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
-COPY genie-ai-overlay/chatqna/genie-ai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
-COPY genie-ai-overlay/chatqna/main-chatqna_genie-ai.py /app/ChatQnA/src/main.py
+# COPY genie-ai-overlay/chatqna/genieai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
+# COPY genie-ai-overlay/chatqna/genieai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
+COPY genie-ai-overlay/chatqna/chatqna_genieai.py /app/ChatQnA/src/chatqna.py
 
 # Step E: Run our new GENIE-AI entry point
-CMD ["python", "/app/ChatQnA/src/main.py"]
+CMD ["python", "/app/ChatQnA/src/chatqna.py"]

@@ -15,7 +15,7 @@ WORKDIR /app
 # Step A: Copy the base OPEA microservice code
 COPY --from=opea_base /src/comps/retrievers/src/ /app/
 # **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
-**COPY --from=opea_base /src/comps/cores/ /app/comps/cores/**
+COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
 
 # Step B: Copy and Run the Dependency Patch
 COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
@@ -25,10 +25,11 @@ RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirem
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Step D: "Overlay" our custom GENIE-AI files
-COPY genie-ai-overlay/retriever/genie-ai_retriever.py /app/src/genie-ai_retriever.py
-COPY genie-ai-overlay/retriever/main-retriever_genie-ai.py /app/main.py
+COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/genieai_retriever_arangodb.py
+COPY genie-ai-overlay/retriever/genieai_retriever_microservice.py /app/genieai_retriever_microservice.py
+
 # 3. Overwrite the OPEA API protocol with our custom version
-COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/api_protocol.py
+COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
 # Step E: Run the new GENIE-AI entry point
-CMD ["python", "main.py"]
+CMD ["python", "genieai_retriever_microservice.py"]

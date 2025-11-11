@@ -18,12 +18,13 @@ WORKDIR /app
 # This copies arangodb.py, main.py, requirements.txt, etc.
 COPY --from=opea_base /src/comps/dataprep/src/ /app/
 # **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
-**COPY --from=opea_base /src/comps/cores/ /app/comps/cores/**
+COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
 
-# Step B: Copy and Run the Dependency Patch
+# Step B: Copy and Run the Dependency Patch and the utils.py patch
 # This removes unused, broken dependencies (pathway, graspologic)
 COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
 RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirements.txt
+COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/genieai_dataprep_utils.py
 
 # Step C: Install *fixed* dependencies
 # This will now succeed by skipping the unused packages
@@ -31,13 +32,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Step D: "Overlay" our custom GENIE-AI files
 # These paths are relative to the build context (our repo root)
-# 1. Copy our new subclass (Section 2.1)
-COPY genie-ai-overlay/dataprep/genie-ai_dataprep.py /app/src/genie-ai_dataprep.py
+# 1. Copy our new subclass (Section 2.1) and the loader
+COPY genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py /app/integrations/genieai_dataprep_arangodb.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_loader.py /app/genieai_dataprep_loader.py
+
 # 2. Overwrite OPEA's entry point with our new one
-COPY genie-ai-overlay/dataprep/main-dataprep_genie-ai.py /app/main.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_microservice.py /app/genieai_dataprep_microservice.py
+
 # 3. Overwrite the OPEA API protocol with our custom version
-COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/api_protocol.py
+COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
 # Step E: Run the new GENIE-AI entry point
-# We are running main.py, which we successfully overwrote in Step D
-CMD ["python", "main.py"]
+# We are running genieai_dataprep_microservice.py, which we successfully overwrote in Step D
+CMD ["python", "genieai_dataprep_microservice.py"]

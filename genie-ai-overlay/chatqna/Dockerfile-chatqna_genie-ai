@@ -1,7 +1,7 @@
 # ======== Stage 1: The OPEA Example Base ========
 # This stage clones the orchestration layer
 ARG OPEA_REPO_URL="https://github.com/opea-project/GenAIExamples.git"
-ARG OPEA_VERSION="main" # OPEA v1.3 era used the 'main' branch
+ARG OPEA_VERSION="v1.3" 
 FROM alpine/git:latest AS opea_example_base
 
 WORKDIR /src

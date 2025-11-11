@@ -225,6 +225,7 @@ services:
       dockerfile: ./genie-ai-overlay/http-service/Dockerfile-http-service_genie-ai
       args:
         - OPEA_VERSION=${OPEA_VERSION:-v1.3}
+        - OPEA_REPO_URL=https://github.com/opea-project/GenAIComps.git
     image: http-service:latest
     container_name: http-service
     environment:
@@ -245,6 +246,7 @@ services:
       dockerfile: ./genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
       args:
         - OPEA_VERSION=${OPEA_VERSION:-v1.3}
+        - OPEA_REPO_URL=https://github.com/opea-project/GenAIComps.git
     image: dataprep-dev:latest
     container_name: dataprep-arango-dev
     depends_on:
@@ -281,6 +283,7 @@ services:
       dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
       args:
         - OPEA_VERSION=${OPEA_VERSION:-v1.3}
+        - OPEA_REPO_URL=https://github.com/opea-project/GenAIComps.git
     image: retriever-dev:latest
     container_name: retriever-arango-dev
     depends_on:
@@ -310,6 +313,7 @@ services:
       dockerfile: ./genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
       args:
         - OPEA_VERSION=${OPEA_VERSION:-v1.3}
+        - OPEA_REPO_URL=https://github.com/opea-project/GenAIExamples.git
     image: chatqna-genieai:latest
     container_name: chatqna-xeon-backend-server
     working_dir: /app/ChatQnA
@@ -349,7 +353,7 @@ services:
     restart: "no"
 
   chatqna-xeon-ui-server:
-    image: opea/chatqna-ui:v1.3
+    image: opea/chatqna-ui:latest
     container_name: chatqna-xeon-ui-server
     depends_on:
       - chatqna-xeon-backend-server
@@ -371,7 +375,7 @@ services:
       start_period: 10s
 
   chatqna-xeon-nginx-server:
-    image: opea/nginx:v1.3
+    image: opea/nginx:latest
     container_name: chatqna-xeon-nginx-server
     depends_on:
       chatqna-xeon-backend-server:
@@ -433,7 +437,7 @@ services:
   textgen:
     container_name: llm-textgen
     # Corrected: Pulling the pre-built, versioned image
-    image: opea/llm-textgen:v1.3
+    image: opea/llm-textgen:latest
     environment:
       - LLM_ENDPOINT=http://vllm:8000
       - LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
@@ -475,7 +479,7 @@ services:
   guardrail:
     container_name: llm-guardrail
     # Corrected: Pulling the pre-built, versioned image
-    image: opea/guardrails:v1.3
+    image: opea/guardrails:latest
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
       - LLM_MODEL_ID=gemma-3-1b-it
@@ -520,7 +524,7 @@ services:
   embedding:
     container_name: embedding
     # Corrected: Pulling the pre-built, versioned image
-    image: opea/embedding:v1.3
+    image: opea/embedding:latest
     environment:
       - EMBEDDING_MODEL_ENDPOINT=http://tei:80
       - TEI_EMBEDDING_ENDPOINT=http://tei:80
@@ -564,7 +568,7 @@ services:
 
   reranker:
     container_name: reranker
-    image: opea/reranking:v1.3
+    image: opea/reranking:latest
     env_file:
       - .env
     environment:

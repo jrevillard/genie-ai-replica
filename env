@@ -4,8 +4,6 @@ no_proxy=noproxy
 http_proxy=
 https_proxy=
 
-OPEA_VERSION=v1.3
-
 # ========= KONG DATABASE SERVICE CONFIG =========
 POSTGRES_USER=kong
 POSTGRES_DB=kong

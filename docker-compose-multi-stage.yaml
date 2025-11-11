@@ -224,8 +224,8 @@ services:
       # Point to our new, custom multi-stage Dockerfile
       dockerfile: ./genie-ai-overlay/http-service/Dockerfile-http-service_genie-ai
       args:
-        - OPEA_VERSION=${OPEA_VERSION:-v1.3}
-        - OPEA_REPO_URL=https://github.com/opea-project/GenAIComps.git
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
     image: http-service:latest
     container_name: http-service
     environment:
@@ -245,8 +245,8 @@ services:
       # Point to our new, custom multi-stage Dockerfile
       dockerfile: ./genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
       args:
-        - OPEA_VERSION=${OPEA_VERSION:-v1.3}
-        - OPEA_REPO_URL=https://github.com/opea-project/GenAIComps.git
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
     image: dataprep-dev:latest
     container_name: dataprep-arango-dev
     depends_on:
@@ -282,8 +282,8 @@ services:
       # Point to our new, custom multi-stage Dockerfile
       dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
       args:
-        - OPEA_VERSION=${OPEA_VERSION:-v1.3}
-        - OPEA_REPO_URL=https://github.com/opea-project/GenAIComps.git
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
     image: retriever-dev:latest
     container_name: retriever-arango-dev
     depends_on:
@@ -312,8 +312,8 @@ services:
       # Point to our new, custom multi-stage Dockerfile
       dockerfile: ./genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
       args:
-        - OPEA_VERSION=${OPEA_VERSION:-v1.3}
-        - OPEA_REPO_URL=https://github.com/opea-project/GenAIExamples.git
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIExamples.git
     image: chatqna-genieai:latest
     container_name: chatqna-xeon-backend-server
     working_dir: /app/ChatQnA

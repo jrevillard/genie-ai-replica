@@ -22,7 +22,7 @@ COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
 
 # Step B: Copy and Run the Dependency Patch
 COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
-RUN ./app/fix_dependencies.sh /app/requirements.txt
+RUN ./fix_dependencies.sh /app/requirements.txt
 
 # Step C: Install *fixed* dependencies
 RUN pip install --no-cache-dir -r requirements.txt

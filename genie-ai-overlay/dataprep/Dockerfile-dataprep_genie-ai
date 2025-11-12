@@ -25,7 +25,7 @@ COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
 # Step B: Copy and Run the Dependency Patch and the utils.py patch
 # This removes unused, broken dependencies (pathway, graspologic)
 COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
-RUN ./app/fix_dependencies.sh /app/requirements.txt
+RUN ./fix_dependencies.sh /app/requirements.txt
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/genieai_dataprep_utils.py
 
 # Step C: Install *fixed* dependencies

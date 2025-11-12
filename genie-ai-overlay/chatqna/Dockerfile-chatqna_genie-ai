@@ -33,7 +33,6 @@ RUN pip install --no-cache-dir -e .
 RUN useradd -ms /bin/bash user
 RUN mkdir -p /home/user/comps && chown -R user:user /home/user
 
-# *** THE FIX IS HERE ***
 # Copy the *contents* of the cloned 'comps' directory to the expected path
 RUN cp -R /src/GenAIComps/comps/. /home/user/comps/
 
@@ -52,8 +51,10 @@ ARG OPEA_VERSION="v1.3"
 USER root
 WORKDIR /app
 
-# Tell Python to include /app in its search path
-ENV PYTHONPATH="${PYTHONPATH}:/app"
+# Tell Python to include all our custom code paths.
+# /home/user is the parent of the 'comps' package.
+# /app is for api_protocol.py and the ChatQnA app itself.
+ENV PYTHONPATH="/home/user:/app:/app/ChatQnA:${PYTHONPATH}"
 
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/

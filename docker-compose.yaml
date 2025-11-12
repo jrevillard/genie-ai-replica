@@ -219,9 +219,10 @@ services:
 
   http-service:
     build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/third_parties/httpservices/Dockerfile
-    image: http-service:latest
+      # Set the context to the root of the GENIE-AI repo
+      context: .
+      # Point to our new, custom multi-stage Dockerfile
+      dockerfile: ./genie-ai-overlay/http-service/Dockerfile-http-service_genie-ai
     container_name: http-service
     environment:
       AUTH_SERVICE_URL: "https://localhost/"
@@ -235,8 +236,13 @@ services:
 
   dataprep-arango-service:
     build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/dataprep/src/Dockerfile
+      # Set the context to the root of the GENIE-AI repo
+      context: .
+      # Point to our new, custom multi-stage Dockerfile
+      dockerfile: ./genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
+      args:
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
     image: dataprep-dev:latest
     container_name: dataprep-arango-dev
     depends_on:
@@ -248,8 +254,6 @@ services:
         condition: service_healthy
       guardrail:
         condition: service_started
-    volumes:
-      - ./opea/GenAIComps/comps:/home/user/comps
     ports:
       - "6007:5000"
     env_file:
@@ -269,8 +273,13 @@ services:
 
   retriever-arango-service:
     build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/retrievers/src/Dockerfile
+      # Set the context to the root of the GENIE-AI repo
+      context: .
+      # Point to our new, custom multi-stage Dockerfile
+      dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
+      args:
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
     image: retriever-dev:latest
     container_name: retriever-arango-dev
     depends_on:
@@ -281,8 +290,6 @@ services:
     ports:
       - "7025:7025"
     ipc: host
-    volumes:
-      - ./opea/GenAIComps/comps:/home/user/comps
     env_file:
       - .env
     environment:
@@ -296,12 +303,15 @@ services:
 
   chatqna-xeon-backend-server:
     build:
-      context: ./opea
-      dockerfile: ./ChatQnA/Dockerfile_genieai
+      # Set the context to the root of the GENIE-AI repo
+      context: .
+      # Point to our new, custom multi-stage Dockerfile
+      dockerfile: ./genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+      args:
+        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
+        OPEA_REPO_URL: https://github.com/opea-project/GenAIExamples.git
     image: chatqna-genieai:latest
     container_name: chatqna-xeon-backend-server
-    volumes:
-      - ./opea:/app
     working_dir: /app/ChatQnA
     depends_on:
       vllm:
@@ -422,9 +432,8 @@ services:
 
   textgen:
     container_name: llm-textgen
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/llms/src/text-generation/Dockerfile
+    # Corrected: Pulling the pre-built, versioned image
+    image: opea/llm-textgen:latest
     environment:
       - LLM_ENDPOINT=http://vllm:8000
       - LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
@@ -465,11 +474,8 @@ services:
 
   guardrail:
     container_name: llm-guardrail
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/guardrails/src/guardrails/Dockerfile
-    volumes:
-      - ./opea/GenAIComps/comps:/home/user/comps
+    # Corrected: Pulling the pre-built, versioned image
+    image: opea/guardrails:latest
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
       - LLM_MODEL_ID=gemma-3-1b-it
@@ -482,7 +488,8 @@ services:
       - genieai_network
     restart: "no"
   tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    image: ghcr.io/huggingface/text-embeddings-inference:latest
+    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID}"
     runtime: nvidia
@@ -512,11 +519,8 @@ services:
 
   embedding:
     container_name: embedding
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/embeddings/src/Dockerfile
-    volumes:
-      - ./opea/GenAIComps/comps:/home/user/comps
+    # Corrected: Pulling the pre-built, versioned image
+    image: opea/embedding:latest
     environment:
       - EMBEDDING_MODEL_ENDPOINT=http://tei:80
       - TEI_EMBEDDING_ENDPOINT=http://tei:80
@@ -529,7 +533,8 @@ services:
     restart: "no"
 
   tei_reranker:
-    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    image: ghcr.io/huggingface/text-embeddings-inference:latest
+    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-reranker-serving
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID}"
     runtime: nvidia
@@ -559,11 +564,7 @@ services:
 
   reranker:
     container_name: reranker
-    build:
-      context: ./opea/GenAIComps
-      dockerfile: comps/rerankings/src/Dockerfile
-    volumes:
-      - ./opea/GenAIComps/comps:/home/user/comps
+    image: opea/reranking:latest
     env_file:
       - .env
     environment:

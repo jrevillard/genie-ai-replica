@@ -223,10 +223,6 @@ services:
       context: .
       # Point to our new, custom multi-stage Dockerfile
       dockerfile: ./genie-ai-overlay/http-service/Dockerfile-http-service_genie-ai
-      args:
-        OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
-    image: http-service:latest
     container_name: http-service
     environment:
       AUTH_SERVICE_URL: "https://localhost/"

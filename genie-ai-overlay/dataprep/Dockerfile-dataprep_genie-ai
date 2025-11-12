@@ -12,12 +12,11 @@ WORKDIR /src
 RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
 # ======== Final Stage: Assembly ========
-# This is the final production image.
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Step A: Copy the base OPEA microservice code from Stage 1
+# Step A: Copy the base OPEA microservice code
 # This copies arangodb.py, main.py, requirements.txt, etc.
 COPY --from=opea_base /src/comps/dataprep/src/ /app/
 # **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
@@ -25,8 +24,8 @@ COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
 
 # Step B: Copy and Run the Dependency Patch and the utils.py patch
 # This removes unused, broken dependencies (pathway, graspologic)
-COPY genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
-RUN chmod +x /app/fix_dependencies.sh && ./app/fix_dependencies.sh /app/requirements.txt
+COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
+RUN ./app/fix_dependencies.sh /app/requirements.txt
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/genieai_dataprep_utils.py
 
 # Step C: Install *fixed* dependencies

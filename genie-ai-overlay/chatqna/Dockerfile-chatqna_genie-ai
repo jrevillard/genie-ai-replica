@@ -18,13 +18,10 @@ WORKDIR /app
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
 
-# Step B: Copy and Run the Dependency Patch
-COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
-# Note: The requirements file is in a different location for this service
-RUN ./fix_dependencies.sh /app/ChatQnA/requirements.txt
+# Step B: Copy the hacked entrypoint.sh with the right permissions from the overlay
+COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint.sh
 
-# Step C: Install *fixed* dependencies
-RUN pip install --no-cache-dir -r /app/ChatQnA/requirements.txt
+# Step C: Install dependencies
 # Install extra dependencies from our original Dockerfile_genieai
 RUN pip install langdetect transformers
 
@@ -34,4 +31,4 @@ RUN pip install langdetect transformers
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/src/chatqna.py
 
 # Step E: Run our new GENIE-AI entry point
-CMD ["python", "/app/ChatQnA/src/chatqna.py"]
+ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

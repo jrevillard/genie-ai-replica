@@ -12,7 +12,6 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
 # ======== Stage 2 (NEW): The OPEA Comps Base Builder ========
 # This stage builds the missing 'opea/comps-base:v1.3' functionality from source.
-# We build from the GenAIComps repository.
 ARG OPEA_COMPS_REPO_URL="https://github.com/opea-project/GenAIComps.git"
 ARG OPEA_VERSION="v1.3" # Re-declare ARG for this stage
 FROM python:3.10-slim AS comps_base_builder
@@ -31,12 +30,12 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_COMPS_REPO_URL} .
 RUN pip install --no-cache-dir -e .
 
 # Re-create the user and directory structure expected by the final stage
-# (based on your COPY commands in the original file )
 RUN useradd -ms /bin/bash user
 RUN mkdir -p /home/user/comps && chown -R user:user /home/user
 
-# Copy the installed 'comps' source code to the expected path
-RUN cp -R /src/GenAIComps/comps /home/user/comps
+# *** THE FIX IS HERE ***
+# Copy the *contents* of the cloned 'comps' directory to the expected path
+RUN cp -R /src/GenAIComps/comps/. /home/user/comps/
 
 # Set default user for this base
 USER user
@@ -45,12 +44,8 @@ WORKDIR /home/user
 
 # ======== Final Stage: Assembly ========
 # This is the final production image. 
-#
-# *** KEY CHANGE HERE ***
-# Instead of pulling from Docker Hub, we use our 'comps_base_builder' stage
 FROM comps_base_builder
 
-# Re-declare ARG if needed, although OPEA_VERSION is set in the base
 ARG OPEA_VERSION="v1.3" 
 
 # Switch back to root to create /app and install packages
@@ -72,7 +67,7 @@ RUN pip install --no-cache-dir langdetect transformers
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
-# This path '/home/user/comps/...' now exists thanks to our Stage 2 build
+# This path '/home/user/comps/...' will now be correct
 RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py
 
 # --- Copy to the correct path where comps is located (/home/user/comps) ---

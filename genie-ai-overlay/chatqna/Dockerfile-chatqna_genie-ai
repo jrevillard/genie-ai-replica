@@ -16,7 +16,7 @@ FROM opea/comps-base:latest
 WORKDIR /app
 
 # Tell Python to include /app in its search path
-ENV PYTHONPATH="${PYTHONPATH}:/app"
+ENV PYTHONPATH="${PYTHONPATH}:/app:/home/user/comps/cores/proto"
 
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
@@ -35,9 +35,6 @@ RUN pip install langdetect transformers
 # --- FIX: Copy to the correct path where comps is located (/home/user/comps) ---
 # This copies the module to the /home/user/comps/... directory
 COPY --chown=user:user genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
-
-# Patch the import in genieai_api_protocol.py to use relative import
-RUN sed -i 's/from api_protocol import */from .api_protocol import */' /home/user/comps/cores/proto/genieai_api_protocol.py
 
 # This copies your main script
 COPY --chown=user:user genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py

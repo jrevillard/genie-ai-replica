@@ -16,7 +16,7 @@ FROM opea/comps-base:latest
 WORKDIR /app
 
 # Tell Python to include /app in its search path
-ENV PYTHONPATH="${PYTHONPATH}:/app"
+ENV PYTHONPATH="/app:${PYTHONPATH}"
 
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/

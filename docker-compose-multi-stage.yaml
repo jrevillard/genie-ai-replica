@@ -461,7 +461,7 @@ services:
       --gpu_memory_utilization 0.4
       --served-model-name gemma-3-1b-it
       --max_model_len 2048
-      --dtype=half
+      --dtype=bfloat16
       --port 9031
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}

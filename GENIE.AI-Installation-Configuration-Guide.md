@@ -2,7 +2,7 @@
 
 ### **Introduction**
 
-Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an initial MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labelling and ingesting your curated data prior to modifying any code. This way, you will get used to how the framework operates, before you delve into deeper issues and extensions. This approach can also be used to deliver a rapid solution to a RAG problem, without any coding at all (just implementing a knowledge base design and the associated configuration). The application title and theme can also be modified by configuration in JSON without changing code. The suggested appraoch for this is to utilize something like ChatGOT, Gemini Pro or Grok etc. to build a new configuration for color theme and title etc. This can be done in minutes.
+Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an initial MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labeling and ingesting your curated data prior to modifying any code. This way, you will get used to how the framework operates, before you delve into deeper issues and extensions. This approach can also be used to deliver a rapid solution to a RAG problem, without any coding at all (just implementing a knowledge base design and the associated configuration). The application title and theme can also be modified by configuration in JSON without changing code. The suggested approach for this is to utilize something like ChatGOT, Gemini Pro or Grok etc. to build a new configuration for color theme and title etc. This can be done in minutes.
 
 For a high-level understanding of the system architecture before beginning any work, please refer to the [**Architecture Overview**](https://osaips.atlassian.net/wiki/external/N2U5ZjkwM2FhOTgyNDZlZjk3MWRlODY5Mzk5OTBhNjE). This will give you an insight into most of the high level components and how they are assembled.
 
@@ -10,7 +10,7 @@ For a high-level understanding of the system architecture before beginning any w
 
 ### **Step 1: Data Curation and Knowledge Hierarchy (Conceptual Design)**
 
-Before any data is ingested into GENIE.AI, you must first establish the scope of knowledge for your application and organize it logically. This process involves a strategic design of your knowledge core, the curation and verification of source documents, and the creation of an assoicated two-level labeling system that serves as the knowledge hierarchy within the framework's user interface (i.e., the Knowledge Hierarchy displayed on the left sidebar). Ingested data is tagged with these labels, and queries can also select the same labels, which enhanced RAG accuracy as we have utilized labeling as part of the hybrid-retrieval strategy for RAG at the backend.
+Before any data is ingested into GENIE.AI, you must first establish the scope of knowledge for your application and organize it logically. This process involves a strategic design of your knowledge core, the curation and verification of source documents, and the creation of an associated two-level labeling system that serves as the knowledge hierarchy within the framework's user interface (i.e., the Knowledge Hierarchy displayed on the left sidebar). Ingested data is tagged with these labels, and queries can also select the same labels, which enhances RAG accuracy as we have utilized labeling as part of the hybrid-retrieval strategy for RAG at the backend.
 
 #### **1.1 Designing the Knowledge Core with Domain Analysis**
 
@@ -128,64 +128,73 @@ GENIE.AI requires significant computational resources, particularly for AI model
 * **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.  
 * **Docker & Docker Compose:** Required for orchestrating the containerized services.  
 * **NVIDIA Drivers & CUDA:** Required for GPU acceleration of the AI services (vLLM, TEI).  
-  * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.
+  * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.  
 * **Node.js:** Required for the JavaScript components
 
 #### **2.3 Install and Verify Docker on Every Host**
 
 Bash
 
-##### 1. Update and install prerequisites
+##### 1\. Update and install prerequisites
+
 sudo apt-get update
 
-sudo apt-get install -y ca-certificates curl gnupg
+sudo apt-get install \-y ca-certificates curl gnupg
 
-##### 2. Add Docker's official GPG key
-sudo install -m 0755 -d /etc/apt/keyrings
+##### 2\. Add Docker's official GPG key
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo install \-m 0755 \-d /etc/apt/keyrings
+
+curl \-fsSL [https://download.docker.com/linux/ubuntu/gpg](https://download.docker.com/linux/ubuntu/gpg) | sudo gpg \--dearmor \-o /etc/apt/keyrings/docker.gpg
 
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-##### 3. Set up the official Docker repository
-echo \
-  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+##### 3\. Set up the official Docker repository
 
-##### 4. Install Docker Engine
-###### (This also removes conflicting older versions like docker.io if present)
+echo   
+"deb \[arch="$(dpkg \--print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg\] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu)   
+"$(. /etc/os-release && echo "$VERSION\_CODENAME")" stable" |   
+sudo tee /etc/apt/sources.list.d/docker.list \> /dev/null
+
+##### 4\. Install Docker Engine
+
+###### *(This also removes conflicting older versions like docker.io if present)*
+
 sudo apt-get update
 
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo apt-get install \-y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-##### 5. Start and enable the Docker daemon
-###### (Necessary if the installer fails to start it automatically)
+##### 5\. Start and enable the Docker daemon
+
+###### *(Necessary if the installer fails to start it automatically)*
+
 sudo systemctl start docker
 
 sudo systemctl enable docker
 
-##### 6. Grant your user standard Docker permissions
-sudo usermod -aG docker $USER
+##### 6\. Grant your user standard Docker permissions
+
+sudo usermod \-aG docker $USER
 
 newgrp docker
 
-##### 7. Verify Docker
+##### 7\. Verify Docker
+
 docker run hello-world
 
 ---
 
-#### **2.4 Install Node.js on Every Host and Verify** 
+#### **2.4 Install Node.js on Every Host and Verify**
 
 Bash
 
-curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+curl \-fsSL [https://deb.nodesource.com/setup\_lts.x](https://deb.nodesource.com/setup_lts.x) | sudo \-E bash \-
 
-sudo apt-get install -y nodejs
+sudo apt-get install \-y nodejs
 
-node -v
+node \-v
 
-npm -v
+npm \-v
 
 ---
 
@@ -210,8 +219,8 @@ repository-root/
 │   ├── docker-compose.yaml       \# Docker compose for bastion host tier  
 │   └── env                       \# .env file for the bastion tier  
 └── opea/  
-    ├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
-    └── env                       \# .env file for the OPEA tier
+├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
+└── env                       \# .env file for the OPEA tier
 
 Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
 
@@ -228,7 +237,7 @@ Clone the appropriate repository to your local machine:
 
 Bash
 
-git clone https://gitlab.com/fordendk/genie-ai-replica    
+git clone [https://gitlab.com/fordendk/genie-ai-replica](https://gitlab.com/fordendk/genie-ai-replica)  
 cd genie-ai-replica
 
 2\. Environment Configuration (.env)
@@ -253,10 +262,10 @@ The following tables document the key variables found in the .env file, grouped 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API (must be accessible to the browser). | https://localhost/api |
+| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API (must be accessible to the browser). | [https://localhost/api](https://localhost/api) |
 | VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
-| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. You must understand CSP policy to modify this for your environment | 'self' http://locahost... |
-| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. Again, you need to understand CORS to modify this. | http://localhost,https://localhost... |
+| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. You must understand CSP policy to modify this for your environment | 'self' [http://locahost](http://locahost)... |
+| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. Again, you need to understand CORS to modify this. | [http://localhost,https://localhost](http://localhost,https://localhost)... |
 
 **Backend Service**
 
@@ -287,7 +296,7 @@ The following tables document the key variables found in the .env file, grouped 
 | ARANGO\_PASSWORD | Root password for ArangoDB. | test |
 | ARANGO\_DB\_NAME | Database name used by the backend. | genie-backend |
 | ARANGO\_DB | Database name used by the frontend. | genie-frontend |
-| ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
+| ARANGO\_URL | Connection URL for ArangoDB. | [http://arango-vector-db:8529](http://arango-vector-db:8529) |
 | ARANGO\_USER | Username for ArangoDB. | root |
 | ARANGO\_USERNAME | Username for ArangoDB. | root |
 
@@ -296,7 +305,7 @@ The following tables document the key variables found in the .env file, grouped 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | DOC\_REPO\_PORT | Internal port for the document service. | 3001 |
-| DATAPREP\_HOST | Hostname for the Dataprep service. | http://localhost |
+| DATAPREP\_HOST | Hostname for the Dataprep service. | [http://localhost](http://localhost) |
 | DATAPREP\_PORT | Port for the Dataprep service. | 6007 |
 | MAX\_FILE\_SIZE | Maximum file upload size in bytes (e.g., 50MB). | 52428800 |
 | VIRUS\_SCANNING | Enable/disable ClamAV virus scanning. | true |
@@ -320,7 +329,7 @@ The following tables document the key variables found in the .env file, grouped 
 | :---- | :---- | :---- |
 | HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face. | hf\_YnXMHAtvTTVfwZJIYxKrEC... |
 | VLLM\_API\_KEY | API key for the VLLM service. | eyJhbGciOiJSUzI1NiIsInR5cCIg... |
-| VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:80 |
+| VLLM\_ENDPOINT | URL for the VLLM inference server. | [http://vllm:80](http://vllm:80) |
 | EMBEDDING\_MODEL\_ID | Model ID for embeddings. | BAAI/bge-base-en-v1.5 |
 | RERANKER\_MODEL\_ID | Model ID for reranking. | BAAI/bge-reranker-v2-m3 |
 | LLM\_MODEL\_ID | Model ID for the main language model. | meta-llama/Llama-3.3-70B-Instruct |
@@ -346,16 +355,17 @@ Proceed immediately to **Step 4** to complete the necessary infrastructure confi
 
 **Option B** is a three node architecture. This style of architecture is recommended for production docker compose based deployments as it separates the concerns for each tier into separate nodes as follows:
 
-1. **Bastion Node**: this host runs nginx as a reverse proxy, kong and the API gateway and keycloak for implementation of 3rd party identity services.
-2. **Infrastructure Node**: this host runs all the application infrastructure services (ArangoDB, node.js backend, Vue 3 frontend, redis-cache, document-repository and clamav).
+1. **Bastion Node**: this host runs nginx as a reverse proxy, kong and the API gateway and keycloak for implementation of 3rd party identity services.  
+2. **Infrastructure Node**: this host runs all the application infrastructure services (ArangoDB, node.js backend, Vue 3 frontend, redis-cache, document-repository and clamav).  
 3. **AI/GPU Node**: this host runs the customized OPEA microservices backend.
 
 Refer to the diagram above for the various docker-compose.yaml and associated .env files. Setting this up is simply a case of setting up the three hosts with the required operating system and dependencies and then configuring each of the components (the default configurations in the example env files should be mostly correct but will require adjustments for your host names and DNS etc.).
 
 **Steps:**
-1. Set up the virtual hosts as per the instructions with the required capacity
-2. Clone the repository to each node as per Option A.
-3. Set up your configurations as outlined in Option A above and adjust for the three node environment on each node.
+
+1. Set up the virtual hosts as per the instructions with the required capacity  
+2. Clone the repository to each node as per Option A.  
+3. Set up your configurations as outlined in Option A above and adjust for the three node environment on each node.  
 4. Bring up the environment
 
 Bash
@@ -374,13 +384,14 @@ Once the base services are running (Step 3), you must configure the core infrast
 
 While the arango-vector-db service is running, the specific application databases must be created.
 
-1. Access the ArangoDB web interface at http://localhost:8529 (login with root and the password defined in your .env).  
-2. Create the necessary databases as defined in your environment variables (default: genie-ai) - ensure both the frontend and backend services use the same database.
+1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).  
+2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure both the frontend and backend services use the same database.
 
 #### **4.2 NGINX and Kong API Gateway Configuration**
 
 There are Nginx default.conf files available for both three-node and single-node deployments:
-1. For three-node deployments, use the default default.conf and modify the upstream addresses
+
+1. For three-node deployments, use the default default.conf and modify the upstream addresses  
 2. for single-node deployments, use the default.conf-single-node
 
 Kong requires specific initialization and configuration to route traffic correctly.
@@ -391,18 +402,16 @@ Bash
 
 docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"  
 docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"  
-docker compose run \--rm kong kong migrations bootstrap
-docker compose kong restart
+docker compose run \--rm kong kong migrations bootstrap docker compose restart kong
 
 2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script (ensure that curl and jq are installed).  
    For Single-Node installation: \`\`\`bash  
    cd api-gateway-solution/new-config/  
    cp kong\_config.json-single-node kong\_config.json  
-   chmod \+x manage-kong-config.sh 
-   sudo apt update
-   sudo apt install jq
-   ./manage-kong-config.sh \-a
-
+   chmod \+x manage-kong-config.sh   
+   sudo apt update sudo apt install jq   
+   ./manage-kong-config.sh \-a  
+     
    \*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default).\*
 
 Enter the correct hosts and expect the following output:
@@ -414,33 +423,32 @@ This script will configure your Kong instance.
 Please provide the required connection details.
 
 \--- Kong Admin API Details \---  
-Enter Kong host \[default: localhost\]:   
-Enter Kong admin port \[default: 8001\]: 
+Enter Kong host \[default: localhost\]:  
+Enter Kong admin port \[default: 8001\]:
 
 \--- Backend Service Details \---  
 Enter 'express-api' service host \[default: localhost\]: backend  
-Enter 'express-api' service port \[default: 3000\]: 
+Enter 'express-api' service port \[default: 3000\]:
 
 Enter 'document-repository' service host \[default: localhost\]: document-repository  
-Enter 'document-repository' service port \[default: 3001\]: 
+Enter 'document-repository' service port \[default: 3001\]:
 
 \[2025-11-08 14:12:02\] Applying configuration from kong\_config.json  
-\[2025-11-08 14:12:02\] Using Kong Admin API at: http://localhost:8001  
+\[2025-11-08 14:12:02\] Using Kong Admin API at: [http://localhost:8001](http://localhost:8001)  
 \[2025-11-08 14:12:02\] Setting 'express-api' to: backend:3000  
 \[2025-11-08 14:12:02\] Setting 'document-repository' to: document-repository:3001  
 \[2025-11-08 14:12:02\] Processing service: express-api  
 \[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
-...  
-   
+...
 
 \#\#\#\# \*\*4.3 Nginx Configuration\*\*
 
 Nginx acts as the reverse proxy and SSL termination point.
 
-1\. Navigate to api-gateway-solution/nginx.    
-2\. Select the appropriate configuration file:    
-   \* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).    
-   \* For \*\*Three-Node\*\*, use: default.conf.    
+1\. Navigate to api-gateway-solution/nginx.  
+2\. Select the appropriate configuration file:  
+\* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
+\* For \*\*Three-Node\*\*, use: default.conf.  
 3\. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
 
 \---
@@ -453,13 +461,12 @@ With the infrastructure configured, you can now instantiate the knowledge hierar
 
 This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
 
-5.1 Prepare Script Environment    
-You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set_env.sh script for the correct database environment
+5.1 Prepare Script Environment  
+You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
 
 \`\`\`bash  
-cd components/gov-chat-backend/scripts/new-schema-scripts    
-chmod \+x set-env.sh
-source set-env.sh
+cd components/gov-chat-backend/scripts/new-schema-scripts  
+chmod \+x set-env.sh source set-env.sh
 
 5.2 Create Database Schema
 
@@ -467,9 +474,8 @@ Use the arango-schema-creator.js script to generate the collections, indexes, an
 
 Bash
 
-\# Ensure you are still in the new-schema-scripts directory and environment is set    
-npm install arangojs
-node arango-schema-creator.js ./arango-schema.json
+\# Ensure you are still in the new-schema-scripts directory and environment is set  
+npm install arangojs node arango-schema-creator.js ./arango-schema.json
 
 5.3 Create Initial User Accounts
 
@@ -477,10 +483,10 @@ You must create the default Admin and Manager accounts. These are required for t
 
 Bash
 
-\# Create the Admin account    
+\# Create the Admin account  
 node create-genie-ai-admin-account.js
 
-\# Create the Manager account    
+\# Create the Manager account  
 node create-genie-ai-manager-account.js
 
 **Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
@@ -493,8 +499,8 @@ Use the create-knowledge-hierarchy.js script to import your Category/Service str
 
 Bash
 
-\# Return to parent scripts directory if hierarchy file is there, or adjust path.    
-cd ..    
+\# Return to the parent scripts directory if the hierarchy file is there, or adjust the path.  
+cd ..  
 node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
 5.5 Generate Translations
@@ -515,8 +521,8 @@ After all configuration steps are complete, you must restart the services to ens
    docker-compose down  
    docker-compose up \-d
 
-2\. Verify Service Health:    
-   Check that all containers are running and healthy.    
+2\. Verify Service Health:  
+Check that all containers are running and healthy.  
 \`\`\`bash  
 docker ps
 
@@ -529,7 +535,7 @@ Bash
 docker-compose logs \-f
 
 4. Initial Login:  
-   Access the application in your browser (e.g., https://localhost or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
+   Access the application in your browser (e.g., [https://localhost](https://localhost) or your configured domain). Log in using the default Admin credentials created in Step 5.3:  
    * **Username:** Admin  
    * **Password:** ADMINadmin
 
@@ -555,3 +561,4 @@ Navigate to the **Document Management** tab.
 1. **Upload:** Click "+ Upload Files" or "+ Add from Link". Status will be "Pending".  
 2. **Apply Labels:** Click the document, and use the "Labels" multi-select dropdown to apply relevant categories/services from your hierarchy.  
 3. **Ingest:** Click "Ingest" to trigger chunking, embedding, and storage. Status will update to "Ingested".
+

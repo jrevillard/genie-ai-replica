@@ -49,29 +49,27 @@ class ChatCompletionRequest(BaseModel):
     logit_bias: Optional[Dict[str, float]] = None
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
-    max_tokens: Optional[PositiveInt] = 1024  # use https://platform.openai.com/docs/api-reference/completions/create
-    n: Optional[PositiveInt] = 1
+    max_tokens: Optional[int] = 1024  # use https://platform.openai.com/docs/api-reference/completions/create
+    n: Optional[int] = 1
     presence_penalty: Optional[float] = 0.0
     response_format: Optional[ResponseFormat] = None
-    seed: Optional[PositiveInt] = None
+    seed: Optional[int] = None
     service_tier: Optional[str] = None
     stop: Union[str, List[str], None] = Field(default_factory=list)
     stream: Optional[bool] = False
-    stream_options: Optional[StreamOptions] = Field(default=None)
-    temperature: Optional[NonNegativeFloat] = 0.01  # vllm default 0.7
-    top_p: Optional[NonNegativeFloat] = (
+    stream_options: Optional[StreamOptions] = Field(default=None) # changed from default_factory=StreamOptions
+    temperature: Optional[float] = 0.01  # vllm default 0.7
+    top_p: Optional[float] = (
         None  # openai default 1.0, but tgi needs `top_p` must be > 0.0 and < 1.0, set None
     )
     tools: Optional[List[ChatCompletionToolsParam]] = None
     tool_choice: Optional[Union[Literal["none"], ChatCompletionNamedToolChoiceParam]] = "none"
     parallel_tool_calls: Optional[bool] = True
     user: Optional[str] = None
-    ### GENIE.AI ######################################################################################################
     context: Optional[RequestContext] = Field(
         default=None,
         description="Application-specific context for metadata filtering in retrieval."
         )
-    ### 17/08/25 ######################################################################################################
     language: str = "auto"  # can be "en", "zh"
     image_path: Optional[str] = None
     audio_path: Optional[str] = None
@@ -79,22 +77,22 @@ class ChatCompletionRequest(BaseModel):
     # Ordered by official OpenAI API documentation
     # default values are same with
     # https://platform.openai.com/docs/api-reference/completions/create
-    best_of: Optional[PositiveInt] = 1
+    best_of: Optional[int] = 1
     suffix: Optional[str] = None
 
     # vllm reference: https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/openai/protocol.py#L130
-    repetition_penalty: Optional[NonNegativeFloat] = 1.0
+    repetition_penalty: Optional[float] = 1.0
 
     # tgi reference: https://huggingface.github.io/text-generation-inference/#/Text%20Generation%20Inference/generate
     # some tgi parameters in use
     # default values are same with
     # https://github.com/huggingface/text-generation-inference/blob/main/router/src/lib.rs#L190
     # max_new_tokens: Optional[int] = 100 # Priority use openai
-    top_k: Optional[PositiveInt] = None
+    top_k: Optional[int] = None
     # top_p: Optional[float] = None # Priority use openai
     typical_p: Optional[float] = None
     # repetition_penalty: Optional[float] = None
-    timeout: Optional[PositiveInt] = None
+    timeout: Optional[int] = None
 
     # doc: begin-chat-completion-extra-params
     echo: Optional[bool] = Field(
@@ -154,21 +152,26 @@ class ChatCompletionRequest(BaseModel):
 
     # retrieval
     search_type: str = "similarity_score_threshold" #"similarity"
-    k: PositiveInt = 4
+    k: int = 4
     distance_threshold: Optional[float] = None
-    fetch_k: PositiveInt = 20
-    lambda_mult: NonNegativeFloat = 0.5
-    score_threshold: NonNegativeFloat = 0.01
+    fetch_k: int = 20
+    lambda_mult: float = 0.5
+    score_threshold: float = 0.01
     retrieved_docs: Union[List[RetrievalResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
     index_name: Optional[str] = None
 
     # reranking
-    top_n: PositiveInt = 2 # Need to highlight this variable in the documentation
+    top_n: int = 2 # Need to highlight this variable in the documentation
     reranked_docs: Union[List[RerankingResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
 
     # define
     request_type: Literal["chat"] = "chat"
 
+class TranslationRequest(BaseModel):
+    text: str
+    stream: Optional[bool] = False
+
+    
 class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
     def __init__(
         self,

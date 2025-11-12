@@ -13,9 +13,9 @@ elif [[ $chatqna_arg == "CHATQNA_GUARDRAILS" ]]; then
 elif [[ $chatqna_arg == "CHATQNA_GENIE_AI" ]]; then
     python chatqna.py --genie-ai
 elif [[ $chatqna_arg == "CHATQNA_DAVID" ]]; then
-    python chatqna_genieai.py --with-translation
+    python genieai_chatqna.py --with-translation
 elif [[ $chatqna_arg == "CHATQNA_MACDAVID" ]]; then
-    python chatqna_genieai.py --without-translation
+    python genieai_chatqna.py --without-translation
 else
-    python chatqna_genieai.py
+    python genieai_chatqna.py
 fi

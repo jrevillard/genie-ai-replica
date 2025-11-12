@@ -16,7 +16,7 @@ FROM opea/comps-base:latest
 WORKDIR /app
 
 # Tell Python to include /app in its search path
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV PYTHONPATH="${PYTHONPATH}:/app"
 
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
@@ -32,12 +32,14 @@ RUN pip install langdetect transformers
 # COPY genie-ai-overlay/chatqna/genieai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
 # COPY genie-ai-overlay/chatqna/genieai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
 
-# --- FIX 2: Use this (your original) path ---
-# This copies the module to the /app/comps/... directory
-COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
+# This copies the module to the /home/user/comps/... directory
+COPY genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
 
 # This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
+
+# Optional: Fix ownership if needed (since base image runs as user 'user')
+RUN chown -R user:user /home/user/comps
 
 # Step E: Run our new GENIE-AI entry point
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

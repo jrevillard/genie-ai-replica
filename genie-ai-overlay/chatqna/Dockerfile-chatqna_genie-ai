@@ -36,8 +36,9 @@ RUN pip install langdetect transformers
 RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py
 
 # --- Copy to the correct path where comps is located (/home/user/comps) ---
-# This copies the module to the /home/user/comps/... directory
+# This copies the hacked api_protocol.py and constants.py to the /home/user/comps/... directory
 COPY --chown=user:user genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
+COPY --chown=user:user genie-ai-overlay/core/constants.py /home/user/comps/cores/mega/constants.py
 
 # This copies your main script
 COPY --chown=user:user genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py

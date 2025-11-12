@@ -32,14 +32,12 @@ RUN pip install langdetect transformers
 # COPY genie-ai-overlay/chatqna/genieai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
 # COPY genie-ai-overlay/chatqna/genieai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
 
+# --- FIX: Copy to the correct path where comps is located (/home/user/comps) ---
 # This copies the module to the /home/user/comps/... directory
-COPY genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
+COPY --chown=user:user genie-ai-overlay/core/genieai_api_protocol.py /home/user/comps/cores/proto/genieai_api_protocol.py
 
 # This copies your main script
-COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
-
-# Optional: Fix ownership if needed (since base image runs as user 'user')
-RUN chown -R user:user /home/user/comps
+COPY --chown=user:user genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 
 # Step E: Run our new GENIE-AI entry point
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

@@ -12,7 +12,7 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
 # ======== Final Stage: Assembly ========
 # This is the final production image.
-FROM opea/comps-base:latest
+FROM opea/comps-base:${OPEA_VERSION}
 WORKDIR /app
 
 # Tell Python to include /app in its search path
@@ -29,9 +29,6 @@ COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint
 RUN pip install langdetect transformers
 
 # Step D: "Overlay" our custom GENIE-AI "glue" files
-# COPY genie-ai-overlay/chatqna/genieai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
-# COPY genie-ai-overlay/chatqna/genieai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
-
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
 RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py
 

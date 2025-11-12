@@ -15,8 +15,8 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 FROM opea/comps-base:latest
 WORKDIR /app
 
-# Tell Python to include /app in its search path
-ENV PYTHONPATH="${PYTHONPATH}:/app"
+# Tell Python to include /app and the proto dir in its search path (to resolve the import without modifying code)
+ENV PYTHONPATH="${PYTHONPATH}:/app:/home/user/comps/cores/proto"
 
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/

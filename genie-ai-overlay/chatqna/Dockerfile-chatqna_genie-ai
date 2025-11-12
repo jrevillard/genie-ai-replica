@@ -9,10 +9,14 @@ ARG OPEA_VERSION
 
 WORKDIR /src
 RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
+
 # ======== Final Stage: Assembly ========
 # This is the final production image.
 FROM opea/comps-base:latest
 WORKDIR /app
+
+# Tell Python to include /app in its search path
+ENV PYTHONPATH="${PYTHONPATH}:/app"
 
 # Step A: Copy the base OPEA ChatQnA code
 COPY --from=opea_example_base /src/ChatQnA/ /app/ChatQnA/
@@ -28,9 +32,11 @@ RUN pip install langdetect transformers
 # COPY genie-ai-overlay/chatqna/genieai_dataprep_loader.py /app/ChatQnA/src/opea_dataprep_loader.py
 # COPY genie-ai-overlay/chatqna/genieai_retriever_microservice.py /app/ChatQnA/src/opea_retriever_microservice.py
 
-# We copy the module into the ChatQnA directory, where the script expects it.
-COPY genie-ai-overlay/core/genieai_api_protocol.py /app/ChatQnA/comps/cores/proto/genieai_api_protocol.py
+# --- FIX 2: Use this (your original) path ---
+# This copies the module to the /app/comps/... directory
+COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
+# This copies your main script
 COPY genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
 
 # Step E: Run our new GENIE-AI entry point

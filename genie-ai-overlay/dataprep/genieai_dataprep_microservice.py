@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from fastapi import Body
 
 # --- Import the entire base dataprep microservice safely ---
-import opea_dataprep_service as base 
+import opea_dataprep_microservice as base 
 from genieai_dataprep_loader import GenieDataprepLoader 
 from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
 

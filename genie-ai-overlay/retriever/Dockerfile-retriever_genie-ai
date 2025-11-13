@@ -15,6 +15,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Add the proto dir to PYTHONPATH for import resolution
+ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/cores/proto"
+
 # Step A: Copy the base OPEA microservice code
 COPY --from=opea_base /src/comps/retrievers/src/ /app/
 # **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
@@ -28,7 +31,7 @@ RUN ./fix_dependencies.sh /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Step D: "Overlay" our custom GENIE-AI files
-COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/genieai_retriever_arangodb.py
+COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/integrations/genieai_retriever_arangodb.py
 COPY genie-ai-overlay/retriever/genieai_retriever_microservice.py /app/genieai_retriever_microservice.py
 
 # 3. Overwrite the OPEA API protocol with our custom version

@@ -82,5 +82,11 @@ COPY genie-ai-overlay/dataprep/genieai_dataprep_microservice.py /app/comps/datap
 # 3. Overwrite the OPEA API protocol with our custom version
 COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
-# Step H: Run the new GENIE-AI entry point from its new location
+# Step H: Lighten library load
+# Comment out unused integrations in the *base* OPEA microservice to prevent
+# ModuleNotFoundErrors for dependencies we intentionally removed (e.g., graspologic).
+# This finds all 'from integrations.' lines and comments them out *unless* they contain 'arangodb'.
+RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/src/opea_dataprep_microservice.py
+
+# Step I: Run the new GENIE-AI entry point from its new location
 CMD ["python", "comps/dataprep/src/genieai_dataprep_microservice.py"]

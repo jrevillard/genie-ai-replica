@@ -3,10 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import easyocr 
+import easyocr
+import pymupdf
+import fitz 
+import cv2
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed 
 
 # Note:- imorted the os package
 import os
+
 
 from docling.document_converter import (
     DocumentConverter,
@@ -19,10 +25,15 @@ from docling.datamodel.pipeline_options import (
     EasyOcrOptions, 
     )
 
+# Might need to check the path
+from comps.dataprep.src.utils import document_loader as origin_document_loader
+
 from comps import CustomLogger
 
 logger = CustomLogger("genie-ai_prepare_doc_util")
 logflag = os.getenv("LOGFLAG", False)
+
+reader = easyocr.Reader(['en']) # Can add more languages later
 
 try:
     # configuring Docling to use easyocr (more lightweight than OPEA default library)
@@ -76,3 +87,86 @@ async def docling_document_loader(doc_path):
 
     else:
         print(f'File type {doc_path} not supported by Docling')
+
+
+def genieai_process_page(doc, idx):
+    page = doc.load_page(idx)
+    pagetext = page.get_text().strip()
+    result = pagetext if pagetext.endswith(("!", "?", ".")) else pagetext + "."
+
+    page_images = doc.get_page_images(idx)
+    if page_images:
+        for img_index, img in enumerate(page_images):
+            xref = img[0]
+            img_data = doc.extract_image(xref)
+            img_bytes = img_data["image"]
+
+            # process images
+            img_array = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+            # img_result = pytesseract.image_to_string(img_array, lang="eng", config="--psm 6")
+            img_result = ''.join(reader.readtext(img_array, detail = 0)) 
+
+            # add results
+            pageimg = img_result.strip()
+            pageimg += "" if pageimg.endswith(("!", "?", ".")) else "."
+            result += pageimg
+
+    return result
+
+
+def genieai_load_pdf(pdf_path):
+    # doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
+    results = {}
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(genieai_process_page, doc, i): i for i in range(doc.page_count)}
+        for future in as_completed(futures):
+            page_idx = futures[future]
+            results[page_idx] = future.result()
+
+    combined_result = "".join(results[i] for i in sorted(results))
+    return combined_result
+
+
+async def document_loader(doc_path):
+    if doc_path.endswith(".pdf"):
+        # return await load_pdf_async(doc_path) # to be tested later
+        return genieai_load_pdf(doc_path)
+    else:
+        return origin_document_loader(doc_path)
+
+
+def is_valid_content(chunk):
+    """Check if the chunk content is suitable for llm to process, rather than web archive content or base64 encoded content."""
+    if not chunk:
+        return False
+
+    # Check if content is predominantly base64/web archive
+    lines = chunk.split('\n')
+    
+    # Count problematic lines
+    problematic_lines = 0
+    for line in lines:
+        line = line.strip()
+        if (line.startswith('//') or 
+            'base64' in line.lower() or
+            'MIME-Version' in line or
+            'Content-Type:' in line or
+            'Content-Transfer-Encoding' in line or
+            line.startswith('------=_NextPart_') or
+            # Base64 pattern: long strings of alphanumeric chars with + and /
+            (len(line) > 50 and line.replace('+', '').replace('/', '').replace('=', '').isalnum())):
+            problematic_lines += 1
+    
+    # If more than 50% of lines are problematic, consider it invalid
+    if len(lines) > 0 and problematic_lines / len(lines) > 0.5:
+        return False
+    
+    # Also check for readable text content
+    readable_chars = sum(1 for char in chunk if char.isalnum() or char.isspace())
+    if len(chunk) > 0 and readable_chars / len(chunk) < 0.7:
+        return False
+    
+    return True
+    

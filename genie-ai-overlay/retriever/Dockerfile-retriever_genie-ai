@@ -15,9 +15,16 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Add the root /app dir to PYTHONPATH for import resolution
-# This allows Python to find 'comps' as a top-level package
+# Add /app (for 'comps') and ALL component 'src' directories to PYTHONPATH
+# This ensures all modules are discoverable, including the base 'api_protocol.py'
 ENV PYTHONPATH="${PYTHONPATH}:/app"
+# Add core directories
+ENV PYTHONPATH="${PYTHONPATH}:/app/comps/cores"
+ENV PYTHONPATH="${PYTHONPATH}:/app/comps/cores/proto"
+# Add all component src directories
+ENV PYTHONPATH="${PYTHONPATH}:/app/comps/retrievers/src"
+ENV PYTHONPATH="${PYTHONPATH}:/app/comps/web_retrievers/src"
+
 
 # Step A: Copy the entire OPEA 'comps' directory from the clone
 # This ensures all components (agents, llms, retrievers, cores, etc.) are available.
@@ -43,4 +50,5 @@ COPY genie-ai-overlay/retriever/genieai_retriever_microservice.py /app/comps/ret
 COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
 # Step E: Run the new GENIE-AI entry point from its new location
+# The extensive PYTHONPATH should handle all import resolution
 CMD ["python", "comps/retrievers/src/genieai_retriever_microservice.py"]

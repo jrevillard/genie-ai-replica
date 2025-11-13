@@ -30,7 +30,7 @@ from openai import AsyncOpenAI
 from rank_bm25 import BM25Okapi
 
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry, ServiceType, TextDoc
-from comps.cores.proto.api_protocol import ArangoDBDataprepRequest, DataprepRequest, ArangoDBDataprepRequestFromDocRepo
+from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequest, DataprepRequest, ArangoDBDataprepRequestFromDocRepo
 from comps.dataprep.src.utils import (
     decode_filename,
     document_loader,

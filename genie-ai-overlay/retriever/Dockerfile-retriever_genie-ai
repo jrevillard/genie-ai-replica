@@ -22,6 +22,8 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/cores/proto"
 COPY --from=opea_base /src/comps/retrievers/src/ /app/
 # **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
 COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
+# **Step A.2: Copy the top-level comps/__init__.py to make comps a package**
+COPY --from=opea_base /src/comps/__init__.py /app/comps/__init__.py
 
 # Step B: Copy and Run the Dependency Patch
 COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh

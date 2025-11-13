@@ -35,7 +35,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Fix circular import by renaming the local docarray.py and updating import in __init__.py
 RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.py && \
     sed -i 's/from comps.cores.proto.docarray import/from comps.cores.proto.opea_docarray import/' /app/comps/__init__.py && \
-    sed -i 's/from \.\.proto.docarray import/from ..proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py
+    sed -i 's/from \.\.proto.docarray import/from ..proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py && \
+    sed -i 's/from \.\.proto.docarray import/from ..proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
 
 # Step D: "Overlay" our custom GENIE-AI files
 COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/integrations/genieai_retriever_arangodb.py

@@ -35,14 +35,13 @@ RUN ./fix_dependencies.sh ${REQ_PATH}
 RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step D: Fix docarray circular import
-# This is the "alternative solution" you requested.
-# 1. Delete the OPEA-provided docarray.py, which conflicts with the pip package.
-# 2. Update all OPEA files that imported the local file to import from the 
-#    pip-installed 'docarray' package directly.
-RUN rm /app/comps/cores/proto/docarray.py && \
-    sed -i 's/from comps.cores.proto.docarray import/from docarray import/' /app/comps/__init__.py && \
-    sed -i 's/from \.\.proto.docarray import/from docarray import/' /app/comps/cores/mega/orchestrator.py && \
-    sed -i 's/from \.\.proto.docarray import/from docarray import/' /app/comps/cores/mega/micro_service.py
+# Reverting to the original, correct "rename hack".
+# 1. Rename the conflicting local file to avoid name collision.
+# 2. Update imports to point to the new, non-conflicting filename.
+RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.py && \
+    sed -i 's/from comps.cores.proto.docarray import/from comps.cores.proto.opea_docarray import/' /app/comps/__init__.py && \
+    sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py && \
+    sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
 
 # Step E: "Overlay" our custom GENIE-AI files
 # Copy overlay files to their correct new locations within /app/comps/

@@ -36,7 +36,6 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequest, Data
 
 from comps.dataprep.src.utils import ( 
     decode_filename,
-    document_loader,
     encode_filename,
     get_separators,
     get_tables_result,
@@ -47,7 +46,8 @@ from comps.dataprep.src.utils import (
 # Note:- I replaced the genieai_dataprep_utils.py with the required imports (David)
 from comps.dataprep.src.genieai_dataprep_utils import ( 
     is_valid_content,
-    docling_document_loader
+    docling_document_loader,
+    document_loader
 )
 
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep

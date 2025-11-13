@@ -46,6 +46,8 @@ RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.p
 # Step E: "Overlay" our custom GENIE-AI files
 # Copy overlay files to their correct new locations within /app/comps/
 COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py
+# Add the custom config.py from the overlay to fix the ImportError
+COPY genie-ai-overlay/retriever/config.py /app/comps/retrievers/src/integrations/config.py
 COPY genie-ai-overlay/retriever/genieai_retriever_microservice.py /app/comps/retrievers/src/genieai_retriever_microservice.py
 
 # This path remains correct as it's relative to /app/comps/

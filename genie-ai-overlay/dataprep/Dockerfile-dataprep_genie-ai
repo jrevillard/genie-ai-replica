@@ -23,7 +23,7 @@ RUN apt-get update -y && \
     build-essential \
     default-jre \
     libcairo2 \
-    libgl1-mesa-glx \
+    libgl1 \
     libjemalloc-dev \
     libpq-dev \
     libreoffice \

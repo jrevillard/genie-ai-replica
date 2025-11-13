@@ -16,34 +16,46 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Step A: Copy the base OPEA microservice code
-# This copies arangodb.py, main.py, requirements.txt, etc.
-COPY --from=opea_base /src/comps/dataprep/src/ /app/
-# **Step A.1: Copy the shared 'cores' module (for api_protocol.py)**
-COPY --from=opea_base /src/comps/cores/ /app/comps/cores/
+# Add /app (for 'comps'), the dataprep 'src' (for entrypoint),
+# and 'proto' (for api_protocol) to PYTHONPATH
+ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/cores/proto"
+
+# Step A: Copy the entire OPEA 'comps' directory from the clone
+COPY --from=opea_base /src/comps/ /app/comps/
+
+# Define the path to the requirements file for easier reference
+ARG REQ_PATH=/app/comps/dataprep/src/requirements.txt
 
 # Step B: Copy and Run the Dependency Patch and the utils.py patch
 # This removes unused, broken dependencies (pathway, graspologic)
 COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
-RUN ./fix_dependencies.sh /app/requirements.txt
-COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/genieai_dataprep_utils.py
+RUN ./fix_dependencies.sh ${REQ_PATH}
+# Copy custom utils to its new correct location
+COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
 
 # Step C: Install *fixed* dependencies
 # This will now succeed by skipping the unused packages
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r ${REQ_PATH}
 
-# Step D: "Overlay" our custom GENIE-AI files
+# Step D: Fix docarray circular import (Proactive fix based on retriever)
+# 1. Rename the conflicting local file to avoid name collision.
+# 2. Update imports to point to the new, non-conflicting filename.
+RUN mv /app/comps/cores/proto/docarray.py /app/comps/cores/proto/opea_docarray.py && \
+    sed -i 's/from comps.cores.proto.docarray import/from comps.cores.proto.opea_docarray import/' /app/comps/__init__.py && \
+    sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/orchestrator.py && \
+    sed -i 's/from \.\.proto.docarray import/from \.\.proto.opea_docarray import/' /app/comps/cores/mega/micro_service.py
+
+# Step E: "Overlay" our custom GENIE-AI files
 # These paths are relative to the build context (our repo root)
 # 1. Copy our new subclass (Section 2.1) and the loader
-COPY genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py /app/integrations/genieai_dataprep_arangodb.py
-COPY genie-ai-overlay/dataprep/genieai_dataprep_loader.py /app/genieai_dataprep_loader.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py /app/comps/dataprep/src/integrations/genieai_dataprep_arangodb.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_loader.py /app/comps/dataprep/src/genieai_dataprep_loader.py
 
 # 2. Overwrite OPEA's entry point with our new one
-COPY genie-ai-overlay/dataprep/genieai_dataprep_microservice.py /app/genieai_dataprep_microservice.py
+COPY genie-ai-overlay/dataprep/genieai_dataprep_microservice.py /app/comps/dataprep/src/genieai_dataprep_microservice.py
 
 # 3. Overwrite the OPEA API protocol with our custom version
 COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/genieai_api_protocol.py
 
-# Step E: Run the new GENIE-AI entry point
-# We are running genieai_dataprep_microservice.py, which we successfully overwrote in Step D
-CMD ["python", "genieai_dataprep_microservice.py"]
+# Step F: Run the new GENIE-AI entry point from its new location
+CMD ["python", "comps/dataprep/src/genieai_dataprep_microservice.py"]

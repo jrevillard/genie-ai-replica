@@ -4,6 +4,8 @@
 
 
 import easyocr 
+
+# Note:- imorted the os package
 import os
 
 from docling.document_converter import (

@@ -34,8 +34,7 @@ from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry, S
 # Note:- I changed this import from api_protocol to genieai_api_protocol (David)
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequest, DataprepRequest, ArangoDBDataprepRequestFromDocRepo
 
-# Note:- I replaced the utils.py with the genieai version (David)
-from comps.dataprep.src.genieai_dataprep_utils import ( 
+from comps.dataprep.src.utils import ( 
     decode_filename,
     document_loader,
     encode_filename,
@@ -43,6 +42,10 @@ from comps.dataprep.src.genieai_dataprep_utils import (
     get_tables_result,
     parse_html,
     save_content_to_local_disk,
+)
+
+# Note:- I replaced the genieai_dataprep_utils.py with the required imports (David)
+from comps.dataprep.src.genieai_dataprep_utils import ( 
     is_valid_content,
     docling_document_loader
 )

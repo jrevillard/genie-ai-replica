@@ -30,8 +30,12 @@ from openai import AsyncOpenAI
 from rank_bm25 import BM25Okapi
 
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry, ServiceType, TextDoc
+
+# Note:- I changed this import from api_protocol to genieai_api_protocol (David)
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequest, DataprepRequest, ArangoDBDataprepRequestFromDocRepo
-from comps.dataprep.src.utils import (
+
+# Note:- I replaced the utils.py with the genieai version (David)
+from comps.dataprep.src.genieai_dataprep_utils import ( 
     decode_filename,
     document_loader,
     encode_filename,
@@ -39,12 +43,14 @@ from comps.dataprep.src.utils import (
     get_tables_result,
     parse_html,
     save_content_to_local_disk,
-    is_valid_content
+    is_valid_content,
+    docling_document_loader
 )
 
-
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
-from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader
+
+# Note:- I moved this up to the import above (David)
+# from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader
 
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")

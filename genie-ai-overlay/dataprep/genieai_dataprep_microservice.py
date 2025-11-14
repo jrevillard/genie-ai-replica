@@ -216,7 +216,7 @@ async def retract_file(payload: DocRepoRetractPayload):
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     logger.info("GENIE Dataprep Microservice is starting...")
-    create_upload_folder(upload_folder)
+    base.create_upload_folder(upload_folder)
     base.opea_microservices["opea_service@dataprep"].start()
 
     

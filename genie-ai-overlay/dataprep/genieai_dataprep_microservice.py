@@ -131,11 +131,10 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         logger.info(f"[ ingest ] File saved to: {save_path}")
 
         # --- Construct Arango-specific dataprep request ---
-        # ** FIXED: Removed 'base.' prefix **
+        # ** FIXED: Removed 'base.' prefix and 'storage_path' argument **
         input_req = ArangoDBDataprepRequestFromDocRepo(
             file_id=payload.fileId,
             file_name=payload.fileName,
-            storage_path=payload.storagePath,
             file_path=save_path,
             file_type=payload.fileType,
             file_labels=payload.fileLabels,
@@ -220,4 +219,3 @@ if __name__ == "__main__":
     logger.info("GENIE Dataprep Microservice is starting...")
     base.create_upload_folder(upload_folder)
     base.opea_microservices["opea_service@dataprep"].start()
-    

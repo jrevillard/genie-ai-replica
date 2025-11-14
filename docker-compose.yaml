@@ -266,6 +266,13 @@ services:
       E2E_CPU_URL: http://localhost:3000
       ARANGO_URL: http://arango-vector-db:8529
       GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - genieai_network
     ipc: "host"

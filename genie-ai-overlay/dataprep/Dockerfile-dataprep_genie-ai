@@ -38,7 +38,8 @@ RUN apt-get update -y && \
     poppler-utils \
     tesseract-ocr \
     wget \
-    curl && \
+    curl \
+    unzip && \
     # Create symlinks to make python3.10 the default 'python' and 'python3'
     # and pip3 the default 'pip'
     update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
@@ -81,7 +82,6 @@ RUN pip install --no-cache-dir rank_bm25
 
 # Step G: Pre-download EasyOCR models
 # This prevents the service from hanging on its one-time model download at runtime.
-# 1. Create the model and config directories
 # 1. Create the model and config directories
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \

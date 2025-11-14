@@ -82,12 +82,17 @@ RUN pip install --no-cache-dir rank_bm25
 # Step G: Pre-download EasyOCR models
 # This prevents the service from hanging on its one-time model download at runtime.
 # 1. Create the model and config directories
+# 1. Create the model and config directories
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \
-# 2. Download the 'en' (English) recognition model - Corrected URL from Hugging Face
-    wget --no-check-certificate -O /root/.EasyOCR/model/english_g2.pth https://huggingface.co/qualcomm/EasyOCR/resolve/main/english_g2.pth && \
-# 3. Download the text detection model - Corrected URL from Hugging Face
-    wget --no-check-certificate -O /root/.EasyOCR/model/craft_mlt_25k.pth https://huggingface.co/qualcomm/EasyOCR/resolve/main/craft_mlt_25k.pth && \
+# 2. Download and unzip the 'en' (English) recognition model from official GitHub release
+    wget --no-check-certificate -O /tmp/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
+    unzip /tmp/english_g2.zip -d /root/.EasyOCR/model && \
+    rm /tmp/english_g2.zip && \
+# 3. Download and unzip the text detection model from official GitHub release
+    wget --no-check-certificate -O /tmp/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
+    unzip /tmp/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
+    rm /tmp/craft_mlt_25k.zip && \
 # 4. Download the 'en' config file (GitHub link, no token needed)
     wget --no-check-certificate -O /root/.EasyOCR/config/en.yaml https://github.com/JaidedAI/EasyOCR/raw/master/easyocr/config/en.yaml
 

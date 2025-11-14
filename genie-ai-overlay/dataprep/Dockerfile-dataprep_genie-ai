@@ -13,7 +13,8 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
 # ======== Final Stage: Assembly ========
 # Use the official NVIDIA CUDA image for Ubuntu 22.04 to enable GPU access.
-FROM nvidia/cuda:12.1.1-cudnn9-runtime-ubuntu22.04
+# This uses the correct 'cudnn8' tag.
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 WORKDIR /app
 

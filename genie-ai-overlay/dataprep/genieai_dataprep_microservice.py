@@ -1,5 +1,3 @@
-
-
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 
@@ -19,8 +17,8 @@ from pydantic import BaseModel
 from fastapi import Body
 
 # --- Import the entire base dataprep microservice safely ---
-import opea_dataprep_microservice as base 
-from genieai_dataprep_loader import GenieDataprepLoader 
+import opea_dataprep_microservice as base
+from genieai_dataprep_loader import GenieDataprepLoader
 from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
 
 # --- Use same shared OPEA components ---
@@ -32,10 +30,13 @@ from comps import (
     statistics_dict,
 )
 
+# --- Import custom Pydantic model from our overlay protocol ---
+from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
+
 
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
-upload_folder = "./uploaded_files/" ################################################# 
+upload_folder = "./uploaded_files/" #################################################
 
 dataprep_component_name = os.getenv("DATAPREP_COMPONENT_NAME", "GENIE_DATAPREP_ARANGODB")
 # Initialize OpeaComponentLoader
@@ -130,7 +131,8 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         logger.info(f"[ ingest ] File saved to: {save_path}")
 
         # --- Construct Arango-specific dataprep request ---
-        input_req = base.ArangoDBDataprepRequestFromDocRepo(
+        # ** FIXED: Removed 'base.' prefix **
+        input_req = ArangoDBDataprepRequestFromDocRepo(
             file_id=payload.fileId,
             file_name=payload.fileName,
             storage_path=payload.storagePath,
@@ -195,10 +197,10 @@ async def retract_file(payload: DocRepoRetractPayload):
     logger.info(f"[ retract ] Start to delete ingested file {file_id} (graph, chunks, entities, relations)")
 
     try:
-        if dataprep_component_name == "OPEA_DATAPREP_ARANGODB":
-            response = await loader.retract_file(file_id, graph_name)
+        if dataprep_component_name == "GENIE_DATAPREP_ARANGODB":
+            response = await loader.retract_file(file_id=file_id, graph_name=graph_name)
         else:
-            logger.error("dataprep_component_name is not set or invalid.")
+            logger.error(f"dataprep_component_name is not set or invalid: {dataprep_component_name}")
             raise RuntimeError("Unsupported dataprep_component_name")
 
         if logflag:
@@ -218,5 +220,4 @@ if __name__ == "__main__":
     logger.info("GENIE Dataprep Microservice is starting...")
     base.create_upload_folder(upload_folder)
     base.opea_microservices["opea_service@dataprep"].start()
-
     

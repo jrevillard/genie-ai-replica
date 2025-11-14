@@ -243,6 +243,7 @@ services:
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
         OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
+        HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
     image: dataprep-dev:latest
     container_name: dataprep-arango-dev
     depends_on:

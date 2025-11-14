@@ -33,7 +33,7 @@ const config = {
       'application/vnd.ms-excel', // excel files .xls
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // excel files .xlsx
       'text/markdown',  // markdown files .md, .markdown
-      'text/html',  // html files .html
+      'text/html',   // html files .html
       'text/plain',  // text files .txt
       'application/octet-stream' // generic binary files - temporary adding it to solve docx, xlsx, md upload issues
     ],
@@ -61,13 +61,13 @@ const config = {
 
   // ClamAV configuration using clamscan library
   clamscan: {
-    removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
+   removeInfected: process.env.CLAMSCAN_REMOVE_INFECTED === 'true' || false,
     
     // FIX: Check for the string 'false' or use the env var as a path
     quarantineInfected: process.env.CLAMSCAN_QUARANTINE_INFECTED === 'false' 
       ? false 
       : (process.env.CLAMSCAN_QUARANTINE_INFECTED || false),
-      
+ 
     debugMode: process.env.CLAMSCAN_DEBUG_MODE === 'true' || false,
     
     // FIX: Use a strict === 'true' check, as 'false' string is truthy
@@ -92,5 +92,61 @@ const config = {
     file: process.env.LOG_FILE || 'app.log'
   }
 };
+
+/**
+ * Returns a formatted string representation of the configuration object for logging.
+ * Sensitive keys (like 'password' or 'jwtSecret') will be redacted.
+ * @returns {string} A formatted string of the loaded configuration.
+ */
+config.getFormattedConfiguration = function() {
+  // Add any other sensitive keys here in lowercase
+  const sensitiveKeys = ['password', 'jwtsecret', 'arango_password'];
+
+  /**
+   * Recursively formats an object for logging.
+   * @param {object} obj - The object to format.
+   * @param {string} indent - The current indentation level.
+   * @returns {string} A formatted string representation of the object.
+   */
+  const formatRecursive = (obj, indent = '  ') => {
+    const lines = [];
+    for (const [key, value] of Object.entries(obj)) {
+      // Skip logging this function itself
+      if (key === 'getFormattedConfiguration') {
+        continue;
+      }
+
+      // 1. Check for sensitive keys (case-insensitive)
+      if (sensitiveKeys.includes(key.toLowerCase())) {
+        lines.push(`${indent}${key}: [REDACTED]`);
+        continue;
+      }
+
+      // 2. Handle nested objects
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        lines.push(`${indent}${key}:`);
+        lines.push(formatRecursive(value, indent + '  '));
+      } 
+      // 3. Handle arrays
+      else if (Array.isArray(value)) {
+        // Truncate long arrays for readability
+        if (value.length > 10) {
+           lines.push(`${indent}${key}: [${value.slice(0, 10).join(', ')}... (and ${value.length - 10} more)]`);
+        } else {
+           lines.push(`${indent}${key}: [${value.join(', ')}]`);
+        }
+      } 
+      // 4. Handle primitives (string, number, boolean, null)
+      else {
+        lines.push(`${indent}${key}: ${value}`);
+      }
+    }
+    return lines.join('\n');
+  };
+
+  // Using 'this' refers to the 'config' object itself
+  return `\n--- Loaded Environment Configuration ---\n${formatRecursive(this)}\n----------------------------------------`;
+};
+
 
 module.exports = config;

@@ -28,6 +28,7 @@ const gracefulShutdown = (signal) => {
 
 // Start server
 const server = app.listen(PORT, HOST, () => {
+  logger.info(appConfig.getFormattedConfiguration());
   logger.info(`🚀 Document Repository Server is running on http://${HOST}:${PORT}`);
   logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
   logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);

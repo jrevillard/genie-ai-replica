@@ -25,6 +25,7 @@ from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
 
 # --- Use same shared OPEA components ---
 from comps import (
+    CustomLogger, # Added this as it is referenced later (David)
     ServiceType,
     register_microservice,
     register_statistics,

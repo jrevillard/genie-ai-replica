@@ -162,10 +162,6 @@ services:
       - PORT=${DOC_REPO_PORT}
     env_file:
       - .env
-    args:
-      - DATAPREP_HOST=${DATAPREP_HOST}
-      - DATAPREP_PORT=${DATAPREP_PORT}
-      - DOC_REPO_PORT=${DOC_REPO_PORT}
     depends_on:
       - clamav
     ports:

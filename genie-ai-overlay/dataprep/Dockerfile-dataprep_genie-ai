@@ -39,7 +39,8 @@ RUN apt-get update -y && \
     tesseract-ocr \
     wget \
     curl \
-    unzip && \
+    unzip \
+    ca-certificates && \
     # Create symlinks to make python3.10 the default 'python' and 'python3'
     # and pip3 the default 'pip'
     update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
@@ -80,21 +81,19 @@ RUN pip install --no-cache-dir -r ${REQ_PATH}
 # The custom genieai_dataprep_arangodb.py requires 'rank_bm25', which is not in the base requirements.
 RUN pip install --no-cache-dir rank_bm25
 
-# Step G: Pre-download EasyOCR models
+# Step G: Pre-install EasyOCR models (using pre-downloaded files)
 # This prevents the service from hanging on its one-time model download at runtime.
 # 1. Create the model and config directories
+COPY english_g2.zip /tmp/english_g2.zip
+COPY craft_mlt_25k.zip /tmp/craft_mlt_25k.zip
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \
-# 2. Download and unzip the 'en' (English) recognition model from official GitHub release
-    wget --no-check-certificate -O /tmp/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
+# 2. Unzip the 'en' (English) recognition model
     unzip /tmp/english_g2.zip -d /root/.EasyOCR/model && \
     rm /tmp/english_g2.zip && \
-# 3. Download and unzip the text detection model from official GitHub release
-    wget --no-check-certificate -O /tmp/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
+# 3. Unzip the text detection model
     unzip /tmp/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
-    rm /tmp/craft_mlt_25k.zip && \
-# 4. Download the 'en' config file (GitHub link, no token needed)
-    wget --no-check-certificate -O /root/.EasyOCR/config/en.yaml https://github.com/JaidedAI/EasyOCR/raw/master/easyocr/config/en.yaml
+    rm /tmp/craft_mlt_25k.zip
 
 # Step H: Fix docarray circular import (Proactive fix based on retriever)
 # 1. Rename the conflicting local file to avoid name collision.

@@ -6,7 +6,7 @@ const config = require('../config/appConfig');
  */
 const errorHandler = (err, req, res, next) => {
   // Log error details
-  logger.error({
+  const errorLog = {
     message: err.message,
     stack: err.stack,
     url: req.url,
@@ -14,7 +14,16 @@ const errorHandler = (err, req, res, next) => {
     ip: req.ip,
     userAgent: req.get('User-Agent'),
     timestamp: new Date().toISOString()
-  });
+  };
+
+  // Add verbose details only in development to avoid logging sensitive data in production
+  if (config.nodeEnv === 'development') {
+    logger.debug('Adding verbose debug info to error log...');
+    errorLog.requestBody = req.body;
+    errorLog.requestParams = req.params;
+  }
+
+  logger.error('Global error handler caught an error:', errorLog);
 
   // Default error response
   let statusCode = 500;
@@ -62,6 +71,9 @@ const errorHandler = (err, req, res, next) => {
     };
   }
 
+  // Log the response being sent
+  logger.info(`Sending error response: ${statusCode} - ${message}`);
+
   res.status(statusCode).json(response);
 };
 
@@ -69,7 +81,11 @@ const errorHandler = (err, req, res, next) => {
  * 404 handler for unmatched routes
  */
 const notFoundHandler = (req, res) => {
-  logger.warn(`404 - Route not found: ${req.method} ${req.url}`);
+  logger.warn(`404 - Route not found: ${req.method} ${req.url}`, {
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
+  });
   
   res.status(404).json({
     success: false,

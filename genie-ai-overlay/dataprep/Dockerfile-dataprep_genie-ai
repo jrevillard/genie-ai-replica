@@ -82,11 +82,11 @@ RUN pip install --no-cache-dir rank_bm25
 # 1. Create the model and config directories
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \
-# 2. Download the 'en' (English) recognition model
-    wget -O /root/.EasyOCR/model/english_g2.pth https://github.com/JaidedAI/EasyOCR-Models/releases/download/v1.0/english_g2.pth && \
-# 3. Download the text detection model
-    wget -O /root/.EasyOCR/model/craft_mlt_25k.pth https://github.com/JaidedAI/EasyOCR-Models/releases/download/v1.0/craft_mlt_25k.pth && \
-# 4. Download the 'en' config file (tells easyocr where to find the models)
+# 2. Download the 'en' (English) recognition model - Corrected URL
+    wget -O /root/.EasyOCR/model/english_g2.pth https://github.com/JaidedAI/EasyOCR-Models/releases/download/v1.2.3/english_g2.pth && \
+# 3. Download the text detection model - Corrected URL
+    wget -O /root/.EasyOCR/model/craft_mlt_25k.pth https://github.com/JaidedAI/EasyOCR-Models/releases/download/v1.2.3/craft_mlt_25k.pth && \
+# 4. Download the 'en' config file (tells easyocr where to find the models) - URL was still valid
     wget -O /root/.EasyOCR/config/en.yaml https://github.com/JaidedAI/EasyOCR/raw/master/easyocr/config/en.yaml
 
 # Step H: Fix docarray circular import (Proactive fix based on retriever)

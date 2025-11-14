@@ -7,7 +7,7 @@
 # work by Intel Corporation.
 import json
 import os
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 
 import aiohttp
 import base64

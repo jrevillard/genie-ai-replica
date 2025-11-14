@@ -16,9 +16,7 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # This uses the correct 'cudnn8' tag.
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-# --- ADD THIS ARG ---
-# Argument to receive the Hugging Face token during the build
-ARG HUGGING_FACE_HUB_TOKEN
+# ARG for Hugging Face token is NO LONGER NEEDED.
 
 WORKDIR /app
 
@@ -87,9 +85,9 @@ RUN pip install --no-cache-dir rank_bm25
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \
 # 2. Download the 'en' (English) recognition model - Corrected URL from Hugging Face
-    wget --no-check-certificate --header="Authorization: Bearer ${HUGGING_FACE_HUB_TOKEN}" -O /root/.EasyOCR/model/english_g2.pth https://huggingface.co/JaidedAI/EasyOCR-Models/resolve/main/english_g2.pth && \
+    wget --no-check-certificate -O /root/.EasyOCR/model/english_g2.pth https://huggingface.co/qualcomm/EasyOCR/resolve/main/english_g2.pth && \
 # 3. Download the text detection model - Corrected URL from Hugging Face
-    wget --no-check-certificate --header="Authorization: Bearer ${HUGGING_FACE_HUB_TOKEN}" -O /root/.EasyOCR/model/craft_mlt_25k.pth https://huggingface.co/JaidedAI/EasyOCR-Models/resolve/main/craft_mlt_25k.pth && \
+    wget --no-check-certificate -O /root/.EasyOCR/model/craft_mlt_25k.pth https://huggingface.co/qualcomm/EasyOCR/resolve/main/craft_mlt_25k.pth && \
 # 4. Download the 'en' config file (GitHub link, no token needed)
     wget --no-check-certificate -O /root/.EasyOCR/config/en.yaml https://github.com/JaidedAI/EasyOCR/raw/master/easyocr/config/en.yaml
 

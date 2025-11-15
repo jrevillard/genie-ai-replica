@@ -1,3 +1,6 @@
+/*
+ * This object is used to read and load all of the configurations and make them available to the other components
+*/
 require('dotenv').config();
 
 const config = {
@@ -12,6 +15,7 @@ const config = {
     databaseName: process.env.ARANGO_DB_NAME || 'node-services'
   },
 
+  // Dataprep service configuration
   dataprep: {
     host: process.env.DATAPREP_HOST || 'http://91.203.132.198', 
     port: process.env.DATAPREP_PORT || '6007', 
@@ -41,9 +45,10 @@ const config = {
     requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
   },
 
+  //Labeling configuration 
   labels: {
     allowedLevels: ['category', 'service'], // Allowed levels for labels
-    allowedStatuses: ['pending', 'active'] // Allowed statuses for labels
+    allowedStatuses: ['pending', 'active'] // Allowed statuses for labels - not sure what this is for; David F
   },
 
   // Security configuration
@@ -56,7 +61,8 @@ const config = {
       max: 100 // limit each IP to 100 requests per windowMs
     }
   },
-
+ 
+  //Controls whether or not the clamav service is used for uploaded documents
   virusScanning: process.env.VIRUS_SCANNING === 'true' || false,
 
   // ClamAV configuration using clamscan library
@@ -95,11 +101,11 @@ const config = {
 
 /**
  * Returns a formatted string representation of the configuration object for logging.
- * Sensitive keys (like 'password' or 'jwtSecret') will be redacted.
+ * Sensitive keys (like 'password' or 'jwtSecret') are redacted.
  * @returns {string} A formatted string of the loaded configuration.
  */
 config.getFormattedConfiguration = function() {
-  // Add any other sensitive keys here in lowercase
+  // Add any other sensitive keys here in lowercase and they will be redacted
   const sensitiveKeys = ['password', 'jwtsecret', 'arango_password'];
 
   /**

@@ -151,9 +151,9 @@ sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 ##### 3\. Set up the official Docker repository
 
-echo   
-"deb \[arch="$(dpkg \--print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg\] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu)   
-"$(. /etc/os-release && echo "$VERSION\_CODENAME")" stable" |   
+echo  
+"deb \[arch="$(dpkg \--print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg\] [https://download.docker.com/linux/ubuntu](https://download.docker.com/linux/ubuntu)  
+"$(. /etc/os-release && echo "$VERSION\_CODENAME")" stable" |  
 sudo tee /etc/apt/sources.list.d/docker.list \> /dev/null
 
 ##### 4\. Install Docker Engine
@@ -339,7 +339,13 @@ The following tables document the key variables found in the .env file, grouped 
 
 Use the provided docker-compose.yaml to start the stack. This will spin up core services including Kong, Postgres, ArangoDB, Redis, Nginx, and the AI services (vLLM, TEI, etc.).
 
+Note: that because we are using EasyOCR during the data prep process and it takes a while to download images in the container, the dockerfile is set up to unzip them. They must be downloaded into the root of the project folder in advance using wget.
+
 Bash
+
+wget \-O craft\_mlt\_25k.zip [https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip](https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip)
+
+wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zi
 
 docker-compose up \--build \-d
 
@@ -400,21 +406,30 @@ Kong requires specific initialization and configuration to route traffic correct
 
 Bash
 
-docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"  
-docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"  
+docker compose exec kong-database psql \-U kong postgres \-c "CREATE DATABASE kong;"
+
+docker compose exec kong-database psql \-U kong postgres \-c "GRANT ALL PRIVILEGES ON DATABASE kong TO kong;"
+
 docker compose run \--rm kong kong migrations bootstrap docker compose restart kong
 
 2. **Apply Configuration:** Navigate to the config directory, stage the correct configuration file (overwriting the default kong\_config.json), and run the apply script (ensure that curl and jq are installed).  
-   For Single-Node installation: \`\`\`bash  
-   cd api-gateway-solution/new-config/  
-   cp kong\_config.json-single-node kong\_config.json  
-   chmod \+x manage-kong-config.sh   
-   sudo apt update sudo apt install jq   
-   ./manage-kong-config.sh \-a  
-     
-   \*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default).\*
+   For Single-Node installation: 
 
-Enter the correct hosts and expect the following output:
+Bash
+
+cd api-gateway-solution/new-config/
+
+cp kong\_config.json-single-node kong\_config.json
+
+chmod \+x [manage-kong-config.sh](http://manage-kong-config.sh)
+
+sudo apt update sudo apt install jq
+
+./manage-kong-config.sh \-a
+
+\*(For Three-Node installation, simply run ./manage-kong-config.sh \\-a as kong\\\_config.json is the default).\*
+
+**Enter the correct hosts and expect the following output**:
 
 Bash
 
@@ -441,7 +456,7 @@ Enter 'document-repository' service port \[default: 3001\]:
 \[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
 ...
 
-\#\#\#\# \*\*4.3 Nginx Configuration\*\*
+#### **4.3 Nginx Configuration**
 
 Nginx acts as the reverse proxy and SSL termination point.
 
@@ -453,19 +468,20 @@ Nginx acts as the reverse proxy and SSL termination point.
 
 \---
 
-\#\#\# \*\*Step 5: Knowledge Base Population & User Setup\*\*
+### Step 5: Knowledge Base Population & User Setup
 
 With the infrastructure configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts.
 
-\#\#\#\# \*\*Method 1: Automated Script Approach (Recommended for Initial Setup)\*\*
+#### **Method 1: Automated Script Approach (Recommended for Initial Setup)**
 
 This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
 
-5.1 Prepare Script Environment  
-You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
+##### **5.1 Prepare Script Environment** You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
 
-\`\`\`bash  
-cd components/gov-chat-backend/scripts/new-schema-scripts  
+Bash
+
+cd components/gov-chat-backend/scripts/new-schema-scripts
+
 chmod \+x set-env.sh source set-env.sh
 
 5.2 Create Database Schema
@@ -477,7 +493,7 @@ Bash
 \# Ensure you are still in the new-schema-scripts directory and environment is set  
 npm install arangojs node arango-schema-creator.js ./arango-schema.json
 
-5.3 Create Initial User Accounts
+##### 5.3 Create Initial User Accounts
 
 You must create the default Admin and Manager accounts. These are required for the application to load correctly and for full integration with the Document Repository.
 
@@ -491,7 +507,7 @@ node create-genie-ai-manager-account.js
 
 **Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
 
-5.4 Populate Hierarchy
+##### 5.4 Populate Hierarchy
 
 Use the create-knowledge-hierarchy.js script to import your Category/Service structure.
 
@@ -503,7 +519,7 @@ Bash
 cd ..  
 node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
-5.5 Generate Translations
+##### 5.5 Generate Translations
 
 (Optional) Use create-translations.js to auto-generate labels for other supported languages (requires Google Cloud credentials).
 
@@ -522,8 +538,10 @@ After all configuration steps are complete, you must restart the services to ens
    docker-compose up \-d
 
 2\. Verify Service Health:  
-Check that all containers are running and healthy.  
-\`\`\`bash  
+Check that all containers are running and healthy.
+
+Bash
+
 docker ps
 
 *Look for (healthy) status next to critical services like kong, kong-database, vllm, and arango-vector-db.* 3\. Check Logs for Errors:

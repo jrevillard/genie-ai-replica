@@ -505,6 +505,7 @@ services:
     networks:
       - genieai_network
     restart: "no"
+  
   tei:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
@@ -539,6 +540,9 @@ services:
     container_name: embedding
     # Corrected: Pulling the pre-built, versioned image
     image: opea/embedding:latest
+    depends_on:
+      tei:
+        condition: service_healthy
     environment:
       - EMBEDDING_MODEL_ENDPOINT=http://tei:80
       - TEI_EMBEDDING_ENDPOINT=http://tei:80

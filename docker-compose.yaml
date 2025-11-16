@@ -110,7 +110,7 @@ services:
     # --- UPDATED THIS SECTION ---
     # This now reads the port from your .env file
     ports:
-      - ${FRONTEND_PORT}:${FRONTEND_PORT}
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:
       - backend
     networks:
@@ -139,7 +139,7 @@ services:
       dockerfile: /gov-chat-backend/Dockerfile-single-node 
     restart: unless-stopped
     ports:
-      - ${BACKEND_PORT}:${BACKEND_PORT}
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
       - ./database_backups:/app/database_backups
       - ./logs:/app/logs
@@ -173,7 +173,7 @@ services:
     depends_on:
       - clamav
     ports:
-      - ${DOC_REPO_PORT}:${DOC_REPO_PORT}
+      - "${DOC_REPO_PORT}:${DOC_REPO_PORT}"
     networks:
       - genieai_network
     volumes:

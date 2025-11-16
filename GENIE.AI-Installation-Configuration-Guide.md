@@ -218,7 +218,7 @@ repository-root/
 ├── api-gateway-solution/  
 │   ├── docker-compose.yaml       \# Docker compose for bastion host tier  
 │   └── env                       \# .env file for the bastion tier  
-└── opea/  
+└── genie-ai-overlay/       \# This is the folder where all the build overlay files exist  
 ├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
 └── env                       \# .env file for the OPEA tier
 
@@ -262,6 +262,7 @@ The following tables document the key variables found in the .env file, grouped 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
+| FRONTEND\_PORT | The port that the frontend Vue 3 app will run on | 8090 |
 | VUE\_APP\_API\_URL | Path for the frontend to reach the backend API (must be accessible to the browser). | [https://localhost/api](https://localhost/api) |
 | VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
 | CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. You must understand CSP policy to modify this for your environment | 'self' [http://locahost](http://locahost)... |
@@ -318,8 +319,8 @@ The following tables document the key variables found in the .env file, grouped 
 | :---- | :---- | :---- |
 | DATAPREP\_CHUNK\_SIZE | Size of document chunks for ingestion. | 500 |
 | DATAPREP\_CHUNK\_OVERLAP | Overlap between document chunks. | 50 |
-| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for Dataprep to write to. | graph\_el\_salvador |
-| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for Retriever to read from. | graph\_el\_salvador |
+| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for Dataprep to write to. | GRAPH |
+| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for Retriever to read from. | GRAPH |
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
 | ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (e.g., OR, AND). | OR |
 
@@ -484,9 +485,9 @@ Nginx acts as the reverse proxy and SSL termination point.
 \* For \*\*Three-Node\*\*, use: default.conf.  
 3\. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
 
-\---
+---
 
-### Step 5: Knowledge Base Population & User Setup
+### **Step 5: Knowledge Base Population & User Setup**
 
 With the infrastructure configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts.
 

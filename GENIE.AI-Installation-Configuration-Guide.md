@@ -219,6 +219,12 @@ repository-root/
 │   ├── docker-compose.yaml       \# Docker compose for bastion host tier  
 │   └── env                       \# .env file for the bastion tier  
 └── genie-ai-overlay/       \# This is the folder where all the build overlay files exist  
+│   ├── build-patches       \# Shell scripts to patch the build  
+│   ├── chatqna                \# Overlay files for the chatqna server extensions  
+│   ├── core                      \# Overlay files for the OPEA core extensions  
+│   ├── dataprep              \# Overlay files for the dataprep service extensions  
+│   ├── http-service          \# Overlay files for the http-service service extensions  
+     └── retriever                \# Overlay files for the retriever service extensions  
 ├── docker-compose.yaml       \# Docker compose for customized GENIE.AI OPEA  
 └── env                       \# .env file for the OPEA tier
 

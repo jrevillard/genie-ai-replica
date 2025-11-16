@@ -337,7 +337,25 @@ The following tables document the key variables found in the .env file, grouped 
 
 3\. Launch Services
 
-Use the provided docker-compose.yaml to start the stack. This will spin up core services including Kong, Postgres, ArangoDB, Redis, Nginx, and the AI services (vLLM, TEI, etc.).
+For older GPU’s like the nVidia Tesla T4, you will need to make changes to the docker-compose.yaml. This is unavoidable due to the compute capabilities:
+
+The following items need to change:
+
+* In the vllm: service  
+  * Use the image: vllm/vllm-openai:latest tag  
+* In the vllm-translation-guardrail: service  
+  * Use the image: vllm/vllm-openai:v0.10.0 tag  
+  * In the command: change the –dtype parameter to \--dtype=half  
+* In the tei: service  
+  * Use the image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7 tag  
+* In the tei\_reranker: service  
+  * Use the image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7 tag
+
+**Note:- that other generations of GPU’s may require slightly different releases, depending on their compute capabilities etc. so you might need to research these and adapt the images and command parameters.**
+
+**The base docker-compose.yaml has been tested on: NVIDIA RTX 6000 ADA Generation**
+
+Use the provided or modified docker-compose.yaml to start the stack. This will spin up core services including Kong, Postgres, ArangoDB, Redis, Nginx, and the AI services (vLLM, TEI, etc.).
 
 Note: that because we are using EasyOCR during the data prep process and it takes a while to download images in the container, the dockerfile is set up to unzip them. They must be downloaded into the root of the project folder in advance using wget.
 

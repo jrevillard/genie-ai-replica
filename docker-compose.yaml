@@ -94,7 +94,7 @@ services:
   frontend:
     build:
       context: ./components/gov-chat-frontend
-      dockerfile: Dockerfile-single-node-frontend # Specify the Dockerfile name
+      dockerfile: Dockerfile-single-node # Specify the Dockerfile name
       args:
         - VUE_APP_API_URL=${VUE_APP_API_URL}
         - VUE_PROXY_HOST=${VUE_PROXY_HOST}
@@ -110,7 +110,7 @@ services:
     # --- UPDATED THIS SECTION ---
     # This now reads the port from your .env file
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - ${FRONTEND_PORT}:${FRONTEND_PORT}
     depends_on:
       - backend
     networks:
@@ -136,12 +136,10 @@ services:
   backend:
     build:
       context: ./components
-      dockerfile: Dockerfile-single-node-backend # Specify the Dockerfile name
+      dockerfile: /gov-chat-backend/Dockerfile-single-node 
     restart: unless-stopped
-    # --- UPDATED THIS SECTION ---
-    # This now reads the port from your .env file
     ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
+      - ${BACKEND_PORT}:${BACKEND_PORT}
     volumes:
       - ./database_backups:/app/database_backups
       - ./logs:/app/logs
@@ -159,7 +157,6 @@ services:
       - JWT_SECRET=${JWT_SECRET:-default-jwt-secret}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSP_CONNECT_SRC=${CSP_CONNECT_SRC}
-      # This is the key: it maps your .env variable to the generic $PORT
       - PORT=${BACKEND_PORT}
     networks:
       - genieai_network
@@ -170,15 +167,13 @@ services:
       dockerfile: document-repository/Dockerfile
     container_name: doc-repo-dev
     environment:
-      # This service is already set up correctly
       - PORT=${DOC_REPO_PORT}
     env_file:
       - .env
     depends_on:
       - clamav
-    # --- UPDATED THIS SECTION ---
     ports:
-      - "${DOC_REPO_PORT}:${DOC_REPO_PORT}"
+      - ${DOC_REPO_PORT}:${DOC_REPO_PORT}
     networks:
       - genieai_network
     volumes:

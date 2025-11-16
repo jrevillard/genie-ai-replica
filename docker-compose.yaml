@@ -452,6 +452,9 @@ services:
     container_name: llm-textgen
     # Corrected: Pulling the pre-built, versioned image
     image: opea/llm-textgen:latest
+    depends_on:
+      vllm:
+        condition: service_healthy
     environment:
       - LLM_ENDPOINT=http://vllm:8000
       - LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
@@ -587,6 +590,9 @@ services:
   reranker:
     container_name: reranker
     image: opea/reranking:latest
+    depends_on:
+      tei_reranker:
+        condition: service_healthy
     env_file:
       - .env
     environment:

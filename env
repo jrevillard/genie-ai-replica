@@ -22,7 +22,9 @@ KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl
 KONG_DNS_RESOLVER="127.0.0.11"
 KONG_DNS_ORDER="LAST,A,AAAA,CNAME"
 
-# ========= FRONTEND & BACKEND SERVICE SHARED CONFIG =========
+# ========= FRONTEND SERVICE CONFIG =========
+FRONTEND_PORT=8090
+APP_NAME=Genie AI
 VUE_APP_API_URL=https://<your-frontend-reverse-proxy>/api
 VUE_PROXY_HOST=kong:8010
 VUE_APP_CSP_CONNECT_SRC="'self' http://localhost:8010 https://localhost:8010 http://localhost:8090 https://localhost:8090 ws://localhost:8090 wss://localhost:8090 https://genie-ai.itu.int https://*.ssdcloudindia.net"
@@ -58,7 +60,6 @@ EMAIL_USER=<your-email-user>
 EMAIL_PASSWORD=<your-smtp-password... quoted if it contains special characters>
 EMAIL_FROM=noreply@<your-domain-name>
 
-APP_NAME=Genie AI
 FRONTEND_URL=https://localhost/
 
 BACKUP_DIR=./database_backups

@@ -16,7 +16,7 @@ JWT_SECRET=UJeFROw+yRJeVOPiUTgdcXzlE2eukTfATZPxBfPkptQLZs+ER+iuSA1BIXiJtw1sS181k
 JWT_EXPIRES_IN=24h
 
 # Server Configuration
-PORT=3000
+BACKEND_PORT=3000
 NODE_ENV=production
 API_PREFIX=/api
 
@@ -41,6 +41,7 @@ EMAIL_PASSWORD=gLp+Ek)Vf)
 EMAIL_FROM=noreply@genie-ai.itu.int
 
 # App config
+FRONTEND_PORT=8090
 APP_NAME=Genie AI
 #FRONTEND_URL=https://e2e-82-109.ssdcloudindia.net
 FRONTEND_URL=https://genie-ai.itu.int/

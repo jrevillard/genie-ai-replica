@@ -136,7 +136,7 @@ services:
   backend:
     build:
       context: ./components
-      dockerfile: /gov-chat-backend/Dockerfile-single-node 
+      dockerfile: gov-chat-backend/Dockerfile-single-node 
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"

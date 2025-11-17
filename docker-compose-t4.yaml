@@ -415,7 +415,8 @@ services:
 
   vllm:
     container_name: vllm-vllm-2
-    image: vllm/vllm-openai:latest
+      #image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.6.3.post1
     deploy:
       resources:
         reservations:
@@ -427,14 +428,15 @@ services:
       - "8000:8000"
     command: >
       --model ibm-granite/granite-3.3-2b-instruct
-      --gpu_memory_utilization 0.6
+      --gpu_memory_utilization 0.5
       --served-model-name ibm-granite/granite-3.3-2b-instruct
       --max_model_len 4096
       --dtype=half
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
-      - VLLM_USE_FLASHINFER_SAMPLER=0
+      - VLLM_ATTENTION_BACKEND=XFORMERS
+        # - VLLM_ATTENTION_BACKEND=TORCH_SDPA
+        # - VLLM_USE_FLASHINFER_SAMPLER=0
     volumes:
       - /root/.cache/huggingface:/root/.cache/huggingface
     networks:
@@ -467,7 +469,8 @@ services:
 
   vllm-translation-guardrail:
     container_name: vllm-vllm-translation-guardrail
-    image: vllm/vllm-openai:latest
+      # image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.6.3.post1
     deploy:
       resources:
         reservations:
@@ -479,13 +482,14 @@ services:
       - "9031:9031"
     command: >
       --model google/gemma-3-1b-it
-      --gpu_memory_utilization 0.4
+      --gpu_memory_utilization 0.2
       --served-model-name gemma-3-1b-it
       --max_model_len 2048
-      --dtype=bfloat16
+      --dtype=half
       --port 9031
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - VLLM_ATTENTION_BACKEND=XFORMERS
     volumes:
       - /root/.cache/huggingface:/root/.cache/huggingface
     networks:
@@ -510,8 +514,8 @@ services:
     restart: "no"
   
   tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
-    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    # image: ghcr.io/huggingface/text-embeddings-inference:latest
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID}"
     runtime: nvidia
@@ -558,9 +562,10 @@ services:
     restart: "no"
 
   tei_reranker:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
-    # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    # image: ghcr.io/huggingface/text-embeddings-inference:latest
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-reranker-serving
+      # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID}"
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
     runtime: nvidia
     ports:

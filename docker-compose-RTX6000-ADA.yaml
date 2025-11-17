@@ -430,6 +430,7 @@ services:
       --gpu_memory_utilization 0.6
       --served-model-name ibm-granite/granite-3.3-2b-instruct
       --max_model_len 4096
+      --max_num_seqs 1024
       --dtype=half
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
@@ -479,7 +480,7 @@ services:
       - "9031:9031"
     command: >
       --model google/gemma-3-1b-it
-      --gpu_memory_utilization 0.4
+      --gpu_memory_utilization 0.3
       --served-model-name gemma-3-1b-it
       --max_model_len 2048
       --dtype=bfloat16
@@ -561,7 +562,7 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-reranker-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 16384 --max-concurrent-requests 64 --auto-truncate"
     runtime: nvidia
     ports:
       - "7100:80"

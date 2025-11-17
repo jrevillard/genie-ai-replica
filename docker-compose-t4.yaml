@@ -415,8 +415,7 @@ services:
 
   vllm:
     container_name: vllm-vllm-2
-      #image: vllm/vllm-openai:latest
-    image: vllm/vllm-openai:v0.6.3.post1
+    image: vllm/vllm-openai:latest
     deploy:
       resources:
         reservations:
@@ -430,13 +429,12 @@ services:
       --model ibm-granite/granite-3.3-2b-instruct
       --gpu_memory_utilization 0.5
       --served-model-name ibm-granite/granite-3.3-2b-instruct
-      --max_model_len 4096
+      --max_model_len 2048
       --dtype=half
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=XFORMERS
-        # - VLLM_ATTENTION_BACKEND=TORCH_SDPA
-        # - VLLM_USE_FLASHINFER_SAMPLER=0
+      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
+      - VLLM_USE_FLASHINFER_SAMPLER=0
     volumes:
       - /root/.cache/huggingface:/root/.cache/huggingface
     networks:
@@ -469,8 +467,8 @@ services:
 
   vllm-translation-guardrail:
     container_name: vllm-vllm-translation-guardrail
-      # image: vllm/vllm-openai:latest
-    image: vllm/vllm-openai:v0.6.3.post1
+    image: vllm/vllm-openai:v0.10.0
+    # image: vllm/vllm-openai:latest
     deploy:
       resources:
         reservations:
@@ -482,20 +480,30 @@ services:
       - "9031:9031"
     command: >
       --model google/gemma-3-1b-it
-      --gpu_memory_utilization 0.2
+      --gpu_memory_utilization 0.5
       --served-model-name gemma-3-1b-it
       --max_model_len 2048
+      --kv-cache-dtype=fp8
       --dtype=half
       --port 9031
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=XFORMERS
+    depends_on:
+      vllm:
+        condition: service_healthy
     volumes:
       - /root/.cache/huggingface:/root/.cache/huggingface
     networks:
       - genieai_network
     ipc: "host"
     restart: "no"
+    healthcheck:
+      # Check the specific port 9031 defined in your command
+      test: ["CMD", "curl", "-f", "http://localhost:9031/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   guardrail:
     container_name: llm-guardrail
@@ -517,7 +525,7 @@ services:
     # image: ghcr.io/huggingface/text-embeddings-inference:latest
     image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID}"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
     runtime: nvidia
     ports:
       - "7000:80"
@@ -534,6 +542,9 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=1
       - NVIDIA_VISIBLE_DEVICES=all
+    depends_on:
+      vllm-translation-guardrail:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -563,10 +574,10 @@ services:
 
   tei_reranker:
     # image: ghcr.io/huggingface/text-embeddings-inference:latest
-    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.8
     container_name: tei-reranker-serving
       # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID}"
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64 --auto-truncate"
     runtime: nvidia
     ports:
       - "7100:80"
@@ -583,6 +594,9 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=1
       - NVIDIA_VISIBLE_DEVICES=all
+    depends_on:
+      vllm-translation-guardrail:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s

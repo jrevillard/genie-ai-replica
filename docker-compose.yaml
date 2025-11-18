@@ -564,7 +564,7 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-reranker-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 16384 --max-concurrent-requests 64 --auto-truncate"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 32768 --max-concurrent-requests 256 --auto-truncate"
     runtime: nvidia
     ports:
       - "7100:80"

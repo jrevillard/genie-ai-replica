@@ -5,7 +5,6 @@
       :key="'settings-dialog-' + currentLocale"
       :style="dialogThemeStyles"
     >
-      <!-- Header with Buttons -->
       <div class="dialog-header">
         <h2 class="header-title" :data-themed="isThemeReady">
           {{ translate("settings.title", "Settings") }}
@@ -20,7 +19,6 @@
         </div>
       </div>
 
-      <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
         <p>
@@ -30,7 +28,6 @@
         </p>
       </div>
 
-      <!-- Error Message -->
       <div v-else-if="errorMessage" class="error-container">
         <p class="error-message">{{ errorMessage }}</p>
         <button @click="fetchUserData" class="btn-retry">
@@ -39,7 +36,6 @@
       </div>
 
       <div v-else>
-        <!-- User Profile Section -->
         <div class="profile-section">
           <div class="account-avatar">
             <div class="avatar-placeholder" v-if="!userAvatar">
@@ -77,15 +73,12 @@
           </div>
         </div>
 
-        <!-- Settings Grid -->
         <div class="settings-grid">
-          <!-- Display Box (Language + Theme) -->
           <div class="settings-box">
             <h3 class="section-title">
               {{ translate("settings.display", "Display") }}
             </h3>
 
-            <!-- Language Selector -->
             <div class="setting-item">
               <label class="section-label">{{
                 translate("settings.displayLanguage", "Display Language")
@@ -93,7 +86,6 @@
               <language-selector v-model="settings.language" />
             </div>
 
-            <!-- Theme Controls -->
             <div class="setting-item">
               <label class="section-label">{{
                 translate("settings.theme", "Theme")
@@ -116,7 +108,6 @@
               </div>
             </div>
 
-            <!-- Font Size -->
             <div class="setting-item">
               <label class="section-label">{{
                 translate("settings.fontSize", "Font Size")
@@ -134,7 +125,6 @@
             </div>
           </div>
 
-          <!-- Notifications Box -->
           <div class="settings-box">
             <h3 class="section-title">
               {{ translate("settings.notifications", "Notifications") }}
@@ -185,14 +175,12 @@
           </div>
         </div>
 
-        <!-- Account Management Section -->
         <div class="account-management-section">
           <h3 class="section-title">
             {{ translate("settings.accountManagement", "Account Management") }}
           </h3>
 
           <div class="account-management-grid">
-            <!-- Row 1: Email & Password -->
             <div class="management-row">
               <div class="management-col">
                 <label class="section-label">{{
@@ -239,7 +227,6 @@
               </div>
             </div>
 
-            <!-- Row 2: Reset & Delete -->
             <div class="management-row">
               <div class="management-col">
                 <button
@@ -279,7 +266,6 @@
         </div>
       </div>
 
-      <!-- Email Change Confirmation Modal -->
       <div class="modal" v-if="showEmailConfirmModal">
         <div class="modal-content" :data-theme="settings.theme">
           <h3 class="modal-title" :data-themed="true">
@@ -370,7 +356,6 @@
         </div>
       </div>
 
-      <!-- Password Reset Modal - FIXED -->
       <div class="modal" v-if="showPasswordReset">
         <PasswordResetInitiateScreen
           :prefilledEmail="userData.email"
@@ -382,7 +367,6 @@
     </div>
   </div>
 
-  <!-- Delete Account Confirmation Modal -->
   <div class="modal" v-if="showDeleteAccountModal">
     <div class="modal-content">
       <h3 class="modal-title">
@@ -457,7 +441,6 @@
     </div>
   </div>
 
-  <!-- Reset User Data Confirmation Dialog -->
   <ConfirmDialog
     :visible="showResetDataConfirm"
     :title="resetDataDialog.title"
@@ -470,7 +453,6 @@
     @cancel="handleResetDataCancel"
   />
 
-  <!-- Delete Account Confirmation Dialog -->
   <ConfirmDialog
     :visible="showDeleteAccountConfirm"
     :title="deleteAccountDialog.title"
@@ -501,14 +483,14 @@ import { themeManager } from "@/utils/ThemeManager";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 
 // Import LanguageSelector component
-import LanguageSelector from '@/components/LanguageSelector.vue'
+import LanguageSelector from "@/components/LanguageSelector.vue";
 
 export default {
   name: "SettingsComponent",
   components: {
     PasswordResetInitiateScreen,
     ConfirmDialog,
-    LanguageSelector
+    LanguageSelector,
   },
   data() {
     return {
@@ -517,6 +499,7 @@ export default {
       errorMessage: null,
       isThemeReady: false,
       currentUserId: "",
+      themeEnforcementInterval: null, // Track interval ID here
       settings: {
         language: this.getCurrentLanguage(),
         theme: this.getCurrentTheme(),
@@ -646,8 +629,9 @@ export default {
     this.applyTheme(this.settings.theme);
 
     // Continuously enforce theme to handle external overrides
+    // FIXED: Assigned to 'this' instead of const, removed $once
     console.log("[SETTINGS] Setting up theme enforcement interval...");
-    const themeEnforcementInterval = setInterval(() => {
+    this.themeEnforcementInterval = setInterval(() => {
       const currentDomTheme =
         document.documentElement.getAttribute("data-theme") || "light";
       if (currentDomTheme !== this.settings.theme) {
@@ -661,12 +645,6 @@ export default {
         this.applyTheme(this.settings.theme);
       }
     }, 100);
-
-    // Clean up interval on component destroy
-    this.$once("hook:beforeDestroy", () => {
-      console.log("[SETTINGS] Cleaning up theme enforcement interval...");
-      clearInterval(themeEnforcementInterval);
-    });
 
     console.log("[SETTINGS] Scheduling theme readiness update...");
     this.$nextTick(() => {
@@ -701,6 +679,16 @@ export default {
       this.$i18n.t("settings.deleteAccount"),
       this.$i18n.te("settings.deleteAccount") ? "exists" : "missing"
     );
+  },
+  // FIXED: Added beforeUnmount to replace $once('hook:beforeDestroy')
+  beforeUnmount() {
+    if (this.themeEnforcementInterval) {
+      console.log("[SETTINGS] Cleaning up theme enforcement interval...");
+      clearInterval(this.themeEnforcementInterval);
+      this.themeEnforcementInterval = null;
+    }
+    console.log("[SETTINGS] Removing theme change event listener...");
+    window.removeEventListener("themeChange", this.updateTheme);
   },
   methods: {
     getCurrentTheme() {

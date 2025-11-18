@@ -13,7 +13,7 @@ const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./sh
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000; // Corrected default port
+const PORT = process.env.PORT || 3000;
 
 // Initialize WebSocket server
 const server = require('http').createServer(app);
@@ -88,11 +88,6 @@ try {
   });
 }
 
-//
-// MANUAL CORS MIDDLEWARE REMOVED FROM HERE TO PREVENT CONFLICTS.
-// ALL CORS LOGIC IS NOW HANDLED BY THE 'cors' PACKAGE BELOW.
-//
-
 // Debug middleware for IP and request details
 app.use((req, res, next) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
@@ -157,7 +152,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || `http://localhost:${PORT}/api`, // Corrected port
+        url: process.env.API_URL || `http://localhost:${PORT}/api`,
         description: 'Development server'
       }
     ],
@@ -427,7 +422,6 @@ const swaggerOptions = {
         name: 'Weather',
         description: 'Endpoints for fetching weather data'
       },
-      // ADDED Swagger Tag for Translation
       {
         name: 'Translation',
         description: 'On-the-fly text translation endpoints'
@@ -457,7 +451,7 @@ try {
   });
 }
 
-// --- HELMET CSP (Content Security Policy from Environment Variables) ---
+// --- HELMET CSP ---
 const connectSrcUrls = (process.env.CSP_CONNECT_SRC || "'self' http://localhost:3000 ws://localhost:3000").split(' ');
 
 const cspOptions = {
@@ -467,7 +461,7 @@ const cspOptions = {
     styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
     imgSrc: ["'self'", "data:"],
     fontSrc: ["'self'", "data:", "https://cdnjs.cloudflare.com"],
-    connectSrc: connectSrcUrls, // <-- This now reads from the environment variable
+    connectSrc: connectSrcUrls,
     frameSrc: ["'none'"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
@@ -477,7 +471,6 @@ const cspOptions = {
   reportOnly: false
 };
 
-// Apply helmet with the new, dynamically configured CSP
 try {
   app.use(helmet({
     contentSecurityPolicy: cspOptions,
@@ -497,36 +490,30 @@ try {
   });
 }
 
-// --- CORS BEST PRACTICE (Single source of truth with DEBUGGING) ---
+// --- CORS ---
 const allowlist = (process.env.CORS_ALLOWED_ORIGINS || '').split(',');
-logger.debug('CORS allowlist configured:', { allowlist }); // Log the allowlist on startup
+logger.debug('CORS allowlist configured:', { allowlist });
 console.log("allowlist:" + allowlist);
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // 1. Log every incoming CORS check
     logger.debug('--- CORS CHECK ---', {
       'Request Origin': origin || 'No Origin (e.g., Postman, server-to-server)',
     });
 
-    // Allow server-to-server requests (like Postman) which have no origin.
     if (!origin) {
       logger.debug('CORS Allowed: No origin provided.');
       return callback(null, true);
     }
 
-    // 2. Check if the request's origin is on our allowlist
     const isAllowed = allowlist.some(allowedOrigin => {
-      // If an item in our list starts and ends with '/', treat it as a regex.
       if (allowedOrigin.startsWith('/') && allowedOrigin.endsWith('/')) {
         const regex = new RegExp(allowedOrigin.slice(1, -1));
         return regex.test(origin);
       }
-      // Otherwise, treat it as a normal string for an exact match.
       return origin === allowedOrigin;
     });
 
-    // 3. Log the result and either allow or deny the request
     if (isAllowed) {
       logger.debug(`CORS Allowed: Origin "${origin}" is in the allowlist.`);
       callback(null, true);
@@ -543,7 +530,7 @@ const corsOptions = {
 
 try {
   app.use(cors(corsOptions));
-  app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+  app.options('*', cors(corsOptions));
   logger.info('CORS middleware applied with debugging');
 } catch (error) {
   logger.error('Failed to apply CORS middleware:', {
@@ -551,6 +538,7 @@ try {
     stack: error.stack
   });
 }
+
 // Apply security middleware
 try {
   SecurityMiddleware.applySecurityMiddleware(app);
@@ -678,7 +666,6 @@ async function initializeServices() {
     ]);
     logger.info('Pre-initialization connection test successful');
 
-    // Get ArangoDB version
     try {
       const version = await defaultConnection.version();
       logger.debug('ArangoDB version:', { version: version.version, server: version.server });
@@ -705,7 +692,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let authService, userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, sessionService, logsService;
-  let databaseOperationsService, weatherService, securityScanService, translationService; // ADDED translationService
+  let databaseOperationsService, weatherService, securityScanService, translationService;
 
   const importService = async (name, path) => {
     logger.info(`Importing service: ${name}`);
@@ -737,7 +724,7 @@ async function initializeServices() {
     databaseOperationsService = await importService('DatabaseOperationsService', './services/database-operations-service');
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
-    translationService = await importService('TranslationService', './services/translation-service'); // ADDED
+    translationService = await importService('TranslationService', './services/translation-service');
 
     logger.info('Constructing service map');
     const serviceMap = {
@@ -753,7 +740,7 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
-      translationService: { instance: translationService, name: 'TranslationService' } // ADDED
+      translationService: { instance: translationService, name: 'TranslationService' }
     };
 
     // Validate services
@@ -787,7 +774,7 @@ async function initializeServices() {
       logger.warn('AdminDashboardService missing getSystemHealth method');
     }
 
-    // Initialize services with detailed error logging
+    // Initialize services with detailed error logging and optional service handling
     logger.info('Initializing services');
     const initPromises = [
       { service: services.sessionService, name: 'SessionService' },
@@ -800,11 +787,12 @@ async function initializeServices() {
       { service: services.queryService, name: 'QueryService' },
       { service: services.chatHistoryService, name: 'ChatHistoryService' },
       { service: services.logsService, name: 'LogsService' },
-      { service: services.weatherService, name: 'WeatherService' },
-      { service: services.translationService, name: 'TranslationService' } // ADDED
+      // Marked optional: true to prevent boot failure on rate limits
+      { service: services.weatherService, name: 'WeatherService', optional: true },
+      { service: services.translationService, name: 'TranslationService' }
     ];
 
-    for (const { service, name, preInit } of initPromises) {
+    for (const { service, name, preInit, optional } of initPromises) {
       logger.info(`Initializing ${name}`);
       try {
         if (preInit) await preInit();
@@ -817,7 +805,13 @@ async function initializeServices() {
           rawError: JSON.stringify(initError, Object.getOwnPropertyNames(initError)),
           errorType: initError?.constructor?.name || 'Unknown'
         });
-        throw initError;
+
+        // If service is optional, log a warning but don't throw
+        if (optional) {
+          logger.warn(`⚠️ Optional service ${name} failed to initialize. Continuing startup without it. Reason: ${initError.message}`);
+        } else {
+          throw initError;
+        }
       }
     }
 
@@ -951,7 +945,7 @@ async function startApp() {
     logger.info('Services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize services:', {
-      error: error.message, // Corrected from options.error
+      error: error.message,
       stack: error.stack,
       rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
       errorType: error?.constructor?.name || 'Unknown'
@@ -973,7 +967,7 @@ async function startApp() {
     { file: 'database-operations-routes', paths: ['/api/database'], service: services.databaseOperationsService },
     { file: 'admin-routes', paths: ['/api/admin'], service: services.adminDashboardService, extraService: services.logsService },
     { file: 'weather-routes', paths: ['/api/weather'], service: services.weatherService },
-    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService } // ADDED
+    { file: 'translation-routes', paths: ['/api/translate'], service: services.translationService }
   ];
 
   // Log route configurations
@@ -1178,7 +1172,7 @@ async function startApp() {
       logger.info(`Server is running on port ${PORT}`);
       logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
     });
-    // Set server timeout to 300 seconds (300,000 ms)
+    // Set server timeout to 300 seconds
     server.setTimeout(300000);
     logger.info(`Server timeout set to 300 seconds`);
   } catch (error) {

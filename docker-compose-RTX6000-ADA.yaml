@@ -478,12 +478,22 @@ services:
       --port 9031
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+    depends_on:
+      vllm:
+        condition: service_healthy
     volumes:
       - /root/.cache/huggingface:/root/.cache/huggingface
     networks:
       - genieai_network
     ipc: "host"
     restart: "no"
+    healthcheck:
+      # Check the specific port 9031 defined in your command
+      test: ["CMD", "curl", "-f", "http://localhost:9031/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   guardrail:
     container_name: llm-guardrail
@@ -521,6 +531,9 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=1
       - NVIDIA_VISIBLE_DEVICES=all
+    depends_on:
+      vllm-translation-guardrail:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -568,6 +581,9 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=1
       - NVIDIA_VISIBLE_DEVICES=all
+    depends_on:
+      vllm-translation-guardrail:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s

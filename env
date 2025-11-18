@@ -141,16 +141,33 @@ ARANGO_FILTER_STRATEGY=OR
 # ========= VLLM SERVICE =========
 VLLM_ENDPOINT=http://vllm:80
 
-# ========= MODELS =========
+# ========= VLLM INFERENCE CONFIG =========
+# The model used for main chat/generation (Service: vllm)
+# Defaults to the granite model 
+VLLM_LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
+VLLM_GPU_UTIL=0.6
+VLLM_MAX_MODEL_LEN=4096
+VLLM_DTYPE=half
+
+# ========= VLLM TRANSLATION/GUARDRAIL CONFIG =========
+# The model used for guardrails and translation (Service: vllm-translation-guardrail)
+# Defaults to the gemma model 
+VLLM_TRANSLATION_MODEL_ID=google/gemma-3-1b-it
+VLLM_TRANSLATION_GPU_UTIL=0.3
+VLLM_TRANSLATION_MAX_MODEL_LEN=2048
+VLLM_TRANSLATION_DTYPE=bfloat16
+
+# ========= EMBEDDING AND RERANKING MODELS =========
+# This is the embedding model used by the OPEA embedding service
 EMBEDDING_MODEL_ID=BAAI/bge-base-en-v1.5
 
 # This reranker model seems to work with the version we are using on the RTX6000 ADA configuration
 RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
 
-# Looks like this is the right reranker model to use for the T4 reranker image
+# This is a correct reranker model to use for the T4 reranker image (BAAI/bge-reranker-v2-m3 is not supported on T4)
 #RERANKER_MODEL_ID=cross-encoder/ms-marco-MiniLM-L-6-v2
 
-LLM_MODEL_ID=meta-llama/Llama-3.3-70B-Instruct
+# This is the TEI embedding model and the vector dimensions need to equal the model used for the OPEA embedding service above
 TEI_EMBED_MODEL=BAAI/bge-base-en-v1.5
 
 # ========= TELEMETRY (optional) =========

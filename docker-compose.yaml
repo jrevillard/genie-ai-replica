@@ -102,13 +102,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # --- ADDED THIS SECTION ---
-    # This injects the $FRONTEND_PORT variable from .env
-    # as a variable named $PORT inside the container
     environment:
       - PORT=${FRONTEND_PORT}
-    # --- UPDATED THIS SECTION ---
-    # This now reads the port from your .env file
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     depends_on:
@@ -121,7 +116,7 @@ services:
     container_name: redis-cache
     restart: unless-stopped
     ports:
-      - "6379:6379" # Optional: Expose on host for debugging
+      - "6379:6379"
     command: redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "!@#$$5678"
     volumes:
       - redis_data:/data
@@ -181,11 +176,10 @@ services:
       - doc_repo_uploads:/app/uploads
 
   clamav:
-    #image: mkodockx/docker-clamav:alpine
     image: clamav/clamav
     container_name: clamav
     ports:
-      - "3310:3310"  # ClamAV daemon port
+      - "3310:3310"
     networks:
       - genieai_network
 
@@ -263,7 +257,6 @@ services:
         condition: service_healthy
       guardrail:
         condition: service_started
-    # --- UPDATED THIS SECTION ---
     ports:
       - "${DATAPREP_PORT}:5000"
     env_file:
@@ -339,7 +332,6 @@ services:
         condition: service_started
       reranker:
         condition: service_started
-    # --- UPDATED THIS SECTION ---
     ports:
       - "${OPEA_PORT}:${OPEA_PORT}"
     env_file:
@@ -426,12 +418,12 @@ services:
     ports:
       - "8000:8000"
     command: >
-      --model ibm-granite/granite-3.3-2b-instruct
-      --gpu_memory_utilization 0.6
-      --served-model-name ibm-granite/granite-3.3-2b-instruct
-      --max_model_len 4096
+      --model ${VLLM_LLM_MODEL_ID}
+      --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.6}
+      --served-model-name ${VLLM_LLM_MODEL_ID}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-4096}
       --max_num_seqs 1024
-      --dtype=half
+      --dtype=${VLLM_DTYPE:-half}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
@@ -451,14 +443,13 @@ services:
 
   textgen:
     container_name: llm-textgen
-    # Corrected: Pulling the pre-built, versioned image
     image: opea/llm-textgen:latest
     depends_on:
       vllm:
         condition: service_healthy
     environment:
       - LLM_ENDPOINT=http://vllm:8000
-      - LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
+      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID}
     ports:
       - "9000:9000"
     ipc: "host"
@@ -479,11 +470,11 @@ services:
     ports:
       - "9031:9031"
     command: >
-      --model google/gemma-3-1b-it
-      --gpu_memory_utilization 0.3
-      --served-model-name gemma-3-1b-it
-      --max_model_len 2048
-      --dtype=bfloat16
+      --model ${VLLM_TRANSLATION_MODEL_ID}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.3}
+      --served-model-name ${VLLM_TRANSLATION_MODEL_ID}
+      --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-bfloat16}
       --port 9031
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
@@ -496,12 +487,11 @@ services:
 
   guardrail:
     container_name: llm-guardrail
-    # Corrected: Pulling the pre-built, versioned image
     image: opea/guardrails:latest
     environment:
       - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
-      - LLM_MODEL_ID=gemma-3-1b-it
-      - SAFETY_GUARD_MODEL_ID=gemma-3-1b-it
+      - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
+      - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - GUARDRAILS_COMPONENT_NAME=OPEA_GEMMA_GUARD
     ports:
       - "9090:9090"
@@ -542,7 +532,6 @@ services:
 
   embedding:
     container_name: embedding
-    # Corrected: Pulling the pre-built, versioned image
     image: opea/embedding:latest
     depends_on:
       tei:

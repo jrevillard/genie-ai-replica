@@ -246,11 +246,11 @@ Bash
 git clone [https://gitlab.com/fordendk/genie-ai-replica](https://gitlab.com/fordendk/genie-ai-replica)  
 cd genie-ai-replica
 
-2\. Environment Configuration (.env)
+#### 2\. Environment Configuration (.env)
 
 The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.
 
-The following tables document the key variables found in the .env file, grouped by the service they configure.
+The following tables document the key variables found in the .env file1, grouped by the service they configure.
 
 **Kong (API Gateway) & Database**
 
@@ -258,7 +258,7 @@ The following tables document the key variables found in the .env file, grouped 
 | :---- | :---- | :---- |
 | POSTGRES\_USER | Username for the Kong database. | kong |
 | POSTGRES\_DB | Name of the Kong database. | kong |
-| POSTGRES\_PASSWORD | Password for the Kong database. | your-kong-db-password |
+| POSTGRES\_PASSWORD | Password for the Kong database. | k1ngk0ng |
 | KONG\_DATABASE | Tells Kong which database type to use. | postgres |
 | KONG\_PG\_HOST | Hostname for the Kong database service. | kong-database |
 | KONG\_ADMIN\_LISTEN | Kong admin API listen address. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
@@ -268,11 +268,11 @@ The following tables document the key variables found in the .env file, grouped 
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| FRONTEND\_PORT | The port that the frontend Vue 3 app will run on | 8090 |
-| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API (must be accessible to the browser). | [https://localhost/api](https://localhost/api) |
+| FRONTEND\_PORT | The port that the frontend Vue 3 app will run on. | 8090 |
+| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API. | https://\<your-reverse-proxy\>/api |
 | VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
-| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. You must understand CSP policy to modify this for your environment | 'self' [http://locahost](http://locahost)... |
-| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. Again, you need to understand CORS to modify this. | [http://localhost,https://localhost](http://localhost,https://localhost)... |
+| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. | 'self' http://localhost... |
+| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. | http://localhost,https://genie-ai... |
 
 **Backend Service**
 
@@ -283,17 +283,14 @@ The following tables document the key variables found in the .env file, grouped 
 | API\_PREFIX | Global prefix for all API routes. | /api |
 | JWT\_SECRET | Secret key for signing JSON Web Tokens. | UJeFROw+yRJeVOPiUTgdcXzl... |
 | JWT\_EXPIRES\_IN | Expiration time for JWTs. | 24h |
+| TRANSLATION\_CACHE | Switch on/off translation caching. | on |
 | TRANSLATION\_CACHE\_HOST | Redis host for translation caching. | redis-cache |
 | TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
-| TRANSLATION\_THREADS | The number of threads for the node.js translation service | 4 |
-| TRANSLATION\_BATCHES | The number of batches for the node.js translation service | 5 |
-| TRANSLATION\_CACHE | Switch on translation caching | on or off |
-| TRANSLATION\_CACHE\_PATH | The path of the tranlsation cache | /cache/translations |
-| TRANSLATION\_CACHE\_PASSWORD | The password for the Redis cache | Must equal the password in the redis-cach container startup command: command: redis-server \--appendonly yes \--maxmemory-policy noeviction \--requirepass "\!@\#$$5678" |
+| TRANSLATION\_CACHE\_PASSWORD | Password for the Redis cache. | \!@\#$$5678 |
 | EMAIL\_HOST | SMTP server for sending emails. | your-smtp-host |
 | EMAIL\_USER | SMTP username. | your-email-user |
-| EMAIL\_PASSWORD | SMTP password. | your-email-password |
-| EMAIL\_FROM | noreply email address | noreply@your-domain-name |
+| EMAIL\_PASSWORD | SMTP password. | your-smtp-password |
+| EMAIL\_FROM | Noreply email address. | noreply@your-domain-name |
 | OPEA\_HOST | Hostname for the OPEA backend service. | chatqna-xeon-backend-server |
 
 **ArangoDB (Knowledge Base)**
@@ -303,16 +300,15 @@ The following tables document the key variables found in the .env file, grouped 
 | ARANGO\_PASSWORD | Root password for ArangoDB. | test |
 | ARANGO\_DB\_NAME | Database name used by the backend. | genie-backend |
 | ARANGO\_DB | Database name used by the frontend. | genie-frontend |
-| ARANGO\_URL | Connection URL for ArangoDB. | [http://arango-vector-db:8529](http://arango-vector-db:8529) |
+| ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
 | ARANGO\_USER | Username for ArangoDB. | root |
-| ARANGO\_USERNAME | Username for ArangoDB. | root |
 
 **Document Repository Service**
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | DOC\_REPO\_PORT | Internal port for the document service. | 3001 |
-| DATAPREP\_HOST | Hostname for the Dataprep service. | [http://localhost](http://localhost) |
+| DATAPREP\_HOST | Hostname for the Dataprep service. | http://localhost |
 | DATAPREP\_PORT | Port for the Dataprep service. | 6007 |
 | MAX\_FILE\_SIZE | Maximum file upload size in bytes (e.g., 50MB). | 52428800 |
 | VIRUS\_SCANNING | Enable/disable ClamAV virus scanning. | true |
@@ -325,85 +321,115 @@ The following tables document the key variables found in the .env file, grouped 
 | :---- | :---- | :---- |
 | DATAPREP\_CHUNK\_SIZE | Size of document chunks for ingestion. | 500 |
 | DATAPREP\_CHUNK\_OVERLAP | Overlap between document chunks. | 50 |
-| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for Dataprep to write to. | GRAPH |
-| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for Retriever to read from. | GRAPH |
+| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for Dataprep to write to. | graph\_el\_salvador |
+| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for Retriever to read from. | graph\_el\_salvador |
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
 | ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (e.g., OR, AND). | OR |
 
-**Models & External APIs**
+**AI Models & Inference Configuration**
+
+These variables control the specific AI models used for generation, embeddings, and reranking.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face. | hf\_YnXMHAtvTTVfwZJIYxKrEC... |
-| VLLM\_API\_KEY | API key for the VLLM service. | eyJhbGciOiJSUzI1NiIsInR5cCIg... |
-| VLLM\_ENDPOINT | URL for the VLLM inference server. | [http://vllm:80](http://vllm:80) |
+| HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face (Required for gated models). | hf\_... |
+| VLLM\_API\_KEY | API key for the VLLM service. | eyJhb... |
+| VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:80 |
+| **Main Inference (vLLM)** |  |  |
+| VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | ibm-granite/granite-3.3-2b-instruct |
+| VLLM\_GPU\_UTIL | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.65 (Standard) / 0.5 (T4) |
+| VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 4096 (Standard) / 2048 (T4) |
+| VLLM\_DTYPE | Data type for model weights (half, bfloat16). | half (T4), bfloat16 (Ampere+) |
+| **Guardrails (Translation)** |  |  |
+| VLLM\_TRANSLATION\_MODEL\_ID | Model ID for guardrails/translation tasks. | google/gemma-3-1b-it |
+| VLLM\_TRANSLATION\_GPU\_UTIL | GPU Memory Utilization for guardrail model. | 0.15 (Standard) / 0.2 (T4) |
+| VLLM\_TRANSLATION\_MAX\_MODEL\_LEN | Context window for guardrail model. | 2048 |
+| VLLM\_TRANSLATION\_DTYPE | Data type for guardrail model. | bfloat16 |
+| **Embeddings & Reranking** |  |  |
 | EMBEDDING\_MODEL\_ID | Model ID for embeddings. | BAAI/bge-base-en-v1.5 |
-| RERANKER\_MODEL\_ID | Model ID for reranking. | BAAI/bge-reranker-v2-m3 |
-| LLM\_MODEL\_ID | Model ID for the main language model. | meta-llama/Llama-3.3-70B-Instruct |
-| TEI\_EMBED\_MODEL | Model ID for TEI embeddings. | BAAI/bge-base-en-v1.5 |
+| TEI\_EMBED\_MODEL | TEI embedding model (must match above). | BAAI/bge-base-en-v1.5 |
+| RERANKER\_MODEL\_ID | Model ID for reranking. | cross-encoder/ms-marco-MiniLM-L-6-v2 |
 
-3\. Launch Services
+#### 3\. Model Selection and GPU Compatibility
 
-For older GPU’s like the nVidia Tesla T4, you will need to make changes to the docker-compose.yaml. This is unavoidable due to the compute capabilities:
+The GENIE.AI framework relies on four distinct AI models working in concert. Configuring these correctly in your .env file is the single most important factor for system stability and performance.
 
-The following items need to change:
+**The Four Key Model Parameters:**
 
-* In the vllm: service  
-  * Use the image: vllm/vllm-openai:latest tag  
-* In the vllm-translation-guardrail: service  
-  * Use the image: vllm/vllm-openai:v0.10.0 tag  
-  * In the command: change the –dtype parameter to \--dtype=half  
-* In the tei: service  
-  * Use the image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7 tag  
-* In the tei\_reranker: service  
-  * Use the image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7 tag
+1. **VLLM\_LLM\_MODEL\_ID**: The main "brain" of the chatbot (e.g., Granite 3B). It generates the final answer based on retrieved context.  
+2. **VLLM\_TRANSLATION\_MODEL\_ID**: A smaller, specialized model (e.g., Gemma 2B) used for guardrails and translation tasks to offload work from the main model.  
+3. **EMBEDDING\_MODEL\_ID**: Converts documents and queries into mathematical vectors. This determines search accuracy.  
+4. **RERANKER\_MODEL\_ID**: A specialized model that double-checks search results for relevance. This is the "quality control" step.
 
-**Note:- that other generations of GPU’s may require slightly different releases, depending on their compute capabilities etc. so you might need to research these and adapt the images and command parameters.**
+**Hardware Profiles and Recommended Configurations:**
 
-**The base docker-compose.yaml has been tested on: NVIDIA RTX 6000 ADA Generation**
+Select the profile below that matches your GPU hardware to avoid "Out of Memory" (OOM) crashes or architecture incompatibility errors.
 
-Use the provided or modified docker-compose.yaml to start the stack. This will spin up core services including Kong, Postgres, ArangoDB, Redis, Nginx, and the AI services (vLLM, TEI, etc.).
+**Profile A: The "Entry Level" Profile (NVIDIA Tesla T4 \- 16GB VRAM)**
 
-Note: that because we are using EasyOCR during the data prep process and it takes a while to download images in the container, the dockerfile is set up to unzip them. They must be downloaded into the root of the project folder in advance using wget.
+* **Status:** Restricted / Legacy.  
+* **Challenge:** The T4 has limited memory (16GB) and older compute architecture (Turing). It does **not** support bfloat16, requiring float16 (half precision) which impacts stability.  
+* **Recommended Configuration:**  
+  * **LLM:** ibm-granite/granite-3.3-2b-instruct (Small enough to fit alongside other services).  
+  * **Embeddings:** BAAI/bge-base-en-v1.5.  
+  * **Reranker:** cross-encoder/ms-marco-MiniLM-L-6-v2.  
+    * **CRITICAL:** Do not run BAAI/bge-reranker-v2-m3 on a T4. It uses an XLM-RoBERTa architecture that may cause compatibility issues with the T4-optimized TEI images, and its memory footprint is too large for a shared 16GB card.  
+  * **Env Settings:** Ensure VLLM\_DTYPE=half and keep VLLM\_MAX\_MODEL\_LEN at 2048\.
+
+**Profile B: The "Enterprise Workstation" Profile (RTX 6000 Ada, L40S, A100 \- 48GB+ VRAM)**
+
+* **Status:** Production Ready.  
+* **Advantage:** These cards support bfloat16 for higher precision and stability. 48GB allows for larger context windows and concurrent processing.  
+* **Recommended Configuration:**  
+  * **LLM:** ibm-granite/granite-3.3-2b-instruct or meta-llama/Meta-Llama-3.1-70B-Instruct-AWQ (Quantized).  
+  * **Embeddings:** BAAI/bge-base-en-v1.5 or BAAI/bge-m3.  
+  * **Reranker:** cross-encoder/ms-marco-MiniLM-L-6-v2.  
+  * **Env Settings:** Use VLLM\_DTYPE=bfloat16 and enable VLLM\_ATTENTION\_BACKEND=FLASH\_ATTN (if supported) for maximum throughput.
+
+#### 4\. Launch Services
+
+Prerequisite: Download OCR Models  
+Because the framework uses EasyOCR during data prep and model downloads inside containers can be slow or unreliable, you must download these files to the root of your project folder first.
 
 Bash
 
-wget \-O craft\_mlt\_25k.zip [https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip](https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip)
+wget \-O craft\_mlt\_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft\_mlt\_25k.zip  
+wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zip
 
-wget \-O english\_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english\_g2.zi
+Launch Option A: Standard Launch (RTX 6000 Ada / A100 / H100)  
+Use this command if you are running on modern Ampere or Ada generation hardware with sufficient VRAM (24GB+). This uses the standard docker-compose.yaml.
 
-docker-compose up \--build \-d
+Bash
 
-⚠️ IMPORTANT: EXPECTED ERRORS
+docker compose up \-d \--build
 
-At this stage, while the containers are running, they are not yet configured. If you inspect the logs now, you will see many critical errors related to missing databases (ArangoDB), unconfigured routes (Kong), and unreachable upstreams (Nginx).
+Launch Option B: Legacy Launch (NVIDIA Tesla T4)  
+Use this command only if you are running on a Tesla T4 (16GB). This uses docker-compose-t4.yaml, which applies specific overrides:
 
+* **Precision:** Forces dtype=half (float16).  
+* **Images:** Uses specific turing tags for TEI containers to ensure CUDA 7.5 compatibility.  
+* **Memory Safety:** Reduces batch tokens and GPU utilization limits to prevent system crashes.
+
+Bash
+
+docker compose \-f docker-compose-t4.yaml up \-d \--build
+
+5\. Initial Verification  
+After the containers launch, check their status. It may take several minutes for the large AI models (vLLM) to download and initialize.
+
+Bash
+
+\# Check container status  
+docker ps
+
+\# Monitor the vLLM initialization (wait for "Application startup complete")  
+docker logs \-f vllm-vllm-2
+
+⚠️ **IMPORTANT: EXPECTED ERRORS**  
+At this stage, while the containers are running, they are not yet configured. If you inspect the backend logs now, you will see errors related to missing databases (ArangoDB) and unconfigured routes (Kong). This is normal. Do NOT attempt to debug these errors yet. Proceed immediately to Step 4 to complete the necessary infrastructure configuration.  
 **This is normal. Do NOT attempt to debug these errors yet.**
 
 Proceed immediately to **Step 4** to complete the necessary infrastructure configuration.
-
-#### **Option B: Three-Node Installation (Production)**
-
-**Option B** is a three node architecture. This style of architecture is recommended for production docker compose based deployments as it separates the concerns for each tier into separate nodes as follows:
-
-1. **Bastion Node**: this host runs nginx as a reverse proxy, kong and the API gateway and keycloak for implementation of 3rd party identity services.  
-2. **Infrastructure Node**: this host runs all the application infrastructure services (ArangoDB, node.js backend, Vue 3 frontend, redis-cache, document-repository and clamav).  
-3. **AI/GPU Node**: this host runs the customized OPEA microservices backend.
-
-Refer to the diagram above for the various docker-compose.yaml and associated .env files. Setting this up is simply a case of setting up the three hosts with the required operating system and dependencies and then configuring each of the components (the default configurations in the example env files should be mostly correct but will require adjustments for your host names and DNS etc.).
-
-**Steps:**
-
-1. Set up the virtual hosts as per the instructions with the required capacity  
-2. Clone the repository to each node as per Option A.  
-3. Set up your configurations as outlined in Option A above and adjust for the three node environment on each node.  
-4. Bring up the environment
-
-Bash
-
-docker-compose up \--build \-d
-
-5. Proceed as per Option A. then go to **Step 4: Infrastructure Configuration**
 
 ---
 

@@ -236,9 +236,9 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
     ports:
       - "6666:6666"
-  networks:
-    - genieai_network
-  restart: "no"
+    networks:
+      - genieai_network
+    restart: "no"
 
   dataprep-arango-service:
     build:

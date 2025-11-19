@@ -1,4 +1,3 @@
-<!-- UnifiedAnalytics.vue - Restored original #414141 background in dark mode, fixed theme inconsistency -->
 <template>
   <div class="analytics-modal" @click.self="close" :data-theme="theme">
     <div class="analytics-content" :key="'analytics-content-' + currentLocale">
@@ -10,7 +9,6 @@
       </div>
 
       <div class="analytics-body">
-        <!-- Period selector (for dynamic mode) -->
         <div v-if="useDynamicData" class="period-selector">
           <label style="color: var(--text-primary) !important">{{
             translate("analytics.period")
@@ -34,7 +32,6 @@
             </option>
           </select>
 
-          <!-- Date picker (hidden for all-time) -->
           <div v-if="selectedPeriod !== 'all-time'" class="date-picker">
             <input
               type="date"
@@ -46,13 +43,11 @@
           </div>
         </div>
 
-        <!-- Loading state -->
         <div v-if="isLoading" class="loading-container">
           <div class="spinner"></div>
           <p>{{ translate("analytics.loading") }}</p>
         </div>
 
-        <!-- Error state -->
         <div v-else-if="error" class="error-container">
           <p class="error-message">{{ error }}</p>
           <button @click="loadAnalytics" class="retry-button">
@@ -60,9 +55,7 @@
           </button>
         </div>
 
-        <!-- Dashboard content -->
         <div v-else class="dashboard-content">
-          <!-- Usage Trend Chart -->
           <div class="analytics-section">
             <usage-trend-chart
               ref="usageTrendChart"
@@ -74,7 +67,6 @@
             />
           </div>
 
-          <!-- Key metrics summary -->
           <div class="metrics-summary">
             <div class="metric-card">
               <h3>{{ translate("analytics.metrics.totalQueries") }}</h3>
@@ -133,7 +125,6 @@
             </div>
           </div>
 
-          <!-- Satisfaction charts section -->
           <div class="satisfaction-charts">
             <h3 class="satisfaction-title">
               {{
@@ -144,7 +135,6 @@
               }}
             </h3>
             <div class="satisfaction-container">
-              <!-- Satisfaction Gauge Chart -->
               <div class="analytics-section half-width">
                 <satisfaction-gauge
                   :value="analytics.satisfactionGaugeData?.currentValue || 0"
@@ -160,7 +150,6 @@
                 />
               </div>
 
-              <!-- Satisfaction Heatmap Chart -->
               <div class="analytics-section half-width">
                 <satisfaction-heatmap
                   :data="analytics.satisfactionHeatmapData"
@@ -174,7 +163,6 @@
           </div>
 
           <div class="charts-container">
-            <!-- Top Queries Section -->
             <div class="analytics-section half-width">
               <h3>{{ translate("analytics.topQueries") }}</h3>
               <top-queries-chart
@@ -187,7 +175,6 @@
               </div>
             </div>
 
-            <!-- Service Categories Usage -->
             <div class="analytics-section half-width">
               <h3>{{ translate("analytics.serviceUsage") }}</h3>
               <category-distribution-chart
@@ -365,28 +352,8 @@ export default {
     this.theme = localStorageTheme;
     console.log("[UnifiedAnalytics] Initial theme set to:", this.theme);
 
-    // Log computed styles for debugging
-    this.$nextTick(() => {
-      if (this.$el) {
-        console.log(
-          "[UnifiedAnalytics] Dialog overlay background:",
-          getComputedStyle(this.$el).backgroundColor
-        );
-        console.log(
-          "[UnifiedAnalytics] Analytics content background:",
-          getComputedStyle(this.$el.querySelector(".analytics-content"))
-            .backgroundColor
-        );
-        console.log(
-          "[UnifiedAnalytics] Header title color:",
-          getComputedStyle(this.$el.querySelector("h2")).color
-        );
-        console.log(
-          "[UnifiedAnalytics] Metric value color:",
-          getComputedStyle(this.$el.querySelector(".metric-value")).color
-        );
-      }
-    });
+    // *** REMOVED getComputedStyle BLOCK FROM created() ***
+    // The previous block was removed here to prevent the DOM access error.
 
     if (this.useDynamicData) {
       this.loadAnalytics();
@@ -431,6 +398,9 @@ export default {
     console.log("UnifiedAnalytics mounted with locale:", this.currentLocale);
     console.log("[UnifiedAnalytics] Current theme after mount:", this.theme);
 
+    // *** NEW: Log computed styles after mounting, when DOM is ready ***
+    this.logComputedStyles("Initial Mounted");
+
     // Add resize listener
     window.addEventListener("resize", this.handleResize);
   },
@@ -451,31 +421,60 @@ export default {
       console.log("[UnifiedAnalytics] Updating theme to:", newTheme);
       this.theme = newTheme;
 
-      // Log computed styles for debugging
-      this.$nextTick(() => {
-        console.log(
-          "[UnifiedAnalytics] Dialog overlay background after theme change:",
-          getComputedStyle(this.$el).backgroundColor
-        );
-        console.log(
-          "[UnifiedAnalytics] Analytics content background after theme change:",
-          getComputedStyle(this.$el.querySelector(".analytics-content"))
-            .backgroundColor
-        );
-        console.log(
-          "[UnifiedAnalytics] Header title color after theme change:",
-          getComputedStyle(this.$el.querySelector("h2")).color
-        );
-        console.log(
-          "[UnifiedAnalytics] Metric value color after theme change:",
-          getComputedStyle(this.$el.querySelector(".metric-value")).color
-        );
-      });
+      // *** NEW: Log computed styles after theme change ***
+      this.logComputedStyles("After Theme Change");
 
       // Force chart re-rendering to ensure child charts update
       console.log("[UnifiedAnalytics] Triggering chart re-render...");
       this.loadAnalytics();
     },
+
+    // *** NEW METHOD TO SAFELY LOG COMPUTED STYLES ***
+    logComputedStyles(stage) {
+      this.$nextTick(() => {
+        const content = this.$el.querySelector(".analytics-content");
+        const h2 = this.$el.querySelector("h2");
+        const metricValue = this.$el.querySelector(".metric-value");
+
+        if (this.$el) {
+          console.log(
+            `[UnifiedAnalytics] ${stage} Dialog overlay background:`,
+            getComputedStyle(this.$el).backgroundColor
+          );
+          if (content) {
+            console.log(
+              `[UnifiedAnalytics] ${stage} Analytics content background:`,
+              getComputedStyle(content).backgroundColor
+            );
+          } else {
+            console.warn(
+              `[UnifiedAnalytics] ${stage} Analytics content element not found.`
+            );
+          }
+          if (h2) {
+            console.log(
+              `[UnifiedAnalytics] ${stage} Header title color:`,
+              getComputedStyle(h2).color
+            );
+          } else {
+            console.warn(
+              `[UnifiedAnalytics] ${stage} Header h2 element not found.`
+            );
+          }
+          if (metricValue) {
+            console.log(
+              `[UnifiedAnalytics] ${stage} Metric value color:`,
+              getComputedStyle(metricValue).color
+            );
+          } else {
+            console.warn(
+              `[UnifiedAnalytics] ${stage} Metric value element not found.`
+            );
+          }
+        }
+      });
+    },
+    // *** END NEW METHOD ***
 
     applyTheme() {
       // Use saved theme preference or data-theme attribute

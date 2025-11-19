@@ -895,6 +895,11 @@ export default {
         return;
       }
 
+      const container = this.$refs.chart;
+      if (container && Math.max(0, container.offsetWidth) < 100) {
+        return; // Prevents ApexCharts from rendering when container is collapsed
+      }
+
       // Get theme information
       const theme = this.getTheme();
       console.log(

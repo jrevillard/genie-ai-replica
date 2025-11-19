@@ -159,7 +159,7 @@ Defaults to the granite model
 
 VLLM_LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
 VLLM_GPU_UTIL=0.5
-VLLM_MAX_MODEL_LEN=2048
+VLLM_MAX_MODEL_LEN=4096
 VLLM_DTYPE=half
 
 ========= VLLM TRANSLATION/GUARDRAIL CONFIG (T4 TUNED) =========

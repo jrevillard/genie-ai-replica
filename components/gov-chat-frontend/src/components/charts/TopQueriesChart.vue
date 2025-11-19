@@ -624,11 +624,16 @@ export default {
         return;
       }
 
-      const theme = this.getTheme();
-      console.log(
-        `[DEBUG] Theme detected: ${theme.isDarkMode ? "dark" : "light"}`
-      );
+      // FINAL FIX: Stop ApexCharts from exploding when container collapses (mobile resize)
+      const chartContainer = this.$refs.chart;
+      if (chartContainer) {
+        const width = Math.max(0, chartContainer.offsetWidth);
+        if (width < 50) {
+          return; // Silently skip — no negative width, no errors
+        }
+      }
 
+      const theme = this.getTheme();
       const textColor = theme.isDarkMode ? "#FFFFFF" : "#333333";
 
       const topQueries = this.chartData.slice(0, 5);
@@ -643,103 +648,67 @@ export default {
       this.chartOptions = {
         chart: {
           type: "bar",
+          height: 140,
           fontFamily: "inherit",
-          toolbar: {
-            show: false,
-          },
-          animations: {
-            enabled: true,
-            speed: 300,
-          },
-          background: theme.backgroundColor,
+          toolbar: { show: false },
+          background: "transparent",
           foreColor: textColor,
           events: {
             mounted: () => {
               setTimeout(() => {
                 this.addTooltipHandlers();
                 this.fixLabelColors(textColor);
-              }, 300);
+              }, 100);
             },
             updated: () => {
               setTimeout(() => {
                 this.addTooltipHandlers();
                 this.fixLabelColors(textColor);
-              }, 300);
+              }, 100);
             },
           },
         },
         plotOptions: {
           bar: {
-            horizontal: false,
-            columnWidth: "55%",
+            horizontal: false, // ← VERTICAL BARS (this was the fuckup)
             borderRadius: 2,
-            dataLabels: {
-              position: "top",
-            },
+            columnWidth: "45%",
+            dataLabels: { position: "top" },
           },
         },
         colors: [theme.accentColor || "#4E97D1"],
         dataLabels: {
           enabled: true,
-          formatter: function (val) {
-            return val.toLocaleString();
-          },
+          formatter: (val) => val.toLocaleString(),
           offsetY: -20,
           style: {
             fontSize: "10px",
             colors: [textColor],
             fontWeight: "600",
           },
-          background: {
-            enabled: false,
-          },
-        },
-        xaxis: {
-          categories: topQueries.map((query, index) => `#${index + 1}`),
-          position: "bottom",
-          axisBorder: {
-            show: false,
-          },
-          axisTicks: {
-            show: false,
-          },
-          labels: {
-            style: {
-              colors: textColor,
-              fontSize: "10px",
-            },
-          },
-        },
-        yaxis: {
-          labels: {
-            formatter: (value) => {
-              return value.toLocaleString();
-            },
-            style: {
-              colors: textColor,
-              fontSize: "10px",
-            },
-          },
         },
         grid: {
-          borderColor: theme.isDarkMode
-            ? "rgba(255, 255, 255, 0.1)"
-            : "rgba(0, 0, 0, 0.1)",
+          show: false,
         },
-        tooltip: {
-          enabled: false,
-        },
-        states: {
-          hover: {
-            filter: {
-              type: "none",
-            },
+        xaxis: {
+          categories: topQueries.map((q, i) => `#${i + 1}`),
+          labels: {
+            style: { colors: textColor, fontSize: "11px" },
           },
+          axisBorder: { show: false },
+          axisTicks: { show: false },
+        },
+        yaxis: {
+          labels: { show: false },
+          axisBorder: { show: false },
+          axisTicks: { show: false },
+        },
+        tooltip: { enabled: false },
+        states: {
+          hover: { filter: { type: "none" } },
           active: {
             allowMultipleDataPointsSelection: false,
-            filter: {
-              type: "none",
-            },
+            filter: { type: "none" },
           },
         },
         theme: {

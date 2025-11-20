@@ -293,9 +293,9 @@ services:
       dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
-    image: retriever-dev:latest
-    container_name: retriever-arango-dev
+        OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
+    image: genie-ai-retriever-arango:${OPEA_VERSION:-latest}
+    container_name: genie-ai-retriever-arango
     depends_on:
       arango-vector-db:
         condition: service_started
@@ -308,9 +308,9 @@ services:
       - .env
     environment:
       RETRIEVER_COMPONENT_NAME: "OPEA_RETRIEVER_ARANGODB"
-      VLLM_ENDPOINT: http://vllm:8000
-      ARANGO_URL: http://arango-vector-db:8529
-      TEI_EMBEDDING_ENDPOINT: http://embedding:6000
+      VLLM_ENDPOINT: ${VLLM_ENDPOINT}
+      ARANGO_URL: ${ARANGO_URL}
+      TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
     networks:
       - genieai_network
     restart: "no"

@@ -256,8 +256,8 @@ services:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
         OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
         HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
-    image: dataprep-dev:latest
-    container_name: dataprep-arango-dev
+    image: genie-ai-dataprep-arango:${OPEA_VERSION:-latest}
+    container_name: genie-ai-dataprep-arango
     depends_on:
       arango-vector-db:
         condition: service_started
@@ -267,19 +267,18 @@ services:
         condition: service_healthy
       guardrail:
         condition: service_started
-    # --- UPDATED THIS SECTION ---
     ports:
       - "${DATAPREP_PORT}:5000"
     env_file:
       - env-T4
     environment:
       DATAPREP_COMPONENT_NAME: "OPEA_DATAPREP_ARANGODB"
-      VLLM_ENDPOINT: http://vllm:8000
-      TEI_EMBEDDING_ENDPOINT: http://embedding:6000
-      GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
-      E2E_CPU_URL: http://localhost:3000
-      ARANGO_URL: http://arango-vector-db:8529
-      GET_AUTH_TOKEN_URL: http://http-service:6666/get-token
+      VLLM_ENDPOINT: ${VLLM_ENDPOINT}
+      TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
+      GUARDRAIL_URL: ${GUARDRAIL_URL}
+      E2E_CPU_URL: ${E2E_CPU_URL}
+      ARANGO_URL: ${ARANGO_URL}
+      GET_AUTH_TOKEN_URL: ${GET_AUTH_TOKEN_URL}
     deploy:
       resources:
         reservations:
@@ -300,9 +299,9 @@ services:
       dockerfile: ./genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
       args:
         OPEA_VERSION: ${OPEA_VERSION:-v1.3}
-        OPEA_REPO_URL: https://github.com/opea-project/GenAIComps.git
-    image: retriever-dev:latest
-    container_name: retriever-arango-dev
+        OPEA_REPO_URL: ${OPEA_GENAI_COMPS_URL}
+    image: genie-ai-retriever-arango:${OPEA_VERSION:-latest}
+    container_name: genie-ai-retriever-arango
     depends_on:
       arango-vector-db:
         condition: service_started
@@ -312,12 +311,12 @@ services:
       - "7025:7025"
     ipc: host
     env_file:
-      - env-T4
+      - .env
     environment:
       RETRIEVER_COMPONENT_NAME: "OPEA_RETRIEVER_ARANGODB"
-      VLLM_ENDPOINT: http://vllm:8000
-      ARANGO_URL: http://arango-vector-db:8529
-      TEI_EMBEDDING_ENDPOINT: http://embedding:6000
+      VLLM_ENDPOINT: ${VLLM_ENDPOINT}
+      ARANGO_URL: ${ARANGO_URL}
+      TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
     networks:
       - genieai_network
     restart: "no"

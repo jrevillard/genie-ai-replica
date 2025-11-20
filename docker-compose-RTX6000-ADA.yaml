@@ -427,8 +427,10 @@ services:
       --served-model-name ${VLLM_LLM_MODEL_ID}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-4096}
       --max_num_seqs 1024
-      --dtype=${VLLM_DTYPE:-half}
+      --kv-cache-dtype auto
+      --dtype=${VLLM_DTYPE:-auto}
     environment:
+      - VLLM_USE_V1=0
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
       - VLLM_USE_FLASHINFER_SAMPLER=0
@@ -478,10 +480,11 @@ services:
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.3}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp16}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-bfloat16}
+      --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-auto}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
       --port 9031
     environment:
+      - VLLM_USE_V1=0
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     depends_on:
       vllm:

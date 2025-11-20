@@ -175,7 +175,7 @@ RETRIEVER_OPENAI_EMBED_MODEL=text-embedding-3-small
 ARANGO_FILTER_STRATEGY=OR
 
 # ========= VLLM SERVICE =========
-XVLLM_ENDPOINT=http://vllm:8000
+VLLM_ENDPOINT=http://vllm:8000
 
 # ========= VLLM INFERENCE CONFIG =========
 # The model used for main chat/generation (Service: vllm)

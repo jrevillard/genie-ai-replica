@@ -502,6 +502,19 @@ services:
       retries: 20
       start_period: 30s
 
+  translation:
+    image: opea/translation:latest
+    container_name: translation-microservice
+    environment:
+      - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}  
+      - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
+    ports:
+      - "9030:9090"
+    ipc: "host"
+    networks:
+      - genieai_network
+    restart: "no"
+
   guardrail:
     container_name: llm-guardrail
     image: opea/guardrails:latest
@@ -509,7 +522,7 @@ services:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
-      - GUARDRAILS_COMPONENT_NAME=OPEA_GEMMA_GUARD
+      - GUARDRAILS_COMPONENT_NAME=OPEA_LLM_GUARD
     ports:
       - "9090:9090"
     ipc: "host"

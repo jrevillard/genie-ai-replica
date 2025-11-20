@@ -530,7 +530,9 @@ services:
     # image: ghcr.io/huggingface/text-embeddings-inference:latest
     image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
+    # ROMAN: updated code (for review)
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --dtype float16 --max-batch-tokens 1024 --max-concurrent-requests 8
+    # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
     runtime: nvidia
     ports:
       - "7000:80"
@@ -569,7 +571,9 @@ services:
     environment:
       - EMBEDDING_MODEL_ENDPOINT=http://tei:80
       - TEI_EMBEDDING_ENDPOINT=http://tei:80
-      - EMBEDDING_MODEL_ID=bge-base-en-v1.5
+      # ROMAN: updated code (for review)
+      - EMBEDDING_MODEL_ID=bge-m3
+      # - EMBEDDING_MODEL_ID=bge-base-en-v1.5
     ports:
       - "6000:6000"
     ipc: "host"
@@ -582,7 +586,9 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:turing-1.8
     container_name: tei-reranker-serving
       # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID}"
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64 --auto-truncate"
+    # ROMAN: updated code (for review)
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 1024 --max-concurrent-requests 8 --auto-truncate"
+    # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64 --auto-truncate"
     runtime: nvidia
     ports:
       - "7100:80"
@@ -601,6 +607,9 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
     depends_on:
       vllm-translation-guardrail:
+        condition: service_healthy
+      # ROMAN: new code (for review)
+      tei:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]

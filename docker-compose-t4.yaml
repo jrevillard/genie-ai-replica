@@ -459,7 +459,7 @@ services:
       vllm:
         condition: service_healthy
     environment:
-      - LLM_ENDPOINT=http://vllm:8000
+      - LLM_ENDPOINT=${VLLM_ENDPOINT}
       - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID}
     ports:
       - "9000:9000"
@@ -513,7 +513,7 @@ services:
     # Corrected: Pulling the pre-built, versioned image
     image: opea/guardrails:latest
     environment:
-      - LLM_ENDPOINT=http://vllm-translation-guardrail:9031
+      - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - GUARDRAILS_COMPONENT_NAME=OPEA_GEMMA_GUARD
@@ -545,8 +545,8 @@ services:
               capabilities: [gpu]
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=1
-      - NVIDIA_VISIBLE_DEVICES=all
+      - RUST_BACKTRACE=${RUST_BACKTRACE}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
     depends_on:
       vllm-translation-guardrail:
         condition: service_healthy
@@ -567,11 +567,9 @@ services:
       tei:
         condition: service_healthy
     environment:
-      - EMBEDDING_MODEL_ENDPOINT=http://tei:80
-      - TEI_EMBEDDING_ENDPOINT=http://tei:80
-      # ROMAN: updated code (for review)
-      - EMBEDDING_MODEL_ID=bge-m3
-      # - EMBEDDING_MODEL_ID=bge-base-en-v1.5
+      - EMBEDDING_MODEL_ENDPOINT=${EMBEDDING_MODEL_ENDPOINT}
+      - TEI_EMBEDDING_ENDPOINT=${TEI_EMBEDDING_ENDPOINT}
+      - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID}
     ports:
       - "6000:6000"
     ipc: "host"
@@ -601,8 +599,8 @@ services:
               capabilities: [gpu]
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=1
-      - NVIDIA_VISIBLE_DEVICES=all
+      - RUST_BACKTRACE=1${RUST_BACKTRACE}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
     depends_on:
       vllm-translation-guardrail:
         condition: service_healthy
@@ -627,8 +625,8 @@ services:
     env_file:
       - env-T4
     environment:
-      - RERANKER_MODEL_ENDPOINT=http://tei_reranker:80
-      - TEI_RERANKING_ENDPOINT=http://tei_reranker:80
+      - RERANKER_MODEL_ENDPOINT=${RERANKER_MODEL_ENDPOINT}
+      - TEI_RERANKING_ENDPOINT=${TEI_RERANKING_ENDPOINT}
     ports:
       - "6100:8000"
     ipc: "host"

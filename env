@@ -175,7 +175,7 @@ RETRIEVER_OPENAI_EMBED_MODEL=text-embedding-3-small
 ARANGO_FILTER_STRATEGY=OR
 
 # ========= VLLM SERVICE =========
-VLLM_ENDPOINT=http://vllm:8000
+XVLLM_ENDPOINT=http://vllm:8000
 
 # ========= VLLM INFERENCE CONFIG =========
 # The model used for main chat/generation (Service: vllm)
@@ -189,6 +189,7 @@ VLLM_DTYPE=half
 TEXTGEN_PORT=9000
 
 # ========= VLLM TRANSLATION/GUARDRAIL CONFIG =========
+VLLM_TRANSLATION_SERVICE_PORT=9031
 # The model used for guardrails and translation (Service: vllm-translation-guardrail)
 # Defaults to the gemma model 
 VLLM_TRANSLATION_MODEL_ID=google/gemma-3-1b-it

@@ -480,7 +480,7 @@ services:
               count: 1
               capabilities: [gpu]
     ports:
-      - "${TRANSLATION_SERVICE_PORT}:${TRANSLATION_SERVICE_PORT}"
+      - "${VLLM_TRANSLATION_SERVICE_PORT}:${VLLM_TRANSLATION_SERVICE_PORT}"
     command: >
       --model ${VLLM_TRANSLATION_MODEL_ID}
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.5}
@@ -488,7 +488,7 @@ services:
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
       --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp8}
       --dtype=${VLLM_TRANSLATION_DTYPE:-half}
-      --port ${TRANSLATION_SERVICE_PORT}
+      --port ${VLLM_TRANSLATION_SERVICE_PORT}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     depends_on:

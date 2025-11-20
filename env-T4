@@ -136,7 +136,7 @@ GUARDRAIL_SERVICE_HOST_IP=guardrail
 GUARDRAIL_SERVICE_PORT=9090
 # ---- Translation service
 TRANSLATION_SERVICE_HOST_IP=vllm-translation-guardrail
-TRANSLATION_SERVICE_PORT=9031
+TRANSLATION_SERVICE_PORT=9090
 # Document repository service
 DOC_REPO_URL=http://localhost:3001
 
@@ -192,6 +192,7 @@ VLLM_DTYPE=half
 # ========= VLLM TRANSLATION/GUARDRAIL CONFIG (T4 TUNED) =========
 # The model used for guardrails and translation (Service: vllm-translation-guardrail)
 # Defaults to the gemma model
+VLLM_TRANSLATION_SERVICE_PORT=9031
 VLLM_TRANSLATION_MODEL_ID=google/gemma-3-1b-it
 VLLM_TRANSLATION_GPU_UTIL=0.5
 VLLM_TRANSLATION_MAX_MODEL_LEN=8192

@@ -34,7 +34,7 @@ services:
   # Note: after starting this service, execute the following commands:
   #       docker compose exec kong-database psql -U kong postgres
   #       CREATE DATABASE kong;
-  #       ALTER USER kong WITH PASSWORD 'k1ngk0ng';
+  #       ALTER USER kong WITH PASSWORD '${KONG_PG_PASSWORD}';
   #       GRANT ALL PRIVILEGES ON DATABASE kong TO kong;
   kong-database:
     image: postgres:13
@@ -262,7 +262,7 @@ services:
       guardrail:
         condition: service_started
     ports:
-      - "${DATAPREP_PORT}:5000"
+      - "${DATAPREP_PORT}:5000" # Wondering why the container port is 5000
     env_file:
       - .env
     environment:
@@ -302,7 +302,7 @@ services:
       embedding:
         condition: service_started
     ports:
-      - "7025:7025"
+      - "7025:7025" # Lets check why this is 7025 when the RETRIEVER_SERVICE_PORT config is 7000 - there is no port 7025 in any config
     ipc: host
     env_file:
       - .env

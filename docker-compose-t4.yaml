@@ -541,7 +541,7 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
     # ROMAN: updated code (for review)
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --dtype float16 --max-batch-tokens 1024 --max-concurrent-requests 8
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --dtype float16 --max-batch-tokens 1024 --max-concurrent-requests 8"
     # entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --max-batch-tokens 2048 --max-concurrent-requests 64"
     runtime: nvidia
     ports:

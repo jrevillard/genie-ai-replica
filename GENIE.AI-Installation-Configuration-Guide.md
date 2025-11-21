@@ -2,7 +2,7 @@
 
 ### **Introduction**
 
-Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an initial MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labeling and ingesting your curated data prior to modifying any code. This way, you will get used to how the framework operates, before you delve into deeper issues and extensions. This approach can also be used to deliver a rapid solution to a RAG problem, without any coding at all (just implementing a knowledge base design and the associated configuration). The application title and theme can also be modified by configuration in JSON without changing code. The suggested approach for this is to utilize something like ChatGOT, Gemini Pro or Grok etc. to build a new configuration for color theme and title etc. This can be done in minutes.
+Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an initial MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labeling and ingesting your curated data prior to modifying any code. This way, you will get used to how the framework operates, before you delve into deeper issues and extensions. This approach can also be used to deliver a rapid solution to a RAG problem, without any coding at all (just implementing a knowledge base design and the associated configuration). The application title and theme can also be modified by configuration in JSON without changing code. The suggested approach for this is to utilize something like ChatGPT, Gemini Pro or Grok etc. to build a new configuration for color theme and title etc. This can be done in minutes.
 
 For a high-level understanding of the system architecture before beginning any work, please refer to the [**Architecture Overview**](https://osaips.atlassian.net/wiki/external/N2U5ZjkwM2FhOTgyNDZlZjk3MWRlODY5Mzk5OTBhNjE). This will give you an insight into most of the high level components and how they are assembled.
 
@@ -572,6 +572,71 @@ Nginx acts as the reverse proxy and SSL termination point.
 \* For \*\*Single-Node\*\*, use: default.conf-single-node (rename to default.conf if necessary for volume mapping, or adjust mapping).  
 \* For \*\*Three-Node\*\*, use: default.conf.  
 3\. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
+
+#### 4.4 Domain & Security Configuration (CSP & CORS)
+
+When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a public IP address other than localhost, you must configure the **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** settings. Failure to do this will result in the browser blocking the application from connecting to the backend API or WebSocket services.
+
+This configuration involves updates in two locations: the central .env file and the Nginx configuration file.
+
+##### 1\. Update Environment Variables (.env)
+
+The frontend and backend services rely on specific environment variables to construct their security headers. Locate the following variables in your root .env file and update them to include your target domain/IP.
+
+**Critical Formatting Note:** When defining CSP sources that contain single quotes (like 'self'), you **must** wrap the entire value in double quotes. Failure to do so may cause the backend configuration to strip the quotes, resulting in browser errors.
+
+**Example Configuration for genie.agency.gov:**
+
+Bash
+
+\# \========= FRONTEND SERVICE CONFIG \=========
+
+\# 1\. VUE\_APP\_CSP\_CONNECT\_SRC: Used by the Vue build process.  
+\# Ensure you include both http/https for API and ws/wss for WebSockets.  
+VUE\_APP\_CSP\_CONNECT\_SRC="'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int"
+
+\# 2\. CSP\_CONNECT\_SRC: Used by the Node.js Backend (Helmet Middleware).  
+\# Must match the frontend allowed sources.  
+CSP\_CONNECT\_SRC="'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int"
+
+\# 3\. CORS\_ALLOWED\_ORIGINS: A comma-separated list of origins allowed to access the backend.  
+CORS\_ALLOWED\_ORIGINS=https://genie.agency.gov,https://genie-ai.itu.int
+
+**Checklist for Variables:**
+
+* **Protocols:** Ensure you list wss:// (Secure WebSockets) if you are using https://. If you are testing on http://, use ws://.  
+* **Ports:** If your application runs on a non-standard port (e.g., :8443), that port must be appended to the domain in the CSP (e.g., https://genie.agency.gov:8443).  
+* **Quoting:** Verify that 'self' is enclosed in single quotes, and the whole string is enclosed in double quotes.
+
+##### 2\. Update Nginx Configuration
+
+The Nginx reverse proxy also serves a Content-Security-Policy header which acts as the final gatekeeper. You must ensure the default.conf file matches your environment variables.
+
+1. Open your active Nginx configuration file (e.g., api-gateway-solution/nginx/default.conf or default.conf-single-node).  
+2. Locate the add\_header Content-Security-Policy directive.  
+3. Append your new domain to the connect-src section.
+
+**Example Nginx Update:**
+
+Nginx
+
+\# Ensure this is on a SINGLE line to avoid syntax errors  
+add\_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int;" always;
+
+##### 3\. Rebuild the Frontend
+
+**Crucial Step:** The Vue.js frontend "bakes" the VUE\_APP\_ environment variables into the static HTML/JS files at **build time**. Simply restarting the container is not enough.
+
+If you change the CSP or Domain settings, you must force a rebuild of the frontend container:
+
+Bash
+
+\# For Single Node  
+docker compose down  
+docker compose \-f docker-compose.yaml up –build \-d –force-recreate
+
+\# For Standard/Three-Node  
+TBD
 
 ---
 

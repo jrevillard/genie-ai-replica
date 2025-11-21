@@ -514,7 +514,7 @@ services:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT}  
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
     ports:
-      - "9030:9090"
+      - "${TRANSLATION_SERVICE_PORT}:${TRANSLATION_SERVICE_PORT}"
     ipc: "host"
     networks:
       - genieai_network

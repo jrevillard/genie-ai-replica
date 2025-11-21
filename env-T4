@@ -189,6 +189,9 @@ VLLM_GPU_UTIL=0.5
 VLLM_MAX_MODEL_LEN=8192
 VLLM_DTYPE=half
 
+# ========= TEXTGEN SERVICE =========
+TEXTGEN_PORT=9000
+
 # ========= VLLM TRANSLATION/GUARDRAIL CONFIG (T4 TUNED) =========
 # The model used for guardrails and translation (Service: vllm-translation-guardrail)
 # Defaults to the gemma model

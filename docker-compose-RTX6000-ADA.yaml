@@ -302,7 +302,7 @@ services:
       embedding:
         condition: service_started
     ports:
-      - "7025:7025" # Lets check why this is 7025 when the RETRIEVER_SERVICE_PORT config is 7000 - there is no port 7025 in any config
+      - "${RETRIEVER_SERVICE_PORT}:${RETRIEVER_SERVICE_PORT}"
     ipc: host
     env_file:
       - .env
@@ -523,7 +523,7 @@ services:
       - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - GUARDRAILS_COMPONENT_NAME=OPEA_LLM_GUARD
     ports:
-      - "9090:9090"
+      - "${GUARDRAIL_SERVICE_PORT}:${GUARDRAIL_SERVICE_PORT}"
     ipc: "host"
     networks:
       - genieai_network

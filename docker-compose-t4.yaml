@@ -530,7 +530,7 @@ services:
       - SAFETY_GUARD_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID}
       - GUARDRAILS_COMPONENT_NAME=OPEA_GEMMA_GUARD
     ports:
-      - "9090:9090"
+      - "${GUARDRAIL_SERVICE_PORT}:${GUARDRAIL_SERVICE_PORT}"
     ipc: "host"
     networks:
       - genieai_network

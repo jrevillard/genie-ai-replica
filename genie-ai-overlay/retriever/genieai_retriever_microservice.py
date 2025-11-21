@@ -22,6 +22,9 @@ from integrations.genieai_retriever_arangodb import OpeaArangoRetriever
 # from integrations.redis import OpeaRedisRetriever
 # from integrations.vdms import OpeaVDMsRetriever
 
+RETRIEVER_SERVICE_HOST_IP = os.getenv("RETRIEVER_SERVICE_HOST_IP", "0.0.0.0")
+RETRIEVER_SERVICE_PORT = int(os.getenv("RETRIEVER_SERVICE_PORT", 7000))
+
 from comps import (
     CustomLogger,
     EmbedDoc,
@@ -60,8 +63,8 @@ loader = OpeaComponentLoader(
     name="opea_service@retrievers",
     service_type=ServiceType.RETRIEVER,
     endpoint="/v1/retrieval",
-    host="0.0.0.0",
-    port=7000,
+    host=RETRIEVER_SERVICE_HOST_IP,
+    port=RETRIEVER_SERVICE_PORT,
 )
 @register_statistics(names=["opea_service@retrievers"])
 async def retrieve_docs(

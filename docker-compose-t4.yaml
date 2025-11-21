@@ -308,7 +308,7 @@ services:
       embedding:
         condition: service_started
     ports:
-      - "7025:7025"
+      - "${RETRIEVER_SERVICE_PORT}:${RETRIEVER_SERVICE_PORT}"
     ipc: host
     env_file:
       - .env

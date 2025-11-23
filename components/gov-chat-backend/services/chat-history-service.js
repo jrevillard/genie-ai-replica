@@ -147,11 +147,6 @@ class ChatHistoryService {
    * @param {Object} messageData - Message data
    * @returns {Promise<Object>} The created message
    */
-  /**
- * Add a message to a conversation
- * @param {Object} messageData - Message data
- * @returns {Promise<Object>} The created message
- */
   async addMessage(messageData) {
     try {
       logger.info(`Adding message to conversation ${messageData.conversationId}`);
@@ -162,17 +157,17 @@ class ChatHistoryService {
         throw new Error('conversationId, content, and sender are required');
       }
 
-      // Get conversation to check if it exists and to update stats
-      const conversation = await this.conversations.document(messageData.conversationId);
+      // OPTIMIZATION: Removed initial conversation document read.
+      // We don't need to fetch the whole doc just to increment a counter.
 
       // Get the latest sequence number for this conversation
       const sequenceCursor = await this.db.query(aql`
-      FOR msg IN messages
-        FILTER msg.conversationId == ${messageData.conversationId}
-        SORT msg.sequence DESC
-        LIMIT 1
-        RETURN msg.sequence
-    `);
+        FOR msg IN messages
+          FILTER msg.conversationId == ${messageData.conversationId}
+          SORT msg.sequence DESC
+          LIMIT 1
+          RETURN msg.sequence
+      `);
 
       const latestSequence = await sequenceCursor.next() || 0;
       const newSequence = latestSequence + 1;
@@ -188,11 +183,11 @@ class ChatHistoryService {
         metadata: messageData.metadata || {}
       };
 
-      // Create message
+      // Create message (Critical Wait)
       const message = await this.messages.save(messageDoc);
       logger.info(`Message created with key: ${message._key}`);
 
-      // Link to originating query if provided
+      // Link to originating query if provided (Critical Wait)
       if (messageData.queryId) {
         const edgeDoc = {
           _from: `queries/${messageData.queryId}`,
@@ -219,15 +214,27 @@ class ChatHistoryService {
         }
       }
 
-      // Update conversation stats
-      await this.conversations.update(messageData.conversationId, {
-        messageCount: conversation.messageCount + 1,
-        lastMessage: messageData.content.length > 100
-          ? `${messageData.content.substring(0, 97)}...`
-          : messageData.content,
-        updated: new Date().toISOString()
-      });
-      logger.info(`Conversation ${messageData.conversationId} stats updated`);
+      // OPTIMIZATION: Update conversation stats using Atomic AQL + Fire-and-Forget
+      // Safe JSON stringify for the snippet to prevent AQL injection/errors
+      const snippet = messageData.content.length > 100
+        ? `${messageData.content.substring(0, 97)}...`
+        : messageData.content;
+      const safeSnippet = JSON.stringify(snippet);
+
+      const updateStatsQuery = `
+        FOR doc IN conversations
+          FILTER doc._key == "${messageData.conversationId}"
+          UPDATE doc WITH { 
+            messageCount: doc.messageCount + 1,
+            lastMessage: ${safeSnippet},
+            updated: "${new Date().toISOString()}"
+          } IN conversations
+      `;
+
+      // We do not await this. Errors are logged but do not block the response.
+      this.db.query(updateStatsQuery)
+        .then(() => logger.info(`Conversation ${messageData.conversationId} stats updated (background)`))
+        .catch(err => logger.warn(`Background stats update failed for ${messageData.conversationId}: ${err.message}`));
 
       return { ...message, ...messageDoc };
     } catch (error) {
@@ -237,65 +244,66 @@ class ChatHistoryService {
   }
 
   /**
- * Get a conversation by ID
- * @param {String} conversationId - Conversation ID
- * @returns {Promise<Object>} Conversation details with messages
- */
+   * Get a conversation by ID
+   * @param {String} conversationId - Conversation ID
+   * @returns {Promise<Object>} Conversation details with messages
+   */
   async getConversation(conversationId) {
     try {
       logger.info(`Getting conversation with ID: ${conversationId}`);
 
-      // Get conversation
+      // Get conversation main document first to ensure 404 if missing
       const conversation = await this.conversations.document(conversationId);
 
-      // Get messages for this conversation with queryId from queryMessages
-      const messagesCursor = await this.db.query(aql`
-      FOR msg IN messages
-        FILTER msg.conversationId == ${conversationId}
-        SORT msg.sequence ASC
-        LET queryLink = (
-          FOR edge IN queryMessages
-            FILTER edge._to == CONCAT('messages/', msg._key)
-            FOR q IN queries
-              FILTER q._id == edge._from
-              RETURN q._key
-        )[0]
-        RETURN MERGE(msg, { queryId: queryLink })
-    `);
-      const messages = await messagesCursor.all();
+      // OPTIMIZATION: Run independent queries in PARALLEL
+      const [messages, categories, owners] = await Promise.all([
+        // 1. Get Messages
+        this.db.query(aql`
+          FOR msg IN messages
+            FILTER msg.conversationId == ${conversationId}
+            SORT msg.sequence ASC
+            LET queryLink = (
+              FOR edge IN queryMessages
+                FILTER edge._to == CONCAT('messages/', msg._key)
+                FOR q IN queries
+                  FILTER q._id == edge._from
+                  RETURN q._key
+            )[0]
+            RETURN MERGE(msg, { queryId: queryLink })
+        `).then(cursor => cursor.all()),
+
+        // 2. Get Categories
+        this.db.query(aql`
+          FOR edge IN conversationCategories
+            FILTER edge._from == ${'conversations/' + conversationId}
+            FOR cat IN serviceCategories
+              FILTER cat._id == edge._to
+              RETURN {
+                _id: cat._id,
+                _key: cat._key,
+                nameEN: cat.nameEN,
+                nameFR: cat.nameFR,
+                nameSW: cat.nameSW,
+                relevanceScore: edge.relevanceScore
+              }
+        `).then(cursor => cursor.all()),
+
+        // 3. Get Owners
+        this.db.query(aql`
+          FOR edge IN userConversations
+            FILTER edge._to == ${'conversations/' + conversationId}
+            FOR user IN users
+              FILTER user._id == edge._from
+              RETURN {
+                _id: user._id,
+                _key: user._key,
+                role: edge.role,
+                lastViewedAt: edge.lastViewedAt
+              }
+        `).then(cursor => cursor.all())
+      ]);
+
       logger.info(`Found ${messages.length} messages for conversation ${conversationId}`);
-
-      // Get category details
-      const categoryCursor = await this.db.query(aql`
-      FOR edge IN conversationCategories
-        FILTER edge._from == ${'conversations/' + conversationId}
-        FOR cat IN serviceCategories
-          FILTER cat._id == edge._to
-          RETURN {
-            _id: cat._id,
-            _key: cat._key,
-            nameEN: cat.nameEN,
-            nameFR: cat.nameFR,
-            nameSW: cat.nameSW,
-            relevanceScore: edge.relevanceScore
-          }
-    `);
-      const categories = await categoryCursor.all();
-
-      // Get owner details
-      const ownerCursor = await this.db.query(aql`
-      FOR edge IN userConversations
-        FILTER edge._to == ${'conversations/' + conversationId}
-        FOR user IN users
-          FILTER user._id == edge._from
-          RETURN {
-            _id: user._id,
-            _key: user._key,
-            role: edge.role,
-            lastViewedAt: edge.lastViewedAt
-          }
-    `);
-      const owners = await ownerCursor.all();
 
       return {
         ...conversation,
@@ -315,8 +323,6 @@ class ChatHistoryService {
    * @param {Object} options - Query options (limit, offset, filters)
    * @returns {Promise<Object>} Conversations with pagination
    */
-  // Fixed getUserConversations method
-
   async getUserConversations(userId, options = {}) {
     try {
       logger.info(`Getting conversations for user ${userId}`);
@@ -420,11 +426,11 @@ class ChatHistoryService {
   }
 
   /**
- * Update the response time of a query
- * @param {String} queryId - The ID of the query to update
- * @param {Number} responseTime - The response time in milliseconds
- * @returns {Promise<Object>} The updated query document
- */
+   * Update the response time of a query
+   * @param {String} queryId - The ID of the query to update
+   * @param {Number} responseTime - The response time in milliseconds
+   * @returns {Promise<Object>} The updated query document
+   */
   async updateQueryResponseTime(queryId, responseTime) {
     try {
       logger.info(`Updating response time for query ${queryId} to ${responseTime}ms`);
@@ -622,21 +628,24 @@ class ChatHistoryService {
         result = { count: updatedMessages.length, ids: updatedMessages.map(msg => msg._key) };
       }
 
-      // Update the lastViewedAt timestamp in the userConversations edge
+      // OPTIMIZATION: Fire and Forget Timestamp Update
+      // We do not await this. It happens in background to speed up response.
       if (result.count > 0) {
-        const userId = await this.getConversationOwnerId(conversationId);
-        if (userId) {
-          const currentTime = new Date().toISOString();
-
-          const updateViewedQuery = `
-            FOR edge IN userConversations
-              FILTER edge._from == 'users/${userId}' AND edge._to == 'conversations/${conversationId}'
-              UPDATE edge WITH { lastViewedAt: "${currentTime}" } IN userConversations
-          `;
-
-          await this.db.query(updateViewedQuery);
-          logger.info(`Updated lastViewedAt for user ${userId} in conversation ${conversationId}`);
-        }
+        this.getConversationOwnerId(conversationId).then(userId => {
+          if (userId) {
+            const currentTime = new Date().toISOString();
+            const updateViewedQuery = `
+              FOR edge IN userConversations
+                FILTER edge._from == 'users/${userId}' AND edge._to == 'conversations/${conversationId}'
+                UPDATE edge WITH { lastViewedAt: "${currentTime}" } IN userConversations
+            `;
+            return this.db.query(updateViewedQuery);
+          }
+        }).then(() => {
+          logger.info(`Updated lastViewedAt for conversation ${conversationId} (background)`);
+        }).catch(err => {
+          logger.warn(`Background Task Failed: Could not update lastViewedAt for ${conversationId}: ${err.message}`);
+        });
       }
 
       logger.info(`Marked ${result.count} messages as read in conversation ${conversationId}`);
@@ -1251,15 +1260,10 @@ class ChatHistoryService {
   }
 
   /**
- * Create a new folder
- * @param {Object} folderData - Folder data
- * @returns {Promise<Object>} The created folder
- */
-  /**
- * Create a new folder
- * @param {Object} folderData - Folder data
- * @returns {Promise<Object>} The created folder
- */
+   * Create a new folder
+   * @param {Object} folderData - Folder data
+   * @returns {Promise<Object>} The created folder
+   */
   async createFolder(folderData) {
     try {
       logger.info('Creating new folder with data:', folderData);
@@ -1319,47 +1323,45 @@ class ChatHistoryService {
     try {
       logger.info(`Getting folder with ID: ${folderId}`);
 
-      // Get folder
+      // Get folder main document first
       const folder = await this.db.collection('folders').document(folderId);
 
-      // Get conversations for this folder
-      const conversationsCursor = await this.db.query(aql`
-      FOR edge IN folderConversations
-        FILTER edge._from == ${'folders/' + folderId}
-        FOR conv IN conversations
-          FILTER conv._id == edge._to
-          SORT conv.updated DESC
-          RETURN conv
-    `);
+      // OPTIMIZATION: Run independent queries in PARALLEL
+      const [conversations, owners, childFolders] = await Promise.all([
+        // 1. Get conversations
+        this.db.query(aql`
+          FOR edge IN folderConversations
+            FILTER edge._from == ${'folders/' + folderId}
+            FOR conv IN conversations
+              FILTER conv._id == edge._to
+              SORT conv.updated DESC
+              RETURN conv
+        `).then(c => c.all()),
 
-      const conversations = await conversationsCursor.all();
+        // 2. Get owners
+        this.db.query(aql`
+          FOR edge IN userFolders
+            FILTER edge._to == ${'folders/' + folderId}
+            FOR user IN users
+              FILTER user._id == edge._from
+              RETURN {
+                _id: user._id,
+                _key: user._key,
+                role: edge.role,
+                lastAccessedAt: edge.lastAccessedAt
+              }
+        `).then(c => c.all()),
+
+        // 3. Get child folders
+        this.db.query(aql`
+          FOR folder IN folders
+            FILTER folder.parentFolderId == ${folderId}
+            SORT folder.order ASC, folder.created ASC
+            RETURN folder
+        `).then(c => c.all())
+      ]);
+
       logger.info(`Found ${conversations.length} conversations for folder ${folderId}`);
-
-      // Get owner details
-      const ownerCursor = await this.db.query(aql`
-      FOR edge IN userFolders
-        FILTER edge._to == ${'folders/' + folderId}
-        FOR user IN users
-          FILTER user._id == edge._from
-          RETURN {
-            _id: user._id,
-            _key: user._key,
-            role: edge.role,
-            lastAccessedAt: edge.lastAccessedAt
-          }
-    `);
-
-      const owners = await ownerCursor.all();
-
-      // Get child folders
-      const childFoldersCursor = await this.db.query(aql`
-      FOR folder IN folders
-        FILTER folder.parentFolderId == ${folderId}
-        SORT folder.order ASC, folder.created ASC
-        RETURN folder
-    `);
-
-      const childFolders = await childFoldersCursor.all();
 
       return {
         ...folder,

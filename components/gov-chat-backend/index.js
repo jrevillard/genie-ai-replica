@@ -1,4 +1,5 @@
 require('dotenv').config();
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Increased from default 4 to support high concurrency
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');

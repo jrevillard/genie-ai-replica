@@ -42,10 +42,14 @@ class DatabaseService {
             const databaseName = process.env.ARCADE_DB || 'node-services';
             const username = process.env.ARCADE_USER || 'root';
             const password = process.env.ARCADE_PASSWORD || 'test';
+            const maxSockets = process.env.MAX_SOCKETS || 100;
+            const maxFreeSockets = process.env.MAX_FREE_SOCKETS || 50;
 
             logger.info(`ARCADE_URL: ${url}`);
             logger.info(`ARCADE_DB: ${databaseName}`);
             logger.info(`ARCADE_USERNAME: ${username}`);
+            logger.info(`MAX_SOCKETS: ${maxSockets}`);
+            logger.info(`MAX_FREE_SOCKETS: ${maxFreeSockets}`);
 
             this._arcadeBaseUrl = url;
             this._arcadeDbName = databaseName;
@@ -55,8 +59,8 @@ class DatabaseService {
             const agentOptions = {
                 keepAlive: true,
                 keepAliveMsecs: 60000,
-                maxSockets: 20,
-                maxFreeSockets: 10,
+                maxSockets: maxSockets,
+                maxFreeSockets: maxFreeSockets,
                 timeout: 120000,
                 freeSocketTimeout: 1800000
             };
@@ -68,6 +72,8 @@ class DatabaseService {
             const databaseName = process.env.ARANGO_DB || 'node-services';
             const username = process.env.ARANGO_USER || 'root';
             const password = process.env.ARANGO_PASSWORD || 'test';
+            const maxSockets = process.env.MAX_SOCKETS || 100;
+            const maxFreeSockets = process.env.MAX_FREE_SOCKETS || 50;
 
             logger.info(`process.env.ARANGO_URL:` + process.env.ARANGO_URL);
             logger.info(`process.env.ARANGO_DB:` + process.env.ARANGO_DB);
@@ -76,6 +82,8 @@ class DatabaseService {
             logger.info(`ARANGO_URL: ${url}`);
             logger.info(`ARANGO_DB: ${databaseName}`);
             logger.info(`ARANGO_USERNAME: ${username}`);
+            logger.info(`MAX_SOCKETS: ${maxSockets}`);
+            logger.info(`MAX_FREE_SOCKETS: ${maxFreeSockets}`);
 
             this._defaultConfig = {
                 url,
@@ -84,8 +92,8 @@ class DatabaseService {
                 agentOptions: {
                     keepAlive: true,
                     keepAliveMsecs: 60000,
-                    maxSockets: 20,
-                    maxFreeSockets: 10,
+                    maxSockets: maxSockets,
+                    maxFreeSockets: maxFreeSockets,
                     timeout: 120000,
                     freeSocketTimeout: 1800000
                 },

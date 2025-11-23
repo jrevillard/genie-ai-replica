@@ -230,29 +230,40 @@ repository-root/
 
 Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
 
-#### **Option A: Single-Node Installation (MVP/Dev)**
+#### Option A: Single-Node Installation (MVP/Dev)
 
 This method deploys all services onto a single host using Docker Compose.
 
-1\. Clone the Repository
+##### 1\. Clone the Repository
 
 Clone the appropriate repository to your local machine:
 
-* *Public Replica:* [https://gitlab.com/fordendk/genie-ai-replica](https://gitlab.com/fordendk/genie-ai-replica)  
-* *Internal UNICC GitLab:* (Check with administrator)
+* **Public Replica:** https://gitlab.com/fordendk/genie-ai-replica  
+* **Internal UNICC GitLab:** (Check with administrator)
 
 Bash
 
-git clone [https://gitlab.com/fordendk/genie-ai-replica](https://gitlab.com/fordendk/genie-ai-replica)  
+git clone https://gitlab.com/fordendk/genie-ai-replica  
 cd genie-ai-replica
 
-#### 2\. Environment Configuration (.env)
+##### 2\. Environment Configuration (.env)
 
 The docker-compose.yaml file sources its configuration from an .env file located in the root of the repository (named env in the repo). You must create this file (e.g., by copying the existing env example to .env) and populate it with your specific settings.
 
-The following tables document the key variables found in the .env file1, grouped by the service they configure.
+The following tables document all variables found in the .env file, grouped by the service they configure.
 
-**Kong (API Gateway) & Database**
+**General & Proxy Settings**  
+These settings control global logging and proxy configurations for environments behind corporate firewalls.
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| LOGFLAG | Global flag to enable/disable detailed logging. | true |
+| no\_proxy | Comma-separated list of hosts to bypass the proxy. | noproxy |
+| http\_proxy | HTTP proxy URL (leave blank if not used). | http://proxy.example.com:8080 |
+| https\_proxy | HTTPS proxy URL (leave blank if not used). | http://proxy.example.com:8080 |
+
+**Kong (API Gateway) & Database**  
+Configuration for the Kong API Gateway and its backing PostgreSQL database.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
@@ -261,94 +272,238 @@ The following tables document the key variables found in the .env file1, grouped
 | POSTGRES\_PASSWORD | Password for the Kong database. | k1ngk0ng |
 | KONG\_DATABASE | Tells Kong which database type to use. | postgres |
 | KONG\_PG\_HOST | Hostname for the Kong database service. | kong-database |
-| KONG\_ADMIN\_LISTEN | Kong admin API listen address. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
-| KONG\_DNS\_RESOLVER | DNS resolver for Kong (e.g., Docker's internal). | 127.0.0.11 |
+| KONG\_PG\_USER | Kong service user (usually matches POSTGRES\_USER). | kong |
+| KONG\_PG\_PASSWORD | Kong service password. | k1ngk0ng |
+| KONG\_PROXY\_ACCESS\_LOG | Path for proxy access logs. | /dev/stdout |
+| KONG\_ADMIN\_ACCESS\_LOG | Path for admin access logs. | /dev/stdout |
+| KONG\_PROXY\_ERROR\_LOG | Path for proxy error logs. | /dev/stderr |
+| KONG\_ADMIN\_ERROR\_LOG | Path for admin error logs. | /dev/stderr |
+| KONG\_ADMIN\_LISTEN | Kong admin API listen address and ports. | 0.0.0.0:8001, 0.0.0.0:8444 ssl |
+| KONG\_DNS\_RESOLVER | DNS resolver for Kong (Docker internal DNS). | 127.0.0.11 |
+| KONG\_DNS\_ORDER | Order of DNS resolution types. | LAST,A,AAAA,CNAME |
 
-**Frontend & Backend (Shared)**
+**Frontend Service (Vue.js)**  
+Configuration for the user-facing web application.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| FRONTEND\_PORT | The port that the frontend Vue 3 app will run on. | 8090 |
-| VUE\_APP\_API\_URL | Path for the frontend to reach the backend API. | https://\<your-reverse-proxy\>/api |
+| APP\_NAME | The display name of the application. | Genie AI |
+| FRONTEND\_PORT | The port the Vue 3 app runs on locally. | 8090 |
+| VUE\_APP\_API\_URL | Public URL for the frontend to reach the backend API. | https://\<your-proxy\>/api |
 | VUE\_PROXY\_HOST | Target for the Vue development proxy. | kong:8010 |
-| CSP\_CONNECT\_SRC | Content Security Policy connect-src directive. | 'self' http://localhost... |
-| CORS\_ALLOWED\_ORIGINS | Allowed origins for CORS. | http://localhost,https://genie-ai... |
+| VUE\_APP\_CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Vue build). | 'self' https://genie-ai.itu.int |
+| CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Backend Helmet config). | 'self' wss://localhost:8090 |
+| CORS\_ALLOWED\_ORIGINS | Comma-separated list of allowed CORS origins. | http://localhost,https://genie.ai |
 
-**Backend Service**
+Backend Service (Node.js Logic)  
+Configuration for core logic, sessions, email, backups, and OPEA integration.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| NODE\_ENV | Sets the application environment. | development or production |
+| NODE\_ENV | Application environment (development/production). | production |
 | BACKEND\_PORT | Internal port the Node.js app listens on. | 3000 |
 | API\_PREFIX | Global prefix for all API routes. | /api |
-| JWT\_SECRET | Secret key for signing JSON Web Tokens. | UJeFROw+yRJeVOPiUTgdcXzl... |
+| UV\_THREADPOOL\_SIZE | Libuv thread pool size for async operations. | 128 |
+| LOG\_LEVEL | Logging verbosity. | debug |
+| JWT\_SECRET | Secret key for signing JSON Web Tokens. | UJeFROw+yRJe... |
 | JWT\_EXPIRES\_IN | Expiration time for JWTs. | 24h |
-| TRANSLATION\_CACHE | Switch on/off translation caching. | on |
-| TRANSLATION\_CACHE\_HOST | Redis host for translation caching. | redis-cache |
-| TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
-| TRANSLATION\_CACHE\_PASSWORD | Password for the Redis cache. | \!@\#$$5678 |
-| EMAIL\_HOST | SMTP server for sending emails. | your-smtp-host |
-| EMAIL\_USER | SMTP username. | your-email-user |
-| EMAIL\_PASSWORD | SMTP password. | your-smtp-password |
-| EMAIL\_FROM | Noreply email address. | noreply@your-domain-name |
+| SESSION\_SECRET | Secret used to sign session cookies. | default-session-secret |
+| SESSION\_EXPIRATION\_TIME | Session lifetime in milliseconds. | 1800000 |
+| CORS\_ORIGIN | Primary CORS origin for the backend integration. | http://localhost/ |
+| OPENWEATHERMAP\_API\_KEY | API Key for weather widget integration. | b115ccced... |
+| EMAIL\_HOST | SMTP server host. | \<your-smtp-host\> |
+| EMAIL\_PORT | SMTP server port. | \<your-smtp-port\> |
+| EMAIL\_SECURE | Use secure connection (TLS/SSL). | false |
+| EMAIL\_USER | SMTP username. | \<your-email-user\> |
+| EMAIL\_PASSWORD | SMTP password. | \<your-smtp-password\> |
+| EMAIL\_FROM | Noreply email address. | noreply@\<your-domain\> |
+| FRONTEND\_URL | Base URL of the frontend (for email links). | https://localhost/ |
+| BACKUP\_DIR | Directory to store database backups. | ./database\_backups |
+| MAX\_BACKUPS | Number of backups to retain. | 5 |
+| BACKUP\_FORMAT | Format for backups (e.g., json, dump). | json |
+| COMPRESS\_BACKUPS | Enable gzip compression for backups. | true |
 | OPEA\_HOST | Hostname for the OPEA backend service. | chatqna-xeon-backend-server |
+| OPEA\_PORT | Port for the OPEA backend service. | 8888 |
+| CONTEXT\_OPTION | Strategy for handling conversation context. | conversation-with-context-labels |
 
-**ArangoDB (Knowledge Base)**
+**Translation & Caching**  
+Configuration for the translation engine and Redis caching.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| ARANGO\_PASSWORD | Root password for ArangoDB. | test |
-| ARANGO\_DB\_NAME | Database name used by the backend. | genie-backend |
-| ARANGO\_DB | Database name used by the frontend. | genie-frontend |
-| ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
-| ARANGO\_USER | Username for ArangoDB. | root |
+| TRANSLATION\_THREADS | Number of concurrent translation threads. | 4 |
+| TRANSLATION\_BATCHES | Batch size for translation processing. | 5 |
+| TRANSLATION\_CACHE | Enable or disable translation caching. | on |
+| TRANSLATION\_CACHE\_PATH | File path for cache (if file-based). | /cache/translations |
+| TRANSLATION\_CACHE\_HOST | Redis host for translation caching. | redis-cache |
+| TRANSLATION\_CACHE\_PORT | Redis port. | 6379 |
+| TRANSLATION\_CACHE\_PASSWORD | Password for the Redis cache. | \!@\#$5678 |
 
-**Document Repository Service**
+**ArangoDB (Knowledge Base)**  
+Connection settings for the graph and vector database.
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| ARANGO\_URL | Connection URL for ArangoDB. | http://arango-vector-db:8529 |
+| ARANGO\_PORT | Port ArangoDB is listening on. | 8529 |
+| ARANGO\_DB\_NAME | Database name used by the backend. | genie-ai |
+| ARANGO\_DB | Database name used by the frontend/utility scripts. | genie-ai |
+| ARANGO\_USER | Database username. | root |
+| ARANGO\_USERNAME | Database username (alias). | root |
+| ARANGO\_PASSWORD | Root password for ArangoDB. | test |
+| MAX\_SOCKETS | Maximum concurrent socket connections. | 100 |
+| MAX\_FREE\_SOCKETS | Maximum free sockets to keep open. | 50 |
+
+**Document Repository & Virus Scanning**  
+Configuration for file ingestion, storage, and security scanning.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | DOC\_REPO\_PORT | Internal port for the document service. | 3001 |
-| DATAPREP\_HOST | Hostname for the Dataprep service. | http://localhost |
-| DATAPREP\_PORT | Port for the Dataprep service. | 6007 |
-| MAX\_FILE\_SIZE | Maximum file upload size in bytes (e.g., 50MB). | 52428800 |
-| VIRUS\_SCANNING | Enable/disable ClamAV virus scanning. | true |
+| DOC\_REPO\_URL | URL for the backend to access the doc repo. | http://localhost:3001 |
+| UPLOAD\_DIR | Local directory path for file uploads. | ./uploads |
+| MAX\_FILES\_UPLOAD | Max number of files allowed per upload. | 10 |
+| MAX\_FILE\_SIZE | Maximum file upload size in bytes (approx 50MB). | 52428800 |
+| DOCUMENT\_INGESTION\_LANGUAGE | Language code for document ingestion. | en |
+| BCRYPT\_ROUNDS | Cost factor for hashing. | 10 |
+| LOG\_FILE | Application log file name. | app.log |
+| VIRUS\_SCANNING | Enable/Disable ClamAV scanning on upload. | true |
+| CLAMSCAN\_ACTIVE | Master switch for ClamAV integration. | true |
 | CLAMSCAN\_HOST | Hostname for the ClamAV service. | 127.0.0.1 |
 | CLAMSCAN\_PORT | Port for the ClamAV service. | 3310 |
+| CLAMSCAN\_TIMEOUT | Timeout for virus scanning (ms). | 60000 |
+| CLAMSCAN\_REMOVE\_INFECTED | Automatically delete infected files. | false |
+| CLAMSCAN\_QUARANTINE\_INFECTED | Quarantine infected files instead of deleting. | false |
+| CLAMSCAN\_DEBUG\_MODE | Enable debug logging for scanner. | false |
+| CLAMSCAN\_SOCKET | Use socket connection (vs TCP). | false |
+| CLAMSCAN\_LOCAL\_FALLBACK | Fallback to local binary if daemon fails. | true |
+| CLAMSCAN\_PATH | Path to local ClamAV binary. | /usr/bin/clamdscan |
 
-**Dataprep & Retriever Services**
+**Authentication Service**  
+Dedicated service for managing user authorization tokens.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| DATAPREP\_CHUNK\_SIZE | Size of document chunks for ingestion. | 500 |
-| DATAPREP\_CHUNK\_OVERLAP | Overlap between document chunks. | 50 |
-| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for Dataprep to write to. | graph\_el\_salvador |
-| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for Retriever to read from. | graph\_el\_salvador |
+| AUTH\_SERVICE\_URL | Base URL for the auth service. | https://localhost/ |
+| AUTH\_SERVICE\_PORT | Port for the auth service. | 6666 |
+| GET\_AUTH\_TOKEN\_URL | Internal URL to retrieve auth tokens. | http://http-service:6666/get-token |
+| AUTH\_SERVICE\_USERNAME | Service account username for token generation. | genie-ai-manager |
+| AUTH\_SERVICE\_PASSWORD | Service account password for token generation. | 1357924680+Manager |
+
+**OPEA & ChatQnA Service Orchestration**  
+These variables define the internal wiring and ports for the AI microservices.
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| NGINX\_PORT | Port for the ChatQnA Nginx router. | 80 |
+| FRONTEND\_SERVICE\_IP | Hostname for the ChatQnA UI Server. | chatqna-xeon-ui-server |
+| FRONTEND\_SERVICE\_PORT | Port for the ChatQnA UI Server. | 5173 |
+| BACKEND\_SERVICE\_NAME | Name of the ChatQnA backend service. | chatqna |
+| BACKEND\_SERVICE\_IP | Hostname/IP of the ChatQnA backend. | chatqna-xeon-backend-server |
+| BACKEND\_SERVICE\_PORT | Port of the ChatQnA backend. | 8888 |
+| DATAPREP\_SERVICE\_IP | Hostname for the Dataprep service. | dataprep-arango-service |
+| DATAPREP\_SERVICE\_PORT | Port for the Dataprep service. | 5000 |
+| MEGA\_SERVICE\_HOST\_IP | Hostname of the Mega Service Orchestrator. | chatqna-xeon-backend-server |
+| CHATQNA\_TYPE | Type of ChatQnA deployment. | CHATQNA\_MACDAVID |
+| OPEA\_EXAMPLES\_URL | URL for OPEA Examples Git repo. | https://github.com/... |
+| OPEA\_GENAI\_COMPS\_URL | URL for OPEA GenAI Comps Git repo. | https://github.com/... |
+| EMBEDDING\_SERVER\_HOST\_IP | Hostname for the TEI embedding service. | tei |
+| EMBEDDING\_SERVER\_PORT | Port for the TEI embedding service. | 80 |
+| RETRIEVER\_SERVICE\_HOST\_IP | Hostname for the retriever service. | retriever-arango-service |
+| RETRIEVER\_SERVICE\_PORT | Port for the retriever service. | 7025 |
+| RERANK\_SERVER\_HOST\_IP | Hostname for the TEI reranking service. | tei\_reranker |
+| RERANK\_SERVER\_PORT | Port for the TEI reranking service. | 80 |
+| LLM\_SERVER\_HOST\_IP | Hostname for the vLLM inference engine. | vllm |
+| LLM\_SERVER\_PORT | Port for the vLLM inference engine. | 8000 |
+| GUARDRAIL\_SERVICE\_HOST\_IP | Hostname for the guardrail service. | guardrail |
+| GUARDRAIL\_SERVICE\_PORT | Port for the guardrail service. | 9090 |
+| TRANSLATION\_SERVICE\_HOST\_IP | Hostname for the translation service. | translation |
+| TRANSLATION\_SERVICE\_PORT | Port for the translation service. | 9030 |
+| GUARDRAIL\_URL | Full URL for the Guardrail endpoint. | http://guardrail:9090/v1/guardrails |
+| E2E\_CPU\_URL | End-to-end CPU URL endpoint. | http://localhost:3000 |
+
+**Dataprep Configuration**  
+Configuration for how documents are chunked and prepared for the knowledge graph.
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| DATAPREP\_HOST | Hostname for the Dataprep service. | http://dataprep-arango-service |
+| DATAPREP\_PORT | Port for the Dataprep service. | 5000 |
+| DATAPREP\_CHUNK\_SIZE | Token/Character count per document chunk. | 500 |
+| DATAPREP\_CHUNK\_OVERLAP | Overlap between chunks to preserve context. | 50 |
+| DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for storing ingested data. | GRAPH |
+| DATAPREP\_ARANGO\_INSERT\_ASYNC | Perform inserts asynchronously. | false |
+| DATAPREP\_ARANGO\_USE\_GRAPH\_NAME | Force usage of graph name. | true |
+| DATAPREP\_NODE\_PROPERTIES | Custom properties for graph nodes. | (Empty) |
+| DATAPREP\_RELATIONSHIP\_PROPERTIES | Custom properties for graph edges. | (Empty) |
+| DATAPREP\_OPENAI\_CHAT\_ENABLED | Enable OpenAI format for chat prep. | true |
+| DATAPREP\_OPENAI\_EMBED\_ENABLED | Enable OpenAI format for embeddings. | true |
+| DATAPREP\_EMBED\_NODES | Embed graph nodes. | true |
+| DATAPREP\_EMBED\_RELATIONSHIPS | Embed graph relationships. | true |
+| DATAPREP\_EMBED\_SOURCE\_DOCUMENTS | Embed original source documents. | true |
+
+**Retriever Configuration**  
+Configuration for the retrieval logic (hybrid search, traversals, etc.).
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for retrieving data. | GRAPH |
+| RETRIEVER\_ARANGO\_SEARCH\_START | Starting point for graph search. | node |
+| RETRIEVER\_ARANGO\_SEARCH\_MODE | Search mode (e.g., hybrid, vector). | hybrid |
+| RETRIEVER\_ARANGO\_TRAVERSAL\_ENABLED | Enable graph traversal during retrieval. | true |
+| RETRIEVER\_ARANGO\_TRAVERSAL\_MAX\_DEPTH | Max depth for graph traversal. | 3 |
+| RETRIEVER\_ARANGO\_USE\_APPROX\_SEARCH | Use approximate nearest neighbor search. | false |
+| RETRIEVER\_SUMMARIZER\_ENABLED | Enable summarization of retrieved docs. | false |
+| RETRIEVER\_OPENAI\_CHAT\_ENABLED | Enable OpenAI chat format in retriever. | true |
+| RETRIEVER\_OPENAI\_EMBED\_ENABLED | Enable OpenAI embed format in retriever. | true |
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
-| ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (e.g., OR, AND). | OR |
+| ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (OR/AND). | OR |
 
-**AI Models & Inference Configuration**
-
-These variables control the specific AI models used for generation, embeddings, and reranking.
+**AI Inference Configuration (vLLM, TEI, TextGen)**  
+These variables control the specific AI models used for generation, guardrails, embeddings, and reranking.
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | HUGGINGFACEHUB\_API\_TOKEN | API key for Hugging Face (Required for gated models). | hf\_... |
+| HUGGING\_FACE\_HUB\_TOKEN | Alias for the Hugging Face Token. | hf\_... |
 | VLLM\_API\_KEY | API key for the VLLM service. | eyJhb... |
-| VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:80 |
-| **Main Inference (vLLM)** |  |  |
+| VLLM\_ENDPOINT | URL for the VLLM inference server. | http://vllm:8000 |
+| TEXTGEN\_PORT | Port for the text generation service. | 9000 |
+| RUST\_BACKTRACE | Enable Rust backtraces for debugging. | 1 |
+| NVIDIA\_VISIBLE\_DEVICES | GPUs visible to the container. | all |
+
+**Main Inference Model (vLLM)**
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
 | VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | ibm-granite/granite-3.3-2b-instruct |
-| VLLM\_GPU\_UTIL | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.65 (Standard) / 0.5 (T4) |
-| VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 4096 (Standard) / 2048 (T4) |
-| VLLM\_DTYPE | Data type for model weights (half, bfloat16). | half (T4), bfloat16 (Ampere+) |
-| **Guardrails (Translation)** |  |  |
+| VLLM\_GPU\_UTIL | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.6 |
+| VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 16384 |
+| VLLM\_DTYPE | Data type for model weights. | half |
+
+**Translation & Guardrail Model (vLLM)**
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| VLLM\_TRANSLATION\_ENDPOINT | URL for the translation/guardrail service. | http://vllm-translation-guardrail:9031 |
+| VLLM\_TRANSLATION\_SERVICE\_PORT | Port for the translation/guardrail service. | 9031 |
 | VLLM\_TRANSLATION\_MODEL\_ID | Model ID for guardrails/translation tasks. | google/gemma-3-1b-it |
-| VLLM\_TRANSLATION\_GPU\_UTIL | GPU Memory Utilization for guardrail model. | 0.15 (Standard) / 0.2 (T4) |
-| VLLM\_TRANSLATION\_MAX\_MODEL\_LEN | Context window for guardrail model. | 2048 |
-| VLLM\_TRANSLATION\_DTYPE | Data type for guardrail model. | bfloat16 |
-| **Embeddings & Reranking** |  |  |
-| EMBEDDING\_MODEL\_ID | Model ID for embeddings. | BAAI/bge-base-en-v1.5 |
+| VLLM\_TRANSLATION\_GPU\_UTIL | GPU Memory Utilization for guardrail model. | 0.3 |
+| VLLM\_TRANSLATION\_MAX\_MODEL\_LEN | Context window for guardrail model. | 16384 |
+| VLLM\_TRANSLATION\_DTYPE | Data type for guardrail model. | auto |
+| VLLM\_TRANSLATION\_KV\_CACHE\_DTYPE | KV Cache data type for guardrail model. | auto |
+
+**Embeddings & Reranking Models (TEI)**
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| EMBEDDING\_MODEL\_ENDPOINT | Endpoint for the embedding service. | http://tei:80 |
+| EMBEDDING\_MODEL\_ID | Model ID used by OPEA embedding service. | BAAI/bge-base-en-v1.5 |
 | TEI\_EMBED\_MODEL | TEI embedding model (must match above). | BAAI/bge-base-en-v1.5 |
-| RERANKER\_MODEL\_ID | Model ID for reranking. | cross-encoder/ms-marco-MiniLM-L-6-v2 |
+| TEI\_EMBEDDING\_ENDPOINT | TEI Endpoint (Note: duplicate of Dataprep config). | http://tei:80 |
+| RERANKER\_MODEL\_ENDPOINT | Endpoint for the reranking service. | http://tei\_reranker:80 |
+| TEI\_RERANKING\_ENDPOINT | Endpoint alias for reranking. | http://tei\_reranker:80 |
+| RERANKER\_MODEL\_ID | Model ID for reranking results. | cross-encoder/ms-marco-MiniLM-L-6-v2 |
 
 #### 3\. Model Selection and GPU Compatibility
 

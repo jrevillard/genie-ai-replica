@@ -3,6 +3,8 @@ const axios = require('axios');
 const { Database, aql } = require('arangojs');
 const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
+const { Worker } = require('worker_threads');
+const path = require('path');
 
 class QueryService {
   constructor() {
@@ -55,6 +57,39 @@ class QueryService {
   async setChatHistoryService(chatHistoryService) {
     this.chatHistoryService = chatHistoryService;
     logger.info('QueryService.chat_history_service_set');
+  }
+
+  /**
+   * Offload OPEA call to a worker thread
+   * @param {string} url - The OPEA endpoint URL
+   * @param {Object} payload - The request payload
+   * @returns {Promise<Object>} The worker result
+   */
+  runOPEAWorker(url, payload) {
+    return new Promise((resolve, reject) => {
+      const workerPath = path.join(__dirname, './opea-worker.js');
+      const worker = new Worker(workerPath);
+
+      worker.on('message', (msg) => {
+        if (msg.status === 'success') {
+          resolve(msg.data);
+        } else {
+          reject(new Error(msg.error ? msg.error.message : 'Worker execution failed'));
+        }
+        worker.terminate();
+      });
+
+      worker.on('error', (err) => {
+        reject(err);
+        worker.terminate();
+      });
+
+      worker.on('exit', (code) => {
+        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
+      });
+
+      worker.postMessage({ url, payload });
+    });
   }
 
   /**
@@ -176,10 +211,10 @@ class QueryService {
   }
 
   /**
- * Create a new query
- * @param {Object} queryData - Query data
- * @returns {Promise<Object>} The created query
- */
+   * Create a new query
+   * @param {Object} queryData - Query data
+   * @returns {Promise<Object>} The created query
+   */
   async createQuery(queryData) {
     const startTime = Date.now();
     try {
@@ -352,7 +387,7 @@ class QueryService {
         await this.queries.update(queryId, updateData);
 
       } else {
-        // *** EXISTING OPEA CALL LOGIC ***
+        // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
         const opeaPort = process.env.OPEA_PORT || '8888';
         const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
@@ -383,21 +418,17 @@ class QueryService {
           };
         }
 
-        logger.info('[DEBUG] Sending request to OPEA...');
+        logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
-        const opeaResponse = await axios.post(opeaUrl, opeaPayload, {
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000 // 30 seconds timeout
-        });
+        // *** CHANGED: Use Worker Thread for OPEA Call ***
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
 
-        opeaResponseTime = Date.now() - opeaStartTime;
-        opeaResponseContent = opeaResponse.data.response;
-        opeaMetadata = opeaResponse.data.metadata;
+        opeaResponseTime = workerResult.responseTime;
+        opeaResponseContent = workerResult.response;
+        opeaMetadata = workerResult.metadata;
 
-        logger.info(`[DEBUG] OPEA response received in ${opeaResponseTime}ms.`);
+        logger.info(`[DEBUG] Worker thread returned result in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] OPEA Response Content: ${opeaResponseContent}`);
         logger.info(`[DEBUG] OPEA Metadata: ${JSON.stringify(opeaMetadata, null, 2)}`);
 

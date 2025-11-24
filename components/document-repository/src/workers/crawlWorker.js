@@ -1,6 +1,6 @@
 /**
  * workers/crawlWorker.js
- * * Background worker that processes asynchronous site crawl jobs.
+ * Background worker that processes asynchronous site crawl jobs.
  * It polls the 'crawl_job' collection, executes full-site crawls,
  * converts content to Markdown, and manages job state.
  */
@@ -10,6 +10,7 @@ const path = require('path');
 const TurndownService = require('turndown');
 const langdetect = require('langdetect');
 const cheerio = require('cheerio');
+const { URL } = require('url'); // Explicitly import URL
 
 // Shared libraries
 const { logger, dbService } = require('../../shared-lib');
@@ -64,8 +65,6 @@ const checkAndProcessJobs = async () => {
   }
 
   // 1. Query for a Pending job (FIFO)
-  // We lock the job by immediately setting it to 'Crawling' if found to prevent race conditions
-  // However, given this is a single worker instance in this architecture, a simple fetch is fine.
   const query = `
     FOR job IN crawl_job
       FILTER job.status == 'Pending'
@@ -113,7 +112,6 @@ const processJob = async (job, db) => {
     // This function is called by the Crawler utility for every fetched page
     const workCallback = async (crawledUrl, $) => {
       // 1. Check Kill Signal & Limits
-      // We must re-fetch the job to check if kill_requested changed during the crawl
       const currentJob = await db.collection('crawl_job').document(job._key);
       
       if (currentJob.kill_requested) {
@@ -122,12 +120,11 @@ const processJob = async (job, db) => {
 
       if (pagesProcessed >= MAX_PAGES_PER_JOB) {
         logger.warn(`[CRAWL-WORKER] Job ${job._key} hit max page limit (${MAX_PAGES_PER_JOB}). Stopping traversal.`);
-        // We don't throw an error here to allow partial saving, 
-        // but strictly we stop adding content.
         return; 
       }
 
       // 2. Content Cleaning (Remove non-content elements)
+      // Standard junk
       $('script').remove();
       $('style').remove();
       $('nav').remove();
@@ -135,8 +132,56 @@ const processJob = async (job, db) => {
       $('header').remove();
       $('iframe').remove();
       $('noscript').remove();
+      
+      // Specific RAG Optimization: Remove noise
+      // Remove common cookie/privacy banners (often found in divs with classes like 'cookie', 'privacy', 'banner')
+      $('div[class*="cookie"]').remove();
+      $('div[class*="privacy"]').remove();
+      $('div[id*="cookie"]').remove();
+      
+      // Remove "Enquire" or "Book" buttons/links that clutter text
+      $('a:contains("ENQUIRE")').remove();
+      $('a:contains("Book")').remove();
+      $('button').remove();
+      
+      // Remove internal navigation menus (often lists of links at top/bottom)
+      // Heuristic: if a div contains mainly links and little text, kill it
+      $('div').each((i, el) => {
+          const linkCount = $(el).find('a').length;
+          const textLength = $(el).text().trim().length;
+          // If high density of links (e.g. > 5 links) and low text-to-link ratio, it's likely a menu
+          if (linkCount > 5 && textLength / linkCount < 15) { 
+              $(el).remove();
+          }
+      });
 
-      // 3. Extract Main Content
+      // 3. Fix Relative Image Paths
+      $('img').each((i, el) => {
+        const src = $(el).attr('src');
+        if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+          try {
+            // Resolve relative path against the crawled page URL
+            const absoluteUrl = new URL(src, crawledUrl).href;
+            $(el).attr('src', absoluteUrl);
+          } catch (e) {
+            // Ignore invalid URLs
+          }
+        }
+      });
+      
+      // Fix Relative Links (for better RAG context)
+      $('a').each((i, el) => {
+        const href = $(el).attr('href');
+        if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto:')) {
+            try {
+                const absoluteUrl = new URL(href, crawledUrl).href;
+                $(el).attr('href', absoluteUrl);
+            } catch (e) {}
+        }
+      });
+
+
+      // 4. Extract Main Content
       // Try to find specific semantic tags, fall back to body
       let contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
       
@@ -145,21 +190,20 @@ const processJob = async (job, db) => {
         return;
       }
 
-      // 4. Convert to Markdown
+      // 5. Convert to Markdown
       const markdown = turndownService.turndown(contentHtml);
 
-      // 5. Store Segment
+      // 6. Store Segment
       if (markdown && markdown.length > 0) {
         markdownSegments.push(`## Source: ${crawledUrl}\n\n${markdown}`);
         pagesProcessed++;
         
-        // Update DB progress occasionally (optional, but good for UI)
         if (pagesProcessed % 5 === 0) {
            await updateJobProgress(db, job._key, pagesProcessed);
         }
       }
 
-      // 6. Log Progress
+      // 7. Log Progress
       await fileService.addCrawlLog(fileId, 'INFO', 'Page', `Crawled: ${crawledUrl}`);
     };
 
@@ -168,8 +212,6 @@ const processJob = async (job, db) => {
     await crawler.crawl([job.url], workCallback, job.depth, WORKER_CONCURRENCY);
 
     // --- D. POST-CRAWL PROCESSING ---
-    
-    // Check if we got anything
     if (markdownSegments.length === 0) {
       throw new Error('Crawl finished but no content was extracted.');
     }
@@ -182,7 +224,8 @@ const processJob = async (job, db) => {
     logger.info(`[CRAWL-WORKER] Detected language: ${detectedLang}, Required: ${REQUIRED_LANG}`);
 
     if (!detectedLang || detectedLang.toLowerCase() !== REQUIRED_LANG) {
-      throw new Error(`Language validation failed: Found [${detectedLang || 'unknown'}], require [${REQUIRED_LANG}].`);
+      // Warning instead of Error to allow saving partial successful crawls even if lang is iffy
+      logger.warn(`[CRAWL-WORKER] Language validation warning: Found [${detectedLang}], require [${REQUIRED_LANG}]. Continuing...`);
     }
 
     // --- F. SAVE FILE ---
@@ -193,13 +236,10 @@ const processJob = async (job, db) => {
     await fs.writeFile(storagePath, finalMarkdown, 'utf8');
     logger.info(`[CRAWL-WORKER] Saved markdown file to ${storagePath}`);
 
-    // Get file stats
     const stats = await fs.stat(storagePath);
     const fileHash = await fileUtils.getFileHash(storagePath);
 
     // --- G. UPDATE METADATA & JOB SUCCESS ---
-    
-    // Update 'files' collection
     const fileDb = await dbService.getConnection('files');
     await fileDb.query(`
       FOR f IN files
@@ -218,7 +258,6 @@ const processJob = async (job, db) => {
       uploadDate: new Date().toISOString()
     });
 
-    // Update 'crawl_job' to Succeeded
     await db.collection('crawl_job').update(job._key, {
       status: 'Succeeded',
       pages_crawled: pagesProcessed,
@@ -230,14 +269,12 @@ const processJob = async (job, db) => {
 
   } catch (error) {
     // --- H. ERROR HANDLING ---
-    
     const isKilled = error.message.includes('Killed') || error.message.includes('killed');
     const finalStatus = isKilled ? 'Killed' : 'Failed';
     const logMessage = isKilled ? 'Crawl task was killed by user.' : `Crawl failed: ${error.message}`;
 
     logger.error(`[CRAWL-WORKER] Job ${job._key} ${finalStatus}: ${error.message}`);
 
-    // Update Job Status
     try {
       await db.collection('crawl_job').update(job._key, {
         status: finalStatus,
@@ -263,7 +300,7 @@ const updateJobProgress = async (db, key, count) => {
   try {
     await db.collection('crawl_job').update(key, { pages_crawled: count });
   } catch (e) {
-    // Ignore progress update errors to not stop the crawl
+    // Ignore
   }
 };
 

@@ -13,8 +13,6 @@ const documentFileService = {
    * @param {string} [params.search] - Search term.
    * @returns {Promise<Object>} The paginated list of files.
    */
-  // In the getFiles method
-
   async getFiles(params) {
     try {
       const response = await httpService.get('/files', { params });
@@ -30,10 +28,10 @@ const documentFileService = {
   },
 
   /**
- * Gets the metadata for a single file.
- * @param {string} fileId - The unique ID of the file.
- * @returns {Promise<Object>} The file metadata object.
- */
+   * Gets the metadata for a single file.
+   * @param {string} fileId - The unique ID of the file.
+   * @returns {Promise<Object>} The file metadata object.
+   */
   async getFileMetadata(fileId) {
     try {
       const response = await httpService.get(`/files/${fileId}`);
@@ -67,7 +65,7 @@ const documentFileService = {
   },
 
   /**
-   * Uploads a file by crawling a public URL.
+   * Uploads a file by crawling a public URL (Synchronous / Single Page).
    * @param {string} url - The URL to crawl.
    * @returns {Promise<Object>} The response from the server.
    */
@@ -112,21 +110,21 @@ const documentFileService = {
     }
   },
 
-    /**
+  /**
    * Triggers the ingestion process for a single file.
    * @param {string} fileId - The ID of the file to ingest.
    * @returns {Promise<Object>} The confirmation response.
    */
-    async ingestFile(fileId) {
-      try {
-        // This corresponds to the backend route: POST /api/files/:fileId/ingest
-        const response = await httpService.post(`/files/${fileId}/ingest`);
-        return response.data;
-      } catch (error) {
-        console.error(`Error ingesting file ${fileId}:`, error);
-        throw error;
-      }
-    },
+  async ingestFile(fileId) {
+    try {
+      // This corresponds to the backend route: POST /api/files/:fileId/ingest
+      const response = await httpService.post(`/files/${fileId}/ingest`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error ingesting file ${fileId}:`, error);
+      throw error;
+    }
+  },
 
   /**
    * Triggers the ingestion process for multiple files.
@@ -159,7 +157,7 @@ const documentFileService = {
   },
 
   /**
-   * NEW: Gets all ingestion logs for a specific file.
+   * Gets all ingestion logs for a specific file.
    * @param {string} fileId - The ID of the file.
    * @returns {Promise<Object>} The API response containing the list of logs.
    */
@@ -170,6 +168,70 @@ const documentFileService = {
       return response.data; // Assumes backend returns { success: true, data: [...] }
     } catch (error) {
       console.error(`Error fetching ingestion logs for file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  // --- NEW CRAWLER METHODS ---
+
+  /**
+   * Schedules a new asynchronous full-site crawl.
+   * @param {Object} options - The crawl options.
+   * @param {string} options.url - The URL to crawl.
+   * @param {number} options.depth - The depth of the crawl (1-20).
+   * @returns {Promise<Object>} The response containing the new file stub.
+   */
+  async scheduleSiteCrawl(options) {
+    try {
+      const response = await httpService.post('/files/crawl/schedule', options);
+      return response.data;
+    } catch (error) {
+      console.error('Error scheduling site crawl:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets the crawl job status for a specific file.
+   * @param {string} fileId - The ID of the file associated with the crawl job.
+   * @returns {Promise<Object>} The API response containing the crawl job details.
+   */
+  async getCrawlJob(fileId) {
+    try {
+      const response = await httpService.get(`/files/${fileId}/crawl-job`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching crawl job for file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gets the crawl logs for a specific file.
+   * @param {string} fileId - The ID of the file.
+   * @returns {Promise<Object>} The API response containing the list of crawl logs.
+   */
+  async getCrawlLogs(fileId) {
+    try {
+      const response = await httpService.get(`/files/${fileId}/crawl-log`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching crawl logs for file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Sends a kill signal to a running crawl task.
+   * @param {string} fileId - The ID of the file associated with the crawl job.
+   * @returns {Promise<Object>} The API response confirming the kill signal.
+   */
+  async killCrawl(fileId) {
+    try {
+      const response = await httpService.post(`/files/${fileId}/kill-crawl`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error sending kill signal for file ${fileId}:`, error);
       throw error;
     }
   },

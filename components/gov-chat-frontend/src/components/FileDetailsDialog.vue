@@ -41,6 +41,15 @@
         >
           {{ translate("details.tabs.details", "Details") }}
         </button>
+        <!-- Crawl Log Tab (Only visible if a crawl job exists) -->
+        <button
+          v-if="crawlJob"
+          :class="['tab-btn', { active: activeTab === 'crawlLog' }]"
+          @click="switchToCrawlLogTab"
+        >
+          {{ translate("details.tabs.crawlLog", "Crawling Log") }}
+        </button>
+        <!-- Ingestion Log Tab (Only visible if status indicates ingestion started) -->
         <button
           v-if="file.dataprep.status?.toLowerCase() !== 'pending'"
           :class="['tab-btn', { active: activeTab === 'ingestionLog' }]"
@@ -141,10 +150,11 @@
               <span class="info-label">{{
                 translate("details.status", "Status")
               }}</span>
+              <!-- UPDATED: Display Crawl Status if active/failed, else Dataprep status -->
               <span
-                :class="['status-tag', getStatusClass(file.dataprep.status)]"
+                :class="['status-tag', getStatusClass(displayStatus)]"
               >
-                {{ file.dataprep.status }}
+                {{ displayStatus }}
               </span>
             </div>
             <div class="info-item">
@@ -160,23 +170,41 @@
               <span>{{ file.file_type }}</span>
             </div>
 
-            <div class="info-item" v-if="fileViewUrl">
+            <!-- LINK 1: Original Source URL (External) -->
+            <div class="info-item" v-if="file.source_url">
               <span class="info-label">{{
-                translate("details.viewFile", "View File")
+                translate("details.sourceUrl", "Source URL")
               }}</span>
               <a
-                href="#"
-                @click.prevent="handleViewFile"
+                :href="file.source_url"
+                target="_blank"
                 rel="noopener noreferrer"
                 class="file-view-link"
               >
-                {{
-                  isExternalUrl(file.source_url)
-                    ? translate("details.visitLink", "Visit External Link")
-                    : translate("details.openFile", "Open file in new tab")
+                {{ translate("details.visitSource", "Visit Original Website") }}
+                <span class="external-icon">↗</span>
+              </a>
+            </div>
+
+            <!-- LINK 2: View Crawled/Uploaded File (Internal) -->
+            <!-- Only show for crawled files if crawl succeeded, or for normal files -->
+            <div class="info-item" v-if="canViewInternalFile">
+              <span class="info-label">{{
+                translate("details.viewFile", "Stored File")
+              }}</span>
+              <a
+                href="#"
+                @click.prevent="handleViewInternalFile"
+                class="file-view-link"
+              >
+                {{ 
+                  crawlJob 
+                  ? translate("details.viewCrawled", "View Generated Markdown") 
+                  : translate("details.viewFileContent", "View File Content")
                 }}
               </a>
             </div>
+
             <div class="info-item">
               <span class="info-label">{{
                 translate("details.fileSize", "File Size")
@@ -198,6 +226,71 @@
           </div>
         </div>
 
+        <!-- NEW: Crawling Log Tab Content -->
+        <div
+          v-if="activeTab === 'crawlLog'"
+          class="tab-content crawl-log-tab"
+        >
+          <div class="log-actions">
+            <button
+              class="btn btn-outline"
+              @click="fetchCrawlLogs"
+              :disabled="isCrawlLogLoading"
+            >
+              <span v-if="isCrawlLogLoading" class="btn-spinner"></span>
+              {{
+                isCrawlLogLoading
+                  ? translate("common.loading", "Loading...")
+                  : translate("common.refresh", "Refresh")
+              }}
+            </button>
+            
+            <!-- Kill Crawl Button -->
+             <button
+                v-if="crawlJob && crawlJob.status === 'Crawling'"
+                class="btn btn-danger"
+                @click="handleKillCrawl"
+              >
+                {{ translate("details.log.killCrawl", "Kill Crawl Task") }}
+              </button>
+          </div>
+
+          <div class="log-table-container">
+             <table class="log-table">
+              <thead>
+                <tr>
+                  <th>{{ translate("details.log.timestamp", "Timestamp") }}</th>
+                  <th>{{ translate("details.log.level", "Level") }}</th>
+                  <th>{{ translate("details.log.stage", "Stage") }}</th>
+                  <th>{{ translate("details.log.message", "Message") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="isCrawlLogLoading">
+                  <td colspan="4" class="log-state">
+                    {{ translate("details.log.loadingLogs", "Loading logs...") }}
+                  </td>
+                </tr>
+                <tr v-if="!isCrawlLogLoading && crawlLogs.length === 0">
+                  <td colspan="4" class="log-state">
+                    {{ translate("details.log.noLogs", "No logs found.") }}
+                  </td>
+                </tr>
+                <tr v-for="(log, index) in crawlLogs" :key="index">
+                  <td data-label="Timestamp">
+                    {{ new Date(log.timestamp).toLocaleString() }}
+                  </td>
+                  <td data-label="Level">
+                    <span :class="['log-level', getLogLevelClass(log.level)]">{{ log.level }}</span>
+                  </td>
+                  <td data-label="Stage">{{ log.stage }}</td>
+                  <td data-label="Message">{{ log.message }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Ingestion Log Tab Content -->
         <div
           v-if="activeTab === 'ingestionLog'"
@@ -209,23 +302,6 @@
               @click="fetchIngestionLogs"
               :disabled="isLogLoading"
             >
-              <svg
-                v-if="!isLogLoading"
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M23 4v6h-6"></path>
-                <path
-                  d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"
-                ></path></svg
-              >
               <span v-if="isLogLoading" class="btn-spinner"></span>
               {{
                 isLogLoading
@@ -233,7 +309,7 @@
                   : translate("common.refresh", "Refresh")
               }}
             </button>
-            <div class_="kill-actions">
+            <div class="kill-actions">
               <span class="kill-label">{{
                 translate("details.log.killActions", "Kill Actions:")
               }}</span>
@@ -261,9 +337,7 @@
             <table class="log-table">
               <thead>
                 <tr>
-                  <th>
-                    {{ translate("details.log.timestamp", "Timestamp") }}
-                  </th>
+                  <th>{{ translate("details.log.timestamp", "Timestamp") }}</th>
                   <th>{{ translate("details.log.level", "Level") }}</th>
                   <th>{{ translate("details.log.stage", "Stage") }}</th>
                   <th>{{ translate("details.log.message", "Message") }}</th>
@@ -272,14 +346,10 @@
               <tbody>
                 <tr v-if="isLogLoading">
                   <td colspan="4" class="log-state">
-                    {{
-                      translate("details.log.loadingLogs", "Loading logs...")
-                    }}
+                    {{ translate("details.log.loadingLogs", "Loading logs...") }}
                   </td>
                 </tr>
-                <tr
-                  v-if="!isLogLoading && ingestionLogs.length === 0"
-                >
+                <tr v-if="!isLogLoading && ingestionLogs.length === 0">
                   <td colspan="4" class="log-state">
                     {{ translate("details.log.noLogs", "No logs found.") }}
                   </td>
@@ -289,9 +359,7 @@
                     {{ new Date(log.timestamp).toLocaleString() }}
                   </td>
                   <td data-label="Level">
-                    <span :class="['log-level', getLogLevelClass(log.level)]">{{
-                      log.level
-                    }}</span>
+                    <span :class="['log-level', getLogLevelClass(log.level)]">{{ log.level }}</span>
                   </td>
                   <td data-label="Stage">{{ log.stage }}</td>
                   <td data-label="Message">{{ log.message }}</td>
@@ -353,12 +421,12 @@
 import documentFileService from "../services/documentFileService.js";
 import serviceTreeService from "../services/serviceTreeService.js";
 import { eventBus } from "../eventBus.js";
-import ConfirmDialog from "./ConfirmDialog.vue"; // Import ConfirmDialog
+import ConfirmDialog from "./ConfirmDialog.vue";
 
 export default {
   name: "FileDetailsDialog",
   components: {
-    ConfirmDialog, // Register ConfirmDialog
+    ConfirmDialog,
   },
   props: {
     fileId: {
@@ -373,6 +441,11 @@ export default {
       isFetchingData: true,
       isHierarchyLoading: true,
       file: null,
+      // Crawl related state
+      crawlJob: null,
+      crawlLogs: [],
+      isCrawlLogLoading: false,
+      
       editableFile: {
         file_name: "",
         author: "",
@@ -382,10 +455,10 @@ export default {
       englishKnowledgeHierarchy: [],
       currentLocale: this.$i18n?.locale || "en",
       areAllLabelsSelected: false,
-      activeTab: "details", // New tab state
-      ingestionLogs: [], // New state for logs
-      isLogLoading: false, // New loading state for logs
-      confirmDialog: { // New state for confirmation dialog
+      activeTab: "details",
+      ingestionLogs: [],
+      isLogLoading: false,
+      confirmDialog: {
         visible: false,
         title: "",
         message: "",
@@ -410,20 +483,33 @@ export default {
       return false;
     },
     isMetadataEditable() {
-      // Per spec, metadata is editable unless 'Ingested'.
-      // Allow editing for 'Pending', 'Retracted', 'Ingestion Error', 'Ingested with Warnings'
-      // UPDATED: Use toLowerCase() for reliable comparison
       return this.file && this.file.dataprep.status?.toLowerCase() !== "ingested";
+    },
+    // Determine what status text to show
+    displayStatus() {
+      if (this.crawlJob) {
+        if (this.crawlJob.status === 'Crawling') return 'Crawling';
+        if (this.crawlJob.status === 'Failed' || this.crawlJob.status === 'Killed') return 'Crawl Failed';
+        // If succeeded, fallback to dataprep status
+      }
+      return this.file?.dataprep.status || '';
+    },
+    // Determine if the internal file link should be shown
+    canViewInternalFile() {
+      if (!this.file) return false;
+      // If it's a crawl job, only show if succeeded (or warning)
+      if (this.crawlJob) {
+        return this.crawlJob.status === 'Succeeded' || this.crawlJob.status === 'Crawl Warning';
+      }
+      // Regular file: show if not purely external (or if viewUrl logic handles it)
+      return true;
     },
     mainAction() {
       if (!this.file) return {};
-      // UPDATED: Use toLowerCase() for reliable comparison
       const status = this.file.dataprep.status ? this.file.dataprep.status.toLowerCase() : '';
-      
-      // Spec 4.2: Ingest button disabled if no labels
       const hasLabels = this.editableFile.labels.length > 0;
       
-      // UPDATED: Check lowercase statuses
+      // Retract logic
       if (status === "ingested" || status === "ingested with warnings") {
         return {
           text: this.translate("details.buttons.retract", "Retract"),
@@ -432,11 +518,19 @@ export default {
           handler: this.handleRetract,
         };
       }
+      
+      // Ingest logic
+      // Spec 4.4: Disable if crawlJob exists AND status is NOT Succeeded
+      let isCrawlPending = false;
+      if (this.crawlJob && this.crawlJob.status !== 'Succeeded') {
+        isCrawlPending = true;
+      }
+
       return {
         text: this.translate("details.buttons.ingest", "Ingest"),
         class: "btn btn-success",
-        // Disable ingest if metadata is invalid OR no labels are selected (Sec 4.2)
-        disabled: this.isSaveDisabled || !hasLabels, 
+        // Disable if: Save disabled OR No labels OR Crawl not finished
+        disabled: this.isSaveDisabled || !hasLabels || isCrawlPending, 
         handler: this.handleIngest,
       };
     },
@@ -448,15 +542,13 @@ export default {
         category.children ? category.children.map((service) => service.name) : []
       );
     },
+    // URL for the internal file endpoint
     fileViewUrl() {
       if (!this.file) return null;
-      if (this.isExternalUrl(this.file.source_url)) {
-        return this.file.source_url;
-      }
       if (this.file.file_id) {
         return `/api/files/${this.file.file_id}/viewbrowser`;
       }
-      return this.file.source_url || null;
+      return null;
     },
   },
   watch: {
@@ -505,18 +597,18 @@ export default {
     isExternalUrl(url) {
       if (!url) return false;
       const isHttp = url.startsWith("http://") || url.startsWith("https://");
-      const isOtherProtocol =
-        url.startsWith("file:") ||
-        url.startsWith("ftp:") ||
-        url.startsWith("smb:");
       const isPlaceholder = url.includes("<HOST>") || url.includes("<PORT>");
-      return isHttp && !isPlaceholder && !isOtherProtocol;
+      return isHttp && !isPlaceholder;
     },
     async fetchData(id) {
       this.isFetchingData = true;
       this.isLoading = true;
       this.isHierarchyLoading = true;
+      this.crawlJob = null; // Reset crawl job state
+
       try {
+        // Fetch File Metadata, Hierarchy (current + en), and Crawl Job concurrently
+        // Note: getCrawlJob might 404 if it's not a crawl file, handled below.
         const [fileResponse, hierarchyResponse, englishHierarchyResponse] =
           await Promise.all([
             documentFileService.getFileMetadata(id),
@@ -525,6 +617,24 @@ export default {
           ]);
 
         this.file = fileResponse;
+        
+        // Try to fetch crawl job status
+        try {
+           const crawlResponse = await documentFileService.getCrawlJob(id);
+           // The controller returns { success: true, data: job } or similar. 
+           // Service returns response.data. We assume service logic returns the job object.
+           // If using the service I generated: it returns response.data (which is the whole object with .data property? 
+           // No, the generated service returns response.data. 
+           // Controller sends { success, data }. So response.data is {success, data}.
+           // Actually looking at the generated service code `return response.data` means we get the JSON body.
+           if (crawlResponse && crawlResponse.data) {
+             this.crawlJob = crawlResponse.data;
+           }
+        } catch (e) {
+          // Not a crawl job or not found, ignore
+          this.crawlJob = null;
+        }
+
         const initialLabelsInCurrentLocale = this.mapEnglishToLocale(
           fileResponse.labels || [],
           hierarchyResponse,
@@ -539,8 +649,7 @@ export default {
         this.knowledgeHierarchy = hierarchyResponse;
         this.englishKnowledgeHierarchy = englishHierarchyResponse;
 
-        // If file status is not pending, fetch logs immediately
-        // UPDATED: Use toLowerCase() for reliable comparison
+        // If file status is not pending, fetch ingestion logs
         if (this.file.dataprep.status?.toLowerCase() !== "pending") {
           this.fetchIngestionLogs();
         }
@@ -561,6 +670,7 @@ export default {
         this.isFetchingData = false;
       }
     },
+    // ... existing mapEnglishToLocale ...
     mapEnglishToLocale(englishLabels, localeHierarchy, englishHierarchy) {
       if (!englishLabels || englishLabels.length === 0 || !localeHierarchy || !englishHierarchy) {
         return [];
@@ -585,12 +695,12 @@ export default {
         if (englishServiceMap.has(engLabel)) {
           localeLabels.push(englishServiceMap.get(engLabel));
         } else {
-          console.warn(`Could not map English label "${engLabel}" to current locale "${this.currentLocale}". Using English name.`);
           localeLabels.push(engLabel);
         }
       });
       return localeLabels;
     },
+    // ... existing getEnglishLabelNames ...
     getEnglishLabelNames(selectedLocaleLabels) {
       if (!selectedLocaleLabels || selectedLocaleLabels.length === 0 || this.englishKnowledgeHierarchy.length === 0 || this.knowledgeHierarchy.length === 0) {
         return [];
@@ -603,8 +713,6 @@ export default {
             const englishService = this.findServiceInHierarchy(this.englishKnowledgeHierarchy, localeService._key, localeService.name);
             if (englishService) {
               localeServiceMap.set(localeService.name, englishService.name);
-            } else {
-              console.warn(`Could not find English equivalent for locale service: ${localeService.name} (Key: ${localeService._key})`);
             }
           });
         }
@@ -613,7 +721,6 @@ export default {
         if (localeServiceMap.has(localeLabel)) {
           englishLabels.push(localeServiceMap.get(localeLabel));
         } else {
-          console.warn(`Could not map selected locale label "${localeLabel}" back to English.`);
           const directMatch = this.findServiceInHierarchy(this.englishKnowledgeHierarchy, null, localeLabel);
           if (directMatch) {
             englishLabels.push(directMatch.name);
@@ -624,6 +731,7 @@ export default {
       });
       return [...new Set(englishLabels)];
     },
+    // ... existing findServiceInHierarchy ...
     findServiceInHierarchy(hierarchy, serviceKey, serviceName) {
       for (const category of hierarchy) {
         if (category.children) {
@@ -648,7 +756,7 @@ export default {
           ),
           "error"
         );
-        return false; // Return false on failure
+        return false;
       }
 
       const englishLabelsToSave = this.getEnglishLabelNames(
@@ -670,7 +778,7 @@ export default {
           "success"
         );
         this.$emit("file-updated", { fileId: this.fileId, ...updates });
-        return true; // Return true on success
+        return true;
       } catch (error) {
         this.showNotification(
           this.translate(
@@ -679,16 +787,12 @@ export default {
           ),
           "error"
         );
-        return false; // Return false on failure
+        return false;
       }
     },
-    async handleViewFile() {
-      if (this.isExternalUrl(this.file?.source_url)) {
-        console.log(`Opening external source URL: ${this.file.source_url}`);
-        window.open(this.file.source_url, "_blank", "noopener,noreferrer");
-        return;
-      }
-
+    
+    // NEW: Open the internal file (Markdown or otherwise)
+    async handleViewInternalFile() {
       let token = null;
       try {
         const userDataString = localStorage.getItem("user");
@@ -698,29 +802,22 @@ export default {
         }
 
         if (!token) {
-          console.error("Authentication token not found in user data.");
           this.showNotification(
-            this.translate(
-              "details.notifications.tokenError",
-              "Authentication token not found. Cannot view file."
-            ),
+            this.translate("details.notifications.tokenError", "Authentication token not found."),
             "error"
           );
           return;
         }
 
         if (!this.fileViewUrl) {
-          console.error("File view URL is not available.");
           this.showNotification(
-            this.translate(
-              "details.notifications.viewError",
-              "Could not determine file view URL."
-            ),
+            this.translate("details.notifications.viewError", "Could not determine file view URL."),
             "error"
           );
           return;
         }
 
+        // Fetch with auth headers first to verify access/get blob, then open
         const response = await fetch(this.fileViewUrl, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -728,32 +825,81 @@ export default {
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Failed to fetch file: ${response.status} ${response.statusText}. Response: ${errorText}`
-          );
+          throw new Error(`Failed to fetch file: ${response.status}`);
         }
 
         const blob = await response.blob();
         const fileURL = URL.createObjectURL(blob);
         window.open(fileURL, "_blank", "noopener,noreferrer");
       } catch (error) {
-        console.error("Error viewing file:", error);
+        console.error("Error viewing internal file:", error);
         this.showNotification(
-          this.translate(
-            "details.notifications.viewError",
-            "Could not load file for viewing."
-          ) + ` Error: ${error.message}`,
+          this.translate("details.notifications.viewError", "Could not load file for viewing.") + ` ${error.message}`,
           "error"
-
         );
       }
     },
 
-    // --- Action Handlers using ConfirmDialog ---
-    
+    // --- Crawl Log Methods ---
+    switchToCrawlLogTab() {
+       this.activeTab = 'crawlLog';
+       if (this.crawlLogs.length === 0) {
+         this.fetchCrawlLogs();
+       }
+    },
+    async fetchCrawlLogs() {
+      this.isCrawlLogLoading = true;
+      try {
+        const response = await documentFileService.getCrawlLogs(this.fileId);
+        // Controller returns { success, data: [], count }
+        this.crawlLogs = response.data || [];
+      } catch (error) {
+        console.error("Error fetching crawl logs:", error);
+        this.showNotification(
+          this.translate("details.notifications.crawlLogError", "Failed to fetch crawl logs."),
+          "error"
+        );
+      } finally {
+        this.isCrawlLogLoading = false;
+      }
+    },
+    handleKillCrawl() {
+       this.confirmDialog = {
+        visible: true,
+        title: this.translate("details.confirm.killCrawlTitle", "Kill Crawl Task"),
+        message: this.translate(
+          "details.confirm.killCrawl",
+          "Are you sure you want to stop this crawling task? Partial data may be saved."
+        ),
+        confirmText: this.translate("details.log.killCrawl", "Kill Task"),
+        cancelText: this.translate("common.cancel", "Cancel"),
+        onConfirm: this.confirmKillCrawl,
+        onCancel: this.closeConfirm,
+      };
+    },
+    async confirmKillCrawl() {
+      this.closeConfirm();
+      this.isCrawlLogLoading = true; 
+      try {
+        await documentFileService.killCrawl(this.fileId);
+        this.showNotification(
+          this.translate("details.notifications.killCrawlSuccess", "Kill signal sent."),
+          "success"
+        );
+        // Refresh info to see status change
+        this.fetchData(this.fileId);
+      } catch (error) {
+         this.showNotification(
+          this.translate("details.notifications.killCrawlError", "Failed to send kill signal."),
+          "error"
+        );
+      } finally {
+        this.isCrawlLogLoading = false;
+      }
+    },
+
+    // --- Action Handlers ---
     async handleIngest() {
-      // Spec 4.2: Label constraint check
       if (this.editableFile.labels.length === 0) {
         this.showNotification(
           this.translate(
@@ -765,7 +911,6 @@ export default {
         return;
       }
       
-      // Spec 4.2: Save before ingest
       this.showNotification(
         this.translate(
           "details.notifications.ingestSaving",
@@ -776,7 +921,6 @@ export default {
       const saveSuccess = await this.handleSave();
 
       if (saveSuccess) {
-        // Show ingest confirmation
         this.confirmDialog = {
           visible: true,
           title: this.translate("details.confirm.ingestTitle", "Confirm Ingestion"),
@@ -976,33 +1120,6 @@ export default {
       this.confirmDialog.visible = false;
     },
 
-    // --- Log Tab Methods ---
-    switchToLogTab() {
-      this.activeTab = 'ingestionLog';
-      // Fetch logs when switching to the tab for the first time
-      if (this.ingestionLogs.length === 0) {
-        this.fetchIngestionLogs();
-      }
-    },
-    async fetchIngestionLogs() {
-      this.isLogLoading = true;
-      try {
-        const response = await documentFileService.getIngestionLogs(this.fileId);
-        this.ingestionLogs = response.data || [];
-      } catch (error) {
-        console.error("Error fetching ingestion logs:", error);
-        this.showNotification(
-          this.translate(
-            "details.notifications.logError",
-            "Failed to fetch ingestion logs."
-          ),
-          "error"
-        );
-        this.ingestionLogs = []; // Clear logs on error
-      } finally {
-        this.isLogLoading = false;
-      }
-    },
     getLogLevelClass(level) {
       if (level === "ERROR") return "log-level-error";
       if (level === "WARN") return "log-level-warn";
@@ -1011,17 +1128,16 @@ export default {
 
     // --- Util Methods ---
     getStatusClass(status) {
-      // Added new states from Sec 3.1
-      // UPDATED: Use toLowerCase() for reliable comparison
       const lowerStatus = status ? status.toLowerCase() : '';
-
       if (lowerStatus === "ingested") return "status-ingested";
       if (lowerStatus === "pending") return "status-pending";
       if (lowerStatus === "retracted") return "status-retracted";
       if (lowerStatus === "ingesting") return "status-ingesting";
       if (lowerStatus === "ingestion error") return "status-error";
       if (lowerStatus === "ingested with warnings") return "status-warn";
-      return "status-pending"; // Default
+      if (lowerStatus === "crawling") return "status-ingesting"; // Re-use ingesting color (blue)
+      if (lowerStatus === "crawl failed") return "status-error";
+      return "status-pending";
     },
     formatFileSize(bytes) {
       if (bytes == null || bytes === 0) return "0 Bytes";
@@ -1085,8 +1201,8 @@ export default {
   gap: 2rem;
 }
 
-/* Ingestion Log Tab Styles */
-.ingestion-log-tab {
+/* Ingestion/Crawl Log Tab Styles */
+.ingestion-log-tab, .crawl-log-tab {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1117,6 +1233,10 @@ export default {
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   margin-right: 0.5em;
+}
+.external-icon {
+  font-size: 0.9em;
+  margin-left: 0.3em;
 }
 
 .log-table-container {

@@ -36,20 +36,21 @@ class FileService {
       const requiredCollections = ['files', 'ingestion_log', 'crawl_job', 'crawl_log'];
       
       for (const collectionName of requiredCollections) {
-        const exists = await db.collection(collectionName).exists();
+        const collection = db.collection(collectionName);
+        const exists = await collection.exists();
         if (!exists) {
-          await db.createCollection(collectionName);
+          await collection.create(); // Use collection.create()
           logger.info(`[FILE-SERVICE] Created missing collection: ${collectionName}`);
-          
-          // Create indexes for performance
-          if (collectionName === 'crawl_job') {
-            await db.collection('crawl_job').createIndex({ type: 'persistent', fields: ['file_id'], unique: true });
-            await db.collection('crawl_job').createIndex({ type: 'persistent', fields: ['status'] });
-          }
-          if (collectionName === 'crawl_log') {
-            await db.collection('crawl_log').createIndex({ type: 'persistent', fields: ['file_id'] });
-            await db.collection('crawl_log').createIndex({ type: 'persistent', fields: ['timestamp'] });
-          }
+        }
+        
+        // Create indexes (Use ensureIndex instead of createIndex if using arangojs)
+        if (collectionName === 'crawl_job') {
+          await collection.ensureIndex({ type: 'persistent', fields: ['file_id'], unique: true });
+          await collection.ensureIndex({ type: 'persistent', fields: ['status'] });
+        }
+        if (collectionName === 'crawl_log') {
+          await collection.ensureIndex({ type: 'persistent', fields: ['file_id'] });
+          await collection.ensureIndex({ type: 'persistent', fields: ['timestamp'] });
         }
       }
     } catch (error) {

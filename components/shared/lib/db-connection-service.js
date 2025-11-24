@@ -718,39 +718,86 @@ class DatabaseService {
    */
     _createCollectionProxy(connectionName, collectionName, targetCollection) {
         const self = this;
-        
-        return new Proxy(targetCollection, {
-          get(target, prop) {
-            // The 'target' argument is the real collection object. We will now use it directly.
-            const currentCollection = target;
-            
-            // Pass through non-function properties
-            if (typeof currentCollection[prop] !== 'function') {
-              return currentCollection[prop];
-            }
-            
-            const operation = async (...args) => {
-                // Re-fetch the fresh DB connection on every call to ensure it's not stale
-                const freshConnectionInfo = self._connections.get(connectionName);
-                if (!freshConnectionInfo) throw new Error(`Connection ${connectionName} not found during operation.`);
-                
-                // Get the collection object from the fresh DB connection to perform the operation
-                const liveCollection = freshConnectionInfo.db.collection(collectionName);
-                
-                return await liveCollection[prop](...args);
-            };
-    
-            return async function(...args) {
-                return await self._executeWithRetry(
-                    connectionName,
-                    () => operation(...args),
-                    `collection.${prop}`
-                );
-            };
-          }
-        });
-      }
 
+        return new Proxy(targetCollection, {
+            get(target, prop) {
+                // Get the current connection and collection
+                // This ensures we always use the freshest connection available
+                const currentConnectionInfo = self._connections.get(connectionName);
+                const currentDb = currentConnectionInfo ? currentConnectionInfo.db : null;
+
+                // If we have a live DB connection, get the real collection from it.
+                // Otherwise fall back to the target (which might be the Arcade adapter).
+                const currentCollection = currentDb ? currentDb.collection(collectionName) : target;
+
+                // Pass through non-function properties
+                if (typeof currentCollection[prop] !== 'function') {
+                    return currentCollection[prop];
+                }
+
+                // 1. Methods that return cursors (Need to wrap result in CursorProxy)
+                const cursorMethods = ['byExample', 'firstExample', 'any', 'all', 'fulltext', 'near', 'within', 'range'];
+                if (cursorMethods.includes(prop)) {
+                    return async function (...args) {
+                        const result = await self._executeCollectionMethodWithRetry(
+                            connectionName, collectionName, prop, args
+                        );
+
+                        // CRITICAL RESTORATION: Wrap cursors in proxy so iteration is safe
+                        if (result && typeof result.next === 'function') {
+                            return self._createCursorProxy(connectionName, result);
+                        }
+
+                        return result;
+                    };
+                }
+
+                // 2. Edge collection methods (For graph collections)
+                const edgeMethods = ['edges', 'inEdges', 'outEdges', 'traversal', 'shortestPath'];
+                if (edgeMethods.includes(prop)) {
+                    return async function (...args) {
+                        const result = await self._executeCollectionMethodWithRetry(
+                            connectionName, collectionName, prop, args
+                        );
+
+                        // Handle cursor results for edge traversals
+                        if (result && typeof result.next === 'function') {
+                            return self._createCursorProxy(connectionName, result);
+                        }
+
+                        return result;
+                    };
+                }
+
+                // 3. ALL other collection methods (Standard CRUD)
+                const allCollectionMethods = [
+                    // Index methods
+                    'ensureIndex', 'dropIndex', 'indexes',
+                    // Document CRUD
+                    'save', 'replace', 'update', 'remove', 'document', 'exists',
+                    // Bulk operations
+                    'removeByExample', 'replaceByExample', 'updateByExample', 'import', 'export',
+                    // Collection management
+                    'create', 'drop', 'truncate', 'rename', 'rotate',
+                    // Collection info
+                    'get', 'properties', 'count', 'figures', 'revision', 'checksum', 'load', 'unload',
+                    // Replication
+                    'loadIndexes', 'waitForSync'
+                ];
+
+                if (allCollectionMethods.includes(prop) || typeof currentCollection[prop] === 'function') {
+                    return async function (...args) {
+                        return await self._executeCollectionMethodWithRetry(
+                            connectionName, collectionName, prop, args
+                        );
+                    };
+                }
+
+                // For other methods, return bound function from current collection
+                return currentCollection[prop].bind(currentCollection);
+            }
+        });
+    }
     _createGraphProxy(connectionName, graphName, targetGraph) {
         const self = this;
 

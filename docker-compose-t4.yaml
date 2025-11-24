@@ -429,11 +429,12 @@ services:
       - "${LLM_SERVER_PORT}:${LLM_SERVER_PORT}"
     command: >
       --model ${VLLM_LLM_MODEL_ID}
-      --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.5}
+      --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.4}
       --served-model-name ${VLLM_LLM_MODEL_ID}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-2048}
-      --max_num_seqs 1024
+      --max_num_seqs 64
       --dtype=${VLLM_DTYPE:-half}
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA
@@ -483,12 +484,14 @@ services:
       - "${VLLM_TRANSLATION_SERVICE_PORT}:${VLLM_TRANSLATION_SERVICE_PORT}"
     command: >
       --model ${VLLM_TRANSLATION_MODEL_ID}
-      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.5}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.4}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID}
       --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
       --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-fp8}
       --dtype=${VLLM_TRANSLATION_DTYPE:-half}
       --port ${VLLM_TRANSLATION_SERVICE_PORT}
+      --max_num_seqs 64
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
     depends_on:

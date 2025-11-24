@@ -251,7 +251,7 @@ class FileController {
       file_hash: fileRecord.file_hash,
       labels: fileRecord.labels,
       author: fileRecord.author,
-      upload_date: fileRecord.uploade_date,
+      upload_date: fileRecord.uploaded_date, // FIX: Fixed typo 'uploade_date' to 'uploaded_date'
       create_date: fileRecord.create_date,
       crawl_date: fileRecord.crawl_date,
       source_url: fileRecord.source_url,

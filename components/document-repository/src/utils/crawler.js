@@ -186,6 +186,11 @@ class Crawler {
       }
       return sublinks;
     } catch (error) {
+      // --- FIX: Re-throw kill errors to stop the crawl ---
+      if (error.message && (error.message.includes('killed') || error.message.includes('Killed'))) {
+        throw error; 
+      }
+      // --------------------------------------------------
       logger.error(`Error during processWork for ${subUrl}: ${error.message}`);
       return []; 
     }
@@ -219,6 +224,10 @@ class Crawler {
                 await work(url, $);
             }
         } catch(e) {
+            // Check for kill signal on seed
+            if (e.message && (e.message.includes('killed') || e.message.includes('Killed'))) {
+                throw e;
+            }
             logger.error(`Failed to fetch seed URL ${url}: ${e.message}`);
             continue; 
         }
@@ -243,17 +252,28 @@ class Crawler {
                   return Promise.resolve([]);
               });
               
-              // Wait for this batch to complete before starting the next batch
-              // This ensures database connections aren't exhausted and logs are written incrementally
-              const results = await Promise.all(tasks);
-              
-              results.forEach(links => {
-                  links.forEach(link => {
-                      if (!this.fetchedPool.has(link)) {
-                          nextDepthLinks.add(link);
-                      }
-                  });
-              });
+              // --- FIX: Catch kill signals in the batch ---
+              try {
+                // Wait for this batch to complete before starting the next batch
+                // This ensures database connections aren't exhausted and logs are written incrementally
+                const results = await Promise.all(tasks);
+                
+                results.forEach(links => {
+                    links.forEach(link => {
+                        if (!this.fetchedPool.has(link)) {
+                            nextDepthLinks.add(link);
+                        }
+                    });
+                });
+              } catch (err) {
+                // If any task threw a Kill error, we stop the entire crawl here
+                if (err.message && (err.message.includes('killed') || err.message.includes('Killed'))) {
+                    throw err;
+                }
+                // Other errors are logged in processWork, but if Promise.all fails otherwise:
+                logger.error(`Batch processing failed: ${err.message}`);
+              }
+              // --------------------------------------------
           }
           
           nextDepthLinks.forEach(link => urlPool.add(link));
@@ -264,6 +284,9 @@ class Crawler {
       }
     } catch (error) {
       logger.error(`Crawl failed: ${error.message}`, error);
+      // --- FIX: Re-throw error so the Worker knows it failed/was killed ---
+      throw error;
+      // -------------------------------------------------------------------
     }
   }
 

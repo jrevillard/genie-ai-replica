@@ -790,12 +790,9 @@
                         <td class="cell-main">{{ doc.file_name }}</td>
                         <td>
                           <span
-                            :class="[
-                              'status-tag',
-                              getStatusClass(doc.dataprep.status),
-                            ]"
+                            :class="['status-tag', getStatusClass(doc)]"
                           >
-                            {{ doc.dataprep.status }}
+                            {{ getDisplayStatus(doc) }}
                           </span>
                         </td>
                         <td>
@@ -1331,12 +1328,6 @@
                   v-if="!isLoading && securityDetails"
                   class="security-findings-section"
                 >
-                  {{
-                    console.log(
-                      "[AdminDashboard] Rendering security-findings-section, securityDetails:",
-                      securityDetails
-                    )
-                  }}
                   <div
                     v-if="
                       securityDetails.vulnerabilityDetails &&
@@ -2621,7 +2612,6 @@ export default {
       },
       selectedDocuments: [],
 
-      selectedDocuments: [],
       // --- END: DOCUMENT and HIERARCHY DATA ---
 
       showUploadDialog: false,
@@ -2794,12 +2784,6 @@ export default {
     /**
      * Shows a confirmation dialog.
      * @param {object} options - Dialog options.
-     * @param {string} options.title - The dialog title.
-     * @param {string} options.message - The dialog message.
-     * @param {string} [options.confirmText='OK'] - The confirm button text.
-     * @param {string} [options.cancelText='Cancel'] - The cancel button text.
-     * @param {function} options.onConfirm - Callback function if confirmed.
-     * @param {function} [options.onCancel] - Callback function if canceled.
      */
     showConfirmDialog({
       title,
@@ -2846,7 +2830,6 @@ export default {
 
     /**
      * Handle document list pagination.
-     * @param {number} newPage - The page number to navigate to.
      */
     handleDocumentPagination(newPage) {
       if (
@@ -2861,7 +2844,6 @@ export default {
 
     /**
      * Sets the sort key and toggles the sort order.
-     * @param {string} key - The key of the column to sort by.
      */
     sortBy(key) {
       if (this.sortKey === key) {
@@ -2972,7 +2954,7 @@ export default {
       }
     },
 
-    // Get current effective theme (useful for components that need the actual theme)
+    // Get current effective theme
     getCurrentTheme() {
       return this.currentTheme;
     },
@@ -4171,16 +4153,71 @@ export default {
       this.selectedFileId = docId;
       this.showDetailsDialog = true;
     },
-    getStatusClass(status) {
-      if (status === "ingested") return "status-ingested";
-      if (status === "Ingesting") return "status-ingesting";
-      if (status === "Ingested with Warnings")
-        return "status-ingested-with-warnings";
-      if (status === "Ingestion Error") return "status-ingestion-error";
-      if (status === "pending") return "status-pending";
-      if (status === "retracted") return "status-retracted";
+    
+    // UPDATED: Determine status class based on crawl status first
+    getStatusClass(doc) {
+      // 1. Normalize Access: Handle snake_case, camelCase, or potential array wrapping
+      let job = doc.crawl_job || doc.crawlJob;
+      if (Array.isArray(job)) job = job.length > 0 ? job[0] : null;
+
+      // 2. Normalize Strings
+      const crawlStatus = job?.status ? String(job.status).toLowerCase().trim() : null;
+      const dataPrepStatus = doc.dataprep?.status ? String(doc.dataprep.status).toLowerCase().trim() : '';
+
+      // 3. Priority Logic: Crawl Status takes precedence for active/failed states
+      if (crawlStatus === 'crawling') return 'status-ingesting'; // Blue
+      if (crawlStatus === 'failed' || crawlStatus === 'killed') return 'status-error'; // Red
+      
+      // 4. Fallback Logic: DataPrep Status
+      if (dataPrepStatus === "ingested") return "status-ingested";
+      if (dataPrepStatus === "ingesting") return "status-ingesting";
+      if (dataPrepStatus === "ingested with warnings") return "status-ingested-with-warnings";
+      if (dataPrepStatus === "ingestion error") return "status-ingestion-error";
+      if (dataPrepStatus === "pending") return "status-pending";
+      if (dataPrepStatus === "retracted") return "status-retracted";
+      
       return "";
     },
+
+    getDisplayStatus(doc) {
+      // 1. Normalize Access
+      let job = doc.crawl_job || doc.crawlJob;
+      if (Array.isArray(job)) job = job.length > 0 ? job[0] : null;
+
+      // 2. Priority Logic
+      if (job && job.status) {
+        const s = String(job.status).toLowerCase().trim();
+        if (s === 'crawling') return 'Crawling';
+        if (s === 'failed') return 'Crawl Failed';
+        if (s === 'killed') return 'Crawl Killed';
+        // If 'pending', we distinguish it from the file's ingestion pending status
+        if (s === 'pending') return 'Crawl Scheduled';
+      }
+
+      // 3. Fallback to dataprep status or 'Unknown'
+      return doc.dataprep ? doc.dataprep.status : 'Unknown';
+    },
+
+    // NEW: Determine display text based on crawl status first
+    getDisplayStatus(doc) {
+      // 1. Normalize Access
+      let job = doc.crawl_job || doc.crawlJob;
+      if (Array.isArray(job)) job = job[0];
+
+      // 2. Priority Logic
+      if (job && job.status) {
+        const s = job.status.toLowerCase().trim();
+        if (s === 'crawling') return 'Crawling';
+        if (s === 'failed') return 'Crawl Failed';
+        if (s === 'killed') return 'Crawl Killed';
+        // If 'pending', we distinguish it from the file's ingestion pending status
+        if (s === 'pending') return 'Crawl Scheduled';
+      }
+
+      // 3. Fallback to dataprep status or 'Unknown'
+      return doc.dataprep ? doc.dataprep.status : 'Unknown';
+    },
+
     selectAllDocuments(event) {
       if (event.target.checked) {
         // MODIFICATION: Select based on _key, not file_id
@@ -4335,32 +4372,38 @@ export default {
     async loadDocuments() {
       this.isDocumentsLoading = true;
       try {
-        // Start with the required parameters
+        // 1. Prepare Params 
+        // Note: 'sort' and 'order' removed because the backend returned 400 Bad Request.
+        // The list will load in the backend's default order (currently Ascending/Oldest First).
         const params = {
           page: this.documentPagination.page,
           limit: this.documentPagination.limit,
         };
 
-        // Conditionally add the search parameter if it has a value
         if (this.documentSearchTerm && this.documentSearchTerm.trim() !== "") {
           params.search = this.documentSearchTerm.trim();
         }
 
-        // The block for adding the 'status' parameter has been intentionally removed.
-        // We will now always fetch all documents and filter them on the client side.
-
-        // Call the service with the correctly built params object
+        // 2. Call API
         const response = await documentFileService.getFiles(params);
+        
+        // 3. Normalize Data
+        // Map DB 'uploaded_date' to UI 'upload_date' so the client-side table renders dates correctly
+        const rawDocs = response.data || [];
+        this.documents = rawDocs.map(doc => {
+            if (!doc.upload_date && doc.uploaded_date) {
+                doc.upload_date = doc.uploaded_date;
+            }
+            return doc;
+        });
 
-        // The documents array is inside the 'data' property
-        this.documents = response.data || [];
-
-        // The pagination info is inside the 'pagination' property
+        // 4. Pagination
         if (response.pagination) {
           this.documentPagination.total = response.pagination.totalFiles || 0;
           this.documentPagination.page = response.pagination.currentPage || 1;
         }
       } catch (error) {
+        console.error("Error loading documents:", error);
         this.showNotification(
           this.translate(
             "admin.documents.loadError",
@@ -6017,6 +6060,11 @@ input:checked + .slider:before {
   color: var(--warning);
 }
 .status-ingestion-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+/* NEW: Error status for failed/killed crawls */
+.status-error {
   background-color: rgba(239, 68, 68, 0.1);
   color: var(--danger);
 }

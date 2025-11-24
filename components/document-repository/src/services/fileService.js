@@ -545,7 +545,9 @@ class FileService {
         query += ` FILTER ${filters.join(' AND ')}`;
       }
 
-      query += ' SORT file.upload_date DESC';
+      // --- FIX: Sort by uploaded_date instead of upload_date to match DB schema ---
+      query += ' SORT file.uploaded_date DESC'; 
+      
       query += ` LIMIT ${offset}, ${limit}`;
       // MERGE the file with the found crawlJob (if any)
       query += ' RETURN MERGE(file, { crawl_job: crawlJob })';

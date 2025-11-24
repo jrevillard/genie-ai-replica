@@ -1,4 +1,5 @@
 #!/bin/bash
+# This script is used to start the document repository service. It starts clamav first, waits and then starts the node server
 echo "#Starting ClamAV daemon..."
 freshclam --quiet --no-warnings || true
 clamd &

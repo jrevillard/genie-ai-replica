@@ -3,6 +3,7 @@ process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Incre
 const app = require('./app');
 const appConfig = require('./config/appConfig');
 const { logger } = require('../shared-lib');
+const crawlWorker = require('./workers/crawlWorker'); // Import the crawl worker
 
 const PORT = appConfig.port || process.env.PORT || 3001;
 const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
@@ -33,6 +34,14 @@ const server = app.listen(PORT, HOST, () => {
   logger.info(`🚀 Document Repository Server is running on http://${HOST}:${PORT}`);
   logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
   logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
+
+  // Start background workers
+  try {
+    crawlWorker.start();
+    logger.info('🕷️  Background Crawl Worker started');
+  } catch (error) {
+    logger.error('Failed to start Crawl Worker:', error);
+  }
 });
 
 // Handle unhandled promise rejections

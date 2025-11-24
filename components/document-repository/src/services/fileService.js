@@ -5,11 +5,10 @@ const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
-const Crawler = require('../utils/crawler'); // having a crawler utility to fetch webpage content
+const Crawler = require('../utils/crawler'); 
 const langdetect = require('langdetect');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
-
 
 // Import services
 const securityService = require('./securityService');
@@ -22,6 +21,40 @@ class FileService {
     this.uploadDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
     this.allowedMimeTypes = appConfig.upload.allowedMimeTypes;
     this.allowedExtensions = appConfig.upload.allowedExtensions;
+
+    // Initialize collections on startup to ensure crawl_job and crawl_log exist
+    this._initializeCollections();
+  }
+
+  /**
+   * Ensures required collections exist in the database
+   * (New method to support the asynchronous crawler architecture)
+   */
+  async _initializeCollections() {
+    try {
+      const db = await this.getDb();
+      const requiredCollections = ['files', 'ingestion_log', 'crawl_job', 'crawl_log'];
+      
+      for (const collectionName of requiredCollections) {
+        const exists = await db.collection(collectionName).exists();
+        if (!exists) {
+          await db.createCollection(collectionName);
+          logger.info(`[FILE-SERVICE] Created missing collection: ${collectionName}`);
+          
+          // Create indexes for performance
+          if (collectionName === 'crawl_job') {
+            await db.collection('crawl_job').createIndex({ type: 'persistent', fields: ['file_id'], unique: true });
+            await db.collection('crawl_job').createIndex({ type: 'persistent', fields: ['status'] });
+          }
+          if (collectionName === 'crawl_log') {
+            await db.collection('crawl_log').createIndex({ type: 'persistent', fields: ['file_id'] });
+            await db.collection('crawl_log').createIndex({ type: 'persistent', fields: ['timestamp'] });
+          }
+        }
+      }
+    } catch (error) {
+      logger.error(`[FILE-SERVICE] Failed to initialize collections: ${error.message}`);
+    }
   }
 
   /**
@@ -333,9 +366,139 @@ class FileService {
     return uploadedFile;
   }
 
+  // --- NEW ASYNCHRONOUS CRAWLER METHODS (Spec v1.5) ---
+
+  /**
+   * Schedules an asynchronous site crawl.
+   * Creates a file stub and a crawl job record.
+   * @param {string} url - The URL to crawl
+   * @param {number} depth - The crawl depth
+   * @returns {Object} The created file record stub
+   */
+  async scheduleSiteCrawl(url, depth) {
+    const db = await this.getDb();
+    const fileId = fileUtils.generateUniqueFileId();
+    
+    // Extract domain for filename
+    let domain = 'unknown-site';
+    try {
+      domain = new URL(url).hostname;
+    } catch (e) { 
+      logger.warn(`[FILE-SERVICE] Could not parse hostname from ${url}`);
+    }
+    
+    const fileName = `${domain}_full_crawl.md`;
+
+    // 1. Create File Stub
+    const fileRecord = {
+      file_id: fileId,
+      file_name: fileName,
+      file_size: 0,
+      file_type: 'text/markdown', // Set correct type per spec
+      storage_path: null, // Will be updated by worker
+      file_hash: null,
+      labels: [],
+      author: 'System Crawler',
+      uploaded_date: new Date().toISOString(),
+      created_date: new Date().toISOString(),
+      crawl_date: new Date().toISOString(),
+      source_url: url,
+      language: null, // Will be updated by worker
+      chunk_count: 0,
+      dataprep: {
+        status: 'Pending',
+        ingest_date: '',
+        retract_date: ''
+      }
+    };
+
+    // 2. Create Crawl Job
+    const crawlJob = {
+      file_id: fileId,
+      url: url,
+      status: 'Pending',
+      depth: depth,
+      max_pages: appConfig.crawler.maxPages, // Use config
+      pages_crawled: 0,
+      kill_requested: false,
+      started_at: new Date().toISOString(),
+      finished_at: null,
+      error_message: null
+    };
+
+    // Save to DB
+    // We manually save metadata to skip file existence checks in metadataService/uploadFile
+    // because the physical file doesn't exist yet.
+    await db.collection('files').save(fileRecord);
+    await db.collection('crawl_job').save(crawlJob);
+
+    logger.info(`[FILE-SERVICE] Scheduled crawl for ${url} (ID: ${fileId})`);
+    return fileRecord;
+  }
+
+  /**
+   * Get crawl job status by file ID
+   * @param {string} fileId 
+   */
+  async getCrawlJobByFileId(fileId) {
+    const db = await this.getDb();
+    const query = `
+      FOR job IN crawl_job
+      FILTER job.file_id == @fileId
+      RETURN job
+    `;
+    const cursor = await db.query(query, { fileId });
+    return await cursor.next();
+  }
+
+  /**
+   * Add a log entry for a crawl job
+   */
+  async addCrawlLog(fileId, level, stage, message) {
+    const db = await this.getDb();
+    const logEntry = {
+      file_id: fileId,
+      timestamp: new Date().toISOString(),
+      level: level,
+      stage: stage,
+      message: message
+    };
+    await db.collection('crawl_log').save(logEntry);
+  }
+
+  /**
+   * Get logs for a crawl job
+   */
+  async getCrawlLogs(fileId) {
+    const db = await this.getDb();
+    const query = `
+      FOR log IN crawl_log
+      FILTER log.file_id == @fileId
+      SORT log.timestamp ASC
+      RETURN log
+    `;
+    const cursor = await db.query(query, { fileId });
+    return await cursor.all();
+  }
+
+  /**
+   * Trigger kill signal for a crawl job
+   */
+  async killCrawlTask(fileId) {
+    const db = await this.getDb();
+    const query = `
+      FOR job IN crawl_job
+      FILTER job.file_id == @fileId
+      UPDATE job WITH { kill_requested: true } IN crawl_job
+    `;
+    await db.query(query, { fileId });
+    logger.info(`[FILE-SERVICE] Kill signal sent for job ${fileId}`);
+  }
+
 
   /**
    * Get all files with pagination
+   * MODIFIED: Performs a LEFT JOIN on crawl_job to include crawl status in the result
    * @param {Object} options - Query options
    * @returns {Object} Files list with pagination
    */
@@ -345,7 +508,17 @@ class FileService {
       const offset = (page - 1) * limit;
 
       // Build query
-      let query = 'FOR file IN files';
+      // Note: using subquery for the JOIN to be efficient and safe if no job exists
+      let query = `
+        FOR file IN files
+        LET crawlJob = (
+          FOR job IN crawl_job
+          FILTER job.file_id == file.file_id
+          LIMIT 1
+          RETURN job
+        )[0]
+      `;
+      
       const bindVars = {};
 
       // Add filters
@@ -374,7 +547,8 @@ class FileService {
 
       query += ' SORT file.upload_date DESC';
       query += ` LIMIT ${offset}, ${limit}`;
-      query += ' RETURN file';
+      // MERGE the file with the found crawlJob (if any)
+      query += ' RETURN MERGE(file, { crawl_job: crawlJob })';
 
       // Execute query
       const db = await this.getDb();
@@ -409,6 +583,7 @@ class FileService {
 
   /**
    * Delete file by ID
+   * MODIFIED: Added cleanup for crawl_job and crawl_log
    * @param {string} fileId - File ID
    * @returns {boolean} Success status
    */
@@ -423,7 +598,7 @@ class FileService {
       // prepare file path for deletion
       const fileExtension = path.extname(file.file_name).slice(1);
       const fileNameOnDisk = file.file_id + '.' + fileExtension;
-      const filePath = path.join(this.uploadDir, fileNameOnDisk);
+      const filePath = file.storage_path || path.join(this.uploadDir, fileNameOnDisk); // Use stored path if available (crawler), else construct it
 
       // Check if file exists on disk
       try {
@@ -445,6 +620,18 @@ class FileService {
         logger.error(`Failed to delete metadata for file ${fileId}: ${error.message}`);
         throw new Error(`Failed to delete metadata for file ${fileId}`);
       }
+
+      // --- NEW: Clean up crawl job and logs if they exist ---
+      const db = await this.getDb();
+      try {
+        await db.query('FOR job IN crawl_job FILTER job.file_id == @id REMOVE job IN crawl_job', { id: fileId });
+        await db.query('FOR log IN crawl_log FILTER log.file_id == @id REMOVE log IN crawl_log', { id: fileId });
+        logger.debug(`Cleaned up crawl logs and jobs for ${fileId}`);
+      } catch (e) {
+        logger.warn(`Failed to cleanup crawl data for ${fileId}: ${e.message}`);
+        // Proceed, as main file is deleted
+      }
+      // -----------------------------------------------------
 
       // Delete the physical file from disk if it exists
       try {

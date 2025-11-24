@@ -67,6 +67,12 @@ const updateStatusSchema = Joi.object({
   chunk_count: Joi.number().integer().min(0).optional(),
 });
 
+// Schema for scheduling a site crawl
+const scheduleCrawlSchema = Joi.object({
+  url: Joi.string().uri().required(),
+  depth: Joi.number().integer().min(1).max(20).required()
+});
+
 
 class FileController {
   constructor() {
@@ -77,7 +83,7 @@ class FileController {
     this.viewFileInBrowser = this.viewFileInBrowser.bind(this);
     this.uploadFile = this.uploadFile.bind(this);
     this.uploadMultipleFiles = this.uploadMultipleFiles.bind(this);
-    this.uploadLink = this.uploadLink.bind(this); // <-- ADDED BIND
+    this.uploadLink = this.uploadLink.bind(this); 
     this.getFiles = this.getFiles.bind(this);
     this.deleteFile = this.deleteFile.bind(this);
     this.searchFiles = this.searchFiles.bind(this);
@@ -88,10 +94,17 @@ class FileController {
     this.retractFile = this.retractFile.bind(this);
     this.ingestMultipleFiles = this.ingestMultipleFiles.bind(this);
     this.retractMultipleFiles = this.retractMultipleFiles.bind(this);
+    
     // --- NEW BINDS ---
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
+    
+    // --- CRAWLER BINDS ---
+    this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
+    this.getCrawlJob = this.getCrawlJob.bind(this);
+    this.getCrawlLogs = this.getCrawlLogs.bind(this);
+    this.killCrawlTask = this.killCrawlTask.bind(this);
   }
 
   /**
@@ -1154,6 +1167,120 @@ class FileController {
         error: 'Failed to update file status',
         message: error.message
       });
+    }
+  }
+
+  // --- NEW CRAWLER METHODS ---
+
+  /**
+   * Schedule a new site crawl
+   */
+  async scheduleSiteCrawl(req, res) {
+    try {
+      const { error, value } = scheduleCrawlSchema.validate(req.body);
+      
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: error.details[0].message
+        });
+      }
+
+      const { url, depth } = value;
+      
+      // Delegate to service
+      const fileRecord = await fileService.scheduleSiteCrawl(url, depth);
+
+      res.status(202).json({
+        success: true,
+        message: 'Site crawl scheduled successfully',
+        data: this._formatFileRecord(fileRecord)
+      });
+
+    } catch (error) {
+      logger.error('[FILE-CONTROLLER] Schedule crawl error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to schedule crawl',
+        message: error.message
+      });
+    }
+  }
+
+  /**
+   * Get status of a crawl job
+   */
+  async getCrawlJob(req, res) {
+    try {
+      const { fileId } = req.params;
+      if (!fileId) {
+        return res.status(400).json({ success: false, error: 'File ID required' });
+      }
+
+      const job = await fileService.getCrawlJobByFileId(fileId);
+      
+      if (!job) {
+        return res.status(404).json({ success: false, error: 'Crawl job not found' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Crawl job retrieved',
+        data: job
+      });
+
+    } catch (error) {
+      logger.error('[FILE-CONTROLLER] Get crawl job error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Get logs for a crawl job
+   */
+  async getCrawlLogs(req, res) {
+    try {
+      const { fileId } = req.params;
+      if (!fileId) {
+        return res.status(400).json({ success: false, error: 'File ID required' });
+      }
+
+      const logs = await fileService.getCrawlLogs(fileId);
+
+      res.json({
+        success: true,
+        message: 'Crawl logs retrieved',
+        data: logs,
+        count: logs.length
+      });
+
+    } catch (error) {
+      logger.error('[FILE-CONTROLLER] Get crawl logs error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Send kill signal to a crawl job
+   */
+  async killCrawlTask(req, res) {
+    try {
+      const { fileId } = req.params;
+      if (!fileId) {
+        return res.status(400).json({ success: false, error: 'File ID required' });
+      }
+
+      await fileService.killCrawlTask(fileId);
+
+      res.json({
+        success: true,
+        message: 'Kill signal sent to crawl task'
+      });
+
+    } catch (error) {
+      logger.error('[FILE-CONTROLLER] Kill crawl error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
   }
 }

@@ -5,7 +5,7 @@ const { authenticateToken, authorizeRole } = require('../middlewares/authMiddlew
 
 const router = express.Router();
 
-// apply authentication to all endpoints 
+// Apply authentication to all routes
 router.use(authenticateToken);
 
 /**
@@ -48,7 +48,6 @@ router.use(authenticateToken);
  *         description: Forbidden - Admin role required
  */
 router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
-// router.post('/upload', uploadSingle, fileController.uploadFile);
 
 /**
  * @swagger
@@ -93,12 +92,11 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  */
 router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
 
-
 /**
  * @swagger
  * /api/files/upload-link:
  *   post:
- *     summary: Upload a link (webpage), crawl the content and save as a file
+ *     summary: Upload a link (webpage), crawl the content and save as a file (Synchronous/Single Page)
  *     tags: [Files]
  *     security:
  *       - bearerAuth: []
@@ -124,6 +122,43 @@ router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController
  */
 router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink);
 
+/**
+ * @swagger
+ * /api/files/crawl/schedule:
+ *   post:
+ *     summary: Schedule a new asynchronous site crawl (Full Site)
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *               - depth
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: The target URL to crawl
+ *               depth:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 20
+ *                 description: The crawl depth (1-20)
+ *     responses:
+ *       202:
+ *         description: Crawl scheduled successfully
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ */
+router.post('/crawl/schedule', authorizeRole(['Admin']), fileController.scheduleSiteCrawl);
 
 /**
  * @swagger
@@ -181,11 +216,11 @@ router.get('/', fileController.getFiles);
  *     parameters:
  *       - in: query
  *         name: q
+ *         required: true
  *         schema:
  *           type: string
  *           minLength: 2
  *           maxLength: 100
- *         required: true
  *         description: Search query
  *       - in: query
  *         name: limit
@@ -223,9 +258,9 @@ router.get('/search', fileController.searchMetadata);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -239,6 +274,85 @@ router.get('/:fileId', fileController.getMetadata);
 
 /**
  * @swagger
+ * /api/files/{fileId}/crawl-job:
+ *   get:
+ *     summary: Get the crawl job status for a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: Crawl job details
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ *       404:
+ *         description: Job not found
+ */
+router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCrawlJob);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/crawl-log:
+ *   get:
+ *     summary: Get all crawl log entries for a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: List of crawl log entries
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ */
+router.get('/:fileId/crawl-log', authorizeRole(['Admin']), fileController.getCrawlLogs);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/kill-crawl:
+ *   post:
+ *     summary: Triggers the kill signal for a crawl task
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: Kill signal sent successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin role required
+ *       404:
+ *         description: Job not found
+ */
+router.post('/:fileId/kill-crawl', authorizeRole(['Admin']), fileController.killCrawlTask);
+
+/**
+ * @swagger
  * /api/files/{fileId}/view:
  *   get:
  *     summary: Get file as base64 for viewing
@@ -248,9 +362,9 @@ router.get('/:fileId', fileController.getMetadata);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -273,9 +387,9 @@ router.get('/:fileId/view', fileController.viewFile);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -298,9 +412,9 @@ router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -353,9 +467,9 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -408,9 +522,9 @@ router.delete('/', fileController.deleteMultipleFiles);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     requestBody:
  *       required: true
@@ -434,11 +548,6 @@ router.delete('/', fileController.deleteMultipleFiles);
  */
 router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
 
-// Update file metadata by fileId
-// This endpoint has similar functionality to the one above (PATCH /:fileId)
-// So this one and related functionalities are commented out and can be modified later if needed
-// router.patch('/metadata/:fileId', fileController.updateMetadataController);
-
 /**
  * @swagger
  * /api/files/{fileId}/ingest:
@@ -450,9 +559,9 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -477,9 +586,9 @@ router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFi
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -540,9 +649,9 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     requestBody:
  *       required: true
@@ -587,9 +696,9 @@ router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.a
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     responses:
  *       200:
@@ -610,9 +719,9 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.ge
  *     parameters:
  *       - in: path
  *         name: fileId
+ *         required: true
  *         schema:
  *           type: string
- *         required: true
  *         description: File ID
  *     requestBody:
  *       required: true

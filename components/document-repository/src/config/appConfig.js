@@ -9,7 +9,7 @@ const config = {
 
   // Database configuration
   database: {
-    url: process.env.ARANGO_URL || 'http://91.203.132.51:8529',
+    url: process.env.ARANGO_URL || 'http://arangodb:8529',
     username: process.env.ARANGO_USERNAME || 'root',
     password: process.env.ARANGO_PASSWORD || 'test',
     databaseName: process.env.ARANGO_DB_NAME || 'node-services'
@@ -43,6 +43,16 @@ const config = {
     ],
     allowedExtensions: ['.pdf', '.docx', '.xlsx', '.md', '.html', '.txt'],
     requiredIngestionLanguage: process.env.DOCUMENT_INGESTION_LANGUAGE || 'en' // Added per spec
+  },
+
+  // Crawler configuration (NEW)
+  crawler: {
+    // Hard limit on pages to crawl per job to prevent OOM
+    maxPages: parseInt(process.env.CRAWLER_MAX_PAGES) || 1000,
+    // How often the worker polls for new jobs (in ms)
+    pollIntervalMs: parseInt(process.env.CRAWLER_POLL_INTERVAL_MS) || 5000,
+    // Number of concurrent page fetches
+    workerConcurrency: parseInt(process.env.CRAWLER_WORKER_CONCURRENCY) || 10
   },
 
   //Labeling configuration 

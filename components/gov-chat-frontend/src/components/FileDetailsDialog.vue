@@ -1115,6 +1115,35 @@ export default {
       );
       // TODO: Call backend service when available
     },
+
+    // --- Log Tab Methods ---
+    switchToLogTab() {
+      this.activeTab = 'ingestionLog';
+      // Fetch logs when switching to the tab for the first time
+      if (this.ingestionLogs.length === 0) {
+        this.fetchIngestionLogs();
+      }
+    },
+
+    async fetchIngestionLogs() {
+      this.isLogLoading = true;
+      try {
+        const response = await documentFileService.getIngestionLogs(this.fileId);
+        this.ingestionLogs = response.data || [];
+      } catch (error) {
+        console.error("Error fetching ingestion logs:", error);
+        this.showNotification(
+          this.translate(
+            "details.notifications.logError",
+            "Failed to fetch ingestion logs."
+          ),
+          "error"
+        );
+        this.ingestionLogs = []; // Clear logs on error
+      } finally {
+        this.isLogLoading = false;
+      }
+    },
     
     closeConfirm() {
       this.confirmDialog.visible = false;

@@ -1,420 +1,440 @@
 <template>
-  <div class="dialog-backdrop" @click="$emit('close')"></div>
-  <div class="dialog-container">
-    <div v-if="isLoading || isFetchingData" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <span>{{ translate("details.loading", "Loading File Details...") }}</span>
-    </div>
+  <Teleport to="body">
+    <div class="dialog-backdrop" @click="$emit('close')"></div>
+    <div class="dialog-container">
+      <div v-if="isLoading || isFetchingData" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <span>{{
+          translate("details.loading", "Loading File Details...")
+        }}</span>
+      </div>
 
-    <template v-if="!isLoading && !isFetchingData && file">
-      <div class="dialog-header">
-        <h2 class="dialog-title">
-          {{ translate("details.title", "File Details") }}
-        </h2>
-        <button
-          class="dialog-close-btn"
-          @click="$emit('close')"
-          :aria-label="translate('details.close', 'Close')"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+      <template v-if="!isLoading && !isFetchingData && file">
+        <div class="dialog-header">
+          <h2 class="dialog-title">
+            {{ translate("details.title", "File Details") }}
+          </h2>
+          <button
+            class="dialog-close-btn"
+            @click="$emit('close')"
+            :aria-label="translate('details.close', 'Close')"
           >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
 
-      <!-- NEW: Tab Navigation -->
-      <div class="tab-nav">
-        <button
-          :class="['tab-btn', { active: activeTab === 'details' }]"
-          @click="activeTab = 'details'"
-        >
-          {{ translate("details.tabs.details", "Details") }}
-        </button>
-        <!-- Crawl Log Tab (Only visible if a crawl job exists) -->
-        <button
-          v-if="crawlJob"
-          :class="['tab-btn', { active: activeTab === 'crawlLog' }]"
-          @click="switchToCrawlLogTab"
-        >
-          {{ translate("details.tabs.crawlLog", "Crawling Log") }}
-        </button>
-        <!-- Ingestion Log Tab (Only visible if status indicates ingestion started) -->
-        <button
-          v-if="file.dataprep.status?.toLowerCase() !== 'pending'"
-          :class="['tab-btn', { active: activeTab === 'ingestionLog' }]"
-          @click="switchToLogTab"
-        >
-          {{ translate("details.tabs.ingestionLog", "Ingestion Log") }}
-        </button>
-      </div>
+        <div class="tab-nav">
+          <button
+            :class="['tab-btn', { active: activeTab === 'details' }]"
+            @click="activeTab = 'details'"
+          >
+            {{ translate("details.tabs.details", "Details") }}
+          </button>
+          <button
+            v-if="crawlJob"
+            :class="['tab-btn', { active: activeTab === 'crawlLog' }]"
+            @click="switchToCrawlLogTab"
+          >
+            {{ translate("details.tabs.crawlLog", "Crawling Log") }}
+          </button>
+          <button
+            v-if="file.dataprep.status?.toLowerCase() !== 'pending'"
+            :class="['tab-btn', { active: activeTab === 'ingestionLog' }]"
+            @click="switchToLogTab"
+          >
+            {{ translate("details.tabs.ingestionLog", "Ingestion Log") }}
+          </button>
+        </div>
 
-      <!-- Tab Content -->
-      <div class="dialog-body">
-        <!-- Details Tab Content -->
-        <div
-          v-if="activeTab === 'details'"
-          class="tab-content tab-content-details"
-        >
-          <div class="form-section">
-            <div class="form-group">
-              <label for="file-name">{{
-                translate("details.fileName", "File Name")
-              }}</label>
-              <input
-                id="file-name"
-                type="text"
-                class="form-input"
-                v-model="editableFile.file_name"
-                :disabled="!isMetadataEditable"
-                :class="{
-                  'is-invalid':
-                    !editableFile.file_name.trim() && isMetadataEditable,
-                }"
-              />
-            </div>
-            <div class="form-group">
-              <label for="author">{{
-                translate("details.author", "Author")
-              }}</label>
-              <input
-                id="author"
-                type="text"
-                class="form-input"
-                v-model="editableFile.author"
-                :disabled="!isMetadataEditable"
-                :class="{
-                  'is-invalid':
-                    !editableFile.author.trim() && isMetadataEditable,
-                }"
-              />
-            </div>
-            <div class="form-group">
-              <label>{{ translate("details.labels", "Labels") }}</label>
-
-              <div class="select-all-container">
-                <input
-                  type="checkbox"
-                  id="select-all-labels"
-                  v-model="areAllLabelsSelected"
-                  :disabled="!isMetadataEditable"
-                />
-                <label for="select-all-labels">{{
-                  translate("details.selectAll", "Select All")
+        <div class="dialog-body">
+          <div
+            v-if="activeTab === 'details'"
+            class="tab-content tab-content-details"
+          >
+            <div class="form-section">
+              <div class="form-group">
+                <label for="file-name">{{
+                  translate("details.fileName", "File Name")
                 }}</label>
+                <input
+                  id="file-name"
+                  type="text"
+                  class="form-input"
+                  v-model="editableFile.file_name"
+                  :disabled="!isMetadataEditable"
+                  :class="{
+                    'is-invalid':
+                      !editableFile.file_name.trim() && isMetadataEditable,
+                  }"
+                />
               </div>
+              <div class="form-group">
+                <label for="author">{{
+                  translate("details.author", "Author")
+                }}</label>
+                <input
+                  id="author"
+                  type="text"
+                  class="form-input"
+                  v-model="editableFile.author"
+                  :disabled="!isMetadataEditable"
+                  :class="{
+                    'is-invalid':
+                      !editableFile.author.trim() && isMetadataEditable,
+                  }"
+                />
+              </div>
+              <div class="form-group">
+                <label>{{ translate("details.labels", "Labels") }}</label>
 
-              <div class="labels-container">
-                <div v-if="isHierarchyLoading" class="loading-state-small">
-                  {{ translate("details.loadingLabels", "Loading labels...") }}
+                <div class="select-all-container">
+                  <input
+                    type="checkbox"
+                    id="select-all-labels"
+                    v-model="areAllLabelsSelected"
+                    :disabled="!isMetadataEditable"
+                  />
+                  <label for="select-all-labels">{{
+                    translate("details.selectAll", "Select All")
+                  }}</label>
                 </div>
-                <div
-                  v-for="category in knowledgeHierarchy"
-                  :key="category.catKey"
-                  class="label-category"
-                >
-                  <strong>{{ category.name }}</strong>
+
+                <div class="labels-container">
+                  <div v-if="isHierarchyLoading" class="loading-state-small">
+                    {{
+                      translate("details.loadingLabels", "Loading labels...")
+                    }}
+                  </div>
                   <div
-                    v-for="service in category.children"
-                    :key="service._key"
-                    class="label-item"
+                    v-for="category in knowledgeHierarchy"
+                    :key="category.catKey"
+                    class="label-category"
                   >
-                    <input
-                      type="checkbox"
-                      :id="'label-' + service._key"
-                      :value="service.name"
-                      v-model="editableFile.labels"
-                      :disabled="!isMetadataEditable"
-                    />
-                    <label :for="'label-' + service._key">{{
-                      service.name
-                    }}</label>
+                    <strong>{{ category.name }}</strong>
+                    <div
+                      v-for="service in category.children"
+                      :key="service._key"
+                      class="label-item"
+                    >
+                      <input
+                        type="checkbox"
+                        :id="'label-' + service._key"
+                        :value="service.name"
+                        v-model="editableFile.labels"
+                        :disabled="!isMetadataEditable"
+                      />
+                      <label :for="'label-' + service._key">{{
+                        service.name
+                      }}</label>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            <div class="info-section">
+              <div class="info-item">
+                <span class="info-label">{{
+                  translate("details.status", "Status")
+                }}</span>
+                <span :class="['status-tag', getStatusClass(displayStatus)]">
+                  {{ displayStatus }}
+                </span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">{{
+                  translate("details.fileId", "File ID")
+                }}</span>
+                <span>{{ file.file_id }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">{{
+                  translate("details.fileType", "File Type")
+                }}</span>
+                <span>{{ file.file_type }}</span>
+              </div>
+
+              <div class="info-item" v-if="file.source_url">
+                <span class="info-label">{{
+                  translate("details.sourceUrl", "Source URL")
+                }}</span>
+                <a
+                  :href="file.source_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="file-view-link"
+                >
+                  {{
+                    translate("details.visitSource", "Visit Original Website")
+                  }}
+                  <span class="external-icon">↗</span>
+                </a>
+              </div>
+
+              <div class="info-item" v-if="canViewInternalFile">
+                <span class="info-label">{{
+                  translate("details.viewFile", "Stored File")
+                }}</span>
+                <a
+                  href="#"
+                  @click.prevent="handleViewInternalFile"
+                  class="file-view-link"
+                >
+                  {{
+                    crawlJob
+                      ? translate(
+                          "details.viewCrawled",
+                          "View Generated Markdown"
+                        )
+                      : translate(
+                          "details.viewFileContent",
+                          "View File Content"
+                        )
+                  }}
+                </a>
+              </div>
+
+              <div class="info-item">
+                <span class="info-label">{{
+                  translate("details.fileSize", "File Size")
+                }}</span>
+                <span>{{ formatFileSize(file.file_size) }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">{{
+                  translate("details.uploadDate", "Upload Date")
+                }}</span>
+                <span>{{ new Date(file.upload_date).toLocaleString() }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">{{
+                  translate("details.hash", "SHA256 Hash")
+                }}</span>
+                <span class="info-hash">{{ file.file_hash }}</span>
+              </div>
+            </div>
           </div>
 
-          <div class="info-section">
-            <div class="info-item">
-              <span class="info-label">{{
-                translate("details.status", "Status")
-              }}</span>
-              <!-- UPDATED: Display Crawl Status if active/failed, else Dataprep status -->
-              <span
-                :class="['status-tag', getStatusClass(displayStatus)]"
+          <div
+            v-if="activeTab === 'crawlLog'"
+            class="tab-content crawl-log-tab"
+          >
+            <div class="log-actions">
+              <button
+                class="btn btn-outline"
+                @click="fetchCrawlLogs"
+                :disabled="isCrawlLogLoading"
               >
-                {{ displayStatus }}
-              </span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">{{
-                translate("details.fileId", "File ID")
-              }}</span>
-              <span>{{ file.file_id }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">{{
-                translate("details.fileType", "File Type")
-              }}</span>
-              <span>{{ file.file_type }}</span>
-            </div>
-
-            <!-- LINK 1: Original Source URL (External) -->
-            <div class="info-item" v-if="file.source_url">
-              <span class="info-label">{{
-                translate("details.sourceUrl", "Source URL")
-              }}</span>
-              <a
-                :href="file.source_url"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="file-view-link"
-              >
-                {{ translate("details.visitSource", "Visit Original Website") }}
-                <span class="external-icon">↗</span>
-              </a>
-            </div>
-
-            <!-- LINK 2: View Crawled/Uploaded File (Internal) -->
-            <!-- Only show for crawled files if crawl succeeded, or for normal files -->
-            <div class="info-item" v-if="canViewInternalFile">
-              <span class="info-label">{{
-                translate("details.viewFile", "Stored File")
-              }}</span>
-              <a
-                href="#"
-                @click.prevent="handleViewInternalFile"
-                class="file-view-link"
-              >
-                {{ 
-                  crawlJob 
-                  ? translate("details.viewCrawled", "View Generated Markdown") 
-                  : translate("details.viewFileContent", "View File Content")
+                <span v-if="isCrawlLogLoading" class="btn-spinner"></span>
+                {{
+                  isCrawlLogLoading
+                    ? translate("common.loading", "Loading...")
+                    : translate("common.refresh", "Refresh")
                 }}
-              </a>
-            </div>
+              </button>
 
-            <div class="info-item">
-              <span class="info-label">{{
-                translate("details.fileSize", "File Size")
-              }}</span>
-              <span>{{ formatFileSize(file.file_size) }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">{{
-                translate("details.uploadDate", "Upload Date")
-              }}</span>
-              <span>{{ new Date(file.upload_date).toLocaleString() }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">{{
-                translate("details.hash", "SHA256 Hash")
-              }}</span>
-              <span class="info-hash">{{ file.file_hash }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- NEW: Crawling Log Tab Content -->
-        <div
-          v-if="activeTab === 'crawlLog'"
-          class="tab-content crawl-log-tab"
-        >
-          <div class="log-actions">
-            <button
-              class="btn btn-outline"
-              @click="fetchCrawlLogs"
-              :disabled="isCrawlLogLoading"
-            >
-              <span v-if="isCrawlLogLoading" class="btn-spinner"></span>
-              {{
-                isCrawlLogLoading
-                  ? translate("common.loading", "Loading...")
-                  : translate("common.refresh", "Refresh")
-              }}
-            </button>
-            
-            <!-- Kill Crawl Button -->
-             <button
+              <button
                 v-if="crawlJob && crawlJob.status === 'Crawling'"
                 class="btn btn-danger"
                 @click="handleKillCrawl"
               >
                 {{ translate("details.log.killCrawl", "Kill Crawl Task") }}
               </button>
-          </div>
+            </div>
 
-          <div class="log-table-container">
-             <table class="log-table">
-              <thead>
-                <tr>
-                  <th>{{ translate("details.log.timestamp", "Timestamp") }}</th>
-                  <th>{{ translate("details.log.level", "Level") }}</th>
-                  <th>{{ translate("details.log.stage", "Stage") }}</th>
-                  <th>{{ translate("details.log.message", "Message") }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="isCrawlLogLoading">
-                  <td colspan="4" class="log-state">
-                    {{ translate("details.log.loadingLogs", "Loading logs...") }}
-                  </td>
-                </tr>
-                <tr v-if="!isCrawlLogLoading && crawlLogs.length === 0">
-                  <td colspan="4" class="log-state">
-                    {{ translate("details.log.noLogs", "No logs found.") }}
-                  </td>
-                </tr>
-                <tr v-for="(log, index) in crawlLogs" :key="index">
-                  <td data-label="Timestamp">
-                    {{ new Date(log.timestamp).toLocaleString() }}
-                  </td>
-                  <td data-label="Level">
-                    <span :class="['log-level', getLogLevelClass(log.level)]">{{ log.level }}</span>
-                  </td>
-                  <td data-label="Stage">{{ log.stage }}</td>
-                  <td data-label="Message">{{ log.message }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Ingestion Log Tab Content -->
-        <div
-          v-if="activeTab === 'ingestionLog'"
-          class="tab-content ingestion-log-tab"
-        >
-          <div class="log-actions">
-            <button
-              class="btn btn-outline"
-              @click="fetchIngestionLogs"
-              :disabled="isLogLoading"
-            >
-              <span v-if="isLogLoading" class="btn-spinner"></span>
-              {{
-                isLogLoading
-                  ? translate("common.loading", "Loading...")
-                  : translate("common.refresh", "Refresh")
-              }}
-            </button>
-            <div class="kill-actions">
-              <span class="kill-label">{{
-                translate("details.log.killActions", "Kill Actions:")
-              }}</span>
-              <button
-                class="btn btn-danger"
-                @click="handleKillDocument"
-                :disabled="file.dataprep.status?.toLowerCase() !== 'ingesting'"
-              >
-                {{
-                  translate("details.log.killDocument", "Kill This Document")
-                }}
-              </button>
-              <button
-                class="btn btn-danger"
-                @click="handleKillProcess"
-                :disabled="file.dataprep.status?.toLowerCase() !== 'ingesting'"
-              >
-                {{
-                  translate("details.log.killProcess", "Kill Ingestion Process")
-                }}
-              </button>
+            <div class="log-table-container">
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th>
+                      {{ translate("details.log.timestamp", "Timestamp") }}
+                    </th>
+                    <th>{{ translate("details.log.level", "Level") }}</th>
+                    <th>{{ translate("details.log.stage", "Stage") }}</th>
+                    <th>{{ translate("details.log.message", "Message") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="isCrawlLogLoading">
+                    <td colspan="4" class="log-state">
+                      {{
+                        translate("details.log.loadingLogs", "Loading logs...")
+                      }}
+                    </td>
+                  </tr>
+                  <tr v-if="!isCrawlLogLoading && crawlLogs.length === 0">
+                    <td colspan="4" class="log-state">
+                      {{ translate("details.log.noLogs", "No logs found.") }}
+                    </td>
+                  </tr>
+                  <tr v-for="(log, index) in crawlLogs" :key="index">
+                    <td data-label="Timestamp">
+                      {{ new Date(log.timestamp).toLocaleString() }}
+                    </td>
+                    <td data-label="Level">
+                      <span
+                        :class="['log-level', getLogLevelClass(log.level)]"
+                        >{{ log.level }}</span
+                      >
+                    </td>
+                    <td data-label="Stage">{{ log.stage }}</td>
+                    <td data-label="Message">{{ log.message }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-          <div class="log-table-container">
-            <table class="log-table">
-              <thead>
-                <tr>
-                  <th>{{ translate("details.log.timestamp", "Timestamp") }}</th>
-                  <th>{{ translate("details.log.level", "Level") }}</th>
-                  <th>{{ translate("details.log.stage", "Stage") }}</th>
-                  <th>{{ translate("details.log.message", "Message") }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="isLogLoading">
-                  <td colspan="4" class="log-state">
-                    {{ translate("details.log.loadingLogs", "Loading logs...") }}
-                  </td>
-                </tr>
-                <tr v-if="!isLogLoading && ingestionLogs.length === 0">
-                  <td colspan="4" class="log-state">
-                    {{ translate("details.log.noLogs", "No logs found.") }}
-                  </td>
-                </tr>
-                <tr v-for="(log, index) in ingestionLogs" :key="index">
-                  <td data-label="Timestamp">
-                    {{ new Date(log.timestamp).toLocaleString() }}
-                  </td>
-                  <td data-label="Level">
-                    <span :class="['log-level', getLogLevelClass(log.level)]">{{ log.level }}</span>
-                  </td>
-                  <td data-label="Stage">{{ log.stage }}</td>
-                  <td data-label="Message">{{ log.message }}</td>
-                </tr>
-              </tbody>
-            </table>
+
+          <div
+            v-if="activeTab === 'ingestionLog'"
+            class="tab-content ingestion-log-tab"
+          >
+            <div class="log-actions">
+              <button
+                class="btn btn-outline"
+                @click="fetchIngestionLogs"
+                :disabled="isLogLoading"
+              >
+                <span v-if="isLogLoading" class="btn-spinner"></span>
+                {{
+                  isLogLoading
+                    ? translate("common.loading", "Loading...")
+                    : translate("common.refresh", "Refresh")
+                }}
+              </button>
+              <div class="kill-actions">
+                <span class="kill-label">{{
+                  translate("details.log.killActions", "Kill Actions:")
+                }}</span>
+                <button
+                  class="btn btn-danger"
+                  @click="handleKillDocument"
+                  :disabled="
+                    file.dataprep.status?.toLowerCase() !== 'ingesting'
+                  "
+                >
+                  {{
+                    translate("details.log.killDocument", "Kill This Document")
+                  }}
+                </button>
+                <button
+                  class="btn btn-danger"
+                  @click="handleKillProcess"
+                  :disabled="
+                    file.dataprep.status?.toLowerCase() !== 'ingesting'
+                  "
+                >
+                  {{
+                    translate(
+                      "details.log.killProcess",
+                      "Kill Ingestion Process"
+                    )
+                  }}
+                </button>
+              </div>
+            </div>
+            <div class="log-table-container">
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th>
+                      {{ translate("details.log.timestamp", "Timestamp") }}
+                    </th>
+                    <th>{{ translate("details.log.level", "Level") }}</th>
+                    <th>{{ translate("details.log.stage", "Stage") }}</th>
+                    <th>{{ translate("details.log.message", "Message") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="isLogLoading">
+                    <td colspan="4" class="log-state">
+                      {{
+                        translate("details.log.loadingLogs", "Loading logs...")
+                      }}
+                    </td>
+                  </tr>
+                  <tr v-if="!isLogLoading && ingestionLogs.length === 0">
+                    <td colspan="4" class="log-state">
+                      {{ translate("details.log.noLogs", "No logs found.") }}
+                    </td>
+                  </tr>
+                  <tr v-for="(log, index) in ingestionLogs" :key="index">
+                    <td data-label="Timestamp">
+                      {{ new Date(log.timestamp).toLocaleString() }}
+                    </td>
+                    <td data-label="Level">
+                      <span
+                        :class="['log-level', getLogLevelClass(log.level)]"
+                        >{{ log.level }}</span
+                      >
+                    </td>
+                    <td data-label="Stage">{{ log.stage }}</td>
+                    <td data-label="Message">{{ log.message }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="dialog-footer">
-        <button
-          class="btn btn-danger"
-          @click="handleDelete"
-          :disabled="file.dataprep.status?.toLowerCase() === 'ingested'"
-        >
-          {{ translate("common.delete", "Delete") }}
-        </button>
-        <div class="footer-actions">
-          <button class="btn btn-outline" @click="$emit('close')">
-            {{ translate("common.cancel", "Cancel") }}
-          </button>
+        <div class="dialog-footer">
           <button
-            class="btn btn-secondary"
-            @click="handleSave"
-            :disabled="isSaveDisabled"
-            v-if="activeTab === 'details'"
+            class="btn btn-danger"
+            @click="handleDelete"
+            :disabled="file.dataprep.status?.toLowerCase() === 'ingested'"
           >
-            {{ translate("details.buttons.saveMetadata", "Save Metadata") }}
+            {{ translate("common.delete", "Delete") }}
           </button>
-          <button
-            :class="mainAction.class"
-            @click="mainAction.handler"
-            :disabled="mainAction.disabled"
-            v-if="activeTab === 'details'"
-          >
-            {{ mainAction.text }}
-          </button>
+          <div class="footer-actions">
+            <button class="btn btn-outline" @click="$emit('close')">
+              {{ translate("common.cancel", "Cancel") }}
+            </button>
+            <button
+              class="btn btn-secondary"
+              @click="handleSave"
+              :disabled="isSaveDisabled"
+              v-if="activeTab === 'details'"
+            >
+              {{ translate("details.buttons.saveMetadata", "Save Metadata") }}
+            </button>
+            <button
+              :class="mainAction.class"
+              @click="mainAction.handler"
+              :disabled="mainAction.disabled"
+              v-if="activeTab === 'details'"
+            >
+              {{ mainAction.text }}
+            </button>
+          </div>
         </div>
-      </div>
-    </template>
+      </template>
 
-    <!-- Confirmation Dialog -->
-    <ConfirmDialog
-      :visible="confirmDialog.visible"
-      :title="confirmDialog.title"
-      :message="confirmDialog.message"
-      :confirmText="confirmDialog.confirmText"
-      :cancelText="confirmDialog.cancelText"
-      :secondaryText="confirmDialog.secondaryText"
-      @confirm="confirmDialog.onConfirm"
-      @cancel="confirmDialog.onCancel"
-      @secondary="confirmDialog.onSecondary"
-    />
-  </div>
+      <ConfirmDialog
+        :visible="confirmDialog.visible"
+        :title="confirmDialog.title"
+        :message="confirmDialog.message"
+        :confirmText="confirmDialog.confirmText"
+        :cancelText="confirmDialog.cancelText"
+        :secondaryText="confirmDialog.secondaryText"
+        @confirm="confirmDialog.onConfirm"
+        @cancel="confirmDialog.onCancel"
+        @secondary="confirmDialog.onSecondary"
+      />
+    </div>
+  </Teleport>
 </template>
 
 <script>
@@ -445,7 +465,7 @@ export default {
       crawlJob: null,
       crawlLogs: [],
       isCrawlLogLoading: false,
-      
+
       editableFile: {
         file_name: "",
         author: "",
@@ -478,37 +498,51 @@ export default {
         return true;
       if (!this.editableFile.author || !this.editableFile.author.trim())
         return true;
-      if (this.isHierarchyLoading || this.englishKnowledgeHierarchy.length === 0)
+      if (
+        this.isHierarchyLoading ||
+        this.englishKnowledgeHierarchy.length === 0
+      )
         return true;
       return false;
     },
     isMetadataEditable() {
-      return this.file && this.file.dataprep.status?.toLowerCase() !== "ingested";
+      return (
+        this.file && this.file.dataprep.status?.toLowerCase() !== "ingested"
+      );
     },
     // Determine what status text to show
     displayStatus() {
       if (this.crawlJob) {
-        if (this.crawlJob.status === 'Crawling') return 'Crawling';
-        if (this.crawlJob.status === 'Failed' || this.crawlJob.status === 'Killed') return 'Crawl Failed';
+        if (this.crawlJob.status === "Crawling") return "Crawling";
+        if (
+          this.crawlJob.status === "Failed" ||
+          this.crawlJob.status === "Killed"
+        )
+          return "Crawl Failed";
         // If succeeded, fallback to dataprep status
       }
-      return this.file?.dataprep.status || '';
+      return this.file?.dataprep.status || "";
     },
     // Determine if the internal file link should be shown
     canViewInternalFile() {
       if (!this.file) return false;
       // If it's a crawl job, only show if succeeded (or warning)
       if (this.crawlJob) {
-        return this.crawlJob.status === 'Succeeded' || this.crawlJob.status === 'Crawl Warning';
+        return (
+          this.crawlJob.status === "Succeeded" ||
+          this.crawlJob.status === "Crawl Warning"
+        );
       }
       // Regular file: show if not purely external (or if viewUrl logic handles it)
       return true;
     },
     mainAction() {
       if (!this.file) return {};
-      const status = this.file.dataprep.status ? this.file.dataprep.status.toLowerCase() : '';
+      const status = this.file.dataprep.status
+        ? this.file.dataprep.status.toLowerCase()
+        : "";
       const hasLabels = this.editableFile.labels.length > 0;
-      
+
       // Retract logic
       if (status === "ingested" || status === "ingested with warnings") {
         return {
@@ -518,11 +552,11 @@ export default {
           handler: this.handleRetract,
         };
       }
-      
+
       // Ingest logic
       // Spec 4.4: Disable if crawlJob exists AND status is NOT Succeeded
       let isCrawlPending = false;
-      if (this.crawlJob && this.crawlJob.status !== 'Succeeded') {
+      if (this.crawlJob && this.crawlJob.status !== "Succeeded") {
         isCrawlPending = true;
       }
 
@@ -530,7 +564,7 @@ export default {
         text: this.translate("details.buttons.ingest", "Ingest"),
         class: "btn btn-success",
         // Disable if: Save disabled OR No labels OR Crawl not finished
-        disabled: this.isSaveDisabled || !hasLabels || isCrawlPending, 
+        disabled: this.isSaveDisabled || !hasLabels || isCrawlPending,
         handler: this.handleIngest,
       };
     },
@@ -539,7 +573,9 @@ export default {
         return [];
       }
       return this.knowledgeHierarchy.flatMap((category) =>
-        category.children ? category.children.map((service) => service.name) : []
+        category.children
+          ? category.children.map((service) => service.name)
+          : []
       );
     },
     // URL for the internal file endpoint
@@ -617,19 +653,19 @@ export default {
           ]);
 
         this.file = fileResponse;
-        
+
         // Try to fetch crawl job status
         try {
-           const crawlResponse = await documentFileService.getCrawlJob(id);
-           // The controller returns { success: true, data: job } or similar. 
-           // Service returns response.data. We assume service logic returns the job object.
-           // If using the service I generated: it returns response.data (which is the whole object with .data property? 
-           // No, the generated service returns response.data. 
-           // Controller sends { success, data }. So response.data is {success, data}.
-           // Actually looking at the generated service code `return response.data` means we get the JSON body.
-           if (crawlResponse && crawlResponse.data) {
-             this.crawlJob = crawlResponse.data;
-           }
+          const crawlResponse = await documentFileService.getCrawlJob(id);
+          // The controller returns { success: true, data: job } or similar.
+          // Service returns response.data. We assume service logic returns the job object.
+          // If using the service I generated: it returns response.data (which is the whole object with .data property?
+          // No, the generated service returns response.data.
+          // Controller sends { success, data }. So response.data is {success, data}.
+          // Actually looking at the generated service code `return response.data` means we get the JSON body.
+          if (crawlResponse && crawlResponse.data) {
+            this.crawlJob = crawlResponse.data;
+          }
         } catch (e) {
           // Not a crawl job or not found, ignore
           this.crawlJob = null;
@@ -653,7 +689,6 @@ export default {
         if (this.file.dataprep.status?.toLowerCase() !== "pending") {
           this.fetchIngestionLogs();
         }
-
       } catch (error) {
         console.error("Error fetching data for FileDetailsDialog:", error);
         this.showNotification(
@@ -672,18 +707,29 @@ export default {
     },
     // ... existing mapEnglishToLocale ...
     mapEnglishToLocale(englishLabels, localeHierarchy, englishHierarchy) {
-      if (!englishLabels || englishLabels.length === 0 || !localeHierarchy || !englishHierarchy) {
+      if (
+        !englishLabels ||
+        englishLabels.length === 0 ||
+        !localeHierarchy ||
+        !englishHierarchy
+      ) {
         return [];
       }
       const localeLabels = [];
       const englishServiceMap = new Map();
       englishHierarchy.forEach((engCategory, catIndex) => {
-        if (engCategory.children && localeHierarchy[catIndex] && localeHierarchy[catIndex].children) {
+        if (
+          engCategory.children &&
+          localeHierarchy[catIndex] &&
+          localeHierarchy[catIndex].children
+        ) {
           engCategory.children.forEach((engService, servIndex) => {
             const localeService = localeHierarchy[catIndex].children[servIndex];
             if (localeService) {
-              const keyToMatch = engService._key || `idx_${catIndex}_${servIndex}`;
-              const localeKey = localeService._key || `idx_${catIndex}_${servIndex}`;
+              const keyToMatch =
+                engService._key || `idx_${catIndex}_${servIndex}`;
+              const localeKey =
+                localeService._key || `idx_${catIndex}_${servIndex}`;
               if (keyToMatch === localeKey) {
                 englishServiceMap.set(engService.name, localeService.name);
               }
@@ -702,7 +748,12 @@ export default {
     },
     // ... existing getEnglishLabelNames ...
     getEnglishLabelNames(selectedLocaleLabels) {
-      if (!selectedLocaleLabels || selectedLocaleLabels.length === 0 || this.englishKnowledgeHierarchy.length === 0 || this.knowledgeHierarchy.length === 0) {
+      if (
+        !selectedLocaleLabels ||
+        selectedLocaleLabels.length === 0 ||
+        this.englishKnowledgeHierarchy.length === 0 ||
+        this.knowledgeHierarchy.length === 0
+      ) {
         return [];
       }
       const englishLabels = [];
@@ -710,7 +761,11 @@ export default {
       this.knowledgeHierarchy.forEach((localeCategory) => {
         if (localeCategory.children) {
           localeCategory.children.forEach((localeService) => {
-            const englishService = this.findServiceInHierarchy(this.englishKnowledgeHierarchy, localeService._key, localeService.name);
+            const englishService = this.findServiceInHierarchy(
+              this.englishKnowledgeHierarchy,
+              localeService._key,
+              localeService.name
+            );
             if (englishService) {
               localeServiceMap.set(localeService.name, englishService.name);
             }
@@ -721,7 +776,11 @@ export default {
         if (localeServiceMap.has(localeLabel)) {
           englishLabels.push(localeServiceMap.get(localeLabel));
         } else {
-          const directMatch = this.findServiceInHierarchy(this.englishKnowledgeHierarchy, null, localeLabel);
+          const directMatch = this.findServiceInHierarchy(
+            this.englishKnowledgeHierarchy,
+            null,
+            localeLabel
+          );
           if (directMatch) {
             englishLabels.push(directMatch.name);
           } else {
@@ -790,7 +849,7 @@ export default {
         return false;
       }
     },
-    
+
     // NEW: Open the internal file (Markdown or otherwise)
     async handleViewInternalFile() {
       let token = null;
@@ -803,7 +862,10 @@ export default {
 
         if (!token) {
           this.showNotification(
-            this.translate("details.notifications.tokenError", "Authentication token not found."),
+            this.translate(
+              "details.notifications.tokenError",
+              "Authentication token not found."
+            ),
             "error"
           );
           return;
@@ -811,7 +873,10 @@ export default {
 
         if (!this.fileViewUrl) {
           this.showNotification(
-            this.translate("details.notifications.viewError", "Could not determine file view URL."),
+            this.translate(
+              "details.notifications.viewError",
+              "Could not determine file view URL."
+            ),
             "error"
           );
           return;
@@ -834,7 +899,10 @@ export default {
       } catch (error) {
         console.error("Error viewing internal file:", error);
         this.showNotification(
-          this.translate("details.notifications.viewError", "Could not load file for viewing.") + ` ${error.message}`,
+          this.translate(
+            "details.notifications.viewError",
+            "Could not load file for viewing."
+          ) + ` ${error.message}`,
           "error"
         );
       }
@@ -842,10 +910,10 @@ export default {
 
     // --- Crawl Log Methods ---
     switchToCrawlLogTab() {
-       this.activeTab = 'crawlLog';
-       if (this.crawlLogs.length === 0) {
-         this.fetchCrawlLogs();
-       }
+      this.activeTab = "crawlLog";
+      if (this.crawlLogs.length === 0) {
+        this.fetchCrawlLogs();
+      }
     },
     async fetchCrawlLogs() {
       this.isCrawlLogLoading = true;
@@ -856,7 +924,10 @@ export default {
       } catch (error) {
         console.error("Error fetching crawl logs:", error);
         this.showNotification(
-          this.translate("details.notifications.crawlLogError", "Failed to fetch crawl logs."),
+          this.translate(
+            "details.notifications.crawlLogError",
+            "Failed to fetch crawl logs."
+          ),
           "error"
         );
       } finally {
@@ -864,9 +935,12 @@ export default {
       }
     },
     handleKillCrawl() {
-       this.confirmDialog = {
+      this.confirmDialog = {
         visible: true,
-        title: this.translate("details.confirm.killCrawlTitle", "Kill Crawl Task"),
+        title: this.translate(
+          "details.confirm.killCrawlTitle",
+          "Kill Crawl Task"
+        ),
         message: this.translate(
           "details.confirm.killCrawl",
           "Are you sure you want to stop this crawling task? Partial data may be saved."
@@ -879,18 +953,24 @@ export default {
     },
     async confirmKillCrawl() {
       this.closeConfirm();
-      this.isCrawlLogLoading = true; 
+      this.isCrawlLogLoading = true;
       try {
         await documentFileService.killCrawl(this.fileId);
         this.showNotification(
-          this.translate("details.notifications.killCrawlSuccess", "Kill signal sent."),
+          this.translate(
+            "details.notifications.killCrawlSuccess",
+            "Kill signal sent."
+          ),
           "success"
         );
         // Refresh info to see status change
         this.fetchData(this.fileId);
       } catch (error) {
-         this.showNotification(
-          this.translate("details.notifications.killCrawlError", "Failed to send kill signal."),
+        this.showNotification(
+          this.translate(
+            "details.notifications.killCrawlError",
+            "Failed to send kill signal."
+          ),
           "error"
         );
       } finally {
@@ -910,7 +990,7 @@ export default {
         );
         return;
       }
-      
+
       this.showNotification(
         this.translate(
           "details.notifications.ingestSaving",
@@ -923,7 +1003,10 @@ export default {
       if (saveSuccess) {
         this.confirmDialog = {
           visible: true,
-          title: this.translate("details.confirm.ingestTitle", "Confirm Ingestion"),
+          title: this.translate(
+            "details.confirm.ingestTitle",
+            "Confirm Ingestion"
+          ),
           message: this.translate(
             "details.confirm.ingest",
             "Are you sure you want to ingest this file? This will start the data processing pipeline."
@@ -934,7 +1017,7 @@ export default {
           onCancel: this.closeConfirm,
         };
       } else {
-         this.showNotification(
+        this.showNotification(
           this.translate(
             "details.notifications.ingestSaveFailed",
             "Failed to save metadata. Ingestion cancelled."
@@ -976,7 +1059,10 @@ export default {
     handleRetract() {
       this.confirmDialog = {
         visible: true,
-        title: this.translate("details.confirm.retractTitle", "Confirm Retraction"),
+        title: this.translate(
+          "details.confirm.retractTitle",
+          "Confirm Retraction"
+        ),
         message: this.translate(
           "details.confirm.retract",
           "Are you sure you want to retract this file?"
@@ -1020,7 +1106,10 @@ export default {
     handleDelete() {
       this.confirmDialog = {
         visible: true,
-        title: this.translate("details.confirm.deleteTitle", "Confirm Deletion"),
+        title: this.translate(
+          "details.confirm.deleteTitle",
+          "Confirm Deletion"
+        ),
         message: this.translate(
           "details.confirm.delete",
           "Are you sure you want to permanently delete this file? This action cannot be undone."
@@ -1065,12 +1154,18 @@ export default {
     handleKillDocument() {
       this.confirmDialog = {
         visible: true,
-        title: this.translate("details.confirm.killDocTitle", "Kill Document Ingestion"),
+        title: this.translate(
+          "details.confirm.killDocTitle",
+          "Kill Document Ingestion"
+        ),
         message: this.translate(
           "details.confirm.killDoc",
           "Are you sure you want to kill the ingestion task for THIS document? The process will attempt a graceful rollback."
         ),
-        confirmText: this.translate("details.log.killDocument", "Kill This Document"),
+        confirmText: this.translate(
+          "details.log.killDocument",
+          "Kill This Document"
+        ),
         cancelText: this.translate("common.cancel", "Cancel"),
         onConfirm: this.confirmKillDocument,
         onCancel: this.closeConfirm,
@@ -1088,16 +1183,22 @@ export default {
       );
       // TODO: Call backend service when available
     },
-    
+
     handleKillProcess() {
-       this.confirmDialog = {
+      this.confirmDialog = {
         visible: true,
-        title: this.translate("details.confirm.killProcTitle", "Kill ENTIRE Ingestion Process"),
+        title: this.translate(
+          "details.confirm.killProcTitle",
+          "Kill ENTIRE Ingestion Process"
+        ),
         message: this.translate(
           "details.confirm.killProc",
           "WARNING: This will kill the entire backend ingestion service, affecting ALL files currently processing. Are you absolutely sure?"
         ),
-        confirmText: this.translate("details.log.killProcess", "Kill Ingestion Process"),
+        confirmText: this.translate(
+          "details.log.killProcess",
+          "Kill Ingestion Process"
+        ),
         cancelText: this.translate("common.cancel", "Cancel"),
         onConfirm: this.confirmKillProcess,
         onCancel: this.closeConfirm,
@@ -1118,7 +1219,7 @@ export default {
 
     // --- Log Tab Methods ---
     switchToLogTab() {
-      this.activeTab = 'ingestionLog';
+      this.activeTab = "ingestionLog";
       // Fetch logs when switching to the tab for the first time
       if (this.ingestionLogs.length === 0) {
         this.fetchIngestionLogs();
@@ -1128,7 +1229,9 @@ export default {
     async fetchIngestionLogs() {
       this.isLogLoading = true;
       try {
-        const response = await documentFileService.getIngestionLogs(this.fileId);
+        const response = await documentFileService.getIngestionLogs(
+          this.fileId
+        );
         this.ingestionLogs = response.data || [];
       } catch (error) {
         console.error("Error fetching ingestion logs:", error);
@@ -1144,7 +1247,7 @@ export default {
         this.isLogLoading = false;
       }
     },
-    
+
     closeConfirm() {
       this.confirmDialog.visible = false;
     },
@@ -1157,7 +1260,7 @@ export default {
 
     // --- Util Methods ---
     getStatusClass(status) {
-      const lowerStatus = status ? status.toLowerCase() : '';
+      const lowerStatus = status ? status.toLowerCase() : "";
       if (lowerStatus === "ingested") return "status-ingested";
       if (lowerStatus === "pending") return "status-pending";
       if (lowerStatus === "retracted") return "status-retracted";
@@ -1231,7 +1334,8 @@ export default {
 }
 
 /* Ingestion/Crawl Log Tab Styles */
-.ingestion-log-tab, .crawl-log-tab {
+.ingestion-log-tab,
+.crawl-log-tab {
   display: flex;
   flex-direction: column;
   gap: 1rem;

@@ -39,6 +39,11 @@ CLAMSCAN_LOCAL_FALLBACK=true
 CLAMSCAN_PATH=/usr/bin/clamdscan
 CLAMSCAN_ACTIVE=true
 
+# Crawler configuration
+POLL_INTERVAL_MS=5000
+MAX_PAGES_PER_JOB=1000
+WORKER_CONCURRENCY=10
+
 # Logging config
 LOG_LEVEL=info
 LOG_FILE=app.log

@@ -111,19 +111,21 @@ const processJob = async (job, db) => {
     // --- B. DEFINE WORKER CALLBACK ---
     // This function is called by the Crawler utility for every fetched page
     const workCallback = async (crawledUrl, $) => {
-      // 1. Check Kill Signal & Limits
+      // 1. Check Kill Signal
       const currentJob = await db.collection('crawl_job').document(job._key);
       
       if (currentJob.kill_requested) {
-        throw new Error('Crawl task killed by user.');
+        throw new Error('Killed'); // Use specific string for logic in Crawler
       }
 
+      // 2. Check Page Limit
       if (pagesProcessed >= MAX_PAGES_PER_JOB) {
         logger.warn(`[CRAWL-WORKER] Job ${job._key} hit max page limit (${MAX_PAGES_PER_JOB}). Stopping traversal.`);
-        return; 
+        // FIX: Throw Error instead of return to signal Crawler to stop the loop
+        throw new Error('MaxPagesReached');
       }
 
-      // 2. Content Cleaning (Remove non-content elements)
+      // 3. Content Cleaning (Remove non-content elements)
       // Standard junk
       $('script').remove();
       $('style').remove();
@@ -155,7 +157,7 @@ const processJob = async (job, db) => {
           }
       });
 
-      // 3. Fix Relative Image Paths
+      // 4. Fix Relative Image Paths
       $('img').each((i, el) => {
         const src = $(el).attr('src');
         if (src && !src.startsWith('http') && !src.startsWith('data:')) {
@@ -181,7 +183,7 @@ const processJob = async (job, db) => {
       });
 
 
-      // 4. Extract Main Content
+      // 5. Extract Main Content
       // Try to find specific semantic tags, fall back to body
       let contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
       
@@ -190,10 +192,10 @@ const processJob = async (job, db) => {
         return;
       }
 
-      // 5. Convert to Markdown
+      // 6. Convert to Markdown
       const markdown = turndownService.turndown(contentHtml);
 
-      // 6. Store Segment
+      // 7. Store Segment
       if (markdown && markdown.length > 0) {
         markdownSegments.push(`## Source: ${crawledUrl}\n\n${markdown}`);
         pagesProcessed++;
@@ -203,7 +205,7 @@ const processJob = async (job, db) => {
         }
       }
 
-      // 7. Log Progress
+      // 8. Log Progress
       await fileService.addCrawlLog(fileId, 'INFO', 'Page', `Crawled: ${crawledUrl}`);
     };
 
@@ -269,7 +271,49 @@ const processJob = async (job, db) => {
 
   } catch (error) {
     // --- H. ERROR HANDLING ---
-    const isKilled = error.message.includes('Killed') || error.message.includes('killed');
+    
+    // Check for our control flow error
+    const isMaxPages = error.message === 'MaxPagesReached';
+    if (isMaxPages) {
+        // If max pages reached, we treat it as success (partial crawl)
+        logger.info(`[CRAWL-WORKER] Job ${job._key} reached max pages. Saving what we have.`);
+        try {
+            // Re-run save logic here or call a shared function. 
+            // For safety, if we hit this catch, we should probably save what we have so far.
+            // Ideally, the crawler.js catches 'MaxPagesReached' and returns gracefully so we don't land here.
+            // But if we land here, handle it:
+            
+            if (markdownSegments.length > 0) {
+                const finalMarkdown = markdownSegments.join('\n\n---\n\n');
+                await fileUtils.ensureDirectoryExists(UPLOAD_DIR);
+                const fileName = `${fileId}.md`;
+                const storagePath = path.join(UPLOAD_DIR, fileName);
+                await fs.writeFile(storagePath, finalMarkdown, 'utf8');
+                
+                const stats = await fs.stat(storagePath);
+                const fileHash = await fileUtils.getFileHash(storagePath);
+                
+                const fileDb = await dbService.getConnection('files');
+                await fileDb.query(`
+                  FOR f IN files
+                  FILTER f.file_id == @fileId
+                  UPDATE f WITH { storage_path: @storagePath, file_size: @fileSize, file_hash: @fileHash } IN files
+                `, { fileId, storagePath, fileSize: stats.size, fileHash });
+
+                await db.collection('crawl_job').update(job._key, {
+                  status: 'Succeeded',
+                  pages_crawled: pagesProcessed,
+                  finished_at: new Date().toISOString()
+                });
+                await fileService.addCrawlLog(fileId, 'WARN', 'System', 'Crawl stopped: Max pages reached. Saved partial content.');
+                return; // Exit function, do not mark as Failed
+            }
+        } catch (saveErr) {
+            logger.error(`Failed to save partial crawl: ${saveErr.message}`);
+        }
+    }
+
+    const isKilled = error.message.includes('Killed');
     const finalStatus = isKilled ? 'Killed' : 'Failed';
     const logMessage = isKilled ? 'Crawl task was killed by user.' : `Crawl failed: ${error.message}`;
 

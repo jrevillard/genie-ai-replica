@@ -186,8 +186,8 @@ class Crawler {
       }
       return sublinks;
     } catch (error) {
-      // --- FIX: Re-throw kill errors to stop the crawl ---
-      if (error.message && (error.message.includes('killed') || error.message.includes('Killed'))) {
+      // --- FIX: Re-throw critical control errors to stop the crawl ---
+      if (error.message && (error.message.includes('killed') || error.message.includes('Killed') || error.message === 'MaxPagesReached')) {
         throw error; 
       }
       // --------------------------------------------------
@@ -225,7 +225,7 @@ class Crawler {
             }
         } catch(e) {
             // Check for kill signal on seed
-            if (e.message && (e.message.includes('killed') || e.message.includes('Killed'))) {
+            if (e.message && (e.message.includes('killed') || e.message.includes('Killed') || e.message === 'MaxPagesReached')) {
                 throw e;
             }
             logger.error(`Failed to fetch seed URL ${url}: ${e.message}`);
@@ -242,7 +242,6 @@ class Crawler {
           const nextDepthLinks = new Set();
           
           // Process in chunks based on concurrency limit
-          // THIS IS THE KEY FIX: Processing in batches with Promise.all
           for (let i = 0; i < currentUrls.length; i += workers) {
               const batch = currentUrls.slice(i, i + workers);
               const tasks = batch.map(subUrl => {
@@ -254,8 +253,6 @@ class Crawler {
               
               // --- FIX: Catch kill signals in the batch ---
               try {
-                // Wait for this batch to complete before starting the next batch
-                // This ensures database connections aren't exhausted and logs are written incrementally
                 const results = await Promise.all(tasks);
                 
                 results.forEach(links => {
@@ -270,7 +267,11 @@ class Crawler {
                 if (err.message && (err.message.includes('killed') || err.message.includes('Killed'))) {
                     throw err;
                 }
-                // Other errors are logged in processWork, but if Promise.all fails otherwise:
+                // If max pages reached, stop cleanly (success)
+                if (err.message === 'MaxPagesReached') {
+                   logger.info('Max pages reached. Stopping crawl loop.');
+                   return;
+                }
                 logger.error(`Batch processing failed: ${err.message}`);
               }
               // --------------------------------------------
@@ -283,6 +284,12 @@ class Crawler {
         logger.info(`Crawl finished. Reached max depth ${maxDepth} or exhausted pool.`);
       }
     } catch (error) {
+      // Special handling for seed level limit
+      if (error.message === 'MaxPagesReached') {
+         logger.info('Max pages reached during seed processing. Stopping.');
+         return;
+      }
+
       logger.error(`Crawl failed: ${error.message}`, error);
       // --- FIX: Re-throw error so the Worker knows it failed/was killed ---
       throw error;

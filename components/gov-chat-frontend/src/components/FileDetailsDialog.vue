@@ -2,11 +2,29 @@
   <Teleport to="body">
     <div class="dialog-backdrop" @click="$emit('close')"></div>
     <div class="dialog-container">
-      <div v-if="isLoading || isFetchingData" class="loading-overlay">
+      <div
+        v-if="isLoading || isFetchingData || isDownloading"
+        class="loading-overlay"
+      >
         <div class="loading-spinner"></div>
-        <span>{{
+
+        <span v-if="!isDownloading">{{
           translate("details.loading", "Loading File Details...")
         }}</span>
+
+        <template v-else>
+          <span
+            >{{ translate("details.downloading", "Downloading...") }}
+            {{ downloadMessage }}</span
+          >
+
+          <div class="progress-track">
+            <div
+              class="progress-fill"
+              :style="{ width: downloadProgress + '%' }"
+            ></div>
+          </div>
+        </template>
       </div>
 
       <template v-if="!isLoading && !isFetchingData && file">
@@ -194,16 +212,21 @@
                   class="file-view-link"
                 >
                   {{
-                    crawlJob
+                    file.file_size > 20 * 1024 * 1024
+                      ? translate("details.downloadFile", "Download File")
+                      : crawlJob
                       ? translate(
                           "details.viewCrawled",
                           "View Generated Markdown"
                         )
-                      : translate(
-                          "details.viewFileContent",
-                          "View File Content"
-                        )
+                      : translate("details.viewFileContent", "View File")
                   }}
+                  <span
+                    v-if="file.file_size > 20 * 1024 * 1024"
+                    class="external-icon"
+                    >⭳</span
+                  >
+                  <span v-else class="external-icon">↗</span>
                 </a>
               </div>
 
@@ -457,6 +480,9 @@ export default {
   emits: ["close", "file-updated", "action-triggered"],
   data() {
     return {
+      isDownloading: false,
+      downloadProgress: 0,
+      downloadMessage: "",
       isLoading: true,
       isFetchingData: true,
       isHierarchyLoading: true,
@@ -850,61 +876,153 @@ export default {
       }
     },
 
-    // NEW: Open the internal file (Markdown or otherwise)
+    // NEW: Open/Download the internal file (Generic for all types)
     async handleViewInternalFile() {
-      let token = null;
+      const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20MB
+      const isLargeFile = this.file.file_size > LARGE_FILE_THRESHOLD;
+      let newWindow = null;
+
+      // --- SCENARIO A: SMALL FILE (View in Tab) ---
+      // Open tab immediately to bypass popup blockers
+      if (!isLargeFile) {
+        newWindow = window.open("", "_blank");
+        if (newWindow) {
+          // User-friendly loading state (Readable HTML)
+          newWindow.document.write(`
+            <html>
+              <head><title>Loading...</title></head>
+              <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#f3f4f6;">
+                <div style="text-align:center;">
+                  <div style="width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem;"></div>
+                  <p style="color:#4b5563;">Loading ${this.file.file_name}...</p>
+                </div>
+                <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+              </body>
+            </html>
+          `);
+        } else {
+          this.showNotification(
+            "Popup blocked. Please allow popups for this site.",
+            "error"
+          );
+          return;
+        }
+      }
+
+      // --- SCENARIO B: LARGE FILE (Download with Progress) ---
+      if (isLargeFile) {
+        this.isDownloading = true;
+        this.downloadProgress = 0;
+        this.downloadMessage = "Starting...";
+      }
+
       try {
         const userDataString = localStorage.getItem("user");
-        if (userDataString) {
-          const userData = JSON.parse(userDataString);
-          token = userData?.accessToken;
+        const token = userDataString
+          ? JSON.parse(userDataString)?.accessToken
+          : null;
+
+        if (!token) throw new Error("Authentication token not found.");
+        if (!this.fileViewUrl)
+          throw new Error("Could not determine file view URL.");
+
+        if (isLargeFile) {
+          // --- XHR LOGIC (For Progress Bar) ---
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", this.fileViewUrl);
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+            xhr.responseType = "blob";
+
+            xhr.onprogress = (event) => {
+              // Calculate MB loaded so far
+              const loadedMB = (event.loaded / (1024 * 1024)).toFixed(1);
+              
+              // LOGIC FIX: If event.total is missing (Nginx issue), fallback to our known DB file size
+              const totalSize = event.lengthComputable ? event.total : this.file.file_size;
+
+              if (totalSize > 0) {
+                // Now we can calculate the real percentage
+                const percent = Math.floor((event.loaded / totalSize) * 100);
+                
+                // Update the bar and the text together
+                this.downloadProgress = Math.min(percent, 100); // Clamp to 100%
+                this.downloadMessage = `${this.downloadProgress}% (${loadedMB} MB)`;
+              } else {
+                // Only if we truly have NO size info (rare)
+                this.downloadProgress = 100; 
+                this.downloadMessage = `${loadedMB} MB downloaded...`;
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                const blob = xhr.response;
+                const fileType =
+                  this.file.file_type ||
+                  blob.type ||
+                  "application/octet-stream";
+                const downloadBlob = new Blob([blob], { type: fileType });
+                const url = URL.createObjectURL(downloadBlob);
+
+                // Trigger Save
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = this.file.file_name || "download";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+                resolve();
+              } else {
+                reject(new Error(`HTTP ${xhr.status}`));
+              }
+            };
+
+            xhr.onerror = () => reject(new Error("Network Error"));
+            xhr.send();
+          });
+
+          this.showNotification("Download complete.", "success");
+        } else {
+          // --- FETCH LOGIC (For Small Files) ---
+          const response = await fetch(this.fileViewUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+
+          if (!response.ok)
+            throw new Error(`Failed to fetch file: ${response.status}`);
+
+          const rawBlob = await response.blob();
+          const fileType =
+            this.file.file_type || rawBlob.type || "application/octet-stream";
+          const blob = new Blob([rawBlob], { type: fileType });
+          const fileURL = URL.createObjectURL(blob);
+
+          // Redirect the ALREADY OPEN window to the blob URL
+          if (newWindow) newWindow.location.href = fileURL;
         }
-
-        if (!token) {
-          this.showNotification(
-            this.translate(
-              "details.notifications.tokenError",
-              "Authentication token not found."
-            ),
-            "error"
-          );
-          return;
-        }
-
-        if (!this.fileViewUrl) {
-          this.showNotification(
-            this.translate(
-              "details.notifications.viewError",
-              "Could not determine file view URL."
-            ),
-            "error"
-          );
-          return;
-        }
-
-        // Fetch with auth headers first to verify access/get blob, then open
-        const response = await fetch(this.fileViewUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const fileURL = URL.createObjectURL(blob);
-        window.open(fileURL, "_blank", "noopener,noreferrer");
       } catch (error) {
-        console.error("Error viewing internal file:", error);
-        this.showNotification(
-          this.translate(
-            "details.notifications.viewError",
-            "Could not load file for viewing."
-          ) + ` ${error.message}`,
-          "error"
-        );
+        console.error("View/Download error:", error);
+
+        // RESTORED: Detailed error message in the new window (Better UX)
+        if (newWindow && !isLargeFile) {
+          newWindow.document.body.innerHTML = `
+            <div style="text-align:center;color:#ef4444;font-family:sans-serif;padding:2rem;">
+              <h3>Error Loading File</h3>
+              <p>${error.message}</p>
+              <button onclick="window.close()" style="padding:0.5rem 1rem;cursor:pointer;">Close</button>
+            </div>
+          `;
+        }
+
+        this.showNotification("Could not load file. " + error.message, "error");
+      } finally {
+        this.isDownloading = false;
+        this.downloadProgress = 0;
+        this.downloadMessage = "";
       }
     },
 
@@ -1848,5 +1966,21 @@ export default {
 .file-view-link:hover {
   text-decoration: underline;
   color: var(--primary-dark, #2563eb);
+}
+.progress-track {
+  width: 200px;
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background-color: var(--primary, #3b82f6);
+  transition: width 0.2s ease;
+}
+[data-theme="dark"] .progress-track {
+  background-color: #475569;
 }
 </style>

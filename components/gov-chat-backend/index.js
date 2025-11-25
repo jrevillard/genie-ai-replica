@@ -643,7 +643,7 @@ async function initializeServices() {
   logger.debug('Logger level:', logger.level || 'unknown');
 
   // Validate environment variables
-  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_USERNAME', 'ARANGO_PASSWORD'];
+  const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB_NAME', 'ARANGO_USER', 'ARANGO_PASSWORD'];
   const missingEnvVars = requiredEnvVars.filter(key => !process.env[key]);
   if (missingEnvVars.length > 0) {
     logger.error('Missing required environment variables:', { missing: missingEnvVars });
@@ -653,8 +653,8 @@ async function initializeServices() {
   // Log ArangoDB configuration
   logger.debug('ArangoDB configuration:', {
     ARANGO_URL: process.env.ARANGO_URL,
-    ARANGO_DB: process.env.ARANGO_DB,
-    ARANGO_USERNAME: process.env.ARANGO_USERNAME,
+    ARANGO_DB_NAME: process.env.ARANGO_DB_NAME,
+    ARANGO_USER: process.env.ARANGO_USER,
     ARANGO_PASSWORD: process.env.ARANGO_PASSWORD ? '***' : 'undefined'
   });
 

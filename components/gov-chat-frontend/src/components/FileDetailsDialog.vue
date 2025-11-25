@@ -881,22 +881,26 @@ export default {
       const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20MB
       const isLargeFile = this.file.file_size > LARGE_FILE_THRESHOLD;
 
-      // --- 1. SMART ROUTING (The Missing Piece) ---
-      // Determine if the browser can natively render this file type.
+      // --- 1. SMART ROUTING ---
       const mime = (this.file.file_type || "").toLowerCase();
+      // Explicitly detect Markdown
+      const isMarkdown =
+        mime.includes("markdown") ||
+        (this.file.file_name || "").endsWith(".md");
+
       const isViewable =
         mime.startsWith("image/") ||
         mime.startsWith("text/") ||
         mime === "application/pdf" ||
-        mime === "application/json";
+        mime === "application/json" ||
+        isMarkdown;
 
-      // We ONLY open a new tab if it is Small AND Viewable.
-      // If it is Large OR Non-Viewable (like DOCX), we use the in-page download overlay.
+      // Only open tab if Small AND Viewable
       const useNewTab = !isLargeFile && isViewable;
 
       let newWindow = null;
 
-      // --- SCENARIO A: VIEW IN TAB (Small PDF/Image/Text) ---
+      // --- SCENARIO A: PREPARE TAB ---
       if (useNewTab) {
         newWindow = window.open("", "_blank");
         if (newWindow) {
@@ -921,7 +925,7 @@ export default {
         }
       }
 
-      // --- SCENARIO B: DOWNLOAD OVERLAY (Large Files OR Docx/Xlsx) ---
+      // --- SCENARIO B: DOWNLOAD OVERLAY ---
       if (!useNewTab) {
         this.isDownloading = true;
         this.downloadProgress = 0;
@@ -939,7 +943,7 @@ export default {
           throw new Error("Could not determine file view URL.");
 
         if (!useNewTab) {
-          // --- XHR DOWNLOAD LOGIC (Progress Bar) ---
+          // --- XHR DOWNLOAD (Progress Bar) ---
           await new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open("GET", this.fileViewUrl);
@@ -948,8 +952,6 @@ export default {
 
             xhr.onprogress = (event) => {
               const loadedMB = (event.loaded / (1024 * 1024)).toFixed(1);
-
-              // Nginx Fix: Fallback to DB file size if event.total is missing
               const totalSize = event.lengthComputable
                 ? event.total
                 : this.file.file_size;
@@ -994,7 +996,7 @@ export default {
 
           this.showNotification("Download complete.", "success");
         } else {
-          // --- FETCH VIEW LOGIC (Tab) ---
+          // --- FETCH VIEW (Tab Navigation) ---
           const response = await fetch(this.fileViewUrl, {
             headers: { Authorization: `Bearer ${token}` },
             cache: "no-store",
@@ -1007,14 +1009,23 @@ export default {
           const fileType =
             this.file.file_type || rawBlob.type || "application/octet-stream";
           const blob = new Blob([rawBlob], { type: fileType });
-          const fileURL = URL.createObjectURL(blob);
 
-          if (newWindow) newWindow.location.href = fileURL;
+          // HASH HACK: We append the filename.
+          // 1. Extensions see ".md" and render it.
+          // 2. Browsers see "text/markdown" MIME type and render text.
+          const fileURL =
+            URL.createObjectURL(blob) +
+            "#" +
+            (this.file.file_name || "file.md");
+
+          if (newWindow) {
+            // This replaces the "Loading..." spinner with the actual file/blob
+            newWindow.location.href = fileURL;
+          }
         }
       } catch (error) {
         console.error("View/Download error:", error);
 
-        // Show error in the tab if we opened one
         if (newWindow && useNewTab) {
           newWindow.document.body.innerHTML = `
             <div style="text-align:center;color:#ef4444;font-family:sans-serif;padding:2rem;">
@@ -1024,7 +1035,6 @@ export default {
             </div>
           `;
         }
-
         this.showNotification("Could not load file. " + error.message, "error");
       } finally {
         this.isDownloading = false;

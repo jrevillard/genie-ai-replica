@@ -227,7 +227,7 @@ class DatabaseOperationsService {
       const backupPath = path.join(this.backupDir, backupFilename);
   
       const dbInfo = {
-        name: process.env.ARANGO_DB,
+        name: process.env.ARANGO_DB_NAME,
         version: await this.db.version(),
         timestamp: timestamp,
         environment: process.env.NODE_ENV
@@ -496,7 +496,7 @@ class DatabaseOperationsService {
         systemStats: stats ? stats.body : null,
         server: {
           name: process.env.ARANGO_URL,
-          database: process.env.ARANGO_DB,
+          database: process.env.ARANGO_DB_NAME,
           environment: process.env.NODE_ENV
         }
       };

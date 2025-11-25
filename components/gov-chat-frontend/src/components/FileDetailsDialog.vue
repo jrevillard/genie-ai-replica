@@ -880,14 +880,26 @@ export default {
     async handleViewInternalFile() {
       const LARGE_FILE_THRESHOLD = 20 * 1024 * 1024; // 20MB
       const isLargeFile = this.file.file_size > LARGE_FILE_THRESHOLD;
+
+      // --- 1. SMART ROUTING (The Missing Piece) ---
+      // Determine if the browser can natively render this file type.
+      const mime = (this.file.file_type || "").toLowerCase();
+      const isViewable =
+        mime.startsWith("image/") ||
+        mime.startsWith("text/") ||
+        mime === "application/pdf" ||
+        mime === "application/json";
+
+      // We ONLY open a new tab if it is Small AND Viewable.
+      // If it is Large OR Non-Viewable (like DOCX), we use the in-page download overlay.
+      const useNewTab = !isLargeFile && isViewable;
+
       let newWindow = null;
 
-      // --- SCENARIO A: SMALL FILE (View in Tab) ---
-      // Open tab immediately to bypass popup blockers
-      if (!isLargeFile) {
+      // --- SCENARIO A: VIEW IN TAB (Small PDF/Image/Text) ---
+      if (useNewTab) {
         newWindow = window.open("", "_blank");
         if (newWindow) {
-          // User-friendly loading state (Readable HTML)
           newWindow.document.write(`
             <html>
               <head><title>Loading...</title></head>
@@ -909,8 +921,8 @@ export default {
         }
       }
 
-      // --- SCENARIO B: LARGE FILE (Download with Progress) ---
-      if (isLargeFile) {
+      // --- SCENARIO B: DOWNLOAD OVERLAY (Large Files OR Docx/Xlsx) ---
+      if (!useNewTab) {
         this.isDownloading = true;
         this.downloadProgress = 0;
         this.downloadMessage = "Starting...";
@@ -926,8 +938,8 @@ export default {
         if (!this.fileViewUrl)
           throw new Error("Could not determine file view URL.");
 
-        if (isLargeFile) {
-          // --- XHR LOGIC (For Progress Bar) ---
+        if (!useNewTab) {
+          // --- XHR DOWNLOAD LOGIC (Progress Bar) ---
           await new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open("GET", this.fileViewUrl);
@@ -935,22 +947,19 @@ export default {
             xhr.responseType = "blob";
 
             xhr.onprogress = (event) => {
-              // Calculate MB loaded so far
               const loadedMB = (event.loaded / (1024 * 1024)).toFixed(1);
-              
-              // LOGIC FIX: If event.total is missing (Nginx issue), fallback to our known DB file size
-              const totalSize = event.lengthComputable ? event.total : this.file.file_size;
+
+              // Nginx Fix: Fallback to DB file size if event.total is missing
+              const totalSize = event.lengthComputable
+                ? event.total
+                : this.file.file_size;
 
               if (totalSize > 0) {
-                // Now we can calculate the real percentage
                 const percent = Math.floor((event.loaded / totalSize) * 100);
-                
-                // Update the bar and the text together
-                this.downloadProgress = Math.min(percent, 100); // Clamp to 100%
+                this.downloadProgress = Math.min(percent, 100);
                 this.downloadMessage = `${this.downloadProgress}% (${loadedMB} MB)`;
               } else {
-                // Only if we truly have NO size info (rare)
-                this.downloadProgress = 100; 
+                this.downloadProgress = 100;
                 this.downloadMessage = `${loadedMB} MB downloaded...`;
               }
             };
@@ -965,7 +974,6 @@ export default {
                 const downloadBlob = new Blob([blob], { type: fileType });
                 const url = URL.createObjectURL(downloadBlob);
 
-                // Trigger Save
                 const link = document.createElement("a");
                 link.href = url;
                 link.download = this.file.file_name || "download";
@@ -986,7 +994,7 @@ export default {
 
           this.showNotification("Download complete.", "success");
         } else {
-          // --- FETCH LOGIC (For Small Files) ---
+          // --- FETCH VIEW LOGIC (Tab) ---
           const response = await fetch(this.fileViewUrl, {
             headers: { Authorization: `Bearer ${token}` },
             cache: "no-store",
@@ -1001,14 +1009,13 @@ export default {
           const blob = new Blob([rawBlob], { type: fileType });
           const fileURL = URL.createObjectURL(blob);
 
-          // Redirect the ALREADY OPEN window to the blob URL
           if (newWindow) newWindow.location.href = fileURL;
         }
       } catch (error) {
         console.error("View/Download error:", error);
 
-        // RESTORED: Detailed error message in the new window (Better UX)
-        if (newWindow && !isLargeFile) {
+        // Show error in the tab if we opened one
+        if (newWindow && useNewTab) {
           newWindow.document.body.innerHTML = `
             <div style="text-align:center;color:#ef4444;font-family:sans-serif;padding:2rem;">
               <h3>Error Loading File</h3>

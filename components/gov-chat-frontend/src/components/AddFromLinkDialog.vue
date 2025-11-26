@@ -88,59 +88,97 @@
             max="20"
           />
           <p class="form-hint">
-            {{ translate("link.depthHint", "Depth of links to follow (1-20).") }}
+            {{
+              translate("link.depthHint", "Depth of links to follow (1-20).")
+            }}
           </p>
         </div>
 
         <div class="advanced-toggle">
           <button class="btn-link" @click="showAdvanced = !showAdvanced">
-            {{ showAdvanced ? 'Hide' : 'Show' }} {{ translate("link.advancedOptions", "Advanced Configuration") }}
-            <span class="toggle-icon">{{ showAdvanced ? '▲' : '▼' }}</span>
+            {{ showAdvanced ? "Hide" : "Show" }}
+            {{ translate("link.advancedOptions", "Advanced Configuration") }}
+            <span class="toggle-icon">{{ showAdvanced ? "▲" : "▼" }}</span>
           </button>
           <span v-if="detectedPreset" class="preset-badge">
-             Matched Preset: {{ detectedPreset }}
+            Matched Preset: {{ detectedPreset }}
           </span>
         </div>
 
         <div v-if="showAdvanced" class="advanced-panel">
           <div class="form-group checkbox-group">
-            <input type="checkbox" id="ext-links" v-model="config.followExternalLinks">
-            <label for="ext-links">{{ translate("link.config.followExternal", "Follow External Links") }}</label>
+            <input
+              type="checkbox"
+              id="ext-links"
+              v-model="config.followExternalLinks"
+            />
+            <label for="ext-links">{{
+              translate("link.config.followExternal", "Follow External Links")
+            }}</label>
           </div>
           <p class="form-hint small-hint" v-if="config.followExternalLinks">
-            Useful for "Awesome Lists". Will crawl pages linked to from this domain.
+            Useful for "Awesome Lists". Will crawl pages linked to from this
+            domain.
           </p>
 
           <div class="form-group" v-if="config.followExternalLinks">
-            <label for="ext-depth">{{ translate("link.config.extDepth", "Max External Depth") }}</label>
-            <input id="ext-depth" type="number" class="form-input" v-model.number="config.maxExternalDepth" min="0" max="2">
-            <p class="form-hint small-hint">0 = Only save the external page. 1 = Crawl links on the external page.</p>
+            <label for="ext-depth">{{
+              translate("link.config.extDepth", "Max External Depth")
+            }}</label>
+            <input
+              id="ext-depth"
+              type="number"
+              class="form-input"
+              v-model.number="config.maxExternalDepth"
+              min="0"
+              max="5"
+            />
+            <p class="form-hint small-hint">
+              0 = Save specific external page only. 1-5 = Depth of links to
+              follow on external domains.
+            </p>
           </div>
 
           <div class="form-group">
             <div class="label-with-tooltip">
-              <label for="content-selector">{{ translate("link.config.selector", "Content CSS Selector") }}</label>
+              <label for="content-selector">{{
+                translate("link.config.selector", "Content CSS Selector")
+              }}</label>
               <div class="tooltip-container">
                 <span class="help-icon">?</span>
                 <div class="tooltip-text">
-                  Tells the crawler which HTML element contains the main text (e.g. 'main', 'article', '.content'). 
-                  Leave empty to let the system auto-detect the best content area.
+                  Tells the crawler which HTML element contains the main text
+                  (e.g. 'main', 'article', '.content'). Leave empty to let the
+                  system auto-detect the best content area.
                 </div>
               </div>
             </div>
-            <input 
-              id="content-selector" 
-              type="text" 
-              class="form-input" 
-              v-model="config.contentSelector" 
+            <input
+              id="content-selector"
+              type="text"
+              class="form-input"
+              v-model="config.contentSelector"
               placeholder="Default: Auto-detect (main, article, body)"
-            >
-            <p class="form-hint small-hint">Specific container to extract content from (reduces noise).</p>
+            />
+            <p class="form-hint small-hint">
+              Specific container to extract content from (reduces noise).
+            </p>
           </div>
 
           <div class="form-group">
-            <label for="exclude-patterns">{{ translate("link.config.exclude", "Exclude Patterns (comma separated)") }}</label>
-            <textarea id="exclude-patterns" class="form-input" v-model="excludePatternsInput" rows="3" placeholder="/commits/, /issues/, /login"></textarea>
+            <label for="exclude-patterns">{{
+              translate(
+                "link.config.exclude",
+                "Exclude Patterns (comma separated)"
+              )
+            }}</label>
+            <textarea
+              id="exclude-patterns"
+              class="form-input"
+              v-model="excludePatternsInput"
+              rows="3"
+              placeholder="/commits/, /issues/, /login"
+            ></textarea>
           </div>
         </div>
       </template>
@@ -178,127 +216,134 @@ import { eventBus } from "../eventBus.js";
 
 // --- TOP 20 SITE PRESETS ---
 const SITE_PRESETS = {
-  'github.com': {
-    name: 'GitHub',
-    selector: '.markdown-body',
-    exclude: '/commits/, /issues, /pulls, /actions, /projects, /security, /pulse, /find, /search, /stargazers, /watchers, /network, /branches, /tags, /blob/, /tree/, /releases',
-    followExternal: true
+  "github.com": {
+    name: "GitHub",
+    selector: ".markdown-body",
+    exclude:
+      "/commits/, /issues, /pulls, /actions, /projects, /security, /pulse, /find, /search, /stargazers, /watchers, /network, /branches, /tags, /blob/, /tree/, /releases",
+    followExternal: true,
   },
-  'gitlab.com': {
-    name: 'GitLab',
-    selector: '.file-content, .wiki-content, .md',
-    exclude: '/-/commits, /-/tree, /-/blob, /-/blame, /-/issues, /-/merge_requests, /-/pipelines, /-/jobs, /-/tags, /-/network',
-    followExternal: true
+  "gitlab.com": {
+    name: "GitLab",
+    selector: ".file-content, .wiki-content, .md",
+    exclude:
+      "/-/commits, /-/tree, /-/blob, /-/blame, /-/issues, /-/merge_requests, /-/pipelines, /-/jobs, /-/tags, /-/network",
+    followExternal: true,
   },
-  'wikipedia.org': {
-    name: 'Wikipedia',
-    selector: '#bodyContent',
-    exclude: 'Talk:, User:, User_talk:, Wikipedia:, File:, MediaWiki:, Template:, Help:, Category:, Portal:, Special:, /w/index.php',
-    followExternal: false
+  "wikipedia.org": {
+    name: "Wikipedia",
+    selector: "#bodyContent",
+    exclude:
+      "Talk:, User:, User_talk:, Wikipedia:, File:, MediaWiki:, Template:, Help:, Category:, Portal:, Special:, /w/index.php",
+    followExternal: false,
   },
-  'medium.com': {
-    name: 'Medium',
-    selector: 'article, section',
-    exclude: '/signin, /m/signin, /search, /tag/, /@', 
-    followExternal: false
+  "medium.com": {
+    name: "Medium",
+    selector: "article, section",
+    exclude: "/signin, /m/signin, /search, /tag/, /@",
+    followExternal: false,
   },
-  'stackoverflow.com': {
-    name: 'Stack Overflow',
-    selector: '#mainbar, .post-text',
-    exclude: '/users/, /posts/, /revisions, /search, /feeds, /timeline, /admin',
-    followExternal: false
+  "stackoverflow.com": {
+    name: "Stack Overflow",
+    selector: "#mainbar, .post-text",
+    exclude: "/users/, /posts/, /revisions, /search, /feeds, /timeline, /admin",
+    followExternal: false,
   },
-  'reddit.com': {
-    name: 'Reddit',
+  "reddit.com": {
+    name: "Reddit",
     // Targets new UI shadow-dom content (shreddit-post) and old/mobile content
-    selector: 'shreddit-post, .Post, .post-content, .entry', 
-    exclude: '/user/, /u/, /search, /message/compose, /submit',
-    followExternal: false
+    selector: "shreddit-post, .Post, .post-content, .entry",
+    exclude: "/user/, /u/, /search, /message/compose, /submit",
+    followExternal: false,
   },
-  'atlassian.net': { // Confluence Cloud
-    name: 'Confluence',
-    selector: '#main-content, .wiki-content, #content',
-    exclude: '/display/, /pages/viewpage.action, /history, /diffpages',
-    followExternal: false
+  "atlassian.net": {
+    // Confluence Cloud
+    name: "Confluence",
+    selector: "#main-content, .wiki-content, #content",
+    exclude: "/display/, /pages/viewpage.action, /history, /diffpages",
+    followExternal: false,
   },
-  'notion.site': { // Notion Public
-    name: 'Notion',
-    selector: '.notion-page-content',
-    exclude: 'login, pricing, /signup',
-    followExternal: false
+  "notion.site": {
+    // Notion Public
+    name: "Notion",
+    selector: ".notion-page-content",
+    exclude: "login, pricing, /signup",
+    followExternal: false,
   },
-  'readthedocs.io': {
-    name: 'Read the Docs',
+  "readthedocs.io": {
+    name: "Read the Docs",
     selector: '.rst-content, div[role="main"]',
-    exclude: '_static, _images, genindex, search.html, py-modindex.html',
-    followExternal: false
+    exclude: "_static, _images, genindex, search.html, py-modindex.html",
+    followExternal: false,
   },
-  'gitbook.io': {
-    name: 'GitBook',
-    selector: 'main, .gitbook-root',
-    exclude: '/s/, /search',
-    followExternal: false
+  "gitbook.io": {
+    name: "GitBook",
+    selector: "main, .gitbook-root",
+    exclude: "/s/, /search",
+    followExternal: false,
   },
-  'docusaurus': { // Generic check for docusaurus sites often works by meta tag, but by domain is hard. We'll add common ones.
-    name: 'Docusaurus Site',
-    selector: 'article, .theme-doc-markdown, .markdown',
-    exclude: '/blog/tags, /search',
-    followExternal: false
+  docusaurus: {
+    // Generic check for docusaurus sites often works by meta tag, but by domain is hard. We'll add common ones.
+    name: "Docusaurus Site",
+    selector: "article, .theme-doc-markdown, .markdown",
+    exclude: "/blog/tags, /search",
+    followExternal: false,
   },
-  'wordpress.com': {
-    name: 'WordPress',
-    selector: '.entry-content, .post-content, article',
-    exclude: '/wp-admin/, /wp-includes/, /feed/, /comments/, /page/, /xmlrpc.php',
-    followExternal: false
+  "wordpress.com": {
+    name: "WordPress",
+    selector: ".entry-content, .post-content, article",
+    exclude:
+      "/wp-admin/, /wp-includes/, /feed/, /comments/, /page/, /xmlrpc.php",
+    followExternal: false,
   },
-  'substack.com': {
-    name: 'Substack',
-    selector: '.available-content, .post',
-    exclude: '/sign-in, /subscribe, /people/, /archive',
-    followExternal: false
+  "substack.com": {
+    name: "Substack",
+    selector: ".available-content, .post",
+    exclude: "/sign-in, /subscribe, /people/, /archive",
+    followExternal: false,
   },
-  'dev.to': {
-    name: 'Dev.to',
-    selector: '#article-body, .crayons-article__body',
-    exclude: '/search, /tag/, /top/, /latest, /videos',
-    followExternal: false
+  "dev.to": {
+    name: "Dev.to",
+    selector: "#article-body, .crayons-article__body",
+    exclude: "/search, /tag/, /top/, /latest, /videos",
+    followExternal: false,
   },
-  'arxiv.org': {
-    name: 'ArXiv',
-    selector: 'blockquote.abstract, .abstract',
-    exclude: '/pdf/, /ps/, /format/, /list/, /find/',
-    followExternal: false
+  "arxiv.org": {
+    name: "ArXiv",
+    selector: "blockquote.abstract, .abstract",
+    exclude: "/pdf/, /ps/, /format/, /list/, /find/",
+    followExternal: false,
   },
-  'huggingface.co': {
-    name: 'Hugging Face',
-    selector: 'section#readme, .readme',
-    exclude: '/tree/, /blob/, /resolve/, /discussions, /settings',
-    followExternal: true
+  "huggingface.co": {
+    name: "Hugging Face",
+    selector: "section#readme, .readme",
+    exclude: "/tree/, /blob/, /resolve/, /discussions, /settings",
+    followExternal: true,
   },
-  'developer.mozilla.org': {
-    name: 'MDN Web Docs',
-    selector: 'article.main-page-content',
-    exclude: '/history, /edit, /users/, /docs/Web/HTML/Global_attributes', // common massive lists
-    followExternal: false
+  "developer.mozilla.org": {
+    name: "MDN Web Docs",
+    selector: "article.main-page-content",
+    exclude: "/history, /edit, /users/, /docs/Web/HTML/Global_attributes", // common massive lists
+    followExternal: false,
   },
-  'youtube.com': {
-    name: 'YouTube',
-    selector: '#description, ytd-video-secondary-info-renderer', 
-    exclude: '/watch, /channel/, /results, /feed/',
-    followExternal: false
+  "youtube.com": {
+    name: "YouTube",
+    selector: "#description, ytd-video-secondary-info-renderer",
+    exclude: "/watch, /channel/, /results, /feed/",
+    followExternal: false,
   },
-  'quora.com': {
-    name: 'Quora',
-    selector: '.q-box, .q-text',
-    exclude: '/profile/, /topic/, /log_in, /unanswered',
-    followExternal: false
+  "quora.com": {
+    name: "Quora",
+    selector: ".q-box, .q-text",
+    exclude: "/profile/, /topic/, /log_in, /unanswered",
+    followExternal: false,
   },
-  'linkedin.com': {
-     name: 'LinkedIn Article',
-     selector: '.article-main, .pulse-main-content',
-     exclude: '/feed, /mynetwork, /jobs, /messaging',
-     followExternal: false
-  }
+  "linkedin.com": {
+    name: "LinkedIn Article",
+    selector: ".article-main, .pulse-main-content",
+    exclude: "/feed, /mynetwork, /jobs, /messaging",
+    followExternal: false,
+  },
 };
 
 export default {
@@ -319,7 +364,7 @@ export default {
         followExternalLinks: false,
         maxExternalDepth: 0,
         contentSelector: "",
-      }
+      },
     };
   },
   computed: {
@@ -340,15 +385,19 @@ export default {
         return;
       }
       try {
-        const hostname = new URL(newUrl).hostname.replace('www.', '').toLowerCase();
-        
+        const hostname = new URL(newUrl).hostname
+          .replace("www.", "")
+          .toLowerCase();
+
         // Find matching preset (checking for partial matches like 'github.com' inside 'github.com/user/repo')
-        const presetKey = Object.keys(SITE_PRESETS).find(key => hostname.includes(key));
-        
+        const presetKey = Object.keys(SITE_PRESETS).find((key) =>
+          hostname.includes(key)
+        );
+
         if (presetKey) {
           const preset = SITE_PRESETS[presetKey];
           this.detectedPreset = preset.name;
-          
+
           // Only auto-fill if the user hasn't typed anything yet (prevent overwriting custom config)
           if (!this.config.contentSelector) {
             this.config.contentSelector = preset.selector;
@@ -357,7 +406,10 @@ export default {
             this.excludePatternsInput = preset.exclude;
           }
           // For repos/wikis/hub sites, we often want to follow links, but respect user choice if they toggled it
-          if (this.config.followExternalLinks === false && preset.followExternal) {
+          if (
+            this.config.followExternalLinks === false &&
+            preset.followExternal
+          ) {
             this.config.followExternalLinks = true;
           }
         } else {
@@ -367,7 +419,7 @@ export default {
         // Ignore invalid URLs while typing
         this.detectedPreset = null;
       }
-    }
+    },
   },
   methods: {
     translate(key, fallback) {
@@ -412,20 +464,23 @@ export default {
           // --- FIX START: Construct Clean Configuration Object ---
           const cleanConfig = {
             followExternalLinks: this.config.followExternalLinks,
-            maxExternalDepth: this.config.maxExternalDepth
+            maxExternalDepth: this.config.maxExternalDepth,
           };
 
           // Only attach selector if valid string exists
-          if (this.config.contentSelector && this.config.contentSelector.trim() !== "") {
+          if (
+            this.config.contentSelector &&
+            this.config.contentSelector.trim() !== ""
+          ) {
             cleanConfig.contentSelector = this.config.contentSelector.trim();
           }
 
           // Only attach patterns if array has items
           const excludeArray = this.excludePatternsInput
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
-          
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+
           if (excludeArray.length > 0) {
             cleanConfig.excludePatterns = excludeArray;
           }
@@ -434,13 +489,13 @@ export default {
           response = await documentFileService.scheduleSiteCrawl({
             url: this.url,
             depth: this.crawlDepth,
-            config: cleanConfig 
+            config: cleanConfig,
           });
           // --- FIX END ---
         }
 
         const fileName = response.data?.file_name || "the file";
-        
+
         const successMsg =
           this.crawlMode === "single_page"
             ? this.translate(
@@ -457,7 +512,7 @@ export default {
         this.$emit("close");
       } catch (error) {
         const backendMessage =
-          error.response?.data?.message || 
+          error.response?.data?.message ||
           (typeof error.response?.data === "string"
             ? error.response.data
             : null) ||
@@ -718,7 +773,7 @@ export default {
   font-size: 0.8rem;
   line-height: 1.4;
   pointer-events: none;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .tooltip-text::after {

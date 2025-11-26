@@ -9,7 +9,7 @@ const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true });
 
 class Crawler {
-  // [FIX] Added 'config' to arguments
+  // [MODIFIED] Added 'metricsUpdateFn' to constructor (optional)
   constructor(pool = null, timeoutMs = 10000, config = {}) {
     logger.debug('Crawler instance created.');
     this.timeoutMs = timeoutMs;
@@ -18,7 +18,6 @@ class Crawler {
       throw new Error('url pool should be string, array or tuple');
     }
     this.pool = pool;
-    // [FIX] Assign the passed argument to the instance property
     this.config = config || {}; 
     
     this.headers = {
@@ -28,9 +27,19 @@ class Crawler {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36'
     };
     this.fetchedPool = new Set();
-    
-    // Map<hostname, timestamp_when_ready> for smart backoff
     this.domainCoolDowns = new Map(); 
+    
+    // --- METRICS TRACKING STATE ---
+    this.startTime = Date.now();
+    this.stats = {
+      totalCrawled: 0,
+      totalErrors: 0,
+      errorCounts: {},
+      linksInternal: 0,
+      linksExternal: 0,
+      queueSize: 0,
+      currentDepth: 0
+    };
     
     logger.debug('Crawler initialized', { pool: this.pool });
   }
@@ -101,10 +110,12 @@ class Crawler {
       
       // 2. External Domain Handling
       if (linkUrl.hostname !== baseDomain) {
-        // If configured to follow, allow it. Default is FALSE (strict same-domain)
+        this.stats.linksExternal++; // Increment external stat
         if (!this.config.followExternalLinks) {
             return;
         }
+      } else {
+        this.stats.linksInternal++; // Increment internal stat
       }
 
       if (!linkUrl.pathname) return;
@@ -116,7 +127,6 @@ class Crawler {
     return [...new Set(sublinks)];
   }
 
-  // Check if a domain is currently rate-limited
   isDomainReady(url) {
     try {
         const hostname = new URL(url).hostname;
@@ -133,7 +143,6 @@ class Crawler {
     } catch (e) { return true; }
   }
 
-  // Add domain to cool-down list
   triggerCoolDown(url, seconds = 60) {
       try {
           const hostname = new URL(url).hostname;
@@ -170,12 +179,16 @@ class Crawler {
           lastError = new Error(`fail to fetch ${url}, response status code: ${response.status}`);
           logger.warn(`Fetch attempt ${attempt} failed for ${url}: status code ${response.status}`);
           
+          // Count Error Codes
+          this.stats.errorCounts[response.status] = (this.stats.errorCounts[response.status] || 0) + 1;
+
           if (response.status === 403 || response.status === 429) {
              const delay = Math.floor(Math.random() * 2000) + 1000;
              await new Promise(r => setTimeout(r, delay));
           }
         } else {
           logger.info(`Successfully fetched ${url} with status 200.`);
+          this.stats.totalCrawled++; // Count successful fetch
           return response;
         }
       } catch (e) {
@@ -190,6 +203,7 @@ class Crawler {
       maxTimes -= 1;
     }
     
+    this.stats.totalErrors++; // Count total failure
     logger.error(`Failed to fetch ${url} after ${totalAttempts} attempts. ${lastError ? lastError.message : ''}`);
     throw lastError;
   }
@@ -242,8 +256,35 @@ class Crawler {
     }
   }
 
-  async crawl(pool, work = null, maxDepth = 10, workers = 10) {
+  // [MODIFIED] Crawl method signature accepts metricsUpdateFn
+  async crawl(pool, work = null, maxDepth = 10, workers = 10, metricsUpdateFn = null) {
     logger.info(`Starting new crawl. Max depth: ${maxDepth}, Concurrency: ${workers}`);
+    
+    this.startTime = Date.now();
+    this.stats.maxDepth = maxDepth;
+
+    // Helper to report stats
+    const reportMetrics = async () => {
+        if (metricsUpdateFn) {
+            const elapsedSeconds = (Date.now() - this.startTime) / 1000;
+            const crawlRate = elapsedSeconds > 0 ? (this.stats.totalCrawled / elapsedSeconds).toFixed(2) : 0;
+            const totalAttempts = this.stats.totalCrawled + this.stats.totalErrors;
+            const errorRate = totalAttempts > 0 ? ((this.stats.totalErrors / totalAttempts) * 100).toFixed(1) : 0;
+
+            const metrics = {
+                crawl_rate: parseFloat(crawlRate),
+                total_crawled: this.stats.totalCrawled,
+                error_rate: parseFloat(errorRate),
+                error_counts: this.stats.errorCounts,
+                queue_size: this.stats.queueSize,
+                current_depth: this.stats.currentDepth,
+                links_internal: this.stats.linksInternal,
+                links_external: this.stats.linksExternal
+            };
+            await metricsUpdateFn(metrics);
+        }
+    };
+
     try {
       let urlPool = new Set(Array.isArray(pool) ? pool : [pool]);
       
@@ -276,6 +317,10 @@ class Crawler {
 
       let depth = 0;
       while (urlPool.size > 0 && depth < maxDepth) {
+        this.stats.currentDepth = depth;
+        this.stats.queueSize = urlPool.size;
+        await reportMetrics(); // Report at start of depth
+
         logger.info(`Starting crawl depth ${depth}. Pending URLs: ${urlPool.size}`);
         
         const nextDepthLinks = new Set();
@@ -285,13 +330,11 @@ class Crawler {
         let processedIndex = 0;
         
         // --- SMART BATCH LOOP ---
-        // Continues until all URLs in this depth have been either processed or deferred
         while (processedIndex < currentDepthUrls.length) {
             const batch = [];
             const deferred = []; // URLs skipped due to rate limits in this pass
 
             // 1. Fill Batch with "Ready" Domains
-            // Scan through queue until we fill workers OR hit end
             while (processedIndex < currentDepthUrls.length && batch.length < workers) {
                 const url = currentDepthUrls[processedIndex];
                 processedIndex++; // Move pointer
@@ -303,12 +346,14 @@ class Crawler {
                 }
             }
 
-            // 2. If we have deferred items but empty batch, it means ALL remaining are rate-limited
+            // Update queue size based on what's left in this depth + deferred
+            this.stats.queueSize = (currentDepthUrls.length - processedIndex) + deferred.length + nextDepthLinks.size;
+
+            // 2. If we have deferred items but empty batch
             if (batch.length === 0 && deferred.length > 0) {
                 logger.info('All remaining URLs for this depth are rate-limited. Pausing 5s...');
                 await new Promise(r => setTimeout(r, 5000));
                 
-                // Push them to next depth effectively (retry later)
                 deferred.forEach(u => nextDepthLinks.add(u));
                 continue; 
             }
@@ -333,12 +378,10 @@ class Crawler {
                         // Failed
                         const err = result.reason;
                         if (err.message === 'DomainRateLimited') {
-                            // Re-queue for next depth (don't mark fetched)
                             nextDepthLinks.add(originalUrl);
                         } else if (err.message && (err.message.includes('killed') || err.message === 'MaxPagesReached')) {
                             throw err; // Hard stop
                         }
-                        // Regular fetch errors (404) are logged in processWork and marked fetched
                     }
                 }
             } catch (err) {
@@ -346,15 +389,19 @@ class Crawler {
                 logger.error(`Batch processing error: ${err.message}`);
             }
             
-            // 4. Re-queue deferred items for next depth retry
+            // 4. Re-queue deferred items
             deferred.forEach(u => nextDepthLinks.add(u));
+
+            // Report periodically (every batch)
+            await reportMetrics();
         }
         
         // Setup for next depth
         nextDepthLinks.forEach(link => urlPool.add(link));
         logger.info(`Depth ${depth} complete. Found ${nextDepthLinks.size} unique links for next pass.`);
         depth += 1;
-      }
+    }
+      await reportMetrics(); // Final report
       logger.info(`Crawl finished. Reached max depth ${maxDepth} or exhausted pool.`);
     } catch (error) {
       if (error.message === 'MaxPagesReached') {

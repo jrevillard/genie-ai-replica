@@ -108,6 +108,7 @@ class FileController {
     // --- CRAWLER BINDS ---
     this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
     this.getCrawlJob = this.getCrawlJob.bind(this);
+    this.getCrawlMetrics = this.getCrawlMetrics.bind(this); // <--- NEW
     this.getCrawlLogs = this.getCrawlLogs.bind(this);
     this.killCrawlTask = this.killCrawlTask.bind(this);
   }
@@ -1237,6 +1238,36 @@ class FileController {
 
     } catch (error) {
       logger.error('[FILE-CONTROLLER] Get crawl job error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Get live crawl metrics
+   */
+  async getCrawlMetrics(req, res) {
+    try {
+      const { fileId } = req.params;
+      if (!fileId) {
+        return res.status(400).json({ success: false, error: 'File ID required' });
+      }
+
+      // Call service
+      const metrics = await fileService.getCrawlMetrics(fileId);
+      
+      if (!metrics) {
+        // Return defaults if no metrics found yet
+        return res.json({ success: true, data: { crawlRate: 0, processed: 0 } });
+      }
+
+      res.json({
+        success: true,
+        message: 'Crawl metrics retrieved',
+        data: metrics
+      });
+
+    } catch (error) {
+      logger.error('[FILE-CONTROLLER] Get crawl metrics error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   }

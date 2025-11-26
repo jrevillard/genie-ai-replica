@@ -1,9 +1,19 @@
 require('dotenv').config();
 process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || 128; // Increased from default 4 to support high concurrency
+
+const http = require('http'); // [ADDED] For agent tuning
+const path = require('path'); // [ADDED] For worker path resolution
+const { Worker } = require('worker_threads'); // [ADDED] For non-blocking execution
+
 const app = require('./app');
 const appConfig = require('./config/appConfig');
 const { logger } = require('../shared-lib');
-const crawlWorker = require('./workers/crawlWorker'); // Import the crawl worker
+// const crawlWorker = require('./workers/crawlWorker'); // [MODIFIED] Handled via Worker Thread now
+
+// [ADDED] High Concurrency Global Tuning
+// Allow more concurrent outgoing connections (e.g., to DB, Dataprep, or external sites)
+http.globalAgent.maxSockets = 1000;
+http.globalAgent.keepAlive = true;
 
 const PORT = appConfig.port || process.env.PORT || 3001;
 const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
@@ -35,10 +45,29 @@ const server = app.listen(PORT, HOST, () => {
   logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
   logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
 
+  // [ADDED] Server Socket Optimizations
+  // Prevents "EMFILE" errors and helps drop stuck connections faster
+  server.maxConnections = 10000; // Hard limit on concurrent TCP connections
+  server.keepAliveTimeout = 60000; // 1 minute (must be higher than load balancer timeout)
+  server.headersTimeout = 65000;   // Must be slightly higher than keepAliveTimeout
+
   // Start background workers
   try {
-    crawlWorker.start();
-    logger.info('🕷️  Background Crawl Worker started');
+    // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
+    const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
+    
+    // We use eval to require the file and call start(), isolating the CPU load
+    const worker = new Worker(`
+      const { start } = require('${workerPath.replace(/\\/g, '/')}');
+      start();
+    `, { eval: true });
+
+    worker.on('error', err => logger.error('Crawl Worker Error:', err));
+    worker.on('exit', code => {
+        if (code !== 0) logger.warn(`Crawl Worker stopped with exit code ${code}`);
+    });
+
+    logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
   } catch (error) {
     logger.error('Failed to start Crawl Worker:', error);
   }

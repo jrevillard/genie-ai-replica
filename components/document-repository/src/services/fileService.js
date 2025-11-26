@@ -33,7 +33,7 @@ class FileService {
   async _initializeCollections() {
     try {
       const db = await this.getDb();
-      const requiredCollections = ['files', 'ingestion_log', 'crawl_job', 'crawl_log'];
+      const requiredCollections = ['files', 'ingestion_log', 'crawl_job', 'crawl_log', 'crawl_metrics'];
       
       for (const collectionName of requiredCollections) {
         const collection = db.collection(collectionName);
@@ -43,7 +43,7 @@ class FileService {
           logger.info(`[FILE-SERVICE] Created missing collection: ${collectionName}`);
         }
         
-        // Create indexes (Use ensureIndex instead of createIndex if using arangojs)
+        // Create indexes
         if (collectionName === 'crawl_job') {
           await collection.ensureIndex({ type: 'persistent', fields: ['file_id'], unique: true });
           await collection.ensureIndex({ type: 'persistent', fields: ['status'] });
@@ -51,6 +51,9 @@ class FileService {
         if (collectionName === 'crawl_log') {
           await collection.ensureIndex({ type: 'persistent', fields: ['file_id'] });
           await collection.ensureIndex({ type: 'persistent', fields: ['timestamp'] });
+        }
+        if (collectionName === 'crawl_metrics') {
+          await collection.ensureIndex({ type: 'persistent', fields: ['file_id'], unique: true });
         }
       }
     } catch (error) {
@@ -459,6 +462,39 @@ class FileService {
   }
 
   /**
+   * Get live crawl metrics by file ID
+   * @param {string} fileId
+   */
+  async getCrawlMetrics(fileId) {
+    const db = await this.getDb();
+    const query = `
+      FOR m IN crawl_metrics
+      FILTER m.file_id == @fileId
+      LIMIT 1
+      RETURN m
+    `;
+    const cursor = await db.query(query, { fileId });
+    return await cursor.next();
+  }
+
+  /**
+   * Update (upsert) crawl metrics
+   * @param {string} fileId
+   * @param {Object} metrics
+   */
+  async updateCrawlMetrics(fileId, metrics) {
+    const db = await this.getDb();
+    // Use UPSERT to either insert or update
+    const query = `
+      UPSERT { file_id: @fileId }
+      INSERT MERGE({ file_id: @fileId, timestamp: DATE_ISO8601(DATE_NOW()) }, @metrics)
+      UPDATE MERGE({ timestamp: DATE_ISO8601(DATE_NOW()) }, @metrics)
+      IN crawl_metrics
+    `;
+    await db.query(query, { fileId, metrics });
+  }
+
+  /**
    * Add a log entry for a crawl job
    */
   async addCrawlLog(fileId, level, stage, message) {
@@ -592,7 +628,7 @@ class FileService {
 
   /**
    * Delete file by ID
-   * MODIFIED: Added cleanup for crawl_job and crawl_log
+   * MODIFIED: Added cleanup for crawl_job, crawl_log, and crawl_metrics
    * @param {string} fileId - File ID
    * @returns {boolean} Success status
    */
@@ -630,12 +666,13 @@ class FileService {
         throw new Error(`Failed to delete metadata for file ${fileId}`);
       }
 
-      // --- NEW: Clean up crawl job and logs if they exist ---
+      // --- NEW: Clean up crawl job, logs, and metrics if they exist ---
       const db = await this.getDb();
       try {
         await db.query('FOR job IN crawl_job FILTER job.file_id == @id REMOVE job IN crawl_job', { id: fileId });
         await db.query('FOR log IN crawl_log FILTER log.file_id == @id REMOVE log IN crawl_log', { id: fileId });
-        logger.debug(`Cleaned up crawl logs and jobs for ${fileId}`);
+        await db.query('FOR m IN crawl_metrics FILTER m.file_id == @id REMOVE m IN crawl_metrics', { id: fileId });
+        logger.debug(`Cleaned up crawl logs, jobs, and metrics for ${fileId}`);
       } catch (e) {
         logger.warn(`Failed to cleanup crawl data for ${fileId}: ${e.message}`);
         // Proceed, as main file is deleted

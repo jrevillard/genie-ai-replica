@@ -1,213 +1,215 @@
 <template>
-  <div class="dialog-backdrop" @click="$emit('close')"></div>
-  <div class="dialog-container">
-    <div class="dialog-header">
-      <h2 class="dialog-title">
-        {{ translate("admin.documents.addLink", "Add from Link") }}
-      </h2>
-      <button
-        class="dialog-close-btn"
-        @click="$emit('close')"
-        :aria-label="translate('common.close', 'Close')"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+  <Teleport to="body">
+    <div class="dialog-backdrop" @click="$emit('close')"></div>
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <h2 class="dialog-title">
+          {{ translate("admin.documents.addLink", "Add from Link") }}
+        </h2>
+        <button
+          class="dialog-close-btn"
+          @click="$emit('close')"
+          :aria-label="translate('common.close', 'Close')"
         >
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-
-    <div class="dialog-body">
-      <div class="form-group">
-        <label for="url-input">{{
-          translate("link.label", "Website URL")
-        }}</label>
-        <input
-          id="url-input"
-          type="text"
-          class="form-input"
-          v-model="url"
-          :placeholder="
-            translate('link.placeholder', 'https://example.com/article')
-          "
-          @keyup.enter="handleSubmit"
-        />
-        <p class="form-hint" v-if="crawlMode === 'single_page'">
-          {{
-            translate(
-              "link.hint",
-              "The content of the webpage will be crawled and saved as an HTML file."
-            )
-          }}
-        </p>
-        <p class="form-hint" v-else>
-          {{
-            translate(
-              "link.hintAsync",
-              "The full site will be crawled in the background and saved as a Markdown file."
-            )
-          }}
-        </p>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
-      <div class="form-group">
-        <label>{{ translate("link.crawlMode", "Crawl Mode") }}</label>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input type="radio" v-model="crawlMode" value="single_page" />
-            {{ translate("link.mode.single", "Single Page") }}
-          </label>
-          <label class="radio-label">
-            <input type="radio" v-model="crawlMode" value="full_site" />
-            {{ translate("link.mode.fullSite", "Full Site (Async)") }}
-          </label>
-        </div>
-      </div>
-
-      <template v-if="crawlMode === 'full_site'">
+      <div class="dialog-body">
         <div class="form-group">
-          <label for="depth-input">{{
-            translate("link.crawlDepth", "Crawl Depth")
+          <label for="url-input">{{
+            translate("link.label", "Website URL")
           }}</label>
           <input
-            id="depth-input"
-            type="number"
+            id="url-input"
+            type="text"
             class="form-input"
-            v-model.number="crawlDepth"
-            min="1"
-            max="20"
+            v-model="url"
+            :placeholder="
+              translate('link.placeholder', 'https://example.com/article')
+            "
+            @keyup.enter="handleSubmit"
           />
-          <p class="form-hint">
+          <p class="form-hint" v-if="crawlMode === 'single_page'">
             {{
-              translate("link.depthHint", "Depth of links to follow (1-20).")
+              translate(
+                "link.hint",
+                "The content of the webpage will be crawled and saved as an HTML file."
+              )
+            }}
+          </p>
+          <p class="form-hint" v-else>
+            {{
+              translate(
+                "link.hintAsync",
+                "The full site will be crawled in the background and saved as a Markdown file."
+              )
             }}
           </p>
         </div>
 
-        <div class="advanced-toggle">
-          <button class="btn-link" @click="showAdvanced = !showAdvanced">
-            {{ showAdvanced ? "Hide" : "Show" }}
-            {{ translate("link.advancedOptions", "Advanced Configuration") }}
-            <span class="toggle-icon">{{ showAdvanced ? "▲" : "▼" }}</span>
-          </button>
-          <span v-if="detectedPreset" class="preset-badge">
-            Matched Preset: {{ detectedPreset }}
-          </span>
+        <div class="form-group">
+          <label>{{ translate("link.crawlMode", "Crawl Mode") }}</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" v-model="crawlMode" value="single_page" />
+              {{ translate("link.mode.single", "Single Page") }}
+            </label>
+            <label class="radio-label">
+              <input type="radio" v-model="crawlMode" value="full_site" />
+              {{ translate("link.mode.fullSite", "Full Site (Async)") }}
+            </label>
+          </div>
         </div>
 
-        <div v-if="showAdvanced" class="advanced-panel">
-          <div class="form-group checkbox-group">
-            <input
-              type="checkbox"
-              id="ext-links"
-              v-model="config.followExternalLinks"
-            />
-            <label for="ext-links">{{
-              translate("link.config.followExternal", "Follow External Links")
-            }}</label>
-          </div>
-          <p class="form-hint small-hint" v-if="config.followExternalLinks">
-            Useful for "Awesome Lists". Will crawl pages linked to from this
-            domain.
-          </p>
-
-          <div class="form-group" v-if="config.followExternalLinks">
-            <label for="ext-depth">{{
-              translate("link.config.extDepth", "Max External Depth")
+        <template v-if="crawlMode === 'full_site'">
+          <div class="form-group">
+            <label for="depth-input">{{
+              translate("link.crawlDepth", "Crawl Depth")
             }}</label>
             <input
-              id="ext-depth"
+              id="depth-input"
               type="number"
               class="form-input"
-              v-model.number="config.maxExternalDepth"
-              min="0"
-              max="5"
+              v-model.number="crawlDepth"
+              min="1"
+              max="20"
             />
-            <p class="form-hint small-hint">
-              0 = Save specific external page only. 1-5 = Depth of links to
-              follow on external domains.
+            <p class="form-hint">
+              {{
+                translate("link.depthHint", "Depth of links to follow (1-20).")
+              }}
             </p>
           </div>
 
-          <div class="form-group">
-            <div class="label-with-tooltip">
-              <label for="content-selector">{{
-                translate("link.config.selector", "Content CSS Selector")
+          <div class="advanced-toggle">
+            <button class="btn-link" @click="showAdvanced = !showAdvanced">
+              {{ showAdvanced ? "Hide" : "Show" }}
+              {{ translate("link.advancedOptions", "Advanced Configuration") }}
+              <span class="toggle-icon">{{ showAdvanced ? "▲" : "▼" }}</span>
+            </button>
+            <span v-if="detectedPreset" class="preset-badge">
+              Matched Preset: {{ detectedPreset }}
+            </span>
+          </div>
+
+          <div v-if="showAdvanced" class="advanced-panel">
+            <div class="form-group checkbox-group">
+              <input
+                type="checkbox"
+                id="ext-links"
+                v-model="config.followExternalLinks"
+              />
+              <label for="ext-links">{{
+                translate("link.config.followExternal", "Follow External Links")
               }}</label>
-              <div class="tooltip-container">
-                <span class="help-icon">?</span>
-                <div class="tooltip-text">
-                  Tells the crawler which HTML element contains the main text
-                  (e.g. 'main', 'article', '.content'). Leave empty to let the
-                  system auto-detect the best content area.
+            </div>
+            <p class="form-hint small-hint" v-if="config.followExternalLinks">
+              Useful for "Awesome Lists". Will crawl pages linked to from this
+              domain.
+            </p>
+
+            <div class="form-group" v-if="config.followExternalLinks">
+              <label for="ext-depth">{{
+                translate("link.config.extDepth", "Max External Depth")
+              }}</label>
+              <input
+                id="ext-depth"
+                type="number"
+                class="form-input"
+                v-model.number="config.maxExternalDepth"
+                min="0"
+                max="5"
+              />
+              <p class="form-hint small-hint">
+                0 = Save specific external page only. 1-5 = Depth of links to
+                follow on external domains.
+              </p>
+            </div>
+
+            <div class="form-group">
+              <div class="label-with-tooltip">
+                <label for="content-selector">{{
+                  translate("link.config.selector", "Content CSS Selector")
+                }}</label>
+                <div class="tooltip-container">
+                  <span class="help-icon">?</span>
+                  <div class="tooltip-text">
+                    Tells the crawler which HTML element contains the main text
+                    (e.g. 'main', 'article', '.content'). Leave empty to let the
+                    system auto-detect the best content area.
+                  </div>
                 </div>
               </div>
+              <input
+                id="content-selector"
+                type="text"
+                class="form-input"
+                v-model="config.contentSelector"
+                placeholder="Default: Auto-detect (main, article, body)"
+              />
+              <p class="form-hint small-hint">
+                Specific container to extract content from (reduces noise).
+              </p>
             </div>
-            <input
-              id="content-selector"
-              type="text"
-              class="form-input"
-              v-model="config.contentSelector"
-              placeholder="Default: Auto-detect (main, article, body)"
-            />
-            <p class="form-hint small-hint">
-              Specific container to extract content from (reduces noise).
-            </p>
+
+            <div class="form-group">
+              <label for="exclude-patterns">{{
+                translate(
+                  "link.config.exclude",
+                  "Exclude Patterns (comma separated)"
+                )
+              }}</label>
+              <textarea
+                id="exclude-patterns"
+                class="form-input"
+                v-model="excludePatternsInput"
+                rows="3"
+                placeholder="/commits/, /issues/, /login"
+              ></textarea>
+            </div>
           </div>
+        </template>
 
-          <div class="form-group">
-            <label for="exclude-patterns">{{
-              translate(
-                "link.config.exclude",
-                "Exclude Patterns (comma separated)"
-              )
-            }}</label>
-            <textarea
-              id="exclude-patterns"
-              class="form-input"
-              v-model="excludePatternsInput"
-              rows="3"
-              placeholder="/commits/, /issues/, /login"
-            ></textarea>
-          </div>
-        </div>
-      </template>
+        <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+      </div>
 
-      <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+      <div class="dialog-footer">
+        <button class="btn btn-outline" @click="$emit('close')">
+          {{ translate("common.cancel", "Cancel") }}
+        </button>
+        <button
+          class="btn btn-primary"
+          @click="handleSubmit"
+          :disabled="!isValidUrl || isLoading"
+        >
+          <span v-if="isLoading">{{
+            crawlMode === "full_site"
+              ? translate("link.scheduling", "Scheduling...")
+              : translate("link.crawling", "Crawling...")
+          }}</span>
+          <span v-else>{{
+            crawlMode === "full_site"
+              ? translate("link.submitAsync", "Start Crawl")
+              : translate("link.submit", "Crawl & Save")
+          }}</span>
+        </button>
+      </div>
     </div>
-
-    <div class="dialog-footer">
-      <button class="btn btn-outline" @click="$emit('close')">
-        {{ translate("common.cancel", "Cancel") }}
-      </button>
-      <button
-        class="btn btn-primary"
-        @click="handleSubmit"
-        :disabled="!isValidUrl || isLoading"
-      >
-        <span v-if="isLoading">{{
-          crawlMode === "full_site"
-            ? translate("link.scheduling", "Scheduling...")
-            : translate("link.crawling", "Crawling...")
-        }}</span>
-        <span v-else>{{
-          crawlMode === "full_site"
-            ? translate("link.submitAsync", "Start Crawl")
-            : translate("link.submit", "Crawl & Save")
-        }}</span>
-      </button>
-    </div>
-  </div>
+  </Teleport>
 </template>
 
 <script>
@@ -544,7 +546,7 @@ export default {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1050;
+  z-index: 9998; /* Updated Z-Index for Teleport */
 }
 .dialog-container {
   position: fixed;
@@ -556,7 +558,7 @@ export default {
   background-color: var(--bg-dialog, #fff);
   border-radius: 8px;
   box-shadow: var(--shadow-lg);
-  z-index: 1051;
+  z-index: 9999; /* Updated Z-Index for Teleport */
   max-height: 90vh;
   overflow-y: auto;
 }

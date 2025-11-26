@@ -40,11 +40,11 @@ router.use(authenticateToken);
  *                   type: string
  *                 description: Array of tags
  *     responses:
- *       200:
+ *       '200':
  *         description: File uploaded successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
 router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.uploadFile);
@@ -83,11 +83,11 @@ router.post('/upload', authorizeRole(['Admin']), uploadSingle, fileController.up
  *                   type: string
  *                 description: Array of tags for all files
  *     responses:
- *       200:
+ *       '200':
  *         description: Files uploaded successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
 router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController.uploadMultipleFiles);
@@ -113,11 +113,11 @@ router.post('/uploads', authorizeRole(['Admin']), uploadMultiple, fileController
  *                 type: string
  *                 description: The URL to crawl and save
  *     responses:
- *       200:
+ *       '200':
  *         description: Link uploaded and processed successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
 router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink);
@@ -171,7 +171,6 @@ router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink)
  *       '403':
  *         description: Forbidden - Admin role required
  */
-
 router.post('/crawl/schedule', authorizeRole(['Admin']), fileController.scheduleSiteCrawl);
 
 /**
@@ -212,9 +211,9 @@ router.post('/crawl/schedule', authorizeRole(['Admin']), fileController.schedule
  *           type: string
  *         description: Search in file names and descriptions
  *     responses:
- *       200:
+ *       '200':
  *         description: List of files
- *       401:
+ *       '401':
  *         description: Unauthorized
  */
 router.get('/', fileController.getFiles);
@@ -254,9 +253,9 @@ router.get('/', fileController.getFiles);
  *           type: string
  *         description: Filter by MIME type
  *     responses:
- *       200:
+ *       '200':
  *         description: Search results
- *       401:
+ *       '401':
  *         description: Unauthorized
  */
 router.get('/search', fileController.searchMetadata);
@@ -277,11 +276,11 @@ router.get('/search', fileController.searchMetadata);
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File metadata
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.get('/:fileId', fileController.getMetadata);
@@ -302,16 +301,41 @@ router.get('/:fileId', fileController.getMetadata);
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: Crawl job details
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
- *       404:
+ *       '404':
  *         description: Job not found
  */
 router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCrawlJob);
+
+/**
+ * @swagger
+ * /api/files/{fileId}/crawl-metrics:
+ *   get:
+ *     summary: Get the live crawl metrics for a file
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       '200':
+ *         description: Crawl metrics
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden - Admin role required
+ */
+router.get('/:fileId/crawl-metrics', authorizeRole(['Admin']), fileController.getCrawlMetrics);
 
 /**
  * @swagger
@@ -329,11 +353,11 @@ router.get('/:fileId/crawl-job', authorizeRole(['Admin']), fileController.getCra
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: List of crawl log entries
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
 router.get('/:fileId/crawl-log', authorizeRole(['Admin']), fileController.getCrawlLogs);
@@ -354,13 +378,13 @@ router.get('/:fileId/crawl-log', authorizeRole(['Admin']), fileController.getCra
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: Kill signal sent successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
- *       404:
+ *       '404':
  *         description: Job not found
  */
 router.post('/:fileId/kill-crawl', authorizeRole(['Admin']), fileController.killCrawlTask);
@@ -381,11 +405,11 @@ router.post('/:fileId/kill-crawl', authorizeRole(['Admin']), fileController.kill
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File content in base64
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.get('/:fileId/view', fileController.viewFile);
@@ -406,11 +430,11 @@ router.get('/:fileId/view', fileController.viewFile);
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File content for browser viewing
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
@@ -431,11 +455,11 @@ router.get('/:fileId/viewbrowser', fileController.viewFileInBrowser);
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File downloaded successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.get('/:fileId/download', fileController.downloadFile);
@@ -463,9 +487,9 @@ router.get('/:fileId/download', fileController.downloadFile);
  *                   type: string
  *                 description: Array of file IDs to download
  *     responses:
- *       200:
+ *       '200':
  *         description: ZIP archive downloaded successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
  */
 router.post('/downloads', fileController.downloadMultipleFiles);
@@ -486,11 +510,11 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File deleted successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.delete('/:fileId', fileController.deleteFile);
@@ -518,9 +542,9 @@ router.delete('/:fileId', fileController.deleteFile);
  *                   type: string
  *                 description: Array of file IDs to delete
  *     responses:
- *       200:
+ *       '200':
  *         description: Files deleted successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
  */
 router.delete('/', fileController.deleteMultipleFiles);
@@ -551,13 +575,13 @@ router.delete('/', fileController.deleteMultipleFiles);
  *                 type: object
  *                 description: JSON object with the fields to update
  *     responses:
- *       200:
+ *       '200':
  *         description: File metadata updated successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
@@ -578,13 +602,13 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File ingested successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
@@ -605,13 +629,13 @@ router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFi
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: File retracted successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
@@ -625,11 +649,11 @@ router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retract
  *     security:
  *       - bearerAuth: []
  *     responses:
- *       200:
+ *       '200':
  *         description: Files ingested successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
 router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFiles);
@@ -643,11 +667,11 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *     security:
  *       - bearerAuth: []
  *     responses:
- *       200:
+ *       '200':
  *         description: Files retracted successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
 router.post('/retract', authorizeRole(['Admin']), fileController.retractMultipleFiles);
@@ -688,13 +712,13 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *                 type: string
  *                 description: The ingestion stage (e.g., 'dataprep', 'embedding')
  *     responses:
- *       201:
+ *       '201':
  *         description: Log entry added successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
- *       404:
+ *       '404':
  *         description: File not found
  */
 router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.addIngestionLog);
@@ -715,9 +739,9 @@ router.post('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.a
  *           type: string
  *         description: File ID
  *     responses:
- *       200:
+ *       '200':
  *         description: List of log entries
- *       401:
+ *       '401':
  *         description: Unauthorized
  */
 router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.getIngestionLogs);
@@ -753,9 +777,9 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin']), fileController.ge
  *                   chunk_count:
  *                     type: integer
  *     responses:
- *       200:
+ *       '200':
  *         description: File status updated successfully
- *       401:
+ *       '401':
  *         description: Unauthorized
  */
 router.patch('/:fileId/status', authorizeRole(['Admin']), fileController.updateFileStatus);

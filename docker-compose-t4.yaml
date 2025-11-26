@@ -427,7 +427,7 @@ services:
               capabilities: [gpu]
     ports:
       - "${LLM_SERVER_PORT}:${LLM_SERVER_PORT}"
-    command: >
+    command: 
       --model ${VLLM_LLM_MODEL_ID}
       --gpu_memory_utilization ${VLLM_GPU_UTIL:-0.4}
       --served-model-name ${VLLM_LLM_MODEL_ID}

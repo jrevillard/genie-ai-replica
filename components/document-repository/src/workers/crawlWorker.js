@@ -6,6 +6,7 @@
  */
 
 const fs = require('fs').promises;
+const fsStandard = require('fs'); // [MODIFIED] Added for streaming support
 const path = require('path');
 const TurndownService = require('turndown');
 const langdetect = require('langdetect');
@@ -23,7 +24,7 @@ const fileUtils = require('../utils/fileUtils');
 
 // Configuration constants from appConfig
 const POLL_INTERVAL_MS = appConfig.crawler?.pollIntervalMs || 5000;
-const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 10000; // New timeout setting
+const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 10000;
 const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
 const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 10;
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
@@ -98,7 +99,7 @@ const processJob = async (job, db) => {
   // Extract advanced config (if any)
   const crawlConfig = job.config || {};
 
-  // [FIX] Pass crawlConfig as the 3rd argument
+  // Pass crawlConfig as the 3rd argument
   const crawler = new Crawler(null, REQUEST_TIMEOUT_MS, crawlConfig);
   
   const turndownService = new TurndownService({
@@ -110,6 +111,60 @@ const processJob = async (job, db) => {
   const markdownSegments = [];
   let pagesProcessed = 0;
 
+  // --- [PERFORMANCE PATCH START] State Variables for Throttling ---
+  let lastKillCheck = 0;
+  let lastMetricsUpdate = 0;
+  let isJobKilled = false;
+  let logBuffer = [];
+
+  // Helper: Flush logs to DB in batch to prevent connection starvation
+  const flushLogBuffer = async () => {
+    if (logBuffer.length === 0) return;
+    const bufferCopy = [...logBuffer];
+    logBuffer = []; // Clear immediately
+    try {
+        // Execute inserts in parallel (Promise.all) to minimize event loop blocking
+        await Promise.all(bufferCopy.map(l => fileService.addCrawlLog(fileId, l.level, l.stage, l.message)));
+    } catch (e) {
+        logger.warn(`[CRAWL-WORKER] Failed to flush logs: ${e.message}`);
+    }
+  };
+  // --- [PERFORMANCE PATCH END] ---
+
+  // [ADDED] Helper: Writes segments to disk using streams to prevent OOM and Event Loop Blocking
+  const saveSegmentsToStream = async (segments, destPath) => {
+    const writeStream = fsStandard.createWriteStream(destPath, { encoding: 'utf8' });
+    
+    // Helper to allow the Event Loop to breathe (process other requests)
+    const yieldToEventLoop = () => new Promise(resolve => setImmediate(resolve));
+
+    for (let i = 0; i < segments.length; i++) {
+        // Add separator unless it's the very last segment
+        const separator = (i < segments.length - 1) ? '\n\n---\n\n' : '';
+        const chunk = segments[i] + separator;
+
+        // Write to stream
+        const canContinue = writeStream.write(chunk);
+
+        // Handle Backpressure: If buffer is full, wait for 'drain'
+        if (!canContinue) {
+            await new Promise(resolve => writeStream.once('drain', resolve));
+        }
+
+        // CPU PROTECTION: Every 50 segments, force a yield to the Node.js event loop
+        if (i % 50 === 0) {
+            await yieldToEventLoop();
+        }
+    }
+
+    // Close stream and wait for finish
+    writeStream.end();
+    await new Promise((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+    });
+  };
+
   try {
     // --- A. UPDATE STATUS TO CRAWLING ---
     await updateJobStatus(db, job._key, 'Crawling');
@@ -118,12 +173,23 @@ const processJob = async (job, db) => {
     // --- B. DEFINE WORKER CALLBACK ---
     // This function is called by the Crawler utility for every fetched page
     const workCallback = async (crawledUrl, $) => {
-      // 1. Check Kill Signal
-      const currentJob = await db.collection('crawl_job').document(job._key);
       
-      if (currentJob.kill_requested) {
+      // --- [PERFORMANCE PATCH START] Throttled Kill Check ---
+      // Only check the DB for a kill signal every 2000ms (2 seconds)
+      // This prevents hammering the DB on every single page load
+      const now = Date.now();
+      if (now - lastKillCheck > 2000) {
+          const currentJob = await db.collection('crawl_job').document(job._key);
+          if (currentJob.kill_requested) {
+            isJobKilled = true;
+          }
+          lastKillCheck = now;
+      }
+
+      if (isJobKilled) {
         throw new Error('Killed'); // Specific message for control flow
       }
+      // --- [PERFORMANCE PATCH END] ---
 
       // 2. Check Page Limit
       if (pagesProcessed >= MAX_PAGES_PER_JOB) {
@@ -223,43 +289,89 @@ const processJob = async (job, db) => {
         markdownSegments.push(`## Source: ${crawledUrl}\n\n${markdown}`);
         pagesProcessed++;
         
-        if (pagesProcessed % 5 === 0) {
-           await updateJobProgress(db, job._key, pagesProcessed);
-        }
+        // --- [PERFORMANCE PATCH START] Removed Immediate Update ---
+        // Removed immediate updateJobProgress call here. 
+        // It is now handled in onMetricsUpdate to reduce DB load.
+        // --- [PERFORMANCE PATCH END] ---
       }
 
       // 8. Log Progress
-      await fileService.addCrawlLog(fileId, 'INFO', 'Page', `Crawled: ${crawledUrl}`);
+      // --- [PERFORMANCE PATCH START] Buffered Logging ---
+      // Replaced immediate DB call with memory buffer
+      logBuffer.push({ level: 'INFO', stage: 'Page', message: `Crawled: ${crawledUrl}` });
+      
+      // Flush if buffer gets too big (e.g., 20 items)
+      if (logBuffer.length >= 20) {
+          await flushLogBuffer();
+      }
+      // --- [PERFORMANCE PATCH END] ---
+    };
+
+    // --- [ADDED] METRICS UPDATE CALLBACK ---
+    const onMetricsUpdate = async (metrics) => {
+      // --- [PERFORMANCE PATCH START] Throttled Metrics ---
+      const now = Date.now();
+      // Only update metrics and progress every 3000ms (3 seconds)
+      if (now - lastMetricsUpdate > 3000) {
+          const fullMetrics = {
+            ...metrics,
+            processed: pagesProcessed,
+            limit: MAX_PAGES_PER_JOB,
+            max_depth: job.depth 
+          };
+          try {
+            await fileService.updateCrawlMetrics(fileId, fullMetrics);
+            // Also update the simple page counter in the job record periodically
+            await updateJobProgress(db, job._key, pagesProcessed);
+            
+            // Opportunity to flush logs while we are at it
+            await flushLogBuffer();
+          } catch (e) {
+            logger.error(`[CRAWL-WORKER] Failed to update metrics: ${e.message}`);
+          }
+          lastMetricsUpdate = now;
+      }
+      // --- [PERFORMANCE PATCH END] ---
     };
 
     // --- C. EXECUTE CRAWL ---
     logger.debug(`[CRAWL-WORKER] Invoking crawler for ${job.url}`);
-    await crawler.crawl([job.url], workCallback, job.depth, WORKER_CONCURRENCY);
+    // [MODIFIED] Pass onMetricsUpdate to crawl
+    await crawler.crawl([job.url], workCallback, job.depth, WORKER_CONCURRENCY, onMetricsUpdate);
 
-    // --- D. POST-CRAWL PROCESSING ---
+    // --- [PERFORMANCE PATCH START] Final Flush ---
+    // Ensure any remaining logs in buffer are written
+    await flushLogBuffer();
+    // --- [PERFORMANCE PATCH END] ---
+
+    // --- D. POST-CRAWL PROCESSING (OPTIMIZED) ---
     if (markdownSegments.length === 0) {
       throw new Error('Crawl finished but no content was extracted.');
     }
 
-    logger.info(`[CRAWL-WORKER] Crawl complete. Joining ${markdownSegments.length} segments.`);
-    const finalMarkdown = markdownSegments.join('\n\n---\n\n');
+    logger.info(`[CRAWL-WORKER] Crawl complete. Processing ${markdownSegments.length} segments with stream strategy.`);
 
-    // --- E. LANGUAGE VALIDATION ---
-    const detectedLang = langdetect.detectOne(finalMarkdown);
-    logger.info(`[CRAWL-WORKER] Detected language: ${detectedLang}, Required: ${REQUIRED_LANG}`);
+    // --- E. LANGUAGE VALIDATION (SAMPLING) ---
+    // [MODIFIED] Detect language on sample only to save CPU
+    const sampleSize = Math.min(markdownSegments.length, 50);
+    const sampleText = markdownSegments.slice(0, sampleSize).join('\n');
+    const detectedLang = langdetect.detectOne(sampleText);
+    logger.info(`[CRAWL-WORKER] Detected language (from sample): ${detectedLang}, Required: ${REQUIRED_LANG}`);
 
     if (!detectedLang || detectedLang.toLowerCase() !== REQUIRED_LANG) {
       // Warning instead of Error to allow saving partial successful crawls even if lang is iffy
       logger.warn(`[CRAWL-WORKER] Language validation warning: Found [${detectedLang}], require [${REQUIRED_LANG}]. Continuing...`);
     }
 
-    // --- F. SAVE FILE ---
+    // --- F. SAVE FILE (STREAMING) ---
     await fileUtils.ensureDirectoryExists(UPLOAD_DIR);
     const fileName = `${fileId}.md`;
     const storagePath = path.join(UPLOAD_DIR, fileName);
     
-    await fs.writeFile(storagePath, finalMarkdown, 'utf8');
-    logger.info(`[CRAWL-WORKER] Saved markdown file to ${storagePath}`);
+    // [MODIFIED] Use streaming helper
+    await saveSegmentsToStream(markdownSegments, storagePath);
+    
+    logger.info(`[CRAWL-WORKER] Streamed markdown file to ${storagePath}`);
 
     const stats = await fs.stat(storagePath);
     const fileHash = await fileUtils.getFileHash(storagePath);
@@ -295,16 +407,20 @@ const processJob = async (job, db) => {
   } catch (error) {
     // --- H. ERROR HANDLING ---
     
+    // --- [PERFORMANCE PATCH] Flush any remaining logs in error state ---
+    await flushLogBuffer();
+
     // 1. Handle Max Pages (Partial Success)
     if (error.message === 'MaxPagesReached') {
         logger.info(`[CRAWL-WORKER] Job ${job._key} reached max pages. Saving partial results.`);
         try {
             if (markdownSegments.length > 0) {
-                const finalMarkdown = markdownSegments.join('\n\n---\n\n');
+                // [MODIFIED] Use streaming helper for partial save too
                 await fileUtils.ensureDirectoryExists(UPLOAD_DIR);
                 const fileName = `${fileId}.md`;
                 const storagePath = path.join(UPLOAD_DIR, fileName);
-                await fs.writeFile(storagePath, finalMarkdown, 'utf8');
+                
+                await saveSegmentsToStream(markdownSegments, storagePath);
                 
                 const stats = await fs.stat(storagePath);
                 const fileHash = await fileUtils.getFileHash(storagePath);

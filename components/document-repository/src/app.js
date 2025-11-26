@@ -74,9 +74,10 @@ app.use(cors({
 // **FIX:** Trust the proxy to allow rate limiting based on X-Forwarded-For
 app.set('trust proxy', 1); 
 
+// [MODIFIED] Increased Rate Limit significantly to support Dashboard Polling
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: appConfig.rateLimitMax || 100, // limit each IP to 100 requests per windowMs
+  max: appConfig.rateLimitMax || 30000, // [CHANGED] Increased from 100 to 30000 to prevent 429 errors during crawl monitoring
   message: {
     error: 'Too many requests from this IP, please try again later.'
   },

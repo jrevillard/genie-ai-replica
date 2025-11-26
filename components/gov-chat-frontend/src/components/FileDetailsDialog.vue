@@ -63,6 +63,13 @@
           </button>
           <button
             v-if="crawlJob"
+            :class="['tab-btn', { active: activeTab === 'dashboard' }]"
+            @click="activeTab = 'dashboard'"
+          >
+            Dashboard <span v-if="crawlJob.status === 'Crawling'" class="live-dot"></span>
+          </button>
+          <button
+            v-if="crawlJob"
             :class="['tab-btn', { active: activeTab === 'crawlLog' }]"
             @click="switchToCrawlLogTab"
           >
@@ -251,6 +258,90 @@
             </div>
           </div>
 
+          <div v-if="activeTab === 'dashboard'" class="tab-content dashboard-tab">
+            
+            <div class="dashboard-controls">
+              <div class="auto-refresh">
+                <div class="toggle-wrapper">
+                  <input 
+                    type="checkbox" 
+                    id="auto-refresh-toggle" 
+                    v-model="isAutoRefreshEnabled"
+                  >
+                  <label for="auto-refresh-toggle">Auto-refresh every</label>
+                </div>
+                <input 
+                  type="number" 
+                  v-model.number="dashboardRefreshInterval" 
+                  min="1" 
+                  class="small-input"
+                  :disabled="!isAutoRefreshEnabled"
+                >
+                <span class="text-sm">seconds</span>
+              </div>
+              <button 
+                class="btn btn-sm btn-outline" 
+                @click="refreshDashboardData" 
+                :disabled="isRefreshingDashboard"
+              >
+                <span v-if="isRefreshingDashboard" class="btn-spinner"></span>
+                Refresh Now
+              </button>
+            </div>
+
+             <div class="dashboard-grid">
+              <div class="stat-card">
+                <div class="stat-label">Crawl Rate</div>
+                <div class="stat-value text-primary">{{ crawlStats.crawlRate }} <span class="unit">pgs/sec</span></div>
+              </div>
+              
+              <div class="stat-card">
+                <div class="stat-label">Queue Size</div>
+                <div class="stat-value">{{ crawlStats.queueSize }}</div>
+              </div>
+
+              <div class="stat-card" :class="{'bg-danger-light': crawlStats.errorRate > 5}">
+                <div class="stat-label">Error Rate</div>
+                <div class="stat-value" :class="crawlStats.errorRate > 5 ? 'text-danger' : 'text-success'">
+                  {{ crawlStats.errorRate }}%
+                </div>
+                <div class="stat-subtext">
+                  <span class="err-badge" title="403 Forbidden">403: {{ crawlStats.errors['403'] || 0 }}</span>
+                  <span class="err-badge" title="429 Rate Limit">429: {{ crawlStats.errors['429'] || 0 }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="progress-section">
+              <div class="progress-header">
+                <span class="progress-label">Pages Processed</span>
+                <span class="progress-fraction">{{ crawlStats.processed }} / {{ crawlStats.limit }}</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" :style="{ width: dashboardProgressPercent + '%' }"></div>
+              </div>
+            </div>
+
+            <div class="efficiency-grid">
+              <div class="eff-item">
+                <span class="eff-label">Depth</span>
+                <span class="eff-val">{{ crawlStats.currentDepth }} / {{ crawlStats.maxDepth }}</span>
+              </div>
+              <div class="eff-item">
+                <span class="eff-label">Internal Links</span>
+                <span class="eff-val">{{ crawlStats.linksInternal }}</span>
+              </div>
+              <div class="eff-item">
+                <span class="eff-label">External Links</span>
+                <span class="eff-val">{{ crawlStats.linksExternal }}</span>
+              </div>
+              <div class="eff-item">
+                <span class="eff-label">Total Fetched</span>
+                <span class="eff-val">{{ crawlStats.totalCrawled }}</span>
+              </div>
+            </div>
+          </div>
+
           <div
             v-if="activeTab === 'crawlLog'"
             class="tab-content crawl-log-tab"
@@ -423,7 +514,7 @@
           </button>
           <div class="footer-actions">
             <button class="btn btn-outline" @click="$emit('close')">
-              {{ translate("common.cancel", "Cancel") }}
+              {{ activeTab === 'dashboard' ? translate("common.close", "Close") : translate("common.cancel", "Cancel") }}
             </button>
             <button
               class="btn btn-secondary"
@@ -492,6 +583,27 @@ export default {
       crawlLogs: [],
       isCrawlLogLoading: false,
 
+      // DASHBOARD STATE
+      isAutoRefreshEnabled: true,
+      dashboardRefreshInterval: 5,
+      dashboardTimer: null,
+      isRefreshingDashboard: false,
+      
+      // REAL METRICS STATE (replaced mockStats)
+      crawlStats: {
+        crawlRate: 0,
+        queueSize: 0,
+        errorRate: 0,
+        errors: {},
+        processed: 0,
+        limit: 0,
+        currentDepth: 0,
+        maxDepth: 0,
+        linksInternal: 0,
+        linksExternal: 0,
+        totalCrawled: 0
+      },
+
       editableFile: {
         file_name: "",
         author: "",
@@ -518,6 +630,10 @@ export default {
     };
   },
   computed: {
+    dashboardProgressPercent() {
+        if (!this.crawlStats.limit) return 0;
+        return (this.crawlStats.processed / this.crawlStats.limit) * 100;
+    },
     isSaveDisabled() {
       if (!this.isMetadataEditable) return true;
       if (!this.editableFile.file_name || !this.editableFile.file_name.trim())
@@ -622,6 +738,27 @@ export default {
         }
       },
     },
+    activeTab(newTab) {
+      if (newTab === 'dashboard') {
+        this.startDashboardTimer();
+      } else {
+        this.stopDashboardTimer();
+      }
+    },
+    isAutoRefreshEnabled(enabled) {
+      if (enabled && this.activeTab === 'dashboard') {
+        this.startDashboardTimer();
+      } else {
+        this.stopDashboardTimer();
+      }
+    },
+    dashboardRefreshInterval() {
+        // Restart timer if interval changes and it's running
+        if(this.isAutoRefreshEnabled && this.activeTab === 'dashboard') {
+            this.stopDashboardTimer();
+            this.startDashboardTimer();
+        }
+    },
     "$i18n.locale"(newLocale) {
       if (newLocale && newLocale !== this.currentLocale) {
         this.currentLocale = newLocale;
@@ -645,6 +782,9 @@ export default {
       }
     },
   },
+  beforeUnmount() {
+    this.stopDashboardTimer();
+  },
   methods: {
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {
@@ -656,6 +796,62 @@ export default {
       }
       return fallback || key;
     },
+    
+    // --- DASHBOARD TIMER METHODS ---
+    startDashboardTimer() {
+      this.stopDashboardTimer(); // Clear any existing
+      if (!this.isAutoRefreshEnabled) return;
+      
+      const interval = Math.max(1, this.dashboardRefreshInterval) * 1000;
+      this.dashboardTimer = setInterval(() => {
+        this.refreshDashboardData();
+      }, interval);
+      
+      // Trigger immediate refresh
+      this.refreshDashboardData();
+    },
+    stopDashboardTimer() {
+      if (this.dashboardTimer) {
+        clearInterval(this.dashboardTimer);
+        this.dashboardTimer = null;
+      }
+    },
+    async refreshDashboardData() {
+      if (this.isRefreshingDashboard) return;
+      this.isRefreshingDashboard = true;
+      try {
+        // 1. Refresh real file metadata
+        const crawlJobResponse = await documentFileService.getCrawlJob(this.fileId);
+        if (crawlJobResponse && crawlJobResponse.data) {
+            this.crawlJob = crawlJobResponse.data;
+        }
+        
+        // 2. Fetch Live Metrics from Backend (REAL IMPLEMENTATION)
+        const metricsResponse = await documentFileService.getCrawlMetrics(this.fileId);
+        if (metricsResponse && metricsResponse.data) {
+            const m = metricsResponse.data;
+            this.crawlStats = {
+                crawlRate: m.crawl_rate || 0,
+                queueSize: m.queue_size || 0,
+                errorRate: m.error_rate || 0,
+                errors: m.error_counts || {},
+                processed: m.processed || 0,
+                limit: m.limit || 0,
+                currentDepth: m.current_depth || 0,
+                maxDepth: m.max_depth || 0,
+                linksInternal: m.links_internal || 0,
+                linksExternal: m.links_external || 0,
+                totalCrawled: m.total_crawled || 0
+            };
+        }
+
+      } catch (e) {
+        console.error("Dashboard refresh failed", e);
+      } finally {
+        this.isRefreshingDashboard = false;
+      }
+    },
+
     isExternalUrl(url) {
       if (!url) return false;
       const isHttp = url.startsWith("http://") || url.startsWith("https://");
@@ -670,7 +866,6 @@ export default {
 
       try {
         // Fetch File Metadata, Hierarchy (current + en), and Crawl Job concurrently
-        // Note: getCrawlJob might 404 if it's not a crawl file, handled below.
         const [fileResponse, hierarchyResponse, englishHierarchyResponse] =
           await Promise.all([
             documentFileService.getFileMetadata(id),
@@ -683,12 +878,6 @@ export default {
         // Try to fetch crawl job status
         try {
           const crawlResponse = await documentFileService.getCrawlJob(id);
-          // The controller returns { success: true, data: job } or similar.
-          // Service returns response.data. We assume service logic returns the job object.
-          // If using the service I generated: it returns response.data (which is the whole object with .data property?
-          // No, the generated service returns response.data.
-          // Controller sends { success, data }. So response.data is {success, data}.
-          // Actually looking at the generated service code `return response.data` means we get the JSON body.
           if (crawlResponse && crawlResponse.data) {
             this.crawlJob = crawlResponse.data;
           }
@@ -1450,6 +1639,12 @@ export default {
 .tab-btn:hover:not(.active) {
   color: var(--text-primary);
 }
+.live-dot {
+    display: inline-block; width: 6px; height: 6px;
+    background-color: #ef4444; border-radius: 50%;
+    margin-left: 4px; animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.4;} 100% {opacity: 1;} }
 
 .dialog-body {
   padding: 0; /* Remove padding as content will have its own */
@@ -1467,6 +1662,105 @@ export default {
   grid-template-columns: 2fr 1fr;
   gap: 2rem;
 }
+
+/* --- DASHBOARD STYLES --- */
+.dashboard-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 1.5rem;
+}
+.auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #475569;
+}
+.toggle-wrapper { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.small-input {
+    width: 60px;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    text-align: center;
+}
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.stat-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.75rem;
+    text-align: center;
+}
+.stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #334155;
+}
+.unit { font-size: 0.9rem; font-weight: 400; color: #94a3b8; }
+.stat-subtext {
+    display: flex; justify-content: center; gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+.err-badge {
+    font-size: 0.7rem;
+    background: #fee2e2; color: #b91c1c;
+    padding: 1px 4px; border-radius: 3px;
+}
+.bg-danger-light { background-color: #fef2f2; border-color: #fecaca; }
+.text-danger { color: #ef4444; }
+.text-success { color: #10b981; }
+.text-primary { color: #3b82f6; }
+
+/* Progress Bar */
+.progress-section { margin-bottom: 1.5rem; }
+.progress-header {
+    display: flex; justify-content: space-between;
+    font-size: 0.85rem; color: #475569; margin-bottom: 0.25rem;
+}
+.progress-bar-bg {
+    height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;
+}
+.progress-bar-fill {
+    height: 100%; background: #3b82f6; transition: width 0.3s ease;
+}
+
+/* Efficiency Grid */
+.efficiency-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 0.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 1rem;
+}
+.eff-item {
+    display: flex; flex-direction: column; align-items: center;
+}
+.eff-label { font-size: 0.7rem; color: #94a3b8; }
+.eff-val { font-size: 0.9rem; font-weight: 600; color: #334155; }
 
 /* Ingestion/Crawl Log Tab Styles */
 .ingestion-log-tab,

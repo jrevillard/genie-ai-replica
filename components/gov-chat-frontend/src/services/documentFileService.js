@@ -208,6 +208,22 @@ const documentFileService = {
   },
 
   /**
+   * Gets the live crawl metrics for a specific file.
+   * @param {string} fileId - The ID of the file.
+   * @returns {Promise<Object>} The API response containing the crawl metrics.
+   */
+  async getCrawlMetrics(fileId) {
+    try {
+      const response = await httpService.get(`/files/${fileId}/crawl-metrics`);
+      // Expected return: { success: true, data: { ...metrics } }
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching crawl metrics for file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
    * Gets the crawl logs for a specific file.
    * @param {string} fileId - The ID of the file.
    * @returns {Promise<Object>} The API response containing the list of crawl logs.

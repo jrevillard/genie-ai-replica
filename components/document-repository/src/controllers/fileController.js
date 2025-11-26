@@ -394,7 +394,7 @@ class FileController {
   // --- UPDATED `uploadLink` to use `_handleUploadError` ---
   uploadLink = async (req, res) => {
     try {
-      const { url, fileType = 'html' } = req.body;
+      const { url, fileType = 'md' } = req.body;
       if (!url) {
         return res.status(400).json({ success: false, error: 'URL is required' });
       }

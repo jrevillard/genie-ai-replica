@@ -304,41 +304,70 @@ class FileService {
     const response = await crawler.fetch(url);
     if (!response) throw new Error('Failed to fetch URL');
 
-    let content = response.data || response.text;
+    // 1. Parse HTML using Cheerio (Required for cleaning)
+    const cheerio = require('cheerio');
+    const $ = cheerio.load(response.data || response.text);
 
-    // --- UPDATED: Trust the crawler's language detection ---
-    const language = crawler.getLanguage(content); // This gets 'ru' from <html lang="ru">
-    logger.info(`[FILE-SERVICE-CRAWLER] Detected language tag: ${language}`);
-    // ---
-
-    // Save content to a temp file
-    let title = crawler.getTitle(content) || 'untitled';
-    title = title.replace(/[\/\\?%*:|"<>]/g, '-').substring(0, 100) || 'untitled';
-
-    if (title === 'untitled') {
-      try {
-        const { hostname, pathname } = new URL(url);
-        // Use hostname and last path segment as fallback
-        const pathPart = pathname.split('/').filter(Boolean).pop() || 'index';
-        title = `${hostname}-${pathPart}`;
-      } catch {
-        title = 'untitled-webpage';
-      }
+    // 2. [FIXED] Clean content (Match logic from crawlWorker.js)
+    if (fileType === 'md') {
+        $('script').remove();
+        $('style').remove();
+        $('nav').remove();
+        $('footer').remove();
+        $('header').remove();
+        $('iframe').remove();
+        $('noscript').remove();
+        $('div[class*="cookie"]').remove();
+        $('div[class*="privacy"]').remove();
+        $('button').remove();
+        
+        // Fix relative links & images
+        $('img, a').each((i, el) => {
+            const attr = el.tagName === 'img' ? 'src' : 'href';
+            const val = $(el).attr(attr);
+            if (val && !val.startsWith('http') && !val.startsWith('data:') && !val.startsWith('#')) {
+                try {
+                    $(el).attr(attr, new URL(val, url).href);
+                } catch (e) {}
+            }
+        });
     }
 
-    const ext = fileType === 'md' ? '.md' : '.html'; //if fileType is 'md' then use .md else use .html
+    // 3. Extract Content
+    let contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
+    
+    // 4. Detect Language
+    const language = crawler.getLanguage($.html()); 
+    logger.info(`[FILE-SERVICE] Detected language tag: ${language}`);
+
+    // 5. Generate Filename
+    let pageTitle = $('title').text().trim() || 'untitled';
+    pageTitle = pageTitle.replace(/[\/\\?%*:|"<>]/g, '-').substring(0, 100) || 'untitled';
+    
+    // [FIX] Include Domain in filename to ensure it matches search queries
+    let domain = 'web';
+    try { domain = new URL(url).hostname; } catch(e){}
+    const title = `${domain}_${pageTitle}`; 
+
+    const ext = fileType === 'md' ? '.md' : '.html';
     const fileName = `${title}${ext}`;
     const filePath = path.join(this.uploadDir, fileName);
 
+    let finalContent = contentHtml;
+
+    // 6. Convert to Markdown if requested
     if (fileType === 'md') {
-      // Optionally convert HTML to Markdown here
       const TurndownService = require('turndown');
-      const turndownService = new TurndownService();
-      content = turndownService.turndown(content);
+      const turndownService = new TurndownService({
+        headingStyle: 'atx',
+        codeBlockStyle: 'fenced'
+      });
+      // Add Source Header
+      finalContent = `## Source: ${url}\n\n${turndownService.turndown(contentHtml || '')}`;
     }
 
     await fileUtils.ensureDirectoryExists(this.uploadDir);
-    await fs.writeFile(filePath, content);
+    await fs.writeFile(filePath, finalContent);
 
     // Prepare fileData object similar to multer
     const stats = await fs.stat(filePath);
@@ -346,7 +375,7 @@ class FileService {
       originalname: fileName,
       mimetype: fileType === 'md' ? 'text/markdown' : 'text/html',
       size: stats.size,
-      buffer: Buffer.from(content)
+      buffer: Buffer.from(finalContent)
     };
 
     // Call uploadFile to handle security, metadata, etc.
@@ -354,12 +383,43 @@ class FileService {
       sourceUrl: url,
       labels: [],
       author: 'crawler',
-      language: language, // <-- PASS THE DETECTED LANGUAGE
+      language: language,
       crawlDate: new Date().toISOString()
     };
+    
     const uploadedFile = await this.uploadFile(fileData, fileInfo);
 
-    // Delete the originally downloaded html file
+    // [FIX] Create a "synthetic" crawl_job record so the dashboard knows this happened
+    try {
+      const db = await this.getDb();
+      const crawlJob = {
+        _key: `job_${uploadedFile.file_id}`,
+        file_id: uploadedFile.file_id,
+        url: url,
+        status: 'Succeeded', // It was synchronous and successful
+        depth: 0,
+        config: {
+          followExternalLinks: false,
+          maxExternalDepth: 0,
+          singlePage: true
+        },
+        max_pages: 1,
+        pages_crawled: 1,
+        kill_requested: false,
+        started_at: uploadedFile.uploaded_date,
+        finished_at: new Date().toISOString(),
+        error_message: null
+      };
+      await db.collection('crawl_job').save(crawlJob);
+      logger.info(`[FILE-SERVICE] Created crawl_job record for single page: ${url}`);
+      
+      // Add log
+      await this.addCrawlLog(uploadedFile.file_id, 'INFO', 'System', 'Single page crawl completed successfully.');
+    } catch (e) {
+      logger.warn(`[FILE-SERVICE] Failed to create crawl_job record: ${e.message}`);
+    }
+
+    // Delete the temp file
     try {
       await fs.unlink(filePath);
       logger.debug(`[FILE-SERVICE] Deleted temp file: ${filePath}`);
@@ -575,7 +635,8 @@ class FileService {
         bindVars.mimeType = mimeType;
       }
       if (search) {
-        filters.push('CONTAINS(LOWER(file.file_name), LOWER(@search))');
+        // [FIX] Search in both filename AND source_url so domain search works
+        filters.push('(CONTAINS(LOWER(file.file_name), LOWER(@search)) OR CONTAINS(LOWER(file.source_url), LOWER(@search)))');
         bindVars.search = search;
       }
       if (dataprepStatus) {
@@ -588,8 +649,9 @@ class FileService {
         query += ` FILTER ${filters.join(' AND ')}`;
       }
 
-      // --- FIX: Sort by uploaded_date instead of upload_date to match DB schema ---
-      query += ' SORT file.uploaded_date DESC'; 
+      // [FIX] Sort by file_id DESC instead of uploaded_date to avoid timezone/UTC confusion
+      // file_id is chronologically generated so new files always appear first.
+      query += ' SORT file.file_id DESC'; 
       
       query += ` LIMIT ${offset}, ${limit}`;
       // MERGE the file with the found crawlJob (if any)

@@ -23,6 +23,7 @@ const fileUtils = require('../utils/fileUtils');
 
 // Configuration constants from appConfig
 const POLL_INTERVAL_MS = appConfig.crawler?.pollIntervalMs || 5000;
+const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 10000; // New timeout setting
 const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
 const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 10;
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
@@ -93,7 +94,13 @@ const checkAndProcessJobs = async () => {
  */
 const processJob = async (job, db) => {
   const fileId = job.file_id;
-  const crawler = new Crawler();
+  
+  // Extract advanced config (if any)
+  const crawlConfig = job.config || {};
+
+  // [FIX] Pass crawlConfig as the 3rd argument
+  const crawler = new Crawler(null, REQUEST_TIMEOUT_MS, crawlConfig);
+  
   const turndownService = new TurndownService({
     headingStyle: 'atx',
     codeBlockStyle: 'fenced'
@@ -115,13 +122,13 @@ const processJob = async (job, db) => {
       const currentJob = await db.collection('crawl_job').document(job._key);
       
       if (currentJob.kill_requested) {
-        throw new Error('Killed'); // Use specific string for logic in Crawler
+        throw new Error('Killed'); // Specific message for control flow
       }
 
       // 2. Check Page Limit
       if (pagesProcessed >= MAX_PAGES_PER_JOB) {
         logger.warn(`[CRAWL-WORKER] Job ${job._key} hit max page limit (${MAX_PAGES_PER_JOB}). Stopping traversal.`);
-        // FIX: Throw Error instead of return to signal Crawler to stop the loop
+        // Throwing specific error to stop the crawler loop cleanly
         throw new Error('MaxPagesReached');
       }
 
@@ -136,7 +143,7 @@ const processJob = async (job, db) => {
       $('noscript').remove();
       
       // Specific RAG Optimization: Remove noise
-      // Remove common cookie/privacy banners (often found in divs with classes like 'cookie', 'privacy', 'banner')
+      // Remove common cookie/privacy banners
       $('div[class*="cookie"]').remove();
       $('div[class*="privacy"]').remove();
       $('div[id*="cookie"]').remove();
@@ -184,8 +191,24 @@ const processJob = async (job, db) => {
 
 
       // 5. Extract Main Content
-      // Try to find specific semantic tags, fall back to body
-      let contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
+      let contentHtml = null;
+
+      // A. Configured Selector
+      if (crawlConfig.contentSelector && crawlConfig.contentSelector.trim() !== '') {
+          try {
+              const userHtml = $(crawlConfig.contentSelector.trim()).html();
+              if (userHtml && userHtml.trim()) {
+                  contentHtml = userHtml;
+              }
+          } catch (selErr) {
+              logger.warn(`[CRAWL-WORKER] Invalid selector '${crawlConfig.contentSelector}': ${selErr.message}`);
+          }
+      }
+
+      // B. Fallback Heuristics (Original Logic)
+      if (!contentHtml || !contentHtml.trim()) {
+          contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
+      }
       
       if (!contentHtml || !contentHtml.trim()) {
         logger.debug(`[CRAWL-WORKER] No content extracted for ${crawledUrl}`);
@@ -272,17 +295,10 @@ const processJob = async (job, db) => {
   } catch (error) {
     // --- H. ERROR HANDLING ---
     
-    // Check for our control flow error
-    const isMaxPages = error.message === 'MaxPagesReached';
-    if (isMaxPages) {
-        // If max pages reached, we treat it as success (partial crawl)
-        logger.info(`[CRAWL-WORKER] Job ${job._key} reached max pages. Saving what we have.`);
+    // 1. Handle Max Pages (Partial Success)
+    if (error.message === 'MaxPagesReached') {
+        logger.info(`[CRAWL-WORKER] Job ${job._key} reached max pages. Saving partial results.`);
         try {
-            // Re-run save logic here or call a shared function. 
-            // For safety, if we hit this catch, we should probably save what we have so far.
-            // Ideally, the crawler.js catches 'MaxPagesReached' and returns gracefully so we don't land here.
-            // But if we land here, handle it:
-            
             if (markdownSegments.length > 0) {
                 const finalMarkdown = markdownSegments.join('\n\n---\n\n');
                 await fileUtils.ensureDirectoryExists(UPLOAD_DIR);
@@ -297,22 +313,29 @@ const processJob = async (job, db) => {
                 await fileDb.query(`
                   FOR f IN files
                   FILTER f.file_id == @fileId
-                  UPDATE f WITH { storage_path: @storagePath, file_size: @fileSize, file_hash: @fileHash } IN files
-                `, { fileId, storagePath, fileSize: stats.size, fileHash });
+                  UPDATE f WITH { storage_path: @storagePath, file_size: @fileSize, file_hash: @fileHash, upload_date: @uploadDate } IN files
+                `, { 
+                    fileId, 
+                    storagePath, 
+                    fileSize: stats.size, 
+                    fileHash,
+                    uploadDate: new Date().toISOString() 
+                });
 
                 await db.collection('crawl_job').update(job._key, {
-                  status: 'Succeeded',
+                  status: 'Succeeded', // Marked as success because we got data
                   pages_crawled: pagesProcessed,
                   finished_at: new Date().toISOString()
                 });
                 await fileService.addCrawlLog(fileId, 'WARN', 'System', 'Crawl stopped: Max pages reached. Saved partial content.');
-                return; // Exit function, do not mark as Failed
+                return; 
             }
-        } catch (saveErr) {
-            logger.error(`Failed to save partial crawl: ${saveErr.message}`);
+        } catch (e) {
+            logger.error(`[CRAWL-WORKER] Failed to save partial crawl: ${e.message}`);
         }
     }
 
+    // 2. Handle Kill/Failure
     const isKilled = error.message.includes('Killed');
     const finalStatus = isKilled ? 'Killed' : 'Failed';
     const logMessage = isKilled ? 'Crawl task was killed by user.' : `Crawl failed: ${error.message}`;

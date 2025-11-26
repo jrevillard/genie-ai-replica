@@ -179,6 +179,7 @@ const documentFileService = {
    * @param {Object} options - The crawl options.
    * @param {string} options.url - The URL to crawl.
    * @param {number} options.depth - The depth of the crawl (1-20).
+   * @param {Object} [options.config] - Advanced config (selectors, exclusions).
    * @returns {Promise<Object>} The response containing the new file stub.
    */
   async scheduleSiteCrawl(options) {

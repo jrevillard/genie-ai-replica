@@ -374,9 +374,10 @@ class FileService {
    * Creates a file stub and a crawl job record.
    * @param {string} url - The URL to crawl
    * @param {number} depth - The crawl depth
+   * @param {Object} config - Advanced crawler configuration
    * @returns {Object} The created file record stub
    */
-  async scheduleSiteCrawl(url, depth) {
+  async scheduleSiteCrawl(url, depth, config = {}) {
     const db = await this.getDb();
     const fileId = fileUtils.generateUniqueFileId();
     
@@ -395,8 +396,8 @@ class FileService {
       file_id: fileId,
       file_name: fileName,
       file_size: 0,
-      file_type: 'text/markdown', // Set correct type per spec
-      storage_path: null, // Will be updated by worker
+      file_type: 'text/markdown',
+      storage_path: null,
       file_hash: null,
       labels: [],
       author: 'System Crawler',
@@ -404,7 +405,7 @@ class FileService {
       created_date: new Date().toISOString(),
       crawl_date: new Date().toISOString(),
       source_url: url,
-      language: null, // Will be updated by worker
+      language: null,
       chunk_count: 0,
       dataprep: {
         status: 'Pending',
@@ -413,13 +414,20 @@ class FileService {
       }
     };
 
-    // 2. Create Crawl Job
+    // 2. Create Crawl Job (With Config)
     const crawlJob = {
       file_id: fileId,
       url: url,
       status: 'Pending',
       depth: depth,
-      max_pages: appConfig.crawler.maxPages, // Use config
+      // Use defaults if config values aren't provided
+      config: {
+        followExternalLinks: config.followExternalLinks || false,
+        maxExternalDepth: config.maxExternalDepth || 0,
+        contentSelector: config.contentSelector || null,
+        excludePatterns: config.excludePatterns || []
+      },
+      max_pages: appConfig.crawler.maxPages,
       pages_crawled: 0,
       kill_requested: false,
       started_at: new Date().toISOString(),
@@ -428,12 +436,10 @@ class FileService {
     };
 
     // Save to DB
-    // We manually save metadata to skip file existence checks in metadataService/uploadFile
-    // because the physical file doesn't exist yet.
     await db.collection('files').save(fileRecord);
     await db.collection('crawl_job').save(crawlJob);
 
-    logger.info(`[FILE-SERVICE] Scheduled crawl for ${url} (ID: ${fileId})`);
+    logger.info(`[FILE-SERVICE] Scheduled crawl for ${url} (ID: ${fileId}) with config: ${JSON.stringify(crawlJob.config)}`);
     return fileRecord;
   }
 

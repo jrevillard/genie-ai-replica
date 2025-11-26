@@ -148,16 +148,30 @@ router.post('/upload-link', authorizeRole(['Admin']), fileController.uploadLink)
  *                 minimum: 1
  *                 maximum: 20
  *                 description: The crawl depth (1-20)
+ *               config:
+ *                 type: object
+ *                 properties:
+ *                   followExternalLinks:
+ *                     type: boolean
+ *                   maxExternalDepth:
+ *                     type: integer
+ *                   contentSelector:
+ *                     type: string
+ *                   excludePatterns:
+ *                     type: array
+ *                     items:
+ *                       type: string
  *     responses:
- *       202:
+ *       '202':
  *         description: Crawl scheduled successfully
- *       400:
+ *       '400':
  *         description: Invalid input
- *       401:
+ *       '401':
  *         description: Unauthorized
- *       403:
+ *       '403':
  *         description: Forbidden - Admin role required
  */
+
 router.post('/crawl/schedule', authorizeRole(['Admin']), fileController.scheduleSiteCrawl);
 
 /**

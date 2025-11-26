@@ -70,9 +70,14 @@ const updateStatusSchema = Joi.object({
 // Schema for scheduling a site crawl
 const scheduleCrawlSchema = Joi.object({
   url: Joi.string().uri().required(),
-  depth: Joi.number().integer().min(1).max(20).required()
+  depth: Joi.number().integer().min(1).max(20).required(),
+  config: Joi.object({
+    followExternalLinks: Joi.boolean().optional(),
+    maxExternalDepth: Joi.number().integer().min(0).max(5).optional(),
+    contentSelector: Joi.string().max(200).optional(),
+    excludePatterns: Joi.array().items(Joi.string()).optional()
+  }).optional()
 });
-
 
 class FileController {
   constructor() {
@@ -1187,10 +1192,10 @@ class FileController {
         });
       }
 
-      const { url, depth } = value;
+      const { url, depth, config } = value;
       
-      // Delegate to service
-      const fileRecord = await fileService.scheduleSiteCrawl(url, depth);
+      // Delegate to service (passing config)
+      const fileRecord = await fileService.scheduleSiteCrawl(url, depth, config);
 
       res.status(202).json({
         success: true,

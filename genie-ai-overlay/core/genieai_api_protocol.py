@@ -179,6 +179,7 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         file_name: Optional[str] = None,
         file_path: Optional[str] = None,
         file_type: Optional[str] = None,
+        file_labels: Optional[List[str]] = Form(None),
         upload_date: Optional[str] = None,
         files: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
         link_list: Optional[str] = None,

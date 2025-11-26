@@ -272,7 +272,7 @@ services:
     env_file:
       - .env
     environment:
-      DATAPREP_COMPONENT_NAME: "OPEA_DATAPREP_ARANGODB"
+      DATAPREP_COMPONENT_NAME: ${DATAPREP_COMPONENT_NAME}
       VLLM_ENDPOINT: ${VLLM_ENDPOINT}
       TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
       GUARDRAIL_URL: ${GUARDRAIL_URL}
@@ -482,7 +482,7 @@ services:
               capabilities: [gpu]
     ports:
       - "${VLLM_TRANSLATION_SERVICE_PORT}:${VLLM_TRANSLATION_SERVICE_PORT}"
-    command: >
+    command: 
       --model ${VLLM_TRANSLATION_MODEL_ID}
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTIL:-0.4}
       --served-model-name ${VLLM_TRANSLATION_MODEL_ID}

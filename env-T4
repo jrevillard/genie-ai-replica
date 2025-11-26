@@ -151,7 +151,7 @@ DOC_REPO_URL=http://localhost:3001
 OPEA_GENAI_COMPS_URL=https://github.com/opea-project/GenAIComps.git
 DATAPREP_CHUNK_SIZE=500
 DATAPREP_CHUNK_OVERLAP=50
-DATAPREP_COMPONENT_NAME=GENIE_DATAPREP_ARANGODB
+DATAPREP_COMPONENT_NAME=OPEA_DATAPREP_ARANGODB
 DATAPREP_ARANGO_INSERT_ASYNC=false
 DATAPREP_ARANGO_USE_GRAPH_NAME=true
 DATAPREP_NODE_PROPERTIES=
@@ -192,6 +192,7 @@ VLLM_ENDPOINT=http://vllm:8000
 # The model used for main chat/generation (Service: vllm)
 # Defaults to the granite model
 VLLM_LLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
+VLLM_MODEL_ID=ibm-granite/granite-3.3-2b-instruct
 VLLM_GPU_UTIL=0.4
 VLLM_MAX_MODEL_LEN=8192
 VLLM_DTYPE=half

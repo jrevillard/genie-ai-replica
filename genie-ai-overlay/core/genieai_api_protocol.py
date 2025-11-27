@@ -177,6 +177,7 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self,
         file_id: Optional[str] = None,
         file_name: Optional[str] = None,
+        storage_path: Optional[str] = None,
         file_path: Optional[str] = None,
         file_type: Optional[str] = None,
         file_labels: Optional[List[str]] = Form(None),
@@ -223,8 +224,10 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
 
         self.file_id = file_id
         self.file_name = file_name
+        self.storage_path = storage_path
         self.file_path = file_path
         self.file_type = file_type
         self.upload_date = upload_date
+        self.file_lables = file_lables
 
 

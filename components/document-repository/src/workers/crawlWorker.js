@@ -27,6 +27,7 @@ const POLL_INTERVAL_MS = appConfig.crawler?.pollIntervalMs || 5000;
 const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 10000;
 const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
 const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 10;
+// [CRITICAL] This is the language filter target (e.g., 'en')
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
 const UPLOAD_DIR = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
 
@@ -175,8 +176,6 @@ const processJob = async (job, db) => {
     const workCallback = async (crawledUrl, $) => {
       
       // --- [PERFORMANCE PATCH START] Throttled Kill Check ---
-      // Only check the DB for a kill signal every 2000ms (2 seconds)
-      // This prevents hammering the DB on every single page load
       const now = Date.now();
       if (now - lastKillCheck > 2000) {
           const currentJob = await db.collection('crawl_job').document(job._key);
@@ -194,12 +193,10 @@ const processJob = async (job, db) => {
       // 2. Check Page Limit
       if (pagesProcessed >= MAX_PAGES_PER_JOB) {
         logger.warn(`[CRAWL-WORKER] Job ${job._key} hit max page limit (${MAX_PAGES_PER_JOB}). Stopping traversal.`);
-        // Throwing specific error to stop the crawler loop cleanly
         throw new Error('MaxPagesReached');
       }
 
       // 3. Content Cleaning (Remove non-content elements)
-      // Standard junk
       $('script').remove();
       $('style').remove();
       $('nav').remove();
@@ -208,23 +205,17 @@ const processJob = async (job, db) => {
       $('iframe').remove();
       $('noscript').remove();
       
-      // Specific RAG Optimization: Remove noise
-      // Remove common cookie/privacy banners
       $('div[class*="cookie"]').remove();
       $('div[class*="privacy"]').remove();
       $('div[id*="cookie"]').remove();
       
-      // Remove "Enquire" or "Book" buttons/links that clutter text
       $('a:contains("ENQUIRE")').remove();
       $('a:contains("Book")').remove();
       $('button').remove();
       
-      // Remove internal navigation menus (often lists of links at top/bottom)
-      // Heuristic: if a div contains mainly links and little text, kill it
       $('div').each((i, el) => {
           const linkCount = $(el).find('a').length;
           const textLength = $(el).text().trim().length;
-          // If high density of links (e.g. > 5 links) and low text-to-link ratio, it's likely a menu
           if (linkCount > 5 && textLength / linkCount < 15) { 
               $(el).remove();
           }
@@ -235,16 +226,13 @@ const processJob = async (job, db) => {
         const src = $(el).attr('src');
         if (src && !src.startsWith('http') && !src.startsWith('data:')) {
           try {
-            // Resolve relative path against the crawled page URL
             const absoluteUrl = new URL(src, crawledUrl).href;
             $(el).attr('src', absoluteUrl);
-          } catch (e) {
-            // Ignore invalid URLs
-          }
+          } catch (e) { }
         }
       });
       
-      // Fix Relative Links (for better RAG context)
+      // Fix Relative Links
       $('a').each((i, el) => {
         const href = $(el).attr('href');
         if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto:')) {
@@ -271,7 +259,7 @@ const processJob = async (job, db) => {
           }
       }
 
-      // B. Fallback Heuristics (Original Logic)
+      // B. Fallback Heuristics
       if (!contentHtml || !contentHtml.trim()) {
           contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
       }
@@ -284,23 +272,44 @@ const processJob = async (job, db) => {
       // 6. Convert to Markdown
       const markdown = turndownService.turndown(contentHtml);
 
+      // --- [ADDED] LANGUAGE FILTER (PER PAGE) ---
+      // Ensure we only keep pages that match the required ingestion language
+      if (markdown && markdown.length > 50) { // Don't check very short snippets
+        let pageLang = null;
+        
+        // A. Check HTML Tag first (Fastest)
+        const htmlLang = $('html').attr('lang');
+        if (htmlLang) {
+             pageLang = htmlLang.split('-')[0].toLowerCase();
+        }
+
+        // B. If Tag matches or doesn't exist, Double Check Content (Most Accurate)
+        // If tag says 'en' but content is 'fr', we want to catch that.
+        if (!pageLang || pageLang === REQUIRED_LANG) {
+             const detected = langdetect.detectOne(markdown);
+             if (detected) pageLang = detected;
+        }
+
+        // C. Enforce Filter
+        if (pageLang && pageLang !== REQUIRED_LANG) {
+             // Log it locally but don't throw error, just skip this specific page
+             // This allows the crawl to continue finding English links on this page, but not save the non-English content
+             logBuffer.push({ level: 'INFO', stage: 'Filter', message: `Skipped ${crawledUrl}: Detected '${pageLang}', required '${REQUIRED_LANG}'` });
+             return; // EXIT CALLBACK HERE -> Content is NOT added to markdownSegments
+        }
+      }
+      // ----------------------------------------
+
       // 7. Store Segment
       if (markdown && markdown.length > 0) {
         markdownSegments.push(`## Source: ${crawledUrl}\n\n${markdown}`);
         pagesProcessed++;
-        
-        // --- [PERFORMANCE PATCH START] Removed Immediate Update ---
-        // Removed immediate updateJobProgress call here. 
-        // It is now handled in onMetricsUpdate to reduce DB load.
-        // --- [PERFORMANCE PATCH END] ---
       }
 
       // 8. Log Progress
       // --- [PERFORMANCE PATCH START] Buffered Logging ---
-      // Replaced immediate DB call with memory buffer
       logBuffer.push({ level: 'INFO', stage: 'Page', message: `Crawled: ${crawledUrl}` });
       
-      // Flush if buffer gets too big (e.g., 20 items)
       if (logBuffer.length >= 20) {
           await flushLogBuffer();
       }
@@ -311,7 +320,6 @@ const processJob = async (job, db) => {
     const onMetricsUpdate = async (metrics) => {
       // --- [PERFORMANCE PATCH START] Throttled Metrics ---
       const now = Date.now();
-      // Only update metrics and progress every 3000ms (3 seconds)
       if (now - lastMetricsUpdate > 3000) {
           const fullMetrics = {
             ...metrics,
@@ -321,10 +329,7 @@ const processJob = async (job, db) => {
           };
           try {
             await fileService.updateCrawlMetrics(fileId, fullMetrics);
-            // Also update the simple page counter in the job record periodically
             await updateJobProgress(db, job._key, pagesProcessed);
-            
-            // Opportunity to flush logs while we are at it
             await flushLogBuffer();
           } catch (e) {
             logger.error(`[CRAWL-WORKER] Failed to update metrics: ${e.message}`);
@@ -336,11 +341,9 @@ const processJob = async (job, db) => {
 
     // --- C. EXECUTE CRAWL ---
     logger.debug(`[CRAWL-WORKER] Invoking crawler for ${job.url}`);
-    // [MODIFIED] Pass onMetricsUpdate to crawl
     await crawler.crawl([job.url], workCallback, job.depth, WORKER_CONCURRENCY, onMetricsUpdate);
 
     // --- [PERFORMANCE PATCH START] Final Flush ---
-    // Ensure any remaining logs in buffer are written
     await flushLogBuffer();
     // --- [PERFORMANCE PATCH END] ---
 
@@ -359,7 +362,6 @@ const processJob = async (job, db) => {
     logger.info(`[CRAWL-WORKER] Detected language (from sample): ${detectedLang}, Required: ${REQUIRED_LANG}`);
 
     if (!detectedLang || detectedLang.toLowerCase() !== REQUIRED_LANG) {
-      // Warning instead of Error to allow saving partial successful crawls even if lang is iffy
       logger.warn(`[CRAWL-WORKER] Language validation warning: Found [${detectedLang}], require [${REQUIRED_LANG}]. Continuing...`);
     }
 

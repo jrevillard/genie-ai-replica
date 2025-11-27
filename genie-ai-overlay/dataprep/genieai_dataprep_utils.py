@@ -134,7 +134,7 @@ async def document_loader(doc_path):
         # return await load_pdf_async(doc_path) # to be tested later
         return genieai_load_pdf(doc_path)
     else:
-        return origin_document_loader(doc_path)
+        return await origin_document_loader(doc_path)
 
 
 def is_valid_content(chunk):

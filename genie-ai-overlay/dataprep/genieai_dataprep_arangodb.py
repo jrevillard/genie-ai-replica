@@ -21,6 +21,8 @@ from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterT
 from langchain_arangodb import ArangoGraph
 # Added for error handling
 from arango.exceptions import AQLQueryExecuteError
+# --- FIXED: Added missing HTTPException import ---
+from fastapi import HTTPException
 
 # Import OPEA Core
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry

@@ -228,6 +228,6 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self.file_path = file_path
         self.file_type = file_type
         self.upload_date = upload_date
-        self.file_lables = file_lables
+        self.file_labels = file_labels
 
 

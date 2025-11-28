@@ -19,9 +19,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_arangodb import ArangoGraph
-# Added for error handling
+# Import exceptions for robust error handling
 from arango.exceptions import AQLQueryExecuteError
-# --- FIXED: Added missing HTTPException import ---
 from fastapi import HTTPException
 
 # Import OPEA Core
@@ -42,7 +41,6 @@ logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---
-# Only define variables NOT present in the base arangodb.py
 E2E_CPU_URL = os.getenv("E2E_CPU_URL", "http://91.203.132.51:3000")
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "false").lower() == "true"
@@ -66,7 +64,7 @@ Output must strictly follow the given JSON format.
 class GenieArangoDataprep(OpeaArangoDataprep):
     """
     GENIE.AI Extension of OpeaArangoDataprep.
-    Adds: Docling support, Semantic/LLM Labeling, and Guardrails.
+    Adds: Docling support, Semantic/LLM Labeling, Guardrails, and Batched Ingestion.
     """
 
     def __init__(self, name: str, description: str, config: dict = None):
@@ -101,7 +99,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
-                        # Flatten the category tree
                         labels = []
                         for item in data:
                             labels.append(item['name'])
@@ -140,9 +137,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             )
 
         # 3. Split
-        # Handle structured data (list of strings) vs raw text
         if isinstance(content, list): 
-            # e.g. from JSON/CSV loaders
             raw_chunks = []
             for item in content:
                 item_str = str(item)
@@ -152,7 +147,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     raw_chunks.append(item_str)
             plain_chunks = raw_chunks
         else:
-            # Standard text
             docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
@@ -182,7 +176,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             return {"success": False, "message": f"Guardrail error chunk {i}"}
                         
                         result = await resp.json()
-                        # Assuming guardrail returns original text if safe
                         if result.get("text") != text:
                             return {
                                 "success": False, 
@@ -198,13 +191,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_llm(self, chunks: List[str], all_labels: List[str]):
         """Labels chunks using VLLM/OpenAI."""
-        # Use existing env vars from parent class for VLLM config
         client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
         model = os.getenv("VLLM_MODEL_ID")
         
         results = []
         for text in chunks:
-            # Simple retry logic could be added here
             try:
                 response = await client.chat.completions.create(
                     model=model,
@@ -222,13 +213,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _label_with_embedding(self, chunks: List[str], all_labels: List[str]):
-        """Labels chunks using Vector Similarity."""
         if not self.embeddings: 
             self._initialize_embeddings()
             
         label_vecs = self.embeddings.embed_documents(all_labels)
         results = []
-        
         for text in chunks:
             chunk_vec = self.embeddings.embed_query(text)
             selected = []
@@ -240,11 +229,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _label_with_bm25(self, chunks: List[str], all_labels: List[str]):
-        """Labels chunks using Keyword Matching."""
         tokenized_labels = [re.findall(r"\b\w+\b", l.lower()) for l in all_labels]
         bm25 = BM25Okapi(tokenized_labels)
         results = []
-        
         for text in chunks:
             tokens = re.findall(r"\b\w+\b", text.lower())
             scores = bm25.get_scores(tokens)
@@ -253,7 +240,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _apply_labels(self, plain_chunks: List[str], all_labels: List[str]):
-        """Dispatch method for labeling."""
         if not all_labels:
             return [{"text": c, "labels": []} for c in plain_chunks]
 
@@ -269,23 +255,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.warning(f"Unknown strategy {LABELING_STRATEGY}, skipping labels.")
             return [{"text": c, "labels": []} for c in plain_chunks]
 
-    # --- Main Ingestion Logic ---
+    # --- Main Ingestion Logic (Batched) ---
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo):
-        """
-        Main Entry Point: Ingests a file with GENIE specific logic.
-        1. Fetch global labels
-        2. Load & Chunk
-        3. Guardrail Check
-        4. Apply Labels
-        5. Graph Transformation & Insertion
-        """
         logger.info(f"Starting ingestion for file: {input.file_id}")
         
         # 1. Fetch Labels
         all_labels = await self._fetch_all_labels()
         
-        # 2. Init LLM (from parent)
+        # 2. Init LLM
         self._initialize_llm(
             allowed_node_types=getattr(input, "allowed_node_types", []),
             allowed_edge_types=getattr(input, "allowed_edge_types", []),
@@ -306,19 +284,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not chunks:
             raise HTTPException(status_code=400, detail="No valid content extracted.")
 
+        logger.info(f"Generated {len(chunks)} chunks from file {input.file_id}")
+
         # 4. Guardrails
         gr_result = await self._run_guardrail(chunks)
         if not gr_result["success"]:
-            # Clean up partial work? Logic handled by caller usually, or implement self.retract_file here
             return gr_result
 
         # 5. Labeling
         labelled_docs = await self._apply_labels(chunks, all_labels)
 
-        # 6. Graph Insertion
+        # 6. Graph Insertion (BATCHED)
         graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
         
-        # Construct LangChain Documents with Metadata
+        # Build Document list
         documents_to_process = []
         for i, doc in enumerate(labelled_docs):
             documents_to_process.append(Document(
@@ -331,36 +310,49 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 }
             ))
 
-        # Use Parent Logic / LangChain to Process & Insert
-        # We iterate manually to handle errors per chunk if necessary, 
-        # or batch process if LLMGraphTransformer supports it.
+        # --- BATCHING LOGIC ---
+        BATCH_SIZE = 10 
+        total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
+        current_batch_num = 0
+
         try:
             graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
             
-            # Batch process for speed
-            # FIXED: Changed process_documents to convert_to_graph_documents
-            graph_docs = self.llm_transformer.convert_to_graph_documents(documents_to_process)
-            
-            graph.add_graph_documents(
-                graph_documents=graph_docs,
-                include_source=getattr(input, "include_chunks", True),
-                graph_name=graph_name,
-                use_one_entity_collection=True,
-                embeddings=self.embeddings,
-                embedding_field="embedding",
-                embed_source=getattr(input, "embed_chunks", True),
-                embed_nodes=getattr(input, "embed_nodes", True),
-                embed_relationships=getattr(input, "embed_edges", True)
-            )
-            
+            for i in range(0, len(documents_to_process), BATCH_SIZE):
+                batch_docs = documents_to_process[i : i + BATCH_SIZE]
+                current_batch_num = (i // BATCH_SIZE) + 1
+                
+                logger.info(f"Processing Batch {current_batch_num}/{total_batches} ({len(batch_docs)} chunks)...")
+                
+                # A. Convert Batch to Graph
+                graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
+                
+                # B. Write Batch to DB
+                if graph_docs:
+                    graph.add_graph_documents(
+                        graph_documents=graph_docs,
+                        include_source=getattr(input, "include_chunks", True),
+                        graph_name=graph_name,
+                        use_one_entity_collection=True,
+                        embeddings=self.embeddings,
+                        embedding_field="embedding",
+                        embed_source=getattr(input, "embed_chunks", True),
+                        embed_nodes=getattr(input, "embed_nodes", True),
+                        embed_relationships=getattr(input, "embed_edges", True),
+                        # --- CRITICAL FIX: Pass capitalization strategy explicitly ---
+                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                    )
+                
+                logger.info(f"Batch {current_batch_num} written to DB.")
+
             return {
                 "status": 200, 
-                "message": f"Successfully ingested {len(chunks)} chunks.",
+                "message": f"Successfully ingested {len(chunks)} chunks in {total_batches} batches.",
                 "graph_name": graph_name
             }
             
         except Exception as e:
-            logger.error(f"Graph insertion failed: {e}")
+            logger.error(f"Graph insertion failed at batch {current_batch_num}: {e}")
             await self.retract_file(file_id=input.file_id, graph_name=graph_name)
             raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
 
@@ -368,28 +360,22 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """Retracts all data associated with a specific file ID."""
         logger.info(f"Retracting file {file_id} from {graph_name}")
         
-        # AQL to delete source chunks
         aql_delete_source = f"""
         FOR s IN {graph_name}_SOURCE
             FILTER s.file_id == @file_id
             REMOVE s IN {graph_name}_SOURCE
             RETURN OLD._id
         """
+        
         try:
             cursor = self.db.aql.execute(aql_delete_source, bind_vars={"file_id": file_id})
             deleted_chunks = [doc for doc in cursor]
-
             if not deleted_chunks:
                 return {"status": 404, "message": "No chunks found."}
-
-            # Cleanup orphans (Edges/Entities) - Simplified for brevity
-            # In a real overlay, you might want to run the rigorous orphan cleanup 
-            # defined in your original file, but this is the core logic.
-            
             return {"status": 200, "message": "Retracted.", "deleted_count": len(deleted_chunks)}
             
         except AQLQueryExecuteError as e:
-            # FIXED: Handle case where graph/collection doesn't exist (Error 1203)
+            # Handle case where graph/collection doesn't exist
             if e.error_code == 1203:
                 logger.warning(f"Graph/Collection {graph_name}_SOURCE not found. Nothing to retract.")
                 return {"status": 200, "message": "Graph not found, nothing to retract."}

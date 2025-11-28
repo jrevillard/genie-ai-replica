@@ -17,7 +17,6 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 # ARG for Hugging Face token is NO LONGER NEEDED.
-
 WORKDIR /app
 
 # Step A: Install System Dependencies
@@ -70,7 +69,7 @@ RUN sed -i "s/unstructured\[all-docs\]/unstructured/" ${REQ_PATH} && \
 # This removes other unused, broken dependencies (pathway, graspologic)
 COPY --chmod=0755 genie-ai-overlay/build-patches/fix_dependencies.sh /app/fix_dependencies.sh
 RUN ./fix_dependencies.sh ${REQ_PATH}
-# Copy custom utils to its new correct location
+# Copy custom utils to its new correct location (matches your structure)
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
 
 # Step E: Install *fixed and pruned* dependencies
@@ -78,8 +77,8 @@ COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src
 RUN pip install --no-cache-dir -r ${REQ_PATH}
 
 # Step F: Install overlay-specific dependencies
-# The custom genieai_dataprep_arangodb.py requires 'rank_bm25', which is not in the base requirements.
-RUN pip install --no-cache-dir rank_bm25
+# **UPDATED**: Added 'docling' and 'opencv-python-headless' which are required by the new utils/arangodb code.
+RUN pip install --no-cache-dir rank_bm25 docling opencv-python-headless
 
 # Step G: Pre-install EasyOCR models (using pre-downloaded files)
 # This prevents the service from hanging on its one-time model download at runtime.
@@ -89,10 +88,10 @@ COPY craft_mlt_25k.zip /tmp/craft_mlt_25k.zip
 RUN mkdir -p /root/.EasyOCR/model && \
     mkdir -p /root/.EasyOCR/config && \
 # 2. Unzip the 'en' (English) recognition model
-    unzip /tmp/english_g2.zip -d /root/.EasyOCR/model && \
+    unzip -o /tmp/english_g2.zip -d /root/.EasyOCR/model && \
     rm /tmp/english_g2.zip && \
 # 3. Unzip the text detection model
-    unzip /tmp/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
+    unzip -o /tmp/craft_mlt_25k.zip -d /root/.EasyOCR/model && \
     rm /tmp/craft_mlt_25k.zip
 
 # Step H: Fix docarray circular import (Proactive fix based on retriever)

@@ -19,6 +19,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_arangodb import ArangoGraph
+# Added for error handling
+from arango.exceptions import AQLQueryExecuteError
 
 # Import OPEA Core
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry
@@ -334,7 +336,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
             
             # Batch process for speed
-            graph_docs = self.llm_transformer.process_documents(documents_to_process)
+            # FIXED: Changed process_documents to convert_to_graph_documents
+            graph_docs = self.llm_transformer.convert_to_graph_documents(documents_to_process)
             
             graph.add_graph_documents(
                 graph_documents=graph_docs,
@@ -370,14 +373,22 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             REMOVE s IN {graph_name}_SOURCE
             RETURN OLD._id
         """
-        cursor = self.db.aql.execute(aql_delete_source, bind_vars={"file_id": file_id})
-        deleted_chunks = [doc for doc in cursor]
+        try:
+            cursor = self.db.aql.execute(aql_delete_source, bind_vars={"file_id": file_id})
+            deleted_chunks = [doc for doc in cursor]
 
-        if not deleted_chunks:
-            return {"status": 404, "message": "No chunks found."}
+            if not deleted_chunks:
+                return {"status": 404, "message": "No chunks found."}
 
-        # Cleanup orphans (Edges/Entities) - Simplified for brevity
-        # In a real overlay, you might want to run the rigorous orphan cleanup 
-        # defined in your original file, but this is the core logic.
-        
-        return {"status": 200, "message": "Retracted.", "deleted_count": len(deleted_chunks)}
+            # Cleanup orphans (Edges/Entities) - Simplified for brevity
+            # In a real overlay, you might want to run the rigorous orphan cleanup 
+            # defined in your original file, but this is the core logic.
+            
+            return {"status": 200, "message": "Retracted.", "deleted_count": len(deleted_chunks)}
+            
+        except AQLQueryExecuteError as e:
+            # FIXED: Handle case where graph/collection doesn't exist (Error 1203)
+            if e.error_code == 1203:
+                logger.warning(f"Graph/Collection {graph_name}_SOURCE not found. Nothing to retract.")
+                return {"status": 200, "message": "Graph not found, nothing to retract."}
+            raise e

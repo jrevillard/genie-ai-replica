@@ -164,6 +164,7 @@ DATAPREP_EMBED_SOURCE_DOCUMENTS=true
 DATAPREP_ARANGO_GRAPH_NAME=GRAPH_TEST
 GUARDRAIL_URL=http://guardrail:9090/v1/guardrails
 E2E_CPU_URL=http://localhost:3000
+ARANGO_GRAPH_NAME=GRAPH_TEST
 
 # ========= HTTP SERVICE - Authorization service (used by chatqna and data prep services) ==========
 AUTH_SERVICE_PORT=6666

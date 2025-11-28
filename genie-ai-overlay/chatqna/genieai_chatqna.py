@@ -224,7 +224,9 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             if 'file_ids' in item:
                 file_id_list.extend(item['file_ids'])
 
-        if len(data.get('metadata')) > 0:
+        # FIXED: Check if metadata is not None before checking length
+        metadata = data.get('metadata')
+        if metadata and len(metadata) > 0:
             if RETRIEVER_SEARCH_START == 'node' or RETRIEVER_SEARCH_START == 'edge':
                 # Make sure the len(file_list_list) == the number of retrieved chunks that contains 'RELATED INFORMATION'
                 related_info_count = sum(1 for doc in retrieved_docs if '\n------\nRELATED INFORMATION:\n------\n' in doc['text'])

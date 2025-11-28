@@ -16,14 +16,18 @@ from typing import List, Optional, Union
 from pydantic import BaseModel
 from fastapi import Body
 
+# --- CRITICAL FIX: Import Custom Component FIRST to register it ---
+# This ensures "GENIE_DATAPREP_ARANGODB" exists in the registry 
+# BEFORE the base microservice tries to look it up.
+from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
+
 # --- Import the entire base dataprep microservice safely ---
 import opea_dataprep_microservice as base
 from genieai_dataprep_loader import GenieDataprepLoader
-from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
 
 # --- Use same shared OPEA components ---
 from comps import (
-    CustomLogger, # Added this as it is referenced later (David)
+    CustomLogger,
     ServiceType,
     register_microservice,
     register_statistics,
@@ -32,7 +36,6 @@ from comps import (
 
 # --- Import custom Pydantic model from our overlay protocol ---
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
-
 
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)

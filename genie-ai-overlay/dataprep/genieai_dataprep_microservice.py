@@ -14,11 +14,9 @@ import time
 from typing import List, Optional, Union
 
 from pydantic import BaseModel
-from fastapi import Body
+from fastapi import Body, BackgroundTasks
 
 # --- CRITICAL FIX: Import Custom Component FIRST to register it ---
-# This ensures "GENIE_DATAPREP_ARANGODB" exists in the registry 
-# BEFORE the base microservice tries to look it up.
 from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
 
 # --- Import the entire base dataprep microservice safely ---
@@ -39,24 +37,14 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
-upload_folder = "./uploaded_files/" #################################################
+upload_folder = "./uploaded_files/" 
 
-dataprep_component_name = os.getenv("DATAPREP_COMPONENT_NAME", "GENIE_DATAPREP_ARANGODB")
+dataprep_component_name = "GENIE_DATAPREP_ARANGODB"
 # Initialize OpeaComponentLoader
 loader = GenieDataprepLoader(
     dataprep_component_name,
     description=f"OPEA DATAPREP Component: {dataprep_component_name}",
 )
-
-
-# --- Pull shared logger, loader, and constants from the base module ---
-# logger = base.logger
-# logflag = base.logflag
-# upload_folder = base.upload_folder
-# dataprep_component_name = base.dataprep_component_name
-# loader = base.loader  # inherits OpeaDataprepLoader setup
-# create_upload_folder = base.create_upload_folder
-
 
 # ------------------------------------------------------------------------------
 # Custom request payload models
@@ -86,7 +74,7 @@ class DocRepoRetractPayload(BaseModel):
     port=5000,
 )
 @register_statistics(names=["opea_service@dataprep"])
-async def ingest_file_from_repo(payload: DocRepoIngestPayload):
+async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks: BackgroundTasks):
     """
     Accepts JSON:
     {
@@ -101,32 +89,22 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     """
 
     start = time.time()
-    logger.info(f"[ ingest ] file_id: {payload.fileId}")
-    logger.info(f"[ ingest ] file_name: {payload.fileName}")
-    logger.info(f"[ ingest ] file_type: {payload.fileType}")
+    logger.info(f"[ ingest ] Request received for file_id: {payload.fileId}")
 
     # --- Environment-specific Arango config (set via env vars or defaults) ---
     ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST")
-    #ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "genie_graph")
     ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
-    #ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", True)
     ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 1000))
-    #ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 100))
     ALLOWED_NODE_TYPES = os.getenv("ALLOWED_NODE_TYPES", "").split(",") if os.getenv("ALLOWED_NODE_TYPES") else []
-    #ALLOWED_NODE_TYPES = os.getenv("ALLOWED_NODE_TYPES", "Document,Entity").split(",")
     ALLOWED_EDGE_TYPES = os.getenv("ALLOWED_EDGE_TYPES", "").split(",") if os.getenv("ALLOWED_EDGE_TYPES") else []
-    #ALLOWED_EDGE_TYPES = os.getenv("ALLOWED_EDGE_TYPES", "Relation,Contains").split(",")
     NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", "description").split(",")
-    #NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", "name,type").split(",")
     EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
-    #EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "type,weight").split(",")
     TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
-    #TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "preserve")
     INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
-    #INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
 
     try:
         # --- Decode and temporarily save file ---
+        # We do this synchronously so the file exists before we return 200
         file_bytes = base64.b64decode(payload.fileBase64)
         save_path = os.path.join(upload_folder, payload.fileName)
         with open(save_path, "wb") as f:
@@ -134,13 +112,12 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         logger.info(f"[ ingest ] File saved to: {save_path}")
 
         # --- Construct Arango-specific dataprep request ---
-        # ** FIXED: Removed 'base.' prefix and 'storage_path' argument **
         input_req = ArangoDBDataprepRequestFromDocRepo(
             file_id=payload.fileId,
             file_name=payload.fileName,
             file_path=save_path,
             file_type=payload.fileType,
-            file_labels=payload.fileLabels,
+            file_labels=payload.fileLabels, # Passed through here
             upload_date=payload.uploadDate,
             graph_name=ARANGO_GRAPH_NAME,
             insert_async=ARANGO_INSERT_ASYNC,
@@ -156,28 +133,22 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             include_chunks=INCLUDE_CHUNKS,
         )
 
-        # --- Perform ingestion using the loader ---
-        response = await loader.ingest_file_with_guardrail(input_req)
+        # --- Trigger Background Task (Spec 5.1) ---
+        # This makes the process asynchronous. We return immediately.
+        # The loader.ingest_file_with_guardrail logic handles the heavy lifting,
+        # logging, status updates, and cleanup.
+        background_tasks.add_task(loader.ingest_file_with_guardrail, input_req)
 
-        if logflag:
-            logger.debug(f"[ ingest ] Output generated: {response}")
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
-        return response
+        return {"status": 200, "message": "Ingestion started in background."}
 
     except Exception as e:
-        logger.error(f"Error during dataprep ingest invocation from document repository: {e}")
+        logger.error(f"Error initiating dataprep ingest: {e}")
+        # Cleanup if we fail before even starting the background task
+        if os.path.exists(save_path):
+            os.remove(save_path)
         raise
-
-    finally:
-        # --- Cleanup temporary file ---
-        try:
-            if os.path.exists(save_path):
-                os.remove(save_path)
-                logger.info(f"[ ingest ] Temporary file removed: {save_path}")
-        except Exception as cleanup_error:
-            logger.error(f"[ ingest ] Failed to remove temporary file {save_path}: {cleanup_error}")
-
 
 # ------------------------------------------------------------------------------
 # Retract (delete) a file from graph
@@ -196,7 +167,7 @@ async def retract_file(payload: DocRepoRetractPayload):
     file_id = payload.fileId
     graph_name = os.getenv("ARANGO_GRAPH_NAME", "genie_graph")
 
-    logger.info(f"[ retract ] Start to delete ingested file {file_id} (graph, chunks, entities, relations)")
+    logger.info(f"[ retract ] Start to delete ingested file {file_id}")
 
     try:
         if dataprep_component_name == "GENIE_DATAPREP_ARANGODB":

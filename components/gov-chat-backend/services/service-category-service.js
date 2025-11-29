@@ -389,6 +389,7 @@ class ServiceCategoryService {
  * @returns {Promise<Array>} Categories with service name strings.
  */
   async getAllCategoriesWithServices(locale = 'en') {
+    await this.init();
     try {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with services for locale ${upperLocale}`);
@@ -443,6 +444,7 @@ class ServiceCategoryService {
    * @returns {Promise<Array>} Categories with detailed service objects
    */
   async getAdminAllCategoriesWithServices(locale = 'en') {
+    await this.init();
     try {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching all categories with DETAILED services for admin panel, locale ${upperLocale}`);
@@ -500,6 +502,7 @@ class ServiceCategoryService {
    * @returns {Promise<Object>} Category with services
    */
   async getCategoryWithServices(categoryKey, locale = 'en') {
+    await this.init();
     try {
       const upperLocale = locale.toUpperCase();
       logger.info(`Fetching category ${categoryKey} with services for locale ${upperLocale}`);

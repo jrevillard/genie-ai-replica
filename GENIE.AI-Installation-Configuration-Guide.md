@@ -1,6 +1,6 @@
 # **GENIE.AI Installation and Configuration Guide**
 
-### **Introduction**
+# Introduction
 
 Welcome to the GENIE.AI framework. This guide will walk you through the necessary steps to set up, configure, and deploy your own Retrieval-Augmented Generation (RAG) solution. The success of any AI-driven knowledge system lies in the quality and structure of its data. Therefore, the first and most critical phase is to define, curate, and structure the data that will form the backbone of your system's knowledge. This cannot be over-emphasized. It is the most critical aspect. Our suggestion is that you establish an initial MVP with the framework by simply curating the data, defining the knowledge hierarchy, configuring your quickhelp buttons with prompts and then labeling and ingesting your curated data prior to modifying any code. This way, you will get used to how the framework operates, before you delve into deeper issues and extensions. This approach can also be used to deliver a rapid solution to a RAG problem, without any coding at all (just implementing a knowledge base design and the associated configuration). The application title and theme can also be modified by configuration in JSON without changing code. The suggested approach for this is to utilize something like ChatGPT, Gemini Pro or Grok etc. to build a new configuration for color theme and title etc. This can be done in minutes.
 
@@ -8,11 +8,11 @@ For a high-level understanding of the system architecture before beginning any w
 
 ---
 
-### **Step 1: Data Curation and Knowledge Hierarchy (Conceptual Design)**
+# Step 1: Data Curation and Knowledge Hierarchy (Conceptual Design)
 
 Before any data is ingested into GENIE.AI, you must first establish the scope of knowledge for your application and organize it logically. This process involves a strategic design of your knowledge core, the curation and verification of source documents, and the creation of an associated two-level labeling system that serves as the knowledge hierarchy within the framework's user interface (i.e., the Knowledge Hierarchy displayed on the left sidebar). Ingested data is tagged with these labels, and queries can also select the same labels, which enhances RAG accuracy as we have utilized labeling as part of the hybrid-retrieval strategy for RAG at the backend.
 
-#### **1.1 Designing the Knowledge Core with Domain Analysis**
+## 1.1 Designing the Knowledge Core with Domain Analysis
 
 A powerful RAG solution is built on a well-designed data model. We recommend using a conceptual Venn diagram exercise with your subject matter experts to map your information landscape before you even start. This helps you visualize the relationships between different data sets and define the boundaries of your knowledge base. It helps you to identify the specific data sets you need and to ascertain the specific relationships between these data sets.
 
@@ -42,7 +42,7 @@ This process involves identifying three tiers of data:
 * **Secondary:** "Pharmaceutical Database (Metformin, Insulin dosages)," "Nutritional & Dietary Plans for Diabetics."  
 * **Tertiary:** "Directory of Endocrinologists," "Information on Local Support Groups," "Recommended Fitness Routines."
 
-#### **1.2 Impact on the Labeling System Design**
+## 1.2 Impact on the Labeling System Design
 
 This domain analysis directly informs the structure of your 2-level labeling system. The clear relationships and boundaries identified in the Venn diagrams translate naturally into a logical hierarchy. We suggest that you also use an AI-driven approach to assemble the labeling system design. You can use any of the common RAG tools like ChatGPT, Gemini or Grok for example to accomplish this in minutes. Once this is done, you will need to verify it with subject matter experts to ensure that it meets the needs of indexing the required data sets.
 
@@ -75,7 +75,7 @@ This domain analysis directly informs the structure of your 2-level labeling sys
 
 This method ensures your knowledge hierarchy is not arbitrary but is a direct reflection of how the information is interrelated, making the system more intuitive for both the AI and the end-user.
 
-#### **1.3 Data Curation and Verification Process**
+## 1.3 Data Curation and Verification Process
 
 To deliver an accurate, trustworthy, and useful RAG solution, the underlying data must be meticulously curated and verified. Ingesting inaccurate, outdated, or poorly formatted data is the primary cause of poor performance and "hallucinations" in RAG systems. The GENIE.AI framework supports a wide range of file formats for the ingestion process.
 
@@ -113,17 +113,17 @@ By following this rigorous process of designing, curating, and verifying your da
 
 ---
 
-### **Step 2: Prerequisites**
+# Step 2: Prerequisites
 
 Before attempting installation, ensure your infrastructure meets the necessary requirements.
 
-#### **2.1 Hardware Requirements**
+## 2.1 Hardware Requirements
 
 GENIE.AI requires significant computational resources, particularly for AI model inference (LLMs, embeddings, rerankers). This is critical and the solution will potentially not even run without the required resources.
 
 * Please refer to the [**T-Shirt Sizing Guide**](https://osaips.atlassian.net/wiki/external/ODg2YmZmZTJjNGMyNGQzYzgwZWUzNTk2NWI3NjdiMDk) to determine the appropriate hardware for your deployment scale. Even for development and MVP work, you will need to meet the minimum requirements outlined in the small tee shirt size.
 
-#### **2.2 Software Prerequisites**
+## 2.2 Software Prerequisites
 
 * **Ubuntu Linux 22.04:** Everything has been tested on Ubuntu 22.04. It is OK to use variant Linux distributions but that is something you need to resolve.  
 * **Docker & Docker Compose:** Required for orchestrating the containerized services.  
@@ -131,7 +131,7 @@ GENIE.AI requires significant computational resources, particularly for AI model
   * Follow the [**NVIDIA Driver Installation Guide**](https://osaips.atlassian.net/wiki/external/NTY1ZGY1N2RmYzkzNGRiMGIxMzc1ZDM4ZjI4NmNlOTE) to ensure your host is ready for GPU workloads.  
 * **Node.js:** Required for the JavaScript components
 
-#### **2.3 Install and Verify Docker on Every Host**
+## 2.3 Install and Verify Docker on Every Host
 
 Bash
 
@@ -184,7 +184,7 @@ docker run hello-world
 
 ---
 
-#### **2.4 Install Node.js on Every Host and Verify**
+## 2.4 Install Node.js on Every Host and Verify
 
 Bash
 
@@ -198,7 +198,7 @@ npm \-v
 
 ---
 
-### **Step 3: Base Installation**
+# Step 3: Base Installation
 
 You must complete one of these base docker compose based installations before configuring the application services (single node or three node) \- Kubernetes will be added later. The way that the 2 docker compose based deployent options are organized in the repository is as follows:
 
@@ -230,7 +230,7 @@ repository-root/
 
 Following are the details for configuring both the single-node deployment model and the three node deployment model (Options A and B):
 
-#### Option A: Single-Node Installation (MVP/Dev)
+## Option A: Single-Node Installation (MVP/Dev)
 
 This method deploys all services onto a single host using Docker Compose.
 
@@ -644,18 +644,18 @@ Proceed immediately to **Step 4** to complete the necessary infrastructure confi
 
 ---
 
-### **Step 4: Infrastructure Configuration**
+# Step 4: Infrastructure Configuration
 
 Once the base services are running (Step 3), you must configure the core infrastructure components before the system is usable.
 
-#### **4.1 ArangoDB Database Initialization**
+## 4.1 ArangoDB Database Initialization
 
 While the arango-vector-db service is running, the specific application databases must be created.
 
 1. Access the ArangoDB web interface at [http://localhost:8529](http://localhost:8529) (login with root and the password defined in your .env).  
 2. Create the necessary databases as defined in your environment variables (default: genie-ai) \- ensure both the frontend and backend services use the same database.
 
-#### **4.2 NGINX and Kong API Gateway Configuration**
+## 4.2 NGINX and Kong API Gateway Configuration
 
 There are Nginx default.conf files available for both three-node and single-node deployments:
 
@@ -718,7 +718,7 @@ Enter 'document-repository' service port \[default: 3001\]:
 \[2025-11-08 14:12:02\] Service 'express-api' applied successfully.  
 ...
 
-#### **4.3 Nginx Configuration**
+## 4.3 Nginx Configuration
 
 Nginx acts as the reverse proxy and SSL termination point.
 
@@ -728,13 +728,13 @@ Nginx acts as the reverse proxy and SSL termination point.
 \* For \*\*Three-Node\*\*, use: default.conf.  
 3\. Ensure your SSL certificates are placed in the mapped volumes defined in docker-compose.yaml (nginx\\\_certs volume or ./api-gateway-solution/nginx/certs bind mount).
 
-#### 4.4 Domain & Security Configuration (CSP & CORS)
+## 4.4 Domain & Security Configuration (CSP & CORS)
 
 When deploying GENIE.AI to a specific host domain (e.g., genie.agency.gov) or a public IP address other than localhost, you must configure the **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** settings. Failure to do this will result in the browser blocking the application from connecting to the backend API or WebSocket services.
 
 This configuration involves updates in two locations: the central .env file and the Nginx configuration file.
 
-##### 1\. Update Environment Variables (.env)
+### 1\. Update Environment Variables (.env)
 
 The frontend and backend services rely on specific environment variables to construct their security headers. Locate the following variables in your root .env file and update them to include your target domain/IP.
 
@@ -763,7 +763,7 @@ CORS\_ALLOWED\_ORIGINS=https://genie.agency.gov,https://genie-ai.itu.int
 * **Ports:** If your application runs on a non-standard port (e.g., :8443), that port must be appended to the domain in the CSP (e.g., https://genie.agency.gov:8443).  
 * **Quoting:** Verify that 'self' is enclosed in single quotes, and the whole string is enclosed in double quotes.
 
-##### 2\. Update Nginx Configuration
+### 2\. Update Nginx Configuration
 
 The Nginx reverse proxy also serves a Content-Security-Policy header which acts as the final gatekeeper. You must ensure the default.conf file matches your environment variables.
 
@@ -778,7 +778,7 @@ Nginx
 \# Ensure this is on a SINGLE line to avoid syntax errors  
 add\_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self' https://genie.agency.gov wss://genie.agency.gov https://genie-ai.itu.int;" always;
 
-##### 3\. Rebuild the Frontend
+### 3\. Rebuild the Frontend
 
 **Crucial Step:** The Vue.js frontend "bakes" the VUE\_APP\_ environment variables into the static HTML/JS files at **build time**. Simply restarting the container is not enough.
 
@@ -795,15 +795,15 @@ TBD
 
 ---
 
-### **Step 5: Knowledge Base Population & User Setup**
+# Step 5: Knowledge Base Population & User Setup
 
 With the infrastructure configured, you can now instantiate the knowledge hierarchy designed in Step 1 and create the required system accounts.
 
-#### **Method 1: Automated Script Approach (Recommended for Initial Setup)**
+## Method 1: Automated Script Approach (Recommended for Initial Setup)
 
 This method is ideal for initial deployments, migrating an existing instance, or automated CI/CD workflows.
 
-##### **5.1 Prepare Script Environment** You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
+### **5.1 Prepare Script Environment** You must source the environment configuration before running schema scripts to set necessary variables like database URLs and credentials: i.e. modify the set\_env.sh script for the correct database environment
 
 Bash
 
@@ -820,7 +820,7 @@ Bash
 \# Ensure you are still in the new-schema-scripts directory and environment is set  
 npm install arangojs node arango-schema-creator.js ./arango-schema.json
 
-##### 5.3 Create Initial User Accounts
+### 5.3 Create Initial User Accounts
 
 You must create the default Admin and Manager accounts. These are required for the application to load correctly and for full integration with the Document Repository.
 
@@ -834,7 +834,7 @@ node create-genie-ai-manager-account.js
 
 **Note:** These scripts create accounts with default credentials. It is highly recommended to change these passwords immediately after first login via the Admin Dashboard.
 
-##### 5.4 Populate Hierarchy
+### 5.4 Populate Hierarchy
 
 Use the create-knowledge-hierarchy.js script to import your Category/Service structure.
 
@@ -846,7 +846,7 @@ Bash
 cd ..  
 node create-knowledge-hierarchy.js \--file ./my-hierarchy.json
 
-##### 5.5 Generate Translations
+### 5.5 Generate Translations
 
 (Optional) Use create-translations.js to auto-generate labels for other supported languages (requires Google Cloud credentials).
 
@@ -856,7 +856,7 @@ This method is ideal for users who prefer a visual interface, or for making incr
 
 ---
 
-### **Step 6: Final Verification and Launch**
+# Step 6: Final Verification and Launch
 
 After all configuration steps are complete, you must restart the services to ensure they pick up the new configurations and verify the system is healthy.
 
@@ -886,11 +886,11 @@ docker-compose logs \-f
 
 ---
 
-### **Step 7: Post-Launch Configuration (Manual Dashboard)**
+# Step 7: Post-Launch Configuration (Manual Dashboard)
 
 Once you have logged in as Admin, you can use the visual dashboard to manage your knowledge base.
 
-#### **7.1 Manage the Knowledge Hierarchy**
+## 7.1 Manage the Knowledge Hierarchy
 
 Navigate to the **Knowledge Hierarchy** tab in the Admin Dashboard.
 
@@ -899,7 +899,7 @@ Navigate to the **Knowledge Hierarchy** tab in the Admin Dashboard.
 * **Edit/Delete:** Use hover icons to modify entries.  
 * **Translations:** Use the form to add display translations for different languages.
 
-#### **7.2 Upload and Ingest Documents**
+## 7.2 Upload and Ingest Documents
 
 Navigate to the **Document Management** tab.
 
@@ -907,3 +907,88 @@ Navigate to the **Document Management** tab.
 2. **Apply Labels:** Click the document, and use the "Labels" multi-select dropdown to apply relevant categories/services from your hierarchy.  
 3. **Ingest:** Click "Ingest" to trigger chunking, embedding, and storage. Status will update to "Ingested".
 
+---
+
+# Step 8: Labeling Strategies and Taxonomy Refinement
+
+The GENIE-AI Dataprep module supports three distinct strategies for labeling document chunks during ingestion. Choosing the right strategy is critical for balancing ingestion speed, labeling accuracy, and the maturity of your Knowledge Hierarchy (Taxonomy).
+
+The system is designed to support a **Taxonomy Refinement Lifecycle**, moving from discovery (using LLMs) to stable production (using Embeddings).
+
+## 1\. Labeling Strategy Comparison
+
+| Strategy | Configuration Value | Core Mechanism | Best Use Case | Pros | Cons |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| **LLM** | llm | **Generative Reasoning.** The LLM reads the text and the full taxonomy list, then reasons which labels apply. | **Taxonomy Building & Discovery.** Use this when starting a new project or when you suspect your label list is incomplete. | Can suggest **NEW** labels (Gap Analysis). Understands deep context and nuance. | Slowest ingestion speed. Highest resource/cost. Non-deterministic (results may vary slightly). |
+| **Embedding** | embedding | **Semantic Vector Search.** Calculates the mathematical "distance" (Cosine Similarity) between the meaning of the chunk and the meaning of the label. | **Production / Mature Taxonomy.** Use this when your label list is finalized and you want consistent, fast tagging that captures synonyms. | Fast. Captures semantic meaning (e.g., "Car" matches "Vehicle"). Deterministic results. | Cannot suggest new labels. Requires threshold tuning. |
+| **BM25** | bm25 | **Keyword Matching.** Probabilistically counts valid words from the label that appear in the chunk. | **Strict/Technical Search.** Use this when labels are specific part numbers, codes, or proper nouns that must match textually. | Extremely fast (CPU only). Zero "hallucinations"—only tags what is literally present. | Misses synonyms. Ignores context. Cannot suggest new labels. |
+
+## 2\. Recommended Workflow: The Taxonomy Refinement Cycle
+
+We recommend following this three-phase approach to build and mature your Knowledge Hierarchy.
+
+### Phase 1: Discovery & Gap Analysis (Current Phase)
+
+**Objective:** Identify gaps in the Knowledge Hierarchy using the LLM's reasoning capabilities.
+
+1. **Configuration:** Set LABELING\_STRATEGY=llm.  
+2. **Action:** Ingest a representative set of documents (e.g., 5-10 key files).  
+3. **Review:** Check the **Ingestion Logs** in the Admin Dashboard. Look for WARN entries stating: *"LLM suggested NEW label..."*.  
+4. **Refine:**  
+   * If the suggested label is valid (e.g., "Safari"), add it to the Knowledge Hierarchy via the Admin Dashboard.  
+   * If the suggested label is a synonym for an existing one (e.g., "Safaris" vs "Safari"), keep your hierarchy clean; do not add duplicates.  
+5. **Repeat:** Continue until the logs show mostly "Existing label added" messages and very few "NEW label" suggestions.
+
+### Phase 2: Production Stabilization
+
+**Objective:** Speed up ingestion and ensure consistent tagging once the hierarchy is established.
+
+1. **Configuration:** Switch to LABELING\_STRATEGY=embedding.  
+2. **Action:** Re-ingest a document.  
+3. **Review:** Check the resulting graph or search results.  
+4. **Tuning:**  
+   * **Too many irrelevant tags?** Increase EMBEDDING\_LABEL\_THRESHOLD (e.g., to 0.80 or 0.85).  
+   * **Missing obvious tags?** Decrease EMBEDDING\_LABEL\_THRESHOLD (e.g., to 0.70 or 0.65).
+
+### Phase 3: Specialized/Strict Matching (Optional)
+
+**Objective:** Enforce strict keyword presence for technical domains.
+
+1. **Configuration:** Switch to LABELING\_STRATEGY=bm25.  
+2. **Usage:** Only recommended if embedding is too "loose" and is tagging concepts that are semantically related but factually incorrect for your specific use case.
+
+## 3\. Configuration Reference
+
+Add or modify the following variables in your .env file to control the behavior. You must restart the dataprep-arango-service container for changes to take effect.
+
+### Option A: LLM Strategy (Default / Discovery)
+
+Bash
+
+\# Discovery Mode  
+LABELING\_STRATEGY=llm
+
+\# Optional: Tune the system prompt if the LLM hallucinates formats  
+\# LABEL\_SELECTOR\_SYSTEM\_PROMPT="You are a label selector..." 
+
+### Option B: Embedding Strategy (Production / Semantic)
+
+Bash
+
+\# Semantic Match Mode  
+LABELING\_STRATEGY=embedding
+
+\# Similarity Threshold (0.0 to 1.0)  
+\# Start at 0.75. Increase for stricter matching.  
+EMBEDDING\_LABEL\_THRESHOLD=0.75
+
+### Option C: BM25 Strategy (Strict Keyword)
+
+Bash
+
+\# Keyword Match Mode  
+LABELING\_STRATEGY=bm25
+
+\# Relevance Score Threshold  
+\# Start at 2.0. This is a raw score, not a percentage.  
+BM25\_LABEL\_THRESHOLD=2.0  

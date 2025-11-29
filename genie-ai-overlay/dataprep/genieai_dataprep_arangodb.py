@@ -107,8 +107,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Content-Type": "application/json"
         }
         
-        # FIX: Only include chunk_count if explicitly provided.
-        # This prevents "Validation error: dataprep.chunk_count is not allowed" from backend.
         dataprep_payload = {"status": status}
         if chunk_count is not None:
             dataprep_payload["chunk_count"] = chunk_count
@@ -138,7 +136,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Content-Type": "application/json"
         }
         payload = {
-            "level": level.lower(),
+            "level": level, # FIX: Send as-is (e.g. INFO), do not lowercase
             "stage": stage,
             "message": message
         }
@@ -157,7 +155,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.warning("Skipping label fetch due to missing auth token.")
             return []
 
-        url = f"{DOCUMENT_REPOSITORY_URL}/api/service-categories/categories"
+        # FIX: Updated URL to the standard labels endpoint based on fileRoutes.js
+        url = f"{DOCUMENT_REPOSITORY_URL}/api/labels" 
         headers = {"Authorization": f"Bearer {token}"}
         
         try:
@@ -166,9 +165,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if response.status == 200:
                         data = await response.json()
                         labels = []
-                        for item in data:
-                            labels.append(item['name'])
-                            labels.extend(item.get('children', []))
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, str):
+                                    labels.append(item)
+                                elif isinstance(item, dict) and 'name' in item:
+                                    labels.append(item['name'])
                         return list(set(labels))
                     logger.error(f"Label fetch failed. Status: {response.status}")
         except Exception as e:
@@ -210,12 +212,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             docs = text_splitter.create_documents([content])
             plain_chunks = [d.page_content for d in docs]
 
-        # Spec: Validate content validity
         valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
-        
-        if not valid_chunks:
-            return []
-            
         return valid_chunks
 
     async def _run_guardrail(self, plain_chunks: List[str]) -> Dict[str, Any]:
@@ -279,7 +276,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not self.embeddings: 
             self._initialize_embeddings()
             
-        # Cache label embeddings
         label_vecs = self.embeddings.embed_documents(all_labels)
         results = []
         
@@ -287,7 +283,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             chunk_vec = self.embeddings.embed_query(text)
             selected = []
             for i, l_vec in enumerate(label_vecs):
-                # Calculate Cosine Similarity
                 sim = dot(l_vec, chunk_vec) / (norm(l_vec) * norm(chunk_vec))
                 if sim >= EMBEDDING_LABEL_THRESHOLD:
                     selected.append(all_labels[i])
@@ -296,7 +291,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _label_with_bm25(self, chunks: List[str], all_labels: List[str]):
         """Spec 5.4: BM25 Labeling."""
-        # Simple whitespace tokenization
         tokenized_labels = [re.findall(r"\b\w+\b", l.lower()) for l in all_labels]
         bm25 = BM25Okapi(tokenized_labels)
         results = []
@@ -320,21 +314,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         elif LABELING_STRATEGY == "bm25":
             return await self._label_with_bm25(plain_chunks, all_labels)
         else:
-            # Default to LLM (with retry fix)
             return await self._label_with_llm(plain_chunks, all_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo):
-        # 1. Update Status to Ingesting (Spec 5.1)
         await self._update_doc_status(input.file_id, "Ingesting")
         await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
         
         try:
-            # 2. Fetch Labels
             all_labels = await self._fetch_all_labels()
             
-            # 3. Init LLM
             self._initialize_llm(
                 allowed_node_types=getattr(input, "allowed_node_types", []),
                 allowed_edge_types=getattr(input, "allowed_edge_types", []),
@@ -342,7 +332,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 edge_properties=getattr(input, "edge_properties", ["description"]),
             )
 
-            # 4. Load & Chunk
             doc_path = DocPath(
                 path=input.file_path,
                 chunk_size=input.chunk_size,
@@ -357,16 +346,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
             await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
 
-            # 5. Guardrails
             gr_result = await self._run_guardrail(chunks)
             if not gr_result["success"]:
                 await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
                 raise Exception("Guardrail Violation")
 
-            # 6. Labeling
             labelled_docs = await self._apply_labels(chunks, all_labels, input.file_id)
 
-            # 7. Graph Insertion (BATCHED)
             graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
             
             documents_to_process = []
@@ -408,7 +394,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
                     )
 
-            # 8. Success Status (Spec 5.1/5.5)
             await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
             await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
 
@@ -419,7 +404,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             }
             
         except Exception as e:
-            # Spec 5.5: Error Handling & Auto-Retraction
             error_msg = f"Ingestion failed: {str(e)}"
             logger.error(error_msg)
             await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
@@ -428,7 +412,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
             await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
             
-            # Raise exception to ensure the microservice wrapper knows it failed
             raise HTTPException(status_code=500, detail=error_msg)
 
     async def retract_file(self, file_id: str, graph_name: str):
@@ -441,14 +424,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
         
-        # Define collection names based on the graph naming convention
         col_source = f"{graph_name}_SOURCE"
         col_entity = f"{graph_name}_ENTITY"
         col_has_source = f"{graph_name}_HAS_SOURCE"
         col_links_to = f"{graph_name}_LINKS_TO"
 
-        # AQL Query to perform safe, cascading deletion
-        # This ensures we don't delete entities used by OTHER files.
         aql_cascade_delete = f"""
         // 1. Find all Source Chunks belonging to this file
         LET chunks_to_delete = (
@@ -471,10 +451,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         )
 
         // 4. Distinguish Orphans vs. Shared Entities
-        // An orphan is an entity that has NO other edges pointing to non-deleted chunks
         LET true_orphan_entities = (
             FOR entity_id IN referenced_entities
-                // Check if this entity links to ANY chunk that is NOT in our delete list
                 LET other_links = (
                     FOR edge IN @@col_has_source
                     FILTER edge._from == entity_id
@@ -482,33 +460,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     LIMIT 1
                     RETURN 1
                 )
-                // If no other links exist, it is safe to delete this entity
                 FILTER LENGTH(other_links) == 0
                 RETURN entity_id
         )
 
         // 5. EXECUTE DELETIONS
-
-        // A. Delete the HAS_SOURCE edges linking to our chunks
         FOR edge IN source_edges_to_delete
             REMOVE edge IN @@col_has_source
 
-        // B. Delete LINKS_TO edges where the orphan is either source or target
-        // (We only do this for orphans; shared entities keep their relationships)
         FOR entity_id IN true_orphan_entities
             FOR edge IN @@col_links_to
                 FILTER edge._from == entity_id OR edge._to == entity_id
                 REMOVE edge IN @@col_links_to
 
-        // C. Delete the Orphan Entities themselves
         FOR entity_id IN true_orphan_entities
             REMOVE entity_id IN @@col_entity
 
-        // D. Delete the Source Chunks
         FOR chunk_id IN chunks_to_delete
             REMOVE chunk_id IN @@col_source
 
-        // Return stats
         RETURN {{
             deleted_chunks: LENGTH(chunks_to_delete),
             deleted_entities: LENGTH(true_orphan_entities)
@@ -527,7 +497,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             cursor = self.db.aql.execute(aql_cascade_delete, bind_vars=bind_vars)
             result = [doc for doc in cursor]
             
-            # Spec 6.1: Update status to Retracted
             await self._update_doc_status(file_id, "Retracted")
             
             stats = result[0] if result else {"deleted_chunks": 0, "deleted_entities": 0}

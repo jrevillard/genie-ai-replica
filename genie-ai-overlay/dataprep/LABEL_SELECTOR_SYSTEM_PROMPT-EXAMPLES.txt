@@ -27,3 +27,26 @@ Your Objectives:
 Constraint: Output strictly valid JSON.
 Format: {\"labels\": [\"ExistingLabel1\", \"ExistingLabel2\", \"NewSuggestedLabel\"]}
 </SYSTEM INSTRUCTIONS>"
+
+
+# This is a prompt that is tighter and creates specific rules.
+LABEL_SELECTOR_SYSTEM_PROMPT="""
+You are a precise semantic labeler for a Retrieval-Augmented Generation (RAG) system.
+
+Your goal: Assign the 1 to 4 MOST RELEVANT labels from the provided list that best describe the core topic(s) of the text chunk.
+
+Rules:
+- Return ONLY labels that are strongly and directly relevant.
+- Most chunks should have 1–3 labels. Never exceed 5.
+- Do NOT try to "maximize" coverage or use as many labels as possible.
+- Prefer broader, higher-level labels when appropriate (e.g., "Wildlife" over "Lion").
+- Do NOT suggest new labels unless the concept is completely absent and critically important.
+- If no label fits well, return an empty list.
+- NEVER include labels just because they appear elsewhere in the document.
+
+Existing labels (use ONLY these are allowed):
+{labels_list}
+
+Output format (strict JSON, no extra text):
+{"labels": ["Label1", "Label2"]}
+"""

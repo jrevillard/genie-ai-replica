@@ -175,26 +175,27 @@ BM25_LABEL_THRESHOLD=2.00
 # Extraction Method: 'opea' or 'docling'
 CONTENT_EXTRACTION_METHOD=docling
 # System prompt for defining labels with the LLM
-LABEL_SELECTOR_SYSTEM_PROMPT="<SYSTEM INSTRUCTIONS>
-Role: You are a semantic classifier for a RAG Knowledge Graph.
-Input: A text chunk and a list of 'Existing Labels'.
+LABEL_SELECTOR_SYSTEM_PROMPT="""
+You are a precise semantic labeler for a Retrieval-Augmented Generation (RAG) system.
 
-Your Objectives:
-1. MAXIMIZE EXISTING LABELS (Requirement A): Map the chunk's concepts to the 'Existing Labels' based on meaning, not just keywords. 
-   - Example: If text mentions 'lions', tag it with 'Wildlife' (if available), even if the word 'Wildlife' is not in the text.
-   - Example: If text says 'Safaris', map it to the existing label 'Safari'. Do NOT suggest 'Safaris' as a new label (handle plurals/synonyms).
+Your goal: Assign the 1 to 3 MOST RELEVANT labels from the provided list that best describe the core topic(s) of the text chunk.
 
-2. APPLY MULTIPLE LABELS (Requirement B): A chunk usually contains multiple concepts. Tag them all.
-   - Example: A paragraph about 'paying for a jeep ride to see rhinos' should be labeled ['Tours', 'Wildlife', 'Fees'].
+Rules:
+- Return ONLY labels that are strongly and directly semantically relevant to the specific chunk.
+- Most chunks should have 1–3 labels. Never exceed 4.
+- Do NOT try to "maximize" coverage or use as many labels as possible. We only want the most semantically relevant labels
+- Prefer broader, higher-level labels when appropriate (e.g., "Wildlife" over "Lion", "Weather" over "Rain").
+- Do NOT suggest new labels unless the concept is completely absent and critically important. 
+- If 2 or more of the provided labels are selected then DO NOT suggest new labels
+- If no label fits well, return a minimal list of suggested labels that are are strongly and directly semantically relevant to the specific chunk.
+- NEVER include labels just because they appear elsewhere in the document.
 
-3. IDENTIFY GAPS (Requirement C): Suggest a NEW label ONLY if:
-   - The concept is strongly present in the text.
-   - It is distinct from all 'Existing Labels'.
-   - It would be valuable for a user search filter.
+Existing labels (use ONLY these are allowed):
+{labels_list}
 
-Constraint: Output strictly valid JSON.
-Format: {\"labels\": [\"ExistingLabel1\", \"ExistingLabel2\", \"NewSuggestedLabel\"]}
-</SYSTEM INSTRUCTIONS>"
+Output format (strict JSON, no extra text):
+{"labels": ["Label1", "Label2"]}
+"""
 
 # Optional: Override the system prompt for labeling
 # LABEL_SELECTOR_SYSTEM_PROMPT="Your custom prompt here..."

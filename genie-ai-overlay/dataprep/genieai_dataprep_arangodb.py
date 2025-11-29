@@ -60,12 +60,24 @@ CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea")
 
 # Spec 5.3: Externalized Prompt
 LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
-<SYSTEM INSTRUCTIONS> 
-Select the relevant labels from the provided list that best match the content of the input text. 
-Use only the exact labels from the list. Return an empty list if none fit. 
-Output must strictly follow the given JSON format. 
+<SYSTEM INSTRUCTIONS>
+You are a precise semantic labeler for a RAG knowledge graph.
+Goal: Assign 1–4 MOST RELEVANT labels from the list below that best match the chunk content.
+Rules:
+- Return ONLY labels that are strongly relevant.
+- Most chunks get 1–3 labels. Never exceed 5.
+- Do NOT "maximize" coverage.
+- Do NOT suggest new labels.
+- If nothing fits well → return empty list.
+- Use ONLY exact strings from the list.
+
+Labels:
+{labels_list}
+
+Output strict JSON only:
+{"labels": ["Label1", "Label2"]}
 </SYSTEM INSTRUCTIONS>
-""")
+""".strip())
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):

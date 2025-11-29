@@ -174,6 +174,13 @@ EMBEDDING_LABEL_THRESHOLD=0.75
 BM25_LABEL_THRESHOLD=2.00
 # Extraction Method: 'opea' or 'docling'
 CONTENT_EXTRACTION_METHOD=docling
+# System prompt for defining labels with the LLM
+LABEL_SELECTOR_SYSTEM_PROMPT="You are a JSON generator. Your ONLY task is to classify text using the provided labels.
+1. Analyze the input text.
+2. Select the most relevant labels from the 'Labels' list provided.
+3. If a strong concept exists in the text but not in the list, you may suggest a new label.
+4. OUTPUT ONLY VALID JSON. Do not output markdown, do not output explanations.
+Format: {\"labels\": [\"label1\", \"label2\"]}"
 
 # Optional: Override the system prompt for labeling
 # LABEL_SELECTOR_SYSTEM_PROMPT="Your custom prompt here..."

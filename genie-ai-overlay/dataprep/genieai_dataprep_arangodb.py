@@ -158,8 +158,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.warning("Skipping label fetch due to missing auth token.")
             return []
 
-        # FIX: Target the Backend Service for the hierarchy
-        url = f"{BACKEND_SERVICE_URL}/api/service-categories"
+        # FIX: Point to the backend service categories endpoint
+        url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
         headers = {"Authorization": f"Bearer {token}"}
         
         try:
@@ -168,15 +168,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if response.status == 200:
                         data = await response.json()
                         labels = []
-                        # Backend returns a tree structure (Category -> Children)
+                        # Backend returns: [{ name: "Cat", children: ["Svc1", "Svc2"] }, ...]
                         if isinstance(data, list):
                             for category in data:
                                 # Add the Category Name
                                 if isinstance(category, dict) and 'name' in category:
                                     labels.append(category['name'])
-                                    # Flatten Children
+                                    # Add all Children (Services)
                                     if 'children' in category and isinstance(category['children'], list):
                                         for child in category['children']:
+                                            # Children might be strings or objects depending on query
                                             if isinstance(child, dict) and 'name' in child:
                                                 labels.append(child['name'])
                                             elif isinstance(child, str):

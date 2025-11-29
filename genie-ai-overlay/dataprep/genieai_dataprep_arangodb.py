@@ -94,7 +94,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
         return None
 
-    async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = 0):
+    async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
         token = await self._get_auth_token()
         if not token:
@@ -106,12 +106,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
+        
+        # FIX: Only include chunk_count if explicitly provided.
+        # This prevents "Validation error: dataprep.chunk_count is not allowed" from backend.
+        dataprep_payload = {"status": status}
+        if chunk_count is not None:
+            dataprep_payload["chunk_count"] = chunk_count
+
         payload = {
-            "dataprep": {
-                "status": status,
-                "chunk_count": chunk_count
-            }
+            "dataprep": dataprep_payload
         }
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.patch(url, json=payload, headers=headers) as response:
@@ -442,6 +447,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             deleted_chunks = [doc for doc in cursor]
             
             # Spec 6.1: Update status to Retracted
+            # NOTE: Implicitly sending chunk_count=None (default), so it won't be sent in payload
             await self._update_doc_status(file_id, "Retracted")
             
             if not deleted_chunks:

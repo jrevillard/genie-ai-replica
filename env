@@ -178,10 +178,11 @@ CONTENT_EXTRACTION_METHOD=docling
 
 # ========= HTTP SERVICE - Authorization service (used by chatqna and data prep services) ==========
 AUTH_SERVICE_PORT=6666
-AUTH_SERVICE_URL="https://localhost/"
+AUTH_SERVICE_URL="http://backend:3000/"
 AUTH_SERVICE_USERNAME="genie-ai-manager"
 AUTH_SERVICE_PASSWORD="1357924680+Manager"
 GET_AUTH_TOKEN_URL=http://http-service:6666/get-token
+
 
 # ========= RETRIEVER SERVICE =========
 RETRIEVER_ARANGO_GRAPH_NAME=GRAPH_TEST

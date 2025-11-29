@@ -110,13 +110,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Content-Type": "application/json"
         }
         
-        dataprep_payload = {"status": status}
-        if chunk_count is not None:
-            dataprep_payload["chunk_count"] = chunk_count
-
+        # FIX: chunk_count must be at the ROOT level, not inside dataprep object
         payload = {
-            "dataprep": dataprep_payload
+            "dataprep": {"status": status}
         }
+        if chunk_count is not None:
+            payload["chunk_count"] = chunk_count
 
         try:
             async with aiohttp.ClientSession() as session:

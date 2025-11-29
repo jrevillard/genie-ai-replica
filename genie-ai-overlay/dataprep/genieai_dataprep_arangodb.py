@@ -42,7 +42,6 @@ logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---
-# Replaced E2E_CPU_URL and DOC_REPO_URL with a single DOCUMENT_REPOSITORY_URL
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
@@ -73,8 +72,20 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # Token provided in prompt - usually fetched from env or auth service
-        self.doc_repo_token = os.getenv("GENIEAI_MANAGER_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwibG9naW5OYW1lIjoiZ2VuaWUtYWktbWFuYWdlciIsImVtYWlsIjoiZ2VuaWUuYWlAYXRvbWljbWFpbC5pbyIsImlhdCI6MTc1OTcyMDA1OSwiZXhwIjoxNzU5ODA2NDU5fQ.V93S6eBKkJpPj_wCbuVMdcdS6NhwGMMBKtGEFEHkn7E")
+        
+        # --- TOKEN CLEANING FIX ---
+        # Fetch raw token
+        raw_token = os.getenv("GENIEAI_MANAGER_TOKEN", "")
+        # Remove whitespace/newlines first
+        clean_token = raw_token.strip()
+        # Remove surrounding quotes (double or single) that Docker/Env might have passed literally
+        self.doc_repo_token = clean_token.strip('"').strip("'")
+        
+        if not self.doc_repo_token:
+            logger.warning("GENIEAI_MANAGER_TOKEN is missing or empty! Status updates will fail.")
+        else:
+            # Log length to verify it loaded (avoid logging the secret itself)
+            logger.info(f"Loaded Auth Token. Length: {len(self.doc_repo_token)}")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
@@ -121,7 +132,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _fetch_all_labels(self):
         """Fetch taxonomy from the Node Service."""
-        # Using DOCUMENT_REPOSITORY_URL for taxonomy/labels
         url = f"{DOCUMENT_REPOSITORY_URL}/api/service-categories/categories"
         headers = {"Authorization": f"Bearer {self.doc_repo_token}"}
         

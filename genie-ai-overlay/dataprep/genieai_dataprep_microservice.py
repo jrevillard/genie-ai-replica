@@ -141,7 +141,12 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
 
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
-        return {"status": 200, "message": "Ingestion started in background."}
+        # FIX: Added "success": True to satisfy Node.js controller validation
+        return {
+            "success": True, 
+            "status": 200, 
+            "message": "Ingestion started in background."
+        }
 
     except Exception as e:
         logger.error(f"Error initiating dataprep ingest: {e}")
@@ -175,6 +180,14 @@ async def retract_file(payload: DocRepoRetractPayload):
         else:
             logger.error(f"dataprep_component_name is not set or invalid: {dataprep_component_name}")
             raise RuntimeError("Unsupported dataprep_component_name")
+
+        # FIX: Ensure success flag is present for Node.js controller
+        if isinstance(response, dict):
+            if response.get("status") == 200:
+                response["success"] = True
+            elif "success" not in response:
+                # Fallback if status is missing but it returned a dict (usually success in OPEA)
+                response["success"] = False
 
         if logflag:
             logger.debug(f"[ retract ] retracted result: {response}")

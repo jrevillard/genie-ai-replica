@@ -963,7 +963,7 @@ class FileController {
       await metadataService.updateMetadata(fileId, {
         chunk_count: response.data.chunk_count || file.chunk_count || 0, // Update chunk count if provided
         dataprep: {
-          status: 'ingested',
+          status: 'Ingesting',
           ingest_date: new Date().toISOString(),
           retract_date: file.dataprep.retract_date || null,
         }

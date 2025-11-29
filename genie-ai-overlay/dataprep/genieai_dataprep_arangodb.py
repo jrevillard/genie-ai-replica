@@ -76,7 +76,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # Token is fetched dynamically via _get_auth_token
+        self._log_environment_variables()
+
+    def _log_environment_variables(self):
+        """Debug: Print all critical environment variables at startup."""
+        print("\n" + "="*60)
+        print(f" GENIE-AI DATAPREP CONFIGURATION ")
+        print("="*60)
+        print(f" DOCUMENT_REPO_URL    : {DOCUMENT_REPOSITORY_URL}")
+        print(f" BACKEND_SERVICE_URL  : {BACKEND_SERVICE_URL}")
+        print(f" AUTH_TOKEN_URL       : {GET_AUTH_TOKEN_URL}")
+        print(f" GUARDRAIL_ENABLED    : {GUARDRAIL_ENABLED} ({GUARDRAIL_URL})")
+        print("-" * 60)
+        print(f" LABELING_STRATEGY    : {LABELING_STRATEGY}")
+        print(f" EMBEDDING_THRESHOLD  : {EMBEDDING_LABEL_THRESHOLD}")
+        print(f" BM25_THRESHOLD       : {BM25_LABEL_THRESHOLD}")
+        print(f" EXTRACTION_METHOD    : {CONTENT_EXTRACTION_METHOD}")
+        print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
+        print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
+        print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
@@ -157,7 +175,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.warning("Skipping label fetch due to missing auth token.")
             return []
 
-        # FIX: Point to the backend service categories endpoint
+        # FIX: Target the Backend Service for the hierarchy
         url = f"{BACKEND_SERVICE_URL}/api/service-categories/categories"
         headers = {"Authorization": f"Bearer {token}"}
         
@@ -167,7 +185,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if response.status == 200:
                         data = await response.json()
                         labels = []
-                        # Backend returns: [{ name: "Cat", children: ["Svc1", "Svc2"] }, ...]
+                        # Backend returns a tree structure (Category -> Children)
                         if isinstance(data, list):
                             for category in data:
                                 # Add the Category Name
@@ -258,6 +276,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
         model = os.getenv("VLLM_MODEL_ID")
         
+        # Debug: Log inputs to LLM
+        print("\n" + "-"*60)
+        print(f" DEBUG: LLM LABELING INPUTS ")
+        print("-"*60)
+        print(f" Taxonomy ({len(all_labels)} labels): {all_labels[:10]}...") # Show first 10
+        print(f" File Metadata Labels: {file_labels}")
+        print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT[:100]}...")
+        print("-"*60 + "\n")
+        
         results = []
         for i, text in enumerate(chunks):
             retries = 0
@@ -287,20 +314,34 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # 1. Base: Always include the file's assigned labels
             final_labels = set(file_labels) if file_labels else set()
             
-            # 2. Analyze Suggestions
+            # 2. Analyze Suggestions with Synonym Matching (FIX)
             for label in suggested_labels:
                 if label in final_labels:
                     continue 
                 
+                # Exact Match
                 if label in all_labels:
-                    # Case A: Label exists in system but was not selected for this file
                     final_labels.add(label)
                     await self._write_ingestion_log(file_id, "WARN", "Labeling", 
                         f"Chunk {i}: LLM suggested existing label '{label}' (not in file metadata). Added to chunk.")
                 else:
-                    # Case B: Label does not exist in system (New)
-                    await self._write_ingestion_log(file_id, "WARN", "Labeling", 
-                        f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy.")
+                    # Fuzzy/Synonym Match Check
+                    # Check case-insensitive and simple plural s/es
+                    match = next((x for x in all_labels if x.lower() == label.lower()), None)
+                    if not match and label.endswith('s'):
+                        match = next((x for x in all_labels if x.lower() == label[:-1].lower()), None)
+                    if not match:
+                         match = next((x for x in all_labels if x.lower() == label.lower() + 's'), None)
+
+                    if match:
+                        # It's a synonym for an existing label! Use the existing one.
+                        final_labels.add(match)
+                        await self._write_ingestion_log(file_id, "INFO", "Labeling", 
+                            f"Chunk {i}: LLM suggested '{label}' -> Mapped to existing '{match}'.")
+                    else:
+                        # Truly new
+                        await self._write_ingestion_log(file_id, "WARN", "Labeling", 
+                            f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy.")
 
             results.append({"text": text, "labels": list(final_labels)})
         return results
@@ -346,6 +387,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         elif LABELING_STRATEGY == "bm25":
             return await self._label_with_bm25(plain_chunks, all_labels)
         else:
+            # Default to LLM (with retry fix and advisory logic)
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---
@@ -451,7 +493,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             raise HTTPException(status_code=500, detail=error_msg)
 
     async def retract_file(self, file_id: str, graph_name: str):
-        """Retracts a file and performs a clean graph cascade deletion."""
+        """
+        Retracts a file and performs a clean graph cascade deletion.
+        1. Identifies Source Chunks for the file.
+        2. Identifies 'Orphan' Entities (entities linked ONLY to this file).
+        3. Preserves 'Shared' Entities (entities linked to this file AND others).
+        4. Deletes Chunks, Orphans, and all associated Edges.
+        """
         logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
         
         col_source = f"{graph_name}_SOURCE"

@@ -23,7 +23,7 @@ const managerUser = {
   },
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwibG9naW5OYW1lIjoiZ2VuaWUtYWktbWFuYWdlciIsImVtYWlsIjoiZ2VuaWUuYWlAYXRvbWljbWFpbC5pbyIsImlhdCI6MTc1OTcyMDA1OSwiZXhwIjoxNzU5ODA2NDU5fQ.V93S6eBKkJpPj_wCbuVMdcdS6NhwGMMBKtGEFEHkn7E",
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyMTYyIiwidG9rZW5WZXJzaW9uIjowLCJpYXQiOjE3NTk3MjAwNTksImV4cCI6MTc2MDMyNDg1OX0.wrG8l0e4z4AcY2FxBbfXcx9HfgWjFVD7ZRL80ygI4yQ",
-  "role": "User"
+  "role": "Admin"
 };
 
 /**

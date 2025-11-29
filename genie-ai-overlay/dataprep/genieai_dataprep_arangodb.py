@@ -43,10 +43,10 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
+GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
 GUARDRAIL_ENABLED = os.getenv("GUARDRAIL_ENABLED", "false").lower() == "true"
-GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 
 # Spec 8.0: New Env Vars
 LABELING_STRATEGY = os.getenv("LABELING_STRATEGY", "llm") 
@@ -72,28 +72,38 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        
-        # --- TOKEN CLEANING FIX ---
-        # Fetch raw token
-        raw_token = os.getenv("GENIEAI_MANAGER_TOKEN", "")
-        # Remove whitespace/newlines first
-        clean_token = raw_token.strip()
-        # Remove surrounding quotes (double or single) that Docker/Env might have passed literally
-        self.doc_repo_token = clean_token.strip('"').strip("'")
-        
-        if not self.doc_repo_token:
-            logger.warning("GENIEAI_MANAGER_TOKEN is missing or empty! Status updates will fail.")
-        else:
-            # Log length to verify it loaded (avoid logging the secret itself)
-            logger.info(f"Loaded Auth Token. Length: {len(self.doc_repo_token)}")
+        # We no longer load the static token here. 
+        # We fetch it dynamically from the http-service as needed.
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
+    async def _get_auth_token(self):
+        """Fetches a fresh JWT from the internal http-service."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(GET_AUTH_TOKEN_URL) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        token = data.get("accessToken")
+                        if token:
+                            return token
+                        logger.error(f"Auth Service returned 200 but no accessToken: {data}")
+                    else:
+                        logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
+        except Exception as e:
+            logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
+        return None
+
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = 0):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
+        token = await self._get_auth_token()
+        if not token:
+            logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
+            return
+
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
         headers = {
-            "Authorization": f"Bearer {self.doc_repo_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         payload = {
@@ -112,13 +122,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
+        token = await self._get_auth_token()
+        if not token:
+            logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
+            return
+
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
         headers = {
-            "Authorization": f"Bearer {self.doc_repo_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         payload = {
-            "level": level.lower(), # Enum: info, warn, error, debug
+            "level": level.lower(),
             "stage": stage,
             "message": message
         }
@@ -132,8 +147,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _fetch_all_labels(self):
         """Fetch taxonomy from the Node Service."""
+        token = await self._get_auth_token()
+        if not token:
+            logger.warning("Skipping label fetch due to missing auth token.")
+            return []
+
         url = f"{DOCUMENT_REPOSITORY_URL}/api/service-categories/categories"
-        headers = {"Authorization": f"Bearer {self.doc_repo_token}"}
+        headers = {"Authorization": f"Bearer {token}"}
         
         try:
             async with aiohttp.ClientSession() as session:

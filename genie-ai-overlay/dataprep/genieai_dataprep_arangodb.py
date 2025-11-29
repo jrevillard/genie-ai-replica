@@ -76,6 +76,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
+        # Token is fetched dynamically via _get_auth_token
+        # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
     def _log_environment_variables(self):
@@ -94,6 +96,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" EXTRACTION_METHOD    : {CONTENT_EXTRACTION_METHOD}")
         print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
         print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
+        print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
         print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
@@ -276,13 +279,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
         model = os.getenv("VLLM_MODEL_ID")
         
-        # Debug: Log inputs to LLM
+        # Debug Requirement 3: Print what is sent to LLM
         print("\n" + "-"*60)
         print(f" DEBUG: LLM LABELING INPUTS ")
         print("-"*60)
-        print(f" Taxonomy ({len(all_labels)} labels): {all_labels[:10]}...") # Show first 10
+        print(f" Taxonomy ({len(all_labels)} labels): {all_labels}") # Print ALL labels
         print(f" File Metadata Labels: {file_labels}")
-        print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT[:100]}...")
+        print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT}")
         print("-"*60 + "\n")
         
         results = []
@@ -314,7 +317,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # 1. Base: Always include the file's assigned labels
             final_labels = set(file_labels) if file_labels else set()
             
-            # 2. Analyze Suggestions with Synonym Matching (FIX)
+            # 2. Analyze Suggestions with Synonym Matching (Requirement 1 fix)
             for label in suggested_labels:
                 if label in final_labels:
                     continue 
@@ -325,7 +328,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await self._write_ingestion_log(file_id, "WARN", "Labeling", 
                         f"Chunk {i}: LLM suggested existing label '{label}' (not in file metadata). Added to chunk.")
                 else:
-                    # Fuzzy/Synonym Match Check
+                    # Fuzzy/Synonym Match Check (Solves 'Safaris' vs 'Safari')
                     # Check case-insensitive and simple plural s/es
                     match = next((x for x in all_labels if x.lower() == label.lower()), None)
                     if not match and label.endswith('s'):
@@ -342,8 +345,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         # Truly new
                         await self._write_ingestion_log(file_id, "WARN", "Labeling", 
                             f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy.")
+            
+            # Requirement 4: Human readable log for every chunk
+            labels_list = list(final_labels)
+            if labels_list:
+                await self._write_ingestion_log(file_id, "INFO", "Labeling", f"Chunk {i}: Final Labels: {labels_list}")
 
-            results.append({"text": text, "labels": list(final_labels)})
+            results.append({"text": text, "labels": labels_list})
         return results
 
     async def _label_with_embedding(self, chunks: List[str], all_labels: List[str]):

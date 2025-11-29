@@ -165,6 +165,8 @@ ARANGO_GRAPH_NAME=GRAPH_TEST
 # ========= DATAPREP GENIE-AI EXTENSIONS =========
 # URL for the Node.js Document Repository Service (internal docker network name)
 DOCUMENT_REPOSITORY_URL=http://document-repository:3001
+# URL to the backend component used to fetch the knowledge hierarchy
+BACKEND_SERVICE_URL=http://backend:3000
 # Labeling Strategy: 'llm', 'embedding', or 'bm25'
 LABELING_STRATEGY=llm
 # Thresholds for alternative strategies

@@ -42,7 +42,11 @@ logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---
+# 1. Document Repository: Handles Logs and Status Updates
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
+# 2. Backend Service: Source of Truth for Label Hierarchy
+BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
+# 3. HTTP Service: Authentication Token Broker
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 
 GUARDRAIL_URL = os.getenv("GUARDRAIL_URL", "http://guardrail:9090/v1/guardrails")
@@ -72,8 +76,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # We no longer load the static token here. 
-        # We fetch it dynamically from the http-service as needed.
+        # Token is fetched dynamically via _get_auth_token
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
@@ -136,7 +139,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "Content-Type": "application/json"
         }
         payload = {
-            "level": level, # FIX: Send as-is (e.g. INFO), do not lowercase
+            "level": level, # Sent exactly as passed (INFO, WARN, ERROR)
             "stage": stage,
             "message": message
         }
@@ -149,14 +152,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.error(f"Error calling Doc Repo Log API: {e}")
 
     async def _fetch_all_labels(self):
-        """Fetch taxonomy from the Node Service."""
+        """Fetch full taxonomy from the Backend Service to guide the LLM."""
         token = await self._get_auth_token()
         if not token:
             logger.warning("Skipping label fetch due to missing auth token.")
             return []
 
-        # FIX: Updated URL to the standard labels endpoint based on fileRoutes.js
-        url = f"{DOCUMENT_REPOSITORY_URL}/api/labels" 
+        # FIX: Target the Backend Service for the hierarchy
+        url = f"{BACKEND_SERVICE_URL}/api/service-categories"
         headers = {"Authorization": f"Bearer {token}"}
         
         try:
@@ -165,16 +168,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if response.status == 200:
                         data = await response.json()
                         labels = []
+                        # Backend returns a tree structure (Category -> Children)
                         if isinstance(data, list):
-                            for item in data:
-                                if isinstance(item, str):
-                                    labels.append(item)
-                                elif isinstance(item, dict) and 'name' in item:
-                                    labels.append(item['name'])
+                            for category in data:
+                                # Add the Category Name
+                                if isinstance(category, dict) and 'name' in category:
+                                    labels.append(category['name'])
+                                    # Flatten Children
+                                    if 'children' in category and isinstance(category['children'], list):
+                                        for child in category['children']:
+                                            if isinstance(child, dict) and 'name' in child:
+                                                labels.append(child['name'])
+                                            elif isinstance(child, str):
+                                                labels.append(child)
+                        
+                        logger.info(f"Fetched {len(labels)} labels from Backend taxonomy.")
                         return list(set(labels))
-                    logger.error(f"Label fetch failed. Status: {response.status}")
+                    
+                    logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
         except Exception as e:
-            logger.error(f"Error fetching labels: {e}")
+            logger.error(f"Error fetching labels from Backend: {e}")
         return []
 
     # --- Core Pipeline Steps ---
@@ -240,15 +253,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Labeling Strategies (Spec 5.3, 5.4) ---
 
-    async def _label_with_llm(self, chunks: List[str], all_labels: List[str], file_id: str):
-        """Labels chunks using VLLM with Retry Logic (Spec 5.3)."""
+    async def _label_with_llm(self, chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
+        """Labels chunks using VLLM with Retry Logic and Advisory Warnings (Spec 5.3)."""
         client = AsyncOpenAI(api_key=os.getenv("VLLM_API_KEY", "EMPTY"), base_url=f"{os.getenv('VLLM_ENDPOINT')}/v1")
         model = os.getenv("VLLM_MODEL_ID")
         
         results = []
         for i, text in enumerate(chunks):
             retries = 0
-            labels = []
+            suggested_labels = []
+            
             while retries < 3:
                 try:
                     response = await client.chat.completions.create(
@@ -259,16 +273,36 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         ]
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    labels = [l for l in parsed.get("labels", []) if l in all_labels]
+                    suggested_labels = parsed.get("labels", [])
                     break 
                 except Exception as e:
                     retries += 1
             
             if retries == 3:
                 await self._write_ingestion_log(file_id, "WARN", "Labeling", f"Chunk {i}: LLM failed to provide valid labels after 3 attempts.")
-                labels = [] # Fallback to empty
+                suggested_labels = []
 
-            results.append({"text": text, "labels": labels})
+            # --- Logic: Merge File Labels + Suggestions & Generate Warnings ---
+            
+            # 1. Base: Always include the file's assigned labels
+            final_labels = set(file_labels) if file_labels else set()
+            
+            # 2. Analyze Suggestions
+            for label in suggested_labels:
+                if label in final_labels:
+                    continue 
+                
+                if label in all_labels:
+                    # Case A: Label exists in system but was not selected for this file
+                    final_labels.add(label)
+                    await self._write_ingestion_log(file_id, "WARN", "Labeling", 
+                        f"Chunk {i}: LLM suggested existing label '{label}' (not in file metadata). Added to chunk.")
+                else:
+                    # Case B: Label does not exist in system (New)
+                    await self._write_ingestion_log(file_id, "WARN", "Labeling", 
+                        f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy.")
+
+            results.append({"text": text, "labels": list(final_labels)})
         return results
 
     async def _label_with_embedding(self, chunks: List[str], all_labels: List[str]):
@@ -278,7 +312,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             
         label_vecs = self.embeddings.embed_documents(all_labels)
         results = []
-        
         for text in chunks:
             chunk_vec = self.embeddings.embed_query(text)
             selected = []
@@ -294,7 +327,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         tokenized_labels = [re.findall(r"\b\w+\b", l.lower()) for l in all_labels]
         bm25 = BM25Okapi(tokenized_labels)
         results = []
-        
         for text in chunks:
             tokens = re.findall(r"\b\w+\b", text.lower())
             scores = bm25.get_scores(tokens)
@@ -302,10 +334,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": selected})
         return results
 
-    async def _apply_labels(self, plain_chunks: List[str], all_labels: List[str], file_id: str):
+    async def _apply_labels(self, plain_chunks: List[str], all_labels: List[str], file_labels: List[str], file_id: str):
         if not all_labels:
-            await self._write_ingestion_log(file_id, "WARN", "Labeling", "No labels provided in Knowledge Hierarchy. Skipping labeling.")
-            return [{"text": c, "labels": []} for c in plain_chunks]
+            await self._write_ingestion_log(file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels.")
+            return [{"text": c, "labels": file_labels if file_labels else []} for c in plain_chunks]
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
         
@@ -314,7 +346,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         elif LABELING_STRATEGY == "bm25":
             return await self._label_with_bm25(plain_chunks, all_labels)
         else:
-            return await self._label_with_llm(plain_chunks, all_labels, file_id)
+            return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---
 
@@ -323,6 +355,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
         
         try:
+            # 1. Fetch Taxonomy (FROM BACKEND)
             all_labels = await self._fetch_all_labels()
             
             self._initialize_llm(
@@ -351,8 +384,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
                 raise Exception("Guardrail Violation")
 
-            labelled_docs = await self._apply_labels(chunks, all_labels, input.file_id)
+            # 5. Labeling
+            file_labels = getattr(input, "file_labels", [])
+            labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
+            # 6. Graph Insertion (BATCHED)
             graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
             
             documents_to_process = []
@@ -415,13 +451,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             raise HTTPException(status_code=500, detail=error_msg)
 
     async def retract_file(self, file_id: str, graph_name: str):
-        """
-        Retracts a file and performs a clean graph cascade deletion.
-        1. Identifies Source Chunks for the file.
-        2. Identifies 'Orphan' Entities (entities linked ONLY to this file).
-        3. Preserves 'Shared' Entities (entities linked to this file AND others).
-        4. Deletes Chunks, Orphans, and all associated Edges.
-        """
+        """Retracts a file and performs a clean graph cascade deletion."""
         logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
         
         col_source = f"{graph_name}_SOURCE"

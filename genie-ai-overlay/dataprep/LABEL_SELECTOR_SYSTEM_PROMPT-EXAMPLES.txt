@@ -50,3 +50,37 @@ Existing labels (use ONLY these are allowed):
 Output format (strict JSON, no extra text):
 {"labels": ["Label1", "Label2"]}
 """
+
+# This prompt is theoretically designed for granite
+"You are a RULE-BASED CLASSIFIER, not a creative model.
+
+Your ONLY job is to select 1–4 labels STRICTLY from the allowed list based on the semantic meaning of the text chunk.
+
+### HARD RULES (Granite MUST obey)
+1. You MUST output ONLY valid JSON in this exact format:
+   {"labels": ["Label1", "Label2"]}
+
+2. You MUST choose ONLY from the provided labels list. NO new labels. NO substitutions. NO synonyms.
+
+3. You MUST select between 1 and 4 labels. NEVER output 0 labels.
+
+4. You MUST ignore all information not directly relevant to the core semantic meaning of the text chunk.
+
+5. BROAD labels take priority over specific ones.
+
+6. If multiple labels could fit, choose the MOST semantically dominant themes.
+
+7. YOU MUST perform the following internal steps before output (but NEVER show them):
+   - Step A: Identify the 1–4 strongest semantic concepts in the chunk.
+   - Step B: Match each concept to the CLOSEST label from the allowed list.
+   - Step C: Remove any labels not strongly supported by the chunk.
+   - Step D: Verify ALL labels belong to the allowed list.
+   - Step E: Verify JSON format EXACTLY.
+
+### ALLOWED LABELS (use ONLY these):
+{labels_list}
+
+### REQUIRED OUTPUT (NO narration, NO explanation)
+Return ONLY this JSON structure:
+{"labels": ["Label1", "Label2"]}
+"

@@ -550,120 +550,143 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     async def retract_file(self, file_id: str, graph_name: str):
         """
         Retracts a file and performs a clean graph cascade deletion.
-        1. Identifies Source Chunks for the file (robustly).
-        2. Identifies 'Orphan' Entities (robustly).
-        3. Deletes edges, orphans, and chunks safely.
+        Uses sequential steps with detailed logging to ensure stability and observability.
         """
         logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
+        await self._write_ingestion_log(file_id, "INFO", "Retract", "Starting retraction analysis...")
         
         col_source = f"{graph_name}_SOURCE"
         col_entity = f"{graph_name}_ENTITY"
         col_has_source = f"{graph_name}_HAS_SOURCE"
         col_links_to = f"{graph_name}_LINKS_TO"
 
-        # Completely rewritten AQL to handle partial states and ensure clean deletion
-        aql_cascade_delete = f"""
-        // 1. Identify Chunks (store IDs)
-        LET chunk_ids = (
-            FOR doc IN @@col_source
-            FILTER doc.file_id == @file_id OR doc.metadata.file_id == @file_id
-            RETURN doc._id
-        )
-
-        // 2. Identify Edges linked to these chunks
-        LET edges_to_remove = (
-            FOR edge IN @@col_has_source
-            FILTER edge._to IN chunk_ids
-            RETURN edge
-        )
-
-        // 3. Identify potentially orphaned entities
-        LET candidate_entities = (
-            FOR edge IN edges_to_remove
-            RETURN DISTINCT edge._from
-        )
-
-        // 4. Filter for TRUE orphans (entities with no other incoming edges)
-        LET orphan_entities = (
-            FOR entity_id IN candidate_entities
-                LET incoming_count = LENGTH(
-                    FOR edge IN @@col_has_source
-                    FILTER edge._from == entity_id
-                    // Crucial: Check if this edge is NOT one of the ones we are about to delete
-                    FILTER edge._id NOT IN edges_to_remove[*]._id
-                    LIMIT 1
-                    RETURN 1
-                )
-                FILTER incoming_count == 0
-                RETURN entity_id
-        )
-
-        // 5. DELETE OPERATIONS
-        
-        // Delete Edges
-        LET deleted_edges = (
-            FOR edge IN edges_to_remove
-            REMOVE edge IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
-            RETURN OLD._id
-        )
-
-        // Delete Orphan Entities & their inter-links
-        LET deleted_entities = (
-            FOR entity_id IN orphan_entities
-                // Delete links between entities
-                LET deleted_links = (
-                    FOR edge IN @@col_links_to
-                    FILTER edge._from == entity_id OR edge._to == entity_id
-                    REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
-                    RETURN 1
-                )
-                // Delete the entity itself
-                REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
-                RETURN OLD._id
-        )
-
-        // Delete Chunks (SOURCES)
-        LET deleted_chunks = (
-            FOR chunk_id IN chunk_ids
-            REMOVE chunk_id IN @@col_source OPTIONS {{ ignoreErrors: true }}
-            RETURN OLD._id
-        )
-
-        RETURN {{
-            deleted_chunks: LENGTH(deleted_chunks),
-            deleted_entities: LENGTH(deleted_entities),
-            deleted_edges: LENGTH(deleted_edges)
-        }}
-        """
-        
         try:
-            bind_vars = {
-                "file_id": file_id,
-                "@col_source": col_source,
-                "@col_entity": col_entity,
-                "@col_has_source": col_has_source,
-                "@col_links_to": col_links_to
-            }
+            # ----------------------------------------------------------
+            # STEP 1: Identify CHUNKS (Sources)
+            # ----------------------------------------------------------
+            aql_find_chunks = f"""
+                FOR doc IN @@col_source
+                FILTER doc.file_id == @file_id OR doc.metadata.file_id == @file_id
+                RETURN doc._id
+            """
+            cursor_chunks = self.db.aql.execute(aql_find_chunks, bind_vars={"@col_source": col_source, "file_id": file_id})
+            chunk_ids = [doc for doc in cursor_chunks]
             
-            cursor = self.db.aql.execute(aql_cascade_delete, bind_vars=bind_vars)
-            result = [doc for doc in cursor]
+            log_msg = f"Analysis: Found {len(chunk_ids)} chunks (SOURCE) for deletion."
+            logger.info(log_msg)
+            await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
+
+            if not chunk_ids:
+                logger.warning(f"No chunks found for {file_id}. Aborting graph retraction.")
+                await self._update_doc_status(file_id, "Retracted") # Set status anyway
+                return {"status": 200, "message": "No chunks found, but status updated.", "details": {"deleted_chunks": 0}}
+
+            # ----------------------------------------------------------
+            # STEP 2: Identify and Delete EDGES (HAS_SOURCE)
+            # ----------------------------------------------------------
+            # We delete edges first so we can accurately detect orphans in Step 3.
+            aql_delete_edges = f"""
+                FOR edge IN @@col_has_source
+                FILTER edge._to IN @chunk_ids
+                REMOVE edge IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
+                RETURN OLD._from
+            """
+            # This query deletes edges AND returns the entities that were connected (candidates for orphans)
+            cursor_edges = self.db.aql.execute(aql_delete_edges, bind_vars={"@col_has_source": col_has_source, "chunk_ids": chunk_ids})
+            candidate_entity_ids = [doc for doc in cursor_edges]
+            # Deduplicate
+            candidate_entity_ids = list(set(candidate_entity_ids))
             
+            log_msg = f"Action: Deleted {len(candidate_entity_ids)} edges (HAS_SOURCE). Checking {len(candidate_entity_ids)} entities for orphans..."
+            logger.info(log_msg)
+            await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
+
+            # ----------------------------------------------------------
+            # STEP 3: Identify and Delete ORPHAN ENTITIES
+            # ----------------------------------------------------------
+            deleted_entities_count = 0
+            
+            if candidate_entity_ids:
+                aql_find_orphans = f"""
+                    FOR entity_id IN @candidate_ids
+                        // Check if this entity has ANY other incoming edges from other sources
+                        LET incoming_count = LENGTH(
+                            FOR edge IN @@col_has_source
+                            FILTER edge._from == entity_id
+                            LIMIT 1
+                            RETURN 1
+                        )
+                        FILTER incoming_count == 0
+                        RETURN entity_id
+                """
+                cursor_orphans = self.db.aql.execute(aql_find_orphans, bind_vars={"@col_has_source": col_has_source, "candidate_ids": candidate_entity_ids})
+                orphan_ids = [doc for doc in cursor_orphans]
+                
+                if orphan_ids:
+                    log_msg = f"Analysis: Identified {len(orphan_ids)} TRUE orphans (no other sources). Deleting..."
+                    logger.info(log_msg)
+                    await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
+                    
+                    # Delete the orphans
+                    aql_delete_entities = f"""
+                        FOR entity_id IN @orphan_ids
+                            // First clean up LINKS_TO edges connected to this entity
+                            LET deleted_links = (
+                                FOR edge IN @@col_links_to
+                                FILTER edge._from == entity_id OR edge._to == entity_id
+                                REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
+                                RETURN 1
+                            )
+                            // Then remove the entity
+                            REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                            RETURN OLD._id
+                    """
+                    cursor_del_ent = self.db.aql.execute(aql_delete_entities, bind_vars={
+                        "@col_links_to": col_links_to, 
+                        "@col_entity": col_entity,
+                        "orphan_ids": orphan_ids
+                    })
+                    # Consume cursor to ensure execution
+                    deleted_entities_list = [doc for doc in cursor_del_ent]
+                    deleted_entities_count = len(deleted_entities_list)
+                else:
+                    await self._write_ingestion_log(file_id, "INFO", "Retract", "No orphans found. All entities are shared with other documents.")
+
+            # ----------------------------------------------------------
+            # STEP 4: Delete CHUNKS (Source Documents)
+            # ----------------------------------------------------------
+            aql_delete_chunks = f"""
+                FOR chunk_id IN @chunk_ids
+                REMOVE chunk_id IN @@col_source OPTIONS {{ ignoreErrors: true }}
+                RETURN OLD._id
+            """
+            cursor_del_chunks = self.db.aql.execute(aql_delete_chunks, bind_vars={"@col_source": col_source, "chunk_ids": chunk_ids})
+            deleted_chunks_list = [doc for doc in cursor_del_chunks]
+            
+            # ----------------------------------------------------------
+            # FINAL STATUS UPDATE
+            # ----------------------------------------------------------
             await self._update_doc_status(file_id, "Retracted")
             
-            stats = result[0] if result else {"deleted_chunks": 0, "deleted_entities": 0, "deleted_edges": 0}
-            
-            # Warn only if NOTHING was deleted (truly empty result)
-            if stats["deleted_chunks"] == 0 and stats["deleted_edges"] == 0:
-                logger.warning(f"Retraction run but no data found for {file_id}")
-                return {"status": 404, "message": "No chunks found."}
-                
-            msg = f"Retracted. Deleted {stats['deleted_chunks']} chunks, {stats['deleted_edges']} source edges, and {stats['deleted_entities']} orphan entities."
-            logger.info(msg)
-            return {"status": 200, "message": msg, "details": stats}
+            final_msg = f"Retraction Complete. Deleted: {len(deleted_chunks_list)} Chunks, {deleted_entities_count} Entities."
+            logger.info(final_msg)
+            await self._write_ingestion_log(file_id, "INFO", "Retract", final_msg)
+
+            return {
+                "status": 200, 
+                "message": final_msg, 
+                "details": {
+                    "deleted_chunks": len(deleted_chunks_list),
+                    "deleted_entities": deleted_entities_count
+                }
+            }
             
         except AQLQueryExecuteError as e:
             if e.error_code == 1203:
                 logger.warning(f"Graph Collection {graph_name} not found. Nothing to retract.")
                 return {"status": 200, "message": "Graph not found, nothing to retract."}
-            logger.error(f"AQL Cleanup Error: {e}")
+            
+            err_msg = f"AQL Error during retraction: {str(e)}"
+            logger.error(err_msg)
+            await self._write_ingestion_log(file_id, "ERROR", "Retract", err_msg)
             raise e

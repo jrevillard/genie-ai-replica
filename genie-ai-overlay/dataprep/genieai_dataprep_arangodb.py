@@ -588,9 +588,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             aql_delete_edges = f"""
                 FOR edge IN @@col_has_source
                 FILTER edge._to IN @chunk_ids
-                REMOVE edge IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
+                REMOVE edge IN @@col_has_source 
                 RETURN OLD._from
             """
+            # REMOVED: OPTIONS {{ ignoreErrors: true }} to catch if deletion fails
+            
             # This query deletes edges AND returns the entities that were connected (candidates for orphans)
             cursor_edges = self.db.aql.execute(aql_delete_edges, bind_vars={"@col_has_source": col_has_source, "chunk_ids": chunk_ids})
             candidate_entity_ids = [doc for doc in cursor_edges]
@@ -634,13 +636,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             LET deleted_links = (
                                 FOR edge IN @@col_links_to
                                 FILTER edge._from == entity_id OR edge._to == entity_id
-                                REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
+                                REMOVE edge IN @@col_links_to
                                 RETURN 1
                             )
                             // Then remove the entity
-                            REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                            REMOVE entity_id IN @@col_entity
                             RETURN OLD._id
                     """
+                    # REMOVED: OPTIONS {{ ignoreErrors: true }} to catch if deletion fails
+                    
                     cursor_del_ent = self.db.aql.execute(aql_delete_entities, bind_vars={
                         "@col_links_to": col_links_to, 
                         "@col_entity": col_entity,
@@ -657,9 +661,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # ----------------------------------------------------------
             aql_delete_chunks = f"""
                 FOR chunk_id IN @chunk_ids
-                REMOVE chunk_id IN @@col_source OPTIONS {{ ignoreErrors: true }}
+                REMOVE chunk_id IN @@col_source
                 RETURN OLD._id
             """
+            # REMOVED: OPTIONS {{ ignoreErrors: true }} to catch if deletion fails
+            
             cursor_del_chunks = self.db.aql.execute(aql_delete_chunks, bind_vars={"@col_source": col_source, "chunk_ids": chunk_ids})
             deleted_chunks_list = [doc for doc in cursor_del_chunks]
             

@@ -7,7 +7,7 @@ import os
 import re
 import asyncio
 import aiohttp
-import fcntl
+import fcntl  # Added for file locking
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
 
@@ -562,6 +562,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         col_has_source = f"{graph_name}_HAS_SOURCE"
         col_links_to = f"{graph_name}_LINKS_TO"
 
+        # FIXED AQL: Use unique variable names to avoid conflict in scope
         aql_cascade_delete = f"""
         // 1. Find all Source Chunks belonging to this file
         LET chunks_to_delete = (
@@ -598,13 +599,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         )
 
         // 5. EXECUTE DELETIONS
-        FOR edge IN source_edges_to_delete
-            REMOVE edge IN @@col_has_source
+        FOR s_edge IN source_edges_to_delete
+            REMOVE s_edge IN @@col_has_source
 
         FOR entity_id IN true_orphan_entities
-            FOR edge IN @@col_links_to
-                FILTER edge._from == entity_id OR edge._to == entity_id
-                REMOVE edge IN @@col_links_to
+            FOR l_edge IN @@col_links_to
+                FILTER l_edge._from == entity_id OR l_edge._to == entity_id
+                REMOVE l_edge IN @@col_links_to
 
         FOR entity_id IN true_orphan_entities
             REMOVE entity_id IN @@col_entity

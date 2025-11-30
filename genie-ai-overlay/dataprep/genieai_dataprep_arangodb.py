@@ -7,6 +7,7 @@ import os
 import re
 import asyncio
 import aiohttp
+import fcntl  # Added for file locking
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
 
@@ -57,6 +58,7 @@ LABELING_STRATEGY = os.getenv("LABELING_STRATEGY", "llm")
 EMBEDDING_LABEL_THRESHOLD = float(os.getenv("EMBEDDING_LABEL_THRESHOLD", "0.75"))
 BM25_LABEL_THRESHOLD = float(os.getenv("BM25_LABEL_THRESHOLD", "2.00"))
 CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea") 
+LOCK_FILE_PATH = "/tmp/genie_dataprep.lock" # Lock file location
 
 # Spec 5.3: Externalized Prompt
 LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
@@ -435,104 +437,126 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     # --- Main Ingestion Logic (Async + Batched) ---
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo):
-        await self._update_doc_status(input.file_id, "Ingesting")
-        await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
-        
+        # 0. Acquire Global Execution Lock (fcntl)
+        # Prevents parallel execution of the background task
+        lock_file = open(LOCK_FILE_PATH, 'w')
         try:
-            # 1. Fetch Taxonomy (FROM BACKEND)
-            all_labels = await self._fetch_all_labels()
-            
-            self._initialize_llm(
-                allowed_node_types=getattr(input, "allowed_node_types", []),
-                allowed_edge_types=getattr(input, "allowed_edge_types", []),
-                node_properties=getattr(input, "node_properties", ["description"]),
-                edge_properties=getattr(input, "edge_properties", ["description"]),
+            # LOCK_EX: Exclusive Lock
+            # LOCK_NB: Non-Blocking (Raise IOError immediately if busy)
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except IOError:
+            lock_file.close()
+            logger.warning("Dataprep job rejected: System is busy.")
+            raise HTTPException(
+                status_code=429, 
+                detail="System is currently processing another document. Please wait for the current ingestion task to complete."
             )
 
-            doc_path = DocPath(
-                path=input.file_path,
-                chunk_size=input.chunk_size,
-                chunk_overlap=input.chunk_overlap,
-                process_table=input.process_table,
-                table_strategy=input.table_strategy,
-            )
+        try:
+            # --- START PROTECTED EXECUTION ---
+            await self._update_doc_status(input.file_id, "Ingesting")
+            await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
             
-            chunks = await self._load_and_chunk(doc_path)
-            if not chunks:
-                raise Exception("No valid content extracted from file.")
-
-            await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
-
-            gr_result = await self._run_guardrail(chunks)
-            if not gr_result["success"]:
-                await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
-                raise Exception("Guardrail Violation")
-
-            # 5. Labeling
-            file_labels = getattr(input, "file_labels", [])
-            labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
-
-            # 6. Graph Insertion (BATCHED)
-            graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
-            
-            documents_to_process = []
-            for i, doc in enumerate(labelled_docs):
-                documents_to_process.append(Document(
-                    page_content=doc["text"],
-                    metadata={
-                        "file_id": input.file_id,
-                        "file_path": input.storage_path,
-                        "chunk_index": i,
-                        "chunk_labels": doc["labels"]
-                    }
-                ))
-
-            BATCH_SIZE = 10 
-            total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
-            
-            graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
-            
-            for i in range(0, len(documents_to_process), BATCH_SIZE):
-                batch_docs = documents_to_process[i : i + BATCH_SIZE]
-                current_batch_num = (i // BATCH_SIZE) + 1
+            try:
+                # 1. Fetch Taxonomy (FROM BACKEND)
+                all_labels = await self._fetch_all_labels()
                 
-                await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
-                
-                graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
-                
-                if graph_docs:
-                    graph.add_graph_documents(
-                        graph_documents=graph_docs,
-                        include_source=getattr(input, "include_chunks", True),
-                        graph_name=graph_name,
-                        use_one_entity_collection=True,
-                        embeddings=self.embeddings,
-                        embedding_field="embedding",
-                        embed_source=getattr(input, "embed_chunks", True),
-                        embed_nodes=getattr(input, "embed_nodes", True),
-                        embed_relationships=getattr(input, "embed_edges", True),
-                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
-                    )
+                self._initialize_llm(
+                    allowed_node_types=getattr(input, "allowed_node_types", []),
+                    allowed_edge_types=getattr(input, "allowed_edge_types", []),
+                    node_properties=getattr(input, "node_properties", ["description"]),
+                    edge_properties=getattr(input, "edge_properties", ["description"]),
+                )
 
-            await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
-            await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
+                doc_path = DocPath(
+                    path=input.file_path,
+                    chunk_size=input.chunk_size,
+                    chunk_overlap=input.chunk_overlap,
+                    process_table=input.process_table,
+                    table_strategy=input.table_strategy,
+                )
+                
+                chunks = await self._load_and_chunk(doc_path)
+                if not chunks:
+                    raise Exception("No valid content extracted from file.")
 
-            return {
-                "status": 200, 
-                "message": f"Successfully ingested {len(chunks)} chunks.",
-                "graph_name": graph_name
-            }
-            
-        except Exception as e:
-            error_msg = f"Ingestion failed: {str(e)}"
-            logger.error(error_msg)
-            await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
-            await self._update_doc_status(input.file_id, "Ingestion Error")
-            
-            await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
-            await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
-            
-            raise HTTPException(status_code=500, detail=error_msg)
+                await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
+
+                gr_result = await self._run_guardrail(chunks)
+                if not gr_result["success"]:
+                    await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
+                    raise Exception("Guardrail Violation")
+
+                # 5. Labeling
+                file_labels = getattr(input, "file_labels", [])
+                labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
+
+                # 6. Graph Insertion (BATCHED)
+                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
+                
+                documents_to_process = []
+                for i, doc in enumerate(labelled_docs):
+                    documents_to_process.append(Document(
+                        page_content=doc["text"],
+                        metadata={
+                            "file_id": input.file_id,
+                            "file_path": input.storage_path,
+                            "chunk_index": i,
+                            "chunk_labels": doc["labels"]
+                        }
+                    ))
+
+                BATCH_SIZE = 10 
+                total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
+                
+                graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
+                
+                for i in range(0, len(documents_to_process), BATCH_SIZE):
+                    batch_docs = documents_to_process[i : i + BATCH_SIZE]
+                    current_batch_num = (i // BATCH_SIZE) + 1
+                    
+                    await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
+                    
+                    graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
+                    
+                    if graph_docs:
+                        graph.add_graph_documents(
+                            graph_documents=graph_docs,
+                            include_source=getattr(input, "include_chunks", True),
+                            graph_name=graph_name,
+                            use_one_entity_collection=True,
+                            embeddings=self.embeddings,
+                            embedding_field="embedding",
+                            embed_source=getattr(input, "embed_chunks", True),
+                            embed_nodes=getattr(input, "embed_nodes", True),
+                            embed_relationships=getattr(input, "embed_edges", True),
+                            capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                        )
+
+                await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
+
+                return {
+                    "status": 200, 
+                    "message": f"Successfully ingested {len(chunks)} chunks.",
+                    "graph_name": graph_name
+                }
+                
+            except Exception as e:
+                error_msg = f"Ingestion failed: {str(e)}"
+                logger.error(error_msg)
+                await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
+                await self._update_doc_status(input.file_id, "Ingestion Error")
+                
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
+                await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
+                
+                raise HTTPException(status_code=500, detail=error_msg)
+            # --- END PROTECTED EXECUTION ---
+        finally:
+            # Release Lock
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            lock_file.close()
 
     async def retract_file(self, file_id: str, graph_name: str):
         """

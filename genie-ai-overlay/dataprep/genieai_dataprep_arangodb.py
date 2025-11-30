@@ -562,7 +562,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         col_has_source = f"{graph_name}_HAS_SOURCE"
         col_links_to = f"{graph_name}_LINKS_TO"
 
-        # FIXED AQL: Use unique variable names to avoid conflict in scope
+        # FIXED AQL: Use unique variable names AND ignoreErrors option to prevent 404s on retry
         aql_cascade_delete = f"""
         // 1. Find all Source Chunks belonging to this file
         LET chunks_to_delete = (
@@ -573,45 +573,45 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         // 2. Find HAS_SOURCE edges connecting Entities to these Chunks
         LET source_edges_to_delete = (
-            FOR edge IN @@col_has_source
-            FILTER edge._to IN chunks_to_delete
-            RETURN edge
+            FOR e_source IN @@col_has_source
+            FILTER e_source._to IN chunks_to_delete
+            RETURN e_source
         )
 
         // 3. Identify Entities referenced by these edges
         LET referenced_entities = (
-            FOR edge IN source_edges_to_delete
-            RETURN DISTINCT edge._from
+            FOR e_ref IN source_edges_to_delete
+            RETURN DISTINCT e_ref._from
         )
 
         // 4. Distinguish Orphans vs. Shared Entities
         LET true_orphan_entities = (
-            FOR entity_id IN referenced_entities
+            FOR ent_candidate IN referenced_entities
                 LET other_links = (
-                    FOR edge IN @@col_has_source
-                    FILTER edge._from == entity_id
-                    AND edge._to NOT IN chunks_to_delete
+                    FOR e_check IN @@col_has_source
+                    FILTER e_check._from == ent_candidate
+                    AND e_check._to NOT IN chunks_to_delete
                     LIMIT 1
                     RETURN 1
                 )
                 FILTER LENGTH(other_links) == 0
-                RETURN entity_id
+                RETURN ent_candidate
         )
 
-        // 5. EXECUTE DELETIONS
-        FOR s_edge IN source_edges_to_delete
-            REMOVE s_edge IN @@col_has_source
+        // 5. EXECUTE DELETIONS (Idempotent: ignoreErrors=true)
+        FOR del_s_edge IN source_edges_to_delete
+            REMOVE del_s_edge IN @@col_has_source OPTIONS {{ "ignoreErrors": true }}
 
-        FOR entity_to_unlink IN true_orphan_entities
-            FOR l_edge IN @@col_links_to
-                FILTER l_edge._from == entity_to_unlink OR l_edge._to == entity_to_unlink
-                REMOVE l_edge IN @@col_links_to
+        FOR ent_unlink IN true_orphan_entities
+            FOR del_l_edge IN @@col_links_to
+                FILTER del_l_edge._from == ent_unlink OR del_l_edge._to == ent_unlink
+                REMOVE del_l_edge IN @@col_links_to OPTIONS {{ "ignoreErrors": true }}
 
-        FOR entity_to_delete IN true_orphan_entities
-            REMOVE entity_to_delete IN @@col_entity
+        FOR ent_remove IN true_orphan_entities
+            REMOVE ent_remove IN @@col_entity OPTIONS {{ "ignoreErrors": true }}
 
-        FOR chunk_id IN chunks_to_delete
-            REMOVE chunk_id IN @@col_source
+        FOR chk_remove IN chunks_to_delete
+            REMOVE chk_remove IN @@col_source OPTIONS {{ "ignoreErrors": true }}
 
         RETURN {{
             deleted_chunks: LENGTH(chunks_to_delete),

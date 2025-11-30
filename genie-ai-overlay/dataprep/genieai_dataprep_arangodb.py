@@ -602,13 +602,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         FOR s_edge IN source_edges_to_delete
             REMOVE s_edge IN @@col_has_source
 
-        FOR entity_id IN true_orphan_entities
+        FOR entity_to_unlink IN true_orphan_entities
             FOR l_edge IN @@col_links_to
-                FILTER l_edge._from == entity_id OR l_edge._to == entity_id
+                FILTER l_edge._from == entity_to_unlink OR l_edge._to == entity_to_unlink
                 REMOVE l_edge IN @@col_links_to
 
-        FOR entity_id IN true_orphan_entities
-            REMOVE entity_id IN @@col_entity
+        FOR entity_to_delete IN true_orphan_entities
+            REMOVE entity_to_delete IN @@col_entity
 
         FOR chunk_id IN chunks_to_delete
             REMOVE chunk_id IN @@col_source

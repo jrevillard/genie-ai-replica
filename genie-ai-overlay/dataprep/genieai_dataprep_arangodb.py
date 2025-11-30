@@ -550,10 +550,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     async def retract_file(self, file_id: str, graph_name: str):
         """
         Retracts a file and performs a clean graph cascade deletion.
-        1. Identifies Source Chunks for the file.
-        2. Identifies 'Orphan' Entities (entities linked ONLY to this file).
-        3. Preserves 'Shared' Entities (entities linked to this file AND others).
-        4. Deletes Chunks, Orphans, and all associated Edges.
+        1. Identifies Source Chunks for the file (robustly).
+        2. Identifies 'Orphan' Entities (robustly).
+        3. Deletes edges, orphans, and chunks safely.
         """
         logger.info(f"Retracting file {file_id} from {graph_name} with cascading graph cleanup.")
         
@@ -562,60 +561,78 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         col_has_source = f"{graph_name}_HAS_SOURCE"
         col_links_to = f"{graph_name}_LINKS_TO"
 
-        # FIXED AQL: Use unique variable names AND ignoreErrors option to prevent 404s on retry
+        # Completely rewritten AQL to handle partial states and ensure clean deletion
         aql_cascade_delete = f"""
-        // 1. Find all Source Chunks belonging to this file
-        LET chunks_to_delete = (
+        // 1. Identify Chunks (store IDs)
+        LET chunk_ids = (
             FOR doc IN @@col_source
             FILTER doc.file_id == @file_id OR doc.metadata.file_id == @file_id
             RETURN doc._id
         )
 
-        // 2. Find HAS_SOURCE edges connecting Entities to these Chunks
-        LET source_edges_to_delete = (
-            FOR e_source IN @@col_has_source
-            FILTER e_source._to IN chunks_to_delete
-            RETURN e_source
+        // 2. Identify Edges linked to these chunks
+        LET edges_to_remove = (
+            FOR edge IN @@col_has_source
+            FILTER edge._to IN chunk_ids
+            RETURN edge
         )
 
-        // 3. Identify Entities referenced by these edges
-        LET referenced_entities = (
-            FOR e_ref IN source_edges_to_delete
-            RETURN DISTINCT e_ref._from
+        // 3. Identify potentially orphaned entities
+        LET candidate_entities = (
+            FOR edge IN edges_to_remove
+            RETURN DISTINCT edge._from
         )
 
-        // 4. Distinguish Orphans vs. Shared Entities
-        LET true_orphan_entities = (
-            FOR ent_candidate IN referenced_entities
-                LET other_links = (
-                    FOR e_check IN @@col_has_source
-                    FILTER e_check._from == ent_candidate
-                    AND e_check._to NOT IN chunks_to_delete
+        // 4. Filter for TRUE orphans (entities with no other incoming edges)
+        LET orphan_entities = (
+            FOR entity_id IN candidate_entities
+                LET incoming_count = LENGTH(
+                    FOR edge IN @@col_has_source
+                    FILTER edge._from == entity_id
+                    // Crucial: Check if this edge is NOT one of the ones we are about to delete
+                    FILTER edge._id NOT IN edges_to_remove[*]._id
                     LIMIT 1
                     RETURN 1
                 )
-                FILTER LENGTH(other_links) == 0
-                RETURN ent_candidate
+                FILTER incoming_count == 0
+                RETURN entity_id
         )
 
-        // 5. EXECUTE DELETIONS (Idempotent: ignoreErrors=true)
-        FOR del_s_edge IN source_edges_to_delete
-            REMOVE del_s_edge IN @@col_has_source OPTIONS {{ "ignoreErrors": true }}
+        // 5. DELETE OPERATIONS
+        
+        // Delete Edges
+        LET deleted_edges = (
+            FOR edge IN edges_to_remove
+            REMOVE edge IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
+            RETURN OLD._id
+        )
 
-        FOR ent_unlink IN true_orphan_entities
-            FOR del_l_edge IN @@col_links_to
-                FILTER del_l_edge._from == ent_unlink OR del_l_edge._to == ent_unlink
-                REMOVE del_l_edge IN @@col_links_to OPTIONS {{ "ignoreErrors": true }}
+        // Delete Orphan Entities & their inter-links
+        LET deleted_entities = (
+            FOR entity_id IN orphan_entities
+                // Delete links between entities
+                LET deleted_links = (
+                    FOR edge IN @@col_links_to
+                    FILTER edge._from == entity_id OR edge._to == entity_id
+                    REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
+                    RETURN 1
+                )
+                // Delete the entity itself
+                REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                RETURN OLD._id
+        )
 
-        FOR ent_remove IN true_orphan_entities
-            REMOVE ent_remove IN @@col_entity OPTIONS {{ "ignoreErrors": true }}
-
-        FOR chk_remove IN chunks_to_delete
-            REMOVE chk_remove IN @@col_source OPTIONS {{ "ignoreErrors": true }}
+        // Delete Chunks (SOURCES)
+        LET deleted_chunks = (
+            FOR chunk_id IN chunk_ids
+            REMOVE chunk_id IN @@col_source OPTIONS {{ ignoreErrors: true }}
+            RETURN OLD._id
+        )
 
         RETURN {{
-            deleted_chunks: LENGTH(chunks_to_delete),
-            deleted_entities: LENGTH(true_orphan_entities)
+            deleted_chunks: LENGTH(deleted_chunks),
+            deleted_entities: LENGTH(deleted_entities),
+            deleted_edges: LENGTH(deleted_edges)
         }}
         """
         
@@ -633,13 +650,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             
             await self._update_doc_status(file_id, "Retracted")
             
-            stats = result[0] if result else {"deleted_chunks": 0, "deleted_entities": 0}
+            stats = result[0] if result else {"deleted_chunks": 0, "deleted_entities": 0, "deleted_edges": 0}
             
-            if stats["deleted_chunks"] == 0:
-                logger.warning(f"Retraction run but no chunks found for {file_id}")
+            # Warn only if NOTHING was deleted (truly empty result)
+            if stats["deleted_chunks"] == 0 and stats["deleted_edges"] == 0:
+                logger.warning(f"Retraction run but no data found for {file_id}")
                 return {"status": 404, "message": "No chunks found."}
                 
-            msg = f"Retracted. Deleted {stats['deleted_chunks']} chunks and {stats['deleted_entities']} graph entities."
+            msg = f"Retracted. Deleted {stats['deleted_chunks']} chunks, {stats['deleted_edges']} source edges, and {stats['deleted_entities']} orphan entities."
             logger.info(msg)
             return {"status": 200, "message": msg, "details": stats}
             

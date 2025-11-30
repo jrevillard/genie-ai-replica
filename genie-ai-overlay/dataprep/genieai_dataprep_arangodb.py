@@ -7,7 +7,7 @@ import os
 import re
 import asyncio
 import aiohttp
-import fcntl  # Added for file locking
+import fcntl
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
 
@@ -58,7 +58,7 @@ LABELING_STRATEGY = os.getenv("LABELING_STRATEGY", "llm")
 EMBEDDING_LABEL_THRESHOLD = float(os.getenv("EMBEDDING_LABEL_THRESHOLD", "0.75"))
 BM25_LABEL_THRESHOLD = float(os.getenv("BM25_LABEL_THRESHOLD", "2.00"))
 CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea") 
-LOCK_FILE_PATH = "/tmp/genie_dataprep.lock" # Lock file location
+LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 
 # Spec 5.3: Externalized Prompt
 LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
@@ -436,22 +436,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     # --- Main Ingestion Logic (Async + Batched) ---
 
-    async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo):
-        # 0. Acquire Global Execution Lock (fcntl)
-        # Prevents parallel execution of the background task
-        lock_file = open(LOCK_FILE_PATH, 'w')
-        try:
-            # LOCK_EX: Exclusive Lock
-            # LOCK_NB: Non-Blocking (Raise IOError immediately if busy)
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError:
-            lock_file.close()
-            logger.warning("Dataprep job rejected: System is busy.")
-            raise HTTPException(
-                status_code=429, 
-                detail="System is currently processing another document. Please wait for the current ingestion task to complete."
-            )
-
+    async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
+        # NOTE: lock_file is passed from the microservice. It is already LOCKED.
+        # We are responsible for closing it when done.
+        
         try:
             # --- START PROTECTED EXECUTION ---
             await self._update_doc_status(input.file_id, "Ingesting")
@@ -554,9 +542,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 raise HTTPException(status_code=500, detail=error_msg)
             # --- END PROTECTED EXECUTION ---
         finally:
-            # Release Lock
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
-            lock_file.close()
+            # Release Lock passed from Microservice
+            if lock_file:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                lock_file.close()
 
     async def retract_file(self, file_id: str, graph_name: str):
         """

@@ -11,10 +11,11 @@ document repository ingestion and retraction, using ArangoDB as the backend.
 import base64
 import os
 import time
+import fcntl
 from typing import List, Optional, Union
 
 from pydantic import BaseModel
-from fastapi import Body, BackgroundTasks
+from fastapi import Body, BackgroundTasks, HTTPException
 
 # --- CRITICAL FIX: Import Custom Component FIRST to register it ---
 from integrations.genieai_dataprep_arangodb import GenieArangoDataprep
@@ -38,6 +39,7 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 logger = CustomLogger("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/" 
+LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
 
 dataprep_component_name = "GENIE_DATAPREP_ARANGODB"
 # Initialize OpeaComponentLoader
@@ -91,6 +93,20 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
     start = time.time()
     logger.info(f"[ ingest ] Request received for file_id: {payload.fileId}")
 
+    # --- SYNCHRONOUS LOCK CHECK ---
+    # We acquire the lock HERE to ensure we can return 429 immediately if busy.
+    lock_file = open(LOCK_FILE_PATH, 'w')
+    try:
+        # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        lock_file.close()
+        logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
+        raise HTTPException(
+            status_code=429, 
+            detail="System is currently processing another document. Please wait for the current ingestion task to complete."
+        )
+
     # --- Environment-specific Arango config (set via env vars or defaults) ---
     ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST")
     ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
@@ -134,14 +150,12 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
         )
 
         # --- Trigger Background Task (Spec 5.1) ---
-        # This makes the process asynchronous. We return immediately.
-        # The loader.ingest_file_with_guardrail logic handles the heavy lifting,
-        # logging, status updates, and cleanup.
-        background_tasks.add_task(loader.ingest_file_with_guardrail, input_req)
+        # PASS THE LOCKED FILE OBJECT to the background task.
+        # The background task is responsible for releasing the lock (closing the file).
+        background_tasks.add_task(loader.ingest_file_with_guardrail, input_req, lock_file=lock_file)
 
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
-        # FIX: Added "success": True to satisfy Node.js controller validation
         return {
             "success": True, 
             "status": 200, 
@@ -150,7 +164,11 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
 
     except Exception as e:
         logger.error(f"Error initiating dataprep ingest: {e}")
-        # Cleanup if we fail before even starting the background task
+        # Cleanup lock if we fail before assigning to background task
+        fcntl.flock(lock_file, fcntl.LOCK_UN)
+        lock_file.close()
+        
+        # Cleanup file
         if os.path.exists(save_path):
             os.remove(save_path)
         raise

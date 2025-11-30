@@ -24,6 +24,7 @@ from langchain_arangodb import ArangoGraph
 # Import exceptions for robust error handling
 from arango.exceptions import AQLQueryExecuteError
 from fastapi import HTTPException
+from pydantic import ValidationError # Import Pydantic validation error
 
 # Import OPEA Core
 from comps import CustomLogger, DocPath, OpeaComponent, OpeaComponentRegistry
@@ -505,21 +506,47 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     
                     await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
                     
-                    graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
+                    try:
+                        # SAFE EXECUTION: Wrap the graph transformation in try/except
+                        graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
                     
-                    if graph_docs:
-                        graph.add_graph_documents(
-                            graph_documents=graph_docs,
-                            include_source=getattr(input, "include_chunks", True),
-                            graph_name=graph_name,
-                            use_one_entity_collection=True,
-                            embeddings=self.embeddings,
-                            embedding_field="embedding",
-                            embed_source=getattr(input, "embed_chunks", True),
-                            embed_nodes=getattr(input, "embed_nodes", True),
-                            embed_relationships=getattr(input, "embed_edges", True),
-                            capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
-                        )
+                        if graph_docs:
+                            graph.add_graph_documents(
+                                graph_documents=graph_docs,
+                                include_source=getattr(input, "include_chunks", True),
+                                graph_name=graph_name,
+                                use_one_entity_collection=True,
+                                embeddings=self.embeddings,
+                                embedding_field="embedding",
+                                embed_source=getattr(input, "embed_chunks", True),
+                                embed_nodes=getattr(input, "embed_nodes", True),
+                                embed_relationships=getattr(input, "embed_edges", True),
+                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                            )
+                    except (ValidationError, Exception) as ve:
+                        # LOG AND CONTINUE: Do not crash the entire job for one bad batch/chunk
+                        logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
+                        await self._write_ingestion_log(input.file_id, "WARN", "Graph", f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}")
+                        
+                        # Retry Logic: Try processing documents one by one to salvage valid chunks
+                        for retry_doc in batch_docs:
+                            try:
+                                retry_graph_docs = self.llm_transformer.convert_to_graph_documents([retry_doc])
+                                if retry_graph_docs:
+                                    graph.add_graph_documents(
+                                        graph_documents=retry_graph_docs,
+                                        include_source=getattr(input, "include_chunks", True),
+                                        graph_name=graph_name,
+                                        use_one_entity_collection=True,
+                                        embeddings=self.embeddings,
+                                        embedding_field="embedding",
+                                        embed_source=getattr(input, "embed_chunks", True),
+                                        embed_nodes=getattr(input, "embed_nodes", True),
+                                        embed_relationships=getattr(input, "embed_edges", True),
+                                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                                    )
+                            except Exception as inner_e:
+                                logger.error(f"Skipping individual bad document: {inner_e}")
 
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
@@ -588,10 +615,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             aql_delete_edges = f"""
                 FOR edge IN @@col_has_source
                 FILTER edge._to IN @chunk_ids
-                REMOVE edge IN @@col_has_source 
+                REMOVE edge IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
                 RETURN OLD._from
             """
-            # REMOVED: OPTIONS {{ ignoreErrors: true }} to catch if deletion fails
+            # FIXED: Restored {{ ignoreErrors: true }} to ensure idempotency
             
             # This query deletes edges AND returns the entities that were connected (candidates for orphans)
             cursor_edges = self.db.aql.execute(aql_delete_edges, bind_vars={"@col_has_source": col_has_source, "chunk_ids": chunk_ids})
@@ -636,14 +663,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             LET deleted_links = (
                                 FOR edge IN @@col_links_to
                                 FILTER edge._from == entity_id OR edge._to == entity_id
-                                REMOVE edge IN @@col_links_to
+                                REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
                                 RETURN 1
                             )
                             // Then remove the entity
-                            REMOVE entity_id IN @@col_entity
+                            REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
                             RETURN OLD._id
                     """
-                    # REMOVED: OPTIONS {{ ignoreErrors: true }} to catch if deletion fails
+                    # FIXED: Restored {{ ignoreErrors: true }} to ensure idempotency
                     
                     cursor_del_ent = self.db.aql.execute(aql_delete_entities, bind_vars={
                         "@col_links_to": col_links_to, 
@@ -661,10 +688,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # ----------------------------------------------------------
             aql_delete_chunks = f"""
                 FOR chunk_id IN @chunk_ids
-                REMOVE chunk_id IN @@col_source
+                REMOVE chunk_id IN @@col_source OPTIONS {{ ignoreErrors: true }}
                 RETURN OLD._id
             """
-            # REMOVED: OPTIONS {{ ignoreErrors: true }} to catch if deletion fails
+            # FIXED: Restored {{ ignoreErrors: true }} to ensure idempotency
             
             cursor_del_chunks = self.db.aql.execute(aql_delete_chunks, bind_vars={"@col_source": col_source, "chunk_ids": chunk_ids})
             deleted_chunks_list = [doc for doc in cursor_del_chunks]

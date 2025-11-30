@@ -986,6 +986,16 @@ class FileController {
       }
     } catch (error) {
       logger.error('Ingest file error:', error);
+      
+      // --- FIXED: Check for 429 Busy status from Dataprep ---
+      if (error.response && error.response.status === 429) {
+        return res.status(429).json({
+          success: false,
+          error: 'Too Many Requests',
+          message: "Only a single dataprep job can be run at any given time. Wait until the current job finishes before submitting new jobs"
+        });
+      }
+      
       res.status(500).json({ success: false, error: error.message });
     }
   }

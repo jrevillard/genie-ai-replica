@@ -685,12 +685,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
 
                     # Delete links and entities
-                    # Since orphans have no incoming HAS_SOURCE, we just need to clean LINKS_TO and the entity itself.
-                    # We assume Entity IDs are keys or valid IDs. If IDs, we need to extract keys or use REMOVE with ID behavior? 
-                    # ArangoDB REMOVE with string usually treats it as KEY. If orphan_ids are "Collection/Key", we must be careful.
-                    # However, orphan_ids come from `edge._from` which is an ID "Coll/Key". 
-                    # To be safe, we query the docs to get their _key or use specific AQL logic.
-                    
+                    # FIXED: Use PARSE_IDENTIFIER(entity_id).key to delete by KEY, not ID string
                     aql_delete_orphans = f"""
                         FOR entity_id IN @orphan_ids
                             // Delete LINKS_TO edges where this entity is source or target
@@ -700,14 +695,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                 REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
                                 RETURN 1
                             )
-                            // Delete the entity document itself
-                            // Note: entity_id is a full ID string "Coll/Key". 
-                            // We use parse_identifier to be safe or just pass it if using dynamic collection access?
-                            // Standard `REMOVE "Coll/Key" IN Coll` might fail if interpreted as key.
-                            // We will use AQL's DOCUMENT function or just rely on standard ID behavior 
-                            // BUT simplest is to iterate and remove by `_id`.
                             
-                            REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                            // Delete the entity document using its KEY extracted from the ID
+                            REMOVE PARSE_IDENTIFIER(entity_id).key IN @@col_entity OPTIONS {{ ignoreErrors: true }}
                             RETURN OLD._id
                     """
                     cursor_del_orphans = self.db.aql.execute(aql_delete_orphans, bind_vars={

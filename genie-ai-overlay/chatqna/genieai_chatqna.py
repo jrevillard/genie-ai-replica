@@ -421,7 +421,8 @@ class ChatQnAService:
         auth_token = await self.get_auth_token()
         if not auth_token:
             logger.error("Failed to get admin auth token.")
-            return ""
+            return None
+            # return ""
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
         headers = {"Authorization": f"Bearer {auth_token}"}
@@ -442,8 +443,8 @@ class ChatQnAService:
         except Exception as e:
             logger.error(f"An error occurred while fetching metadata for file ID {file_id}: {e}")
 
-        return []
-
+        return None
+        #return []
 
     def add_remote_service(self):
 
@@ -874,15 +875,24 @@ class ChatQnAService:
                         file_name = ''
                         if file_id:
                             file_metadata = await self.fetch_file_metadata(file_id)
-                            labels = file_metadata['labels']
-                            file_name = file_metadata['file_name'] if 'file_name' in file_metadata else ''
-                            logger.info(f"Labels for file ID {file_id}: {labels}")
-                            logger.info(f"File name for file ID {file_id}: {file_name}")
-                            author = file_metadata['author'] if 'author' in file_metadata else ''
-                            if author == 'crawler' and file_name.endswith('.html'):
-                                # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
-                                file_read_url = file_metadata['source_url'] if 'source_url' in file_metadata else file_read_url
-                                logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
+                            if file_metadata and isinstance(file_metadata, dict):
+                                labels = file_metadata['labels']
+                                file_name = file_metadata['file_name'] if 'file_name' in file_metadata else ''
+                                logger.info(f"Labels for file ID {file_id}: {labels}")
+                                logger.info(f"File name for file ID {file_id}: {file_name}")
+                                author = file_metadata['author'] if 'author' in file_metadata else ''
+                                if author == 'crawler' and file_name.endswith('.html'):
+                                    # If the author is 'crawler' and the file is an HTML, we can assume it's a web page
+                                    file_read_url = file_metadata['source_url'] if 'source_url' in file_metadata else file_read_url
+                                    logger.info(f"Updated file read URL for crawled HTML: {file_read_url}")
+                            else:
+                                logger.warning(f"Skipping metadata for file ID {file_id} due to fetch failure.")
+                                # Assigning error values to avoid service crashing [to be optimised]
+                                labels = "error" 
+                                file_id = "error"
+                                file_name = "error"
+                                file_read_url = "error"
+                                score = 0
 
                         source_documents_formatted.append({
                             "document_id": file_id,
@@ -947,9 +957,3 @@ if __name__ == "__main__":
         chatqna.add_remote_service()
 
     chatqna.start()
-
-
-
-
-
-

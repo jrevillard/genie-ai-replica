@@ -248,6 +248,37 @@ export default {
       return isHttp && !isPlaceholder;
     },
 
+    // Added missing method to fix runtime error
+    documentIconClass(doc) {
+      if (!doc) return "fas fa-file";
+
+      // Check for external web links using the existing helper
+      if (this.isExternalUrl(doc.url)) {
+        return "fas fa-globe";
+      }
+
+      // Check file extensions if fileName exists
+      if (doc.fileName) {
+        const lowerName = doc.fileName.toLowerCase();
+        if (lowerName.endsWith(".pdf")) return "fas fa-file-pdf";
+        if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx"))
+          return "fas fa-file-word";
+        if (lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx"))
+          return "fas fa-file-excel";
+        if (lowerName.endsWith(".ppt") || lowerName.endsWith(".pptx"))
+          return "fas fa-file-powerpoint";
+        if (
+          lowerName.endsWith(".jpg") ||
+          lowerName.endsWith(".png") ||
+          lowerName.endsWith(".jpeg")
+        )
+          return "fas fa-file-image";
+      }
+
+      // Default icon
+      return "fas fa-file-alt";
+    },
+
     async openDocument(doc) {
       if (this.isExternalUrl(doc.url)) {
         console.log(`Opening external URL: ${doc.url}`);

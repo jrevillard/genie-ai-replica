@@ -685,7 +685,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
 
                     # Delete links and entities
-                    # FIXED: Use remove with _id selector to safely delete by ID string
+                    # FIXED: Use PARSE_IDENTIFIER(entity_id).key to delete by KEY, not ID string
                     aql_delete_orphans = f"""
                         FOR entity_id IN @orphan_ids
                             // Delete LINKS_TO edges where this entity is source or target
@@ -696,9 +696,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                 RETURN 1
                             )
                             
-                            // Delete the entity using its full ID
-                            REMOVE {{ _id: entity_id }} IN @@col_entity OPTIONS {{ ignoreErrors: true }}
-                            RETURN 1
+                            // Delete the entity document using its KEY extracted from the ID
+                            REMOVE PARSE_IDENTIFIER(entity_id).key IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                            RETURN OLD._id
                     """
                     cursor_del_orphans = self.db.aql.execute(aql_delete_orphans, bind_vars={
                         "@col_links_to": col_links_to, 

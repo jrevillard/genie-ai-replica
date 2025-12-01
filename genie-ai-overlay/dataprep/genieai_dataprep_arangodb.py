@@ -591,6 +591,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # ----------------------------------------------------------
             # STEP 1: Identify CHUNKS (Sources)
             # ----------------------------------------------------------
+            # Fix: Broaden the search to catch documents that LangChain might have stored
+            # either with root-level file_id OR nested metadata.file_id
             aql_find_chunks = f"""
                 FOR doc IN @@col_source
                 FILTER doc.file_id == @file_id OR doc.metadata.file_id == @file_id
@@ -599,7 +601,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             cursor_chunks = self.db.aql.execute(aql_find_chunks, bind_vars={"@col_source": col_source, "file_id": file_id})
             chunk_ids = [doc for doc in cursor_chunks]
             
-            log_msg = f"Analysis: Found {len(chunk_ids)} chunks (SOURCE) for deletion."
+            log_msg = f"Analysis: Searched {col_source} for file_id {file_id}. Found {len(chunk_ids)} chunks."
             logger.info(log_msg)
             await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
 
@@ -618,7 +620,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 REMOVE edge IN @@col_has_source OPTIONS {{ ignoreErrors: true }}
                 RETURN OLD._from
             """
-            # FIXED: Restored {{ ignoreErrors: true }} to ensure idempotency
             
             # This query deletes edges AND returns the entities that were connected (candidates for orphans)
             cursor_edges = self.db.aql.execute(aql_delete_edges, bind_vars={"@col_has_source": col_has_source, "chunk_ids": chunk_ids})
@@ -670,7 +671,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             REMOVE entity_id IN @@col_entity OPTIONS {{ ignoreErrors: true }}
                             RETURN OLD._id
                     """
-                    # FIXED: Restored {{ ignoreErrors: true }} to ensure idempotency
                     
                     cursor_del_ent = self.db.aql.execute(aql_delete_entities, bind_vars={
                         "@col_links_to": col_links_to, 
@@ -691,7 +691,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 REMOVE chunk_id IN @@col_source OPTIONS {{ ignoreErrors: true }}
                 RETURN OLD._id
             """
-            # FIXED: Restored {{ ignoreErrors: true }} to ensure idempotency
             
             cursor_del_chunks = self.db.aql.execute(aql_delete_chunks, bind_vars={"@col_source": col_source, "chunk_ids": chunk_ids})
             deleted_chunks_list = [doc for doc in cursor_del_chunks]

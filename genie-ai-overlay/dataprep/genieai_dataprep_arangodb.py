@@ -60,6 +60,8 @@ EMBEDDING_LABEL_THRESHOLD = float(os.getenv("EMBEDDING_LABEL_THRESHOLD", "0.75")
 BM25_LABEL_THRESHOLD = float(os.getenv("BM25_LABEL_THRESHOLD", "2.00"))
 CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea") 
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# New: Concurrency Control for Batches
+MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "5"))
 
 # Spec 5.3: Externalized Prompt
 LABEL_SELECTOR_SYSTEM_PROMPT = os.getenv("LABEL_SELECTOR_SYSTEM_PROMPT", """
@@ -112,6 +114,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
         print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
         print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
+        print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
         print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
@@ -436,6 +439,56 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---
+    
+    async def _process_batch(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore):
+        """Helper to process a single batch with concurrency control."""
+        async with semaphore:
+            try:
+                await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
+                
+                # We need to wrap the synchronous graph transformer calls in asyncio.to_thread
+                # to avoid blocking the event loop if they are heavy CPU tasks.
+                graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
+                
+                if graph_docs:
+                    # Run graph insertion in a thread as well if it's blocking
+                    await asyncio.to_thread(
+                        self.graph.add_graph_documents,
+                        graph_documents=graph_docs,
+                        include_source=getattr(input, "include_chunks", True),
+                        graph_name=graph_name,
+                        use_one_entity_collection=True,
+                        embeddings=self.embeddings,
+                        embedding_field="embedding",
+                        embed_source=getattr(input, "embed_chunks", True),
+                        embed_nodes=getattr(input, "embed_nodes", True),
+                        embed_relationships=getattr(input, "embed_edges", True),
+                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                    )
+            except (ValidationError, Exception) as ve:
+                logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
+                await self._write_ingestion_log(input.file_id, "WARN", "Graph", f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}")
+                
+                # Retry logic for individual docs in case of failure
+                for retry_doc in batch_docs:
+                    try:
+                        retry_graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, [retry_doc])
+                        if retry_graph_docs:
+                            await asyncio.to_thread(
+                                self.graph.add_graph_documents,
+                                graph_documents=retry_graph_docs,
+                                include_source=getattr(input, "include_chunks", True),
+                                graph_name=graph_name,
+                                use_one_entity_collection=True,
+                                embeddings=self.embeddings,
+                                embedding_field="embedding",
+                                embed_source=getattr(input, "embed_chunks", True),
+                                embed_nodes=getattr(input, "embed_nodes", True),
+                                embed_relationships=getattr(input, "embed_edges", True),
+                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
+                            )
+                    except Exception as inner_e:
+                        logger.error(f"Skipping individual bad document: {inner_e}")
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
         # NOTE: lock_file is passed from the microservice. It is already LOCKED.
@@ -480,7 +533,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 file_labels = getattr(input, "file_labels", [])
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
-                # 6. Graph Insertion (BATCHED)
+                # 6. Graph Insertion (BATCHED & CONCURRENT)
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
                 
                 documents_to_process = []
@@ -498,55 +551,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 BATCH_SIZE = 10 
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
                 
-                graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
+                # Initialize graph object on self to reuse in helper
+                self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
                 
+                # Create a semaphore to limit concurrency
+                semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+                tasks = []
+
                 for i in range(0, len(documents_to_process), BATCH_SIZE):
                     batch_docs = documents_to_process[i : i + BATCH_SIZE]
                     current_batch_num = (i // BATCH_SIZE) + 1
                     
-                    await self._write_ingestion_log(input.file_id, "INFO", "Graph", f"Processing Batch {current_batch_num}/{total_batches}...")
-                    
-                    try:
-                        # SAFE EXECUTION: Wrap the graph transformation in try/except
-                        graph_docs = self.llm_transformer.convert_to_graph_documents(batch_docs)
-                    
-                        if graph_docs:
-                            graph.add_graph_documents(
-                                graph_documents=graph_docs,
-                                include_source=getattr(input, "include_chunks", True),
-                                graph_name=graph_name,
-                                use_one_entity_collection=True,
-                                embeddings=self.embeddings,
-                                embedding_field="embedding",
-                                embed_source=getattr(input, "embed_chunks", True),
-                                embed_nodes=getattr(input, "embed_nodes", True),
-                                embed_relationships=getattr(input, "embed_edges", True),
-                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
-                            )
-                    except (ValidationError, Exception) as ve:
-                        # LOG AND CONTINUE: Do not crash the entire job for one bad batch/chunk
-                        logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
-                        await self._write_ingestion_log(input.file_id, "WARN", "Graph", f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}")
-                        
-                        # Retry Logic: Try processing documents one by one to salvage valid chunks
-                        for retry_doc in batch_docs:
-                            try:
-                                retry_graph_docs = self.llm_transformer.convert_to_graph_documents([retry_doc])
-                                if retry_graph_docs:
-                                    graph.add_graph_documents(
-                                        graph_documents=retry_graph_docs,
-                                        include_source=getattr(input, "include_chunks", True),
-                                        graph_name=graph_name,
-                                        use_one_entity_collection=True,
-                                        embeddings=self.embeddings,
-                                        embedding_field="embedding",
-                                        embed_source=getattr(input, "embed_chunks", True),
-                                        embed_nodes=getattr(input, "embed_nodes", True),
-                                        embed_relationships=getattr(input, "embed_edges", True),
-                                        capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper")
-                                    )
-                            except Exception as inner_e:
-                                logger.error(f"Skipping individual bad document: {inner_e}")
+                    # Schedule batch processing
+                    task = asyncio.create_task(
+                        self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
+                    )
+                    tasks.append(task)
+                
+                # Wait for all batches to complete
+                if tasks:
+                    await asyncio.gather(*tasks)
 
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
@@ -677,35 +701,38 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         RETURN entity_id
                 """
                 cursor_orphans = self.db.aql.execute(aql_find_orphans, bind_vars={"@col_has_source": col_has_source, "candidate_ids": candidate_entity_ids})
-                orphan_ids = [doc for doc in cursor_orphans]
+                orphan_ids = [doc for doc in cursor_orphans] # Full IDs (Collection/Key)
 
                 if orphan_ids:
-                    log_msg = f"Analysis: Identified {len(orphan_ids)} orphans. Deleting..."
-                    logger.info(log_msg)
-                    await self._write_ingestion_log(file_id, "INFO", "Retract", log_msg)
-
-                    # Delete links and entities
-                    # FIXED: Use PARSE_IDENTIFIER(entity_id).key to delete by KEY, not ID string
-                    aql_delete_orphans = f"""
-                        FOR entity_id IN @orphan_ids
-                            // Delete LINKS_TO edges where this entity is source or target
-                            LET deleted_links = (
-                                FOR edge IN @@col_links_to
-                                FILTER edge._from == entity_id OR edge._to == entity_id
+                    await self._write_ingestion_log(file_id, "INFO", "Retract", f"Identified {len(orphan_ids)} orphans. Deleting...")
+                    
+                    # 5a. Delete LINKS_TO edges connected to orphans (Source OR Target)
+                    # Optimization: Batch delete edges connected to these orphans
+                    try:
+                        aql_del_links = f"""
+                            FOR edge IN @@col_links_to
+                                FILTER edge._from IN @orphan_ids OR edge._to IN @orphan_ids
                                 REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
-                                RETURN 1
-                            )
-                            
-                            // Delete the entity document using its KEY extracted from the ID
-                            REMOVE PARSE_IDENTIFIER(entity_id).key IN @@col_entity OPTIONS {{ ignoreErrors: true }}
-                            RETURN OLD._id
-                    """
-                    cursor_del_orphans = self.db.aql.execute(aql_delete_orphans, bind_vars={
-                        "@col_links_to": col_links_to, 
-                        "@col_entity": col_entity, 
-                        "orphan_ids": orphan_ids
-                    })
-                    deleted_entities_count = len([doc for doc in cursor_del_orphans])
+                        """
+                        self.db.aql.execute(aql_del_links, bind_vars={"@col_links_to": col_links_to, "orphan_ids": orphan_ids})
+                    except Exception as e:
+                        logger.warning(f"Error deleting links: {e}")
+
+                    # 5b. Delete Entities
+                    # Extract keys in Python to avoid AQL parsing issues inside REMOVE loop
+                    orphan_keys = [oid.split('/')[-1] for oid in orphan_ids]
+                    
+                    try:
+                        aql_del_entities = f"""
+                            FOR key IN @keys
+                                REMOVE key IN @@col_entity OPTIONS {{ ignoreErrors: true }}
+                        """
+                        self.db.aql.execute(aql_del_entities, bind_vars={"@col_entity": col_entity, "keys": orphan_keys})
+                        deleted_entities_count = len(orphan_keys)
+                    except Exception as e:
+                        logger.warning(f"Error deleting entities: {e}")
+                        deleted_entities_count = 0
+                    
                     await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {deleted_entities_count} orphan entities.")
 
             # ----------------------------------------------------------

@@ -61,8 +61,8 @@ ARANGO_EMBEDDING_FIELD = "embedding"
 ARANGO_FILE_ID_FIELD = "file_id"
 
 
-@OpeaComponentRegistry.register("OPEA_RETRIEVER_ARANGODB")
-class OpeaArangoRetriever(OpeaComponent):
+@OpeaComponentRegistry.register("GENIE_RETRIEVER_ARANGODB")
+class GenieaiArangoRetriever(OpeaComponent):
     """A specialized retriever component derived from OpeaComponent for ArangoDB retriever services.
 
     Attributes:

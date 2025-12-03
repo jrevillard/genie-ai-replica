@@ -6,8 +6,7 @@ import os
 import time
 from typing import Union
 
-# from integrations.arangodb import OpeaArangoRetriever
-from integrations.genieai_retriever_arangodb import OpeaArangoRetriever
+from integrations.genieai_retriever_arangodb import GenieaiArangoRetriever
 
 # import for retrievers component registration
 # from integrations.elasticsearch import OpeaElasticsearchRetriever
@@ -50,7 +49,7 @@ from comps.cores.proto.genieai_api_protocol import (
 logger = CustomLogger("genieai_retriever_microservice")
 logflag = os.getenv("LOGFLAG", False)
 
-retriever_component_name = os.getenv("RETRIEVER_COMPONENT_NAME", "OPEA_RETRIEVER_REDIS")
+retriever_component_name = os.getenv("RETRIEVER_COMPONENT_NAME", "GENIE_RETRIEVER_ARANGODB")
 
 # Initialize OpeaComponentLoader
 loader = OpeaComponentLoader(
@@ -123,5 +122,5 @@ async def retrieve_docs(
 
 
 if __name__ == "__main__":
-    logger.info("OPEA Retriever Microservice is starting...")
+    logger.info("Retriever Microservice is starting...")
     opea_microservices["opea_service@retrievers"].start()

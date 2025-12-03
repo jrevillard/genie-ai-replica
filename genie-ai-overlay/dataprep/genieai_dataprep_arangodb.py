@@ -305,96 +305,94 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" File Metadata Labels: {file_labels}")
         print(f" System Prompt: {LABEL_SELECTOR_SYSTEM_PROMPT}")
         print("-"*60 + "\n")
-    
-        results = []
-        for i, text in enumerate(chunks):
-            retries = 0
-            suggested_labels = []
         
-            while retries < 3:
-                try:
-                    response = await client.chat.completions.create(
-                        model=model,
-                        messages=[
-                            {"role": "system", "content": LABEL_SELECTOR_SYSTEM_PROMPT},
-                            {"role": "user", "content": f"Input: {text}\nLabels: {all_labels}"}
-                        ]
-                    )
-                    parsed = json.loads(response.choices[0].message.content)
-                    suggested_labels = parsed.get("labels", [])
-                    break 
-                except Exception as e:
-                    retries += 1
+        # Parallel Processing with Semaphore
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES) # Reuse same concurrency limit or define a new one
         
-            if retries == 3:
-                await self._write_ingestion_log(file_id, "WARN", "Labeling", f"Chunk {i}: LLM failed to provide valid labels after 3 attempts.")
+        async def _label_single_chunk(i, text):
+            async with semaphore:
+                retries = 0
                 suggested_labels = []
-
-            # --------------------------------------------------------------------
-            # FIX: DO NOT automatically merge file_labels into chunk-level labels.
-            # BEFORE: final_labels = set(file_labels)
-            # NOW:   final_labels = empty set (LLM determines chunk labels)
-            # --------------------------------------------------------------------
-            final_labels = set()
-
-            # --- Analyze Suggestions with Synonym Matching (unchanged logic) ---
-            for label in suggested_labels:
-                # Skip duplicates
-                if label in final_labels:
-                    continue 
+                
+                while retries < 3:
+                    try:
+                        response = await client.chat.completions.create(
+                            model=model,
+                            messages=[
+                                {"role": "system", "content": LABEL_SELECTOR_SYSTEM_PROMPT},
+                                {"role": "user", "content": f"Input: {text}\nLabels: {all_labels}"}
+                            ]
+                        )
+                        parsed = json.loads(response.choices[0].message.content)
+                        suggested_labels = parsed.get("labels", [])
+                        break 
+                    except Exception as e:
+                        retries += 1
             
-                # Exact Match
-                if label in all_labels:
-                    final_labels.add(label)
+                if retries == 3:
+                    await self._write_ingestion_log(file_id, "WARN", "Labeling", f"Chunk {i}: LLM failed to provide valid labels after 3 attempts.")
+                    suggested_labels = []
+
+                final_labels = set()
+
+                # --- Analyze Suggestions with Synonym Matching (unchanged logic) ---
+                for label in suggested_labels:
+                    # Skip duplicates
+                    if label in final_labels:
+                        continue 
+                
+                    # Exact Match
+                    if label in all_labels:
+                        final_labels.add(label)
+                        await self._write_ingestion_log(
+                            file_id, "INFO", "Labeling", 
+                            f"Chunk {i}: LLM selected label '{label}'."
+                        )
+                        continue
+                
+                    # Fuzzy/Synonym Match Check (plural, case-insensitive)
+                    match = next((x for x in all_labels if x.lower() == label.lower()), None)
+                    if not match and label.endswith('s'):
+                        match = next((x for x in all_labels if x.lower() == label[:-1].lower()), None)
+                    if not match:
+                        match = next((x for x in all_labels if x.lower() == label.lower() + 's'), None)
+
+                    if match:
+                        final_labels.add(match)
+                        await self._write_ingestion_log(
+                            file_id, "INFO", "Labeling", 
+                            f"Chunk {i}: LLM suggested '{label}' → Mapped to existing '{match}'."
+                        )
+                    else:
+                        # LLM suggested a label that does NOT exist in taxonomy
+                        await self._write_ingestion_log(
+                            file_id, "WARN", "Labeling", 
+                            f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy."
+                        )
+
+                labels_list = list(final_labels)
+                if labels_list:
                     await self._write_ingestion_log(
-                        file_id, "INFO", "Labeling", 
-                        f"Chunk {i}: LLM selected label '{label}'."
-                    )
-                    continue
-            
-                # Fuzzy/Synonym Match Check (plural, case-insensitive)
-                match = next((x for x in all_labels if x.lower() == label.lower()), None)
-                if not match and label.endswith('s'):
-                    match = next((x for x in all_labels if x.lower() == label[:-1].lower()), None)
-                if not match:
-                    match = next((x for x in all_labels if x.lower() == label.lower() + 's'), None)
-
-                if match:
-                    final_labels.add(match)
-                    await self._write_ingestion_log(
-                        file_id, "INFO", "Labeling", 
-                        f"Chunk {i}: LLM suggested '{label}' → Mapped to existing '{match}'."
-                    )
-                else:
-                    # LLM suggested a label that does NOT exist in taxonomy
-                    await self._write_ingestion_log(
-                        file_id, "WARN", "Labeling", 
-                        f"Chunk {i}: LLM suggested NEW label '{label}'. Consider adding it to the Knowledge Hierarchy."
+                        file_id, "INFO", "Labeling",
+                        f"Chunk {i}: Final Labels: {labels_list}"
                     )
 
-            # --------------------------------------------------------------------
-            # OPTIONAL (recommended): If file-level labels MUST be included,
-            # merge only SMALL metadata label sets to prevent taxonomy pollution.
-            #
-            # if file_labels and len(file_labels) <= 3:
-            #     final_labels.update(file_labels)
-            #
-            # Currently DISABLED to ensure accurate chunk-only labeling.
-            # --------------------------------------------------------------------
+                return {"text": text, "labels": labels_list}
 
-            # Requirement 4: Human-readable per-chunk log
-            labels_list = list(final_labels)
-            if labels_list:
-                await self._write_ingestion_log(
-                    file_id, "INFO", "Labeling",
-                    f"Chunk {i}: Final Labels: {labels_list}"
-                )
-
-            results.append({"text": text, "labels": labels_list})
+        # Create tasks for all chunks
+        tasks = [
+            _label_single_chunk(i, text) 
+            for i, text in enumerate(chunks)
+        ]
+        
+        # Run all tasks concurrently (limited by semaphore)
+        results = await asyncio.gather(*tasks)
+        
+        # Ensure results are sorted by chunk index if order matters (gather preserves order)
         return results
 
 
-    async def _label_with_embedding(self, chunks: List[str], all_labels: List[str]):
+    def _label_with_embedding(self, chunks: List[str], all_labels: List[str]):
         """Spec 5.4: Cosine Similarity Labeling."""
         if not self.embeddings: 
             self._initialize_embeddings()
@@ -411,7 +409,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             results.append({"text": text, "labels": selected})
         return results
 
-    async def _label_with_bm25(self, chunks: List[str], all_labels: List[str]):
+    def _label_with_bm25(self, chunks: List[str], all_labels: List[str]):
         """Spec 5.4: BM25 Labeling."""
         tokenized_labels = [re.findall(r"\b\w+\b", l.lower()) for l in all_labels]
         bm25 = BM25Okapi(tokenized_labels)
@@ -431,9 +429,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
         
         if LABELING_STRATEGY == "embedding":
-            return await self._label_with_embedding(plain_chunks, all_labels)
+            # Offload CPU-bound embedding calculations to a thread
+            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
         elif LABELING_STRATEGY == "bm25":
-            return await self._label_with_bm25(plain_chunks, all_labels)
+            # Offload CPU-bound BM25 calculations to a thread
+            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
         else:
             # Default to LLM (with retry fix and advisory logic)
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)

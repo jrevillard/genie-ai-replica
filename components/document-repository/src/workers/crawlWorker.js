@@ -1,17 +1,15 @@
 /**
  * workers/crawlWorker.js
  * Background worker that processes asynchronous site crawl jobs.
- * It polls the 'crawl_job' collection, executes full-site crawls,
- * converts content to Markdown, and manages job state.
+ * Optimized with Worker Threads for CPU-bound tasks (HTML parsing & Markdown conversion).
  */
 
 const fs = require('fs').promises;
-const fsStandard = require('fs'); // [MODIFIED] Added for streaming support
+const fsStandard = require('fs'); // For streaming support
 const path = require('path');
-const TurndownService = require('turndown');
-const langdetect = require('langdetect');
-const cheerio = require('cheerio');
-const { URL } = require('url'); // Explicitly import URL
+const { Worker } = require('worker_threads');
+const os = require('os');
+const { URL } = require('url');
 
 // Shared libraries
 const { logger, dbService } = require('../../shared-lib');
@@ -26,23 +24,79 @@ const fileUtils = require('../utils/fileUtils');
 const POLL_INTERVAL_MS = appConfig.crawler?.pollIntervalMs || 5000;
 const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 10000;
 const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
-const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 10;
-// [CRITICAL] This is the language filter target (e.g., 'en')
+// We can now increase concurrency because CPU work is offloaded
+const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 20; 
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
 const UPLOAD_DIR = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
 
+// --- THREAD POOL SETUP ---
+const NUM_CPUS = os.cpus().length;
+// Reserve 1 core for the main thread/event loop, use the rest for processing
+const NUM_THREADS = Math.max(1, NUM_CPUS - 1);
+const workers = [];
+let workerRR = 0; // Round-robin index
+
+/**
+ * Initialize the worker thread pool.
+ */
+const initWorkers = () => {
+    logger.info(`[CRAWL-WORKER] Initializing ${NUM_THREADS} CPU worker threads (PageProcessors)...`);
+    for (let i = 0; i < NUM_THREADS; i++) {
+        workers.push(new Worker(path.join(__dirname, 'pageProcessor.js')));
+    }
+};
+
+/**
+ * Helper: Offload page processing to a worker thread.
+ * Returns a Promise that resolves when the worker replies.
+ */
+const processPageOnThread = (html, url, config) => {
+    return new Promise((resolve, reject) => {
+        // Simple Round-Robin Scheduling
+        const worker = workers[workerRR];
+        workerRR = (workerRR + 1) % NUM_THREADS;
+
+        // Create a one-time listener for the result
+        const handler = (msg) => {
+            cleanup();
+            if (msg.result === 'error') reject(new Error(msg.message));
+            else resolve(msg);
+        };
+
+        const errorHandler = (err) => {
+            cleanup();
+            reject(err);
+        };
+
+        const cleanup = () => {
+            worker.off('message', handler);
+            worker.off('error', errorHandler);
+        };
+
+        worker.on('message', handler);
+        worker.on('error', errorHandler);
+
+        // Send data to thread
+        worker.postMessage({ 
+            html, 
+            url, 
+            config, 
+            requiredLang: REQUIRED_LANG 
+        });
+    });
+};
+
 /**
  * Starts the background worker.
- * Exported method called by app.js on startup.
  */
 const start = () => {
+  initWorkers();
   logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
   poll();
 };
 
 /**
- * Recursive polling function using setTimeout to ensure
- * previous job finishes before next poll.
+ * Recursive polling function.
  */
 const poll = async () => {
   try {
@@ -50,7 +104,6 @@ const poll = async () => {
   } catch (err) {
     logger.error(`[CRAWL-WORKER] Global polling error: ${err.message}`, err);
   } finally {
-    // Schedule next poll
     setTimeout(poll, POLL_INTERVAL_MS);
   }
 };
@@ -67,7 +120,7 @@ const checkAndProcessJobs = async () => {
     return;
   }
 
-  // 1. Query for a Pending job (FIFO)
+  // FIFO Query
   const query = `
     FOR job IN crawl_job
       FILTER job.status == 'Pending'
@@ -91,23 +144,13 @@ const checkAndProcessJobs = async () => {
 
 /**
  * Executes the crawl logic for a specific job.
- * @param {Object} job - The job document
- * @param {Object} db - Database connection
  */
 const processJob = async (job, db) => {
   const fileId = job.file_id;
-  
-  // Extract advanced config (if any)
   const crawlConfig = job.config || {};
 
-  // Pass crawlConfig as the 3rd argument
   const crawler = new Crawler(null, REQUEST_TIMEOUT_MS, crawlConfig);
   
-  const turndownService = new TurndownService({
-    headingStyle: 'atx',
-    codeBlockStyle: 'fenced'
-  });
-
   // Container for the final content
   const markdownSegments = [];
   let pagesProcessed = 0;
@@ -118,47 +161,32 @@ const processJob = async (job, db) => {
   let isJobKilled = false;
   let logBuffer = [];
 
-  // Helper: Flush logs to DB in batch to prevent connection starvation
   const flushLogBuffer = async () => {
     if (logBuffer.length === 0) return;
     const bufferCopy = [...logBuffer];
-    logBuffer = []; // Clear immediately
+    logBuffer = [];
     try {
-        // Execute inserts in parallel (Promise.all) to minimize event loop blocking
         await Promise.all(bufferCopy.map(l => fileService.addCrawlLog(fileId, l.level, l.stage, l.message)));
     } catch (e) {
         logger.warn(`[CRAWL-WORKER] Failed to flush logs: ${e.message}`);
     }
   };
-  // --- [PERFORMANCE PATCH END] ---
 
-  // [ADDED] Helper: Writes segments to disk using streams to prevent OOM and Event Loop Blocking
+  // Helper: Writes segments to disk using streams
   const saveSegmentsToStream = async (segments, destPath) => {
     const writeStream = fsStandard.createWriteStream(destPath, { encoding: 'utf8' });
-    
-    // Helper to allow the Event Loop to breathe (process other requests)
     const yieldToEventLoop = () => new Promise(resolve => setImmediate(resolve));
 
     for (let i = 0; i < segments.length; i++) {
-        // Add separator unless it's the very last segment
         const separator = (i < segments.length - 1) ? '\n\n---\n\n' : '';
         const chunk = segments[i] + separator;
-
-        // Write to stream
         const canContinue = writeStream.write(chunk);
 
-        // Handle Backpressure: If buffer is full, wait for 'drain'
         if (!canContinue) {
             await new Promise(resolve => writeStream.once('drain', resolve));
         }
-
-        // CPU PROTECTION: Every 50 segments, force a yield to the Node.js event loop
-        if (i % 50 === 0) {
-            await yieldToEventLoop();
-        }
+        if (i % 50 === 0) await yieldToEventLoop();
     }
-
-    // Close stream and wait for finish
     writeStream.end();
     await new Promise((resolve, reject) => {
         writeStream.on('finish', resolve);
@@ -169,13 +197,12 @@ const processJob = async (job, db) => {
   try {
     // --- A. UPDATE STATUS TO CRAWLING ---
     await updateJobStatus(db, job._key, 'Crawling');
-    await fileService.addCrawlLog(fileId, 'INFO', 'System', `Crawl started for ${job.url} (Depth: ${job.depth}).`);
+    await fileService.addCrawlLog(fileId, 'INFO', 'System', `Crawl started for ${job.url} with ${NUM_THREADS} threads.`);
 
     // --- B. DEFINE WORKER CALLBACK ---
-    // This function is called by the Crawler utility for every fetched page
     const workCallback = async (crawledUrl, $) => {
       
-      // --- [PERFORMANCE PATCH START] Throttled Kill Check ---
+      // 1. Throttled Kill Check
       const now = Date.now();
       if (now - lastKillCheck > 2000) {
           const currentJob = await db.collection('crawl_job').document(job._key);
@@ -184,141 +211,51 @@ const processJob = async (job, db) => {
           }
           lastKillCheck = now;
       }
-
-      if (isJobKilled) {
-        throw new Error('Killed'); // Specific message for control flow
-      }
-      // --- [PERFORMANCE PATCH END] ---
+      if (isJobKilled) throw new Error('Killed');
 
       // 2. Check Page Limit
       if (pagesProcessed >= MAX_PAGES_PER_JOB) {
-        logger.warn(`[CRAWL-WORKER] Job ${job._key} hit max page limit (${MAX_PAGES_PER_JOB}). Stopping traversal.`);
+        logger.warn(`[CRAWL-WORKER] Job ${job._key} hit max page limit (${MAX_PAGES_PER_JOB}).`);
         throw new Error('MaxPagesReached');
       }
 
-      // 3. Content Cleaning (Remove non-content elements)
-      $('script').remove();
-      $('style').remove();
-      $('nav').remove();
-      $('footer').remove();
-      $('header').remove();
-      $('iframe').remove();
-      $('noscript').remove();
-      
-      $('div[class*="cookie"]').remove();
-      $('div[class*="privacy"]').remove();
-      $('div[id*="cookie"]').remove();
-      
-      $('a:contains("ENQUIRE")').remove();
-      $('a:contains("Book")').remove();
-      $('button').remove();
-      
-      $('div').each((i, el) => {
-          const linkCount = $(el).find('a').length;
-          const textLength = $(el).text().trim().length;
-          if (linkCount > 5 && textLength / linkCount < 15) { 
-              $(el).remove();
-          }
-      });
+      // 3. OFFLOAD CPU INTENSIVE WORK TO THREAD
+      // Note: 'crawler.js' passes us a cheerio object '$'. 
+      // We convert it back to HTML to send to the thread.
+      const rawHtml = $.html();
 
-      // 4. Fix Relative Image Paths
-      $('img').each((i, el) => {
-        const src = $(el).attr('src');
-        if (src && !src.startsWith('http') && !src.startsWith('data:')) {
-          try {
-            const absoluteUrl = new URL(src, crawledUrl).href;
-            $(el).attr('src', absoluteUrl);
-          } catch (e) { }
+      try {
+        const result = await processPageOnThread(rawHtml, crawledUrl, crawlConfig);
+
+        // Handle thread result
+        if (result.result === 'empty') {
+             logger.debug(`[CRAWL-WORKER] No content extracted for ${crawledUrl}`);
+             return;
         }
-      });
-      
-      // Fix Relative Links
-      $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto:')) {
-            try {
-                const absoluteUrl = new URL(href, crawledUrl).href;
-                $(el).attr('href', absoluteUrl);
-            } catch (e) {}
+
+        if (result.shouldSkip) {
+             logBuffer.push({ level: 'INFO', stage: 'Filter', message: `Skipped ${crawledUrl}: Detected '${result.detectedLang}'` });
+             return;
         }
-      });
 
+        // Store Segment
+        if (result.markdown && result.markdown.length > 0) {
+            markdownSegments.push(`## Source: ${crawledUrl}\n\n${result.markdown}`);
+            pagesProcessed++;
+        }
 
-      // 5. Extract Main Content
-      let contentHtml = null;
-
-      // A. Configured Selector
-      if (crawlConfig.contentSelector && crawlConfig.contentSelector.trim() !== '') {
-          try {
-              const userHtml = $(crawlConfig.contentSelector.trim()).html();
-              if (userHtml && userHtml.trim()) {
-                  contentHtml = userHtml;
-              }
-          } catch (selErr) {
-              logger.warn(`[CRAWL-WORKER] Invalid selector '${crawlConfig.contentSelector}': ${selErr.message}`);
-          }
-      }
-
-      // B. Fallback Heuristics
-      if (!contentHtml || !contentHtml.trim()) {
-          contentHtml = $('main').html() || $('article').html() || $('div.content').html() || $('body').html();
-      }
-      
-      if (!contentHtml || !contentHtml.trim()) {
-        logger.debug(`[CRAWL-WORKER] No content extracted for ${crawledUrl}`);
-        return;
-      }
-
-      // 6. Convert to Markdown
-      const markdown = turndownService.turndown(contentHtml);
-
-      // --- [ADDED] LANGUAGE FILTER (PER PAGE) ---
-      // Ensure we only keep pages that match the required ingestion language
-      if (markdown && markdown.length > 50) { // Don't check very short snippets
-        let pageLang = null;
+        // Log Progress
+        logBuffer.push({ level: 'INFO', stage: 'Page', message: `Crawled: ${crawledUrl}` });
         
-        // A. Check HTML Tag first (Fastest)
-        const htmlLang = $('html').attr('lang');
-        if (htmlLang) {
-             pageLang = htmlLang.split('-')[0].toLowerCase();
-        }
+        if (logBuffer.length >= 20) await flushLogBuffer();
 
-        // B. If Tag matches or doesn't exist, Double Check Content (Most Accurate)
-        // If tag says 'en' but content is 'fr', we want to catch that.
-        if (!pageLang || pageLang === REQUIRED_LANG) {
-             const detected = langdetect.detectOne(markdown);
-             if (detected) pageLang = detected;
-        }
-
-        // C. Enforce Filter
-        if (pageLang && pageLang !== REQUIRED_LANG) {
-             // Log it locally but don't throw error, just skip this specific page
-             // This allows the crawl to continue finding English links on this page, but not save the non-English content
-             logBuffer.push({ level: 'INFO', stage: 'Filter', message: `Skipped ${crawledUrl}: Detected '${pageLang}', required '${REQUIRED_LANG}'` });
-             return; // EXIT CALLBACK HERE -> Content is NOT added to markdownSegments
-        }
+      } catch (threadError) {
+        logger.warn(`[CRAWL-WORKER] Thread processing failed for ${crawledUrl}: ${threadError.message}`);
       }
-      // ----------------------------------------
-
-      // 7. Store Segment
-      if (markdown && markdown.length > 0) {
-        markdownSegments.push(`## Source: ${crawledUrl}\n\n${markdown}`);
-        pagesProcessed++;
-      }
-
-      // 8. Log Progress
-      // --- [PERFORMANCE PATCH START] Buffered Logging ---
-      logBuffer.push({ level: 'INFO', stage: 'Page', message: `Crawled: ${crawledUrl}` });
-      
-      if (logBuffer.length >= 20) {
-          await flushLogBuffer();
-      }
-      // --- [PERFORMANCE PATCH END] ---
     };
 
-    // --- [ADDED] METRICS UPDATE CALLBACK ---
+    // --- METRICS UPDATE CALLBACK ---
     const onMetricsUpdate = async (metrics) => {
-      // --- [PERFORMANCE PATCH START] Throttled Metrics ---
       const now = Date.now();
       if (now - lastMetricsUpdate > 3000) {
           const fullMetrics = {
@@ -336,41 +273,27 @@ const processJob = async (job, db) => {
           }
           lastMetricsUpdate = now;
       }
-      // --- [PERFORMANCE PATCH END] ---
     };
 
     // --- C. EXECUTE CRAWL ---
     logger.debug(`[CRAWL-WORKER] Invoking crawler for ${job.url}`);
     await crawler.crawl([job.url], workCallback, job.depth, WORKER_CONCURRENCY, onMetricsUpdate);
 
-    // --- [PERFORMANCE PATCH START] Final Flush ---
+    // --- FINAL FLUSH ---
     await flushLogBuffer();
-    // --- [PERFORMANCE PATCH END] ---
 
-    // --- D. POST-CRAWL PROCESSING (OPTIMIZED) ---
+    // --- D. POST-CRAWL PROCESSING ---
     if (markdownSegments.length === 0) {
       throw new Error('Crawl finished but no content was extracted.');
     }
 
-    logger.info(`[CRAWL-WORKER] Crawl complete. Processing ${markdownSegments.length} segments with stream strategy.`);
-
-    // --- E. LANGUAGE VALIDATION (SAMPLING) ---
-    // [MODIFIED] Detect language on sample only to save CPU
-    const sampleSize = Math.min(markdownSegments.length, 50);
-    const sampleText = markdownSegments.slice(0, sampleSize).join('\n');
-    const detectedLang = langdetect.detectOne(sampleText);
-    logger.info(`[CRAWL-WORKER] Detected language (from sample): ${detectedLang}, Required: ${REQUIRED_LANG}`);
-
-    if (!detectedLang || detectedLang.toLowerCase() !== REQUIRED_LANG) {
-      logger.warn(`[CRAWL-WORKER] Language validation warning: Found [${detectedLang}], require [${REQUIRED_LANG}]. Continuing...`);
-    }
+    logger.info(`[CRAWL-WORKER] Crawl complete. Processing ${markdownSegments.length} segments.`);
 
     // --- F. SAVE FILE (STREAMING) ---
     await fileUtils.ensureDirectoryExists(UPLOAD_DIR);
     const fileName = `${fileId}.md`;
     const storagePath = path.join(UPLOAD_DIR, fileName);
     
-    // [MODIFIED] Use streaming helper
     await saveSegmentsToStream(markdownSegments, storagePath);
     
     logger.info(`[CRAWL-WORKER] Streamed markdown file to ${storagePath}`);
@@ -408,8 +331,6 @@ const processJob = async (job, db) => {
 
   } catch (error) {
     // --- H. ERROR HANDLING ---
-    
-    // --- [PERFORMANCE PATCH] Flush any remaining logs in error state ---
     await flushLogBuffer();
 
     // 1. Handle Max Pages (Partial Success)
@@ -417,7 +338,6 @@ const processJob = async (job, db) => {
         logger.info(`[CRAWL-WORKER] Job ${job._key} reached max pages. Saving partial results.`);
         try {
             if (markdownSegments.length > 0) {
-                // [MODIFIED] Use streaming helper for partial save too
                 await fileUtils.ensureDirectoryExists(UPLOAD_DIR);
                 const fileName = `${fileId}.md`;
                 const storagePath = path.join(UPLOAD_DIR, fileName);
@@ -441,7 +361,7 @@ const processJob = async (job, db) => {
                 });
 
                 await db.collection('crawl_job').update(job._key, {
-                  status: 'Succeeded', // Marked as success because we got data
+                  status: 'Succeeded',
                   pages_crawled: pagesProcessed,
                   finished_at: new Date().toISOString()
                 });
@@ -475,12 +395,10 @@ const processJob = async (job, db) => {
   }
 };
 
-// Helper to update status
 const updateJobStatus = async (db, key, status) => {
   await db.collection('crawl_job').update(key, { status: status });
 };
 
-// Helper to update page count progress
 const updateJobProgress = async (db, key, count) => {
   try {
     await db.collection('crawl_job').update(key, { pages_crawled: count });

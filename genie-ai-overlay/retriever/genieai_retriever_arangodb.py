@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import time
 from typing import Any, Union
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import openai
 from arango import ArangoClient
@@ -29,6 +31,7 @@ from .config import (
     ARANGO_TRAVERSAL_MAX_RETURNED,
     ARANGO_TRAVERSAL_QUERY,
     ARANGO_TRAVERSAL_SCORE_THRESHOLD,
+    ARANGO_TRAVERSAL_CONCURRENT_BATCHES,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
@@ -148,7 +151,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         traversal_score_threshold: float,
         traversal_query: str,
         distance_strategy: str,
-    ) -> dict[str, Any]:
+        ) -> dict[str, Any]:
         """Fetch the neighborhoods of matched documents from an ArangoDB graph.
         This method retrieves neighborhoods of documents based on a specified graph traversal
         strategy, distance scoring, and other parameters. It supports different starting points
@@ -177,6 +180,8 @@ class GenieaiArangoRetriever(OpeaComponent):
             - If `logflag` is enabled, the constructed query and bind variables are logged.
         """
 
+        traversal_start = time.time()
+
         if traversal_max_depth < 1:
             traversal_max_depth = 1
 
@@ -198,13 +203,151 @@ class GenieaiArangoRetriever(OpeaComponent):
                 detail=f"Invalid distance strategy: {distance_strategy}. Expected 'COSINE' or 'EUCLIDEAN_DISTANCE'.",
             )
 
-        sub_query = ""
         neighborhoods = {}
 
-        bind_vars = {
-            "@collection": collection_name,
-            "keys": keys,
-        }
+        # Configure threading #
+        
+        max_workers = ARANGO_TRAVERSAL_CONCURRENT_BATCHES
+
+        if max_workers > 4:
+            logger.error(
+                f"[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES={max_workers} "
+                f"is above the safe cap (4). Capping to 4."
+            )
+            max_workers = 4
+
+        if max_workers < 1:
+            logger.error(
+                f"[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES={max_workers} "
+                f"is invalid. Defaulting to 1."
+            )
+            max_workers = 1
+
+        if max_workers == 1:
+            logger.info("[Arango Traversal] Running in single-query mode (no threading).")
+
+            bind_vars = {
+                "@collection": collection_name,
+                "keys": keys,
+            }
+
+            sub_query = self._build_subquery(
+                graph_name=graph_name,
+                search_start=search_start,
+                query_embedding=query_embedding,
+                traversal_max_depth=traversal_max_depth,
+                traversal_max_returned=traversal_max_returned,
+                traversal_score_threshold=traversal_score_threshold,
+                traversal_query=traversal_query,
+                distance_strategy=distance_strategy,
+                score_func=score_func,
+                sort_order=sort_order,
+                bind_vars=bind_vars,
+                collection_name=collection_name,
+                )
+
+            query = f"""
+                FOR key IN @keys
+                    LET doc = DOCUMENT(@@collection, key)
+
+                    LET neighborhood = (
+                        {sub_query}
+                    )
+
+                    RETURN {{[doc._key]: neighborhood}}
+            """
+
+            cursor = db.aql.execute(query, bind_vars=bind_vars)
+
+            for doc in cursor:
+                neighborhoods.update(doc)
+
+            traversal_finish = time.time()
+
+            if logflag:
+                logger.info(f"Graph traversal completion time: {traversal_finish-traversal_start:4f} seconds")
+
+            return neighborhoods
+
+        logger.info(
+        f"[Arango Traversal] Running threaded mode with {max_workers} workers "
+        f"for {len(keys)} keys.")
+
+        def run_for_single_key(single_key: str):
+
+            bind_vars = {
+                "@collection": collection_name,
+                "keys": [single_key],  # ONLY one key
+            }
+
+            # Build subquery for single key
+            sub_query = self._build_subquery(
+                graph_name=graph_name,
+                search_start=search_start,
+                query_embedding=query_embedding,
+                traversal_max_depth=traversal_max_depth,
+                traversal_max_returned=traversal_max_returned,
+                traversal_score_threshold=traversal_score_threshold,
+                traversal_query=traversal_query,
+                distance_strategy=distance_strategy,
+                score_func=score_func,
+                sort_order=sort_order,
+                bind_vars=bind_vars,
+                collection_name=collection_name,
+                )
+
+            # Query for 1 key
+            query = f"""
+                LET key = @keys[0]
+                LET doc = DOCUMENT(@@collection, key)
+
+                LET neighborhood = (
+                    {sub_query}
+                )
+
+                RETURN {{[doc._key]: neighborhood}}
+            """
+
+            cursor = db.aql.execute(query, bind_vars=bind_vars)
+            return next(cursor)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(run_for_single_key, k): k for k in keys}
+
+            for future in as_completed(futures):
+                key = futures[future]
+                try:
+                    result = future.result()
+                    neighborhoods.update(result)
+                except Exception as e:
+                    logger.error(f"[Threaded Traversal] Error for key {key}: {e}")
+
+        traversal_finish = time.time()
+
+        if logflag:
+            logger.info(f"Graph traversal completion time: {traversal_finish-traversal_start:4f} seconds")
+
+        return neighborhoods
+
+    def _build_subquery(
+        self,
+        graph_name,
+        search_start,
+        query_embedding,
+        traversal_max_depth,
+        traversal_max_returned,
+        traversal_score_threshold,
+        traversal_query,
+        distance_strategy,
+        score_func,
+        sort_order,
+        bind_vars,
+        collection_name,
+        ):
+        """
+        Builds the AQL sub-query exactly as your original code did.
+        Moved into a helper to reuse it for threading.
+        """
 
         if traversal_query:
             sub_query = traversal_query.format(
@@ -219,35 +362,54 @@ class GenieaiArangoRetriever(OpeaComponent):
             if "@query_embedding" in sub_query:
                 bind_vars["query_embedding"] = query_embedding
 
-        elif search_start == "chunk":
+            return sub_query
+
+        # ----------------------------
+        # search_start == "chunk"
+        # ----------------------------
+        if search_start == "chunk":
             bind_vars["query_embedding"] = query_embedding
 
-            sub_query = f"""
-                FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                    FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
-                        LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
-                        SORT score {sort_order}
-                        LIMIT {traversal_max_returned}
-                        FILTER score >= {traversal_score_threshold}
-                        RETURN edge.{ARANGO_TEXT_FIELD}
-            """
-            # From a chunk → find entities → find related entity relationships (edges), and return the text of those relations if they're relevant.
+            return f"""
+                LET raw = (
+                    FOR node IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                        FOR node2, edge IN 1..{traversal_max_depth} ANY node {graph_name}_LINKS_TO
+                            LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
+                            FILTER score >= {traversal_score_threshold}
 
+                            RETURN {{
+                                score: score,
+                                text: edge.{ARANGO_TEXT_FIELD}
+                            }}
+                )
+
+                FOR item IN raw
+                    SORT item.score {sort_order}
+                    LIMIT {traversal_max_returned}
+                    RETURN item.text
+            """
+
+        # ----------------------------
+        # search_start == "edge"
+        # ----------------------------
         elif search_start == "edge":
-            sub_query = f"""
+            return f"""
                 FOR chunk IN {graph_name}_SOURCE
                     FILTER chunk._key == doc.source_id
                     LIMIT 1
-                    RETURN {{"chunk_text": chunk.{ARANGO_TEXT_FIELD}, "file_id": chunk.{ARANGO_FILE_ID_FIELD}}}
+                    RETURN {{
+                        "chunk_text": chunk.{ARANGO_TEXT_FIELD},
+                        "file_id": chunk.{ARANGO_FILE_ID_FIELD}
+                    }}
             """
-            # just look up the chunk that the edge points to.
-            # RETURN chunk.{ARANGO_TEXT_FIELD}
-            # RETURN {{"chunk_text": chunk.{ARANGO_TEXT_FIELD}, "chunk_labels": chunk.{ARANGO_LABELS_FIELD}}}
 
+        # ----------------------------
+        # search_start == "node"
+        # ----------------------------
         elif search_start == "node":
             bind_vars["query_embedding"] = query_embedding
 
-            sub_query = f"""
+            return f"""
                 FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
                     LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
                     SORT score {sort_order}
@@ -257,35 +419,17 @@ class GenieaiArangoRetriever(OpeaComponent):
                     FOR chunk IN {graph_name}_SOURCE
                         FILTER chunk._key == edge.source_id
                         LIMIT 1
-                        RETURN {{[edge.{ARANGO_TEXT_FIELD}]: {{"chunk_text": chunk.{ARANGO_TEXT_FIELD}, "file_id": chunk.{ARANGO_FILE_ID_FIELD}}}}}
+                        RETURN {{
+                            [edge.{ARANGO_TEXT_FIELD}]: {{
+                                "chunk_text": chunk.{ARANGO_TEXT_FIELD},
+                                "file_id": chunk.{ARANGO_FILE_ID_FIELD}
+                            }}
+                        }}
             """
-            # From an entity → find related relations → for each relation, find the document chunk it was extracted from → return both relation and chunk text.
-            # {{[edge.{ARANGO_TEXT_FIELD}]: chunk.{ARANGO_TEXT_FIELD}}}
-            # {{[edge.{ARANGO_TEXT_FIELD}]: {{"chunk_text": chunk.{ARANGO_TEXT_FIELD}, "chunk_labels": chunk.{ARANGO_LABELS_FIELD}}}}}
 
-        query = f"""
-            FOR doc IN @@collection
-                FILTER doc._key IN @keys
+        # Fallback 
+        return ""
 
-                LET neighborhood = (
-                    {sub_query}
-                )
-
-                RETURN {{[doc._key]: neighborhood}}
-        """
-        # two @ means collection name
-        # neighborhood is the sub-query result
-
-        if logflag:
-            logger.info(f"Executing query: {query}")
-            logger.info(f"Bind variables: {bind_vars.keys()}")
-
-        cursor = db.aql.execute(query, bind_vars=bind_vars)
-
-        for doc in cursor:
-            neighborhoods.update(doc)
-
-        return neighborhoods
 
     def generate_summarization_prompt(self, query: str, text: str) -> str:
         """Generate a summarization prompt based on the provided query and text.
@@ -331,6 +475,8 @@ class GenieaiArangoRetriever(OpeaComponent):
         if logflag:
             logger.debug(input)
 
+        start = time.time()
+
         #################
         # Process Input #
         #################
@@ -338,7 +484,7 @@ class GenieaiArangoRetriever(OpeaComponent):
         input_dict = input.model_dump(exclude_none=True)
         query = input_dict.get("input", input_dict.get("text"))
         if logflag:
-            logger.debug(f'Retriever Input Dict: {input_dict}')
+            logger.info(f'Retriever Input Dict: {input_dict}')
 
         if not query:
             logger.error("Query is empty. Please provide a valid query.")
@@ -642,5 +788,9 @@ class GenieaiArangoRetriever(OpeaComponent):
         ################################
         #  Returning Powerful Results  #
         ################################
-        
+
+        finish = time.time()
+        if logflag:
+            logger.info(f"Retreiver logic completion time: {finish - start:.4f} seconds")
+
         return search_res

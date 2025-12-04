@@ -545,7 +545,7 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     # image: ghcr.io/huggingface/text-embeddings-inference:turing-1.7
     container_name: tei-embedding-serving
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID}"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID} --auto-truncate"
     runtime: nvidia
     ports:
       - "7000:80"

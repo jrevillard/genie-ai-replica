@@ -203,6 +203,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 detail=f"Invalid distance strategy: {distance_strategy}. Expected 'COSINE' or 'EUCLIDEAN_DISTANCE'.",
             )
 
+        # sub_query = ""
         neighborhoods = {}
 
         # Configure threading #
@@ -280,7 +281,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 "keys": [single_key],  # ONLY one key
             }
 
-            # Build subquery for single key
+            # Subquery for single key
             sub_query = self._build_subquery(
                 graph_name=graph_name,
                 search_start=search_start,
@@ -394,13 +395,12 @@ class GenieaiArangoRetriever(OpeaComponent):
         # ----------------------------
         elif search_start == "edge":
             return f"""
-                FOR chunk IN {graph_name}_SOURCE
-                    FILTER chunk._key == doc.source_id
-                    LIMIT 1
-                    RETURN {{
-                        "chunk_text": chunk.{ARANGO_TEXT_FIELD},
-                        "file_id": chunk.{ARANGO_FILE_ID_FIELD}
-                    }}
+                LET chunk = DOCUMENT({graph_name}_SOURCE, doc.source_id)
+
+                RETURN {{
+                    "chunk_text": (chunk ? chunk.{ARANGO_TEXT_FIELD} : null),
+                    "file_id": (chunk ? chunk.{ARANGO_FILE_ID_FIELD} : null)
+                }}
             """
 
         # ----------------------------
@@ -411,23 +411,29 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             return f"""
                 FOR node, edge IN 1..{traversal_max_depth} ANY doc {graph_name}_LINKS_TO
+                    OPTIONS {{ bfs: true, uniqueVertices: "global" }}
+
                     LET score = {score_func}(edge.{ARANGO_EMBEDDING_FIELD}, @query_embedding)
-                    SORT score {sort_order}
-                    LIMIT {traversal_max_returned}
+
                     FILTER score >= {traversal_score_threshold}
 
-                    FOR chunk IN {graph_name}_SOURCE
-                        FILTER chunk._key == edge.source_id
-                        LIMIT 1
-                        RETURN {{
-                            [edge.{ARANGO_TEXT_FIELD}]: {{
-                                "chunk_text": chunk.{ARANGO_TEXT_FIELD},
-                                "file_id": chunk.{ARANGO_FILE_ID_FIELD}
+                    SORT score {sort_order}
+                    LIMIT {traversal_max_returned}
+
+                    LET chunk = DOCUMENT({graph_name}_SOURCE, edge.source_id)
+
+                    RETURN MERGE(
+                        {{}},
+                        {{
+                            [ edge.{ARANGO_TEXT_FIELD} ] : {{
+                                "chunk_text": (chunk ? chunk.{ARANGO_TEXT_FIELD} : null),
+                                "file_id": (chunk ? chunk.{ARANGO_FILE_ID_FIELD} : null)
                             }}
                         }}
+                    )
             """
 
-        # Fallback 
+        # Fallback
         return ""
 
 
@@ -749,22 +755,64 @@ class GenieaiArangoRetriever(OpeaComponent):
             logger.info(f"Results after fetching neighborhood: {neighborhoods}") 
             for r in search_res:
                 neighborhood = neighborhoods.get(r['doc'].id)
-                if neighborhood:
-                    if search_start == 'chunk': 
-                        r['doc'].page_content += "\n------\nRELATED INFORMATION:\n------\n"
-                        r['doc'].page_content += str(neighborhood)
-                    elif search_start == 'edge':
-                        r['doc'].page_content += "\n------\nRELATED INFORMATION:\n------\n"
-                        r['doc'].page_content += str(neighborhood[0]['chunk_text']) if neighborhood and 'chunk_text' in neighborhood[0] else ''
-                        r['doc'].metadata['file_ids'] = r['doc'].metadata.get('file_ids', []) + [neighborhood[0]['file_id']] if neighborhood and 'file_id' in neighborhood[0] else []
-                    else: 
-                        # search_start == 'node'
-                        r['doc'].page_content += "\n------\nRELATED INFORMATION:\n------\n"
-                        r['doc'].page_content += list(neighborhood[0].values())[0]['chunk_text'] if neighborhood and list(neighborhood[0].values())[0] and 'chunk_text' in list(neighborhood[0].values())[0] else ''
-                        r['doc'].metadata['file_ids'] = r['doc'].metadata.get('file_ids', []) + [list(neighborhood[0].values())[0]['file_id']] if neighborhood and list(neighborhood[0].values())[0] and 'file_id' in list(neighborhood[0].values())[0] else []
+
+                if not neighborhood:
+                    continue
+
+                # Common header for added related info
+                r['doc'].page_content += "\n------\nRELATED INFORMATION:\n------\n"
+
+                if search_start == 'chunk':
+                    # neighborhood may be a list or other structure 
+                    r['doc'].page_content += str(neighborhood)
+
+                elif search_start == 'edge':
+                    # neighborhood is expected to be a list with one dict: [{ "chunk_text": ..., "file_id": ... }]
+                    first = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
+                    if isinstance(first, dict):
+                        # first may contain 'chunk_text' and 'file_id' keys directly
+                        chunk_text = first.get('chunk_text')
+                        file_id = first.get('file_id')
+                    else:
+                        # fallback: if it's nested like { edge_text: { "chunk_text": ..., "file_id": ... } }
+                        chunk_text = None
+                        file_id = None
+                        if isinstance(first, dict):
+                            inner = next(iter(first.values()), None)
+                            if isinstance(inner, dict):
+                                chunk_text = inner.get('chunk_text')
+                                file_id = inner.get('file_id')
+
+                    if chunk_text:
+                        r['doc'].page_content += str(chunk_text)
+                    if file_id:
+                        r['doc'].metadata['file_ids'] = r['doc'].metadata.get('file_ids', []) + [file_id]
+
+                else:
+                    # search_start == 'node'
+                    # neighborhood should be a list of dicts where each dict has a single key mapping to the inner dict:
+                    # e.g. [{ edge_text: { "chunk_text": ..., "file_id": ... } }, ...]
+                    first_item = neighborhood[0] if isinstance(neighborhood, list) and neighborhood else None
+                    inner = None
+
+                    if isinstance(first_item, dict):
+                        # normally it's a dict mapping edge_text -> {...}
+                        inner = next(iter(first_item.values()), None)
+                    elif isinstance(first_item, list):
+                        # defensive: if it's a nested list (older bug) take first element
+                        maybe = first_item[0] if first_item else None
+                        if isinstance(maybe, dict):
+                            inner = next(iter(maybe.values()), None)
+
+                    if isinstance(inner, dict):
+                        chunk_text = inner.get('chunk_text')
+                        file_id = inner.get('file_id')
+                        if chunk_text:
+                            r['doc'].page_content += str(chunk_text)
+                        if file_id:
+                            r['doc'].metadata['file_ids'] = r['doc'].metadata.get('file_ids', []) + [file_id]
 
             logger.info(f"Added neighborhoods to {len(search_res)} documents.")
-
 
 
         ################################

@@ -22,7 +22,7 @@ const fileUtils = require('../utils/fileUtils');
 
 // Configuration constants
 const POLL_INTERVAL_MS = appConfig.crawler?.pollIntervalMs || 5000;
-const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 10000;
+const REQUEST_TIMEOUT_MS = appConfig.crawler?.requestTimeoutMs || 5000;
 const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
 const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 20; 
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
@@ -127,6 +127,8 @@ const processJob = async (job, db) => {
   const fileName = `${fileId}.md`;
   const storagePath = path.join(UPLOAD_DIR, fileName);
   const writeStream = fsStandard.createWriteStream(storagePath, { flags: 'w', encoding: 'utf8' });
+
+  writeStream.setMaxListeners(WORKER_CONCURRENCY + 10);
 
   // Helper to handle backpressure
   const writeToDisk = async (text) => {

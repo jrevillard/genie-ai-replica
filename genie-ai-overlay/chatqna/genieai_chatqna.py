@@ -85,7 +85,7 @@ LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.j
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
 
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
-
+USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
 
 
@@ -722,7 +722,7 @@ class ChatQnAService:
 
         # RegEx-based extraction for last user message in the array
         last_translated_message_content = ""
-        user_messages = re.findall(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", translated_history_string, re.DOTALL)
+        user_messages = USER_MSG_PATTERN.findall(translated_history_string)
         if user_messages:
             last_translated_message_content = user_messages[-1].strip()
 

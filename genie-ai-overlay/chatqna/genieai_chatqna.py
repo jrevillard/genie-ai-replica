@@ -32,7 +32,7 @@ from transformers import AutoTokenizer
 
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
-logflag = os.getenv("LOGFLAG", False)
+logflag = os.getenv("LOGFLAG", True)
 
 
 class ChatTemplate:
@@ -77,7 +77,14 @@ LLM_MODEL = os.getenv("LLM_MODEL", "ibm-granite/granite-3.3-2b-instruct")
 LLM_TRANS_MODEL = os.getenv("LLM_TRANS_MODEL", "google/gemma-3-1b-it")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 
-RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "")  # node | edge | chunk
+RETRIEVER_SEARCH_START = os.getenv("RETRIEVER_ARANGO_SEARCH_START", "chunk")  # node | edge | chunk
+RETRIEVER_K = os.getenv("RETRIEVER_ARANGO_K", 4)
+RETRIEVER_FETCH_K = os.getenv("RETRIEVER_ARANGO_FETCH_K", 20) 
+RETRIEVER_SCORE_THRESHOLD = os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1) 
+RETRIEVER_DISTANCE_THRESHOLD = os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", None) 
+RETRIEVER_LAMBDA_MULT = os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5) 
+
+
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
@@ -298,7 +305,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         original_docs = inputs["documents"]
         rerank_scores = data
         if logflag:
-            logger.debug(f"\nTHESE ARE THE RERANK SCORES: {rerank_scores}")
+            logger.info(f"\nTHESE ARE THE RERANK SCORES: {rerank_scores}")
 
         reranked_docs_with_scores = []
         for best_response in rerank_scores[:top_n]:
@@ -761,12 +768,19 @@ class ChatQnAService:
             model=chat_request.model if chat_request.model else None,
         )
         retriever_parameters = RetrieverParms(
+            # in the current implementation, search_type should always be set to similarity_score_threshold, 
+            # otherwise not possible to calculate confidence scores
             search_type=chat_request.search_type if chat_request.search_type else "similarity_score_threshold",
-            k=chat_request.k if chat_request.k else 4,
-            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold else None,
-            fetch_k=chat_request.fetch_k if chat_request.fetch_k else 20,
-            lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult else 0.5,
-            score_threshold=chat_request.score_threshold if chat_request.score_threshold else 0.01,
+            # k=chat_request.k if chat_request.k else 4,
+            k=chat_request.k if chat_request.k is not None else RETRIEVER_K,
+            # distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold else None,
+            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold is not None else RETRIEVER_DISTANCE_THRESHOLD,
+            # fetch_k=chat_request.fetch_k if chat_request.fetch_k else 20,
+            fetch_k=chat_request.fetch_k if chat_request.fetch_k is not None else RETRIEVER_FETCH_K,
+            # lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult else 0.5,
+            lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult is not None else RETRIEVER_LAMBDA_MULT,
+            # score_threshold=chat_request.score_threshold if chat_request.score_threshold else 0.01,
+            score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
         )
         reranker_parameters = RerankerParms(
             top_n=chat_request.top_n if chat_request.top_n else 1,
@@ -849,6 +863,9 @@ class ChatQnAService:
         scores = []
         source_documents_file_ids = []
 
+        if logflag:
+            logger.info(f"\nretrieved docs with scores: {retrieved_docs_with_scores}\n")
+
         for item in retrieved_docs_with_scores:
             doc_id_by_orchestrator = item.get("id", "N/A")
             if doc_id_by_orchestrator not in file_id_pairs:
@@ -905,9 +922,12 @@ class ChatQnAService:
                             })
 
                         scores.append(score)
+            
+            logger.info(f"\n\n[ DEBUG ] appendding document conf score: {score} ")
 
         # Calculate overall confidence score (e.g., average of top documents)
         confidence_score = sum(scores) / len(scores) if scores else 0.0
+        logger.info(f"\n\n[ DEBUG ] document confidence scores: {scores} ")
 
         # Construct the final JSON payload
         final_response_payload = {
@@ -920,7 +940,7 @@ class ChatQnAService:
 
         # Return as a JSONResponse
         if logflag:
-            logger.debug(f'Megaservice output payload: {final_response_payload}')
+            logger.info(f'Megaservice output payload: {final_response_payload}')
         return final_response_payload
 
     def start(self):
@@ -957,3 +977,5 @@ if __name__ == "__main__":
         chatqna.add_remote_service()
 
     chatqna.start()
+
+

@@ -152,11 +152,15 @@ class ChatCompletionRequest(BaseModel):
 
     # retrieval
     search_type: str = "similarity_score_threshold" #"similarity"
-    k: int = 4
+    # k: int = 4
+    k: Optional[int] = None
     distance_threshold: Optional[float] = None
-    fetch_k: int = 20
-    lambda_mult: float = 0.5
-    score_threshold: float = 0.01
+    # fetch_k: int = 20
+    fetch_k: Optional[int] = None
+    # lambda_mult: float = 0.5
+    lambda_mult: Optional[float] = None
+    # score_threshold: float = 0.01
+    score_threshold: Optional[float] = None
     retrieved_docs: Union[List[RetrievalResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
     index_name: Optional[str] = None
 

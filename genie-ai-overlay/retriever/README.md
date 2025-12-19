@@ -1,9 +1,11 @@
 # Hybrid Vector-Graph Retriever Micro-service
 
 ## Introduction
-This micro-service provides a robust retrieval engine designed for Retrieval-Augmented Generation (RAG) pipelines. It utilizes a hybrid approach that integrates **vector similarity search**, **graph traversal**, and **metadata-based label filtering** to provide highly contextualized results. By combining these techniques, the service moves beyond simple keyword or distance-based lookups to explore the semantic and relational connections within a dataset.
+The **GENIE.AI retriver micro-service** is an extension of the original OPEA retriever microservice and provides a robust retrieval engine designed for Retrieval-Augmented Generation (RAG) pipelines. It utilizes a hybrid approach that integrates **vector similarity search**, **graph traversal**, and **metadata-based label filtering** to provide highly contextualized results. By combining these techniques, the service moves beyond simple keyword or distance-based lookups to explore the semantic and relational connections within a dataset.
 
 The current implementation leverages ArangoDB as its core database engine due to its multimodal capabilities—efficiently handling both document-store (for vector data) and graph-store operations—and the accessibility of its open-source community edition.
+
+The custom GENIE.AI retriever logic builds on code initially developed by the ArangoDB and Intel teams as part of the OPEA framework. It introduces several extensions and optimizes and externalizes multiple parameters, enabling more granular configuration of the retriever microservice directly through environment variables. 
 
 ## High-Level Logic
 The retrieval process follows a multi-stage pipeline:

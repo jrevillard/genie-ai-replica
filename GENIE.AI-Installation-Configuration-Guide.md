@@ -295,7 +295,7 @@ Configuration for the user-facing web application.
 | CSP\_CONNECT\_SRC | Allowed connection sources for CSP (Backend Helmet config). | 'self' wss://localhost:8090 |
 | CORS\_ALLOWED\_ORIGINS | Comma-separated list of allowed CORS origins. | http://localhost,https://genie.ai |
 
-Backend Service (Node.js Logic)  
+**Backend Service (Node.js Logic)**  
 Configuration for core logic, sessions, email, backups, and OPEA integration.
 
 | Variable | Description | Example Value |
@@ -441,23 +441,47 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | DATAPREP\_EMBED\_NODES | Embed graph nodes. | true |
 | DATAPREP\_EMBED\_RELATIONSHIPS | Embed graph relationships. | true |
 | DATAPREP\_EMBED\_SOURCE\_DOCUMENTS | Embed original source documents. | true |
+| MAX\_CONCURRENT\_BATCHES | Limit on concurrent processing batches for data preparation.  | 5 |
+| DATAPREP\_COMPONENT\_NAME | Name of the specific dataprep component. | GENIE\_DATAPREP\_ARANGODB |
+| DOCUMENT\_REPOSITORY\_URL | Internal URL for the Node.js Document Repository Service. | `http://document-repository:3001` |
+| BACKEND\_SERVICE\_URL | URL to the backend component used to fetch knowledge hierarchy.  | `http://backend:3000` |
+| `LABELING_STRATEGY` | Strategy for labeling chunks (`llm`, `embedding`, or `bm25`).  | llm |
+| EMBEDDING\_LABEL\_THRESHOLD | Threshold score for embedding-based labeling.  | 0.75 |
+| BM25\_LABEL\_THRESHOLD | Threshold score for BM25-based labeling.  | 2.00 |
+| CONTENT\_EXTRACTION\_METHOD | Method for text extraction (`opea` or `docling`).  | docling |
+| LABEL\_SELECTOR\_SYSTEM\_PROMPT | System prompt defining the rules for LLM semantic labeling.  | You are a precise semantic... |
 
 **Retriever Configuration**  
 Configuration for the retrieval logic (hybrid search, traversals, etc.).
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
+| RETRIEVER\_COMPONENT\_NAME | Name of the specific retriever component.  | GENIE\_RETRIEVER\_ARANGODB |
 | RETRIEVER\_ARANGO\_GRAPH\_NAME | Graph name for retrieving data. | GRAPH |
 | RETRIEVER\_ARANGO\_SEARCH\_START | Starting point for graph search. | node |
 | RETRIEVER\_ARANGO\_SEARCH\_MODE | Search mode (e.g., hybrid, vector). | hybrid |
 | RETRIEVER\_ARANGO\_TRAVERSAL\_ENABLED | Enable graph traversal during retrieval. | true |
 | RETRIEVER\_ARANGO\_TRAVERSAL\_MAX\_DEPTH | Max depth for graph traversal. | 3 |
+| RETRIEVER\_ARANGO\_TRAVERSAL\_MAX\_RETURNED | Maximum number of items returned during graph traversal.  | 3 |
+| RETRIEVER\_ARANGO\_TRAVERSAL\_SCORE\_THRESHOLD | Minimum score threshold for keeping traversal results.  | 0.5 |
+| RETRIEVER\_ARANGO\_TRAVERSAL\_CONCURRENT\_BATCHES | Number of concurrent batches for traversal operations.  | 1 |
+| RETRIEVER\_ARANGO\_DISTANCE\_STRATEGY | Distance metric used for vector search (e.g., COSINE).  | COSINE |
+| RETRIEVER\_ARANGO\_NUM\_CENTROIDS | Number of centroids for vector search optimization.  | 1 |
 | RETRIEVER\_ARANGO\_USE\_APPROX\_SEARCH | Use approximate nearest neighbor search. | false |
 | RETRIEVER\_SUMMARIZER\_ENABLED | Enable summarization of retrieved docs. | false |
 | RETRIEVER\_OPENAI\_CHAT\_ENABLED | Enable OpenAI chat format in retriever. | true |
 | RETRIEVER\_OPENAI\_EMBED\_ENABLED | Enable OpenAI embed format in retriever. | true |
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
 | ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (OR/AND). | OR |
+
+**Crawler Configuration (implemented in the doc repo)**  
+These variables control the specifics of how crawls are done.
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| CRAWLER\_POLL\_INTERVAL\_MS | Interval (in ms) for the crawler to poll for new jobs.  | 5000 |
+| CRAWLER\_MAX\_PAGES | Maximum number of pages to crawl per job.  | 1500 |
+| CRAWLER\_WORKER\_CONCURRENCY | Number of concurrent workers for the crawler.  | 10 |
 
 **AI Inference Configuration (vLLM, TEI, TextGen)**  
 These variables control the specific AI models used for generation, guardrails, embeddings, and reranking.
@@ -477,6 +501,7 @@ These variables control the specific AI models used for generation, guardrails, 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | VLLM\_LLM\_MODEL\_ID | Model ID for the main chat/generation. | ibm-granite/granite-3.3-2b-instruct |
+| VLLM\_MODEL\_ID | Alias for `VLLM_LLM_MODEL_ID` (it is a duplicate/fallback and needs to be removed).  | ibm-granite/granite-3.3-2b-instruct |
 | VLLM\_GPU\_UTIL | GPU Memory Utilization for main model (0.0 \- 1.0). | 0.6 |
 | VLLM\_MAX\_MODEL\_LEN | Context window size for main model. | 16384 |
 | VLLM\_DTYPE | Data type for model weights. | half |

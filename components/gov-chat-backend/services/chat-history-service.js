@@ -38,11 +38,18 @@ class ChatHistoryService {
       this.conversationCategories = this.db.collection('conversationCategories');
       this.queryMessages = this.db.collection('queryMessages');
       
-      // NEW: Initialize conversationFiles edge collection for reference docs
+      // Initialize conversationFiles as a standard Document collection
       this.conversationFiles = this.db.collection('conversationFiles');
       if (!(await this.conversationFiles.exists())) {
-        await this.conversationFiles.create({ type: 2 }); // 2 indicates an edge collection
-        logger.info('Created conversationFiles edge collection');
+        await this.conversationFiles.create({ type: 2 }); // 2 = Document collection
+        logger.info('Created conversationFiles document collection');
+        
+        // Create an index for fast lookups by conversationId
+        await this.conversationFiles.ensureIndex({
+          type: 'persistent',
+          fields: ['conversationId']
+        });
+        logger.info('Created index on conversationFiles.conversationId');
       }
 
       this.initialized = true;
@@ -191,7 +198,7 @@ class ChatHistoryService {
       logger.info(`Message created with key: ${message._key}`);
 
       // ---------------------------------------------------------
-      // NEW: Save Reference Documents (Compatible with Document Collection)
+      // NEW: Link Reference Documents (Document Collection Compatible)
       // ---------------------------------------------------------
       if (messageData.metadata && Array.isArray(messageData.metadata.source_documents)) {
         const docs = messageData.metadata.source_documents;
@@ -207,11 +214,17 @@ class ChatHistoryService {
             const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
             
             try {
-              // FIX: Save as standard fields, NOT _from/_to
+              // FIX: Save as standard fields since this is a Document collection
               await this.conversationFiles.save({
                 conversationId: convKey, // Standard field link
                 fileId: fileId,          // Standard field link
                 messageId: message._key,
+                
+                // SNAPSHOT: Store display info directly to prevent "Unknown Document"
+                documentName: doc.document_name || doc.title || "Unknown Document",
+                fileName: doc.file_name || doc.document_name || "Unknown File",
+                url: doc.url || null,
+
                 labels: doc.serviceLabels || doc.labels || [], 
                 categoryLabel: doc.categoryLabel || '',
                 confidenceScore: doc.score || 0,
@@ -337,13 +350,13 @@ class ChatHistoryService {
               }
         `).then(cursor => cursor.all()),
 
-        // 4. NEW: Get Linked Files (Standard Document Query)
+        // 4. NEW: Get Linked Files (Standard Document Query with Schema Fix)
         this.db.query(aql`
           FOR doc IN conversationFiles
             FILTER doc.conversationId == ${convKey}
             SORT doc.createdAt DESC
             
-            // Safe lookup using the explicit 'fileId' field we now save
+            // Safe lookup of the file document
             LET fileDoc = DOCUMENT(doc.fileId) || {}
             
             RETURN {
@@ -353,10 +366,13 @@ class ChatHistoryService {
               score: doc.confidenceScore,
               createdAt: doc.createdAt,
               
-              // Safe property access
-              documentName: fileDoc.name || fileDoc.documentName || "Unknown Document",
-              fileName: fileDoc.fileName || fileDoc.name || "Unknown File",
-              url: fileDoc.url || null
+              // SCHEMA FIX: Map 'file_name' from files collection to 'documentName' for UI
+              // Priority: 1. Snapshot name, 2. file_name (DB schema), 3. name (fallback), 4. default
+              documentName: doc.documentName || fileDoc.file_name || fileDoc.name || "Unknown Document",
+              fileName: doc.fileName || fileDoc.file_name || fileDoc.name || "Unknown File",
+              
+              // SCHEMA FIX: Map 'source_url' from files collection
+              url: doc.url || fileDoc.source_url || fileDoc.url || null
             }
         `).then(cursor => cursor.all())
       ]);

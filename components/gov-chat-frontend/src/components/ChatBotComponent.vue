@@ -804,7 +804,8 @@ export default {
       this.newMessage = "";
       this.showQuickHelp = false;
       this.isLoading = true;
-      this.relatedDocuments = [];
+      // Do NOT clear relatedDocuments here. We want to keep previous docs visible.
+      // this.relatedDocuments = []; 
 
       const startTime = performance.now(); // Start timing
 
@@ -878,7 +879,8 @@ export default {
             result.metadata.source_documents &&
             Array.isArray(result.metadata.source_documents)
           ) {
-            this.relatedDocuments = result.metadata.source_documents.map(
+            // Transform new documents
+            const newDocs = result.metadata.source_documents.map(
               (doc) => ({
                 id: doc.document_id,
                 // Prioritize document_name, then file_name for the main title
@@ -898,6 +900,13 @@ export default {
                 serviceLabels: doc.serviceLabels,
               })
             );
+
+            // Incremental Update: Add new documents to the top, filtering out duplicates
+            const existingIds = new Set(this.relatedDocuments.map(d => d.id));
+            const uniqueNewDocs = newDocs.filter(d => !existingIds.has(d.id));
+            
+            // Add unique new docs to start of array (newest at top)
+            this.relatedDocuments.unshift(...uniqueNewDocs);
           }
         }
         this.chatMessages.push(botMessage);
@@ -992,7 +1001,24 @@ export default {
         this.currentChatId = conversation._key;
         this.currentChatTitle = conversation.title || this.generateChatTitle();
         this.currentCategoryId = conversation.categoryId || null;
-        this.relatedDocuments = [];
+        
+        // NEW: Populate related documents from history (files property from backend)
+        if (conversation.files && Array.isArray(conversation.files)) {
+          this.relatedDocuments = conversation.files.map(file => ({
+            id: file.id,
+            title: file.documentName || file.fileName || `Source ${file.id}`,
+            documentName: file.documentName,
+            fileName: file.fileName,
+            type: file.url?.split(".").pop().toUpperCase() || "LINK",
+            size: 0, // Metadata not currently stored
+            url: file.url,
+            score: file.score,
+            categoryLabel: file.categoryLabel,
+            serviceLabels: file.labels || []
+          }));
+        } else {
+          this.relatedDocuments = [];
+        }
 
         this.chatMessages = [];
         const messages = conversation.messages || [];

@@ -37,6 +37,14 @@ class ChatHistoryService {
       this.userConversations = this.db.collection('userConversations');
       this.conversationCategories = this.db.collection('conversationCategories');
       this.queryMessages = this.db.collection('queryMessages');
+      
+      // NEW: Initialize conversationFiles edge collection for reference docs
+      this.conversationFiles = this.db.collection('conversationFiles');
+      if (!(await this.conversationFiles.exists())) {
+        await this.conversationFiles.create({ type: 2 }); // 2 indicates an edge collection
+        logger.info('Created conversationFiles edge collection');
+      }
+
       this.initialized = true;
       logger.info('ChatHistoryService initialized successfully');
     } catch (error) {
@@ -187,6 +195,36 @@ class ChatHistoryService {
       const message = await this.messages.save(messageDoc);
       logger.info(`Message created with key: ${message._key}`);
 
+      // NEW: Link Reference Documents (Files) to Conversation
+      if (messageData.metadata && Array.isArray(messageData.metadata.source_documents)) {
+        const docs = messageData.metadata.source_documents;
+        for (const doc of docs) {
+          // Use document_id or id, and ensure it has the collection prefix if missing
+          const rawId = doc.document_id || doc.id;
+          if (rawId) {
+            const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
+            
+            try {
+              await this.conversationFiles.save({
+                _from: `conversations/${messageData.conversationId}`,
+                _to: fileId,
+                messageId: message._key, // Link to specific message for context
+                labels: doc.serviceLabels || doc.labels || [], 
+                categoryLabel: doc.categoryLabel || '',
+                confidenceScore: doc.score || 0,
+                createdAt: new Date().toISOString()
+              });
+            } catch (edgeError) {
+              // Log warning but don't fail the message creation if a file link fails
+              logger.warn(`Failed to save conversationFile edge for ${fileId}: ${edgeError.message}`);
+            }
+          }
+        }
+        if (docs.length > 0) {
+          logger.info(`Linked ${docs.length} reference documents to conversation ${messageData.conversationId}`);
+        }
+      }
+
       // Link to originating query if provided (Critical Wait)
       if (messageData.queryId) {
         const edgeDoc = {
@@ -256,7 +294,7 @@ class ChatHistoryService {
       const conversation = await this.conversations.document(conversationId);
 
       // OPTIMIZATION: Run independent queries in PARALLEL
-      const [messages, categories, owners] = await Promise.all([
+      const [messages, categories, owners, files] = await Promise.all([
         // 1. Get Messages
         this.db.query(aql`
           FOR msg IN messages
@@ -300,6 +338,27 @@ class ChatHistoryService {
                 role: edge.role,
                 lastViewedAt: edge.lastViewedAt
               }
+        `).then(cursor => cursor.all()),
+
+        // 4. NEW: Get Linked Files (Reference Documents)
+        this.db.query(aql`
+          FOR edge IN conversationFiles
+            FILTER edge._from == ${'conversations/' + conversationId}
+            SORT edge.createdAt DESC
+            // Retrieve edge metadata and merge with file details if needed.
+            // We return a structure compatible with the frontend "relatedDocuments".
+            RETURN {
+              id: PARSE_IDENTIFIER(edge._to).key,
+              labels: edge.labels,
+              categoryLabel: edge.categoryLabel,
+              score: edge.confidenceScore,
+              createdAt: edge.createdAt,
+              // We assume we might need to fetch the actual file doc for names if not stored on edge.
+              // If file doc lookup is required:
+              documentName: DOCUMENT(edge._to).documentName || DOCUMENT(edge._to).name,
+              fileName: DOCUMENT(edge._to).fileName,
+              url: DOCUMENT(edge._to).url
+            }
         `).then(cursor => cursor.all())
       ]);
 
@@ -309,7 +368,8 @@ class ChatHistoryService {
         ...conversation,
         messages,
         categories,
-        owners
+        owners,
+        files // Return the list of files
       };
     } catch (error) {
       logger.error(`Error getting conversation ${conversationId}:`, error);
@@ -713,8 +773,9 @@ class ChatHistoryService {
       const messageIds = await messageCursor.all();
 
       // Start a transaction to ensure atomicity
+      // NEW: Added 'conversationFiles' to write array
       const trx = await this.db.beginTransaction({
-        write: ['messages', 'queryMessages', 'userConversations', 'conversationCategories', 'conversations']
+        write: ['messages', 'queryMessages', 'userConversations', 'conversationCategories', 'conversations', 'conversationFiles']
       });
 
       try {
@@ -758,6 +819,15 @@ class ChatHistoryService {
         `;
 
         await trx.step(() => this.db.query(deleteCategoryEdgeQuery));
+
+        // NEW: Delete conversation-file edges
+        const deleteFileEdgeQuery = `
+          FOR edge IN conversationFiles
+            FILTER edge._from == 'conversations/${conversationId}'
+            REMOVE edge IN conversationFiles
+        `;
+
+        await trx.step(() => this.db.query(deleteFileEdgeQuery));
 
         // Delete the conversation
         await trx.step(() => this.conversations.remove(conversationId));

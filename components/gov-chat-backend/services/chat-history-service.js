@@ -159,14 +159,10 @@ class ChatHistoryService {
     try {
       logger.info(`Adding message to conversation ${messageData.conversationId}`);
 
-      // Ensure minimum required data
       if (!messageData.conversationId || !messageData.content || !messageData.sender) {
         logger.warn('Missing required message data');
         throw new Error('conversationId, content, and sender are required');
       }
-
-      // OPTIMIZATION: Removed initial conversation document read.
-      // We don't need to fetch the whole doc just to increment a counter.
 
       // Get the latest sequence number for this conversation
       const sequenceCursor = await this.db.query(aql`
@@ -185,50 +181,45 @@ class ChatHistoryService {
         conversationId: messageData.conversationId,
         content: messageData.content,
         timestamp: messageData.timestamp || new Date().toISOString(),
-        sender: messageData.sender, // "user" or "assistant"
+        sender: messageData.sender,
         sequence: newSequence,
         readStatus: messageData.readStatus !== undefined ? messageData.readStatus : true,
         metadata: messageData.metadata || {}
       };
 
-      // Create message (Critical Wait)
       const message = await this.messages.save(messageDoc);
       logger.info(`Message created with key: ${message._key}`);
 
       // ---------------------------------------------------------
-      // NEW: Link Reference Documents (Files) to Conversation
+      // NEW: Save Reference Documents (Compatible with Document Collection)
       // ---------------------------------------------------------
       if (messageData.metadata && Array.isArray(messageData.metadata.source_documents)) {
         const docs = messageData.metadata.source_documents;
         
-        // SANITIZATION: Ensure we have a clean conversation ID format (conversations/KEY)
-        // If the ID coming in is "conversations/123", split it. If it's just "123", use it.
+        // Clean the ID just in case
         const convKey = messageData.conversationId.includes('/') 
           ? messageData.conversationId.split('/').pop() 
           : messageData.conversationId;
-        const conversationIdFull = `conversations/${convKey}`;
 
         for (const doc of docs) {
-          // Use document_id or id, and ensure it has the collection prefix if missing
           const rawId = doc.document_id || doc.id;
           if (rawId) {
-            // Assume 'files' collection if no collection prefix provided
             const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
             
             try {
+              // FIX: Save as standard fields, NOT _from/_to
               await this.conversationFiles.save({
-                _from: conversationIdFull,
-                _to: fileId,
-                messageId: message._key, // Link to specific message for context
+                conversationId: convKey, // Standard field link
+                fileId: fileId,          // Standard field link
+                messageId: message._key,
                 labels: doc.serviceLabels || doc.labels || [], 
                 categoryLabel: doc.categoryLabel || '',
                 confidenceScore: doc.score || 0,
                 createdAt: new Date().toISOString()
               });
-              logger.info(`[DEBUG] Saved file link: ${conversationIdFull} -> ${fileId}`);
-            } catch (edgeError) {
-              // Log warning but don't fail the message creation if a file link fails
-              logger.warn(`Failed to save conversationFile edge for ${fileId}: ${edgeError.message}`);
+              logger.info(`[DEBUG] Saved file mapping: conversation ${convKey} -> file ${fileId}`);
+            } catch (saveError) {
+              logger.warn(`Failed to save conversationFile mapping for ${fileId}: ${saveError.message}`);
             }
           }
         }
@@ -238,35 +229,27 @@ class ChatHistoryService {
       }
       // ---------------------------------------------------------
 
-      // Link to originating query if provided (Critical Wait)
+      // Link to originating query if provided
       if (messageData.queryId) {
         const edgeDoc = {
           _from: `queries/${messageData.queryId}`,
           _to: `messages/${message._key}`,
           responseType: messageData.responseType || 'primary',
-          createdAt: new Date().toISOString().split('.')[0] + 'Z' // Simplified format: "2025-05-19T12:32:09Z"
+          createdAt: new Date().toISOString().split('.')[0] + 'Z'
         };
 
-        // Add optional fields only if schema permits
-        if (messageData.confidenceScore !== undefined) {
-          edgeDoc.confidenceScore = Number(messageData.confidenceScore);
-        }
-        if (messageData.userId) {
-          edgeDoc.userId = messageData.userId;
-        }
+        if (messageData.confidenceScore !== undefined) edgeDoc.confidenceScore = Number(messageData.confidenceScore);
+        if (messageData.userId) edgeDoc.userId = messageData.userId;
 
-        logger.info(`Creating queryMessages edge with document:`, JSON.stringify(edgeDoc, null, 2));
         try {
           await this.queryMessages.save(edgeDoc);
-          logger.info(`Message ${message._key} linked to query ${messageData.queryId}`);
         } catch (error) {
           logger.error(`Failed to create queryMessages edge:`, error);
           throw error;
         }
       }
 
-      // OPTIMIZATION: Update conversation stats using Atomic AQL + Fire-and-Forget
-      // Safe JSON stringify for the snippet to prevent AQL injection/errors
+      // Update conversation stats
       const snippet = messageData.content.length > 100
         ? `${messageData.content.substring(0, 97)}...`
         : messageData.content;
@@ -282,10 +265,8 @@ class ChatHistoryService {
           } IN conversations
       `;
 
-      // We do not await this. Errors are logged but do not block the response.
       this.db.query(updateStatsQuery)
-        .then(() => logger.info(`Conversation ${messageData.conversationId} stats updated (background)`))
-        .catch(err => logger.warn(`Background stats update failed for ${messageData.conversationId}: ${err.message}`));
+        .catch(err => logger.warn(`Background stats update failed: ${err.message}`));
 
       return { ...message, ...messageDoc };
     } catch (error) {
@@ -303,34 +284,18 @@ class ChatHistoryService {
     try {
       logger.info(`Getting conversation with ID: ${conversationId}`);
 
-      // SANITIZATION: Ensure correct format for edge query
       const convKey = conversationId.includes('/') ? conversationId.split('/').pop() : conversationId;
       const conversationIdFull = `conversations/${convKey}`;
-      
-      logger.info(`[DEBUG] Querying conversationFiles where _from == "${conversationIdFull}"`);
 
-      // DEBUG PEEK: Check if ANY edges exist in the collection to verify data integrity
-      try {
-        const debugCursor = await this.db.query(aql`
-          FOR edge IN conversationFiles
-          LIMIT 5
-          RETURN { from: edge._from, to: edge._to }
-        `);
-        const debugEdges = await debugCursor.all();
-        logger.info(`[DEBUG] First 5 edges in conversationFiles: ${JSON.stringify(debugEdges)}`);
-      } catch (e) {
-        logger.warn('[DEBUG] Failed to peek at conversationFiles:', e.message);
-      }
-
-      // Get conversation main document first to ensure 404 if missing
-      const conversation = await this.conversations.document(conversationId);
+      // Get conversation main document
+      const conversation = await this.conversations.document(convKey);
 
       // OPTIMIZATION: Run independent queries in PARALLEL
       const [messages, categories, owners, files] = await Promise.all([
         // 1. Get Messages
         this.db.query(aql`
           FOR msg IN messages
-            FILTER msg.conversationId == ${conversationId}
+            FILTER msg.conversationId == ${convKey}
             SORT msg.sequence ASC
             LET queryLink = (
               FOR edge IN queryMessages
@@ -345,7 +310,7 @@ class ChatHistoryService {
         // 2. Get Categories
         this.db.query(aql`
           FOR edge IN conversationCategories
-            FILTER edge._from == ${'conversations/' + conversationId}
+            FILTER edge._from == ${conversationIdFull}
             FOR cat IN serviceCategories
               FILTER cat._id == edge._to
               RETURN {
@@ -361,7 +326,7 @@ class ChatHistoryService {
         // 3. Get Owners
         this.db.query(aql`
           FOR edge IN userConversations
-            FILTER edge._to == ${'conversations/' + conversationId}
+            FILTER edge._to == ${conversationIdFull}
             FOR user IN users
               FILTER user._id == edge._from
               RETURN {
@@ -372,23 +337,26 @@ class ChatHistoryService {
               }
         `).then(cursor => cursor.all()),
 
-        // 4. NEW: Get Linked Files (Reference Documents)
+        // 4. NEW: Get Linked Files (Standard Document Query)
         this.db.query(aql`
-          FOR edge IN conversationFiles
-            FILTER edge._from == ${conversationIdFull}
-            SORT edge.createdAt DESC
-            // Return raw edge data too for debugging if needed
+          FOR doc IN conversationFiles
+            FILTER doc.conversationId == ${convKey}
+            SORT doc.createdAt DESC
+            
+            // Safe lookup using the explicit 'fileId' field we now save
+            LET fileDoc = DOCUMENT(doc.fileId) || {}
+            
             RETURN {
-              id: PARSE_IDENTIFIER(edge._to).key,
-              edgeId: edge._id, 
-              labels: edge.labels,
-              categoryLabel: edge.categoryLabel,
-              score: edge.confidenceScore,
-              createdAt: edge.createdAt,
-              // Attempt to fetch file metadata
-              documentName: DOCUMENT(edge._to).name,
-              fileName: DOCUMENT(edge._to).fileName,
-              url: DOCUMENT(edge._to).url
+              id: PARSE_IDENTIFIER(doc.fileId).key, 
+              labels: doc.labels,
+              categoryLabel: doc.categoryLabel,
+              score: doc.confidenceScore,
+              createdAt: doc.createdAt,
+              
+              // Safe property access
+              documentName: fileDoc.name || fileDoc.documentName || "Unknown Document",
+              fileName: fileDoc.fileName || fileDoc.name || "Unknown File",
+              url: fileDoc.url || null
             }
         `).then(cursor => cursor.all())
       ]);
@@ -400,7 +368,7 @@ class ChatHistoryService {
         messages,
         categories,
         owners,
-        files // Return the files
+        files
       };
     } catch (error) {
       logger.error(`Error getting conversation ${conversationId}:`, error);
@@ -781,32 +749,28 @@ class ChatHistoryService {
       const convKey = conversationId.includes('/') ? conversationId.split('/').pop() : conversationId;
       const conversationIdFull = `conversations/${convKey}`;
 
-      // Verify the user has permission
+      // Verify permission
       const permissionQuery = `
         FOR edge IN userConversations
           FILTER edge._to == '${conversationIdFull}' AND edge._from == 'users/${userId}'
           RETURN edge
       `;
-
       const permissionCursor = await this.db.query(permissionQuery);
       const permission = await permissionCursor.next();
 
       if (!permission) {
-        logger.warn(`User ${userId} does not have permission to delete conversation ${conversationId}`);
         throw new Error('You do not have permission to delete this conversation');
       }
 
-      // Get all message IDs for this conversation
+      // Get messages
       const messageQuery = `
         FOR msg IN messages
           FILTER msg.conversationId == "${convKey}"
           RETURN msg._id
       `;
-
       const messageCursor = await this.db.query(messageQuery);
       const messageIds = await messageCursor.all();
 
-      // Start transaction
       const trx = await this.db.beginTransaction({
         write: ['messages', 'queryMessages', 'userConversations', 'conversationCategories', 'conversations', 'conversationFiles']
       });
@@ -824,18 +788,17 @@ class ChatHistoryService {
           });
         }
 
-        // Delete all messages
+        // Delete messages
         const deleteMessageQuery = `
           FOR msg IN messages
             FILTER msg.conversationId == "${convKey}"
             REMOVE msg IN messages
             RETURN OLD
         `;
-
         const deleteMessageResult = await trx.step(() => this.db.query(deleteMessageQuery));
         const messagesDeleted = await deleteMessageResult.all();
 
-        // Delete user-conversation edges
+        // Delete user links
         const deleteUserEdgeQuery = `
           FOR edge IN userConversations
             FILTER edge._to == '${conversationIdFull}'
@@ -843,7 +806,7 @@ class ChatHistoryService {
         `;
         await trx.step(() => this.db.query(deleteUserEdgeQuery));
 
-        // Delete conversation-category edges
+        // Delete category links
         const deleteCategoryEdgeQuery = `
           FOR edge IN conversationCategories
             FILTER edge._from == '${conversationIdFull}'
@@ -851,25 +814,20 @@ class ChatHistoryService {
         `;
         await trx.step(() => this.db.query(deleteCategoryEdgeQuery));
 
-        // NEW: Delete conversation-file edges
-        const deleteFileEdgeQuery = `
-          FOR edge IN conversationFiles
-            FILTER edge._from == '${conversationIdFull}'
-            REMOVE edge IN conversationFiles
+        // NEW: Delete file mappings (Standard Document Delete)
+        // Note: Using 'doc.conversationId' instead of '_from'
+        const deleteFileDocQuery = `
+          FOR doc IN conversationFiles
+            FILTER doc.conversationId == "${convKey}"
+            REMOVE doc IN conversationFiles
         `;
-        await trx.step(() => this.db.query(deleteFileEdgeQuery));
+        await trx.step(() => this.db.query(deleteFileDocQuery));
 
-        // Delete the conversation
+        // Delete conversation
         await trx.step(() => this.conversations.remove(convKey));
 
         await trx.commit();
-        logger.info(`Conversation ${conversationId} deleted with ${messagesDeleted.length} messages`);
-
-        return {
-          conversationId,
-          messagesDeleted: messagesDeleted.length,
-          success: true
-        };
+        return { conversationId, messagesDeleted: messagesDeleted.length, success: true };
       } catch (error) {
         await trx.abort();
         throw error;

@@ -1186,6 +1186,19 @@ class FileController {
     }
   }
 
+  async killIngestion(req, res) {
+    try {
+      const { fileId } = req.params;
+      const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}/v1/dataprep/kill_ingest`;
+    
+      const response = await axios.post(dataprepUrl, { fileId });
+      res.json(response.data);
+    } catch (error) {
+      logger.error('Kill ingestion error:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
   // --- NEW CRAWLER METHODS ---
 
   /**

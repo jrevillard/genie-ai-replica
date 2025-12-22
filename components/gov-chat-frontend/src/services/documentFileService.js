@@ -252,6 +252,21 @@ const documentFileService = {
       throw error;
     }
   },
+  
+  /**
+   * Sends a kill signal to a running ingestion task.
+   * @param {string} fileId - The ID of the file associated with the ingestion job.
+   * @returns {Promise<Object>} The API response confirming the kill signal.
+   */
+  async killIngestion(fileId) {
+    try {
+      const response = await httpService.post(`/files/${fileId}/kill-ingest`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error killing ingestion for ${fileId}:`, error);
+      throw error;
+    }
+  }
 };
 
 export default documentFileService;

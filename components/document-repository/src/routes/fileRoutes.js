@@ -391,6 +391,33 @@ router.post('/:fileId/kill-crawl', authorizeRole(['Admin']), fileController.kill
 
 /**
  * @swagger
+ * /api/files/{fileId}/kill-ingest:
+ *   post:
+ *     summary: Triggers the kill signal for a ingestion task
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       '200':
+ *         description: Kill signal sent successfully
+ *       '401':
+ *         description: Unauthorized
+ *       '403':
+ *         description: Forbidden - Admin role required
+ *       '404':
+ *         description: Job not found
+ */
+router.post('/:fileId/kill-ingest', authorizeRole(['Admin']), fileController.killIngestion);
+
+/**
+ * @swagger
  * /api/files/{fileId}/view:
  *   get:
  *     summary: Get file as base64 for viewing

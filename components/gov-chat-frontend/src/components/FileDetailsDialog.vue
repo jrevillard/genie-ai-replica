@@ -444,20 +444,6 @@
                     translate("details.log.killDocument", "Kill This Document")
                   }}
                 </button>
-                <button
-                  class="btn btn-danger"
-                  @click="handleKillProcess"
-                  :disabled="
-                    file.dataprep.status?.toLowerCase() !== 'ingesting'
-                  "
-                >
-                  {{
-                    translate(
-                      "details.log.killProcess",
-                      "Kill Ingestion Process"
-                    )
-                  }}
-                </button>
               </div>
             </div>
             <div class="log-table-container">
@@ -1506,50 +1492,26 @@ export default {
         onCancel: this.closeConfirm,
       };
     },
-    confirmKillDocument() {
-      this.closeConfirm();
-      console.warn("KILL DOCUMENT Requested (Backend not implemented)");
-      this.showNotification(
-        this.translate(
-          "details.notifications.killDocSent",
-          "Kill request for this document has been sent."
-        ),
-        "info"
-      );
-      // TODO: Call backend service when available
-    },
 
-    handleKillProcess() {
-      this.confirmDialog = {
-        visible: true,
-        title: this.translate(
-          "details.confirm.killProcTitle",
-          "Kill ENTIRE Ingestion Process"
-        ),
-        message: this.translate(
-          "details.confirm.killProc",
-          "WARNING: This will kill the entire backend ingestion service, affecting ALL files currently processing. Are you absolutely sure?"
-        ),
-        confirmText: this.translate(
-          "details.log.killProcess",
-          "Kill Ingestion Process"
-        ),
-        cancelText: this.translate("common.cancel", "Cancel"),
-        onConfirm: this.confirmKillProcess,
-        onCancel: this.closeConfirm,
-      };
-    },
-    confirmKillProcess() {
+    async confirmKillDocument() {
       this.closeConfirm();
-      console.warn("KILL PROCESS Requested (Backend not implemented)");
-      this.showNotification(
-        this.translate(
-          "details.notifications.killProcSent",
-          "Kill request for the ingestion process has been sent."
-        ),
-        "warning"
-      );
-      // TODO: Call backend service when available
+      this.isLogLoading = true;
+      try {
+        // Call the new service method
+        await documentFileService.killIngestion(this.fileId);
+    
+        this.showNotification(
+          this.translate("details.notifications.killDocSent", "Kill request sent. Rolling back changes..."),
+          "info"
+        );
+    
+        // Refresh logs to see the rollback progress
+        setTimeout(() => this.fetchIngestionLogs(), 2000);
+      } catch (error) {
+        this.showNotification("Failed to kill ingestion: " + error.message, "error");
+      } finally {
+        this.isLogLoading = false;
+      }
     },
 
     // --- Log Tab Methods ---

@@ -12,6 +12,7 @@ import base64
 import os
 import time
 import fcntl
+import asyncio
 from typing import List, Optional, Union
 
 from pydantic import BaseModel
@@ -48,6 +49,9 @@ loader = GenieDataprepLoader(
     description=f"OPEA DATAPREP Component: {dataprep_component_name}",
 )
 
+# Global registry for running ingestion tasks to support specific "Kill" functionality
+active_ingestion_tasks = {}
+
 # ------------------------------------------------------------------------------
 # Custom request payload models
 # ------------------------------------------------------------------------------
@@ -76,20 +80,10 @@ class DocRepoRetractPayload(BaseModel):
     port=5000,
 )
 @register_statistics(names=["opea_service@dataprep"])
-async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks: BackgroundTasks):
+async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     """
-    Accepts JSON:
-    {
-        "fileId": "...",
-        "fileName": "...",
-        "fileBase64": "...",
-        "fileType": "...",
-        "uploadDate": "...",
-        "fileLabels": [...],
-        "storagePath": "..."
-    }
+    Accepts JSON and starts a tracked background task for ingestion.
     """
-
     start = time.time()
     logger.info(f"[ ingest ] Request received for file_id: {payload.fileId}")
 
@@ -104,10 +98,10 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
         logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
         raise HTTPException(
             status_code=429, 
-            detail="System is currently processing another document. Please wait for the current ingestion task to complete."
+            detail="System is currently processing another document. Only one ingestion can run at a time."
         )
 
-    # --- Environment-specific Arango config (set via env vars or defaults) ---
+    # --- Environment-specific Arango config ---
     ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST")
     ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
     ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 1000))
@@ -119,21 +113,20 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
     INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
 
     try:
-        # --- Decode and temporarily save file ---
-        # We do this synchronously so the file exists before we return 200
+        # Decode and temporarily save file
         file_bytes = base64.b64decode(payload.fileBase64)
         save_path = os.path.join(upload_folder, payload.fileName)
         with open(save_path, "wb") as f:
             f.write(file_bytes)
         logger.info(f"[ ingest ] File saved to: {save_path}")
 
-        # --- Construct Arango-specific dataprep request ---
+        # Construct Arango-specific dataprep request
         input_req = ArangoDBDataprepRequestFromDocRepo(
             file_id=payload.fileId,
             file_name=payload.fileName,
             file_path=save_path,
             file_type=payload.fileType,
-            file_labels=payload.fileLabels, # Passed through here
+            file_labels=payload.fileLabels,
             upload_date=payload.uploadDate,
             graph_name=ARANGO_GRAPH_NAME,
             insert_async=ARANGO_INSERT_ASYNC,
@@ -149,10 +142,13 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
             include_chunks=INCLUDE_CHUNKS,
         )
 
-        # --- Trigger Background Task (Spec 5.1) ---
-        # PASS THE LOCKED FILE OBJECT to the background task.
-        # The background task is responsible for releasing the lock (closing the file).
-        background_tasks.add_task(loader.ingest_file_with_guardrail, input_req, lock_file=lock_file)
+        # --- Trigger Tracked Background Task ---
+        # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
+        task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
+        active_ingestion_tasks[payload.fileId] = task
+        
+        # Ensure the task is removed from the registry upon completion (success or failure)
+        task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
 
         statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 
@@ -164,14 +160,49 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload, background_tasks:
 
     except Exception as e:
         logger.error(f"Error initiating dataprep ingest: {e}")
-        # Cleanup lock if we fail before assigning to background task
+        # Cleanup lock if we fail before task starts
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()
         
-        # Cleanup file
         if os.path.exists(save_path):
             os.remove(save_path)
         raise
+
+
+# ------------------------------------------------------------------------------
+# Kill Ingestion Task
+# ------------------------------------------------------------------------------
+@register_microservice(
+    name="opea_service@dataprep",
+    service_type=ServiceType.DATAPREP,
+    endpoint="/v1/dataprep/kill_ingest",
+    host="0.0.0.0",
+    port=5000,
+)
+async def kill_ingest_task(payload: DocRepoRetractPayload):
+    """
+    Cancels a specific running ingestion task. 
+    The task cancellation will trigger the rollback logic in the component.
+    """
+    file_id = payload.fileId
+    logger.info(f"[ kill ] Attempting to kill ingestion task for file_id: {file_id}")
+
+    if file_id in active_ingestion_tasks:
+        task = active_ingestion_tasks[file_id]
+        task.cancel()
+        return {
+            "success": True, 
+            "status": 200, 
+            "message": f"Kill signal sent to ingestion task for {file_id}."
+        }
+    
+    logger.warning(f"[ kill ] No active ingestion task found for file_id: {file_id}")
+    return {
+        "success": False, 
+        "status": 404, 
+        "message": "No active ingestion task found for this file."
+    }
+
 
 # ------------------------------------------------------------------------------
 # Retract (delete) a file from graph
@@ -193,18 +224,13 @@ async def retract_file(payload: DocRepoRetractPayload):
     logger.info(f"[ retract ] Start to delete ingested file {file_id}")
 
     try:
-        if dataprep_component_name == "GENIE_DATAPREP_ARANGODB":
-            response = await loader.retract_file(file_id=file_id, graph_name=graph_name)
-        else:
-            logger.error(f"dataprep_component_name is not set or invalid: {dataprep_component_name}")
-            raise RuntimeError("Unsupported dataprep_component_name")
+        response = await loader.retract_file(file_id=file_id, graph_name=graph_name)
 
-        # FIX: Ensure success flag is present for Node.js controller
+        # Ensure success flag for Node.js controller consistency
         if isinstance(response, dict):
             if response.get("status") == 200:
                 response["success"] = True
             elif "success" not in response:
-                # Fallback if status is missing but it returned a dict (usually success in OPEA)
                 response["success"] = False
 
         if logflag:
@@ -218,7 +244,7 @@ async def retract_file(payload: DocRepoRetractPayload):
 
 
 # ------------------------------------------------------------------------------
-# Launch microservice (inherits base service registry)
+# Launch microservice
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     logger.info("GENIE Dataprep Microservice is starting...")

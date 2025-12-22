@@ -805,7 +805,6 @@ export default {
       this.showQuickHelp = false;
       this.isLoading = true;
       // Do NOT clear relatedDocuments here. We want to keep previous docs visible.
-      // this.relatedDocuments = []; 
 
       const startTime = performance.now(); // Start timing
 
@@ -870,7 +869,10 @@ export default {
           queryId: result.queryId,
           timestamp: new Date().toISOString(),
           isSaved: false,
+          // CRITICAL FIX: Attach the full metadata object so it can be saved later
+          metadata: result.metadata || {} 
         };
+        
         if (result.metadata) {
           if (result.metadata.confidence_score) {
             botMessage.confidenceScore = result.metadata.confidence_score;
@@ -913,7 +915,6 @@ export default {
         if (result.sessionId) {
           this.currentSessionId = result.sessionId;
         }
-        // Removed duplicate markQueryAsAnswered call (handled in submitQuery)
       } catch (error) {
         // --- Error State Update ---
         this.systemStatus.lastResponseTime = null; // No successful response time

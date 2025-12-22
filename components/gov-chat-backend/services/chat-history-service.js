@@ -289,12 +289,15 @@ class ChatHistoryService {
   async getConversation(conversationId) {
     try {
       logger.info(`Getting conversation with ID: ${conversationId}`);
+      
+      // DEBUG: Log the edge ID we are looking for
+      const conversationIdFull = 'conversations/' + conversationId;
+      logger.info(`[DEBUG] Querying conversationFiles where _from == "${conversationIdFull}"`);
 
       // Get conversation main document first to ensure 404 if missing
       const conversation = await this.conversations.document(conversationId);
 
       // OPTIMIZATION: Run independent queries in PARALLEL
-      // Added 4th query for 'files'
       const [messages, categories, owners, files] = await Promise.all([
         // 1. Get Messages
         this.db.query(aql`
@@ -314,7 +317,7 @@ class ChatHistoryService {
         // 2. Get Categories
         this.db.query(aql`
           FOR edge IN conversationCategories
-            FILTER edge._from == ${'conversations/' + conversationId}
+            FILTER edge._from == ${conversationIdFull}
             FOR cat IN serviceCategories
               FILTER cat._id == edge._to
               RETURN {
@@ -330,7 +333,7 @@ class ChatHistoryService {
         // 3. Get Owners
         this.db.query(aql`
           FOR edge IN userConversations
-            FILTER edge._to == ${'conversations/' + conversationId}
+            FILTER edge._to == ${conversationIdFull}
             FOR user IN users
               FILTER user._id == edge._from
               RETURN {
@@ -341,18 +344,20 @@ class ChatHistoryService {
               }
         `).then(cursor => cursor.all()),
 
-        // 4. NEW: Get Linked Files (Reference Documents)
+        // 4. NEW: Get Linked Files (Reference Documents) with DEBUG logic
         this.db.query(aql`
           FOR edge IN conversationFiles
-            FILTER edge._from == ${'conversations/' + conversationId}
+            FILTER edge._from == ${conversationIdFull}
             SORT edge.createdAt DESC
+            // Return raw edge data too for debugging if needed
             RETURN {
               id: PARSE_IDENTIFIER(edge._to).key,
+              edgeId: edge._id, 
               labels: edge.labels,
               categoryLabel: edge.categoryLabel,
               score: edge.confidenceScore,
               createdAt: edge.createdAt,
-              // Fetch basic info from the edge or lookup the file doc if necessary
+              // Attempt to fetch file metadata
               documentName: DOCUMENT(edge._to).name,
               fileName: DOCUMENT(edge._to).fileName,
               url: DOCUMENT(edge._to).url
@@ -360,14 +365,15 @@ class ChatHistoryService {
         `).then(cursor => cursor.all())
       ]);
 
-      logger.info(`Found ${messages.length} messages and ${files.length} files for conversation ${conversationId}`);
+      // DEBUG: Log the raw files array returned from DB
+      logger.info(`[DEBUG] Files Query Result for ${conversationId}:`, JSON.stringify(files, null, 2));
 
       return {
         ...conversation,
         messages,
         categories,
         owners,
-        files // Return the files to the frontend
+        files // Return the files
       };
     } catch (error) {
       logger.error(`Error getting conversation ${conversationId}:`, error);

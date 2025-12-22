@@ -990,13 +990,18 @@ export default {
 
     async loadExistingConversation(conversationId) {
       try {
-        console.log(`Loading conversation ${conversationId}`);
+        console.log(`[DEBUG] Loading conversation ${conversationId} - Starting request...`);
         const conversation = await this.chatHistoryService.getConversation(
           conversationId
         );
+        
         if (!conversation) {
           throw new Error("Conversation not found");
         }
+
+        // DEBUG: Log the full response from backend
+        console.log("[DEBUG] Conversation loaded successfully:", conversation);
+        console.log("[DEBUG] conversation.files raw data:", conversation.files);
 
         this.conversationId = conversation._key;
         this.currentChatId = conversation._key;
@@ -1005,19 +1010,28 @@ export default {
         
         // NEW: Populate related documents from history (files property from backend)
         if (conversation.files && Array.isArray(conversation.files)) {
-          this.relatedDocuments = conversation.files.map(file => ({
-            id: file.id,
-            title: file.documentName || file.fileName || `Source ${file.id}`,
-            documentName: file.documentName,
-            fileName: file.fileName,
-            type: file.url?.split(".").pop().toUpperCase() || "LINK",
-            size: 0, 
-            url: file.url,
-            score: file.score,
-            categoryLabel: file.categoryLabel,
-            serviceLabels: file.labels || []
-          }));
+          console.log(`[DEBUG] Found ${conversation.files.length} files. Mapping to relatedDocuments...`);
+          
+          this.relatedDocuments = conversation.files.map(file => {
+             // Debug individual file mapping
+             const mapped = {
+                id: file.id,
+                title: file.documentName || file.fileName || `Source ${file.id}`,
+                documentName: file.documentName,
+                fileName: file.fileName,
+                type: file.url?.split(".").pop().toUpperCase() || "LINK",
+                size: 0,
+                url: file.url,
+                score: file.score,
+                categoryLabel: file.categoryLabel,
+                serviceLabels: file.labels || []
+             };
+             return mapped;
+          });
+          
+          console.log("[DEBUG] Final mapped relatedDocuments:", this.relatedDocuments);
         } else {
+          console.warn("[DEBUG] No 'files' array found in conversation response or it is empty.");
           this.relatedDocuments = [];
         }
 

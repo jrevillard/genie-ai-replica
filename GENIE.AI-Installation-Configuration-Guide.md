@@ -468,6 +468,8 @@ Configuration for the retrieval logic (hybrid search, traversals, etc.).
 | RETRIEVER\_ARANGO\_DISTANCE\_STRATEGY | Distance metric used for vector search (e.g., COSINE).  | COSINE |
 | RETRIEVER\_ARANGO\_NUM\_CENTROIDS | Number of centroids for vector search optimization.  | 1 |
 | RETRIEVER\_ARANGO\_USE\_APPROX\_SEARCH | Use approximate nearest neighbor search. | false |
+| RETRIEVER\_ARANGO\_K | Controls the number of top-rated  chunks returned by the retriever.  | 5 |
+| RETRIEVER\_ARANGO\_FETCH\_K | Regulates the number of candidate chunks to which the similarity score filtering is applied. Increasing FETCH\_K and K could contribute to better accuracy in case of information-dense queries or content. Decreasing both could boost speed. Increasing the former while decreasing the latter could potentially improve both accuracy and speed, but create greater risk of errors for edge cases | 10 |
 | RETRIEVER\_SUMMARIZER\_ENABLED | Enable summarization of retrieved docs. | false |
 | RETRIEVER\_OPENAI\_CHAT\_ENABLED | Enable OpenAI chat format in retriever. | true |
 | RETRIEVER\_OPENAI\_EMBED\_ENABLED | Enable OpenAI embed format in retriever. | true |

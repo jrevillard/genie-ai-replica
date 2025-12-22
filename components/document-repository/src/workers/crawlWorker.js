@@ -156,19 +156,35 @@ const processJob = async (job, db) => {
     }
   };
 
+  // --- REUSABLE KILL CHECK ---
+  const checkKillStatus = async () => {
+      if (isJobKilled) throw new Error('Killed');
+      
+      const now = Date.now();
+      if (now - lastKillCheck > 2000) {
+          try {
+              const currentJob = await db.collection('crawl_job').document(job._key);
+              if (currentJob.kill_requested) {
+                  isJobKilled = true;
+                  throw new Error('Killed');
+              }
+          } catch(e) {
+              if (e.message === 'Killed') throw e;
+              // Ignore DB errors during check, rely on next check
+              logger.warn(`[CRAWL-WORKER] Kill check failed: ${e.message}`);
+          }
+          lastKillCheck = now;
+      }
+  };
+
   try {
     await updateJobStatus(db, job._key, 'Crawling');
     await fileService.addCrawlLog(fileId, 'INFO', 'System', `Crawl started for ${job.url}. Streaming to disk.`);
 
+    // --- WORK CALLBACK (Executed for every successfully fetched page) ---
     const workCallback = async (crawledUrl, $) => {
       // 1. Kill Check
-      const now = Date.now();
-      if (now - lastKillCheck > 2000) {
-          const currentJob = await db.collection('crawl_job').document(job._key);
-          if (currentJob.kill_requested) isJobKilled = true;
-          lastKillCheck = now;
-      }
-      if (isJobKilled) throw new Error('Killed');
+      await checkKillStatus();
 
       // 2. Page Limit
       if (pagesProcessed >= MAX_PAGES_PER_JOB) throw new Error('MaxPagesReached');
@@ -205,7 +221,12 @@ const processJob = async (job, db) => {
       }
     };
 
+    // --- METRICS CALLBACK (Executed periodically by Crawler) ---
     const onMetricsUpdate = async (metrics) => {
+      // 1. Kill Check (Crucial: Runs even if pages are failing/slow)
+      await checkKillStatus();
+
+      // 2. Report Metrics
       const now = Date.now();
       if (now - lastMetricsUpdate > 3000) {
           try {
@@ -217,7 +238,10 @@ const processJob = async (job, db) => {
             });
             await updateJobProgress(db, job._key, pagesProcessed);
             await flushLogBuffer();
-          } catch (e) { /* ignore metrics errors */ }
+          } catch (e) { 
+              // Do not swallow "Killed", but ignore other metrics errors
+              if (e.message === 'Killed') throw e;
+          }
           lastMetricsUpdate = now;
       }
     };

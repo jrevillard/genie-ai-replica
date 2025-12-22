@@ -612,7 +612,7 @@ export default {
       knowledgeHierarchy: [],
       englishKnowledgeHierarchy: [],
       currentLocale: this.$i18n?.locale || "en",
-      areAllLabelsSelected: false,
+      // Removed 'areAllLabelsSelected' from data as it's now computed
       activeTab: "details",
       ingestionLogs: [],
       isLogLoading: false,
@@ -630,6 +630,30 @@ export default {
     };
   },
   computed: {
+    // --- UPDATED COMPUTED PROPERTY ---
+    areAllLabelsSelected: {
+      get() {
+        // If there are no labels to select, we aren't "all selected"
+        if (this.allLabelNames.length === 0) return false;
+        
+        // Check if length matches AND every available label is in the selected list
+        return (
+          this.editableFile.labels.length === this.allLabelNames.length &&
+          this.allLabelNames.every((label) =>
+            this.editableFile.labels.includes(label)
+          )
+        );
+      },
+      set(value) {
+        if (this.isMetadataEditable) {
+          // Only update the labels if the USER interacts with the select-all box.
+          // Because this is a setter, it is only called when v-model writes to it.
+          this.editableFile.labels = value ? [...this.allLabelNames] : [];
+        }
+      },
+    },
+    // ---------------------------------
+
     dashboardProgressPercent() {
         if (!this.crawlStats.limit) return 0;
         return (this.crawlStats.processed / this.crawlStats.limit) * 100;
@@ -730,6 +754,9 @@ export default {
     },
   },
   watch: {
+    // --- Removed areAllLabelsSelected watcher ---
+    // --- Removed editableFile.labels watcher ---
+    
     fileId: {
       immediate: true,
       handler(newId) {
@@ -763,22 +790,6 @@ export default {
       if (newLocale && newLocale !== this.currentLocale) {
         this.currentLocale = newLocale;
         this.fetchData(this.fileId);
-      }
-    },
-    areAllLabelsSelected(newValue) {
-      if (this.isMetadataEditable) {
-        this.editableFile.labels = newValue ? [...this.allLabelNames] : [];
-      }
-    },
-    "editableFile.labels"(newLabels) {
-      if (this.allLabelNames.length > 0) {
-        const allSelected = this.allLabelNames.every((label) =>
-          newLabels.includes(label)
-        );
-        this.areAllLabelsSelected =
-          allSelected && newLabels.length === this.allLabelNames.length;
-      } else {
-        this.areAllLabelsSelected = false;
       }
     },
   },

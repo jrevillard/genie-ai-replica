@@ -294,6 +294,7 @@ class ChatHistoryService {
       const conversation = await this.conversations.document(conversationId);
 
       // OPTIMIZATION: Run independent queries in PARALLEL
+      // Added 4th query for 'files'
       const [messages, categories, owners, files] = await Promise.all([
         // 1. Get Messages
         this.db.query(aql`
@@ -345,31 +346,28 @@ class ChatHistoryService {
           FOR edge IN conversationFiles
             FILTER edge._from == ${'conversations/' + conversationId}
             SORT edge.createdAt DESC
-            // Retrieve edge metadata and merge with file details if needed.
-            // We return a structure compatible with the frontend "relatedDocuments".
             RETURN {
               id: PARSE_IDENTIFIER(edge._to).key,
               labels: edge.labels,
               categoryLabel: edge.categoryLabel,
               score: edge.confidenceScore,
               createdAt: edge.createdAt,
-              // We assume we might need to fetch the actual file doc for names if not stored on edge.
-              // If file doc lookup is required:
-              documentName: DOCUMENT(edge._to).documentName || DOCUMENT(edge._to).name,
+              // Fetch basic info from the edge or lookup the file doc if necessary
+              documentName: DOCUMENT(edge._to).name,
               fileName: DOCUMENT(edge._to).fileName,
               url: DOCUMENT(edge._to).url
             }
         `).then(cursor => cursor.all())
       ]);
 
-      logger.info(`Found ${messages.length} messages for conversation ${conversationId}`);
+      logger.info(`Found ${messages.length} messages and ${files.length} files for conversation ${conversationId}`);
 
       return {
         ...conversation,
         messages,
         categories,
         owners,
-        files // Return the list of files
+        files // Return the files to the frontend
       };
     } catch (error) {
       logger.error(`Error getting conversation ${conversationId}:`, error);

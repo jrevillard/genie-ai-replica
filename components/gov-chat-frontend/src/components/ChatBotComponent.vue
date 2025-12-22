@@ -1011,7 +1011,7 @@ export default {
             documentName: file.documentName,
             fileName: file.fileName,
             type: file.url?.split(".").pop().toUpperCase() || "LINK",
-            size: 0, // Metadata not currently stored
+            size: 0, 
             url: file.url,
             score: file.score,
             categoryLabel: file.categoryLabel,

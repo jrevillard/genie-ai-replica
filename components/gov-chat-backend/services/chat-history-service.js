@@ -195,18 +195,29 @@ class ChatHistoryService {
       const message = await this.messages.save(messageDoc);
       logger.info(`Message created with key: ${message._key}`);
 
+      // ---------------------------------------------------------
       // NEW: Link Reference Documents (Files) to Conversation
+      // ---------------------------------------------------------
       if (messageData.metadata && Array.isArray(messageData.metadata.source_documents)) {
         const docs = messageData.metadata.source_documents;
+        
+        // SANITIZATION: Ensure we have a clean conversation ID format (conversations/KEY)
+        // If the ID coming in is "conversations/123", split it. If it's just "123", use it.
+        const convKey = messageData.conversationId.includes('/') 
+          ? messageData.conversationId.split('/').pop() 
+          : messageData.conversationId;
+        const conversationIdFull = `conversations/${convKey}`;
+
         for (const doc of docs) {
           // Use document_id or id, and ensure it has the collection prefix if missing
           const rawId = doc.document_id || doc.id;
           if (rawId) {
+            // Assume 'files' collection if no collection prefix provided
             const fileId = rawId.includes('/') ? rawId : `files/${rawId}`;
             
             try {
               await this.conversationFiles.save({
-                _from: `conversations/${messageData.conversationId}`,
+                _from: conversationIdFull,
                 _to: fileId,
                 messageId: message._key, // Link to specific message for context
                 labels: doc.serviceLabels || doc.labels || [], 
@@ -214,6 +225,7 @@ class ChatHistoryService {
                 confidenceScore: doc.score || 0,
                 createdAt: new Date().toISOString()
               });
+              logger.info(`[DEBUG] Saved file link: ${conversationIdFull} -> ${fileId}`);
             } catch (edgeError) {
               // Log warning but don't fail the message creation if a file link fails
               logger.warn(`Failed to save conversationFile edge for ${fileId}: ${edgeError.message}`);
@@ -224,6 +236,7 @@ class ChatHistoryService {
           logger.info(`Linked ${docs.length} reference documents to conversation ${messageData.conversationId}`);
         }
       }
+      // ---------------------------------------------------------
 
       // Link to originating query if provided (Critical Wait)
       if (messageData.queryId) {
@@ -289,10 +302,25 @@ class ChatHistoryService {
   async getConversation(conversationId) {
     try {
       logger.info(`Getting conversation with ID: ${conversationId}`);
+
+      // SANITIZATION: Ensure correct format for edge query
+      const convKey = conversationId.includes('/') ? conversationId.split('/').pop() : conversationId;
+      const conversationIdFull = `conversations/${convKey}`;
       
-      // DEBUG: Log the edge ID we are looking for
-      const conversationIdFull = 'conversations/' + conversationId;
       logger.info(`[DEBUG] Querying conversationFiles where _from == "${conversationIdFull}"`);
+
+      // DEBUG PEEK: Check if ANY edges exist in the collection to verify data integrity
+      try {
+        const debugCursor = await this.db.query(aql`
+          FOR edge IN conversationFiles
+          LIMIT 5
+          RETURN { from: edge._from, to: edge._to }
+        `);
+        const debugEdges = await debugCursor.all();
+        logger.info(`[DEBUG] First 5 edges in conversationFiles: ${JSON.stringify(debugEdges)}`);
+      } catch (e) {
+        logger.warn('[DEBUG] Failed to peek at conversationFiles:', e.message);
+      }
 
       // Get conversation main document first to ensure 404 if missing
       const conversation = await this.conversations.document(conversationId);
@@ -317,7 +345,7 @@ class ChatHistoryService {
         // 2. Get Categories
         this.db.query(aql`
           FOR edge IN conversationCategories
-            FILTER edge._from == ${conversationIdFull}
+            FILTER edge._from == ${'conversations/' + conversationId}
             FOR cat IN serviceCategories
               FILTER cat._id == edge._to
               RETURN {
@@ -333,7 +361,7 @@ class ChatHistoryService {
         // 3. Get Owners
         this.db.query(aql`
           FOR edge IN userConversations
-            FILTER edge._to == ${conversationIdFull}
+            FILTER edge._to == ${'conversations/' + conversationId}
             FOR user IN users
               FILTER user._id == edge._from
               RETURN {
@@ -344,7 +372,7 @@ class ChatHistoryService {
               }
         `).then(cursor => cursor.all()),
 
-        // 4. NEW: Get Linked Files (Reference Documents) with DEBUG logic
+        // 4. NEW: Get Linked Files (Reference Documents)
         this.db.query(aql`
           FOR edge IN conversationFiles
             FILTER edge._from == ${conversationIdFull}
@@ -365,8 +393,7 @@ class ChatHistoryService {
         `).then(cursor => cursor.all())
       ]);
 
-      // DEBUG: Log the raw files array returned from DB
-      logger.info(`[DEBUG] Files Query Result for ${conversationId}:`, JSON.stringify(files, null, 2));
+      logger.info(`Found ${messages.length} messages and ${files.length} files for conversation ${conversationId}`);
 
       return {
         ...conversation,
@@ -750,11 +777,14 @@ class ChatHistoryService {
   async deleteConversation(conversationId, userId) {
     try {
       logger.info(`Deleting conversation ${conversationId} for user ${userId}`);
+      
+      const convKey = conversationId.includes('/') ? conversationId.split('/').pop() : conversationId;
+      const conversationIdFull = `conversations/${convKey}`;
 
-      // Verify the user has permission to delete this conversation
+      // Verify the user has permission
       const permissionQuery = `
         FOR edge IN userConversations
-          FILTER edge._to == 'conversations/${conversationId}' AND edge._from == 'users/${userId}'
+          FILTER edge._to == '${conversationIdFull}' AND edge._from == 'users/${userId}'
           RETURN edge
       `;
 
@@ -769,15 +799,14 @@ class ChatHistoryService {
       // Get all message IDs for this conversation
       const messageQuery = `
         FOR msg IN messages
-          FILTER msg.conversationId == "${conversationId}"
+          FILTER msg.conversationId == "${convKey}"
           RETURN msg._id
       `;
 
       const messageCursor = await this.db.query(messageQuery);
       const messageIds = await messageCursor.all();
 
-      // Start a transaction to ensure atomicity
-      // NEW: Added 'conversationFiles' to write array
+      // Start transaction
       const trx = await this.db.beginTransaction({
         write: ['messages', 'queryMessages', 'userConversations', 'conversationCategories', 'conversations', 'conversationFiles']
       });
@@ -798,7 +827,7 @@ class ChatHistoryService {
         // Delete all messages
         const deleteMessageQuery = `
           FOR msg IN messages
-            FILTER msg.conversationId == "${conversationId}"
+            FILTER msg.conversationId == "${convKey}"
             REMOVE msg IN messages
             RETURN OLD
         `;
@@ -809,36 +838,31 @@ class ChatHistoryService {
         // Delete user-conversation edges
         const deleteUserEdgeQuery = `
           FOR edge IN userConversations
-            FILTER edge._to == 'conversations/${conversationId}'
+            FILTER edge._to == '${conversationIdFull}'
             REMOVE edge IN userConversations
         `;
-
         await trx.step(() => this.db.query(deleteUserEdgeQuery));
 
         // Delete conversation-category edges
         const deleteCategoryEdgeQuery = `
           FOR edge IN conversationCategories
-            FILTER edge._from == 'conversations/${conversationId}'
+            FILTER edge._from == '${conversationIdFull}'
             REMOVE edge IN conversationCategories
         `;
-
         await trx.step(() => this.db.query(deleteCategoryEdgeQuery));
 
         // NEW: Delete conversation-file edges
         const deleteFileEdgeQuery = `
           FOR edge IN conversationFiles
-            FILTER edge._from == 'conversations/${conversationId}'
+            FILTER edge._from == '${conversationIdFull}'
             REMOVE edge IN conversationFiles
         `;
-
         await trx.step(() => this.db.query(deleteFileEdgeQuery));
 
         // Delete the conversation
-        await trx.step(() => this.conversations.remove(conversationId));
+        await trx.step(() => this.conversations.remove(convKey));
 
-        // Commit the transaction
         await trx.commit();
-
         logger.info(`Conversation ${conversationId} deleted with ${messagesDeleted.length} messages`);
 
         return {
@@ -847,7 +871,6 @@ class ChatHistoryService {
           success: true
         };
       } catch (error) {
-        // Abort the transaction on error
         await trx.abort();
         throw error;
       }

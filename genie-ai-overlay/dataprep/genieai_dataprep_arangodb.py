@@ -491,11 +491,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         logger.error(f"Skipping individual bad document: {inner_e}")
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
-        # NOTE: lock_file is passed from the microservice. It is already LOCKED.
-        # We are responsible for closing it when done.
+        """
+        Asynchronous ingestion task with support for graceful 'Killed' status transitions.
+        Ensures auto-retraction occurs if the task is cancelled or fails.
+        """
+        # NOTE: lock_file is passed from the microservice and is already LOCKED.
+        # We are responsible for releasing and closing it in the finally block.
         
         try:
-            # --- START PROTECTED EXECUTION ---
+            # --- START PROTECTED EXECUTION (Spec 5.1) ---
             await self._update_doc_status(input.file_id, "Ingesting")
             await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
             
@@ -518,22 +522,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     table_strategy=input.table_strategy,
                 )
                 
+                # 2. Extract and Chunk Content
                 chunks = await self._load_and_chunk(doc_path)
                 if not chunks:
                     raise Exception("No valid content extracted from file.")
 
                 await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
 
+                # 3. Guardrail Check
                 gr_result = await self._run_guardrail(chunks)
                 if not gr_result["success"]:
                     await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
                     raise Exception("Guardrail Violation")
 
-                # 5. Labeling
+                # 4. Labeling (Spec 5.3, 5.4)
                 file_labels = getattr(input, "file_labels", [])
                 labelled_docs = await self._apply_labels(chunks, all_labels, file_labels, input.file_id)
 
-                # 6. Graph Insertion (BATCHED & CONCURRENT)
+                # 5. Graph Insertion (BATCHED & CONCURRENT)
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH_TEST"))
                 
                 documents_to_process = []
@@ -551,10 +557,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 BATCH_SIZE = 10 
                 total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
                 
-                # Initialize graph object on self to reuse in helper
                 self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
-                
-                # Create a semaphore to limit concurrency
                 semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
                 tasks = []
 
@@ -562,7 +565,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     batch_docs = documents_to_process[i : i + BATCH_SIZE]
                     current_batch_num = (i // BATCH_SIZE) + 1
                     
-                    # Schedule batch processing
+                    # Schedule batch processing with concurrency control
                     task = asyncio.create_task(
                         self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
                     )
@@ -572,6 +575,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 if tasks:
                     await asyncio.gather(*tasks)
 
+                # 6. Final Status Update
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
 
@@ -580,20 +584,42 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     "message": f"Successfully ingested {len(chunks)} chunks.",
                     "graph_name": graph_name
                 }
+
+            except asyncio.CancelledError:
+                # --- KILL SWITCH HANDLING (Spec 3.1 & 4.2) ---
+                # Triggered when task.cancel() is called from the microservice
+                kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
+                logger.warning(kill_msg)
+                
+                # Log the termination event
+                await self._write_ingestion_log(input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup...")
+                
+                # Perform graceful rollback (retraction)
+                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
+                
+                # Set final status to "Killed" as per state machine specification
+                await self._update_doc_status(input.file_id, "Killed")
+                
+                await self._write_ingestion_log(input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed.")
+                raise # Re-raise to ensure the task terminates properly
                 
             except Exception as e:
+                # --- ERROR HANDLING & AUTO-RETRACTION (Spec 5.5) ---
                 error_msg = f"Ingestion failed: {str(e)}"
                 logger.error(error_msg)
+                
                 await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
                 await self._update_doc_status(input.file_id, "Ingestion Error")
                 
+                # Auto-retract created data
                 await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH_TEST"))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Rollback complete. Document retracted.")
                 
                 raise HTTPException(status_code=500, detail=error_msg)
-            # --- END PROTECTED EXECUTION ---
+
         finally:
-            # Release Lock passed from Microservice
+            # --- LOCK MANAGEMENT ---
+            # Release the file lock so the next document can be processed
             if lock_file:
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()

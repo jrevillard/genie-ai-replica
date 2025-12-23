@@ -1566,8 +1566,10 @@ export default {
       if (lowerStatus === "ingested with warnings") return "status-warn";
       if (lowerStatus === "crawling") return "status-ingesting"; // Re-use ingesting color (blue)
       if (lowerStatus === "crawl failed") return "status-error";
+      if (lowerStatus === "killed") return "status-error";
       return "status-pending";
     },
+    
     formatFileSize(bytes) {
       if (bytes == null || bytes === 0) return "0 Bytes";
       const k = 1024;

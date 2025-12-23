@@ -28,14 +28,22 @@ const searchSchema = Joi.object({
   mimeType: Joi.string().optional()
 });
 
-// UPDATED: Added new statuses to validation
+// UPDATED: Added 'killed' to validation per state machine spec
 const getFilesSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(50).default(10),
   language: Joi.string().min(2).max(5).optional(),
   mimeType: Joi.string().optional(),
   search: Joi.string().max(100).optional(),
-  dataprepStatus: Joi.string().valid('pending', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted').optional(),
+  dataprepStatus: Joi.string().valid(
+    'pending', 
+    'ingesting', 
+    'ingested', 
+    'ingested with warnings', 
+    'ingestion error', 
+    'retracted', 
+    'killed'
+  ).optional(),
 });
 
 const updateFileSchema = Joi.object({
@@ -58,9 +66,18 @@ const ingestionLogSchema = Joi.object({
 });
 
 // Schema for status update from OPEA
+// UPDATED: Added 'Killed' to supported statuses
 const updateStatusSchema = Joi.object({
   dataprep: Joi.object({
-    status: Joi.string().valid('Pending', 'Ingesting', 'Ingested', 'Ingested with Warnings', 'Ingestion Error', 'Retracted').required(),
+    status: Joi.string().valid(
+      'Pending', 
+      'Ingesting', 
+      'Ingested', 
+      'Ingested with Warnings', 
+      'Ingestion Error', 
+      'Retracted', 
+      'Killed'
+    ).required(),
     ingest_date: Joi.string().isoDate().optional().allow(null, ''),
     retract_date: Joi.string().isoDate().optional().allow(null, ''),
   }).required(),
@@ -104,11 +121,12 @@ class FileController {
     this.addIngestionLog = this.addIngestionLog.bind(this);
     this.getIngestionLogs = this.getIngestionLogs.bind(this);
     this.updateFileStatus = this.updateFileStatus.bind(this);
+    this.killIngestion = this.killIngestion.bind(this);
     
     // --- CRAWLER BINDS ---
     this.scheduleSiteCrawl = this.scheduleSiteCrawl.bind(this);
     this.getCrawlJob = this.getCrawlJob.bind(this);
-    this.getCrawlMetrics = this.getCrawlMetrics.bind(this); // <--- NEW
+    this.getCrawlMetrics = this.getCrawlMetrics.bind(this); 
     this.getCrawlLogs = this.getCrawlLogs.bind(this);
     this.killCrawlTask = this.killCrawlTask.bind(this);
   }
@@ -257,7 +275,7 @@ class FileController {
       file_hash: fileRecord.file_hash,
       labels: fileRecord.labels,
       author: fileRecord.author,
-      upload_date: fileRecord.uploaded_date, // FIX: Fixed typo 'uploade_date' to 'uploaded_date'
+      upload_date: fileRecord.uploaded_date, 
       create_date: fileRecord.create_date,
       crawl_date: fileRecord.crawl_date,
       source_url: fileRecord.source_url,
@@ -391,7 +409,6 @@ class FileController {
   }
 
 
-  // --- UPDATED `uploadLink` to use `_handleUploadError` ---
   uploadLink = async (req, res) => {
     try {
       const { url, fileType = 'md' } = req.body;
@@ -410,7 +427,6 @@ class FileController {
         data: this._formatFileRecord(fileRecord)
       });
     } catch (error) {
-      // **FIX:** Use the standardized error handler
       const { status, response } = this._handleUploadError(error);
       res.status(status).json(response);
     }
@@ -630,10 +646,6 @@ class FileController {
         res.json({
           success: true,
           message: 'File deleted successfully',
-          // TODO: [LOW] return deleted file information
-          // data: this._formatFileRecord(deletedFile)
-          // Currently page count or word count is also part of metadata for certain file types. 
-          // We need to fix the metadata schema so that the deleted metadata can be checked and returned here.
         });
       } else {
         return res.status(404).json({
@@ -1186,9 +1198,13 @@ class FileController {
     }
   }
 
+  /**
+   * Kill ingestion for a specific file
+   */
   async killIngestion(req, res) {
     try {
       const { fileId } = req.params;
+      // Triggers the signal in genieai_dataprep_microservice.py
       const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}/v1/dataprep/kill_ingest`;
     
       const response = await axios.post(dataprepUrl, { fileId });
@@ -1238,7 +1254,7 @@ class FileController {
   }
 
   /**
-   * Get status of a crawl job
+   * Get the status of a crawl job
    */
   async getCrawlJob(req, res) {
     try {
@@ -1296,7 +1312,7 @@ class FileController {
   }
 
   /**
-   * Get logs for a crawl job
+   * Get crawl logs
    */
   async getCrawlLogs(req, res) {
     try {
@@ -1321,7 +1337,7 @@ class FileController {
   }
 
   /**
-   * Send kill signal to a crawl job
+   * Send a kill signal to a crawl job
    */
   async killCrawlTask(req, res) {
     try {

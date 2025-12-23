@@ -709,6 +709,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 deleted_edges = [doc for doc in cursor_del_edges]
                 await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {len(deleted_edges)} edges.")
 
+            # STEP 4.5: DELETE LINKS_TO edges associated with the file's content
+            # This targets edges that were specifically formed between entities within this file
+            log_msg = "Cleaning up LINKS_TO edges associated with file chunks..."
+            logger.info(log_msg)
+
+            aql_del_file_links = f"""
+                FOR edge IN @@col_links_to
+                FILTER edge.file_id == @file_id OR edge.metadata.file_id == @file_id
+                REMOVE edge IN @@col_links_to OPTIONS {{ ignoreErrors: true }}
+                RETURN OLD._id
+            """
+            cursor_del_file_links = self.db.aql.execute(
+                aql_del_file_links, 
+                bind_vars={
+                    "@col_links_to": col_links_to, 
+                    "file_id": file_id}
+            )
+            deleted_file_links = [l for l in cursor_del_file_links]
+            await self._write_ingestion_log(file_id, "INFO", "Retract", f"Deleted {len(deleted_file_links)} file-specific LINKS_TO edges.")
+
             # ----------------------------------------------------------
             # STEP 5: DETECT & DELETE ORPHANS (Priority 3)
             # ----------------------------------------------------------

@@ -37,7 +37,7 @@ class _PasswordResetConfirmScreenState extends State<PasswordResetConfirmScreen>
     if (_success) return _buildSuccessView();
 
     return Scaffold(
-      appBar: AppBar(title: Text("Set New Password")),
+      appBar: AppBar(title: const Text("Set New Password")),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(children: [

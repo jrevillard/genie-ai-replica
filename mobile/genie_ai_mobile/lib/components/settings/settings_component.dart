@@ -602,8 +602,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
             translate("settings.display", "Display"), boxBg, titleColor, [
           _buildItemLabel(
               translate("settings.displayLanguage", "Display Language")),
-          // FIX: RESTORED Language Selector visibility by providing full horizontal context
-          const LanguageSelector(),
+          const LanguageSelector(textColor: Colors.black87),
           const SizedBox(height: 20),
           _buildItemLabel(translate("settings.theme", "Theme")),
           _buildThemeButtonRow(accent, isDark),

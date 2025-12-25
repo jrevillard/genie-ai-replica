@@ -4,7 +4,7 @@ import 'package:genie_ai_mobile/services/api_service.dart';
 class ChatHistoryProxy {
   final ApiService _api = ApiService();
 
-  Future<Map<String, dynamic>> getUserConversations(String userId, {Map<String, dynamic>? options}) async {
+  Future<Map<String, dynamic>> getUserConversations(String userId, Map<String, Object> map, {Map<String, dynamic>? options}) async {
     final res = await _api.get('chat/conversations', params: {'userId': userId, ...?options});
     return jsonDecode(res.body);
   }
@@ -31,6 +31,16 @@ class ChatHistoryProxy {
 
   Future<Map<String, dynamic>> createFolder(Map<String, dynamic> data) async {
     final res = await _api.post('chat/folders', data);
+    return jsonDecode(res.body);
+  }
+
+  Future<Map<String, dynamic>> updateFolder(String folderId, Map<String, dynamic> data) async {
+    final res = await _api.patch('chat/folders/$folderId', data);
+    return jsonDecode(res.body);
+  }
+
+  Future<Map<String, dynamic>> deleteFolder(String folderId, String userId) async {
+    final res = await _api.delete('chat/folders/$folderId', params: {'userId': userId});
     return jsonDecode(res.body);
   }
 

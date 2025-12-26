@@ -14,14 +14,28 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+
+  # Core networking & utilities
   http: ^1.6.0
   crypto: ^3.0.3
   shared_preferences: ^2.2.2
 
+  # Markdown rendering for chatbot messages
+  flutter_markdown: ^0.7.3
+
+  # PDF generation and printing/export
+  pdf: ^3.11.1
+  printing: ^5.13.1
+
+  # File system access for saving PDF
+  path_provider: ^2.1.4
+
+  # URL launching for opening documents in right sidebar
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^4.0.0
 
 flutter:
@@ -31,5 +45,12 @@ flutter:
   generate: true
 
   assets:
-    # Add assets from the images directory to the application.
     - assets/images/
+    - assets/config/
+    - assets/config/quickhelp/
+    - assets/FAQ.md
+    - assets/icons/
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf

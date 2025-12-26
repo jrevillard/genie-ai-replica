@@ -12,6 +12,8 @@ class ApiService {
   void setToken(String token) => _accessToken = token;
   void clearToken() => _accessToken = null;
 
+  String? get accessToken => _accessToken;
+
   Map<String, String> getHeaders() {
     return {
       'Content-Type': 'application/json',

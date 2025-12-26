@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 // ===========================================================================
@@ -7,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 // ===========================================================================
-// AUTHENTICATION SCREEN IMPORTS - Mirrored from Vue 3 Router logic
+// AUTHENTICATION SCREEN IMPORTS
 // ===========================================================================
 import 'package:genie_ai_mobile/components/auth/login_screen.dart';
 import 'package:genie_ai_mobile/components/auth/register_screen.dart';
@@ -16,13 +17,14 @@ import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.d
 import 'package:genie_ai_mobile/components/auth/password_reset_confirm_screen.dart';
 
 // ===========================================================================
-// COMPONENT IMPORTS - Integrated Sidebar and Navigation
+// COMPONENT IMPORTS
 // ===========================================================================
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
+import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
+import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 
-/// SSL Override to bypass certificate issues for local Nginx development
-/// This ensures local API testing on web/android works without certificate errors.
+/// SSL Override for local development
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -36,12 +38,10 @@ class MyHttpOverrides extends HttpOverrides {
 // MAIN ENTRY POINT
 // ===========================================================================
 void main() {
-  // Apply SSL overrides before the app starts to allow insecure local connections
   HttpOverrides.global = MyHttpOverrides();
 
   runApp(
     ListenableBuilder(
-      // The app rebuilds automatically when ThemeManager() notifies listeners
       listenable: ThemeManager(),
       builder: (context, child) => const GenieAIApp(),
     ),
@@ -56,13 +56,9 @@ class GenieAIApp extends StatefulWidget {
 }
 
 class _GenieAIAppState extends State<GenieAIApp> {
-  // ===========================================================================
-  // GLOBAL APP STATE - Mirrored exactly from Vue App.vue data()
-  // ===========================================================================
   bool _isAuthenticated = false;
   Map<String, dynamic>? _currentUser;
 
-  /// Triggered after successful Login API call
   void _handleLoginSuccess(Map<String, dynamic> user) {
     debugPrint(
         "[AUTH] User logged in successfully. Updating application state...");
@@ -72,7 +68,6 @@ class _GenieAIAppState extends State<GenieAIApp> {
     });
   }
 
-  /// Global logout handler: clears session and returns to login screen
   void _handleLogout() {
     debugPrint("[AUTH] User logged out. Clearing local session data...");
     setState(() {
@@ -83,17 +78,12 @@ class _GenieAIAppState extends State<GenieAIApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Access the singleton instance to ensure 'themeMode' getter is recognized
     final themeManager = ThemeManager();
 
     return MaterialApp(
-      title: 'GENIE.AI',
       debugShowCheckedModeBanner: false,
-
-      // FIXED: Uses the ThemeMode enum provided by your ThemeManager for system/light/dark sync
+      title: 'Genie AI',
       themeMode: themeManager.themeMode,
-
-      // Light Theme Definition
       theme: ThemeData(
         brightness: Brightness.light,
         primaryColor: const Color(0xFF4A90E2),
@@ -103,8 +93,6 @@ class _GenieAIAppState extends State<GenieAIApp> {
           elevation: 4,
         ),
       ),
-
-      // Dark Theme Definition
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF1E3A58),
@@ -114,20 +102,15 @@ class _GenieAIAppState extends State<GenieAIApp> {
           elevation: 4,
         ),
       ),
-
-      // LANDING LOGIC: Checks authentication state to determine view
       home: _isAuthenticated
           ? AuthenticatedShell(user: _currentUser!, onLogout: _handleLogout)
           : LoginScreen(onLoginSuccess: _handleLoginSuccess),
-
-      // COMPLETE ROUTE TABLE: Replicating Vue 3 Router configuration
       routes: {
         '/login': (context) => LoginScreen(onLoginSuccess: _handleLoginSuccess),
         '/register': (context) => const RegisterScreen(),
         '/registration-success': (context) => const RegistrationSuccessScreen(),
         '/forgot-password': (context) => const PasswordResetInitiateScreen(),
         '/reset-password': (context) {
-          // Extracts token from route arguments for the password confirmation screen
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>?;
           return PasswordResetConfirmScreen(token: args?['token'] ?? '');
@@ -138,49 +121,71 @@ class _GenieAIAppState extends State<GenieAIApp> {
 }
 
 // ===========================================================================
-// AUTHENTICATED SHELL - Main Application Layout with Navigation
+// AUTHENTICATED SHELL - Full Layout with Sidebars + ChatBot
 // ===========================================================================
-class AuthenticatedShell extends StatelessWidget {
+class AuthenticatedShell extends StatefulWidget {
   final Map<String, dynamic> user;
   final VoidCallback onLogout;
 
-  const AuthenticatedShell(
-      {super.key, required this.user, required this.onLogout});
+  const AuthenticatedShell({
+    super.key,
+    required this.user,
+    required this.onLogout,
+  });
+
+  @override
+  State<AuthenticatedShell> createState() => _AuthenticatedShellState();
+}
+
+class _AuthenticatedShellState extends State<AuthenticatedShell> {
+  List<dynamic> _currentRelatedDocuments = [];
+
+  void _updateRelatedDocuments(List<dynamic> docs) {
+    setState(() {
+      _currentRelatedDocuments = docs;
+    });
+  }
+
+  void _refreshSidebar() {
+    debugPrint("[MAIN] Sidebar refresh requested");
+  }
 
   @override
   Widget build(BuildContext context) {
+    final bool isWideScreen = MediaQuery.of(context).size.width > 1200;
+
     return Scaffold(
-      // INTEGRATED NAVBAR: Handles status, profile, and settings triggers
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
-        child: NavBarComponent(user: user, onLogout: onLogout),
+        child: NavBarComponent(user: widget.user, onLogout: widget.onLogout),
       ),
-
-      // INTEGRATED SIDEBAR: Replicated full government services and history logic
-      // Passing the user object to ensure chat history is filtered by userId correctly.
-      drawer: SidebarComponent(user: user),
-
-      // MAIN CONTENT AREA
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_outlined, size: 48, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              "Chatbot View Component Placeholder",
-              style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500),
+      drawer: isWideScreen ? null : SidebarComponent(user: widget.user),
+      body: Row(
+        children: [
+          // Left Sidebar — visible on wide screens, drawer on mobile
+          if (isWideScreen)
+            SizedBox(
+              width: 300,
+              child: SidebarComponent(user: widget.user),
             ),
-            SizedBox(height: 8),
-            Text(
-              "Integrated with Government Service Tree Selection",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+
+          // Center: ChatBot — passes required userId and callbacks
+          Expanded(
+            child: ChatBotComponent(
+              userId: widget.user['id'] ?? widget.user['_id'],
+              onRefreshSidebar: _refreshSidebar,
+              onRelatedDocumentsUpdate: _updateRelatedDocuments,
             ),
-          ],
-        ),
+          ),
+
+          // Right Sidebar — now receives live related documents
+          SizedBox(
+            width: 360,
+            child: RightSidebarComponent(
+              relatedDocuments: _currentRelatedDocuments,
+            ),
+          ),
+        ],
       ),
     );
   }

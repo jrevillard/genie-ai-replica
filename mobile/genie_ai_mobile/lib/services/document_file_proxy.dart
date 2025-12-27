@@ -14,13 +14,22 @@ class DocumentFileProxy {
     return jsonDecode(res.body);
   }
 
-  Future<Map<String, dynamic>> scheduleSiteCrawl(Map<String, dynamic> options) async {
+  Future<Map<String, dynamic>> scheduleSiteCrawl(
+      Map<String, dynamic> options) async {
     final res = await _api.post('files/crawl/schedule', options);
     return jsonDecode(res.body);
   }
 
   Future<Map<String, dynamic>> killCrawl(String fileId) async {
     final res = await _api.post('files/$fileId/kill-crawl', {});
+    return jsonDecode(res.body);
+  }
+
+  Future<Map<String, dynamic>> getFileMetadata(String fileId) async {
+    final res = await _api.get('files/$fileId');
+    if (res.statusCode != 200) {
+      throw Exception("Failed to fetch file metadata: ${res.statusCode}");
+    }
     return jsonDecode(res.body);
   }
 }

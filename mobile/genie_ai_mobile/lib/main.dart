@@ -102,12 +102,19 @@ class _MyAppState extends State<MyApp> {
         '/login': (context) => LoginScreen(onLoginSuccess: _handleLogin),
         '/register': (context) => const RegisterScreen(),
         '/registration-success': (context) => const RegistrationSuccessScreen(),
-        '/forgot-password': (context) => const PasswordResetInitiateScreen(),
-
-        // FIXED: Extract 'token' from arguments and pass to constructor
-        '/reset-password': (context) {
-          final args = ModalRoute.of(context)?.settings.arguments;
-          final token = args is String ? args : '';
+        '/password-reset': (context) => const PasswordResetInitiateScreen(),
+        // Fixed: Extract token from route settings and pass it as required parameter
+        '/password-reset-confirm': (context) {
+          final settings = ModalRoute.of(context)?.settings;
+          final String? token = settings?.arguments as String?;
+          if (token == null) {
+            // Fallback if token is missing – navigate back or show error
+            return const Scaffold(
+              body: Center(
+                child: Text("Invalid or missing reset token"),
+              ),
+            );
+          }
           return PasswordResetConfirmScreen(token: token);
         },
       },
@@ -134,15 +141,14 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // GlobalKey to access public methods of ChatBotComponent
+  // GlobalKey for programmatic control of ChatBotComponent
   final GlobalKey<ChatBotComponentState> _chatBotKey =
       GlobalKey<ChatBotComponentState>();
 
-  // State for Right Sidebar content
+  // Current related documents from ChatBot
   List<dynamic> _currentRelatedDocuments = [];
 
   void _updateRelatedDocuments(List<dynamic> docs) {
-    // Only update if there are changes to avoid unnecessary rebuilds
     setState(() {
       _currentRelatedDocuments = docs;
     });
@@ -171,7 +177,7 @@ class _MainScreenState extends State<MainScreen> {
 
   /// Called when a conversation is selected in ChatFoldersPanel (Sidebar)
   void _onConversationSelected(String conversationId) {
-    debugPrint("[MAIN] Conversation Selected: $conversationId)");
+    debugPrint("[MAIN] Conversation Selected: $conversationId");
 
     // Programmatically load conversation in the ChatBot
     _chatBotKey.currentState?.loadConversation(conversationId);
@@ -182,6 +188,10 @@ class _MainScreenState extends State<MainScreen> {
     // Responsive breakpoints
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isWideScreen = screenWidth > 1200;
+
+    // Extract access token from user object (from login response)
+    final String? accessToken =
+        widget.user['accessToken'] ?? widget.user['token'];
 
     return Scaffold(
       appBar: PreferredSize(
@@ -207,6 +217,7 @@ class _MainScreenState extends State<MainScreen> {
           ? null
           : RightSidebarComponent(
               relatedDocuments: _currentRelatedDocuments,
+              accessToken: accessToken,
             ),
 
       // Scrim and edge drag apply to both drawer and endDrawer
@@ -242,6 +253,7 @@ class _MainScreenState extends State<MainScreen> {
               width: 360,
               child: RightSidebarComponent(
                 relatedDocuments: _currentRelatedDocuments,
+                accessToken: accessToken,
               ),
             ),
         ],

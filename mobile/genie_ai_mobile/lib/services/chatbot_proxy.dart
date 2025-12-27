@@ -10,6 +10,7 @@ class ChatbotProxy {
     required List<Map<String, dynamic>> messages,
     required String userId,
     String? categoryId,
+    String? contextLabels, // NEW: Accept labels (e.g. "Mountains, Rivers")
   }) async {
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
@@ -18,8 +19,16 @@ class ChatbotProxy {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    if (categoryId != null && categoryId.isNotEmpty) {
-      payload['categoryId'] = categoryId;
+    // FIX: Construct the 'context' object expected by the backend validation
+    if ((categoryId != null && categoryId.isNotEmpty) || 
+        (contextLabels != null && contextLabels.isNotEmpty)) {
+      payload['context'] = {
+        if (categoryId != null) 'categoryId': categoryId,
+        if (contextLabels != null) 'labels': contextLabels,
+      };
+      
+      // Keep root categoryId for backward compatibility if needed
+      if (categoryId != null) payload['categoryId'] = categoryId;
     }
 
     try {

@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/components/sidebar/chat_folders_panel.dart';
-import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 class SidebarComponent extends StatefulWidget {
   final Map<String, dynamic> user;
-  const SidebarComponent({super.key, required this.user});
+
+  final Function(Map<String, dynamic>)? onServiceSelected;
+  final Function(String)? onConversationSelected;
+
+  const SidebarComponent({
+    super.key,
+    required this.user,
+    this.onServiceSelected,
+    this.onConversationSelected,
+  });
 
   @override
   State<SidebarComponent> createState() => _SidebarComponentState();
@@ -13,12 +21,9 @@ class SidebarComponent extends StatefulWidget {
 
 class _SidebarComponentState extends State<SidebarComponent>
     with SingleTickerProviderStateMixin {
-  // ===========================================================================
-  // COMPONENT STATE - Mirrored from Vue data()
-  // ===========================================================================
   late TabController _tabController;
-  String _activeTab = "services"; // 'services' or 'history'
-  String _activeSubTab = "all"; // 'all', 'folders', 'starred', 'archived'
+  String _activeTab = "services";
+  String _activeSubTab = "all";
   String _currentUserId = "";
 
   @override
@@ -26,7 +31,6 @@ class _SidebarComponentState extends State<SidebarComponent>
     super.initState();
     debugPrint("[SIDEBAR] Initializing Sidebar component...");
 
-    // Extract user ID for sub-component integration
     final userData = widget.user['user'] ?? widget.user;
     _currentUserId = (userData['_key'] ?? userData['id'] ?? "").toString();
 
@@ -36,7 +40,6 @@ class _SidebarComponentState extends State<SidebarComponent>
         setState(() {
           _activeTab = _tabController.index == 0 ? "services" : "history";
         });
-        debugPrint("[SIDEBAR] Primary tab switched to: $_activeTab");
       }
     });
   }
@@ -47,139 +50,109 @@ class _SidebarComponentState extends State<SidebarComponent>
     super.dispose();
   }
 
-  String translate(String key, String fallback) => fallback;
-
-  // ===========================================================================
-  // UI BUILDERS
-  // ===========================================================================
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = ThemeManager().isDarkMode;
-    final bgColor = isDark ? const Color(0xFF222222) : Colors.white;
-    const accentColor = Color(0xFF2A9D8F);
-
-    return Drawer(
-      width: 320,
-      backgroundColor: bgColor,
-      child: Column(
-        children: [
-          _buildSidebarHeader(),
-          _buildPrimaryTabs(accentColor, isDark),
-          Expanded(
-            child: Container(
-              color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF9FAFB),
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Tab 1: Government Services
-                  ServiceTreePanel(
-                    onSelectionChange: (sel) =>
-                        debugPrint("[SIDEBAR] Service selection: $sel"),
-                  ),
-                  // Tab 2: Chat History & Folders
-                  _buildHistoryContent(accentColor, isDark),
-                ],
-              ),
-            ),
-          ),
-          _buildWeatherContainer(isDark),
-        ],
-      ),
-    );
+  String translate(String key, [String defaultValue = ""]) {
+    return defaultValue.isNotEmpty ? defaultValue : key;
   }
 
-  /// Replicates sidebar-tabs styling
-  Widget _buildPrimaryTabs(Color accent, bool isDark) {
+  Widget _buildPrimaryTabs(ThemeData theme, bool isDark) {
     return Container(
-      height: 50,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF3F4F6),
+        color: isDark ? Colors.black12 : Colors.grey[100],
         border: Border(
-            bottom:
-                BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
+          bottom: BorderSide(
+            color: isDark ? Colors.white10 : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
       ),
       child: TabBar(
         controller: _tabController,
-        indicatorColor: accent,
-        indicatorWeight: 3,
-        labelColor: accent,
-        unselectedLabelColor: isDark ? Colors.white60 : Colors.black54,
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-        tabs: [
+        labelColor: theme.primaryColor,
+        unselectedLabelColor: Colors.grey,
+        indicatorColor: theme.primaryColor,
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        tabs: const [
           Tab(
-            icon: const Icon(Icons.list, size: 20),
-            text: translate("sidebar.governmentServices", "SERVICES"),
+            icon: Icon(Icons.category_outlined, size: 20),
+            text: "Services",
+            iconMargin: EdgeInsets.only(bottom: 4),
           ),
           Tab(
-            icon: const Icon(Icons.history, size: 20),
-            text: translate("sidebar.savedChats", "HISTORY"),
+            icon: Icon(Icons.history, size: 20),
+            text: "History",
+            iconMargin: EdgeInsets.only(bottom: 4),
           ),
         ],
       ),
     );
   }
 
-  /// Replicates chat-sub-tabs and folder navigation
-  Widget _buildHistoryContent(Color accent, bool isDark) {
-    return Column(
-      children: [
-        _buildSubTabNavigation(accent, isDark),
-        Expanded(
-          child: ChatFoldersPanel(
-            activeTab: _activeSubTab,
-            userId: _currentUserId,
-            onOpenChat: (chatId) =>
-                debugPrint("[SIDEBAR] Opening chat: $chatId"),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Horizontal sub-tab bar for All/Folders/Starred/Archived
-  Widget _buildSubTabNavigation(Color accent, bool isDark) {
-    final subTabs = ['all', 'folders', 'starred', 'archived'];
+  Widget _buildSubTabNavigation(ThemeData theme, bool isDark) {
+    final List<Map<String, dynamic>> subTabs = [
+      {'key': 'all', 'label': 'All', 'icon': Icons.chat_bubble_outline},
+      {'key': 'folders', 'label': 'Folders', 'icon': Icons.folder_outlined},
+      {'key': 'starred', 'label': 'Starred', 'icon': Icons.star_outline},
+      {'key': 'archived', 'label': 'Archived', 'icon': Icons.archive_outlined},
+    ];
 
     return Container(
-      height: 40,
+      height: 48,
       decoration: BoxDecoration(
-        color: isDark ? Colors.black26 : Colors.white,
+        color: isDark ? Colors.black12 : Colors.grey[50],
         border: Border(
-            bottom:
-                BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
+          bottom: BorderSide(
+            color: isDark ? Colors.white10 : Colors.grey[300]!,
+            width: 1,
+          ),
+        ),
       ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         itemCount: subTabs.length,
-        itemBuilder: (ctx, idx) {
-          final tab = subTabs[idx];
-          final isActive = _activeSubTab == tab;
+        itemBuilder: (context, index) {
+          final tab = subTabs[index];
+          final bool isActive = _activeSubTab == tab['key'];
 
           return InkWell(
-            onTap: () => setState(() => _activeSubTab = tab),
+            onTap: () {
+              setState(() {
+                _activeSubTab = tab['key'] as String;
+              });
+            },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color:
-                        isActive ? const Color(0xFF4E97D1) : Colors.transparent,
-                    width: 2,
+                    color: isActive ? theme.primaryColor : Colors.transparent,
+                    width: 3,
                   ),
                 ),
               ),
-              child: Text(
-                tab.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                  color: isActive
-                      ? const Color(0xFF4E97D1)
-                      : (isDark ? Colors.white38 : Colors.black38),
-                  letterSpacing: 0.5,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    tab['icon'] as IconData,
+                    size: 16,
+                    color: isActive
+                        ? theme.primaryColor
+                        : (isDark ? Colors.white60 : Colors.black54),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    tab['label'] as String,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                      color: isActive
+                          ? theme.primaryColor
+                          : (isDark ? Colors.white70 : Colors.black54),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -188,60 +161,123 @@ class _SidebarComponentState extends State<SidebarComponent>
     );
   }
 
-  Widget _buildSidebarHeader() {
+  Widget _buildSidebarContent(ThemeData theme, bool isDark) {
+    final backgroundColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
-      color: const Color(0xFF4E97D1),
-      child: Row(
+      color: backgroundColor,
+      child: Column(
         children: [
-          const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("GENIE.AI",
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
-              Text(translate("sidebar.tagline", "Smart Public Services"),
-                  style: const TextStyle(color: Colors.white70, fontSize: 10)),
-            ],
+          // Primary tabs
+          _buildPrimaryTabs(theme, isDark),
+
+          // Main expandable content
+          Expanded(
+            child: Column(
+              children: [
+                if (_activeTab == "history")
+                  _buildSubTabNavigation(theme, isDark),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      ServiceTreePanel(
+                        onSelectionChange: (selection) {
+                          debugPrint(
+                              "[SIDEBAR] Service selection changed: $selection");
+                          widget.onServiceSelected?.call(selection);
+                        },
+                      ),
+                      ChatFoldersPanel(
+                        activeTab: _activeSubTab,
+                        userId: _currentUserId,
+                        onOpenChat: (convId) {
+                          debugPrint("[SIDEBAR] Opening conversation: $convId");
+                          widget.onConversationSelected?.call(convId);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Weather footer
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.wb_sunny_outlined,
+                  size: 24,
+                  color: isDark ? Colors.amber[200] : Colors.amber[600],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "24°C - Mostly Sunny",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        translate(
+                            "sidebar.weatherLocation", "Current Location"),
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// Positioned fixed weather placeholder
-  Widget _buildWeatherContainer(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF222222) : Colors.white,
-        border: Border(
-            top: BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.wb_sunny_outlined,
-              size: 22, color: isDark ? Colors.white38 : Colors.black38),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("24°C - Mostly Sunny",
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white70 : Colors.black87)),
-                Text(translate("sidebar.weatherLocation", "Current Location"),
-                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
-              ],
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bool isWideScreen = MediaQuery.of(context).size.width > 1200;
+
+    // Persistent sidebar on wide screens
+    if (isWideScreen) {
+      return SizedBox(
+        width: 360,
+        child: _buildSidebarContent(theme, isDark),
+      );
+    }
+
+    // Mobile drawer: constrained to safe area below AppBar and above bottom input
+    return Drawer(
+      elevation: 0,
+      backgroundColor:
+          Colors.transparent, // Important: no background on drawer itself
+      child: SafeArea(
+        top: false, // We manually handle top (AppBar height)
+        bottom: true, // Respect bottom safe area (home indicator)
+        child: Column(
+          children: [
+            // Empty space equal to AppBar height (60) so content starts below navbar
+            SizedBox(
+              height: kToolbarHeight + MediaQuery.of(context).padding.top,
             ),
-          ),
-        ],
+            // The actual sidebar content
+            Expanded(
+              child: _buildSidebarContent(theme, isDark),
+            ),
+          ],
+        ),
       ),
     );
   }

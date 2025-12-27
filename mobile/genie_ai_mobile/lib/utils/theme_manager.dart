@@ -9,9 +9,9 @@ class ThemeManager extends ChangeNotifier {
   String currentTheme = 'light';
   String userPreference = 'light';
   bool isDarkMode = false;
-
-  // FIXED: Added missing state to resolve "ThemeManager().fontSize does not exist"
-  double fontSize = 50.0;
+  
+  // Restored: Font size state
+  double fontSize = 14.0; 
 
   ThemeMode get themeMode {
     if (userPreference == 'dark') return ThemeMode.dark;
@@ -19,7 +19,6 @@ class ThemeManager extends ChangeNotifier {
     return ThemeMode.system;
   }
 
-  /// Logic from detectInitialTheme() and setTheme()
   void setTheme(String theme) {
     userPreference = theme;
 
@@ -35,7 +34,6 @@ class ThemeManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  // FIXED: New method to sync the settings font size globally
   void setFontSize(double size) {
     fontSize = size;
     notifyListeners();
@@ -43,34 +41,82 @@ class ThemeManager extends ChangeNotifier {
 
   void toggleTheme() => setTheme(currentTheme == 'light' ? 'dark' : 'light');
 
-  /// Full implementation of getThemeInfo()
-  Map<String, dynamic> getThemeInfo() {
+  // ===========================================================================
+  // STATIC THEME DATA GENERATORS (Used by main.dart)
+  // ===========================================================================
+
+  static ThemeData getLightTheme() {
+    return ThemeData(
+      brightness: Brightness.light,
+      primaryColor: const Color(0xFF4E97D1),
+      scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+      cardColor: Colors.white,
+      dividerColor: Colors.grey[300],
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF4E97D1),
+        secondary: Color(0xFF26A69A),
+        surface: Colors.white,
+        onPrimary: Colors.white,
+        onSurface: Color(0xFF333333),
+        primaryContainer: Color(0xFFE3F2FD), 
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF4E97D1),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: Color(0xFF333333)),
+        bodyMedium: TextStyle(color: Color(0xFF333333)),
+      ),
+      useMaterial3: true,
+    );
+  }
+
+  static ThemeData getDarkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      primaryColor: const Color(0xFF4E97D1),
+      scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+      cardColor: const Color(0xFF2A2A2A),
+      dividerColor: const Color(0xFF3A3A3A),
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFF4E97D1),
+        secondary: Color(0xFF26A69A),
+        surface: Color(0xFF2A2A2A),
+        onPrimary: Colors.white,
+        onSurface: Color(0xFFF0F0F0),
+        primaryContainer: Color(0xFF4E97D1), 
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF2A2A2A),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: Color(0xFFF0F0F0)),
+        bodyMedium: TextStyle(color: Color(0xFFF0F0F0)),
+      ),
+      useMaterial3: true,
+    );
+  }
+
+  // ===========================================================================
+  // INSTANCE HELPERS (Used by components)
+  // ===========================================================================
+
+  Map<String, dynamic> getColors() {
     return {
-      'isDarkMode': isDarkMode,
-      'textColor': isDarkMode ? '#FFFFFF' : '#333333',
-      'backgroundColor': 'transparent',
-      'tooltipBackground':
-          isDarkMode ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-      'tooltipTextColor': isDarkMode ? '#FFFFFF' : '#333333',
-      'borderColor':
-          isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-      'gridColor':
-          isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
-      'accentColor': '#4E97D1',
-      'chartColors': [
-        '#5470c6',
-        '#91cc75',
-        '#fac858',
-        '#ee6666',
-        '#73c0de',
-        '#3ba272',
-        '#fc8452',
-        '#9a60b4'
-      ],
+      'primary': const Color(0xFF4E97D1),
+      'secondary': const Color(0xFF26A69A),
+      'background': isDarkMode ? const Color(0xFF1E1E1E) : const Color(0xFFF5F7FA),
+      'surface': isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+      'text': isDarkMode ? const Color(0xFFF0F0F0) : const Color(0xFF333333),
+      'border': isDarkMode ? const Color(0xFF3A3A3A) : const Color(0xFFDCDFE4),
     };
   }
 
-  /// Full implementation of getDialogTheme()
+  /// RESTORED: Implementation of getDialogTheme() used by custom dialogs
   Map<String, dynamic> getDialogTheme() {
     return {
       'modal': {
@@ -96,15 +142,7 @@ class ThemeManager extends ChangeNotifier {
       'input': {
         'background': isDarkMode ? '#333333' : '#ffffff',
         'textColor': isDarkMode ? '#f0f0f0' : '#333333',
-        'borderColor': isDarkMode ? '#3a3a3a' : '#ddd',
-        'placeholderColor': isDarkMode ? '#8c8c8c' : '#767676',
-      },
-      'tabs': {
-        'background': isDarkMode ? '#252525' : '#f0f2f5',
-        'activeBackground': isDarkMode ? '#2a2a2a' : '#ffffff',
-        'textColor': isDarkMode ? '#f0f0f0' : '#333333',
-        'activeTextColor': isDarkMode ? '#ffffff' : '#000000',
-        'borderColor': isDarkMode ? '#3a3a3a' : '#cccccc',
+        'borderColor': isDarkMode ? '#555555' : '#cccccc',
       }
     };
   }

@@ -8,6 +8,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
+import 'package:genie_ai_mobile/services/api_service.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:path_provider/path_provider.dart';
@@ -29,44 +30,45 @@ class ChatBotComponent extends StatefulWidget {
   });
 
   @override
-  State<ChatBotComponent> createState() => _ChatBotComponentState();
+  // State class is public so GlobalKey in main.dart can access it
+  ChatBotComponentState createState() => ChatBotComponentState();
 }
 
-class _ChatBotComponentState extends State<ChatBotComponent> {
+class ChatBotComponentState extends State<ChatBotComponent> {
   final ChatHistoryProxy _chatHistoryProxy = ChatHistoryProxy();
   final ChatbotProxy _chatBotProxy = ChatbotProxy();
+  final ApiService _api = ApiService();
 
+  // Conversation State
   String? _currentConversationId;
   String _conversationTitle = "New Chat";
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
-  bool _isStreaming = false;
-  String _streamingText = "";
+
+  // Inputs
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
 
+  // Context & Related Data
   String? _selectedCategoryId;
   String _selectedCategoryName = "";
-
   List<dynamic> _relatedDocuments = [];
-
   List<Map<String, dynamic>> _quickHelpButtons = [];
 
+  // Dialog States
   bool _showNewChatConfirm = false;
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
   bool _showExportDialog = false;
   String _exportFilename = "";
-
-  // Save dialog state
   bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    debugPrint("[CHAT_FOLDERS] Mounting component for user: ${widget.userId}");
+    debugPrint("[CHATBOT] Mounting component for user: ${widget.userId}");
     _loadQuickHelpConfig();
     _titleController.text = _conversationTitle;
   }
@@ -95,47 +97,35 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _scrollToBottom({bool animated = true}) {
-    if (!_scrollController.hasClients) return;
-    final double maxScroll = _scrollController.position.maxScrollExtent;
-    if (animated) {
-      _scrollController.animateTo(maxScroll,
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-    } else {
-      _scrollController.jumpTo(maxScroll);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        final double maxScroll = _scrollController.position.maxScrollExtent;
+        if (animated) {
+          _scrollController.animateTo(maxScroll,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut);
+        } else {
+          _scrollController.jumpTo(maxScroll);
+        }
+      }
+    });
   }
 
+  // ===========================================================================
+  // PUBLIC METHODS (Called via GlobalKey from Main)
+  // ===========================================================================
+
+  /// Sets the active context (Service Category) for the chatbot
   void setCategoryContext(String categoryId, String categoryName) {
     setState(() {
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
     });
-    NotificationService.info("Context set to: $categoryName");
+    // Optional: Notify user via toast that context changed
+    // NotificationService.info("Context set to: $categoryName");
   }
 
-  Future<void> startNewChat() async {
-    if (_messages.isNotEmpty && _currentConversationId == null) {
-      setState(() => _showNewChatConfirm = true);
-    } else {
-      _resetChat();
-    }
-  }
-
-  void _resetChat() {
-    setState(() {
-      _currentConversationId = null;
-      _conversationTitle = "New Chat";
-      _titleController.text = _conversationTitle;
-      _messages = [];
-      _relatedDocuments = [];
-      _streamingText = "";
-      _isStreaming = false;
-    });
-    widget.onRelatedDocumentsUpdate([]);
-    _inputController.clear();
-    _scrollToBottom();
-  }
-
+  /// Loads a specific conversation by ID
   Future<void> loadConversation(String conversationId) async {
     if (_messages.isNotEmpty && _currentConversationId == null) {
       _pendingLoadConversationId = conversationId;
@@ -145,46 +135,109 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
+  // ===========================================================================
+  // LOGIC
+  // ===========================================================================
+
   Future<void> _loadConversationDirect(String conversationId) async {
     setState(() => _isLoading = true);
-    try {
-      final response = await _chatHistoryProxy.getUserConversations(
-        widget.userId,
-        {},
-        options: {
-          'conversationId': conversationId.replaceFirst('conversations/', '')
-        },
-      );
+    // Reset but keep loading spinner active
+    _resetChat(keepLoading: true);
 
-      if (response['conversations'] == null ||
-          response['conversations'].isEmpty) {
-        NotificationService.error("Conversation not found");
-        setState(() => _isLoading = false);
-        return;
+    try {
+      // 1. Fetch full conversation details from Backend
+      // We use the direct API call to ensure we hit the GET /:id endpoint
+      // which returns the 'messages' array.
+      final cleanId = conversationId.replaceFirst('conversations/', '');
+      final res = await _api.get('chat/conversations/$cleanId',
+          params: {'userId': widget.userId});
+
+      if (res.statusCode != 200) {
+        throw Exception("Failed to load conversation: ${res.statusCode}");
       }
 
-      final conv = response['conversations'][0];
+      final Map<String, dynamic> conv = jsonDecode(res.body);
 
+      // 2. Parse Messages
+      List<Map<String, dynamic>> loadedMessages = [];
+      if (conv['messages'] != null && conv['messages'] is List) {
+        loadedMessages = (conv['messages'] as List).map((m) {
+          return {
+            'role': m['sender'] == 'user' ? 'user' : 'assistant',
+            'content': m['content'],
+            'timestamp': m['timestamp'],
+            'isSaved': true, // Mark as saved so we don't duplicate on next save
+            'confidence': m['confidence'],
+            'metadata': m['metadata'],
+            // Extract sources if available
+            'sources': m['metadata'] != null
+                ? (m['metadata']['sources'] ??
+                    m['metadata']['source_documents'])
+                : [],
+          };
+        }).toList();
+      }
+
+      // 3. Restore Context if available
+      String? savedCategoryName = "";
+      if (conv['category'] != null) {
+        // If backend stores the name, use it. If it's just ID, we might fetch name.
+        // For now, we leave it blank or use the ID as fallback if needed.
+        // _selectedCategoryId = conv['category'];
+      }
+
+      // 4. Update UI State
       setState(() {
-        _currentConversationId = conv['_id'];
+        _currentConversationId = conv['_id'] ?? conv['_key'];
         _conversationTitle = conv['title'] ?? "Untitled Chat";
         _titleController.text = _conversationTitle;
-        // Note: Flutter currently resets messages on load as the proxy doesn't
-        // fetch message history yet. Ideally, you would fetch messages here.
-        _messages = [];
-        _relatedDocuments = [];
+        _messages = loadedMessages;
+        if (savedCategoryName.isNotEmpty)
+          _selectedCategoryName = savedCategoryName;
       });
 
-      widget.onRelatedDocumentsUpdate([]);
+      // 5. Update Right Sidebar with docs from the last assistant message
+      final lastAssistant = loadedMessages.lastWhere(
+        (m) => m['role'] == 'assistant',
+        orElse: () => {},
+      );
 
-      _scrollToBottom();
+      if (lastAssistant.isNotEmpty && lastAssistant['sources'] != null) {
+        _relatedDocuments = List<dynamic>.from(lastAssistant['sources']);
+        widget.onRelatedDocumentsUpdate(_relatedDocuments);
+      }
+
       widget.onRefreshSidebar();
+      _scrollToBottom(animated: false);
     } catch (e) {
       NotificationService.error("Failed to load conversation");
-      debugPrint("[CHATBOT] Load conversation error: $e");
+      debugPrint("[CHATBOT] Load error: $e");
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  void startNewChat() {
+    if (_messages.isNotEmpty && _currentConversationId == null) {
+      setState(() => _showNewChatConfirm = true);
+    } else {
+      _resetChat();
+    }
+  }
+
+  void _resetChat({bool keepLoading = false}) {
+    setState(() {
+      _currentConversationId = null;
+      _conversationTitle = "New Chat";
+      _titleController.text = _conversationTitle;
+      _messages = [];
+      _relatedDocuments = [];
+      // Note: We typically do NOT clear context (_selectedCategoryId) on New Chat
+      // unless user explicitly closes it.
+      if (!keepLoading) _isLoading = false;
+    });
+    widget.onRelatedDocumentsUpdate([]);
+    _inputController.clear();
   }
 
   void _sendMessage(String text) async {
@@ -194,7 +247,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
       'role': 'user',
       'content': text.trim(),
       'timestamp': DateTime.now().toIso8601String(),
-      'isSaved': false, // Track if saved to backend
+      'isSaved': false,
     };
 
     setState(() {
@@ -216,18 +269,15 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
         };
       }).toList();
 
-      // The user message is already in _messages, but for the API payload
-      // we need to ensure we send the current context if it wasn't added yet
-      // (Though here we just added it to _messages, so the map above covers it)
-
+      // Submit to AI
       final response = await _chatBotProxy.submitQuery(
         sessionId: sessionId,
         messages: messagesForApi,
         userId: widget.userId,
-        categoryId: _selectedCategoryId,
+        categoryId: _selectedCategoryId, 
+        contextLabels: _selectedCategoryName, // FIX: Pass the labels string (Context)
       );
 
-      // Extract queryId and metadata for correct saving
       final String? queryId = response['queryId'];
       final Map<String, dynamic>? metadata = response['metadata'];
 
@@ -237,7 +287,6 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
         'timestamp': DateTime.now().toIso8601String(),
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
-        // Store technical fields for saving
         'queryId': queryId,
         'metadata': metadata,
         'isSaved': false,
@@ -253,11 +302,10 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
       });
 
       widget.onRelatedDocumentsUpdate(_relatedDocuments);
-
       _scrollToBottom();
     } catch (e) {
       setState(() => _isLoading = false);
-      NotificationService.error("Failed to get response from server");
+      NotificationService.error("Failed to get response");
       debugPrint("[CHATBOT] Send error: $e");
     }
   }
@@ -268,7 +316,9 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
     _inputFocusNode.requestFocus();
   }
 
-  // UPDATED: Save Conversation logic that persists messages
+  // ===========================================================================
+  // SAVING LOGIC (CRITICAL FIX FOR VUE COMPATIBILITY)
+  // ===========================================================================
   Future<void> saveConversation({String? folderId}) async {
     if (_messages.isEmpty) {
       NotificationService.info("Nothing to save");
@@ -294,10 +344,8 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
       // 1. Create or Update Conversation Document
       dynamic conversationResponse;
       if (_currentConversationId == null) {
-        // Create new
         conversationResponse = await _chatHistoryProxy.createConversation(data);
       } else {
-        // Update existing
         final id = _currentConversationId!.replaceFirst('conversations/', '');
         conversationResponse =
             await _chatHistoryProxy.updateConversation(id, data);
@@ -308,7 +356,8 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
       final String conversationIdClean =
           conversationId.replaceFirst('conversations/', '');
 
-      // 2. Iterate and Save Messages
+      // 2. Iterate and Save Messages individually to the 'messages' collection
+      // This is required so the Vue app can load them via ChatHistoryService
       for (int i = 0; i < _messages.length; i++) {
         final msg = _messages[i];
 
@@ -320,7 +369,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
           'content': msg['content'],
           'sender': msg['role'] == 'user' ? 'user' : 'assistant',
           'userId': widget.userId,
-          // Only assistant messages typically have queryId and metadata
+          // Attach technical metadata for assistant messages
           if (msg['queryId'] != null) 'queryId': msg['queryId'],
           if (msg['metadata'] != null) 'metadata': msg['metadata'],
         };
@@ -328,7 +377,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
         try {
           await _chatHistoryProxy.addMessage(
               conversationIdClean, messagePayload);
-          // Mark as saved locally so we don't save duplicates next time
+          // Mark locally as saved
           setState(() {
             _messages[i]['isSaved'] = true;
           });
@@ -345,14 +394,15 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
 
       NotificationService.success("Conversation saved");
       widget.onRefreshSidebar();
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint("[SAVE] ERROR: $e");
-      debugPrint("$stackTrace");
       NotificationService.error("Failed to save conversation");
     }
   }
 
-  // Robust PDF export with font fallback
+  // ===========================================================================
+  // EXPORT LOGIC
+  // ===========================================================================
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
 
@@ -361,7 +411,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
       final fontData = await rootBundle.load("assets/fonts/Roboto-Regular.ttf");
       customFont = pw.Font.ttf(fontData);
     } catch (e) {
-      debugPrint("Custom font not available, falling back to Helvetica: $e");
+      debugPrint("Custom font not available, falling back: $e");
       customFont = null;
     }
 
@@ -463,6 +513,9 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
+  // ===========================================================================
+  // UI BUILD
+  // ===========================================================================
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -471,46 +524,66 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
       children: [
         Column(
           children: [
-            // Context Bar
+            // -----------------------------------------------------------------
+            // CONTEXT BAR (Visible only when Service/Context is selected)
+            // -----------------------------------------------------------------
             if (_selectedCategoryName.isNotEmpty)
               Container(
-                padding: const EdgeInsets.all(12),
-                color: theme.primaryColor.withOpacity(0.1),
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+                  border: Border(bottom: BorderSide(color: theme.dividerColor)),
+                ),
                 child: Row(
                   children: [
-                    Text(
-                      "Context: $_selectedCategoryName",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    Icon(Icons.lightbulb_outline,
+                        size: 20, color: theme.colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        "Context: $_selectedCategoryName",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () {
-                        setState(() {
-                          _selectedCategoryId = null;
-                          _selectedCategoryName = "";
-                        });
-                      },
+                    Tooltip(
+                      message: "Remove Context",
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        // Clear the context when clicked
+                        onPressed: () => setCategoryContext("", ""),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        splashRadius: 20,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-            // Messages
+            // -----------------------------------------------------------------
+            // MESSAGES AREA
+            // -----------------------------------------------------------------
             Expanded(
               child: ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(16),
                 itemCount: _messages.length + (_isLoading ? 1 : 0),
                 itemBuilder: (context, index) {
+                  // Loading Indicator
                   if (index == _messages.length && _isLoading) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       child: Row(
                         children: [
-                          CircularProgressIndicator(),
+                          CircularProgressIndicator(strokeWidth: 2),
                           SizedBox(width: 12),
-                          Text("Thinking..."),
+                          Text("Genie is thinking..."),
                         ],
                       ),
                     );
@@ -532,7 +605,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                             ? theme.primaryColor
                             : (theme.brightness == Brightness.dark
                                 ? Colors.grey[800]
-                                : Colors.grey[100]),
+                                : Colors.grey[200]),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -548,21 +621,10 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                                 fontSize: 16,
                                 height: 1.5,
                               ),
-                              codeblockPadding: const EdgeInsets.all(12),
                               codeblockDecoration: BoxDecoration(
                                 color: isUser
                                     ? Colors.white.withOpacity(0.1)
-                                    : (theme.brightness == Brightness.dark
-                                        ? Colors.grey[900]
-                                        : Colors.grey[100]),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              blockquoteDecoration: BoxDecoration(
-                                color:
-                                    isUser ? Colors.white10 : Colors.grey[300],
-                                border: Border(
-                                    left: BorderSide(
-                                        color: theme.primaryColor, width: 4)),
+                                    : Colors.black12,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
@@ -596,8 +658,10 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
               ),
             ),
 
-            // Quick Help Buttons
-            if (_quickHelpButtons.isNotEmpty)
+            // -----------------------------------------------------------------
+            // QUICK HELP BUTTONS
+            // -----------------------------------------------------------------
+            if (_quickHelpButtons.isNotEmpty && _messages.isEmpty)
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -605,20 +669,27 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                   spacing: 8,
                   runSpacing: 8,
                   children: _quickHelpButtons.map((btn) {
-                    return ElevatedButton.icon(
-                      icon: Icon(IconData(btn['iconCodePoint'],
-                          fontFamily: 'MaterialIcons')),
+                    IconData icon;
+                    try {
+                      icon = IconData(btn['iconCodePoint'],
+                          fontFamily: 'MaterialIcons');
+                    } catch (e) {
+                      icon = Icons.help_outline;
+                    }
+                    return ActionChip(
+                      avatar: Icon(icon, size: 16),
                       label: Text(btn['label']),
                       onPressed: () => _quickHelpPressed(btn),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              theme.colorScheme.secondaryContainer),
+                      backgroundColor: theme.colorScheme.surface,
+                      side: BorderSide(color: theme.dividerColor),
                     );
                   }).toList(),
                 ),
               ),
 
-            // Input Area with Action Buttons
+            // -----------------------------------------------------------------
+            // INPUT AREA
+            // -----------------------------------------------------------------
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -627,7 +698,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
               ),
               child: Column(
                 children: [
-                  // Action Buttons Row
+                  // Action Toolbar
                   Row(
                     children: [
                       IconButton(
@@ -636,7 +707,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                         onPressed: startNewChat,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.save),
+                        icon: const Icon(Icons.save_outlined),
                         tooltip: "Save Chat",
                         onPressed: () {
                           _titleController.text = _conversationTitle;
@@ -644,7 +715,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.picture_as_pdf),
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
                         tooltip: "Export to PDF",
                         onPressed: () {
                           _exportFilename =
@@ -656,7 +727,8 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Text Input Row
+
+                  // Text Input
                   Row(
                     children: [
                       Expanded(
@@ -667,6 +739,8 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                             hintText: "Type your message...",
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
                           ),
                           maxLines: null,
                           onSubmitted: (_) =>
@@ -689,7 +763,11 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
           ],
         ),
 
-        // Confirm Dialogs
+        // ---------------------------------------------------------------------
+        // DIALOGS
+        // ---------------------------------------------------------------------
+
+        // New Chat Confirmation
         ConfirmDialog(
           visible: _showNewChatConfirm,
           title: "Start New Chat?",
@@ -709,6 +787,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
           },
         ),
 
+        // Load Confirmation
         ConfirmDialog(
           visible: _showLoadConfirm,
           title: "Load Conversation?",
@@ -739,6 +818,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
                 border: OutlineInputBorder(),
               ),
               onChanged: (v) => _conversationTitle = v,
+              autofocus: true,
             ),
             actions: [
               TextButton(
@@ -748,7 +828,7 @@ class _ChatBotComponentState extends State<ChatBotComponent> {
               ElevatedButton(
                 onPressed: () {
                   saveConversation().then((_) {
-                    setState(() => _showSaveDialog = false);
+                    // Dialog close handled inside saveConversation
                   });
                 },
                 child: const Text("Save"),

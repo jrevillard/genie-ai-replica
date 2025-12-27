@@ -26,7 +26,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
 
   Future<void> _loadFAQ() async {
     try {
-      final String md = await rootBundle.loadString('FAQ.md');
+      final String md = await rootBundle.loadString('assets/FAQ.md');
       setState(() => _faqContent = md);
     } catch (e) {
       setState(() => _faqContent = "FAQ not available");

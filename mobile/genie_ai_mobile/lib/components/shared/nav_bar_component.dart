@@ -5,19 +5,17 @@ import 'package:genie_ai_mobile/components/settings/settings_component.dart'; //
 class NavBarComponent extends StatelessWidget {
   final Map<String, dynamic> user;
   final VoidCallback onLogout;
+  final bool showRightDrawerButton;
 
   const NavBarComponent({
     super.key,
     required this.user,
     required this.onLogout,
+    this.showRightDrawerButton = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Standardizing role check from nested user objects
-    final dynamic roleValue = user['role'] ?? (user['user'] != null ? user['user']['role'] : '');
-    final bool isAdmin = roleValue.toString().toLowerCase() == 'admin';
-
     return AppBar(
       // Gradient background matching the web UI
       flexibleSpace: Container(
@@ -30,10 +28,29 @@ class NavBarComponent extends StatelessWidget {
         ),
       ),
       elevation: 4,
-      // Open SideBar (Drawer)
-      leading: IconButton(
-        icon: const Icon(Icons.menu, color: Colors.white),
-        onPressed: () => Scaffold.of(context).openDrawer(),
+      // Open Left SideBar (Drawer)
+      leading: Builder(
+        builder: (BuildContext drawerContext) {
+          return IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white),
+            tooltip: 'Open sidebar',
+            onPressed: () {
+              debugPrint("[NAVBAR] Hamburger button pressed!");
+
+              final scaffold = Scaffold.of(drawerContext);
+              if (scaffold.hasDrawer) {
+                debugPrint("[NAVBAR] Scaffold has drawer — opening it now");
+                scaffold.openDrawer();
+              } else {
+                debugPrint("[NAVBAR] ERROR: Scaffold does NOT have a drawer!");
+                debugPrint(
+                    "[NAVBAR] Current screen width: ${MediaQuery.of(drawerContext).size.width}");
+                debugPrint(
+                    "[NAVBAR] isWideScreen likely true — drawer disabled on large screens");
+              }
+            },
+          );
+        },
       ),
       titleSpacing: 0,
       title: const Row(
@@ -52,37 +69,34 @@ class NavBarComponent extends StatelessWidget {
       ),
       actions: [
         // System Status Indicator
-        const Padding(
-          padding: EdgeInsets.only(right: 8),
-          child: Row(
-            children: [
-              CircleAvatar(radius: 4, backgroundColor: Colors.orange),
-              SizedBox(width: 4),
-              Text("Issues", style: TextStyle(color: Colors.white70, fontSize: 10)),
-            ],
-          ),
-        ),
-        
+        //const Padding(
+        //  padding: EdgeInsets.only(right: 8),
+        //  child: Row(
+        //    children: [
+        //      CircleAvatar(radius: 4, backgroundColor: Colors.orange),
+        //      SizedBox(width: 4),
+        //      Text("Issues",
+        //          style: TextStyle(color: Colors.white70, fontSize: 10)),
+        //    ],
+        //  ),
+        //),
+
         // Language Selector
-        const LanguageSelector(),
+        // const LanguageSelector(),
 
-        // Analytics: Disabled if not Admin
-        IconButton(
-          icon: const Icon(Icons.analytics_outlined),
-          color: isAdmin ? Colors.white : Colors.white24,
-          tooltip: isAdmin ? "Analytics" : "Access Restricted",
-          onPressed: isAdmin ? () => Navigator.pushNamed(context, '/analytics') : null,
-        ),
+        // Right drawer button (Related Documents) – only on mobile/tablet
+        if (showRightDrawerButton)
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.description_outlined, color: Colors.white),
+              tooltip: "Related Documents",
+              onPressed: () {
+                Scaffold.of(context).openEndDrawer();
+              },
+            ),
+          ),
 
-        // Admin: Disabled if not Admin
-        IconButton(
-          icon: const Icon(Icons.admin_panel_settings_outlined),
-          color: isAdmin ? Colors.white : Colors.white24,
-          tooltip: isAdmin ? "Administration" : "Access Restricted",
-          onPressed: isAdmin ? () => Navigator.pushNamed(context, '/admin') : null,
-        ),
-
-        // Settings Button - FIXED: Calling SettingsComponent instead of placeholder
+        // Settings Button
         IconButton(
           icon: const Icon(Icons.settings_outlined, color: Colors.white),
           tooltip: "Settings",
@@ -94,8 +108,7 @@ class NavBarComponent extends StatelessWidget {
               backgroundColor: Colors.transparent,
               builder: (context) => FractionallySizedBox(
                 heightFactor: 0.9,
-                // Pass the current user object so Settings can fetch the profile
-                child: SettingsComponent(user: user), 
+                child: SettingsComponent(user: user),
               ),
             );
           },

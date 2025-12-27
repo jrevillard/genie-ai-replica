@@ -1,0 +1,26 @@
+{
+  "quickhelp": {
+    "justChat": "Just Chat",
+    "applyForID": "Apply for ID",
+    "payTaxes": "Pay taxes",
+    "startBusiness": "Start a business",
+    "findHealthcare": "Find healthcare",
+    "educationServices": "Education services",
+    "transportLicenses": "Transport & licenses",
+    "housingPrograms": "Housing programs",
+    "findJobs": "Find jobs",
+
+    "justChatPrompt": "I'd like to chat about government services in Kenya?",
+    "applyForIDPrompt": "I need information on how to apply for a national ID card in Kenya?",
+    "payTaxesPrompt": "What's the process for paying my taxes online in Kenya?",
+    "startBusinessPrompt": "Guide me through the steps to register a new business in Kenya?",
+    "findHealthcarePrompt": "Where can I find information about public healthcare servicesin Kenya?",
+    "educationServicesPrompt": "What education services are available for my children in Kenya?",
+    "transportLicensesPrompt": "How do I renew my driving license in Kenya?",
+    "housingProgramsPrompt": "Tell me about affordable housing programs in Kenya",
+    "findJobsPrompt": "What government job opportunities are currently available in Kenya?"
+  },
+  "chatbot": {
+    "whatCanIHelp": "How can I help you today?"
+  }
+}

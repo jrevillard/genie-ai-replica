@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
@@ -65,12 +67,28 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
 
+  // Quick Help Overlay Visibility
+  bool _showQuickHelpOverlay = true;
+
+  // Welcome message & translations
+  String _welcomeMessage = "Welcome to GENIE.AI! How can I help you today?";
+  Map<String, dynamic> _translations = {};
+
   @override
   void initState() {
     super.initState();
     debugPrint("[CHATBOT] Mounting component for user: ${widget.userId}");
+    _loadTranslations();
     _loadQuickHelpConfig();
     _titleController.text = _conversationTitle;
+
+    // Initial welcome message
+    _messages.add({
+      'role': 'assistant',
+      'content': _welcomeMessage,
+      'timestamp': DateTime.now().toIso8601String(),
+      'isSaved': true,
+    });
   }
 
   @override
@@ -82,18 +100,104 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     super.dispose();
   }
 
-  Future<void> _loadQuickHelpConfig() async {
+  Future<void> _loadTranslations() async {
     try {
       final String jsonString =
-          await rootBundle.loadString('assets/config/quickhelp/buttons.json');
-      final dynamic data = jsonDecode(jsonString);
-      final List buttons = data is List ? data : data['buttons'] ?? [];
+          await rootBundle.loadString('i18n/en.json');
       setState(() {
-        _quickHelpButtons = buttons.cast<Map<String, dynamic>>();
+        _translations = jsonDecode(jsonString);
       });
     } catch (e) {
-      debugPrint("[CHATBOT] Failed to load quick help config: $e");
+      debugPrint("[CHATBOT] Failed to load translations: $e");
     }
+  }
+
+  String _t(String key, [String fallback = '']) {
+    final keys = key.split('.');
+    dynamic current = _translations;
+    for (var k in keys) {
+      if (current is Map<String, dynamic> && current.containsKey(k)) {
+        current = current[k];
+      } else {
+        return fallback.isNotEmpty ? fallback : key;
+      }
+    }
+    return current?.toString() ?? (fallback.isNotEmpty ? fallback : key);
+  }
+
+  Future<void> _loadQuickHelpConfig() async {
+    try {
+      final String configString =
+          await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final Map<String, dynamic> config = jsonDecode(configString);
+
+      // Welcome message from config
+      final String? welcome = config['features']?['chat']?['welcomeMessage'];
+      if (welcome != null && welcome.isNotEmpty) {
+        _welcomeMessage = welcome;
+        // Update existing welcome message if already added
+        if (_messages.isNotEmpty &&
+            _messages.first['content'].contains('Welcome')) {
+          setState(() {
+            _messages.first['content'] = _welcomeMessage;
+          });
+        }
+      }
+
+      // Quick help buttons
+      final List<dynamic> buttonsJson =
+          config['features']?['chat']?['quickHelp']?['buttons'] ?? [];
+
+      final List<Map<String, dynamic>> loadedButtons = [];
+
+      for (var btn in buttonsJson) {
+        final String iconPath = btn['icon']?['value'] ?? '';
+        final String localIconAsset = iconPath.isNotEmpty
+            ? 'assets/config/quickhelp/${iconPath.split('/').last}'
+            : 'assets/config/quickhelp/default.svg';
+
+        loadedButtons.add({
+          'id': btn['id'],
+          'titleKey': btn['title'], // e.g. "quickhelp.applyForID"
+          'promptKey': btn['prompt'], // e.g. "quickhelp.applyForIDPrompt"
+          'iconAsset': localIconAsset,
+          'category': btn['category'],
+          'styles': btn['styles'],
+        });
+      }
+
+      setState(() {
+        _quickHelpButtons = loadedButtons;
+      });
+
+      debugPrint(
+          "[CHATBOT] Loaded ${_quickHelpButtons.length} quick help buttons from config");
+    } catch (e) {
+      debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
+      // Fallback preserved
+      try {
+        final String jsonString =
+            await rootBundle.loadString('assets/config/quickhelp/buttons.json');
+        final dynamic data = jsonDecode(jsonString);
+        final List buttons = data is List ? data : data['buttons'] ?? [];
+        setState(() {
+          _quickHelpButtons = buttons.cast<Map<String, dynamic>>();
+        });
+      } catch (fallbackError) {
+        debugPrint(
+            "[CHATBOT] Fallback quick help config failed: $fallbackError");
+      }
+    }
+  }
+
+  void _updateQuickHelpVisibility() {
+    final bool hasInteraction = _messages.any((m) =>
+        m['role'] == 'user' ||
+        (m['role'] == 'assistant' && m['content'] != _welcomeMessage));
+
+    setState(() {
+      _showQuickHelpOverlay = !hasInteraction;
+    });
   }
 
   void _scrollToBottom({bool animated = true}) {
@@ -121,8 +225,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       _selectedCategoryId = categoryId;
       _selectedCategoryName = categoryName;
     });
-    // Optional: Notify user via toast that context changed
-    // NotificationService.info("Context set to: $categoryName");
   }
 
   /// Loads a specific conversation by ID
@@ -141,13 +243,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   Future<void> _loadConversationDirect(String conversationId) async {
     setState(() => _isLoading = true);
-    // Reset but keep loading spinner active
     _resetChat(keepLoading: true);
 
     try {
-      // 1. Fetch full conversation details from Backend
-      // We use the direct API call to ensure we hit the GET /:id endpoint
-      // which returns the 'messages' array.
       final cleanId = conversationId.replaceFirst('conversations/', '');
       final res = await _api.get('chat/conversations/$cleanId',
           params: {'userId': widget.userId});
@@ -158,7 +256,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       final Map<String, dynamic> conv = jsonDecode(res.body);
 
-      // 2. Parse Messages
       List<Map<String, dynamic>> loadedMessages = [];
       if (conv['messages'] != null && conv['messages'] is List) {
         loadedMessages = (conv['messages'] as List).map((m) {
@@ -166,10 +263,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             'role': m['sender'] == 'user' ? 'user' : 'assistant',
             'content': m['content'],
             'timestamp': m['timestamp'],
-            'isSaved': true, // Mark as saved so we don't duplicate on next save
+            'isSaved': true,
             'confidence': m['confidence'],
             'metadata': m['metadata'],
-            // Extract sources if available
             'sources': m['metadata'] != null
                 ? (m['metadata']['sources'] ??
                     m['metadata']['source_documents'])
@@ -178,25 +274,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         }).toList();
       }
 
-      // 3. Restore Context if available
-      String? savedCategoryName = "";
-      if (conv['category'] != null) {
-        // If backend stores the name, use it. If it's just ID, we might fetch name.
-        // For now, we leave it blank or use the ID as fallback if needed.
-        // _selectedCategoryId = conv['category'];
-      }
-
-      // 4. Update UI State
       setState(() {
         _currentConversationId = conv['_id'] ?? conv['_key'];
         _conversationTitle = conv['title'] ?? "Untitled Chat";
         _titleController.text = _conversationTitle;
         _messages = loadedMessages;
-        if (savedCategoryName.isNotEmpty)
-          _selectedCategoryName = savedCategoryName;
       });
 
-      // 5. Update Right Sidebar with docs from the last assistant message
       final lastAssistant = loadedMessages.lastWhere(
         (m) => m['role'] == 'assistant',
         orElse: () => {},
@@ -209,6 +293,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       widget.onRefreshSidebar();
       _scrollToBottom(animated: false);
+      _updateQuickHelpVisibility();
     } catch (e) {
       NotificationService.error("Failed to load conversation");
       debugPrint("[CHATBOT] Load error: $e");
@@ -232,12 +317,18 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       _titleController.text = _conversationTitle;
       _messages = [];
       _relatedDocuments = [];
-      // Note: We typically do NOT clear context (_selectedCategoryId) on New Chat
-      // unless user explicitly closes it.
       if (!keepLoading) _isLoading = false;
     });
     widget.onRelatedDocumentsUpdate([]);
     _inputController.clear();
+
+    _messages.add({
+      'role': 'assistant',
+      'content': _welcomeMessage,
+      'timestamp': DateTime.now().toIso8601String(),
+      'isSaved': true,
+    });
+    _updateQuickHelpVisibility();
   }
 
   void _sendMessage(String text) async {
@@ -257,6 +348,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     _inputController.clear();
     _scrollToBottom();
+    _updateQuickHelpVisibility();
 
     try {
       final String sessionId =
@@ -269,13 +361,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         };
       }).toList();
 
-      // Submit to AI
       final response = await _chatBotProxy.submitQuery(
         sessionId: sessionId,
         messages: messagesForApi,
         userId: widget.userId,
-        categoryId: _selectedCategoryId, 
-        contextLabels: _selectedCategoryName, // FIX: Pass the labels string (Context)
+        categoryId: _selectedCategoryId,
+        contextLabels: _selectedCategoryName,
       );
 
       final String? queryId = response['queryId'];
@@ -303,6 +394,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       widget.onRelatedDocumentsUpdate(_relatedDocuments);
       _scrollToBottom();
+      _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
       NotificationService.error("Failed to get response");
@@ -310,10 +402,21 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
+  // Updated: Now automatically sends the message after setting the prompt
   void _quickHelpPressed(Map<String, dynamic> button) {
-    final prompt = button['prompt'] as String;
-    _inputController.text = prompt;
-    _inputFocusNode.requestFocus();
+    final String promptKey = button['promptKey'] as String;
+    final String translatedPrompt = _t(promptKey, promptKey);
+
+    // Hide overlay immediately
+    setState(() {
+      _showQuickHelpOverlay = false;
+    });
+
+    // Set the text and submit immediately
+    _inputController.text = translatedPrompt;
+
+    // Trigger send (same as pressing the send button or Enter)
+    _sendMessage(translatedPrompt);
   }
 
   // ===========================================================================
@@ -341,7 +444,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         'sessionId': sessionId,
       };
 
-      // 1. Create or Update Conversation Document
       dynamic conversationResponse;
       if (_currentConversationId == null) {
         conversationResponse = await _chatHistoryProxy.createConversation(data);
@@ -356,12 +458,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       final String conversationIdClean =
           conversationId.replaceFirst('conversations/', '');
 
-      // 2. Iterate and Save Messages individually to the 'messages' collection
-      // This is required so the Vue app can load them via ChatHistoryService
       for (int i = 0; i < _messages.length; i++) {
         final msg = _messages[i];
-
-        // Skip if already saved
         if (msg['isSaved'] == true) continue;
 
         final messagePayload = {
@@ -369,7 +467,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           'content': msg['content'],
           'sender': msg['role'] == 'user' ? 'user' : 'assistant',
           'userId': widget.userId,
-          // Attach technical metadata for assistant messages
           if (msg['queryId'] != null) 'queryId': msg['queryId'],
           if (msg['metadata'] != null) 'metadata': msg['metadata'],
         };
@@ -377,7 +474,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         try {
           await _chatHistoryProxy.addMessage(
               conversationIdClean, messagePayload);
-          // Mark locally as saved
           setState(() {
             _messages[i]['isSaved'] = true;
           });
@@ -525,7 +621,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         Column(
           children: [
             // -----------------------------------------------------------------
-            // CONTEXT BAR (Visible only when Service/Context is selected)
+            // CONTEXT BAR
             // -----------------------------------------------------------------
             if (_selectedCategoryName.isNotEmpty)
               Container(
@@ -555,7 +651,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                       message: "Remove Context",
                       child: IconButton(
                         icon: const Icon(Icons.close, size: 18),
-                        // Clear the context when clicked
                         onPressed: () => setCategoryContext("", ""),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -575,7 +670,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                 padding: const EdgeInsets.all(16),
                 itemCount: _messages.length + (_isLoading ? 1 : 0),
                 itemBuilder: (context, index) {
-                  // Loading Indicator
                   if (index == _messages.length && _isLoading) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
@@ -659,35 +753,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             ),
 
             // -----------------------------------------------------------------
-            // QUICK HELP BUTTONS
-            // -----------------------------------------------------------------
-            if (_quickHelpButtons.isNotEmpty && _messages.isEmpty)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _quickHelpButtons.map((btn) {
-                    IconData icon;
-                    try {
-                      icon = IconData(btn['iconCodePoint'],
-                          fontFamily: 'MaterialIcons');
-                    } catch (e) {
-                      icon = Icons.help_outline;
-                    }
-                    return ActionChip(
-                      avatar: Icon(icon, size: 16),
-                      label: Text(btn['label']),
-                      onPressed: () => _quickHelpPressed(btn),
-                      backgroundColor: theme.colorScheme.surface,
-                      side: BorderSide(color: theme.dividerColor),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-            // -----------------------------------------------------------------
             // INPUT AREA
             // -----------------------------------------------------------------
             Container(
@@ -698,7 +763,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               ),
               child: Column(
                 children: [
-                  // Action Toolbar
                   Row(
                     children: [
                       IconButton(
@@ -727,8 +791,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                     ],
                   ),
                   const SizedBox(height: 8),
-
-                  // Text Input
                   Row(
                     children: [
                       Expanded(
@@ -763,11 +825,124 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           ],
         ),
 
-        // ---------------------------------------------------------------------
-        // DIALOGS
-        // ---------------------------------------------------------------------
+        // -----------------------------------------------------------------
+        // MUCH SMALLER QUICK HELP OVERLAY
+        // -----------------------------------------------------------------
+        if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+          Container(
+            color: theme.scaffoldBackgroundColor.withOpacity(0.98),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _t('chatbot.whatCanIHelp', 'How can I help you today?'),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final int crossAxisCount = constraints.maxWidth > 900
+                          ? 4
+                          : constraints.maxWidth > 600
+                              ? 3
+                              : 2;
 
-        // New Chat Confirmation
+                      return GridView.builder(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          childAspectRatio:
+                              2.2, // Much taller ratio = smaller buttons
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                        ),
+                        itemCount: _quickHelpButtons.length,
+                        itemBuilder: (context, index) {
+                          final button = _quickHelpButtons[index];
+                          final String titleKey = button['titleKey'] as String;
+                          final String translatedTitle = _t(titleKey, titleKey);
+                          final String iconAsset =
+                              button['iconAsset'] as String;
+                          final Map<String, dynamic>? styles = button['styles'];
+                          final bool isJustChat = button['category'] == null;
+
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => _quickHelpPressed(button),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: styles != null
+                                      ? Color(int.parse(
+                                          styles['backgroundColor']
+                                              .replaceAll('#', '0xFF')))
+                                      : theme.cardColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: styles != null
+                                        ? Color(int.parse(styles['outlineColor']
+                                            .replaceAll('#', '0xFF')))
+                                        : (isJustChat
+                                            ? theme.primaryColor
+                                            : theme.dividerColor),
+                                    width: isJustChat ? 1.8 : 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SvgPicture.asset(
+                                      iconAsset,
+                                      width: 28,
+                                      height: 28,
+                                      placeholderBuilder: (_) => const Icon(
+                                        Icons.help_outline,
+                                        size: 28,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      translatedTitle,
+                                      style:
+                                          theme.textTheme.labelMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.1,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // -----------------------------------------------------------------
+        // DIALOGS (unchanged)
+        // -----------------------------------------------------------------
         ConfirmDialog(
           visible: _showNewChatConfirm,
           title: "Start New Chat?",
@@ -787,7 +962,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           },
         ),
 
-        // Load Confirmation
         ConfirmDialog(
           visible: _showLoadConfirm,
           title: "Load Conversation?",
@@ -807,7 +981,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           },
         ),
 
-        // Save Dialog
         if (_showSaveDialog)
           AlertDialog(
             title: const Text("Save Conversation"),
@@ -827,16 +1000,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  saveConversation().then((_) {
-                    // Dialog close handled inside saveConversation
-                  });
+                  saveConversation().then((_) {});
                 },
                 child: const Text("Save"),
               ),
             ],
           ),
 
-        // Export Dialog
         if (_showExportDialog)
           AlertDialog(
             title: const Text("Export Chat to PDF"),

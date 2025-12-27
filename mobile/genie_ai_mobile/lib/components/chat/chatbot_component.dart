@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -102,8 +103,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   Future<void> _loadTranslations() async {
     try {
-      final String jsonString =
-          await rootBundle.loadString('i18n/en.json');
+
+      String assetPath = kIsWeb ? 'i18n/en.json' : 'assets/i18n/en.json';
+      
+      final String jsonString = await rootBundle.loadString(assetPath);
       setState(() {
         _translations = jsonDecode(jsonString);
       });

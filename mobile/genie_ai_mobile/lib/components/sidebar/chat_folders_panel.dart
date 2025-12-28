@@ -23,6 +23,7 @@ class ChatFoldersPanel extends StatefulWidget {
 class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   final ChatHistoryProxy _chatProxy = ChatHistoryProxy();
 
+  // State
   String _selectedFolderId = "";
   bool _folderSelected = false;
   List<dynamic> _conversations = [];
@@ -31,19 +32,18 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   String _searchTerm = "";
   Timer? _searchDebounceTimeout;
 
+  // Folder Data
   List<dynamic> _folders = [];
   String _newFolderName = "";
-  Map<String, dynamic>? _editingFolder;
   String _editingFolderName = "";
 
-  Map<String, dynamic>? _activeChat;
+  // Chat Actions
   String _newChatTitle = "";
   String? _destinationFolderId;
 
   @override
   void initState() {
     super.initState();
-    debugPrint("[CHAT_FOLDERS] Mounting component for user: ${widget.userId}");
     _loadInitialData();
   }
 
@@ -51,9 +51,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   void didUpdateWidget(ChatFoldersPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.activeTab != widget.activeTab) {
-      debugPrint(
-          "[CHAT_FOLDERS] Tab changed from '${oldWidget.activeTab}' to '${widget.activeTab}'");
       _resetComponentState();
+      // If switching TO folders, ensure we reset to the folder list view
       if (widget.activeTab == 'folders') {
         _handleFoldersTabActivation();
       } else {
@@ -76,19 +75,15 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       _searchTerm = "";
       _errorMessage = null;
     });
-    debugPrint("[CHAT_FOLDERS] State reset for tab change");
   }
 
   Future<void> _loadInitialData() async {
-    debugPrint("[CHAT_FOLDERS] Loading initial data...");
     await _loadFoldersFromBackend();
     await _loadConversationsForCurrentTab();
   }
 
   Future<void> _loadFoldersFromBackend() async {
     try {
-      debugPrint(
-          "[CHAT_FOLDERS] Fetching folders for user ${widget.userId}...");
       final List rawFolders = await _chatProxy.getUserFolders(widget.userId);
       setState(() {
         _folders = rawFolders.map((f) {
@@ -101,24 +96,19 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           };
         }).toList();
       });
-      debugPrint(
-          "[CHAT_FOLDERS] Successfully loaded ${_folders.length} folders: ${_folders.map((f) => f['name']).join(', ')}");
     } catch (e) {
       debugPrint("[CHAT_FOLDERS] ERROR loading folders: $e");
     }
   }
 
   Future<void> _loadConversationsForCurrentTab() async {
+    // If in folders tab but no folder selected, don't load chats yet
     if (widget.activeTab == 'folders' && !_folderSelected) {
-      debugPrint(
-          "[CHAT_FOLDERS] Folders tab active but no folder selected → showing empty list");
       setState(() => _conversations = []);
       return;
     }
 
     setState(() => _isLoading = true);
-    debugPrint(
-        "[CHAT_FOLDERS] Loading conversations for tab: ${widget.activeTab}");
 
     try {
       dynamic response;
@@ -126,8 +116,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       if (widget.activeTab == 'folders' &&
           _folderSelected &&
           _selectedFolderId.isNotEmpty) {
-        debugPrint(
-            "[CHAT_FOLDERS] Using folder-specific endpoint for folder ID: $_selectedFolderId");
         response = await _chatProxy.getFolderConversations(_selectedFolderId);
       } else {
         final Map<String, dynamic> options = {
@@ -138,11 +126,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
 
         if (widget.activeTab == 'starred') {
           options['isStarred'] = true;
-          debugPrint("[CHAT_FOLDERS] Adding isStarred=true filter");
         }
-
-        debugPrint(
-            "[CHAT_FOLDERS] Calling getUserConversations with options: $options");
 
         response = await _chatProxy.getUserConversations(widget.userId, {},
             options: options);
@@ -154,32 +138,20 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           ? (response['conversations'] as List? ?? [])
           : (response as List? ?? []);
 
-      debugPrint(
-          "[CHAT_FOLDERS] API returned ${rawConvs.length} conversations");
-
       setState(() {
         _conversations = rawConvs.map((c) {
           final Map<String, dynamic> typedChat =
               Map<String, dynamic>.from(c as Map);
-          final bool starred = typedChat['isStarred'] == true;
-          final bool archived = typedChat['isArchived'] == true;
-          final String folderId = typedChat['folderId'] ?? 'none';
-          debugPrint(
-              "[CHAT_FOLDERS] Chat: ${typedChat['title'] ?? 'Untitled'} | starred: $starred | archived: $archived | folderId: $folderId");
           return <String, dynamic>{
             ...typedChat,
-            'isStarred': starred,
-            'isArchived': archived,
+            'isStarred': typedChat['isStarred'] == true,
+            'isArchived': typedChat['isArchived'] == true,
           };
         }).toList();
         _isLoading = false;
       });
-
-      debugPrint(
-          "[CHAT_FOLDERS] Loaded ${_conversations.length} conversations into state");
-    } catch (e, stack) {
+    } catch (e) {
       debugPrint("[CHAT_FOLDERS] ERROR loading conversations: $e");
-      debugPrint("[CHAT_FOLDERS] Stack trace: $stack");
       if (mounted) {
         setState(() {
           _errorMessage = "Failed to load chats";
@@ -190,9 +162,9 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   List<dynamic> get _filteredConversations {
-    final int before = _conversations.length;
     var chats = _conversations;
 
+    // Client-side filtering for tabs that don't have dedicated endpoints
     if (widget.activeTab != 'folders') {
       chats = chats.where((conv) {
         final bool matchesTab = (widget.activeTab == 'starred' &&
@@ -206,6 +178,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       }).toList();
     }
 
+    // Search filtering
     if (_searchTerm.isNotEmpty) {
       final term = _searchTerm.toLowerCase().trim();
       chats = chats.where((conv) {
@@ -215,90 +188,67 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       }).toList();
     }
 
+    // Sort by updated date
     chats.sort((a, b) {
       final dateA = DateTime.tryParse(a['updated'] ?? '') ?? DateTime(0);
       final dateB = DateTime.tryParse(b['updated'] ?? '') ?? DateTime(0);
       return dateB.compareTo(dateA);
     });
 
-    debugPrint(
-        "[CHAT_FOLDERS] Filtered: $before → ${chats.length} conversations (tab: ${widget.activeTab}, search: '$_searchTerm')");
     return chats;
   }
 
   void _handleSearchInput(String val) {
     _searchDebounceTimeout?.cancel();
     _searchDebounceTimeout = Timer(const Duration(milliseconds: 300), () {
-      debugPrint("[CHAT_FOLDERS] Search term updated: '$val'");
       setState(() => _searchTerm = val);
     });
   }
 
+  // --- ACTIONS ---
+
   Future<void> _toggleStarred(Map<String, dynamic> chat) async {
     final bool newStatus = !(chat['isStarred'] ?? false);
-    final String title = chat['title'] ?? 'Untitled';
-    debugPrint(
-        "[CHAT_FOLDERS] Toggling starred for chat '$title' (_id: ${chat['_id']}) → $newStatus");
-
     try {
-      // Strip 'conversations/' prefix for backend compatibility
-      final String chatId = chat['_id'].replaceFirst('conversations/', '');
-
+      final String chatId =
+          chat['_id'].toString().replaceFirst('conversations/', '');
       await _chatProxy.updateConversation(chatId, {
         'isStarred': newStatus,
         'userId': widget.userId,
       });
-      debugPrint("[CHAT_FOLDERS] Starred update API call successful");
-
       setState(() {
         chat['isStarred'] = newStatus;
         if (widget.activeTab == 'starred' && !newStatus) {
           _conversations.removeWhere((c) => c['_id'] == chat['_id']);
-          debugPrint(
-              "[CHAT_FOLDERS] Removed unstarred chat from starred tab list");
         }
       });
-      await _loadConversationsForCurrentTab();
     } catch (e) {
       debugPrint("[CHAT_FOLDERS] ERROR toggling starred: $e");
     }
   }
 
   Future<void> _toggleArchived(Map<String, dynamic> chat, bool value) async {
-    final String title = chat['title'] ?? 'Untitled';
-    debugPrint(
-        "[CHAT_FOLDERS] Toggling archived for chat '$title' (_id: ${chat['_id']}) → $value");
-
     setState(() {
       chat['isArchived'] = value;
       if ((widget.activeTab != 'archived' && value) ||
           (widget.activeTab == 'archived' && !value)) {
         _conversations.removeWhere((c) => c['_id'] == chat['_id']);
-        debugPrint(
-            "[CHAT_FOLDERS] Optimistically removed chat from current view");
       }
     });
-
     try {
-      // FIXED: Strip 'conversations/' prefix — backend expects bare key
-      final String chatId = chat['_id'].replaceFirst('conversations/', '');
-
+      final String chatId =
+          chat['_id'].toString().replaceFirst('conversations/', '');
       await _chatProxy.updateConversation(chatId, {
         'isArchived': value,
         'userId': widget.userId,
       });
-      debugPrint("[CHAT_FOLDERS] Archive update sent successfully");
-
       await _loadConversationsForCurrentTab();
-      debugPrint("[CHAT_FOLDERS] Reloaded conversations after archive toggle");
     } catch (e) {
       debugPrint("[CHAT_FOLDERS] ERROR in archive toggle: $e");
-      setState(() => chat['isArchived'] = !value);
-      await _loadConversationsForCurrentTab();
     }
   }
 
-  // All other methods (modals, UI) are unchanged — kept exactly as your version
+  // --- DIALOGS ---
 
   void _openCreateFolderModal() {
     _newFolderName = "";
@@ -369,7 +319,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       builder: (ctx) => AlertDialog(
         title: const Text("Delete Folder"),
         content: Text(
-            "Are you sure you want to delete '${folder['name']}'? All chats will be moved to the default folder."),
+            "Are you sure you want to delete '${folder['name']}'? Chats will be moved to default."),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
@@ -409,7 +359,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
             onPressed: () async {
               if (_newChatTitle.trim().isNotEmpty) {
                 final String chatId =
-                    chat['_id'].replaceFirst('conversations/', '');
+                    chat['_id'].toString().replaceFirst('conversations/', '');
                 await _chatProxy.updateConversation(chatId,
                     {'title': _newChatTitle.trim(), 'userId': widget.userId});
                 setState(() => chat['title'] = _newChatTitle.trim());
@@ -448,8 +398,10 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
             ElevatedButton(
               onPressed: () async {
                 if (_destinationFolderId != null) {
+                  final String convId =
+                      chat['_id'].toString().replaceFirst('conversations/', '');
                   await _chatProxy.addConversationToFolder(
-                      _destinationFolderId!, chat['_id'], widget.userId);
+                      _destinationFolderId!, convId, widget.userId);
                   if (mounted) Navigator.pop(ctx);
                   _loadConversationsForCurrentTab();
                 }
@@ -474,10 +426,21 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await _chatProxy.deleteConversation(chat['_id'], widget.userId);
-              setState(() =>
-                  _conversations.removeWhere((c) => c['_id'] == chat['_id']));
-              if (mounted) Navigator.pop(ctx);
+              try {
+                // Strip 'conversations/' prefix
+                final String chatId =
+                    chat['_id'].toString().replaceFirst('conversations/', '');
+                await _chatProxy.deleteConversation(chatId, widget.userId);
+
+                if (mounted) {
+                  setState(() => _conversations
+                      .removeWhere((c) => c['_id'] == chat['_id']));
+                  Navigator.pop(ctx);
+                }
+              } catch (e) {
+                debugPrint("[CHAT_FOLDERS] ERROR deleting conversation: $e");
+                if (mounted) Navigator.pop(ctx);
+              }
             },
             child: const Text("Delete"),
           )
@@ -486,17 +449,49 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     );
   }
 
+  // --- BUILD METHODS ---
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading)
       return const Center(
           child: CircularProgressIndicator(color: Color(0xFF4E97D1)));
 
+    // CASE 1: Folders Tab - No Folder Selected (Show Grid)
+    if (widget.activeTab == 'folders' && !_folderSelected) {
+      return Column(
+        children: [
+          _buildSearchBox(),
+          _buildFoldersHeader(showBackButton: false),
+          Expanded(child: _buildVerticalFolderGrid()),
+        ],
+      );
+    }
+
+    // CASE 2: Folders Tab - Folder Selected (Show List with Back Button)
+    if (widget.activeTab == 'folders' && _folderSelected) {
+      return Column(
+        children: [
+          _buildSearchBox(),
+          _buildFoldersHeader(showBackButton: true),
+          Expanded(
+            child: _filteredConversations.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _filteredConversations.length,
+                    itemBuilder: (ctx, idx) =>
+                        _buildChatItem(_filteredConversations[idx]),
+                  ),
+          ),
+        ],
+      );
+    }
+
+    // CASE 3: Standard Tabs (All, Starred, Archived)
     return Column(
       children: [
         _buildSearchBox(),
-        if (widget.activeTab == 'folders') _buildFoldersHeader(),
-        if (widget.activeTab == 'folders') _buildFoldersList(),
         Expanded(
           child: _filteredConversations.isEmpty
               ? _buildEmptyState()
@@ -510,8 +505,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       ],
     );
   }
-
-  // All UI builders unchanged — your exact code
 
   Widget _buildSearchBox() {
     return Padding(
@@ -532,108 +525,165 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     );
   }
 
-  Widget _buildFoldersHeader() {
+  Widget _buildFoldersHeader({bool showBackButton = false}) {
+    String title = "FOLDERS";
+    if (showBackButton) {
+      final folder = _folders.firstWhere((f) => f['id'] == _selectedFolderId,
+          orElse: () => {'name': 'Folder'});
+      title = folder['name'];
+    }
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text("FOLDERS",
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                  letterSpacing: 0.8)),
-          IconButton(
-            icon: const Icon(Icons.create_new_folder_outlined,
-                size: 20, color: Color(0xFF4E97D1)),
-            onPressed: _openCreateFolderModal,
-          )
+          Row(
+            children: [
+              if (showBackButton)
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, size: 20),
+                  color: const Color(0xFF4E97D1),
+                  onPressed: () {
+                    setState(() {
+                      _folderSelected = false;
+                      _conversations = [];
+                    });
+                  },
+                ),
+              if (!showBackButton) const SizedBox(width: 8),
+              Text(title.toUpperCase(),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                      letterSpacing: 0.8)),
+            ],
+          ),
+          // Only show "Create Folder" button when in root view
+          if (!showBackButton)
+            IconButton(
+              icon: const Icon(Icons.create_new_folder_outlined,
+                  size: 20, color: Color(0xFF4E97D1)),
+              onPressed: _openCreateFolderModal,
+            )
         ],
       ),
     );
   }
 
-  Widget _buildFoldersList() {
+  Widget _buildVerticalFolderGrid() {
     final nonDefault = _folders.where((f) => f['isDefault'] != true).toList();
-    return Container(
-      height: 135,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: nonDefault.length,
-        itemBuilder: (ctx, idx) {
-          final f = nonDefault[idx];
-          final active = _selectedFolderId == f['id'];
-          return Container(
-            width: 140,
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: InkWell(
-              onTap: () {
-                debugPrint(
-                    "[CHAT_FOLDERS] Folder tapped: ${f['name']} (id: ${f['id']})");
-                setState(() {
-                  _selectedFolderId = f['id'];
-                  _folderSelected = true;
-                });
-                _loadConversationsForCurrentTab();
-              },
-              child: Card(
-                elevation: active ? 4 : 1,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: BorderSide(
-                        color: active
-                            ? const Color(0xFF4E97D1)
-                            : Colors.transparent,
-                        width: 2)),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
+
+    if (nonDefault.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.folder_open, size: 48, color: Colors.black12),
+            const SizedBox(height: 8),
+            const Text("No folders yet",
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio:
+            1.1, // FIX: Reduced ratio from 1.4 to 1.1 for more vertical space
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: nonDefault.length,
+      itemBuilder: (ctx, idx) {
+        final f = nonDefault[idx];
+        return InkWell(
+          onTap: () {
+            setState(() {
+              _selectedFolderId = f['id'];
+              _folderSelected = true;
+            });
+            _loadConversationsForCurrentTab();
+          },
+          child: Card(
+            elevation: 1,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment
+                    .spaceBetween, // FIX: Better spacing distribution
+                children: [
+                  const SizedBox(height: 4),
+                  const Icon(Icons.folder_open,
+                      color: Color(0xFF4E97D1), size: 32),
+                  Text(f['name'],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      const Icon(Icons.folder_open,
-                          color: Color(0xFF4E97D1), size: 24),
-                      const SizedBox(height: 4),
-                      Flexible(
-                        child: Text(f['name'],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: active
-                                    ? FontWeight.bold
-                                    : FontWeight.normal)),
-                      ),
-                      const Spacer(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          IconButton(
-                              icon: const Icon(Icons.edit, size: 16),
-                              onPressed: () => _openEditFolderDialog(f),
-                              constraints: const BoxConstraints()),
-                          IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 16, color: Colors.red),
-                              onPressed: () => _openDeleteFolderDialog(f),
-                              constraints: const BoxConstraints()),
-                        ],
-                      )
+                      IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _openEditFolderDialog(f)),
+                      IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.red),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _openDeleteFolderDialog(f)),
                     ],
-                  ),
-                ),
+                  )
+                ],
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildChatItem(Map<String, dynamic> chat) {
+    // 1. Calculate Message Count
+    final List messages = chat['messages'] as List? ?? [];
+    final int msgCount =
+        int.tryParse(chat['messageCount']?.toString() ?? '') ?? messages.length;
+
+    // 2. Determine Preview
+    String previewText = "";
+    // Check 'lastMessage' property
+    if (chat['lastMessage'] != null) {
+      if (chat['lastMessage'] is String) {
+        previewText = chat['lastMessage'];
+      } else if (chat['lastMessage'] is Map) {
+        previewText =
+            chat['lastMessage']['content'] ?? chat['lastMessage']['text'] ?? "";
+      }
+    }
+    // Fallback to last item in 'messages' array
+    if (previewText.isEmpty && messages.isNotEmpty) {
+      final lastMsg = messages.last;
+      if (lastMsg is Map) {
+        previewText = lastMsg['content'] ?? lastMsg['text'] ?? "";
+      } else {
+        previewText = lastMsg.toString();
+      }
+    }
+    if (previewText.isEmpty) previewText = "New Conversation";
+
+    // 3. Date
+    final String dateStr = _formatDate(chat['updated']);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -647,7 +697,10 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
         ],
       ),
       child: ListTile(
-        onTap: () => widget.onOpenChat(chat['_id']),
+        onTap: () {
+          widget.onOpenChat(chat['_id']);
+          Scaffold.maybeOf(context)?.closeDrawer();
+        },
         leading: CircleAvatar(
             backgroundColor: const Color(0xFFF2F6F9),
             child: Icon(
@@ -663,13 +716,18 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(chat['preview'] ?? "No message preview",
+            Text(previewText,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12, color: Colors.black54)),
             const SizedBox(height: 4),
-            Text(_formatDate(chat['updated']),
-                style: const TextStyle(fontSize: 10, color: Colors.black26)),
+            // Combined Text widget prevents overflow
+            Text(
+              "$dateStr • $msgCount messages",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10, color: Colors.black26),
+            ),
           ],
         ),
         trailing: Row(
@@ -737,8 +795,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     String msg = "No conversations found";
     if (widget.activeTab == 'starred') msg = "No starred conversations";
     if (widget.activeTab == 'archived') msg = "No archived conversations";
-    if (widget.activeTab == 'folders' && !_folderSelected)
-      msg = "Select a folder to view chats";
+    if (widget.activeTab == 'folders' && _folderSelected)
+      msg = "Folder is empty";
 
     return Center(
       child: Column(
@@ -766,7 +824,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   void _handleFoldersTabActivation() {
-    debugPrint("[CHAT_FOLDERS] Folders tab activated");
     setState(() {
       _folderSelected = false;
       _conversations = [];

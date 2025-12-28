@@ -48,6 +48,9 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
 
+  // Dirty State Tracking (New)
+  int _lastSavedMessageCount = 0;
+
   // Inputs
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _inputController = TextEditingController();
@@ -75,6 +78,19 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   String _welcomeMessage = "Welcome to GENIE.AI! How can I help you today?";
   Map<String, dynamic> _translations = {};
 
+  // --- DIRTY STATE CHECK ---
+  bool get _hasUnsavedChanges {
+    // Case 1: New Conversation
+    // Considered "dirty" only if there are user messages (count > 1, assuming Welcome msg is index 0)
+    if (_currentConversationId == null) {
+      return _messages.length > 1;
+    }
+
+    // Case 2: Existing Conversation
+    // Considered "dirty" if new messages/context have been added since load/save
+    return _messages.length > _lastSavedMessageCount;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +106,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': true,
     });
+    // Set initial state: 1 message (Welcome) is the baseline
+    _lastSavedMessageCount = 1;
   }
 
   @override
@@ -103,9 +121,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   Future<void> _loadTranslations() async {
     try {
-
       String assetPath = kIsWeb ? 'i18n/en.json' : 'assets/i18n/en.json';
-      
+
       final String jsonString = await rootBundle.loadString(assetPath);
       setState(() {
         _translations = jsonDecode(jsonString);
@@ -232,7 +249,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   /// Loads a specific conversation by ID
   Future<void> loadConversation(String conversationId) async {
-    if (_messages.isNotEmpty && _currentConversationId == null) {
+    // FIX: Only confirm if there are actual unsaved changes
+    if (_hasUnsavedChanges) {
       _pendingLoadConversationId = conversationId;
       setState(() => _showLoadConfirm = true);
     } else {
@@ -282,17 +300,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         _conversationTitle = conv['title'] ?? "Untitled Chat";
         _titleController.text = _conversationTitle;
         _messages = loadedMessages;
+        // Update baseline count to match loaded messages
+        _lastSavedMessageCount = loadedMessages.length;
       });
 
-      final lastAssistant = loadedMessages.lastWhere(
-        (m) => m['role'] == 'assistant',
-        orElse: () => {},
-      );
-
-      if (lastAssistant.isNotEmpty && lastAssistant['sources'] != null) {
-        _relatedDocuments = List<dynamic>.from(lastAssistant['sources']);
-        widget.onRelatedDocumentsUpdate(_relatedDocuments);
+      // --- AGGREGATE SOURCES FROM HISTORY ---
+      // We iterate reversed (Newest -> Oldest) to populate the list with
+      // latest documents at the top, growing downwards.
+      List<dynamic> accumulatedDocs = [];
+      for (final msg in loadedMessages.reversed) {
+        if (msg['role'] == 'assistant' && msg['sources'] != null) {
+          final List sources = msg['sources'];
+          // Merge sources into accumulatedDocs, keeping priorityDocs (accumulated) at top
+          accumulatedDocs = _mergeUniqueDocs(accumulatedDocs, sources);
+        }
       }
+
+      _relatedDocuments = accumulatedDocs;
+      widget.onRelatedDocumentsUpdate(_relatedDocuments);
 
       widget.onRefreshSidebar();
       _scrollToBottom(animated: false);
@@ -306,7 +331,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void startNewChat() {
-    if (_messages.isNotEmpty && _currentConversationId == null) {
+    // FIX: Only confirm if there are actual unsaved changes
+    if (_hasUnsavedChanges) {
       setState(() => _showNewChatConfirm = true);
     } else {
       _resetChat();
@@ -319,7 +345,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       _conversationTitle = "New Chat";
       _titleController.text = _conversationTitle;
       _messages = [];
-      _relatedDocuments = [];
+      _relatedDocuments = []; // Clears the doc list on new chat
       if (!keepLoading) _isLoading = false;
     });
     widget.onRelatedDocumentsUpdate([]);
@@ -331,6 +357,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': true,
     });
+    // Reset baseline: 1 message (Welcome)
+    _lastSavedMessageCount = 1;
     _updateQuickHelpVisibility();
   }
 
@@ -386,12 +414,16 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         'isSaved': false,
       };
 
-      final newDocs =
+      final List<dynamic> newDocs =
           metadata?['sources'] ?? metadata?['source_documents'] ?? [];
 
       setState(() {
         _messages.add(assistantMessage);
-        _relatedDocuments = List<dynamic>.from(newDocs);
+
+        // --- GROW LIST: NEWEST AT TOP ---
+        // We merge newDocs at the START of the existing list.
+        _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
+
         _isLoading = false;
       });
 
@@ -403,6 +435,36 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       NotificationService.error("Failed to get response");
       debugPrint("[CHATBOT] Send error: $e");
     }
+  }
+
+  /// Helper to merge two lists of docs without duplicates.
+  /// [priorityDocs] are kept at the top (or added first).
+  /// [secondaryDocs] are appended if they don't already exist in [priorityDocs].
+  List<dynamic> _mergeUniqueDocs(
+      List<dynamic> priorityDocs, List<dynamic> secondaryDocs) {
+    final List<dynamic> merged = List.from(priorityDocs);
+
+    for (var doc in secondaryDocs) {
+      // Try to find a match in the existing merged list
+      final String? docId = doc['id'] ?? doc['_id'] ?? doc['document_id'];
+      bool exists = false;
+
+      if (docId != null) {
+        exists = merged.any((m) {
+          final String? mId = m['id'] ?? m['_id'] ?? m['document_id'];
+          return mId == docId;
+        });
+      } else {
+        // Fallback for docs without IDs (rare): strict object equality or skip
+        // For safety, we rely on ID. If no ID, we assume distinct unless object ref matches.
+        exists = merged.contains(doc);
+      }
+
+      if (!exists) {
+        merged.add(doc);
+      }
+    }
+    return merged;
   }
 
   // Updated: Now automatically sends the message after setting the prompt
@@ -489,6 +551,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         _currentConversationId =
             conversationResponse['_id'] ?? _currentConversationId;
         _showSaveDialog = false;
+        // Update baseline count to match current length (all saved)
+        _lastSavedMessageCount = _messages.length;
       });
 
       NotificationService.success("Conversation saved");

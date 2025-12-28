@@ -305,13 +305,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       });
 
       // --- AGGREGATE SOURCES FROM HISTORY ---
-      // We iterate reversed (Newest -> Oldest) to populate the list with
-      // latest documents at the top, growing downwards.
       List<dynamic> accumulatedDocs = [];
       for (final msg in loadedMessages.reversed) {
         if (msg['role'] == 'assistant' && msg['sources'] != null) {
           final List sources = msg['sources'];
-          // Merge sources into accumulatedDocs, keeping priorityDocs (accumulated) at top
           accumulatedDocs = _mergeUniqueDocs(accumulatedDocs, sources);
         }
       }
@@ -419,11 +416,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       setState(() {
         _messages.add(assistantMessage);
-
-        // --- GROW LIST: NEWEST AT TOP ---
-        // We merge newDocs at the START of the existing list.
         _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
-
         _isLoading = false;
       });
 
@@ -437,15 +430,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     }
   }
 
-  /// Helper to merge two lists of docs without duplicates.
-  /// [priorityDocs] are kept at the top (or added first).
-  /// [secondaryDocs] are appended if they don't already exist in [priorityDocs].
   List<dynamic> _mergeUniqueDocs(
       List<dynamic> priorityDocs, List<dynamic> secondaryDocs) {
     final List<dynamic> merged = List.from(priorityDocs);
 
     for (var doc in secondaryDocs) {
-      // Try to find a match in the existing merged list
       final String? docId = doc['id'] ?? doc['_id'] ?? doc['document_id'];
       bool exists = false;
 
@@ -455,8 +444,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           return mId == docId;
         });
       } else {
-        // Fallback for docs without IDs (rare): strict object equality or skip
-        // For safety, we rely on ID. If no ID, we assume distinct unless object ref matches.
         exists = merged.contains(doc);
       }
 
@@ -467,25 +454,20 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     return merged;
   }
 
-  // Updated: Now automatically sends the message after setting the prompt
   void _quickHelpPressed(Map<String, dynamic> button) {
     final String promptKey = button['promptKey'] as String;
     final String translatedPrompt = _t(promptKey, promptKey);
 
-    // Hide overlay immediately
     setState(() {
       _showQuickHelpOverlay = false;
     });
 
-    // Set the text and submit immediately
     _inputController.text = translatedPrompt;
-
-    // Trigger send (same as pressing the send button or Enter)
     _sendMessage(translatedPrompt);
   }
 
   // ===========================================================================
-  // SAVING LOGIC (CRITICAL FIX FOR VUE COMPATIBILITY)
+  // SAVING LOGIC
   // ===========================================================================
   Future<void> saveConversation({String? folderId}) async {
     if (_messages.isEmpty) {
@@ -551,7 +533,6 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         _currentConversationId =
             conversationResponse['_id'] ?? _currentConversationId;
         _showSaveDialog = false;
-        // Update baseline count to match current length (all saved)
         _lastSavedMessageCount = _messages.length;
       });
 
@@ -682,6 +663,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = ThemeManager().getColors();
+    final isDark = ThemeManager().isDarkMode;
 
     return Stack(
       children: [
@@ -696,20 +679,20 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withOpacity(0.2),
-                  border: Border(bottom: BorderSide(color: theme.dividerColor)),
+                  color: colors['primary'].withOpacity(0.1),
+                  border: Border(bottom: BorderSide(color: colors['border'])),
                 ),
                 child: Row(
                   children: [
                     Icon(Icons.lightbulb_outline,
-                        size: 20, color: theme.colorScheme.primary),
+                        size: 20, color: colors['primary']),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         "Context: $_selectedCategoryName",
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
+                          color: colors['text'],
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -717,7 +700,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                     Tooltip(
                       message: "Remove Context",
                       child: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
+                        icon:
+                            Icon(Icons.close, size: 18, color: colors['text']),
                         onPressed: () => setCategoryContext("", ""),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -763,10 +747,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           maxWidth: MediaQuery.of(context).size.width * 0.75),
                       decoration: BoxDecoration(
                         color: isUser
-                            ? theme.primaryColor
-                            : (theme.brightness == Brightness.dark
-                                ? Colors.grey[800]
-                                : Colors.grey[200]),
+                            ? colors['primary']
+                            : isDark
+                                ? colors['surface']
+                                : Colors.grey[200],
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
@@ -776,16 +760,16 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                             data: msg['content'] ?? '',
                             styleSheet: MarkdownStyleSheet(
                               p: TextStyle(
-                                color: isUser
-                                    ? Colors.white
-                                    : theme.textTheme.bodyLarge?.color,
+                                color: isUser ? Colors.white : colors['text'],
                                 fontSize: 16,
                                 height: 1.5,
                               ),
                               codeblockDecoration: BoxDecoration(
                                 color: isUser
                                     ? Colors.white.withOpacity(0.1)
-                                    : Colors.black12,
+                                    : (isDark
+                                        ? Colors.white10
+                                        : Colors.black12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
@@ -807,7 +791,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                     fontSize: 12,
                                     color: isUser
                                         ? Colors.white70
-                                        : theme.textTheme.bodySmall?.color,
+                                        : colors['text'].withOpacity(0.6),
                                     fontStyle: FontStyle.italic),
                               ),
                             ),
@@ -825,20 +809,21 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: theme.cardColor,
-                border: Border(top: BorderSide(color: theme.dividerColor)),
+                color: colors['surface'],
+                border: Border(top: BorderSide(color: colors['border'])),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
+                        icon: Icon(Icons.add_circle_outline,
+                            color: colors['text']),
                         tooltip: "New Chat",
                         onPressed: startNewChat,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.save_outlined),
+                        icon: Icon(Icons.save_outlined, color: colors['text']),
                         tooltip: "Save Chat",
                         onPressed: () {
                           _titleController.text = _conversationTitle;
@@ -846,7 +831,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         },
                       ),
                       IconButton(
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        icon: Icon(Icons.picture_as_pdf_outlined,
+                            color: colors['text']),
                         tooltip: "Export to PDF",
                         onPressed: () {
                           _exportFilename =
@@ -864,10 +850,25 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         child: TextField(
                           controller: _inputController,
                           focusNode: _inputFocusNode,
+                          style: TextStyle(color: colors['text']),
                           decoration: InputDecoration(
                             hintText: "Type your message...",
+                            hintStyle: TextStyle(
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[600]),
+                            filled: true,
+                            fillColor: isDark
+                                ? Colors.white.withOpacity(0.05)
+                                : Colors.transparent,
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: colors['border'])),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: colors['border'])),
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 14),
                           ),
@@ -879,7 +880,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                       const SizedBox(width: 12),
                       IconButton(
                         icon: const Icon(Icons.send),
-                        color: theme.primaryColor,
+                        color: colors['primary'],
                         onPressed: _isLoading
                             ? null
                             : () => _sendMessage(_inputController.text),
@@ -893,11 +894,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         ),
 
         // -----------------------------------------------------------------
-        // MUCH SMALLER QUICK HELP OVERLAY
+        // QUICK HELP OVERLAY
         // -----------------------------------------------------------------
         if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
           Container(
-            color: theme.scaffoldBackgroundColor.withOpacity(0.98),
+            color: colors['background'].withOpacity(0.98),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -906,7 +907,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                   _t('chatbot.whatCanIHelp', 'How can I help you today?'),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: theme.textTheme.bodyLarge?.color,
+                    color: colors['text'],
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -923,8 +924,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                       return GridView.builder(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: crossAxisCount,
-                          childAspectRatio:
-                              2.2, // Much taller ratio = smaller buttons
+                          childAspectRatio: 2.2,
                           mainAxisSpacing: 10,
                           crossAxisSpacing: 10,
                         ),
@@ -938,6 +938,25 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                           final Map<String, dynamic>? styles = button['styles'];
                           final bool isJustChat = button['category'] == null;
 
+                          // Dynamic Button Style based on Mode
+                          final Color btnBgColor = isDark
+                              ? colors[
+                                  'surface'] // Dark Mode: Use surface color
+                              : (styles != null
+                                  ? Color(int.parse(styles['backgroundColor']
+                                      .replaceAll('#', '0xFF')))
+                                  : theme
+                                      .cardColor); // Light Mode: Config or Card
+
+                          final Color btnBorderColor = isDark
+                              ? colors['border']
+                              : (styles != null
+                                  ? Color(int.parse(styles['outlineColor']
+                                      .replaceAll('#', '0xFF')))
+                                  : (isJustChat
+                                      ? colors['primary']
+                                      : colors['border']));
+
                           return Material(
                             color: Colors.transparent,
                             child: InkWell(
@@ -946,19 +965,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: styles != null
-                                      ? Color(int.parse(
-                                          styles['backgroundColor']
-                                              .replaceAll('#', '0xFF')))
-                                      : theme.cardColor,
+                                  color: btnBgColor,
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: styles != null
-                                        ? Color(int.parse(styles['outlineColor']
-                                            .replaceAll('#', '0xFF')))
-                                        : (isJustChat
-                                            ? theme.primaryColor
-                                            : theme.dividerColor),
+                                    color: btnBorderColor,
                                     width: isJustChat ? 1.8 : 1,
                                   ),
                                   boxShadow: [
@@ -976,9 +986,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                       iconAsset,
                                       width: 28,
                                       height: 28,
-                                      placeholderBuilder: (_) => const Icon(
+                                      placeholderBuilder: (_) => Icon(
                                         Icons.help_outline,
                                         size: 28,
+                                        color: colors['text'],
                                       ),
                                     ),
                                     const SizedBox(height: 6),
@@ -988,6 +999,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                           theme.textTheme.labelMedium?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         height: 1.1,
+                                        // Ensure text is visible: Light on Dark / Dark on Light
+                                        color: isDark
+                                            ? colors['text']
+                                            : Colors.black87,
                                       ),
                                       textAlign: TextAlign.center,
                                       maxLines: 2,
@@ -1008,7 +1023,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           ),
 
         // -----------------------------------------------------------------
-        // DIALOGS (unchanged)
+        // DIALOGS
         // -----------------------------------------------------------------
         ConfirmDialog(
           visible: _showNewChatConfirm,

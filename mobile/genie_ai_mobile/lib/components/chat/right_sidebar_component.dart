@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 // --- CONDITIONAL IMPORT ---
 import 'stub_file_utils.dart' if (dart.library.html) 'web_file_utils.dart';
@@ -108,8 +109,6 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     }
 
     if (kIsWeb) {
-      // Calls the function from web_file_utils.dart (via conditional import)
-      // On mobile, this code path is dead, but the compiler sees 'stub_file_utils.dart'
       await openWebFile(
         context: context,
         fileId: fileId,
@@ -117,7 +116,6 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
         docMetadata: doc,
       );
     } else {
-      // --- MOBILE FALLBACK ---
       final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
       final String urlWithToken = '$viewUrl?access_token=$token';
       final Uri uri = Uri.parse(urlWithToken);
@@ -132,47 +130,48 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+  Widget _buildRightSidebarContent(BuildContext context, ThemeData theme) {
+    final colors = ThemeManager().getColors();
+    final bool isDark = ThemeManager().isDarkMode;
 
-    return Container(
-      width: 360,
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        border: Border(left: BorderSide(color: theme.dividerColor)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(-4, 0),
-          ),
-        ],
-      ),
+    return Material(
+      color: colors['background'], // Dynamic Background matching Sidebar
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // HEADER - Styled exactly like the Left Sidebar Tabs
+          // Height set to 72.0 to match standard Tab(icon+text) height
           Container(
-            padding: const EdgeInsets.all(16),
+            height: 72.0,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.centerLeft, // Vertically center the content
             decoration: BoxDecoration(
-              color: theme.appBarTheme.backgroundColor,
-              border: Border(bottom: BorderSide(color: theme.dividerColor)),
+              color: colors['surface'],
+              border: Border(
+                bottom: BorderSide(
+                  color: colors['border'],
+                  width: 1,
+                ),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.description, color: Colors.white),
+                Icon(Icons.description_outlined,
+                    color: theme.primaryColor, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   "Related Documents",
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: theme.primaryColor, // Matching Tab Label Color
+                  ),
                 ),
               ],
             ),
           ),
 
-          // Related Documents List
+          // CONTENT - Related Documents List
           Expanded(
             flex: 3,
             child: widget.relatedDocuments.isEmpty
@@ -180,8 +179,8 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                     child: Text(
                       "No related documents found",
                       style: TextStyle(
-                        color:
-                            theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                        color: colors['text'].withOpacity(0.6),
+                        fontSize: 13,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -193,30 +192,47 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                       final doc = widget.relatedDocuments[index]
                           as Map<String, dynamic>;
 
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: theme.cardColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: isDark
+                              ? Border.all(color: colors['border'])
+                              : null,
+                          boxShadow: isDark
+                              ? []
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
                         child: ExpansionTile(
+                          shape: const Border(), // Remove default borders
                           leading: Icon(_documentIconClass(doc),
-                              color: theme.primaryColor),
+                              color: theme.primaryColor, size: 24),
                           title: Text(
                             doc['title'] ??
                                 doc['document_name'] ??
                                 doc['documentName'] ??
                                 'Untitled Document',
-                            style: theme.textTheme.titleSmall,
-                            maxLines: 2,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: colors['text'],
+                            ),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
-                            doc['id'] ??
-                                doc['_id'] ??
-                                doc['document_id'] ??
-                                'ID not available',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.hintColor),
+                            "Confidence: ${_formatScore(doc['score'] ?? doc['confidence'])}",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colors['text'].withOpacity(0.6),
+                            ),
                           ),
                           children: [
                             Padding(
@@ -225,41 +241,32 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (doc['document_name'] != null ||
-                                      doc['documentName'] != null)
-                                    _buildDetailRow(
-                                        "Document Name",
-                                        doc['document_name'] ??
-                                            doc['documentName'],
-                                        theme),
-                                  if (doc['fileName'] != null)
-                                    _buildDetailRow(
-                                        "File Name", doc['fileName'], theme),
                                   _buildDetailRow(
-                                      "ID",
-                                      doc['id'] ??
-                                          doc['_id'] ??
-                                          doc['document_id'] ??
-                                          'N/A',
-                                      theme),
-                                  _buildDetailRow(
-                                      "Labels", _formatLabels(doc), theme),
-                                  _buildDetailRow(
-                                      "Confidence",
-                                      _formatScore(
-                                          doc['score'] ?? doc['confidence']),
-                                      theme),
+                                      "File Name",
+                                      doc['fileName'] ?? 'N/A',
+                                      theme,
+                                      colors['text']),
+                                  _buildDetailRow("Labels", _formatLabels(doc),
+                                      theme, colors['text']),
                                   const SizedBox(height: 12),
                                   Align(
                                     alignment: Alignment.centerRight,
-                                    child: ElevatedButton.icon(
-                                      icon: const Icon(Icons.open_in_new,
-                                          size: 16),
-                                      label: const Text("Open"),
-                                      onPressed: () => _openDocument(doc),
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
+                                    child: SizedBox(
+                                      height: 32,
+                                      child: ElevatedButton.icon(
+                                        icon: const Icon(Icons.open_in_new,
+                                            size: 14),
+                                        label: const Text("Open",
+                                            style: TextStyle(fontSize: 12)),
+                                        onPressed: () => _openDocument(doc),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: theme.primaryColor
+                                              .withOpacity(0.1),
+                                          foregroundColor: theme.primaryColor,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -274,31 +281,47 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
           ),
 
           // Divider
-          Divider(height: 1, color: theme.dividerColor),
+          Divider(height: 1, color: colors['border']),
 
-          // FAQ Section
+          // FAQ Header
           Container(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              "Frequently Asked Questions",
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: colors['surface'],
+            width: double.infinity,
+            child: Row(
+              children: [
+                Icon(Icons.help_outline, size: 18, color: colors['text']),
+                const SizedBox(width: 8),
+                Text(
+                  "Frequently Asked Questions",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: colors['text'],
+                  ),
+                ),
+              ],
             ),
           ),
 
+          // FAQ Content
           Expanded(
             flex: 2,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
               child: MarkdownBody(
                 data: _faqContent,
                 styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                  p: theme.textTheme.bodyMedium,
-                  h1: theme.textTheme.titleLarge,
-                  h2: theme.textTheme.titleMedium,
-                  h3: theme.textTheme.titleSmall,
-                  listBullet: theme.textTheme.bodyMedium,
+                  p: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors['text'], fontSize: 13, height: 1.5),
+                  h1: theme.textTheme.titleLarge
+                      ?.copyWith(color: colors['text']),
+                  h2: theme.textTheme.titleMedium
+                      ?.copyWith(color: colors['text']),
+                  h3: theme.textTheme.titleSmall
+                      ?.copyWith(color: colors['text']),
+                  listBullet: theme.textTheme.bodyMedium
+                      ?.copyWith(color: colors['text']),
                 ),
                 selectable: true,
               ),
@@ -309,25 +332,69 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value, ThemeData theme) {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool isWideScreen = MediaQuery.of(context).size.width > 1200;
+
+    // 1. Persistent Panel on Wide Screens
+    if (isWideScreen) {
+      return SizedBox(
+        width: 360,
+        child: _buildRightSidebarContent(context, theme),
+      );
+    }
+
+    // 2. Mobile Drawer
+    // Identical structure to SidebarComponent to ensure perfect alignment
+    return Drawer(
+      elevation: 0,
+      backgroundColor: Colors.transparent, // Important: no background on drawer
+      child: SafeArea(
+        top: false, // We manually handle top (AppBar height)
+        bottom: true, // Respect bottom safe area (home indicator)
+        child: Column(
+          children: [
+            // Empty space equal to AppBar height (60) so content starts below navbar
+            SizedBox(
+              height: kToolbarHeight + MediaQuery.of(context).padding.top,
+            ),
+            // The actual sidebar content
+            Expanded(
+              child: _buildRightSidebarContent(context, theme),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(
+      String label, String value, ThemeData theme, Color textColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 80,
             child: Text(
               "$label:",
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: textColor.withOpacity(0.7),
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: theme.textTheme.bodySmall,
-              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 11,
+                color: textColor,
+              ),
+              textAlign: TextAlign.left,
             ),
           ),
         ],

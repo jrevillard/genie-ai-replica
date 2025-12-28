@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 class NavBarComponent extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -17,12 +18,28 @@ class NavBarComponent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Retrieve dynamic navbar configuration from ThemeManager
+    final Map<String, dynamic> themeColors = ThemeManager().getColors();
+    final Map<String, dynamic> navColors = themeColors['navbar'];
+    final bool isDark = ThemeManager().isDarkMode;
+
+    // Override gradient for Dark Mode to a dark gray look
+    final Color gradientStart = isDark
+        ? const Color(0xFF212121) // Dark Grey
+        : navColors['gradientStart'];
+
+    final Color gradientEnd = isDark
+        ? const Color(0xFF303030) // Slightly lighter Dark Grey
+        : navColors['gradientEnd'];
+
+    final Color contentColor = navColors['text'];
+
     return AppBar(
       // Gradient background matching the web UI
       flexibleSpace: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF4E97D1), Color(0xFF2C5F8A)],
+            colors: [gradientStart, gradientEnd],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -33,7 +50,7 @@ class NavBarComponent extends StatelessWidget {
       leading: Builder(
         builder: (BuildContext drawerContext) {
           return IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white),
+            icon: Icon(Icons.menu, color: contentColor),
             tooltip: 'Open sidebar',
             onPressed: () {
               debugPrint("[NAVBAR] Hamburger button pressed!");
@@ -54,14 +71,14 @@ class NavBarComponent extends StatelessWidget {
         },
       ),
       titleSpacing: 0,
-      title: const Row(
+      title: Row(
         children: [
-          Icon(Icons.auto_awesome, color: Colors.white, size: 24),
-          SizedBox(width: 8),
+          Icon(Icons.auto_awesome, color: contentColor, size: 24),
+          const SizedBox(width: 8),
           Text(
             "GENIE.AI",
             style: TextStyle(
-              color: Colors.white,
+              color: contentColor,
               fontWeight: FontWeight.bold,
               fontSize: 18,
             ),
@@ -89,7 +106,7 @@ class NavBarComponent extends StatelessWidget {
         if (showRightDrawerButton)
           Builder(
             builder: (context) => IconButton(
-              icon: const Icon(Icons.description_outlined, color: Colors.white),
+              icon: Icon(Icons.description_outlined, color: contentColor),
               tooltip: "Related Documents",
               onPressed: () {
                 Scaffold.of(context).openEndDrawer();
@@ -99,7 +116,7 @@ class NavBarComponent extends StatelessWidget {
 
         // Settings Button
         IconButton(
-          icon: const Icon(Icons.settings_outlined, color: Colors.white),
+          icon: Icon(Icons.settings_outlined, color: contentColor),
           tooltip: "Settings",
           onPressed: () {
             showModalBottomSheet(
@@ -117,17 +134,17 @@ class NavBarComponent extends StatelessWidget {
 
         // Profile Button
         IconButton(
-      icon: const Icon(Icons.person_outline, color: Colors.white),
-      tooltip: "Profile",
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
-      ),
-    ),
+          icon: Icon(Icons.person_outline, color: contentColor),
+          tooltip: "Profile",
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
+          ),
+        ),
 
         // Logout Button
         IconButton(
-          icon: const Icon(Icons.logout, color: Colors.white),
+          icon: Icon(Icons.logout, color: contentColor),
           tooltip: "Logout",
           onPressed: onLogout,
         ),

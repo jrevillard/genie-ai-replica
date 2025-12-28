@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'dart:convert';
 
 class ChatFoldersPanel extends StatefulWidget {
@@ -52,7 +53,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.activeTab != widget.activeTab) {
       _resetComponentState();
-      // If switching TO folders, ensure we reset to the folder list view
       if (widget.activeTab == 'folders') {
         _handleFoldersTabActivation();
       } else {
@@ -102,7 +102,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   Future<void> _loadConversationsForCurrentTab() async {
-    // If in folders tab but no folder selected, don't load chats yet
     if (widget.activeTab == 'folders' && !_folderSelected) {
       setState(() => _conversations = []);
       return;
@@ -164,7 +163,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   List<dynamic> get _filteredConversations {
     var chats = _conversations;
 
-    // Client-side filtering for tabs that don't have dedicated endpoints
     if (widget.activeTab != 'folders') {
       chats = chats.where((conv) {
         final bool matchesTab = (widget.activeTab == 'starred' &&
@@ -178,7 +176,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       }).toList();
     }
 
-    // Search filtering
     if (_searchTerm.isNotEmpty) {
       final term = _searchTerm.toLowerCase().trim();
       chats = chats.where((conv) {
@@ -188,7 +185,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       }).toList();
     }
 
-    // Sort by updated date
     chats.sort((a, b) {
       final dateA = DateTime.tryParse(a['updated'] ?? '') ?? DateTime(0);
       final dateB = DateTime.tryParse(b['updated'] ?? '') ?? DateTime(0);
@@ -427,7 +423,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               try {
-                // Strip 'conversations/' prefix
                 final String chatId =
                     chat['_id'].toString().replaceFirst('conversations/', '');
                 await _chatProxy.deleteConversation(chatId, widget.userId);
@@ -453,11 +448,12 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading)
-      return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF4E97D1)));
+    if (_isLoading) {
+      return Center(
+          child:
+              CircularProgressIndicator(color: Theme.of(context).primaryColor));
+    }
 
-    // CASE 1: Folders Tab - No Folder Selected (Show Grid)
     if (widget.activeTab == 'folders' && !_folderSelected) {
       return Column(
         children: [
@@ -468,7 +464,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       );
     }
 
-    // CASE 2: Folders Tab - Folder Selected (Show List with Back Button)
     if (widget.activeTab == 'folders' && _folderSelected) {
       return Column(
         children: [
@@ -488,7 +483,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       );
     }
 
-    // CASE 3: Standard Tabs (All, Starred, Archived)
     return Column(
       children: [
         _buildSearchBox(),
@@ -507,16 +501,25 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   Widget _buildSearchBox() {
+    final colors = ThemeManager().getColors();
+    final bool isDark = ThemeManager().isDarkMode;
+
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: TextField(
         onChanged: _handleSearchInput,
+        style: TextStyle(color: colors['text']),
         decoration: InputDecoration(
           hintText: "Search conversations...",
-          prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+          hintStyle:
+              TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
+          prefixIcon: Icon(Icons.search,
+              size: 20, color: isDark ? Colors.grey[500] : Colors.grey),
           isDense: true,
           filled: true,
-          fillColor: Colors.black.withOpacity(0.04),
+          fillColor: isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.04),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none),
@@ -526,6 +529,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   Widget _buildFoldersHeader({bool showBackButton = false}) {
+    final theme = Theme.of(context);
     String title = "FOLDERS";
     if (showBackButton) {
       final folder = _folders.firstWhere((f) => f['id'] == _selectedFolderId,
@@ -543,7 +547,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
               if (showBackButton)
                 IconButton(
                   icon: const Icon(Icons.arrow_back, size: 20),
-                  color: const Color(0xFF4E97D1),
+                  color: theme.primaryColor,
                   onPressed: () {
                     setState(() {
                       _folderSelected = false;
@@ -560,11 +564,10 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                       letterSpacing: 0.8)),
             ],
           ),
-          // Only show "Create Folder" button when in root view
           if (!showBackButton)
             IconButton(
-              icon: const Icon(Icons.create_new_folder_outlined,
-                  size: 20, color: Color(0xFF4E97D1)),
+              icon: Icon(Icons.create_new_folder_outlined,
+                  size: 20, color: theme.primaryColor),
               onPressed: _openCreateFolderModal,
             )
         ],
@@ -573,6 +576,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   Widget _buildVerticalFolderGrid() {
+    final theme = Theme.of(context);
     final nonDefault = _folders.where((f) => f['isDefault'] != true).toList();
 
     if (nonDefault.isEmpty) {
@@ -593,8 +597,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio:
-            1.1, // FIX: Reduced ratio from 1.4 to 1.1 for more vertical space
+        childAspectRatio: 1.1,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
@@ -611,22 +614,23 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           },
           child: Card(
             elevation: 1,
+            color: theme.cardColor, // Dynamic Card Background
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             child: Padding(
               padding: const EdgeInsets.all(8.0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment
-                    .spaceBetween, // FIX: Better spacing distribution
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const SizedBox(height: 4),
-                  const Icon(Icons.folder_open,
-                      color: Color(0xFF4E97D1), size: 32),
+                  Icon(Icons.folder_open, color: theme.primaryColor, size: 32),
                   Text(f['name'],
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textTheme.bodyLarge?.color)),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -654,6 +658,9 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
   }
 
   Widget _buildChatItem(Map<String, dynamic> chat) {
+    final theme = Theme.of(context);
+    final isDark = ThemeManager().isDarkMode;
+
     // 1. Calculate Message Count
     final List messages = chat['messages'] as List? ?? [];
     final int msgCount =
@@ -661,7 +668,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
 
     // 2. Determine Preview
     String previewText = "";
-    // Check 'lastMessage' property
     if (chat['lastMessage'] != null) {
       if (chat['lastMessage'] is String) {
         previewText = chat['lastMessage'];
@@ -670,7 +676,6 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
             chat['lastMessage']['content'] ?? chat['lastMessage']['text'] ?? "";
       }
     }
-    // Fallback to last item in 'messages' array
     if (previewText.isEmpty && messages.isNotEmpty) {
       final lastMsg = messages.last;
       if (lastMsg is Map) {
@@ -687,14 +692,17 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor, // Dynamic Background
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 4))
-        ],
+        // Lighter shadow for Light mode, subtle or no shadow for Dark mode
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4))
+              ],
       ),
       child: ListTile(
         onTap: () {
@@ -702,13 +710,13 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           Scaffold.maybeOf(context)?.closeDrawer();
         },
         leading: CircleAvatar(
-            backgroundColor: const Color(0xFFF2F6F9),
+            backgroundColor: theme.primaryColor.withOpacity(0.1),
             child: Icon(
                 chat['isArchived'] == true
                     ? Icons.archive_outlined
                     : Icons.chat_bubble_outline,
                 size: 18,
-                color: const Color(0xFF4E97D1))),
+                color: theme.primaryColor)),
         title: Text(chat['title'] ?? "Untitled",
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -719,14 +727,16 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
             Text(previewText,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                style: TextStyle(
+                    fontSize: 12,
+                    color:
+                        theme.textTheme.bodyMedium?.color?.withOpacity(0.7))),
             const SizedBox(height: 4),
-            // Combined Text widget prevents overflow
             Text(
               "$dateStr • $msgCount messages",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: Colors.black26),
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
         ),
@@ -749,7 +759,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
 
   Widget _buildChatMenu(Map<String, dynamic> chat) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_horiz, color: Colors.black26),
+      icon: const Icon(Icons.more_horiz, color: Colors.grey),
       onSelected: (val) {
         if (val == 'rename') _promptRenameChat(chat);
         if (val == 'move') _promptMoveChat(chat);

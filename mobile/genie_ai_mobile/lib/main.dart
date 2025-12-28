@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Needed for rootBundle
 
 // ===========================================================================
 // SERVICE & UTILS IMPORTS
@@ -36,6 +39,9 @@ class MyHttpOverrides extends HttpOverrides {
 }
 
 void main() {
+  // Ensure binding is initialized for rootBundle access
+  WidgetsFlutterBinding.ensureInitialized();
+
   // Apply the HTTP overrides for development environment
   HttpOverrides.global = MyHttpOverrides();
   runApp(const MyApp());
@@ -49,18 +55,43 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  // Theme state management
-  bool _isDarkMode = false;
-
   // User session state
   Map<String, dynamic>? _user;
+  bool _isConfigLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppConfiguration();
+  }
+
+  /// Loads the theme configuration from assets and initializes ThemeManager
+  Future<void> _loadAppConfiguration() async {
+    try {
+      debugPrint("[MAIN] Loading configuration...");
+      final String configString =
+          await rootBundle.loadString('assets/config/genie-ai-config.json');
+      final Map<String, dynamic> config = json.decode(configString);
+
+      // Initialize ThemeManager with the loaded config
+      ThemeManager().setConfiguration(config);
+
+      debugPrint("[MAIN] Configuration loaded successfully.");
+    } catch (e) {
+      debugPrint("[MAIN] Error loading configuration: $e");
+      // Proceed with defaults if config fails
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConfigLoaded = true;
+        });
+      }
+    }
+  }
 
   void _toggleTheme() {
-    setState(() {
-      _isDarkMode = !_isDarkMode;
-    });
-    // Ensure the singleton is updated if used elsewhere
-    ThemeManager().setTheme(_isDarkMode ? 'dark' : 'light');
+    // Delegate strictly to ThemeManager
+    ThemeManager().toggleTheme();
   }
 
   void _handleLogin(Map<String, dynamic> user) {
@@ -79,46 +110,67 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Genie AI',
-      debugShowCheckedModeBanner: false,
+    // Listen to ThemeManager for global theme changes (Mode, Font Size)
+    return AnimatedBuilder(
+      animation: ThemeManager(),
+      builder: (context, child) {
+        return MaterialApp(
+          title: 'Genie AI',
+          debugShowCheckedModeBanner: false,
 
-      // Theme Configuration using the static methods from ThemeManager
-      theme: ThemeManager.getLightTheme(),
-      darkTheme: ThemeManager.getDarkTheme(),
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          // Theme Configuration using dynamic properties from ThemeManager
+          theme: ThemeManager().lightTheme,
+          darkTheme: ThemeManager().darkTheme,
+          themeMode: ThemeManager().themeMode,
 
-      // Root Routing Logic
-      home: _user == null
-          ? LoginScreen(onLoginSuccess: _handleLogin)
-          : MainScreen(
-              user: _user!,
-              isDarkMode: _isDarkMode,
-              toggleTheme: _toggleTheme,
-              onLogout: _handleLogout,
-            ),
+          // Global Builder to handle Loading State without breaking Routes
+          builder: (context, child) {
+            if (!_isConfigLoaded) {
+              return Scaffold(
+                backgroundColor: ThemeManager().getColors()['background'],
+                body: Center(
+                  child: CircularProgressIndicator(
+                    color: ThemeManager().getColors()['primary'],
+                  ),
+                ),
+              );
+            }
+            return child!;
+          },
 
-      // Defined Routes for Navigation
-      routes: {
-        '/login': (context) => LoginScreen(onLoginSuccess: _handleLogin),
-        '/register': (context) => const RegisterScreen(),
-        '/registration-success': (context) => const RegistrationSuccessScreen(),
-        '/password-reset': (context) => const PasswordResetInitiateScreen(),
-        '/profile': (context) => UserProfileScreen(user: _user!), // Added
-        // Fixed: Extract token from route settings and pass it as required parameter
-        '/password-reset-confirm': (context) {
-          final settings = ModalRoute.of(context)?.settings;
-          final String? token = settings?.arguments as String?;
-          if (token == null) {
-            // Fallback if token is missing – navigate back or show error
-            return const Scaffold(
-              body: Center(
-                child: Text("Invalid or missing reset token"),
-              ),
-            );
-          }
-          return PasswordResetConfirmScreen(token: token);
-        },
+          // Root Routing Logic
+          home: _user == null
+              ? LoginScreen(onLoginSuccess: _handleLogin)
+              : MainScreen(
+                  user: _user!,
+                  isDarkMode: ThemeManager().isDarkMode,
+                  toggleTheme: _toggleTheme,
+                  onLogout: _handleLogout,
+                ),
+
+          // Defined Routes for Navigation
+          routes: {
+            '/login': (context) => LoginScreen(onLoginSuccess: _handleLogin),
+            '/register': (context) => const RegisterScreen(),
+            '/registration-success': (context) =>
+                const RegistrationSuccessScreen(),
+            '/password-reset': (context) => const PasswordResetInitiateScreen(),
+            // Safety check: ensure _user is not null if accessed, though typically guarded by app logic
+            '/profile': (context) => UserProfileScreen(user: _user ?? {}),
+            '/password-reset-confirm': (context) {
+              final settings = ModalRoute.of(context)?.settings;
+              final String? token = settings?.arguments as String?;
+              if (token == null) {
+                return const Scaffold(
+                  body: Center(
+                    child: Text("Invalid or missing reset token"),
+                  ),
+                );
+              }
+              return PasswordResetConfirmScreen(token: token);
+            },
+          },
+        );
       },
     );
   }

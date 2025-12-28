@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:genie_ai_mobile/services/service_tree_proxy.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 class ServiceTreePanel extends StatefulWidget {
   final String locale;
@@ -104,16 +105,14 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   // SELECTION LOGIC (MULTI-SELECT & CONTEXT AWARE)
   // ===========================================================================
 
-  void _toggleChildSelection(
-      Map<String, dynamic> category, dynamic serviceItem, int index) {
-    // 1. Safe Key Extraction for Category
-    // API might return 'key' or 'id', or we might need to fallback
-    final String catKey = (category['key'] ?? category['id'] ?? "").toString();
+  // FIX: Added catKey parameter to ensure visual state matches logic state
+  void _toggleChildSelection(Map<String, dynamic> category, dynamic serviceItem,
+      int index, String catKey) {
+    // 1. Safe Key Extraction for Category (Backup if catKey fails)
     final String categoryId =
         (category['id'] ?? category['key'] ?? "").toString();
 
     // 2. Normalize Service Data (Handling the String vs Map crash)
-    // The API sometimes returns strings like "Mountains" directly in the children list.
     String serviceId;
     String serviceName;
 
@@ -173,16 +172,11 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     }
 
     // Case B: Selection Active
-
-    // 1. Context Label: Join all names (e.g., "Passport, Visa, Travel")
     final String contextString =
         _orderedSelection.map((item) => item['name']).join(', ');
 
-    // 2. Primary Category: ALWAYS use the category of the FIRST selected item.
-    // This tells the Chatbot which knowledge base to prioritize.
     final String primaryCatId = _orderedSelection.first['category_id'];
 
-    // 3. Combined IDs: Comma-separated list of IDs (if available)
     final String combinedIds =
         _orderedSelection.map((item) => item['id']).join(',');
 
@@ -202,21 +196,21 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Loading State
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text("Loading services...", style: TextStyle(color: Colors.grey)),
+            CircularProgressIndicator(
+                color: ThemeManager().getColors()['primary']),
+            const SizedBox(height: 16),
+            const Text("Loading services...",
+                style: TextStyle(color: Colors.grey)),
           ],
         ),
       );
     }
 
-    // 2. Error State
     if (_errorMessage != null) {
       return Center(
         child: Padding(
@@ -244,7 +238,6 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
       );
     }
 
-    // 3. Content State
     return Column(
       children: [
         _buildSearchBar(),
@@ -254,20 +247,26 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   }
 
   Widget _buildSearchBar() {
+    final colors = ThemeManager().getColors();
+    final bool isDark = ThemeManager().isDarkMode;
+
     return Container(
       padding: const EdgeInsets.all(12.0),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.black12)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: colors['border'])),
       ),
       child: TextField(
         controller: _searchController,
+        style: TextStyle(color: colors['text']),
         decoration: InputDecoration(
           hintText: "Search services...",
-          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+          hintStyle:
+              TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
+          prefixIcon: Icon(Icons.search,
+              color: isDark ? Colors.grey[500] : Colors.grey),
           filled: true,
-          fillColor: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white10
-              : Colors.grey[100],
+          // Adapts to Light/Dark mode input backgrounds
+          fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[200],
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide.none,
@@ -328,6 +327,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         _selectedNodes[catKey]!.isNotEmpty;
     final bool shouldExpand = _searchQuery.isNotEmpty || hasSelection;
 
+    final colors = ThemeManager().getColors();
+
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
@@ -337,14 +338,15 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         // Header Styling
         title: Text(
           catLabel,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 14,
+            color: colors['text'],
           ),
         ),
         leading: Icon(
           Icons.folder_open,
-          color: Theme.of(context).primaryColor,
+          color: colors['primary'],
           size: 20,
         ),
         childrenPadding: EdgeInsets.zero,
@@ -352,7 +354,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         // Children Generation
         children: children.asMap().entries.map((entry) {
           final int childIndex = entry.key;
-          final dynamic child = entry.value; // dynamic to handle String or Map
+          final dynamic child = entry.value;
+          // FIX: Pass catKey correctly to child
           return _buildServiceItem(category, child, childIndex, catKey);
         }).toList(),
       ),
@@ -379,18 +382,16 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     // Check Selection Status
     final bool isSelected = _selectedNodes[catKey]?.contains(index) ?? false;
     final bool isSearchMatch = _searchQuery.isNotEmpty;
-    final theme = Theme.of(context);
+    final colors = ThemeManager().getColors();
 
     // Render Tile
     return Container(
+      // FIX: Added margin for better touch area and visual separation when selected
+      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
       decoration: BoxDecoration(
-        color: isSelected
-            ? theme.primaryColor.withOpacity(0.1)
-            : Colors.transparent,
-        border: isSelected
-            ? Border(left: BorderSide(color: theme.primaryColor, width: 3))
-            : const Border(
-                left: BorderSide(color: Colors.transparent, width: 3)),
+        // FIX: Solid Primary color when selected (Standard Button Color)
+        color: isSelected ? colors['primary'] : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
         dense: true,
@@ -402,26 +403,28 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
           serviceName,
           style: TextStyle(
             fontSize: 13,
-            color: isSelected
-                ? theme.primaryColor
-                : theme.textTheme.bodyMedium?.color,
+            // FIX: White text on selected button, theme text otherwise
+            color: isSelected ? Colors.white : colors['text'],
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
 
         // Subtitle for Search Matches
         subtitle: isSearchMatch
-            ? const Text("Match found",
-                style: TextStyle(fontSize: 10, color: Colors.grey))
+            ? Text("Match found",
+                style: TextStyle(
+                    fontSize: 10,
+                    color: isSelected ? Colors.white70 : Colors.grey))
             : null,
 
-        // Checkmark
+        // Checkmark (White on selected)
         trailing: isSelected
-            ? Icon(Icons.check_circle, size: 16, color: theme.primaryColor)
+            ? const Icon(Icons.check_circle, size: 16, color: Colors.white)
             : null,
 
-        // Tap Handler - Passes the raw serviceItem to logic
-        onTap: () => _toggleChildSelection(category, serviceItem, index),
+        // Tap Handler - Passes the raw serviceItem AND catKey to logic
+        onTap: () =>
+            _toggleChildSelection(category, serviceItem, index, catKey),
       ),
     );
   }

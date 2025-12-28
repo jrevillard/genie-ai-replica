@@ -58,17 +58,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) return;
-    
-    setState(() { _isLoading = true; _error = null; });
-    
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty)
+      return;
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
     try {
-      final user = await UserService().login(_usernameController.text, _passwordController.text);
-      
+      final user = await UserService()
+          .login(_usernameController.text, _passwordController.text);
+
       // Save or Clear credentials based on checkbox state
-      // Note: Using the typed password and the loginName returned/used
-      await _handleRememberMe(_usernameController.text, _passwordController.text);
-      
+      await _handleRememberMe(
+          _usernameController.text, _passwordController.text);
+
       widget.onLoginSuccess(user);
     } catch (e) {
       setState(() => _error = "Invalid credentials or server error");
@@ -79,11 +84,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Dynamic Theme Data
+    final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
-    const accentColor = Color(0xFF2A9D8F); // Matching Vue primary
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF5F7FA),
+      backgroundColor: colors['background'], // Dynamic Background
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
@@ -91,25 +97,34 @@ class _LoginScreenState extends State<LoginScreen> {
             constraints: const BoxConstraints(maxWidth: 400),
             padding: const EdgeInsets.all(24.0),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF252525) : Colors.white,
+              color: colors['surface'], // Dynamic Surface
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)],
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildHeader(accentColor, isDark),
+                _buildHeader(colors, isDark),
                 if (_error != null) _buildError(),
-                _buildField(_usernameController, "Username", Icons.person, isDark),
+                _buildField(_usernameController, "Username", Icons.person,
+                    colors, isDark),
                 const SizedBox(height: 10),
-                _buildField(_passwordController, "Password", Icons.lock, isDark, obscure: true),
-                _buildRememberForgot(accentColor, isDark),
-                _buildLoginButton(accentColor),
-                _buildRegisterLink(accentColor, isDark),
+                _buildField(
+                    _passwordController, "Password", Icons.lock, colors, isDark,
+                    obscure: true),
+                _buildRememberForgot(colors, isDark),
+                _buildLoginButton(colors),
+                _buildRegisterLink(colors, isDark),
                 _buildDivider(isDark),
-                _buildSocialButtons(accentColor, isDark),
+                _buildSocialButtons(colors, isDark),
                 const SizedBox(height: 24),
-                const LanguageSelector(),
+                // Pass text color for visibility
+                LanguageSelector(textColor: colors['text']),
               ],
             ),
           ),
@@ -118,74 +133,104 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildHeader(Color color, bool isDark) {
+  Widget _buildHeader(Map<String, dynamic> colors, bool isDark) {
     return Column(children: [
       Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        decoration:
+            BoxDecoration(color: colors['primary'], shape: BoxShape.circle),
         child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
       ),
       const SizedBox(height: 10),
-      Text("GENIE.AI", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+      Text("GENIE.AI",
+          style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: colors['text'])),
       const SizedBox(height: 20),
     ]);
   }
 
-  Widget _buildField(TextEditingController ctrl, String hint, IconData icon, bool isDark, {bool obscure = false}) {
+  Widget _buildField(TextEditingController ctrl, String hint, IconData icon,
+      Map<String, dynamic> colors, bool isDark,
+      {bool obscure = false}) {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
-      style: TextStyle(color: isDark ? Colors.white : Colors.black),
+      style: TextStyle(color: colors['text']),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[600]),
-        prefixIcon: Icon(icon, color: isDark ? Colors.grey : Colors.grey[600]),
+        hintStyle:
+            TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
+        prefixIcon:
+            Icon(icon, color: isDark ? Colors.grey[500] : Colors.grey[600]),
         filled: true,
-        fillColor: isDark ? const Color(0xFF333333) : const Color(0xFFF0F2F5), //
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+        fillColor:
+            isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF0F2F5),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none),
       ),
     );
   }
 
-  Widget _buildRememberForgot(Color color, bool isDark) {
+  Widget _buildRememberForgot(Map<String, dynamic> colors, bool isDark) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
       Row(children: [
         Checkbox(
-          value: _rememberMe, 
+          value: _rememberMe,
           onChanged: (v) => setState(() => _rememberMe = v!),
-          activeColor: color,
+          activeColor: colors['primary'],
+          side: BorderSide(color: colors['text'].withOpacity(0.6)),
         ),
-        Text("Remember me", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey : Colors.grey[700])),
+        Text("Remember me",
+            style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey[400] : Colors.grey[700])),
       ]),
       TextButton(
-        onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
-        child: Text("Forgot password?", style: TextStyle(color: color, fontSize: 13)),
+        onPressed: () => Navigator.pushNamed(context, '/password-reset'),
+        child: Text("Forgot password?",
+            style: TextStyle(color: colors['primary'], fontSize: 13)),
       ),
     ]);
   }
 
-  Widget _buildLoginButton(Color color) {
+  Widget _buildLoginButton(Map<String, dynamic> colors) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor: color,
+        backgroundColor: colors['primary'],
         minimumSize: const Size(double.infinity, 45),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onPressed: _isLoading ? null : _handleLogin,
-      child: _isLoading 
-        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-        : const Text("Login", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      child: _isLoading
+          ? const SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(
+                  color: Colors.white, strokeWidth: 2))
+          : const Text("Login",
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _buildRegisterLink(Color color, bool isDark) {
+  Widget _buildRegisterLink(Map<String, dynamic> colors, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text("No account? ", style: TextStyle(fontSize: 14, color: isDark ? Colors.grey : Colors.grey[700])),
+        Text("No account? ",
+            style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[400] : Colors.grey[700])),
         GestureDetector(
           onTap: () => Navigator.pushNamed(context, '/register'),
-          child: Text("Register now", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+          child: Text("Register now",
+              style: TextStyle(
+                  color: colors['primary'],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14)),
         ),
       ]),
     );
@@ -196,17 +241,24 @@ class _LoginScreenState extends State<LoginScreen> {
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(children: [
         const Expanded(child: Divider()),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text("OR", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[600], fontSize: 12))),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text("OR",
+                style: TextStyle(
+                    color: isDark ? Colors.grey : Colors.grey[600],
+                    fontSize: 12))),
         const Expanded(child: Divider()),
       ]),
     );
   }
 
-  Widget _buildSocialButtons(Color color, bool isDark) {
+  Widget _buildSocialButtons(Map<String, dynamic> colors, bool isDark) {
     return Column(children: [
-      _socBtn("Continue with Google", Icons.g_mobiledata, color),
+      // UPDATED: Used colors['primary'] instead of colors['secondary']
+      _socBtn("Continue with Google", Icons.g_mobiledata, colors['primary']),
       const SizedBox(height: 8),
-      _socBtn("Continue with Facebook", Icons.facebook, color),
+      _socBtn("Continue with Facebook", Icons.facebook,
+          Color.lerp(colors['primary'], Colors.black, 0.2)!),
     ]);
   }
 
@@ -225,9 +277,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildError() {
     return Container(
-      width: double.infinity, padding: const EdgeInsets.all(10), margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-      child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13), textAlign: TextAlign.center),
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8)),
+      child: Text(_error!,
+          style: const TextStyle(color: Colors.red, fontSize: 13),
+          textAlign: TextAlign.center),
     );
   }
 }

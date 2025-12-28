@@ -17,8 +17,10 @@ Future<void> openWebFile({
   final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
   debugPrint("[WEB_UTILS] Opening web window for: $viewUrl");
 
+  // Check Theme for Dark Mode Support in Markdown Rendering
+  final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
   // 1. Open the window IMMEDIATELY to bypass popup blockers.
-  // We use WindowBase because '_DOMWindowCrossFrame' cannot be cast to 'Window'.
   final html.WindowBase? openedWindow = html.window.open('', '_blank');
 
   if (openedWindow == null) {
@@ -27,10 +29,6 @@ Future<void> openWebFile({
     );
     return;
   }
-
-  // Note: We cannot write "Loading..." to openedWindow.document because
-  // WindowBase does not expose the document property safely in all contexts.
-  // The user will see a blank tab while fetching.
 
   try {
     // 2. Fetch the content
@@ -55,13 +53,12 @@ Future<void> openWebFile({
           final html.Blob blob = await _unwrapBlob(rawBlob, targetMimeType);
 
           if (isMarkdown) {
-            _handleMarkdownRender(openedWindow, blob, docMetadata, c);
+            _handleMarkdownRender(openedWindow, blob, docMetadata, c, isDark);
           } else {
             // Standard File
             final url = html.Url.createObjectUrlFromBlob(blob);
             openedWindow.location?.href = url;
 
-            // Revoke after delay
             Future.delayed(const Duration(seconds: 15), () {
               html.Url.revokeObjectUrl(url);
             });
@@ -69,7 +66,6 @@ Future<void> openWebFile({
           }
         } else {
           debugPrint("[WEB_UTILS] Server error: ${request.status}");
-          // We can't write to the window, so we just close it if it failed immediately
           openedWindow.close();
           c.completeError("Server returned status ${request.status}");
         }
@@ -90,7 +86,6 @@ Future<void> openWebFile({
     await c.future;
   } catch (e) {
     debugPrint("[WEB_UTILS] Error: $e");
-    // Ensure window is closed on error so we don't leave a zombie tab
     try {
       openedWindow.close();
     } catch (_) {}
@@ -104,7 +99,7 @@ Future<void> openWebFile({
 // --- HELPER FUNCTIONS ---
 
 void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
-    Map<String, dynamic> doc, Completer c) {
+    Map<String, dynamic> doc, Completer c, bool isDark) {
   final reader = html.FileReader();
   reader.onLoadEnd.listen((e) {
     try {
@@ -120,6 +115,13 @@ void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
       }
 
       final String htmlContent = md.markdownToHtml(text);
+
+      // Determine styling based on mode
+      final String bgColor = isDark ? '#0d1117' : '#ffffff';
+      final String textColor = isDark ? '#c9d1d9' : '#24292e';
+      final String preBg = isDark ? '#161b22' : '#f6f8fa';
+      final String codeBg = isDark ? 'rgba(110,118,129,0.4)' : '#f6f8fa';
+
       final String styledHtml = '''
 <!DOCTYPE html>
 <html>
@@ -127,9 +129,17 @@ void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
 <meta charset="utf-8">
 <title>${doc['title'] ?? 'Document'}</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 900px; margin: 0 auto; color: #24292e; }
-  pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; }
-  code { background: #f6f8fa; padding: 3px 6px; border-radius: 3px; font-family: monospace; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+    line-height: 1.6; 
+    padding: 40px; 
+    max-width: 900px; 
+    margin: 0 auto; 
+    color: $textColor; 
+    background-color: $bgColor;
+  }
+  pre { background: $preBg; padding: 16px; border-radius: 6px; overflow-x: auto; }
+  code { background: $codeBg; padding: 3px 6px; border-radius: 3px; font-family: monospace; }
   img { max-width: 100%; }
 </style>
 </head>
@@ -148,7 +158,6 @@ $htmlContent
           const Duration(seconds: 15), () => html.Url.revokeObjectUrl(url));
       c.complete();
     } catch (err) {
-      // Fallback to download on parsing error
       _downloadFallback(win, blob, doc);
       c.completeError(err);
     }
@@ -158,14 +167,11 @@ $htmlContent
 
 void _downloadFallback(
     html.WindowBase win, html.Blob blob, Map<String, dynamic> doc) {
-  // Create anchor in the MAIN window context to trigger download
   final url = html.Url.createObjectUrlFromBlob(blob);
   final anchor = html.AnchorElement(href: url)
     ..download = doc['fileName'] ?? 'document.md';
   anchor.click();
   html.Url.revokeObjectUrl(url);
-
-  // Close the blank tab we opened since we are downloading instead
   win.close();
 }
 

@@ -27,10 +27,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final svc = UserService();
     if (type == 'username') {
       final ok = await svc.checkUsernameAvailability(val);
-      setState(() => _userErr = ok ? null : "Username already exists"); //
+      setState(() => _userErr = ok ? null : "Username already exists");
     } else {
       final ok = await svc.checkEmailAvailability(val);
-      setState(() => _emailErr = ok ? null : "Email already registered"); //
+      setState(() => _emailErr = ok ? null : "Email already registered");
     }
   }
 
@@ -42,10 +42,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'loginName': _username.text,
         'email': _email.text,
         'password': _password.text,
-      }); //
-      Navigator.pushReplacementNamed(context, '/registration-success', arguments: _email.text);
+      });
+      Navigator.pushReplacementNamed(context, '/registration-success',
+          arguments: _email.text);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -53,11 +55,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
-    const accent = Color(0xFF2A9D8F);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF5F7FA),
+      backgroundColor: colors['background'],
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -65,24 +67,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
             constraints: const BoxConstraints(maxWidth: 400),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF252525) : Colors.white,
+              color: colors['surface'],
               borderRadius: BorderRadius.circular(16),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
+              ],
             ),
             child: Form(
               key: _formKey,
               child: Column(children: [
-                _buildHeader(accent, isDark),
-                _buildField(_username, "Username", Icons.person, isDark, err: _userErr, onChange: (v) => _checkAvailability('username', v)),
-                _buildField(_email, "Email", Icons.email, isDark, err: _emailErr, onChange: (v) => _checkAvailability('email', v)),
-                _buildField(_password, "Password", Icons.lock, isDark, obscure: true, onChange: (v) => setState(() => _strength = PasswordProxy().validatePasswordStrength(v))),
-                _buildStrengthBar(), //
-                _buildField(_confirm, "Confirm Password", Icons.lock_outline, isDark, obscure: true),
-                _buildTerms(accent, isDark),
-                _buildRegisterButton(accent),
-                _buildLoginLink(accent, isDark),
+                _buildHeader(colors),
+                _buildField(_username, "Username", Icons.person, colors, isDark,
+                    err: _userErr,
+                    onChange: (v) => _checkAvailability('username', v)),
+                _buildField(_email, "Email", Icons.email, colors, isDark,
+                    err: _emailErr,
+                    onChange: (v) => _checkAvailability('email', v)),
+                _buildField(_password, "Password", Icons.lock, colors, isDark,
+                    obscure: true,
+                    onChange: (v) => setState(() => _strength =
+                        PasswordProxy().validatePasswordStrength(v))),
+                _buildStrengthBar(),
+                _buildField(_confirm, "Confirm Password", Icons.lock_outline,
+                    colors, isDark,
+                    obscure: true),
+                _buildTerms(colors, isDark),
+                _buildRegisterButton(colors),
+                _buildLoginLink(colors, isDark),
                 const SizedBox(height: 20),
-                const LanguageSelector(),
+                LanguageSelector(textColor: colors['text']),
               ]),
             ),
           ),
@@ -91,25 +107,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildHeader(Color color, bool isDark) {
+  Widget _buildHeader(Map<String, dynamic> colors) {
     return Column(children: [
-      Icon(Icons.person_add, color: color, size: 50),
+      Icon(Icons.person_add, color: colors['primary'], size: 50),
       const SizedBox(height: 10),
-      Text("Create Account", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+      Text("Create Account",
+          style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: colors['text'])),
       const SizedBox(height: 20),
     ]);
   }
 
-  Widget _buildField(TextEditingController ctrl, String label, IconData icon, bool isDark, {bool obscure = false, String? err, Function(String)? onChange}) {
+  Widget _buildField(TextEditingController ctrl, String label, IconData icon,
+      Map<String, dynamic> colors, bool isDark,
+      {bool obscure = false, String? err, Function(String)? onChange}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
-        controller: ctrl, obscureText: obscure, onChanged: onChange,
-        style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 14),
+        controller: ctrl,
+        obscureText: obscure,
+        onChanged: onChange,
+        style: TextStyle(color: colors['text'], fontSize: 14),
         decoration: InputDecoration(
-          labelText: label, errorText: err, prefixIcon: Icon(icon, size: 20),
-          filled: true, fillColor: isDark ? const Color(0xFF333333) : const Color(0xFFF0F2F5),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+          labelText: label,
+          labelStyle: TextStyle(
+              color: isDark ? Colors.grey[400] : Colors.grey[600]),
+          errorText: err,
+          prefixIcon: Icon(icon, size: 20, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+          filled: true,
+          fillColor: isDark
+              ? Colors.white.withOpacity(0.05)
+              : const Color(0xFFF0F2F5),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none),
         ),
         validator: (v) => v!.isEmpty ? "Required" : null,
       ),
@@ -120,30 +153,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final score = _strength['score'] ?? 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: LinearProgressIndicator(value: score / 4.0, backgroundColor: Colors.grey[300], color: score < 2 ? Colors.red : (score < 3 ? Colors.orange : Colors.green)),
+      child: LinearProgressIndicator(
+          value: score / 4.0,
+          backgroundColor: Colors.grey[300],
+          color: score < 2
+              ? Colors.red
+              : (score < 3 ? Colors.orange : Colors.green)),
     );
   }
 
-  Widget _buildTerms(Color color, bool isDark) {
+  Widget _buildTerms(Map<String, dynamic> colors, bool isDark) {
     return CheckboxListTile(
-      value: _acceptTerms, onChanged: (v) => setState(() => _acceptTerms = v!),
-      title: Text("I accept the Terms of Service", style: TextStyle(fontSize: 13, color: isDark ? Colors.grey : Colors.grey[700])),
-      controlAffinity: ListTileControlAffinity.leading, activeColor: color, contentPadding: EdgeInsets.zero,
+      value: _acceptTerms,
+      onChanged: (v) => setState(() => _acceptTerms = v!),
+      title: Text("I accept the Terms of Service",
+          style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.grey[400] : Colors.grey[700])),
+      controlAffinity: ListTileControlAffinity.leading,
+      activeColor: colors['primary'],
+      contentPadding: EdgeInsets.zero,
+      side: BorderSide(color: colors['text'].withOpacity(0.6)),
     );
   }
 
-  Widget _buildRegisterButton(Color color) {
+  Widget _buildRegisterButton(Map<String, dynamic> colors) {
     return ElevatedButton(
-      style: ElevatedButton.styleFrom(backgroundColor: color, minimumSize: const Size(double.infinity, 45), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+      style: ElevatedButton.styleFrom(
+          backgroundColor: colors['primary'],
+          minimumSize: const Size(double.infinity, 45),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
       onPressed: _isLoading || !_acceptTerms ? null : _handleRegister,
-      child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Register", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      child: _isLoading
+          ? const CircularProgressIndicator(color: Colors.white)
+          : const Text("Register",
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 
-  Widget _buildLoginLink(Color color, bool isDark) {
-    return Padding(padding: const EdgeInsets.only(top: 16), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text("Already have an account? ", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[700])),
-      GestureDetector(onTap: () => Navigator.pop(context), child: Text("Login now", style: TextStyle(color: color, fontWeight: FontWeight.bold))),
-    ]));
+  Widget _buildLoginLink(Map<String, dynamic> colors, bool isDark) {
+    return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text("Already have an account? ",
+              style: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[700])),
+          GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Text("Login now",
+                  style: TextStyle(
+                      color: colors['primary'], fontWeight: FontWeight.bold))),
+        ]));
   }
 }

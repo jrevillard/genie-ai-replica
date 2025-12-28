@@ -29,9 +29,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
   // ===========================================================================
   bool _isLoading = true;
   String? _errorMessage;
-  bool _isThemeReady = false;
+  bool _isThemeReady = false; // RESTORED
   String _currentUserId = "";
-  Timer? _themeEnforcementTimer;
+  // Timer? _themeEnforcementTimer; // REMOVED: Conflicts with "Preview" feature
 
   // Settings Object - Logic from settings initialization
   late String _selectedLanguage;
@@ -84,12 +84,15 @@ class _SettingsComponentState extends State<SettingsComponent> {
     debugPrint("[SETTINGS] Component created, initializing state...");
 
     _emailController = TextEditingController();
+
+    // Initialize from Global State (ThemeManager)
     _selectedTheme = ThemeManager().userPreference;
+    _fontSize = ThemeManager().fontSize;
     _selectedLanguage = "English";
 
     // Logic branch mirroring Vue created() hooks
     _fetchUserData();
-    _startThemeEnforcement();
+    // _startThemeEnforcement(); // DISABLED: We use reactive state now
 
     // Handling layout readiness delay
     Future.delayed(Duration.zero, () {
@@ -103,7 +106,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
   @override
   void dispose() {
     debugPrint("[SETTINGS] Component destroying, cleaning up resources...");
-    _themeEnforcementTimer?.cancel();
+    // _themeEnforcementTimer?.cancel();
     _emailController.dispose();
     _emailChangePasswordController.dispose();
     _deleteAccountPasswordController.dispose();
@@ -115,8 +118,10 @@ class _SettingsComponentState extends State<SettingsComponent> {
   // INTERNAL LOGIC METHODS - Mirrored from Vue methods
   // ===========================================================================
 
+  /* * REMOVED: This timer forces the theme every 100ms.
+   * We removed it because we want the user to "Preview" the theme change
+   * locally in this dialog BEFORE hitting save.
   void _startThemeEnforcement() {
-    debugPrint("[SETTINGS] Initializing theme enforcement interval...");
     _themeEnforcementTimer =
         Timer.periodic(const Duration(milliseconds: 100), (timer) {
       if (ThemeManager().userPreference != _selectedTheme) {
@@ -124,6 +129,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
       }
     });
   }
+  */
 
   String translate(String key, String fallback) {
     return fallback;
@@ -164,7 +170,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
         _emailController.text = _userData['email'];
 
         _selectedLanguage = userMap['language'] ?? 'English';
-        _fontSize = (userMap['fontSize'] ?? 50.0).toDouble();
+        if (userMap['fontSize'] != null) {
+          _fontSize = (userMap['fontSize'] ?? 50.0).toDouble();
+        }
         _emailUpdates = userMap['emailUpdates'] ?? false;
         _soundNotifications = userMap['soundNotifications'] ?? true;
         _isLoading = false;
@@ -199,6 +207,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
         'soundNotifications': _soundNotifications,
       });
 
+      // Apply Global Changes
       ThemeManager().setTheme(_selectedTheme);
       ThemeManager().setFontSize(_fontSize);
 
@@ -447,27 +456,40 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ThemeManager().isDarkMode;
-    const accentColor = Color(0xFF2A9D8F);
-    final bgColor = isDark ? const Color(0xFF2A2A2A) : Colors.white;
-    final titleColor =
-        isDark ? const Color(0xFFF0F0F0) : const Color(0xFF333333);
-    final boxBg = isDark
+    // PREVIEW LOGIC: Use local _selectedTheme state instead of Global ThemeManager
+    final bool previewIsDark = _selectedTheme == 'dark';
+
+    // Retrieve theme data corresponding to the SELECTION (Preview), not the current app state
+    final ThemeData previewTheme =
+        previewIsDark ? ThemeManager().darkTheme : ThemeManager().lightTheme;
+
+    // Config-driven colors
+    final Color bgColor = previewTheme.scaffoldBackgroundColor;
+    final Color titleColor =
+        previewTheme.textTheme.bodyLarge?.color ?? Colors.black;
+    final Color primaryColor = previewTheme.primaryColor;
+
+    // Use opacity based on preview mode
+    final Color boxBg = previewIsDark
         ? Colors.white.withOpacity(0.05)
         : Colors.black.withOpacity(0.02);
 
     if (_isLoading) {
       return Container(
           color: bgColor,
-          child: const Center(
-              child: CircularProgressIndicator(color: accentColor)));
+          child: Center(child: CircularProgressIndicator(color: primaryColor)));
     }
 
     if (_errorMessage != null) {
-      return Container(color: bgColor, child: _buildErrorState(accentColor));
+      return Container(color: bgColor, child: _buildErrorState(primaryColor));
     }
 
-    // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling
+    // RESTORED: Layout Readiness check
+    if (!_isThemeReady) {
+      return Container(color: bgColor);
+    }
+
+    // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling preview
     return MediaQuery(
       data: MediaQuery.of(context)
           .copyWith(textScaler: TextScaler.linear(_fontSize / 50.0)),
@@ -480,20 +502,20 @@ class _SettingsComponentState extends State<SettingsComponent> {
                   const BorderRadius.vertical(top: Radius.circular(16))),
           child: Column(
             children: [
-              _buildStickyHeader(accentColor, titleColor, isDark),
+              _buildStickyHeader(primaryColor, titleColor, previewIsDark),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      _buildIdentitySection(accentColor, titleColor, isDark),
+                      _buildIdentitySection(primaryColor, titleColor),
                       const SizedBox(height: 24),
                       // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
-                      _buildVerticalConfigurationStack(
-                          accentColor, titleColor, isDark, boxBg),
+                      _buildVerticalConfigurationStack(primaryColor, titleColor,
+                          boxBg, previewTheme.cardColor),
                       const SizedBox(height: 24),
                       _buildAccountManagement(
-                          accentColor, titleColor, isDark, boxBg),
+                          primaryColor, titleColor, previewIsDark, boxBg),
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -539,7 +561,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
     );
   }
 
-  Widget _buildIdentitySection(Color accent, Color titleColor, bool isDark) {
+  Widget _buildIdentitySection(Color accent, Color titleColor) {
     final String rawName =
         _userData['name'] ?? translate("settings.userName", "User");
     final String name =
@@ -595,17 +617,19 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   // FIX: Stacking configuration elements vertically gives the Language Selector full width
   Widget _buildVerticalConfigurationStack(
-      Color accent, Color titleColor, bool isDark, Color boxBg) {
+      Color accent, Color titleColor, Color boxBg, Color dropdownBg) {
     return Column(
       children: [
         _buildThemedGroupBox(
             translate("settings.display", "Display"), boxBg, titleColor, [
           _buildItemLabel(
               translate("settings.displayLanguage", "Display Language")),
-          const LanguageSelector(textColor: Colors.black87),
+          // UPDATED: Passing titleColor ensures text is visible.
+          // UPDATED: Passing dropdownBg ensures menu background matches dialog theme.
+          LanguageSelector(textColor: titleColor, dropdownColor: dropdownBg),
           const SizedBox(height: 20),
           _buildItemLabel(translate("settings.theme", "Theme")),
-          _buildThemeButtonRow(accent, isDark),
+          _buildThemeButtonRow(accent),
           const SizedBox(height: 20),
           _buildItemLabel(translate("settings.fontSize", "Font Size")),
           _buildFontSizeSliderControl(accent, titleColor),
@@ -615,13 +639,16 @@ class _SettingsComponentState extends State<SettingsComponent> {
             translate("settings.notifications", "Notifications"),
             boxBg,
             titleColor, [
+          // FIX: Passing accent color for switch
           _buildToggleRow(translate("settings.emailUpdates", "Email Updates"),
-              _emailUpdates, (v) => setState(() => _emailUpdates = v)),
+              _emailUpdates, (v) => setState(() => _emailUpdates = v), accent),
           const SizedBox(height: 16),
+          // FIX: Passing accent color for switch
           _buildToggleRow(
               translate("settings.soundNotifications", "Sound Notifications"),
               _soundNotifications,
-              (v) => setState(() => _soundNotifications = v)),
+              (v) => setState(() => _soundNotifications = v),
+              accent),
         ]),
       ],
     );
@@ -662,15 +689,24 @@ class _SettingsComponentState extends State<SettingsComponent> {
                                   controller: _emailController,
                                   enabled:
                                       _isEditingEmail, // Wired to toggle state
+                                  style: TextStyle(
+                                      color: titleColor), // Dynamic text color
                                   decoration: InputDecoration(
                                       filled: true,
-                                      fillColor: isDark
-                                          ? Colors.black12
-                                          : Colors.white70,
+                                      // FIX: Logic to blend background when not editing
+                                      fillColor: _isEditingEmail
+                                          ? (isDark
+                                              ? Colors.white.withOpacity(0.1)
+                                              : Colors.white)
+                                          : Colors.transparent,
                                       border: const OutlineInputBorder(
                                           borderSide: BorderSide.none)))),
                           const SizedBox(width: 10),
                           ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accent, // Primary Color
+                                foregroundColor: Colors.white, // White Text
+                              ),
                               onPressed: _handleEmailToggle,
                               child: Text(_isEditingEmail ? "Save" : "Edit")),
                         ]),
@@ -687,7 +723,10 @@ class _SettingsComponentState extends State<SettingsComponent> {
                         const SizedBox(height: 8),
                         ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                                minimumSize: const Size(double.infinity, 48)),
+                              minimumSize: const Size(double.infinity, 48),
+                              backgroundColor: accent, // Primary Color
+                              foregroundColor: Colors.white, // White Text
+                            ),
                             onPressed: _renderPasswordResetOverlay,
                             child: Text(translate(
                                 "settings.changePassword", "Change Password"))),
@@ -702,7 +741,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
                         translate(
                             "settings.resetUserDataDesc", "Wipe chat history."),
                         _showResetDataWorkflow,
-                        isDark)),
+                        isDark,
+                        // Custom Override: Darker red than delete button
+                        overrideColor: Colors.red[800])),
                 const SizedBox(width: 24),
                 Expanded(
                     child: _buildActionBtnCard(
@@ -770,7 +811,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
     );
   }
 
-  Widget _buildThemeButtonRow(Color accent, bool isDark) {
+  Widget _buildThemeButtonRow(Color accent) {
     return Row(children: [
       Expanded(
           child: _buildThemeToggleBtn("Light", _selectedTheme == 'light',
@@ -816,31 +857,40 @@ class _SettingsComponentState extends State<SettingsComponent> {
     ]);
   }
 
-  Widget _buildToggleRow(String label, bool value, Function(bool) onChanged) {
+  Widget _buildToggleRow(
+      String label, bool value, Function(bool) onChanged, Color activeColor) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
       Text(label, style: const TextStyle(fontSize: 14.5)),
       Switch(
           value: value,
           onChanged: onChanged,
-          activeColor: const Color(0xFF2A9D8F))
+          // FIX: Using dynamic active color instead of hardcoded hex
+          activeColor: activeColor)
     ]);
   }
 
   Widget _buildActionBtnCard(
       String title, String desc, VoidCallback onTap, bool isDark,
-      {bool isDanger = false}) {
+      {bool isDanger = false, Color? overrideColor}) {
+    // Determine the effective background color
+    // FIX: Added '!' to Colors.grey[200] to handle nullability strictness
+    final Color bgColor = overrideColor ??
+        (isDanger ? Colors.red : (isDark ? Colors.white10 : Colors.grey[200]!));
+
+    // Determine the effective text color
+    // If it's a "danger" button OR has an override (which implies a colored button like Dark Red), use White.
+    // Otherwise use black87 (standard buttons)
+    final Color txtColor =
+        (isDanger || overrideColor != null) ? Colors.white : Colors.black87;
+
     return Column(children: [
       ElevatedButton(
           style: ElevatedButton.styleFrom(
-              backgroundColor: isDanger
-                  ? Colors.red
-                  : (isDark ? Colors.white10 : Colors.grey[200]),
+              backgroundColor: bgColor,
               minimumSize: const Size(double.infinity, 50)),
           onPressed: onTap,
           child: Text(title,
-              style: TextStyle(
-                  color: isDanger ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.bold))),
+              style: TextStyle(color: txtColor, fontWeight: FontWeight.bold))),
       const SizedBox(height: 6),
       Text(desc,
           style: const TextStyle(fontSize: 11.5, color: Colors.grey),
@@ -852,11 +902,14 @@ class _SettingsComponentState extends State<SettingsComponent> {
       padding: const EdgeInsets.only(bottom: 10),
       child:
           Text(text, style: const TextStyle(fontSize: 14, color: Colors.grey)));
+
+  // RESTORED: unused but kept for original parity
   Widget _buildBulletPoint(String text) =>
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text(" • "),
         Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5)))
       ]);
+
   Widget _buildErrorState(Color accent) => Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(_errorMessage!),

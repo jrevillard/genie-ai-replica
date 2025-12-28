@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 class ApiService {
   // Changed from static const to instance getter
   // This allows instance access (_api.baseUrl) while keeping the value constant
-  String get baseUrl => 'https://localhost/api';
+  //String get baseUrl => 'https://localhost/api';
   // For production, you can easily switch:
-  // String get baseUrl => 'https://genie-ai.itu.int/api';
+   String get baseUrl => 'https://genie-ai.itu.int/api';
 
   String? _accessToken;
 

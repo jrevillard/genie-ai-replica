@@ -13,13 +13,14 @@ Future<void> openWebFile({
   required String accessToken,
   required Map<String, dynamic> docMetadata,
 }) async {
-  final String viewUrl = '${ApiService.baseUrl}/files/$fileId/view';
+  final ApiService _api = ApiService();
+  final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
   debugPrint("[WEB_UTILS] Opening web window for: $viewUrl");
 
   // 1. Open the window IMMEDIATELY to bypass popup blockers.
   // We use WindowBase because '_DOMWindowCrossFrame' cannot be cast to 'Window'.
   final html.WindowBase? openedWindow = html.window.open('', '_blank');
-  
+
   if (openedWindow == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Popup blocked. Please allow popups.")),
@@ -27,7 +28,7 @@ Future<void> openWebFile({
     return;
   }
 
-  // Note: We cannot write "Loading..." to openedWindow.document because 
+  // Note: We cannot write "Loading..." to openedWindow.document because
   // WindowBase does not expose the document property safely in all contexts.
   // The user will see a blank tab while fetching.
 
@@ -44,10 +45,11 @@ Future<void> openWebFile({
       try {
         if (request.status == 200 && request.response is html.Blob) {
           final rawBlob = request.response as html.Blob;
-          
+
           // Determine type
           final bool isMarkdown = _isMarkdown(docMetadata);
-          final String targetMimeType = isMarkdown ? 'text/markdown' : _getMimeType(docMetadata);
+          final String targetMimeType =
+              isMarkdown ? 'text/markdown' : _getMimeType(docMetadata);
 
           // 3. Unwrap JSON/Base64 if necessary
           final html.Blob blob = await _unwrapBlob(rawBlob, targetMimeType);
@@ -58,7 +60,7 @@ Future<void> openWebFile({
             // Standard File
             final url = html.Url.createObjectUrlFromBlob(blob);
             openedWindow.location?.href = url;
-            
+
             // Revoke after delay
             Future.delayed(const Duration(seconds: 15), () {
               html.Url.revokeObjectUrl(url);
@@ -68,7 +70,7 @@ Future<void> openWebFile({
         } else {
           debugPrint("[WEB_UTILS] Server error: ${request.status}");
           // We can't write to the window, so we just close it if it failed immediately
-          openedWindow.close(); 
+          openedWindow.close();
           c.completeError("Server returned status ${request.status}");
         }
       } catch (err) {
@@ -86,14 +88,13 @@ Future<void> openWebFile({
 
     request.send();
     await c.future;
-
   } catch (e) {
     debugPrint("[WEB_UTILS] Error: $e");
     // Ensure window is closed on error so we don't leave a zombie tab
     try {
-      openedWindow.close(); 
+      openedWindow.close();
     } catch (_) {}
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Error opening document: $e")),
     );
@@ -102,7 +103,8 @@ Future<void> openWebFile({
 
 // --- HELPER FUNCTIONS ---
 
-void _handleMarkdownRender(html.WindowBase win, html.Blob blob, Map<String, dynamic> doc, Completer c) {
+void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
+    Map<String, dynamic> doc, Completer c) {
   final reader = html.FileReader();
   reader.onLoadEnd.listen((e) {
     try {
@@ -110,7 +112,8 @@ void _handleMarkdownRender(html.WindowBase win, html.Blob blob, Map<String, dyna
 
       // Limit check (5MB) - if too large, download instead of render
       if (text.length > 5 * 1024 * 1024) {
-        debugPrint("[WEB_UTILS] File too large for markdown render. Downloading.");
+        debugPrint(
+            "[WEB_UTILS] File too large for markdown render. Downloading.");
         _downloadFallback(win, blob, doc);
         c.complete();
         return;
@@ -137,11 +140,12 @@ $htmlContent
 ''';
       final htmlBlob = html.Blob([styledHtml], 'text/html');
       final url = html.Url.createObjectUrlFromBlob(htmlBlob);
-      
+
       // Navigate the window to our generated HTML blob
       win.location?.href = url;
-      
-      Future.delayed(const Duration(seconds: 15), () => html.Url.revokeObjectUrl(url));
+
+      Future.delayed(
+          const Duration(seconds: 15), () => html.Url.revokeObjectUrl(url));
       c.complete();
     } catch (err) {
       // Fallback to download on parsing error
@@ -152,16 +156,17 @@ $htmlContent
   reader.readAsText(blob);
 }
 
-void _downloadFallback(html.WindowBase win, html.Blob blob, Map<String, dynamic> doc) {
+void _downloadFallback(
+    html.WindowBase win, html.Blob blob, Map<String, dynamic> doc) {
   // Create anchor in the MAIN window context to trigger download
   final url = html.Url.createObjectUrlFromBlob(blob);
   final anchor = html.AnchorElement(href: url)
     ..download = doc['fileName'] ?? 'document.md';
   anchor.click();
   html.Url.revokeObjectUrl(url);
-  
+
   // Close the blank tab we opened since we are downloading instead
-  win.close(); 
+  win.close();
 }
 
 Future<html.Blob> _unwrapBlob(html.Blob originalBlob, String mimeType) async {
@@ -207,17 +212,25 @@ Future<html.Blob> _unwrapBlob(html.Blob originalBlob, String mimeType) async {
 bool _isMarkdown(Map<String, dynamic> doc) {
   final String? type = doc['type']?.toString().toLowerCase();
   if (type == 'markdown' || type == 'md') return true;
-  final String name = (doc['fileName'] ?? doc['document_name'] ?? doc['title'])?.toString().toLowerCase() ?? '';
+  final String name = (doc['fileName'] ?? doc['document_name'] ?? doc['title'])
+          ?.toString()
+          .toLowerCase() ??
+      '';
   return name.endsWith('.md') || name.endsWith('.markdown');
 }
 
 String _getMimeType(Map<String, dynamic> doc) {
   final String? type = doc['type']?.toString().toLowerCase();
-  final String name = (doc['fileName'] ?? doc['document_name'] ?? doc['title'])?.toString().toLowerCase() ?? '';
-  
+  final String name = (doc['fileName'] ?? doc['document_name'] ?? doc['title'])
+          ?.toString()
+          .toLowerCase() ??
+      '';
+
   if (type == 'pdf' || name.endsWith('.pdf')) return 'application/pdf';
   if (type == 'html' || name.endsWith('.html')) return 'text/html';
-  if (type == 'docx' || name.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  if (type == 'xlsx' || name.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (type == 'docx' || name.endsWith('.docx'))
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (type == 'xlsx' || name.endsWith('.xlsx'))
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   return 'application/octet-stream';
 }

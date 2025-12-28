@@ -6,7 +6,7 @@ class FileProxy {
   final ApiService _api = ApiService();
 
   Future<Map<String, dynamic>> uploadFile(List<int> bytes, String filename, String context, String entityId) async {
-    var request = http.MultipartRequest('POST', Uri.parse('${ApiService.baseUrl}/files/upload'));
+    var request = http.MultipartRequest('POST', Uri.parse('${_api.baseUrl}/files/upload'));
     request.headers.addAll(_api.getHeaders());
     request.fields['context'] = context;
     request.fields['entityId'] = entityId;
@@ -31,5 +31,5 @@ class FileProxy {
     return jsonDecode(res.body);
   }
 
-  String getFileUrl(String fileId) => '${ApiService.baseUrl}/files/$fileId';
+  String getFileUrl(String fileId) => '${_api.baseUrl}/files/$fileId';
 }

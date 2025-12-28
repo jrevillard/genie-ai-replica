@@ -1,21 +1,27 @@
+// lib/services/api_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'https://localhost/api'; 
-  //static const String baseUrl = 'https://genie-ai.itu.int/api'; 
-  
+  // Changed from static const to instance getter
+  // This allows instance access (_api.baseUrl) while keeping the value constant
+  String get baseUrl => 'https://localhost/api';
+  // For production, you can easily switch:
+  // String get baseUrl => 'https://genie-ai.itu.int/api';
+
   String? _accessToken;
 
+  // Singleton pattern
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
   void setToken(String token) {
-    print('[ApiService] Setting access token: ${token.substring(0, token.length > 5 ? 5 : token.length)}...');
+    print(
+        '[ApiService] Setting access token: ${token.substring(0, token.length > 5 ? 5 : token.length)}...');
     _accessToken = token;
   }
-  
+
   void clearToken() {
     print('[ApiService] Clearing access token');
     _accessToken = null;
@@ -23,24 +29,25 @@ class ApiService {
 
   String? get accessToken => _accessToken;
 
-  Map<String, String> getHeaders() {
-    final headers = {
-      'Content-Type': 'application/json',
+  Map<String, String> getHeaders({String contentType = 'application/json'}) {
+    final headers = <String, String>{
+      'Content-Type': contentType,
       if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
     };
-    // print('[ApiService] Generated Headers: $headers'); // Uncomment if you suspect header issues
+    // print('[ApiService] Generated Headers: $headers');
     return headers;
   }
 
-  Future<http.Response> get(String endpoint, {Map<String, dynamic>? params}) async {
+  Future<http.Response> get(String endpoint,
+      {Map<String, dynamic>? params}) async {
     final uri = Uri.parse('$baseUrl/$endpoint').replace(
-      queryParameters: params?.map((k, v) => MapEntry(k, v.toString()))
+      queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
-    
+
     print('----------------------------------------------------------------');
     print('[API Request] GET');
     print('URL: $uri');
-    
+
     try {
       final response = await http.get(uri, headers: getHeaders());
       _logResponse(response);
@@ -53,14 +60,18 @@ class ApiService {
 
   Future<http.Response> post(String endpoint, Map<String, dynamic> data) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
-    
+
     print('----------------------------------------------------------------');
     print('[API Request] POST');
     print('URL: $uri');
     print('Body: ${jsonEncode(data)}');
 
     try {
-      final response = await http.post(uri, headers: getHeaders(), body: jsonEncode(data));
+      final response = await http.post(
+        uri,
+        headers: getHeaders(),
+        body: jsonEncode(data),
+      );
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
@@ -78,7 +89,11 @@ class ApiService {
     print('Body: ${jsonEncode(data)}');
 
     try {
-      final response = await http.put(uri, headers: getHeaders(), body: jsonEncode(data));
+      final response = await http.put(
+        uri,
+        headers: getHeaders(),
+        body: jsonEncode(data),
+      );
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
@@ -87,7 +102,8 @@ class ApiService {
     }
   }
 
-  Future<http.Response> patch(String endpoint, Map<String, dynamic> data) async {
+  Future<http.Response> patch(
+      String endpoint, Map<String, dynamic> data) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
 
     print('----------------------------------------------------------------');
@@ -96,7 +112,11 @@ class ApiService {
     print('Body: ${jsonEncode(data)}');
 
     try {
-      final response = await http.patch(uri, headers: getHeaders(), body: jsonEncode(data));
+      final response = await http.patch(
+        uri,
+        headers: getHeaders(),
+        body: jsonEncode(data),
+      );
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
@@ -105,9 +125,10 @@ class ApiService {
     }
   }
 
-  Future<http.Response> delete(String endpoint, {Map<String, dynamic>? params}) async {
+  Future<http.Response> delete(String endpoint,
+      {Map<String, dynamic>? params}) async {
     final uri = Uri.parse('$baseUrl/$endpoint').replace(
-      queryParameters: params?.map((k, v) => MapEntry(k, v.toString()))
+      queryParameters: params?.map((k, v) => MapEntry(k, v.toString())),
     );
 
     print('----------------------------------------------------------------');

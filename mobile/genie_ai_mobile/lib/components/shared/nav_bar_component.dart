@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
-import 'package:genie_ai_mobile/components/settings/settings_component.dart'; // REQUIRED IMPORT
+import 'package:genie_ai_mobile/components/settings/settings_component.dart';
+import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 
 class NavBarComponent extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -116,10 +117,13 @@ class NavBarComponent extends StatelessWidget {
 
         // Profile Button
         IconButton(
-          icon: const Icon(Icons.person_outline, color: Colors.white),
-          tooltip: "Profile",
-          onPressed: () => Navigator.pushNamed(context, '/profile'),
-        ),
+      icon: const Icon(Icons.person_outline, color: Colors.white),
+      tooltip: "Profile",
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
+      ),
+    ),
 
         // Logout Button
         IconButton(

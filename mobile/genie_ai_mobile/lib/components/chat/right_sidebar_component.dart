@@ -118,7 +118,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       );
     } else {
       // --- MOBILE FALLBACK ---
-      final String viewUrl = '${ApiService.baseUrl}/files/$fileId/view';
+      final String viewUrl = '${_api.baseUrl}/files/$fileId/view';
       final String urlWithToken = '$viewUrl?access_token=$token';
       final Uri uri = Uri.parse(urlWithToken);
       if (await canLaunchUrl(uri)) {

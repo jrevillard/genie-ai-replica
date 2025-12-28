@@ -15,6 +15,7 @@ import 'package:genie_ai_mobile/components/auth/register_screen.dart';
 import 'package:genie_ai_mobile/components/auth/registration_success_screen.dart';
 import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
 import 'package:genie_ai_mobile/components/auth/password_reset_confirm_screen.dart';
+import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 
 // ===========================================================================
 // COMPONENT IMPORTS
@@ -103,6 +104,7 @@ class _MyAppState extends State<MyApp> {
         '/register': (context) => const RegisterScreen(),
         '/registration-success': (context) => const RegistrationSuccessScreen(),
         '/password-reset': (context) => const PasswordResetInitiateScreen(),
+        '/profile': (context) => UserProfileScreen(user: _user!), // Added
         // Fixed: Extract token from route settings and pass it as required parameter
         '/password-reset-confirm': (context) {
           final settings = ModalRoute.of(context)?.settings;

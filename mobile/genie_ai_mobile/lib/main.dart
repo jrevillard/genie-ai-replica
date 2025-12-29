@@ -4,11 +4,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Needed for rootBundle
+import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED FOR I18N
 
 // ===========================================================================
 // SERVICE & UTILS IMPORTS
 // ===========================================================================
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
 
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
@@ -26,7 +28,14 @@ import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
+// FIX: Corrected import path from 'chat' to 'sidebar'
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
+
+// --- CONDITIONAL IMPORT FOR RIGHT SIDEBAR ---
+// This handles the Web vs Mobile stubbing for File Utils indirectly referenced
+// inside RightSidebarComponent. 
+// Note: Direct imports are usually handled inside the component files themselves, 
+// but we keep structure clean here.
 
 /// SSL Override for local development to bypass self-signed certificate issues
 class MyHttpOverrides extends HttpOverrides {
@@ -110,13 +119,30 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to ThemeManager for global theme changes (Mode, Font Size)
+    // Listen to ThemeManager AND I18nService for global changes
     return AnimatedBuilder(
-      animation: ThemeManager(),
+      animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
+        // DEBUG: Confirm rebuild on language change
+        debugPrint("[MAIN] AnimatedBuilder rebuilding. Locale: ${I18nService().currentLocale.languageCode}");
+
         return MaterialApp(
           title: 'Genie AI',
           debugShowCheckedModeBanner: false,
+
+          // I18n Configuration
+          locale: I18nService().currentLocale,
+          supportedLocales: I18nService()
+              .supportedLanguages
+              .keys
+              .map((code) => Locale(code)),
+          
+          // ADDED: Standard Flutter Localizations Delegates
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
 
           // Theme Configuration using dynamic properties from ThemeManager
           theme: ThemeManager().lightTheme,

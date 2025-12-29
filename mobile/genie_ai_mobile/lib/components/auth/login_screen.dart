@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:genie_ai_mobile/services/user_service.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 class LoginScreen extends StatefulWidget {
   final Function(Map<String, dynamic>) onLoginSuccess;
@@ -76,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       widget.onLoginSuccess(user);
     } catch (e) {
-      setState(() => _error = "Invalid credentials or server error");
+      setState(() => _error = tr('login.loginError'));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -111,11 +112,11 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 _buildHeader(colors, isDark),
                 if (_error != null) _buildError(),
-                _buildField(_usernameController, "Username", Icons.person,
-                    colors, isDark),
+                _buildField(_usernameController, tr('login.username'),
+                    Icons.person, colors, isDark),
                 const SizedBox(height: 10),
-                _buildField(
-                    _passwordController, "Password", Icons.lock, colors, isDark,
+                _buildField(_passwordController, tr('login.password'),
+                    Icons.lock, colors, isDark,
                     obscure: true),
                 _buildRememberForgot(colors, isDark),
                 _buildLoginButton(colors),
@@ -142,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
       ),
       const SizedBox(height: 10),
-      Text("GENIE.AI",
+      Text(tr('login.appTitle'),
           style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -183,14 +184,14 @@ class _LoginScreenState extends State<LoginScreen> {
           activeColor: colors['primary'],
           side: BorderSide(color: colors['text'].withOpacity(0.6)),
         ),
-        Text("Remember me",
+        Text(tr('login.rememberMe'),
             style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : Colors.grey[700])),
       ]),
       TextButton(
         onPressed: () => Navigator.pushNamed(context, '/password-reset'),
-        child: Text("Forgot password?",
+        child: Text(tr('login.forgotPassword'),
             style: TextStyle(color: colors['primary'], fontSize: 13)),
       ),
     ]);
@@ -210,9 +211,9 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 20,
               child: CircularProgressIndicator(
                   color: Colors.white, strokeWidth: 2))
-          : const Text("Login",
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          : Text(tr('login.loginButton'),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -220,13 +221,13 @@ class _LoginScreenState extends State<LoginScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text("No account? ",
+        Text(tr('login.noAccount') + ' ',
             style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey[400] : Colors.grey[700])),
         GestureDetector(
           onTap: () => Navigator.pushNamed(context, '/register'),
-          child: Text("Register now",
+          child: Text(tr('login.registerNow'),
               style: TextStyle(
                   color: colors['primary'],
                   fontWeight: FontWeight.bold,
@@ -243,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
         const Expanded(child: Divider()),
         Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text("OR",
+            child: Text(tr('login.or'),
                 style: TextStyle(
                     color: isDark ? Colors.grey : Colors.grey[600],
                     fontSize: 12))),
@@ -255,9 +256,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildSocialButtons(Map<String, dynamic> colors, bool isDark) {
     return Column(children: [
       // UPDATED: Used colors['primary'] instead of colors['secondary']
-      _socBtn("Continue with Google", Icons.g_mobiledata, colors['primary']),
+      _socBtn(tr('login.googleLogin'), Icons.g_mobiledata, colors['primary']),
       const SizedBox(height: 8),
-      _socBtn("Continue with Facebook", Icons.facebook,
+      _socBtn(tr('login.facebookLogin'), Icons.facebook,
           Color.lerp(colors['primary'], Colors.black, 0.2)!),
     ]);
   }

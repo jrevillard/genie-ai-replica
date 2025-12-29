@@ -1,0 +1,125 @@
+import 'package:flutter/material.dart';
+import 'package:genie_ai_mobile/i18n/locales/en.dart';
+import 'package:genie_ai_mobile/i18n/locales/ar.dart';
+import 'package:genie_ai_mobile/i18n/locales/de.dart';
+
+class I18nService extends ChangeNotifier {
+  // Singleton Pattern
+  static final I18nService _instance = I18nService._internal();
+
+  factory I18nService() {
+    return _instance;
+  }
+
+  I18nService._internal() {
+    debugPrint(
+        "[I18N SERVICE] Singleton Initialized. Default Locale: ${_currentLocale.languageCode}");
+  }
+
+  // Current Locale State (Default to English)
+  Locale _currentLocale = const Locale('en');
+  Locale get currentLocale => _currentLocale;
+
+  // Supported Languages Configuration
+  final Map<String, String> supportedLanguages = {
+    'en': 'English',
+    'ar': 'Arabic',
+    'de': 'German',
+    'es': 'Spanish',
+    'fr': 'French',
+    'sw': 'Kiswahili',
+    'pt': 'Portuguese',
+    'zh': 'Chinese',
+    'ru': 'Russian',
+    'th': 'Thai',
+    'id': 'Indonesian',
+  };
+
+  // Translation Data Store
+  final Map<String, Map<String, dynamic>> _localizedValues = {
+    'en': enLocale,
+    'ar': arLocale,
+    'de': deLocale,
+  };
+
+  /// Changes the language and notifies listeners to rebuild the app
+  void changeLanguage(String languageCode) {
+    debugPrint("[I18N SERVICE] changeLanguage called with: $languageCode");
+
+    if (!supportedLanguages.containsKey(languageCode)) {
+      debugPrint("[I18N SERVICE] ERROR: Language $languageCode not supported.");
+      return;
+    }
+
+    if (_currentLocale.languageCode == languageCode) {
+      debugPrint(
+          "[I18N SERVICE] Language is already $languageCode. No change.");
+      return;
+    }
+
+    _currentLocale = Locale(languageCode);
+    debugPrint(
+        "[I18N SERVICE] Locale updated to $_currentLocale. Notifying listeners...");
+    notifyListeners();
+  }
+
+  /// Main translation method
+  String translate(String key, {Map<String, dynamic>? args}) {
+    // 1. Get the map for the current locale
+    Map<String, dynamic>? langMap =
+        _localizedValues[_currentLocale.languageCode];
+
+    // 2. Fallback to English if not found
+    if (langMap == null) {
+      // Only log this once per session ideally, but okay for debug now
+      // debugPrint("[I18N SERVICE] Missing map for ${_currentLocale.languageCode}, falling back to EN");
+      langMap = _localizedValues['en'];
+    }
+
+    // 3. Navigate the nested keys
+    dynamic value = _getValueFromMap(key, langMap ?? {});
+
+    // 4. Fallback: If key not found in current lang, try English
+    if (value == null && _currentLocale.languageCode != 'en') {
+      value = _getValueFromMap(key, _localizedValues['en'] ?? {});
+    }
+
+    // 5. Final Fallback
+    if (value == null) return key;
+
+    String translation = value.toString();
+
+    // 6. Handle Argument Substitution
+    if (args != null) {
+      args.forEach((key, value) {
+        translation = translation.replaceAll('{$key}', value.toString());
+      });
+    }
+
+    return translation;
+  }
+
+  dynamic _getValueFromMap(String key, Map<String, dynamic> map) {
+    List<String> keys = key.split('.');
+    dynamic current = map;
+
+    for (String k in keys) {
+      if (current is Map<String, dynamic> && current.containsKey(k)) {
+        current = current[k];
+      } else {
+        return null;
+      }
+    }
+    return current;
+  }
+
+  bool get isRtl {
+    return _currentLocale.languageCode == 'ar' ||
+        _currentLocale.languageCode == 'he' ||
+        _currentLocale.languageCode == 'fa';
+  }
+}
+
+String tr(String key, {Map<String, dynamic>? args}) {
+  return I18nService().translate(key, args: args);
+}

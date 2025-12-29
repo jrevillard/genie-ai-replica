@@ -3,6 +3,7 @@ import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 class NavBarComponent extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -51,7 +52,7 @@ class NavBarComponent extends StatelessWidget {
         builder: (BuildContext drawerContext) {
           return IconButton(
             icon: Icon(Icons.menu, color: contentColor),
-            tooltip: 'Open sidebar',
+            tooltip: tr('nav.toggleSidebar'), // TRANSLATED
             onPressed: () {
               debugPrint("[NAVBAR] Hamburger button pressed!");
 
@@ -76,7 +77,7 @@ class NavBarComponent extends StatelessWidget {
           Icon(Icons.auto_awesome, color: contentColor, size: 24),
           const SizedBox(width: 8),
           Text(
-            "GENIE.AI",
+            tr('brandName'), // TRANSLATED (Genie AI...)
             style: TextStyle(
               color: contentColor,
               fontWeight: FontWeight.bold,
@@ -107,7 +108,7 @@ class NavBarComponent extends StatelessWidget {
           Builder(
             builder: (context) => IconButton(
               icon: Icon(Icons.description_outlined, color: contentColor),
-              tooltip: "Related Documents",
+              tooltip: tr('nav.relatedDocuments'), // TRANSLATED
               onPressed: () {
                 Scaffold.of(context).openEndDrawer();
               },
@@ -117,7 +118,7 @@ class NavBarComponent extends StatelessWidget {
         // Settings Button
         IconButton(
           icon: Icon(Icons.settings_outlined, color: contentColor),
-          tooltip: "Settings",
+          tooltip: tr('nav.settings'), // TRANSLATED
           onPressed: () {
             showModalBottomSheet(
               context: context,
@@ -135,7 +136,7 @@ class NavBarComponent extends StatelessWidget {
         // Profile Button
         IconButton(
           icon: Icon(Icons.person_outline, color: contentColor),
-          tooltip: "Profile",
+          tooltip: tr('nav.userProfile'), // TRANSLATED
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
@@ -145,7 +146,7 @@ class NavBarComponent extends StatelessWidget {
         // Logout Button
         IconButton(
           icon: Icon(Icons.logout, color: contentColor),
-          tooltip: "Logout",
+          tooltip: tr('nav.logout'), // TRANSLATED
           onPressed: onLogout,
         ),
         const SizedBox(width: 4),

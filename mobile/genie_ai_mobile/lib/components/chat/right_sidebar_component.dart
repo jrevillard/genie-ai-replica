@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -6,9 +8,11 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart';
 
 // --- CONDITIONAL IMPORT ---
-import 'stub_file_utils.dart' if (dart.library.html) 'web_file_utils.dart';
+import 'package:genie_ai_mobile/components/chat/stub_file_utils.dart'
+    if (dart.library.html) 'package:genie_ai_mobile/components/chat/web_file_utils.dart';
 
 class RightSidebarComponent extends StatefulWidget {
   final List<dynamic> relatedDocuments;
@@ -26,85 +30,261 @@ class RightSidebarComponent extends StatefulWidget {
 
 class _RightSidebarComponentState extends State<RightSidebarComponent> {
   final ApiService _api = ApiService();
-  String _faqContent = "Loading FAQ...";
+
+  List<Map<String, String>> _faqItems = [];
+  bool _isLoadingFaq = false;
+  String _currentLangCode = 'en';
 
   @override
   void initState() {
     super.initState();
-    _loadFAQ();
+    _currentLangCode = I18nService().currentLocale.languageCode;
+    _loadAndProcessFAQ();
+    I18nService().addListener(_onLanguageChange);
   }
 
-  Future<void> _loadFAQ() async {
+  @override
+  void dispose() {
+    I18nService().removeListener(_onLanguageChange);
+    super.dispose();
+  }
+
+  void _onLanguageChange() {
+    final newCode = I18nService().currentLocale.languageCode;
+    if (newCode != _currentLangCode) {
+      setState(() {
+        _currentLangCode = newCode;
+      });
+      _loadAndProcessFAQ();
+    }
+  }
+
+  Future<void> _loadAndProcessFAQ() async {
+    if (!mounted) return;
+    setState(() => _isLoadingFaq = true);
+
+    String markdownContent = "";
+
     try {
-      final String md = await rootBundle.loadString('assets/FAQ.md');
-      setState(() => _faqContent = md);
+      final String baseMarkdown = await rootBundle.loadString('assets/FAQ.md');
+
+      if (_currentLangCode == 'en') {
+        markdownContent = baseMarkdown;
+      } else {
+        try {
+          final response = await _api.post('translate/markdown', {
+            'markdown': baseMarkdown,
+            'source_lang': 'en',
+            'target_lang': _currentLangCode,
+          });
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final data = jsonDecode(response.body);
+            final dynamic translated = data['translated_markdown'];
+            if (translated is List) {
+              markdownContent = translated.join('\n');
+            } else if (translated is String) {
+              markdownContent = translated;
+            } else {
+              markdownContent = baseMarkdown;
+            }
+          } else {
+            markdownContent = baseMarkdown;
+          }
+        } catch (e) {
+          markdownContent = baseMarkdown;
+        }
+      }
+
+      final parsedFaqs = _parseFaqMarkdown(markdownContent);
+
+      if (mounted) {
+        setState(() {
+          _faqItems = parsedFaqs;
+          _isLoadingFaq = false;
+        });
+      }
     } catch (e) {
-      setState(() => _faqContent = "FAQ not available");
-      debugPrint("[RIGHT_SIDEBAR] FAQ load error: $e");
+      if (mounted) {
+        setState(() {
+          _faqItems = [
+            {'question': 'Error', 'answer': tr('sidebar.weatherErrorDefault')}
+          ];
+          _isLoadingFaq = false;
+        });
+      }
     }
   }
 
-  IconData _documentIconClass(Map<String, dynamic> doc) {
-    final String? type = doc['type']?.toLowerCase();
-    switch (type) {
-      case 'pdf':
-        return Icons.picture_as_pdf;
-      case 'word':
-      case 'doc':
-      case 'docx':
-        return Icons.description;
-      case 'excel':
-      case 'xls':
-      case 'xlsx':
-        return Icons.table_chart;
-      case 'powerpoint':
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow;
-      case 'image':
-        return Icons.image;
-      case 'video':
-        return Icons.videocam;
-      case 'audio':
-        return Icons.audiotrack;
-      case 'text':
-      case 'txt':
-      case 'html':
-      case 'markdown':
-        return Icons.text_snippet;
-      default:
-        return Icons.insert_drive_file;
+  List<Map<String, String>> _parseFaqMarkdown(String markdown) {
+    final List<Map<String, String>> faqs = [];
+    final lines = markdown.split('\n');
+
+    String? currentQuestion;
+    StringBuffer currentAnswer = StringBuffer();
+
+    for (var line in lines) {
+      if (line.trim().startsWith('## ')) {
+        if (currentQuestion != null) {
+          faqs.add({
+            'question': currentQuestion,
+            'answer': currentAnswer.toString().trim()
+          });
+          currentAnswer.clear();
+        }
+        currentQuestion = line.substring(3).trim();
+      } else {
+        if (currentQuestion != null) {
+          currentAnswer.writeln(line);
+        }
+      }
     }
+
+    if (currentQuestion != null) {
+      faqs.add({
+        'question': currentQuestion,
+        'answer': currentAnswer.toString().trim()
+      });
+    }
+
+    return faqs;
   }
 
-  String _formatLabels(Map<String, dynamic> doc) {
-    final List<dynamic>? labels = doc['labels'] ??
-        doc['tags'] ??
-        doc['categoryLabel'] ??
-        doc['serviceLabels'];
-    if (labels == null || labels.isEmpty) return 'None';
-    return labels.join(', ');
+  // ===========================================================================
+  // DATA HELPERS
+  // ===========================================================================
+
+  dynamic _getDocValue(Map<String, dynamic> doc, List<String> keys) {
+    for (var key in keys) {
+      if (doc.containsKey(key) && doc[key] != null) return doc[key];
+      if (doc['metadata'] is Map && doc['metadata'][key] != null) {
+        return doc['metadata'][key];
+      }
+    }
+    return null;
+  }
+
+  IconData _getDocumentIcon(Map<String, dynamic> doc) {
+    final String url = _getDocValue(doc, ['url'])?.toString() ?? "";
+    final bool isExternal = url.startsWith('http') && !url.contains('<HOST>');
+    if (isExternal) return Icons.public;
+
+    final String type =
+        _getDocValue(doc, ['type', 'fileType'])?.toString().toLowerCase() ?? '';
+    final String name =
+        (_getDocValue(doc, ['fileName', 'document_name', 'title']) ?? '')
+            .toString()
+            .toLowerCase();
+
+    if (type == 'pdf' || name.endsWith('.pdf')) return Icons.picture_as_pdf;
+    if (type.contains('word') || name.contains('.doc'))
+      return Icons.description;
+    if (type.contains('excel') || name.contains('.xls'))
+      return Icons.table_chart;
+    if (type.contains('powerpoint') || name.contains('.ppt'))
+      return Icons.slideshow;
+    if (type.contains('image') ||
+        name.contains('.jpg') ||
+        name.contains('.png')) return Icons.image;
+    if (type.contains('video')) return Icons.videocam;
+    if (type.contains('audio')) return Icons.audiotrack;
+    if (name.endsWith('.md') || name.endsWith('.txt'))
+      return Icons.text_snippet;
+
+    return Icons.insert_drive_file;
   }
 
   String _formatScore(dynamic score) {
-    if (score == null) return 'N/A';
-    if (score is num) return '${(score * 100).toStringAsFixed(1)}%';
-    return score.toString();
+    if (score == null || score is! num) return tr('sidebar.unknown');
+    return "${(score * 100).toStringAsFixed(2)}%";
   }
 
+  String _formatFileSize(Map<String, dynamic> doc) {
+    final val = _getDocValue(
+        doc, ['size', 'fileSize', 'length', 'contentLength', 'file_size']);
+
+    num bytes = 0;
+    if (val is num) {
+      bytes = val;
+    } else if (val is String) {
+      bytes = num.tryParse(val) ?? 0;
+    }
+
+    if (bytes <= 0) return tr('sidebar.unknown');
+
+    const suffixes = ["B", "KB", "MB", "GB"];
+    var i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
+  }
+
+  String _getFileFormat(Map<String, dynamic> doc) {
+    final type = _getDocValue(doc, ['fileType', 'mimeType', 'type', 'format']);
+    if (type != null) {
+      final s = type.toString();
+      if (s.contains('/')) return s.split('/').last.toUpperCase();
+      return s.toUpperCase();
+    }
+
+    final String name =
+        (_getDocValue(doc, ['fileName', 'document_name']) ?? '').toString();
+    if (name.contains('.')) return name.split('.').last.toUpperCase();
+
+    return "FILE";
+  }
+
+  String _formatLabels(Map<String, dynamic> doc) {
+    final Set<String> allLabels = {};
+
+    final cat = _getDocValue(doc, ['categoryLabel', 'category']);
+    if (cat != null) {
+      if (cat is List)
+        allLabels.addAll(cat.map((e) => e.toString()));
+      else
+        allLabels.add(cat.toString());
+    }
+
+    final srv = _getDocValue(doc, ['serviceLabels', 'services']);
+    if (srv != null) {
+      if (srv is List)
+        allLabels.addAll(srv.map((e) => e.toString()));
+      else
+        allLabels.add(srv.toString());
+    }
+
+    final lbl = _getDocValue(doc, ['labels', 'tags', 'keywords']);
+    if (lbl != null) {
+      if (lbl is List)
+        allLabels.addAll(lbl.map((e) => e.toString()));
+      else
+        allLabels.add(lbl.toString());
+    }
+
+    if (allLabels.isEmpty) return tr('sidebar.unknown');
+    return allLabels.join(", ");
+  }
+
+  // RESTORED: Original File Opening Logic
   Future<void> _openDocument(Map<String, dynamic> doc) async {
+    final String url = _getDocValue(doc, ['url'])?.toString() ?? "";
+
+    if (url.startsWith('http') && !url.contains('<HOST>')) {
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      return;
+    }
+
     final String? fileId =
-        doc['id'] ?? doc['_id'] ?? doc['fileId'] ?? doc['document_id'];
+        _getDocValue(doc, ['id', '_id', 'fileId', 'document_id'])?.toString();
+
     if (fileId == null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Document ID not found")));
+          .showSnackBar(SnackBar(content: Text(tr('sidebar.docIdNotFound'))));
       return;
     }
 
     final String? token = widget.accessToken ?? _api.accessToken;
     if (token == null || token.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Not authenticated")));
+          .showSnackBar(SnackBar(content: Text(tr('sidebar.authError'))));
       return;
     }
 
@@ -123,245 +303,73 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Cannot open document on this platform")),
+          SnackBar(content: Text(tr('sidebar.launchError'))),
         );
       }
     }
   }
 
-  Widget _buildRightSidebarContent(BuildContext context, ThemeData theme) {
-    final colors = ThemeManager().getColors();
-    final bool isDark = ThemeManager().isDarkMode;
-
+  // ===========================================================================
+  // CONTENT BUILDER (Abstracted to support Drawer vs Panel)
+  // ===========================================================================
+  Widget _buildRightSidebarContent(BuildContext context, ThemeData theme,
+      Map<String, dynamic> colors, bool isDark) {
     return Material(
-      color: colors['background'], // Dynamic Background matching Sidebar
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // HEADER - Styled exactly like the Left Sidebar Tabs
-          // Height set to 72.0 to match standard Tab(icon+text) height
-          Container(
-            height: 72.0,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.centerLeft, // Vertically center the content
-            decoration: BoxDecoration(
-              color: colors['surface'],
-              border: Border(
-                bottom: BorderSide(
-                  color: colors['border'],
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.description_outlined,
-                    color: theme.primaryColor, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  "Related Documents",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: theme.primaryColor, // Matching Tab Label Color
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // CONTENT - Related Documents List
-          Expanded(
-            flex: 3,
-            child: widget.relatedDocuments.isEmpty
-                ? Center(
-                    child: Text(
-                      "No related documents found",
-                      style: TextStyle(
-                        color: colors['text'].withOpacity(0.6),
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: widget.relatedDocuments.length,
-                    itemBuilder: (context, index) {
-                      final doc = widget.relatedDocuments[index]
-                          as Map<String, dynamic>;
-
-                      return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(10),
-                          border: isDark
-                              ? Border.all(color: colors['border'])
-                              : null,
-                          boxShadow: isDark
-                              ? []
-                              : [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                        ),
-                        child: ExpansionTile(
-                          shape: const Border(), // Remove default borders
-                          leading: Icon(_documentIconClass(doc),
-                              color: theme.primaryColor, size: 24),
-                          title: Text(
-                            doc['title'] ??
-                                doc['document_name'] ??
-                                doc['documentName'] ??
-                                'Untitled Document',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: colors['text'],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            "Confidence: ${_formatScore(doc['score'] ?? doc['confidence'])}",
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colors['text'].withOpacity(0.6),
-                            ),
-                          ),
-                          children: [
-                            Padding(
-                              padding:
-                                  const EdgeInsets.all(16).copyWith(top: 0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildDetailRow(
-                                      "File Name",
-                                      doc['fileName'] ?? 'N/A',
-                                      theme,
-                                      colors['text']),
-                                  _buildDetailRow("Labels", _formatLabels(doc),
-                                      theme, colors['text']),
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: SizedBox(
-                                      height: 32,
-                                      child: ElevatedButton.icon(
-                                        icon: const Icon(Icons.open_in_new,
-                                            size: 14),
-                                        label: const Text("Open",
-                                            style: TextStyle(fontSize: 12)),
-                                        onPressed: () => _openDocument(doc),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: theme.primaryColor
-                                              .withOpacity(0.1),
-                                          foregroundColor: theme.primaryColor,
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
-
-          // Divider
-          Divider(height: 1, color: colors['border']),
-
-          // FAQ Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: colors['surface'],
-            width: double.infinity,
-            child: Row(
-              children: [
-                Icon(Icons.help_outline, size: 18, color: colors['text']),
-                const SizedBox(width: 8),
-                Text(
-                  "Frequently Asked Questions",
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colors['text'],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // FAQ Content
-          Expanded(
-            flex: 2,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: MarkdownBody(
-                data: _faqContent,
-                styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                  p: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors['text'], fontSize: 13, height: 1.5),
-                  h1: theme.textTheme.titleLarge
-                      ?.copyWith(color: colors['text']),
-                  h2: theme.textTheme.titleMedium
-                      ?.copyWith(color: colors['text']),
-                  h3: theme.textTheme.titleSmall
-                      ?.copyWith(color: colors['text']),
-                  listBullet: theme.textTheme.bodyMedium
-                      ?.copyWith(color: colors['text']),
-                ),
-                selectable: true,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bool isWideScreen = MediaQuery.of(context).size.width > 1200;
-
-    // 1. Persistent Panel on Wide Screens
-    if (isWideScreen) {
-      return SizedBox(
-        width: 360,
-        child: _buildRightSidebarContent(context, theme),
-      );
-    }
-
-    // 2. Mobile Drawer
-    // Identical structure to SidebarComponent to ensure perfect alignment
-    return Drawer(
-      elevation: 0,
-      backgroundColor: Colors.transparent, // Important: no background on drawer
-      child: SafeArea(
-        top: false, // We manually handle top (AppBar height)
-        bottom: true, // Respect bottom safe area (home indicator)
+      color: colors['background'],
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: colors['border'])),
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Empty space equal to AppBar height (60) so content starts below navbar
-            SizedBox(
-              height: kToolbarHeight + MediaQuery.of(context).padding.top,
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: colors['border'])),
+              ),
+              child: Text(
+                tr('sidebar.title'),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: colors['text'],
+                ),
+              ),
             ),
-            // The actual sidebar content
+
             Expanded(
-              child: _buildRightSidebarContent(context, theme),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle(tr('sidebar.relatedDocs'),
+                        Icons.description_outlined, colors),
+                    const SizedBox(height: 12),
+                    if (widget.relatedDocuments.isEmpty)
+                      _buildEmptyState(tr('sidebar.noDocuments'), colors)
+                    else
+                      ...widget.relatedDocuments
+                          .map((doc) => _buildDocItem(doc, colors, isDark)),
+                    const SizedBox(height: 32),
+                    _buildSectionTitle(
+                        tr('sidebar.faq'), Icons.help_outline, colors),
+                    const SizedBox(height: 12),
+                    if (_isLoadingFaq)
+                      const Center(
+                          child: Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ))
+                    else if (_faqItems.isEmpty)
+                      _buildEmptyState(tr('sidebar.faqError'), colors)
+                    else
+                      ..._faqItems
+                          .map((item) => _buildFaqItem(item, colors, isDark)),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -369,22 +377,185 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
     );
   }
 
+  // ===========================================================================
+  // MAIN BUILD METHOD (Restored Responsive Logic)
+  // ===========================================================================
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = ThemeManager().getColors();
+    final isDark = ThemeManager().isDarkMode;
+
+    // Check screen width to determine layout mode
+    final bool isWideScreen = MediaQuery.of(context).size.width > 1200;
+
+    // 1. Desktop/Tablet Persistent Panel
+    if (isWideScreen) {
+      return SizedBox(
+        width: 360,
+        child: _buildRightSidebarContent(context, theme, colors, isDark),
+      );
+    }
+
+    // 2. Mobile Drawer (RESTORED)
+    // Using Drawer widget ensures correct width (approx 304dp standard) and overlay behavior
+    return Drawer(
+      elevation: 16,
+      backgroundColor: Colors.transparent, // Avoid double backgrounds
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        child: Column(
+          children: [
+            // Spacer for AppBar
+            SizedBox(
+              height: kToolbarHeight + MediaQuery.of(context).padding.top,
+            ),
+            // Actual Content
+            Expanded(
+              child: _buildRightSidebarContent(context, theme, colors, isDark),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // WIDGET HELPERS
+  // ===========================================================================
+
+  Widget _buildSectionTitle(
+      String title, IconData icon, Map<String, dynamic> colors) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: colors['text'].withOpacity(0.6)),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: colors['text'].withOpacity(0.8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(String message, Map<String, dynamic> colors) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors['surface'],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors['border']),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: colors['text'].withOpacity(0.5),
+          fontSize: 13,
+          fontStyle: FontStyle.italic,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildDocItem(
+      Map<String, dynamic> doc, Map<String, dynamic> colors, bool isDark) {
+    final String title = _getDocValue(doc, [
+          'title',
+          'document_name',
+          'documentName',
+          'fileName',
+          'name'
+        ])?.toString() ??
+        tr('sidebar.unknown');
+
+    final String fileName =
+        _getDocValue(doc, ['fileName', 'document_name'])?.toString() ?? "";
+    final String fileSize = _formatFileSize(doc);
+    final String fileFormat = _getFileFormat(doc);
+    final String labels = _formatLabels(doc);
+    final String confidence = _formatScore(doc['score'] ?? doc['confidence']);
+    final String id =
+        _getDocValue(doc, ['id', '_id', 'document_id', 'fileId'])?.toString() ??
+            "";
+
+    return Card(
+      elevation: 0,
+      color: colors['surface'],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colors['border']),
+      ),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () => _openDocument(doc),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(_getDocumentIcon(doc),
+                      size: 20, color: colors['primary']),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: colors['text'],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Divider(height: 1)),
+              if (fileName.isNotEmpty && fileName != title)
+                _buildDetailRow("File Name", fileName, colors),
+              Row(
+                children: [
+                  Expanded(
+                      child: _buildDetailRow("Format", fileFormat, colors)),
+                  Expanded(child: _buildDetailRow("Size", fileSize, colors)),
+                ],
+              ),
+              if (id.isNotEmpty) _buildDetailRow(tr('sidebar.id'), id, colors),
+              _buildDetailRow(tr('sidebar.labels'), labels, colors),
+              _buildDetailRow(tr('sidebar.confidence'), confidence, colors),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDetailRow(
-      String label, String value, ThemeData theme, Color textColor) {
+      String label, String value, Map<String, dynamic> colors) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              "$label:",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: textColor.withOpacity(0.7),
-              ),
+          Text(
+            "$label: ",
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colors['text'].withOpacity(0.7),
             ),
           ),
           Expanded(
@@ -392,12 +563,61 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
               value,
               style: TextStyle(
                 fontSize: 11,
-                color: textColor,
+                color: colors['text'],
               ),
-              textAlign: TextAlign.left,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFaqItem(
+      Map<String, String> item, Map<String, dynamic> colors, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: colors['surface'],
+        border: Border.all(color: colors['border']),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          title: MarkdownBody(
+            data: item['question'] ?? '',
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors['text'],
+              ),
+            ),
+          ),
+          iconColor: colors['text'].withOpacity(0.5),
+          collapsedIconColor: colors['text'].withOpacity(0.5),
+          backgroundColor: isDark
+              ? Colors.white.withOpacity(0.02)
+              : Colors.grey.withOpacity(0.05),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            MarkdownBody(
+              data: item['answer'] ?? '',
+              styleSheet: MarkdownStyleSheet(
+                p: TextStyle(
+                    fontSize: 13,
+                    color: colors['text'].withOpacity(0.8),
+                    height: 1.4),
+              ),
+              onTapLink: (text, href, title) {
+                if (href != null) {
+                  launchUrl(Uri.parse(href),
+                      mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

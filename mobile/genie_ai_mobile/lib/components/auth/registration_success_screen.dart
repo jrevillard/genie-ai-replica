@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 class RegistrationSuccessScreen extends StatelessWidget {
   const RegistrationSuccessScreen({super.key});
@@ -21,14 +22,15 @@ class RegistrationSuccessScreen extends StatelessWidget {
             const Icon(Icons.check_circle_outline,
                 color: Colors.green, size: 100),
             const SizedBox(height: 24),
-            Text("Welcome to GENIE.AI!",
+            Text(tr('register.registrationSuccess'), // Used Generic Success
                 style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     color: colors['text'] // Dynamic Text
                     )),
             const SizedBox(height: 16),
-            Text("A verification email has been sent to $email.",
+            // Parameterized string: "A verification email has been sent to {email}"
+            Text(tr('register.verificationEmailSent', args: {'email': email}),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: colors['text'])),
             const SizedBox(height: 40),
@@ -38,8 +40,8 @@ class RegistrationSuccessScreen extends StatelessWidget {
                   minimumSize: const Size(200, 50)),
               onPressed: () =>
                   Navigator.pushReplacementNamed(context, '/login'),
-              child: const Text("Go to Login",
-                  style: TextStyle(
+              child: Text(tr('verification.proceedToLogin'),
+                  style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ]),

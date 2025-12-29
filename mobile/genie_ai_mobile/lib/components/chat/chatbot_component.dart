@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -13,6 +12,7 @@ import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/api_service.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -71,9 +71,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   // Quick Help Overlay Visibility
   bool _showQuickHelpOverlay = true;
 
-  // Welcome message & translations
-  String _welcomeMessage = "Welcome to GENIE.AI! How can I help you today?";
-  Map<String, dynamic> _translations = {};
+  // Welcome message
+  late String _welcomeMessage;
 
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
@@ -86,7 +85,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   void initState() {
     super.initState();
     debugPrint("[CHATBOT] Mounting component for user: ${widget.userId}");
-    _loadTranslations();
+
+    // Initialize default text from I18n
+    _conversationTitle = tr('chatbot.newChatTitle');
+    _welcomeMessage = tr('chatbot.welcomeMessage');
+
     _loadQuickHelpConfig();
     _titleController.text = _conversationTitle;
 
@@ -108,29 +111,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     super.dispose();
   }
 
-  Future<void> _loadTranslations() async {
-    try {
-      String assetPath = kIsWeb ? 'i18n/en.json' : 'assets/i18n/en.json';
-      final String jsonString = await rootBundle.loadString(assetPath);
-      setState(() {
-        _translations = jsonDecode(jsonString);
-      });
-    } catch (e) {
-      debugPrint("[CHATBOT] Failed to load translations: $e");
-    }
-  }
-
+  // Bridging method for translations
   String _t(String key, [String fallback = '']) {
-    final keys = key.split('.');
-    dynamic current = _translations;
-    for (var k in keys) {
-      if (current is Map<String, dynamic> && current.containsKey(k)) {
-        current = current[k];
-      } else {
-        return fallback.isNotEmpty ? fallback : key;
-      }
-    }
-    return current?.toString() ?? (fallback.isNotEmpty ? fallback : key);
+    // tr() handles the lookup globally
+    return tr(key);
   }
 
   Future<void> _loadQuickHelpConfig() async {
@@ -256,7 +240,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       setState(() {
         _currentConversationId = conv['_id'] ?? conv['_key'];
-        _conversationTitle = conv['title'] ?? "Untitled Chat";
+        _conversationTitle = conv['title'] ?? tr('chatbot.newChatTitle');
         _titleController.text = _conversationTitle;
         _messages = loadedMessages;
         _lastSavedMessageCount = loadedMessages.length;
@@ -277,7 +261,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       _scrollToBottom(animated: false);
       _updateQuickHelpVisibility();
     } catch (e) {
-      NotificationService.error("Failed to load conversation");
+      NotificationService.error(tr('chatbot.loadError'));
       debugPrint("[CHATBOT] Load error: $e");
     } finally {
       setState(() => _isLoading = false);
@@ -295,7 +279,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   void _resetChat({bool keepLoading = false}) {
     setState(() {
       _currentConversationId = null;
-      _conversationTitle = "New Chat";
+      _conversationTitle = tr('chatbot.newChatTitle');
       _titleController.text = _conversationTitle;
       _messages = [];
       _relatedDocuments = [];
@@ -344,20 +328,24 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         };
       }).toList();
 
+      // FIX: Pass the currently selected language to the backend
+      final String currentLanguage = I18nService().currentLocale.languageCode;
+
       final response = await _chatBotProxy.submitQuery(
         sessionId: sessionId,
         messages: messagesForApi,
         userId: widget.userId,
         categoryId: _selectedCategoryId,
         contextLabels: _selectedCategoryName,
+        language: currentLanguage, // ADDED: Language Parameter
       );
 
       final String? queryId = response['queryId'];
       final Map<String, dynamic>? metadata = response['metadata'];
 
       final assistantMessage = {
-        'id': response['queryId'], // Capture Query ID for feedback
-        'queryId': response['queryId'], // Redundant but explicit
+        'id': response['queryId'],
+        'queryId': response['queryId'],
         'role': 'assistant',
         'content': response['response'] ?? 'No response received',
         'timestamp': DateTime.now().toIso8601String(),
@@ -381,7 +369,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
-      NotificationService.error("Failed to get response");
+      NotificationService.error(tr('chatbot.processingError'));
       debugPrint("[CHATBOT] Send error: $e");
     }
   }
@@ -412,7 +400,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
   void _quickHelpPressed(Map<String, dynamic> button) {
     final String promptKey = button['promptKey'] as String;
-    final String translatedPrompt = _t(promptKey, promptKey);
+    final String translatedPrompt = _t(promptKey);
 
     setState(() {
       _showQuickHelpOverlay = false;
@@ -430,32 +418,29 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         message: message,
         translate: _t,
         onSubmit: (feedbackData) async {
-          // 1. Get Query ID from the message (populated in _sendMessage or _loadConversation)
           final String? queryId = message['queryId'] ?? message['id'];
 
           if (queryId == null) {
-            NotificationService.error("Cannot rate this message (No Query ID)");
+            NotificationService.error(tr('feedback.error'));
             return;
           }
 
           try {
-            // 2. Prepare payload for ChatbotProxy
             final payload = {
               'userId': widget.userId,
-              'rating': feedbackData['rating'], // e.g. 1-5
-              'feedbackText': feedbackData['text'], // comments
-              'thumb': feedbackData['thumbFeedback'], // 'up' or 'down'
+              'rating': feedbackData['rating'],
+              'feedbackText': feedbackData['text'],
+              'thumb': feedbackData['thumbFeedback'],
               'metadata': {'skinTone': feedbackData['skinTone']}
             };
 
-            // 3. Submit via Proxy
             await _chatBotProxy.submitFeedback(
                 queryId: queryId, feedback: payload);
 
-            NotificationService.success("Thanks for your feedback!");
+            NotificationService.success(tr('feedback.success'));
           } catch (e) {
             debugPrint("[FEEDBACK] Error submitting: $e");
-            NotificationService.error("Failed to submit feedback.");
+            NotificationService.error(tr('feedback.error'));
           }
         },
       ),
@@ -473,7 +458,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     setState(() {
       _conversationTitle = _titleController.text.trim().isEmpty
-          ? "Untitled Chat"
+          ? tr('chatbot.newChatTitle')
           : _titleController.text.trim();
     });
 
@@ -532,11 +517,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         _lastSavedMessageCount = _messages.length;
       });
 
-      NotificationService.success("Conversation saved");
+      NotificationService.success(tr('chatbot.chatSaved'));
       widget.onRefreshSidebar();
     } catch (e) {
       debugPrint("[SAVE] ERROR: $e");
-      NotificationService.error("Failed to save conversation");
+      NotificationService.error(tr('chatbot.errorUpdatingChat'));
     }
   }
 
@@ -612,10 +597,10 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
       await Printing.sharePdf(
           bytes: await pdf.save(), filename: '$filename.pdf');
-      NotificationService.success("Chat exported successfully");
+      NotificationService.success(tr('chatbot.exportSuccess'));
       setState(() => _showExportDialog = false);
     } catch (e) {
-      NotificationService.error("Failed to export PDF");
+      NotificationService.error(tr('chatbot.exportError'));
     }
   }
 
@@ -648,14 +633,15 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         size: 20, color: colors['primary']),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text("Context: $_selectedCategoryName",
+                      child: Text(
+                          "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
                           style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: colors['text']),
                           overflow: TextOverflow.ellipsis),
                     ),
                     Tooltip(
-                        message: "Remove Context",
+                        message: tr('chatbot.removeContext'),
                         child: IconButton(
                             icon: Icon(Icons.close,
                                 size: 18, color: colors['text']),
@@ -675,12 +661,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                 itemCount: _messages.length + (_isLoading ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == _messages.length && _isLoading) {
-                    return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
+                    return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         child: Row(children: [
-                          CircularProgressIndicator(strokeWidth: 2),
-                          SizedBox(width: 12),
-                          Text("Genie is thinking...")
+                          const CircularProgressIndicator(strokeWidth: 2),
+                          const SizedBox(width: 12),
+                          Text(tr('chatbot.thinking'))
                         ]));
                   }
 
@@ -738,7 +724,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                 children: [
                                   if (msg['confidence'] != null)
                                     Text(
-                                      "Confidence: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                      "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
                                       style: TextStyle(
                                           fontSize: 11,
                                           color:
@@ -747,7 +733,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                                     ),
                                   // Feedback Button
                                   Tooltip(
-                                    message: "Rate this response",
+                                    message: tr('feedback.title'),
                                     child: InkWell(
                                       onTap: () => _openFeedbackDialog(msg),
                                       borderRadius: BorderRadius.circular(12),
@@ -785,11 +771,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                     IconButton(
                         icon: Icon(Icons.add_circle_outline,
                             color: colors['text']),
-                        tooltip: "New Chat",
+                        tooltip: tr('chatbot.newChatTitle'),
                         onPressed: startNewChat),
                     IconButton(
                         icon: Icon(Icons.save_outlined, color: colors['text']),
-                        tooltip: "Save Chat",
+                        tooltip: tr('chatbot.saveChat'),
                         onPressed: () {
                           _titleController.text = _conversationTitle;
                           setState(() => _showSaveDialog = true);
@@ -797,7 +783,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                     IconButton(
                         icon: Icon(Icons.picture_as_pdf_outlined,
                             color: colors['text']),
-                        tooltip: "Export to PDF",
+                        tooltip: tr('chatbot.exportChat'),
                         onPressed: () {
                           _exportFilename =
                               "chat_${DateTime.now().toIso8601String().split('T').first}";
@@ -813,7 +799,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         focusNode: _inputFocusNode,
                         style: TextStyle(color: colors['text']),
                         decoration: InputDecoration(
-                          hintText: "Type your message...",
+                          hintText: tr('chatbot.placeholder'),
                           hintStyle: TextStyle(
                               color:
                                   isDark ? Colors.grey[500] : Colors.grey[600]),
@@ -858,7 +844,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  _t('chatbot.whatCanIHelp', 'How can I help you today?'),
+                  tr('chatbot.whatCanIHelp'),
                   style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold, color: colors['text']),
                   textAlign: TextAlign.center,
@@ -882,7 +868,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
                         itemBuilder: (context, index) {
                           final button = _quickHelpButtons[index];
                           final String titleKey = button['titleKey'] as String;
-                          final String translatedTitle = _t(titleKey, titleKey);
+                          final String translatedTitle = _t(titleKey);
                           final String iconAsset =
                               button['iconAsset'] as String;
                           final Map<String, dynamic>? styles = button['styles'];
@@ -960,14 +946,14 @@ class ChatBotComponentState extends State<ChatBotComponent> {
             ),
           ),
 
-        // Confirm Dialogs & Save/Export Alerts (Unchanged)
+        // Confirm Dialogs & Save/Export Alerts
         ConfirmDialog(
           visible: _showNewChatConfirm,
-          title: "Start New Chat?",
-          message: "You have unsaved changes. Start new chat anyway?",
-          confirmText: "Discard & New",
-          cancelText: "Cancel",
-          secondaryText: "Save First",
+          title: tr('chatbot.dialogs.newChatTitle'),
+          message: tr('chatbot.dialogs.newChatContent'),
+          confirmText: tr('chatbot.dialogs.actions.discardAndNew'),
+          cancelText: tr('common.cancel'),
+          secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
           onConfirm: () {
             setState(() => _showNewChatConfirm = false);
             _resetChat();
@@ -981,11 +967,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         ),
         ConfirmDialog(
           visible: _showLoadConfirm,
-          title: "Load Conversation?",
-          message: "You have unsaved changes. Load anyway?",
-          confirmText: "Discard & Load",
-          cancelText: "Cancel",
-          secondaryText: "Save First",
+          title: tr('chatbot.dialogs.loadChatTitle'),
+          message: tr('chatbot.dialogs.loadChatContent'),
+          confirmText: tr('chatbot.dialogs.actions.discardAndLoad'),
+          cancelText: tr('common.cancel'),
+          secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
           onConfirm: () {
             setState(() => _showLoadConfirm = false);
             _loadConversationDirect(_pendingLoadConversationId!);
@@ -999,41 +985,41 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         ),
         if (_showSaveDialog)
           AlertDialog(
-            title: const Text("Save Conversation"),
+            title: Text(tr('chatbot.dialogs.saveTitle')),
             content: TextField(
                 controller: _titleController,
-                decoration: const InputDecoration(
-                    hintText: "Enter conversation title",
-                    border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                    hintText: tr('chatbot.dialogs.saveHint'),
+                    border: const OutlineInputBorder()),
                 onChanged: (v) => _conversationTitle = v,
                 autofocus: true),
             actions: [
               TextButton(
                   onPressed: () => setState(() => _showSaveDialog = false),
-                  child: const Text("Cancel")),
+                  child: Text(tr('common.cancel'))),
               ElevatedButton(
                   onPressed: () {
                     saveConversation().then((_) {});
                   },
-                  child: const Text("Save"))
+                  child: Text(tr('common.save')))
             ],
           ),
         if (_showExportDialog)
           AlertDialog(
-            title: const Text("Export Chat to PDF"),
+            title: Text(tr('chatbot.dialogs.exportTitle')),
             content: TextField(
                 decoration:
-                    const InputDecoration(hintText: "Filename (without .pdf)"),
+                    InputDecoration(hintText: tr('chatbot.dialogs.exportHint')),
                 onChanged: (v) => _exportFilename = v,
                 controller: TextEditingController(text: _exportFilename)),
             actions: [
               TextButton(
                   onPressed: () => setState(() => _showExportDialog = false),
-                  child: const Text("Cancel")),
+                  child: Text(tr('common.cancel'))),
               ElevatedButton(
                   onPressed:
                       _exportFilename.trim().isEmpty ? null : exportChatToPDF,
-                  child: const Text("Export"))
+                  child: Text(tr('chatbot.dialogs.actions.export')))
             ],
           ),
       ],

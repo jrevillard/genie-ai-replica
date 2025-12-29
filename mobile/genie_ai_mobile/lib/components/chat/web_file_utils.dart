@@ -4,6 +4,7 @@ import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:genie_ai_mobile/services/api_service.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 /// WEB implementation.
 /// This file is ONLY imported when the app runs on the browser.
@@ -25,7 +26,7 @@ Future<void> openWebFile({
 
   if (openedWindow == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Popup blocked. Please allow popups.")),
+      SnackBar(content: Text(tr('common.popupBlocked'))), // TRANSLATED
     );
     return;
   }
@@ -35,7 +36,7 @@ Future<void> openWebFile({
     final request = html.HttpRequest();
     request.open('GET', viewUrl);
     request.setRequestHeader('Authorization', 'Bearer $accessToken');
-    request.responseType = 'blob';
+    request.responseType = 'blob'; // restored BLOB type
 
     final c = Completer<void>();
 
@@ -91,12 +92,12 @@ Future<void> openWebFile({
     } catch (_) {}
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Error opening document: $e")),
+      SnackBar(content: Text("${tr('sidebar.launchError')}: $e")),
     );
   }
 }
 
-// --- HELPER FUNCTIONS ---
+// --- HELPER FUNCTIONS (Restored Logic) ---
 
 void _handleMarkdownRender(html.WindowBase win, html.Blob blob,
     Map<String, dynamic> doc, Completer c, bool isDark) {

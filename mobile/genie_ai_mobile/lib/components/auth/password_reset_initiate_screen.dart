@@ -3,6 +3,7 @@ import 'package:genie_ai_mobile/services/password_proxy.dart';
 import 'package:genie_ai_mobile/services/user_service.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 class PasswordResetInitiateScreen extends StatefulWidget {
   final bool isEmbedded; // Props from Vue
@@ -40,9 +41,20 @@ class _PasswordResetInitiateScreenState
     return emailRegex.hasMatch(_emailController.text);
   }
 
-  void _setCurrentUserEmail() {
+  // FIXED: Changed to async/await to safely handle the Future
+  Future<void> _setCurrentUserEmail() async {
     if (_emailController.text.isEmpty && widget.isEmbedded) {
       // Logic for fetching logged-in user email if resetting from inside the app
+      try {
+        final user = await UserService().getCurrentUser();
+        if (user != null && user['email'] != null && mounted) {
+          setState(() {
+            _emailController.text = user['email'];
+          });
+        }
+      } catch (e) {
+        debugPrint("Error fetching current user email: $e");
+      }
     }
   }
 
@@ -50,7 +62,7 @@ class _PasswordResetInitiateScreenState
     setState(() => _emailError = "");
 
     if (!_isValidEmail) {
-      setState(() => _emailError = "Invalid email address");
+      setState(() => _emailError = tr('passwordReset.invalidEmail'));
       return;
     }
 
@@ -103,7 +115,7 @@ class _PasswordResetInitiateScreenState
                 _buildHeader(colors),
                 const SizedBox(height: 10),
                 Text(
-                  "Reset Password",
+                  tr('passwordReset.resetPassword'),
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w500,
@@ -135,7 +147,7 @@ class _PasswordResetInitiateScreenState
       ),
       const SizedBox(height: 10),
       Text(
-        "GENIE.AI",
+        tr('passwordReset.appTitle'),
         style: TextStyle(
             fontSize: 28, fontWeight: FontWeight.bold, color: colors['text']),
       ),
@@ -147,7 +159,7 @@ class _PasswordResetInitiateScreenState
       Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          "Email Address",
+          tr('passwordReset.emailLabel'),
           style: TextStyle(
               fontSize: 14, fontWeight: FontWeight.w500, color: colors['text']),
         ),
@@ -159,7 +171,7 @@ class _PasswordResetInitiateScreenState
         onChanged: (_) => setState(() {}),
         style: TextStyle(color: colors['text']),
         decoration: InputDecoration(
-          hintText: "Enter your email",
+          hintText: tr('passwordReset.emailPlaceholder'),
           hintStyle:
               TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
           filled: true,
@@ -186,8 +198,8 @@ class _PasswordResetInitiateScreenState
                 width: 20,
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2))
-            : const Text("Reset Password",
-                style: TextStyle(
+            : Text(tr('passwordReset.resetButton'),
+                style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     ]);
@@ -202,15 +214,16 @@ class _PasswordResetInitiateScreenState
         border: Border.all(color: const Color(0x4D10B981)),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Column(children: [
-        Text("Reset Request Successful",
-            style: TextStyle(
+      child: Column(children: [
+        Text(tr('passwordReset.resetRequestSuccess'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
                 color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text(
-          "Please check your email for further instructions.",
+          tr('passwordReset.checkEmail'),
           textAlign: TextAlign.center,
-          style: TextStyle(color: Color(0xFF10B981), fontSize: 13),
+          style: const TextStyle(color: Color(0xFF10B981), fontSize: 13),
         ),
       ]),
     );
@@ -220,18 +233,18 @@ class _PasswordResetInitiateScreenState
     return Column(children: [
       const SizedBox(height: 16),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text("Remember password? ",
+        Text(tr('passwordReset.rememberPassword') + ' ',
             style:
                 TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700])),
         GestureDetector(
           onTap: () => Navigator.pushReplacementNamed(context, '/login'),
-          child: Text("Back to Login",
+          child: Text(tr('passwordReset.backToLogin'),
               style: TextStyle(
                   color: colors['primary'], fontWeight: FontWeight.bold)),
         ),
       ]),
       const SizedBox(height: 24),
-      Text("If you need assistance, please contact support.",
+      Text(tr('passwordReset.supportMessage'),
           style: TextStyle(
               fontSize: 11, color: isDark ? Colors.grey[500] : Colors.grey)),
       const SizedBox(height: 8),
@@ -249,7 +262,8 @@ class _PasswordResetInitiateScreenState
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         onPressed: () => Navigator.of(context).pop(),
-        child: Text("Cancel", style: TextStyle(color: colors['primary'])),
+        child: Text(tr('common.cancel'),
+            style: TextStyle(color: colors['primary'])),
       ),
     );
   }

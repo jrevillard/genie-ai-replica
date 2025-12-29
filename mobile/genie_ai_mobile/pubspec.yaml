@@ -62,7 +62,7 @@ flutter:
     - assets/config/quickhelp/
     - assets/FAQ.md
     - assets/icons/
-    - assets/i18n/en.json
+    #- assets/i18n/en.json
   fonts:
     - family: Roboto
       fonts:

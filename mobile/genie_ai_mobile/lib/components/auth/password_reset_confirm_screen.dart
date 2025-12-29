@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/services/password_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 class PasswordResetConfirmScreen extends StatefulWidget {
   final String token;
@@ -19,7 +20,11 @@ class _PasswordResetConfirmScreenState
   bool _success = false;
 
   Future<void> _handleReset() async {
-    if (_password.text != _confirm.text) return;
+    if (_password.text != _confirm.text) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(tr('passwordResetConfirm.passwordsDoNotMatch'))));
+      return;
+    }
     setState(() => _isLoading = true);
     try {
       await PasswordProxy().resetPassword(widget.token, _password.text);
@@ -28,8 +33,8 @@ class _PasswordResetConfirmScreenState
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       });
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Reset failed: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("${tr('passwordResetConfirm.resetFailed')}: $e")));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -37,7 +42,6 @@ class _PasswordResetConfirmScreenState
 
   @override
   Widget build(BuildContext context) {
-    // Dynamic Colors from ThemeManager
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
 
@@ -46,20 +50,25 @@ class _PasswordResetConfirmScreenState
     return Scaffold(
       backgroundColor: colors['background'],
       appBar: AppBar(
-        title: const Text("Set New Password"),
-        backgroundColor: colors['primary'],
-        foregroundColor: Colors.white,
+        title: Text(tr('passwordResetConfirm.resetPassword')),
+        backgroundColor: colors['background'],
+        elevation: 0,
+        iconTheme: IconThemeData(color: colors['text']),
+        titleTextStyle: TextStyle(
+            color: colors['text'], fontSize: 20, fontWeight: FontWeight.bold),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24),
         child: Column(children: [
-          Text("Please enter your new password below.",
-              style: TextStyle(color: colors['text'])),
-          const SizedBox(height: 24),
-          _buildTextField(_password, "New Password", colors, isDark),
+          _buildTextField(_password,
+              tr('passwordResetConfirm.newPasswordLabel'), colors, isDark),
           const SizedBox(height: 16),
-          _buildTextField(_confirm, "Confirm Password", colors, isDark),
-          const SizedBox(height: 32),
+          _buildTextField(
+              _confirm,
+              tr('passwordResetConfirm.confirmNewPasswordLabel'),
+              colors,
+              isDark),
+          const SizedBox(height: 24),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: colors['primary'],
@@ -67,7 +76,7 @@ class _PasswordResetConfirmScreenState
               minimumSize: const Size(double.infinity, 45),
             ),
             onPressed: _isLoading ? null : _handleReset,
-            child: const Text("Reset Password"),
+            child: Text(tr('passwordResetConfirm.resetButton')),
           ),
         ]),
       ),
@@ -98,13 +107,13 @@ class _PasswordResetConfirmScreenState
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.check_circle, size: 80, color: Colors.green),
           const SizedBox(height: 16),
-          Text("Success!",
+          Text(tr('passwordResetConfirm.resetSuccess'),
               style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: colors['text'])),
           const SizedBox(height: 8),
-          Text("Redirecting to login...",
+          Text(tr('passwordResetConfirm.redirecting'),
               style: TextStyle(color: colors['text'])),
         ]),
       ),

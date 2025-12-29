@@ -10,7 +10,8 @@ class ChatbotProxy {
     required List<Map<String, dynamic>> messages,
     required String userId,
     String? categoryId,
-    String? contextLabels, // NEW: Accept labels (e.g. "Mountains, Rivers")
+    String? contextLabels,
+    String? language, // ADDED: Language parameter
   }) async {
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
@@ -19,14 +20,19 @@ class ChatbotProxy {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    // FIX: Construct the 'context' object expected by the backend validation
-    if ((categoryId != null && categoryId.isNotEmpty) || 
+    // Add language to payload if present
+    if (language != null && language.isNotEmpty) {
+      payload['language'] = language;
+    }
+
+    // Construct the 'context' object expected by the backend validation
+    if ((categoryId != null && categoryId.isNotEmpty) ||
         (contextLabels != null && contextLabels.isNotEmpty)) {
       payload['context'] = {
         if (categoryId != null) 'categoryId': categoryId,
         if (contextLabels != null) 'labels': contextLabels,
       };
-      
+
       // Keep root categoryId for backward compatibility if needed
       if (categoryId != null) payload['categoryId'] = categoryId;
     }
@@ -51,21 +57,20 @@ class ChatbotProxy {
   }
 
   /// Submits feedback for a specific query response
-  /// Mirrors chatbotService.js submitFeedback
   Future<Map<String, dynamic>> submitFeedback({
     required String queryId,
     required Map<String, dynamic> feedback,
   }) async {
     try {
       debugPrint("[CHATBOT_PROXY] Submitting feedback for $queryId: $feedback");
-      
+
       final response = await _api.post('queries/$queryId/feedback', feedback);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final Map<String, dynamic> data = jsonDecode(response.body);
         return data;
       } else {
-        throw Exception('Feedback submission failed: ${response.statusCode}');
+        throw Exception('Feedback failed: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint("[CHATBOT_PROXY] Feedback error: $e");

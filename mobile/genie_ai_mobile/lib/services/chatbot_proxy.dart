@@ -49,4 +49,27 @@ class ChatbotProxy {
       rethrow;
     }
   }
+
+  /// Submits feedback for a specific query response
+  /// Mirrors chatbotService.js submitFeedback
+  Future<Map<String, dynamic>> submitFeedback({
+    required String queryId,
+    required Map<String, dynamic> feedback,
+  }) async {
+    try {
+      debugPrint("[CHATBOT_PROXY] Submitting feedback for $queryId: $feedback");
+      
+      final response = await _api.post('queries/$queryId/feedback', feedback);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        return data;
+      } else {
+        throw Exception('Feedback submission failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint("[CHATBOT_PROXY] Feedback error: $e");
+      rethrow;
+    }
+  }
 }

@@ -494,7 +494,7 @@
           <button
             class="btn btn-danger"
             @click="handleDelete"
-            :disabled="file.dataprep.status?.toLowerCase() === 'ingested'"
+            :disabled="isFileLocked"
           >
             {{ translate("common.delete", "Delete") }}
           </button>
@@ -688,14 +688,21 @@ export default {
       // Regular file: show if not purely external (or if viewUrl logic handles it)
       return true;
     },
+    // Helper to get normalized status
+    currentStatus() {
+      return this.file && this.file.dataprep.status ? this.file.dataprep.status.toLowerCase() : "";
+    },
+    // FIX: Lock delete/edit actions if file is ingested OR currently ingesting
+    isFileLocked() {
+      const s = this.currentStatus;
+      return s === 'ingested' || s === 'ingested with warnings' || s === 'ingesting';
+    },
     mainAction() {
       if (!this.file) return {};
-      const status = this.file.dataprep.status
-        ? this.file.dataprep.status.toLowerCase()
-        : "";
+      const status = this.currentStatus;
       const hasLabels = this.editableFile.labels.length > 0;
 
-      // Retract logic
+      // Retract logic (Only if Ingested)
       if (status === "ingested" || status === "ingested with warnings") {
         return {
           text: this.translate("details.buttons.retract", "Retract"),
@@ -712,11 +719,14 @@ export default {
         isCrawlPending = true;
       }
 
+      // FIX: Disable Ingest button if status is 'ingesting'
+      const isIngesting = status === 'ingesting';
+
       return {
         text: this.translate("details.buttons.ingest", "Ingest"),
         class: "btn btn-success",
-        // Disable if: Save disabled OR No labels OR Crawl not finished
-        disabled: this.isSaveDisabled || !hasLabels || isCrawlPending,
+        // Disable if: Save disabled OR No labels OR Crawl not finished OR Ingesting
+        disabled: this.isSaveDisabled || !hasLabels || isCrawlPending || isIngesting,
         handler: this.handleIngest,
       };
     },

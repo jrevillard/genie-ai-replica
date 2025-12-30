@@ -41,17 +41,27 @@ try:
     # configuring Docling to use easyocr (more lightweight than OPEA default library)
     ocr_options = EasyOcrOptions(lang=['en']) 
     
-    # FIX: Force CPU usage to prevent CUDA OOM when GPU is full (e.g. running VLLM)
+    # FIX: Configurable Accelerator Device (Default: CUDA)
+    # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CUDA
+    env_device = os.getenv("DOCLING_DEVICE", "cuda").lower()
+    
+    if env_device == "cpu":
+        logger.info("Docling configured to use CPU.")
+        device_selection = AcceleratorDevice.CPU
+    else:
+        logger.info("Docling configured to use CUDA (GPU).")
+        device_selection = AcceleratorDevice.CUDA
+
     accelerator_options = AcceleratorOptions(
         num_threads=4, 
-        device=AcceleratorDevice.CPU
+        device=device_selection 
     )
 
     # Pipeline for PDFs and Images (for layout analysis and OCR)
     pdf_and_image_pipeline_config = PdfPipelineOptions(
         do_ocr=True,  
         ocr_options=ocr_options,
-        accelerator_options=accelerator_options # FIX: Apply CPU config
+        accelerator_options=accelerator_options
     )
 
     # Map PDF file type to relevant pipeline

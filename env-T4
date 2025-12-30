@@ -166,6 +166,7 @@ GUARDRAIL_URL=http://guardrail:9090/v1/guardrails
 E2E_CPU_URL=http://localhost:3000
 ARANGO_GRAPH_NAME=GRAPH_TEST
 MAX_CONCURRENT_BATCHES=5
+DOCLING_DEVICE=cpu
 
 # ========= DATAPREP GENIE-AI EXTENSIONS =========
 # URL for the Node.js Document Repository Service (internal docker network name)

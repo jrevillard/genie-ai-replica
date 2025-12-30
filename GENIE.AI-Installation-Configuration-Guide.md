@@ -442,6 +442,7 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | DATAPREP\_EMBED\_RELATIONSHIPS | Embed graph relationships. | true |
 | DATAPREP\_EMBED\_SOURCE\_DOCUMENTS | Embed original source documents. | true |
 | MAX\_CONCURRENT\_BATCHES | Limit on concurrent processing batches for data preparation.  | 5 |
+| DOCLING\_DEVICE | Configure docking to user either cuda or cpu (cuda|cpu). Cuda will be much faster for document processing. | cuda |
 | DATAPREP\_COMPONENT\_NAME | Name of the specific dataprep component. | GENIE\_DATAPREP\_ARANGODB |
 | DOCUMENT\_REPOSITORY\_URL | Internal URL for the Node.js Document Repository Service. | `http://document-repository:3001` |
 | BACKEND\_SERVICE\_URL | URL to the backend component used to fetch knowledge hierarchy.  | `http://backend:3000` |

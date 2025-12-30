@@ -9,7 +9,7 @@ import asyncio
 import aiohttp
 import fcntl  # Added for file locking
 from typing import List, Optional, Union, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from numpy import dot
 from numpy.linalg import norm
@@ -93,7 +93,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     def __init__(self, name: str, description: str, config: dict = None):
         super().__init__(name, description, config)
-        # Token is fetched dynamically via _get_auth_token
+        # Token caching state
+        self._cached_token = None
+        self._token_expiry = None
+        
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
@@ -120,7 +123,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
     async def _get_auth_token(self):
-        """Fetches a fresh JWT from the internal http-service."""
+        """Fetches a fresh JWT from the internal http-service with caching to prevent 429 errors."""
+        now = datetime.now()
+        
+        # FIX: Check cache first
+        if self._cached_token and self._token_expiry and now < self._token_expiry:
+            return self._cached_token
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(GET_AUTH_TOKEN_URL) as response:
@@ -128,6 +137,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         data = await response.json()
                         token = data.get("accessToken")
                         if token:
+                            # Cache the token. Assuming standard 1h expiry, we cache for 50 mins to be safe.
+                            self._cached_token = token
+                            self._token_expiry = now + timedelta(minutes=50)
                             return token
                         logger.error(f"Auth Service returned 200 but no accessToken: {data}")
                     else:

@@ -98,8 +98,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         self._token_expiry = None
         # FIX: Async Lock to prevent race conditions where 50 tasks fetch token at once
         self._token_lock = asyncio.Lock()
-        # FIX: Semaphore to limit concurrent log requests (prevents 429 on Doc Repo)
-        self._log_semaphore = asyncio.Semaphore(5) 
+        # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
+        # The backend rate limit is now disabled, so we can send logs much faster.
+        self._log_semaphore = asyncio.Semaphore(100) 
         
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
@@ -121,7 +122,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
         print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
         print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
-        print(f" MAX CONCURRENT_BATCHES: {MAX_CONCURRENT_BATCHES}")
+        print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
         print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---

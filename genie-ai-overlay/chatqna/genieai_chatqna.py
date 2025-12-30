@@ -809,38 +809,43 @@ class ChatQnAService:
         if original_language and original_language.strip() != "EN":
             # Load Language Codes
             language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
-            if original_language.lower() not in language_codes:
-                logger.warning(f"Warning: Language '{original_language}' not found in language codes. Defaulting to 'English' and omit translation")
-            else:
-                original_language = language_codes[original_language.lower()]
-                if logflag:
-                    logger.debug(f"LLM reponse translated into: {original_language}")
             
-                prompt = f"Translate the following text to {original_language}. Please only output the translated text. No additional commentary.\n\nTEXT: {llm_response} \n\nTRANSLATION: "
-                if logflag:
-                    logger.debug(f'Prompt for translating the output: {prompt}')
+            # FIX: Fallback logic for language codes. If not in map, use the original code.
+            target_lang_name = original_language
+            if original_language.lower() in language_codes:
+                target_lang_name = language_codes[original_language.lower()]
+            else:
+                logger.warning(f"Warning: Language '{original_language}' not found in language codes. Attempting to translate using code directly.")
 
-                payload = {
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
-                    "stream": False 
-                }
+            if logflag:
+                logger.debug(f"LLM reponse translated into: {target_lang_name}")
+        
+            prompt = f"Translate the following text to {target_lang_name}. Please only output the translated text. No additional commentary.\n\nTEXT: {llm_response} \n\nTRANSLATION: "
+            if logflag:
+                logger.debug(f'Prompt for translating the output: {prompt}')
 
-                try:
-                    async with httpx.AsyncClient(timeout=60.0) as client:
-                        response = await client.post(
-                            f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
-                            json=payload,
-                            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
-                        )
-                        response.raise_for_status()
-                        response_data = response.json()
-                        translated_blob = response_data["choices"][0]["message"]["content"]
-                        final_text_response = translated_blob.strip()
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
+                "stream": False 
+            }
 
-                except Exception as e:
-                    logger.error(f"An error occurred during history translation: {e}")
-                    final_text_response = llm_response
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"http://{TRANSLATION_SERVICE_HOST_IP}:{TRANSLATION_SERVICE_PORT}/v1/chat/completions",
+                        json=payload,
+                        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"}
+                    )
+                    response.raise_for_status()
+                    response_data = response.json()
+                    translated_blob = response_data["choices"][0]["message"]["content"]
+                    final_text_response = translated_blob.strip()
+
+            except Exception as e:
+                # FIX: Corrected error message to refer to "response" translation, not "history"
+                logger.error(f"An error occurred during response translation: {e}")
+                final_text_response = llm_response
         else:
             final_text_response = llm_response
         
@@ -977,5 +982,3 @@ if __name__ == "__main__":
         chatqna.add_remote_service()
 
     chatqna.start()
-
-

@@ -78,6 +78,7 @@ COPY --chown=user:user genie-ai-overlay/core/constants.py /home/user/comps/cores
 
 # This copies your main script
 COPY --chown=user:user genie-ai-overlay/chatqna/genieai_chatqna.py /app/ChatQnA/genieai_chatqna.py
+COPY --chown=user:user genie-ai-overlay/chatqna/language_codes.json /app/ChatQnA/language_codes.json
 
 # Step E: Run our new GENIE-AI entry point
 ENTRYPOINT ["bash", "/app/ChatQnA/entrypoint.sh"]

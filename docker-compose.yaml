@@ -502,6 +502,9 @@ services:
       --kv-cache-dtype=${VLLM_TRANSLATION_KV_CACHE_DTYPE:-auto}
       --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
       --port ${VLLM_TRANSLATION_SERVICE_PORT}
+      --no-enable-chunked-prefill
+      --max-num-seqs 16
+
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - VLLM_ATTENTION_BACKEND=TORCH_SDPA

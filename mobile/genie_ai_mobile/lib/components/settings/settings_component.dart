@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:genie_ai_mobile/services/user_service.dart';
 import 'package:genie_ai_mobile/services/password_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 
 // Component Imports
 import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
@@ -131,8 +132,11 @@ class _SettingsComponentState extends State<SettingsComponent> {
   }
   */
 
+  /// FIXED: Connected to I18nService
   String translate(String key, String fallback) {
-    return fallback;
+    final String val = tr(key);
+    // If tr() returns the key itself (missing translation), use fallback
+    return val == key ? fallback : val;
   }
 
   /// Exhaustive implementation of fetchUserData()
@@ -318,7 +322,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
       if (mounted) {
         setState(() {
           _isEmailUpdating = false;
-          _emailChangeError = "Update failed. Please verify your password.";
+          _emailChangeError = translate("settings.updateFailed",
+              "Update failed. Please verify your password.");
         });
       }
     }
@@ -335,8 +340,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(translate("settings.deleteAccountTitle", "Delete Account")),
-        content: const Text(
-            "Are you sure you want to delete your account? This action is permanent."),
+        content: Text(translate("settings.deleteAccountConfirmation",
+            "Are you sure you want to delete your account? This action is permanent.")),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -349,7 +354,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
                   true); // USING _showDeleteAccountModal
               _renderDeletionPasswordUI();
             },
-            child: const Text("Continue"),
+            child: Text(translate("common.continue", "Continue")),
           ),
         ],
       ),
@@ -408,7 +413,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
               } catch (e) {
                 setState(() {
                   _isDeletingAccount = false;
-                  _deleteAccountError = "Deletion failed. Incorrect password.";
+                  _deleteAccountError = translate("settings.deletionFailed",
+                      "Deletion failed. Incorrect password.");
                 });
               }
             },
@@ -708,7 +714,9 @@ class _SettingsComponentState extends State<SettingsComponent> {
                                 foregroundColor: Colors.white, // White Text
                               ),
                               onPressed: _handleEmailToggle,
-                              child: Text(_isEditingEmail ? "Save" : "Edit")),
+                              child: Text(_isEditingEmail
+                                  ? translate("common.save", "Save")
+                                  : translate("common.edit", "Edit"))),
                         ]),
                       ]),
                 ),
@@ -814,11 +822,17 @@ class _SettingsComponentState extends State<SettingsComponent> {
   Widget _buildThemeButtonRow(Color accent) {
     return Row(children: [
       Expanded(
-          child: _buildThemeToggleBtn("Light", _selectedTheme == 'light',
-              accent, () => setState(() => _selectedTheme = 'light'))),
+          child: _buildThemeToggleBtn(
+              translate("settings.themeLight", "Light"),
+              _selectedTheme == 'light',
+              accent,
+              () => setState(() => _selectedTheme = 'light'))),
       const SizedBox(width: 10),
       Expanded(
-          child: _buildThemeToggleBtn("Dark", _selectedTheme == 'dark', accent,
+          child: _buildThemeToggleBtn(
+              translate("settings.themeDark", "Dark"),
+              _selectedTheme == 'dark',
+              accent,
               () => setState(() => _selectedTheme = 'dark'))),
     ]);
   }
@@ -915,6 +929,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
         Text(_errorMessage!),
         const SizedBox(height: 16),
         ElevatedButton(
-            onPressed: _fetchUserData, child: const Text("Retry Connection"))
+            onPressed: _fetchUserData,
+            child: Text(translate("common.retry", "Retry Connection")))
       ]));
 }

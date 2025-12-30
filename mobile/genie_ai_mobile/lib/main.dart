@@ -33,8 +33,8 @@ import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 
 // --- CONDITIONAL IMPORT FOR RIGHT SIDEBAR ---
 // This handles the Web vs Mobile stubbing for File Utils indirectly referenced
-// inside RightSidebarComponent. 
-// Note: Direct imports are usually handled inside the component files themselves, 
+// inside RightSidebarComponent.
+// Note: Direct imports are usually handled inside the component files themselves,
 // but we keep structure clean here.
 
 /// SSL Override for local development to bypass self-signed certificate issues
@@ -124,7 +124,8 @@ class _MyAppState extends State<MyApp> {
       animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
         // DEBUG: Confirm rebuild on language change
-        debugPrint("[MAIN] AnimatedBuilder rebuilding. Locale: ${I18nService().currentLocale.languageCode}");
+        debugPrint(
+            "[MAIN] AnimatedBuilder rebuilding. Locale: ${I18nService().currentLocale.languageCode}");
 
         return MaterialApp(
           title: 'Genie AI',
@@ -132,11 +133,9 @@ class _MyAppState extends State<MyApp> {
 
           // I18n Configuration
           locale: I18nService().currentLocale,
-          supportedLocales: I18nService()
-              .supportedLanguages
-              .keys
-              .map((code) => Locale(code)),
-          
+          supportedLocales:
+              I18nService().supportedLanguages.keys.map((code) => Locale(code)),
+
           // ADDED: Standard Flutter Localizations Delegates
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
@@ -309,7 +308,8 @@ class _MainScreenState extends State<MainScreen> {
           // Persistent Left Sidebar on wide screens only
           if (isWideScreen)
             SizedBox(
-              width: 360,
+              width:
+                  420, // UPDATED: Increased width to 420 to fit translated tabs
               child: SidebarComponent(
                 user: widget.user,
                 onServiceSelected: _onServiceSelected,
@@ -330,7 +330,7 @@ class _MainScreenState extends State<MainScreen> {
           // Persistent Right Sidebar on wide screens only
           if (isWideScreen)
             SizedBox(
-              width: 360,
+              width: 420, // UPDATED: Kept consistent with Left Sidebar
               child: RightSidebarComponent(
                 relatedDocuments: _currentRelatedDocuments,
                 accessToken: accessToken,

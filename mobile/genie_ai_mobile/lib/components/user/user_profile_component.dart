@@ -1,5 +1,5 @@
 // lib/screens/user_profile_screen.dart
-// FULL FILE - FILE PICKER FIXED FOR MOBILE + WEB (NO PATH ACCESS CRASH) + ALL PREVIOUS FIXES
+// FULL FILE - FIXED I18N KEYS TO MATCH DE.DART STRUCTURE + RESTORED LOGIC
 
 import 'dart:io';
 import 'dart:convert';
@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:genie_ai_mobile/services/user_profile_proxy.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
 
 class UserProfileScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -27,19 +28,20 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   late TabController _tabController;
 
+  // These align with keys in de.dart -> userProfile.tabsShort
   final List<String> _tabs = [
-    'Personal',
-    'Civil',
-    'Address',
-    'Identity',
-    'Health',
-    'Employment',
-    'Education',
-    'Financial',
-    'Social',
-    'Criminal',
-    'Transport',
-    'Civic'
+    'personal',
+    'civil',
+    'address',
+    'identity',
+    'health',
+    'employment',
+    'education',
+    'financial',
+    'social',
+    'criminal',
+    'transport',
+    'civic'
   ];
 
   bool _isLoading = true;
@@ -177,7 +179,6 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         "maritalStatus": "",
         "profileIcon": null,
       },
-      // FIX: Explicitly type as <String, dynamic> and use null for file fields
       "civilRegistration": <String, dynamic>{
         "birthCert": null,
         "deathCert": null,
@@ -325,8 +326,6 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         debugPrint('[DEEP MERGE]   Recursing into nested map for key "$key"');
         base[key] = _deepMerge(base[key] as Map<String, dynamic>, value);
       } else {
-        // Critical fix: always assign the override value, regardless of type
-        // This prevents "String is not a subtype of Null" when backend sends "" for a field initialized as null
         base[key] = value;
         debugPrint('[DEEP MERGE]   Forced assignment: base["$key"] = $value');
       }
@@ -358,7 +357,6 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     }
   }
 
-  // FINAL FIXED FILE PICKER - NO CRASH ON WEB
   Future<void> _pickFile(String section, String field) async {
     debugPrint('[FILE PICKER] Opening picker for $section.$field');
     final FilePickerResult? result =
@@ -368,20 +366,18 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       debugPrint('[FILE PICKER] Selected file name: ${platformFile.name}');
       debugPrint(
           '[FILE PICKER] bytes available: ${platformFile.bytes != null}');
-      // REMOVED ANY ACCESS TO platformFile.path — it causes crash on web
 
       XFile xfile;
       if (platformFile.bytes != null) {
-        // Web — use bytes
         xfile = XFile.fromData(platformFile.bytes!, name: platformFile.name);
         debugPrint('[FILE PICKER] Created XFile from bytes (web)');
       } else {
-        // Mobile — use path (safe because on mobile path is always available)
         if (platformFile.path == null) {
           debugPrint('[FILE PICKER] Unexpected: path is null on mobile');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('File selected but no data available')),
+            SnackBar(
+                content: Text(tr('upload.notifications.uploadFailed',
+                    args: {'fileName': 'Data'}))), // Fallback error
           );
           return;
         }
@@ -400,8 +396,6 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     }
   }
 
-  // Helper: Recursively finds files, converts to Base64, and locks them in a JSON STRING
-  // Helper: Recursively finds files, converts to Base64, and locks them in a JSON STRING
   Future<Map<String, dynamic>> _prepareDataForSubmission(
       Map<String, dynamic> data) async {
     final Map<String, dynamic> output = {};
@@ -410,34 +404,24 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       final value = data[key];
 
       if (value is Map<String, dynamic>) {
-        // Recurse deeper into nested sections
         output[key] = await _prepareDataForSubmission(value);
       } else if (value is XFile) {
         debugPrint('[DATA PREP] Processing file: ${value.name}');
         try {
-          // 1. Read the raw binary bytes (Safe for .ffs_db, .pdf, .png, etc)
           final bytes = await value.readAsBytes();
-
-          // 2. Convert binary bytes to safe Base64 text
           final base64String = base64Encode(bytes);
-
-          // 3. Create the data map
           final fileData = {
             'fileName': value.name,
             'fileSize': bytes.length,
             'mimeType': value.mimeType ?? 'application/octet-stream',
             'data': base64String,
           };
-
-          // 4. CRITICAL FIX: jsonEncode this map into a String.
-          // The server expects a String value for these fields, not a JSON Object.
           output[key] = jsonEncode(fileData);
         } catch (e) {
           debugPrint('[DATA PREP] Error reading file $key: $e');
           output[key] = null;
         }
       } else {
-        // Pass through existing values (Strings, Nulls)
         output[key] = value;
       }
     }
@@ -449,17 +433,15 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     setState(() => _isLoading = true);
 
     try {
-      // 1. Convert all XFiles to safe JSON data
       debugPrint('[PROFILE SCREEN] Encoding files for API transmission...');
       final dataToSubmit = await _prepareDataForSubmission(_formData);
 
-      // 2. Send the clean data to the proxy
       await _proxy.updateProfile(_userId, dataToSubmit);
 
       debugPrint('[PROFILE SCREEN] Profile saved successfully');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile saved successfully!')),
+          SnackBar(content: Text(tr('userProfile.saveSuccess'))), // Correct Key
         );
         Navigator.pop(context);
       }
@@ -468,7 +450,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       debugPrint('[PROFILE SCREEN] Save stack trace: $stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
+          SnackBar(
+              content: Text('${tr('userProfile.errors.savingFailed')}: $e')),
         );
       }
     } finally {
@@ -476,6 +459,60 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  // Helper to translate dropdown items like "Male", "Married"
+  // based on keys in de.dart (userProfile.gender.male, etc)
+  String _translateDropdownItem(String type, String value) {
+    String key = '';
+    // Normalize value to camelCase for key lookup (e.g. "Domestic Partnership" -> "other" or specific)
+    // Based on de.dart, we have: single, married, divorced, widowed, other.
+    // Genders: male, female, other, preferNot
+
+    final lower = value.toLowerCase();
+    if (type == 'gender') {
+      if (lower == 'male')
+        key = 'male';
+      else if (lower == 'female')
+        key = 'female';
+      else if (lower == 'other')
+        key = 'other';
+      else if (lower.contains('prefer')) key = 'preferNot';
+      return tr('userProfile.gender.$key');
+    } else if (type == 'marital') {
+      if (lower == 'single')
+        key = 'single';
+      else if (lower == 'married')
+        key = 'married';
+      else if (lower == 'divorced')
+        key = 'divorced';
+      else if (lower == 'widowed')
+        key = 'widowed';
+      else
+        key =
+            'other'; // Fallback for Separated/Domestic Partnership as they aren't in de.dart
+      return tr('userProfile.maritalStatus.$key');
+    } else if (type == 'blood') {
+      // keys: aPositive, aNegative...
+      // value: A+, A-
+      // Basic mapping
+      Map<String, String> map = {
+        'A+': 'aPositive',
+        'A-': 'aNegative',
+        'B+': 'bPositive',
+        'B-': 'bNegative',
+        'AB+': 'abPositive',
+        'AB-': 'abNegative',
+        'O+': 'oPositive',
+        'O-': 'oNegative',
+        'Unknown': 'unknown'
+      };
+      if (map.containsKey(value)) {
+        return tr('userProfile.bloodTypes.${map[value]}');
+      }
+    }
+
+    return value; // Fallback to raw string
   }
 
   Widget _buildProfileIcon() {
@@ -534,18 +571,22 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     );
   }
 
-  Widget _buildTextField(String label, String section, String field,
+  Widget _buildTextField(String labelKey, String section, String field,
       {bool multiline = false}) {
     final String currentValue = (_formData[section]?[field]?.toString() ?? '');
+
+    // I18N: Translate using the Key provided
+    final String translatedLabel = tr(labelKey);
+
     debugPrint(
-        '[UI] Building TextField "$label" ($section.$field) = "$currentValue"');
+        '[UI] Building TextField Key: "$labelKey" -> "$translatedLabel"');
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextFormField(
         initialValue: currentValue,
         decoration: InputDecoration(
-          labelText: label,
+          labelText: translatedLabel,
           border: const OutlineInputBorder(),
         ),
         maxLines: multiline ? 4 : 1,
@@ -562,10 +603,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildDropdown(
-      String label, String section, String field, List<String> items) {
+      String labelKey, String section, String field, List<String> items,
+      {String type = 'general'}) {
     final String? currentValue = _formData[section]?[field];
-    debugPrint(
-        '[UI] Building Dropdown "$label" ($section.$field) raw value: "$currentValue"');
+
+    final String translatedLabel = tr(labelKey);
+    debugPrint('[UI] Building Dropdown Key: "$labelKey" -> "$translatedLabel"');
 
     String? normalizedValue;
     if (currentValue != null && currentValue.isNotEmpty) {
@@ -575,18 +618,19 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       );
     }
 
-    debugPrint('[UI] Normalized dropdown value: "$normalizedValue"');
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: DropdownButtonFormField<String>(
         value: normalizedValue,
         decoration: InputDecoration(
-          labelText: label,
+          labelText: translatedLabel,
           border: const OutlineInputBorder(),
         ),
         items: items
-            .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+            .map((item) => DropdownMenuItem(
+                value: item,
+                child:
+                    Text(_translateDropdownItem(type, item)))) // Translate Item
             .toList(),
         onChanged: (v) {
           setState(() {
@@ -600,17 +644,16 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildSearchableCountryPicker(
-      String label, String section, String field) {
+      String labelKey, String section, String field) {
     final String currentValue = _formData[section]?[field] ?? '';
-    debugPrint(
-        '[UI] Building CountryPicker "$label" ($section.$field) = "$currentValue"');
+    final String translatedLabel = tr(labelKey);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.titleMedium),
+          Text(translatedLabel, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () {
@@ -627,39 +670,45 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                   });
                 },
                 countryListTheme: CountryListThemeData(
-                  inputDecoration: const InputDecoration(
-                    labelText: 'Search country',
-                    border: OutlineInputBorder(),
+                  inputDecoration: InputDecoration(
+                    labelText: tr(
+                        'userProfile.placeholders.searchCountries'), // Correct Key
+                    border: const OutlineInputBorder(),
                   ),
                 ),
               );
             },
             icon: const Icon(Icons.flag),
-            label: Text(currentValue.isEmpty ? 'Select country' : currentValue),
+            label: Text(currentValue.isEmpty
+                ? tr('userProfile.placeholders.selectCountry')
+                : currentValue),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilePicker(String label, String section, String field) {
+  Widget _buildFilePicker(String labelKey, String section, String field) {
     final file = _formData[section]?[field];
-    String fileName = 'No file selected';
+
+    // Use fallback string if translation missing for "Attached File"
+    String fileName =
+        tr('userProfile.noFileSelected') == 'userProfile.noFileSelected'
+            ? 'No file selected'
+            : tr('userProfile.noFileSelected');
+
+    final String translatedLabel = tr(labelKey);
 
     if (file is XFile) {
-      // Case A: User just picked this file (not saved yet)
       fileName = file.name;
     } else if (file is File) {
-      // Case B: Legacy mobile file object
       fileName = file.path.split(Platform.pathSeparator).last;
     } else if (file is String && file.isNotEmpty) {
-      // Case C: File saved in backend as a JSON String
       try {
         if (file.trim().startsWith('{')) {
           final Map<String, dynamic> data = jsonDecode(file);
           fileName = data['fileName'] ?? 'Attached File';
         } else {
-          // Fallback for legacy plain filenames/URLs
           fileName = file.length > 20
               ? '...${file.substring(file.length - 20)}'
               : file;
@@ -674,7 +723,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.titleMedium),
+          Text(translatedLabel, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -688,7 +737,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               const SizedBox(width: 10),
               ElevatedButton(
                 onPressed: () => _pickFile(section, field),
-                child: const Text('Choose File'),
+                child: Text(
+                    tr('userProfile.uploadFile')), // Key: "Datei hochladen"
               ),
             ],
           ),
@@ -742,14 +792,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           }
         },
         child: InputDecorator(
-          decoration: const InputDecoration(
-            labelText: 'Date of Birth (YYYY-MM-DD)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: tr('userProfile.fields.dob'), // Key: Geburtsdatum
+            border: const OutlineInputBorder(),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(currentDob.isEmpty ? 'Select date' : currentDob),
+              Text(currentDob.isEmpty
+                  ? tr('userProfile.instructions.dobHelp').substring(0, 10) +
+                      '...'
+                  : currentDob),
               const Icon(Icons.calendar_today),
             ],
           ),
@@ -780,7 +833,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               Text(_errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 20),
               ElevatedButton(
-                  onPressed: _loadProfile, child: const Text('Retry')),
+                  onPressed: _loadProfile, child: Text(tr('sidebar.retry'))),
             ],
           ),
         ),
@@ -792,11 +845,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User Profile'),
+        title: Text(tr('userProfile.title')), // "Benutzerprofil"
         actions: [
           TextButton(
             onPressed: _saveProfile,
-            child: const Text('Save', style: TextStyle(color: Colors.white)),
+            child: Text(tr('settings.save'),
+                style: const TextStyle(color: Colors.white)), // "Speichern"
           ),
           IconButton(
               onPressed: () => Navigator.pop(context),
@@ -816,13 +870,14 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                   children: [
                     _buildProfileIcon(),
                     const SizedBox(height: 20),
-                    const Text(
-                      'Your personal data is protected. We only collect information required for service delivery.',
+                    Text(
+                      tr('userProfile.privacyInfo'), // Translated privacy info
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                     TextButton(
-                        onPressed: () {}, child: const Text('Privacy Policy')),
+                        onPressed: () {},
+                        child: Text(tr('userProfile.privacyPolicyLink'))),
                   ],
                 ),
               ),
@@ -832,173 +887,199 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 indicatorSize: TabBarIndicatorSize.label,
                 labelColor: theme.primaryColor,
                 unselectedLabelColor: Colors.grey,
-                tabs: _tabs.map((t) => Tab(text: t)).toList(),
+                // TRANSLATE TABS using keys: userProfile.tabsShort.personal
+                tabs: _tabs
+                    .map((t) => Tab(text: tr('userProfile.tabsShort.$t')))
+                    .toList(),
               ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
                   children: [
+                    // 1. Personal
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField(
-                          'Full Name', 'personalIdentification', 'fullName'),
+                      _buildTextField('userProfile.fields.fullName',
+                          'personalIdentification', 'fullName'),
                       _buildDateOfBirthPicker(),
-                      _buildDropdown('Gender', 'personalIdentification',
-                          'gender', _genders),
-                      _buildSearchableCountryPicker('Nationality',
-                          'personalIdentification', 'nationality'),
-                      _buildDropdown('Marital Status', 'personalIdentification',
-                          'maritalStatus', _maritalStatuses),
+                      _buildDropdown('userProfile.fields.gender',
+                          'personalIdentification', 'gender', _genders,
+                          type: 'gender'),
+                      _buildSearchableCountryPicker(
+                          'userProfile.fields.nationality',
+                          'personalIdentification',
+                          'nationality'),
+                      _buildDropdown(
+                          'userProfile.fields.maritalStatus',
+                          'personalIdentification',
+                          'maritalStatus',
+                          _maritalStatuses,
+                          type: 'marital'),
                     ]),
+                    // 2. Civil
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildFilePicker('Birth Certificate', 'civilRegistration',
-                          'birthCert'),
-                      _buildFilePicker('Death Certificate (if applicable)',
+                      _buildFilePicker('userProfile.fields.birthCert',
+                          'civilRegistration', 'birthCert'),
+                      _buildFilePicker('userProfile.fields.deathCert',
                           'civilRegistration', 'deathCert'),
-                      _buildFilePicker('Marriage/Divorce Papers',
+                      _buildFilePicker('userProfile.fields.marriageDivorce',
                           'civilRegistration', 'marriageDivorce'),
-                      _buildFilePicker(
-                          'Adoption Papers', 'civilRegistration', 'adoption'),
-                      _buildFilePicker('Citizenship Certificate',
+                      _buildFilePicker('userProfile.fields.adoption',
+                          'civilRegistration', 'adoption'),
+                      _buildFilePicker('userProfile.fields.citizenship',
                           'civilRegistration', 'citizenship'),
-                      _buildFilePicker('Immigration Documents',
+                      _buildFilePicker('userProfile.fields.immigration',
                           'civilRegistration', 'immigration'),
                     ]),
+                    // 3. Address
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField('Current Address', 'addressResidency',
-                          'currentAddress',
+                      _buildTextField('userProfile.fields.currentAddress',
+                          'addressResidency', 'currentAddress',
                           multiline: true),
-                      _buildTextField('Previous Addresses', 'addressResidency',
-                          'previousAddresses',
+                      _buildTextField('userProfile.fields.previousAddresses',
+                          'addressResidency', 'previousAddresses',
                           multiline: true),
-                      _buildTextField('Home Ownership / Rental Status',
+                      _buildTextField('userProfile.fields.homeOrRental',
                           'addressResidency', 'homeOrRental'),
-                      _buildFilePicker(
-                          'Utility Bills', 'addressResidency', 'utilityBills'),
-                      _buildFilePicker('Land/Property Records',
+                      _buildFilePicker('userProfile.fields.utilityBills',
+                          'addressResidency', 'utilityBills'),
+                      _buildFilePicker('userProfile.fields.landRecords',
                           'addressResidency', 'landRecords'),
                     ]),
+                    // 4. Identity
                     ListView(padding: const EdgeInsets.all(16), children: [
+                      _buildTextField('userProfile.fields.idCard',
+                          'identityTravel', 'idCard'),
+                      _buildTextField('userProfile.fields.passport',
+                          'identityTravel', 'passport'),
+                      _buildTextField('userProfile.fields.driversLicense',
+                          'identityTravel', 'driversLicense'),
+                      _buildTextField('userProfile.fields.voterId',
+                          'identityTravel', 'voterId'),
                       _buildTextField(
-                          'ID Card Number', 'identityTravel', 'idCard'),
-                      _buildTextField(
-                          'Passport Number', 'identityTravel', 'passport'),
-                      _buildTextField('Driver\'s License', 'identityTravel',
-                          'driversLicense'),
-                      _buildTextField('Voter ID', 'identityTravel', 'voterId'),
-                      _buildTextField(
-                          'Social Security Number', 'identityTravel', 'ssn'),
-                      _buildFilePicker('Military Records', 'identityTravel',
-                          'militaryRecords'),
+                          'userProfile.fields.ssn', 'identityTravel', 'ssn'),
+                      _buildFilePicker('userProfile.fields.militaryRecords',
+                          'identityTravel', 'militaryRecords'),
                     ]),
+                    // 5. Health
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField(
-                          'Medical History', 'healthMedical', 'medicalHistory',
+                      _buildTextField('userProfile.fields.medicalHistory',
+                          'healthMedical', 'medicalHistory',
                           multiline: true),
-                      _buildFilePicker('Vaccination Records', 'healthMedical',
-                          'vaccinations'),
-                      _buildTextField('Insurance Details', 'healthMedical',
-                          'insuranceDetails'),
-                      _buildDropdown('Blood Type', 'healthMedical', 'bloodType',
-                          _bloodTypes),
-                      _buildTextField('Disability Information', 'healthMedical',
-                          'disability'),
-                      _buildTextField(
-                          'Organ Donor Status', 'healthMedical', 'organDonor'),
-                      _buildTextField(
-                          'Prescriptions', 'healthMedical', 'prescriptions',
+                      _buildFilePicker('userProfile.fields.vaccinations',
+                          'healthMedical', 'vaccinations'),
+                      _buildTextField('userProfile.fields.insuranceDetails',
+                          'healthMedical', 'insuranceDetails'),
+                      _buildDropdown('userProfile.fields.bloodType',
+                          'healthMedical', 'bloodType', _bloodTypes,
+                          type: 'blood'),
+                      _buildTextField('userProfile.fields.disability',
+                          'healthMedical', 'disability'),
+                      _buildTextField('userProfile.fields.organDonor',
+                          'healthMedical', 'organDonor'),
+                      _buildTextField('userProfile.fields.prescriptions',
+                          'healthMedical', 'prescriptions',
                           multiline: true),
-                      _buildTextField('Mental Health Records', 'healthMedical',
-                          'mentalHealth',
+                      _buildTextField('userProfile.fields.mentalHealth',
+                          'healthMedical', 'mentalHealth',
                           multiline: true),
                     ]),
+                    // 6. Employment
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField(
-                          'Employment History', 'employment', 'eHistory',
+                      _buildTextField('userProfile.fields.eHistory',
+                          'employment', 'eHistory',
                           multiline: true),
-                      _buildTextField(
-                          'Current Employer', 'employment', 'currentEmployer'),
-                      _buildFilePicker(
-                          'Work Permits', 'employment', 'workPermits'),
-                      _buildFilePicker('Professional Certifications',
+                      _buildTextField('userProfile.fields.currentEmployer',
+                          'employment', 'currentEmployer'),
+                      _buildFilePicker('userProfile.fields.workPermits',
+                          'employment', 'workPermits'),
+                      _buildFilePicker('userProfile.fields.certifications',
                           'employment', 'certifications'),
+                      _buildTextField('userProfile.fields.unemployment',
+                          'employment', 'unemployment'),
                       _buildTextField(
-                          'Unemployment Records', 'employment', 'unemployment'),
-                      _buildTextField('Tax Identification Number (TIN)',
-                          'employment', 'tin'),
-                      _buildTextField('Business Affiliations', 'employment',
-                          'businessAffiliations'),
+                          'userProfile.fields.tin', 'employment', 'tin'),
+                      _buildTextField('userProfile.fields.businessAffiliations',
+                          'employment', 'businessAffiliations'),
                     ]),
+                    // 7. Education
                     ListView(padding: const EdgeInsets.all(16), children: [
                       _buildTextField(
-                          'Schools Attended', 'education', 'schools',
+                          'userProfile.fields.schools', 'education', 'schools',
                           multiline: true),
-                      _buildTextField(
-                          'Diplomas/Degrees', 'education', 'diplomas'),
-                      _buildTextField(
-                          'Academic Performance', 'education', 'performance'),
-                      _buildTextField(
-                          'Scholarships & Awards', 'education', 'scholarships'),
+                      _buildTextField('userProfile.fields.degrees', 'education',
+                          'diplomas'),
+                      _buildTextField('userProfile.fields.performance',
+                          'education', 'performance'),
+                      _buildTextField('userProfile.fields.scholarships',
+                          'education', 'scholarships'),
                     ]),
+                    // 8. Financial
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildFilePicker(
-                          'Income Tax Returns', 'financialTax', 'incomeTax'),
-                      _buildTextField('Bank Account Details', 'financialTax',
-                          'bankAccounts'),
-                      _buildFilePicker('Property Tax Records', 'financialTax',
-                          'propertyTax'),
-                      _buildFilePicker('Business Tax Records', 'financialTax',
-                          'businessTax'),
-                      _buildFilePicker('Pension Contributions', 'financialTax',
-                          'pensionContrib'),
-                      _buildFilePicker(
-                          'Loans & Financial Aid', 'financialTax', 'loanAid'),
+                      _buildFilePicker('userProfile.fields.incomeTax',
+                          'financialTax', 'incomeTax'),
+                      _buildTextField('userProfile.fields.bankAccounts',
+                          'financialTax', 'bankAccounts'),
+                      _buildFilePicker('userProfile.fields.propertyTax',
+                          'financialTax', 'propertyTax'),
+                      _buildFilePicker('userProfile.fields.businessTax',
+                          'financialTax', 'businessTax'),
+                      _buildFilePicker('userProfile.fields.pensionContrib',
+                          'financialTax', 'pensionContrib'),
+                      _buildFilePicker('userProfile.fields.loanAid',
+                          'financialTax', 'loanAid'),
                     ]),
+                    // 9. Social
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField(
-                          'Pension Status', 'socialSecurity', 'pensionStatus'),
-                      _buildTextField('Unemployment Benefits', 'socialSecurity',
-                          'unemployment'),
-                      _buildTextField('Disability Benefits', 'socialSecurity',
-                          'disability'),
-                      _buildTextField('Childcare Assistance', 'socialSecurity',
-                          'childcare'),
-                      _buildTextField('Food Assistance', 'socialSecurity',
-                          'foodAssistance'),
-                      _buildTextField('Housing Assistance', 'socialSecurity',
-                          'housingAssistance'),
+                      _buildTextField('userProfile.fields.pensionStatus',
+                          'socialSecurity', 'pensionStatus'),
+                      _buildTextField('userProfile.fields.unemployment',
+                          'socialSecurity', 'unemployment'),
+                      _buildTextField('userProfile.fields.disability',
+                          'socialSecurity', 'disability'),
+                      _buildTextField('userProfile.fields.childcare',
+                          'socialSecurity', 'childcare'),
+                      _buildTextField('userProfile.fields.foodAssistance',
+                          'socialSecurity', 'foodAssistance'),
+                      _buildTextField('userProfile.fields.housingAssistance',
+                          'socialSecurity', 'housingAssistance'),
                     ]),
+                    // 10. Criminal
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildFilePicker(
-                          'Police Records', 'criminalLegal', 'policeRecords'),
-                      _buildFilePicker(
-                          'Court Cases', 'criminalLegal', 'courtCases'),
-                      _buildFilePicker('Fines & Penalties', 'criminalLegal',
-                          'finesPenalties'),
-                      _buildTextField('Parole/Probation Status',
+                      _buildFilePicker('userProfile.fields.policeRecords',
+                          'criminalLegal', 'policeRecords'),
+                      _buildFilePicker('userProfile.fields.courtCases',
+                          'criminalLegal', 'courtCases'),
+                      _buildFilePicker('userProfile.fields.finesPenalties',
+                          'criminalLegal', 'finesPenalties'),
+                      _buildTextField('userProfile.fields.paroleProbation',
                           'criminalLegal', 'paroleProbation'),
-                      _buildTextField('Citizenship Revocation', 'criminalLegal',
+                      _buildTextField(
+                          'userProfile.fields.citizenshipRevocation',
+                          'criminalLegal',
                           'citizenshipRevocation'),
                     ]),
+                    // 11. Transport
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField('Vehicle Registration', 'transportation',
-                          'vehicleReg'),
-                      _buildFilePicker('Traffic Violations', 'transportation',
-                          'trafficViolations'),
-                      _buildTextField('License History', 'transportation',
-                          'licenseHistory'),
-                      _buildTextField('Public Transport Card', 'transportation',
-                          'publicTransportCard'),
+                      _buildTextField('userProfile.fields.vehicleReg',
+                          'transportation', 'vehicleReg'),
+                      _buildFilePicker('userProfile.fields.trafficViolations',
+                          'transportation', 'trafficViolations'),
+                      _buildTextField('userProfile.fields.licenseHistory',
+                          'transportation', 'licenseHistory'),
+                      _buildTextField('userProfile.fields.publicTransportCard',
+                          'transportation', 'publicTransportCard'),
                     ]),
+                    // 12. Civic
                     ListView(padding: const EdgeInsets.all(16), children: [
-                      _buildTextField('Voter Registration',
+                      _buildTextField('userProfile.fields.voterRegistration',
                           'civicParticipation', 'voterRegistration'),
-                      _buildTextField('Election History', 'civicParticipation',
-                          'electionHistory'),
-                      _buildTextField('Party Membership', 'civicParticipation',
-                          'partyMembership'),
-                      _buildTextField('Military Service Status',
+                      _buildTextField('userProfile.fields.electionHistory',
+                          'civicParticipation', 'electionHistory'),
+                      _buildTextField('userProfile.fields.partyMembership',
+                          'civicParticipation', 'partyMembership'),
+                      _buildTextField('userProfile.fields.militaryStatus',
                           'civicParticipation', 'militaryStatus'),
-                      _buildTextField('Public Service Roles',
+                      _buildTextField('userProfile.fields.publicServiceRoles',
                           'civicParticipation', 'publicServiceRoles'),
                     ]),
                   ],
@@ -1021,8 +1102,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Choose Profile Icon',
-                          style: TextStyle(
+                      Text(tr('userProfile.chooseProfileIcon'),
+                          style: const TextStyle(
                               fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 20),
                       Row(
@@ -1032,7 +1113,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                           return TextButton(
                             onPressed: () => setState(() => _iconTab = t),
                             child: Text(
-                              t[0].toUpperCase() + t.substring(1),
+                              // userProfile.presetIcons, userProfile.upload, userProfile.initials
+                              tr('userProfile.${t == 'preset' ? 'presetIcons' : t}'),
                               style: TextStyle(
                                 color:
                                     active ? theme.primaryColor : Colors.grey,
@@ -1085,7 +1167,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                           child: ElevatedButton.icon(
                             onPressed: _pickImageForIcon,
                             icon: const Icon(Icons.photo_library),
-                            label: const Text('Select from Gallery'),
+                            label: Text(tr('userProfile.clickToUpload')),
                           ),
                         ),
                       if (_iconTab == 'initials')
@@ -1145,12 +1227,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                           TextButton(
                             onPressed: () =>
                                 setState(() => _showIconSelector = false),
-                            child: const Text('Cancel'),
+                            child: Text(tr('userProfile.actions.cancel')),
                           ),
                           ElevatedButton(
                             onPressed: () =>
                                 setState(() => _showIconSelector = false),
-                            child: const Text('Done'),
+                            child: Text(tr('common.done')),
                           ),
                         ],
                       ),

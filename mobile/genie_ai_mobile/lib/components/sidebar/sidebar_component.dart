@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/components/sidebar/service_tree_panel.dart';
 import 'package:genie_ai_mobile/components/sidebar/chat_folders_panel.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
+import 'package:intl/intl.dart';
 
 class SidebarComponent extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -51,10 +53,6 @@ class _SidebarComponentState extends State<SidebarComponent>
     super.dispose();
   }
 
-  String translate(String key, [String defaultValue = ""]) {
-    return defaultValue.isNotEmpty ? defaultValue : key;
-  }
-
   Widget _buildPrimaryTabs(ThemeData theme, Map<String, dynamic> colors) {
     final bool isDark = ThemeManager().isDarkMode;
 
@@ -75,16 +73,17 @@ class _SidebarComponentState extends State<SidebarComponent>
         indicatorColor: theme.primaryColor,
         indicatorSize: TabBarIndicatorSize.tab,
         labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-        tabs: const [
+        tabs: [
           Tab(
-            icon: Icon(Icons.category_outlined, size: 20),
-            text: "Services",
-            iconMargin: EdgeInsets.only(bottom: 4),
+            icon: const Icon(Icons.category_outlined, size: 20),
+            text: tr(
+                "sidebar.governmentServices"), // "Wissensbereiche" / "Services"
+            iconMargin: const EdgeInsets.only(bottom: 4),
           ),
           Tab(
-            icon: Icon(Icons.history, size: 20),
-            text: "History",
-            iconMargin: EdgeInsets.only(bottom: 4),
+            icon: const Icon(Icons.history, size: 20),
+            text: tr("sidebar.chatHistory"), // "Chatverlauf" / "History"
+            iconMargin: const EdgeInsets.only(bottom: 4),
           ),
         ],
       ),
@@ -95,10 +94,26 @@ class _SidebarComponentState extends State<SidebarComponent>
     final bool isDark = ThemeManager().isDarkMode;
 
     final List<Map<String, dynamic>> subTabs = [
-      {'key': 'all', 'label': 'All', 'icon': Icons.chat_bubble_outline},
-      {'key': 'folders', 'label': 'Folders', 'icon': Icons.folder_outlined},
-      {'key': 'starred', 'label': 'Starred', 'icon': Icons.star_outline},
-      {'key': 'archived', 'label': 'Archived', 'icon': Icons.archive_outlined},
+      {
+        'key': 'all',
+        'label': tr('sidebar.tab.all'),
+        'icon': Icons.chat_bubble_outline
+      },
+      {
+        'key': 'folders',
+        'label': tr('sidebar.tab.folders'),
+        'icon': Icons.folder_outlined
+      },
+      {
+        'key': 'starred',
+        'label': tr('sidebar.tab.starred'),
+        'icon': Icons.star_outline
+      },
+      {
+        'key': 'archived',
+        'label': tr('sidebar.tab.archived'),
+        'icon': Icons.archive_outlined
+      },
     ];
 
     return Container(
@@ -229,8 +244,9 @@ class _SidebarComponentState extends State<SidebarComponent>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Weather desc might come from API later, hardcoded for now or use tr if generic
                       Text(
-                        "24°C - Mostly Sunny",
+                        "24°C - ${tr('sidebar.weatherConditions.partlycloudy') != 'sidebar.weatherConditions.partlycloudy' ? tr('sidebar.weatherConditions.partlycloudy') : 'Mostly Sunny'}",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -239,8 +255,11 @@ class _SidebarComponentState extends State<SidebarComponent>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        translate(
-                            "sidebar.weatherLocation", "Current Location"),
+                        // Handle missing key gracefully based on user feedback
+                        tr("sidebar.weatherLocation") ==
+                                'sidebar.weatherLocation'
+                            ? "Current Location"
+                            : tr("sidebar.weatherLocation"),
                         style: TextStyle(
                           fontSize: 11,
                           color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -265,30 +284,39 @@ class _SidebarComponentState extends State<SidebarComponent>
     // Persistent sidebar on wide screens
     if (isWideScreen) {
       return SizedBox(
-        width: 360,
+        width: 420, // UPDATED: Increased width to 420 to fit translated tabs
         child: _buildSidebarContent(context, theme),
       );
     }
 
+    // FIX: DYNAMIC WIDTH CALCULATION FOR MOBILE DRAWER
+    // Calculate width: 85% of screen width, but capped at 420px.
+    final double drawerWidth = MediaQuery.of(context).size.width * 0.85;
+    final double effectiveWidth = drawerWidth > 420 ? 420 : drawerWidth;
+
     // Mobile drawer: constrained to safe area below AppBar and above bottom input
-    return Drawer(
-      elevation: 0,
-      backgroundColor:
-          Colors.transparent, // Important: no background on drawer itself
-      child: SafeArea(
-        top: false, // We manually handle top (AppBar height)
-        bottom: true, // Respect bottom safe area (home indicator)
-        child: Column(
-          children: [
-            // Empty space equal to AppBar height (60) so content starts below navbar
-            SizedBox(
-              height: kToolbarHeight + MediaQuery.of(context).padding.top,
-            ),
-            // The actual sidebar content
-            Expanded(
-              child: _buildSidebarContent(context, theme),
-            ),
-          ],
+    // We wrap the Drawer in a SizedBox to override the default narrow width.
+    return SizedBox(
+      width: effectiveWidth,
+      child: Drawer(
+        elevation: 0,
+        backgroundColor:
+            Colors.transparent, // Important: no background on drawer itself
+        child: SafeArea(
+          top: false, // We manually handle top (AppBar height)
+          bottom: true, // Respect bottom safe area (home indicator)
+          child: Column(
+            children: [
+              // Empty space equal to AppBar height (60) so content starts below navbar
+              SizedBox(
+                height: kToolbarHeight + MediaQuery.of(context).padding.top,
+              ),
+              // The actual sidebar content
+              Expanded(
+                child: _buildSidebarContent(context, theme),
+              ),
+            ],
+          ),
         ),
       ),
     );

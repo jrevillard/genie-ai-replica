@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:genie_ai_mobile/services/chat_history_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
 import 'dart:convert';
 
 class ChatFoldersPanel extends StatefulWidget {
@@ -153,7 +154,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       debugPrint("[CHAT_FOLDERS] ERROR loading conversations: $e");
       if (mounted) {
         setState(() {
-          _errorMessage = "Failed to load chats";
+          _errorMessage =
+              tr("sidebar.errorLoadingConversations"); // "Failed to load chats"
           _isLoading = false;
         });
       }
@@ -251,15 +253,17 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Create Folder"),
+        title: Text(tr("sidebar.createFolder")),
         content: TextField(
           autofocus: true,
           onChanged: (v) => _newFolderName = v,
-          decoration: const InputDecoration(hintText: "Enter folder name"),
+          decoration:
+              InputDecoration(hintText: tr("sidebar.folderNamePlaceholder")),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr("common.cancel"))),
           ElevatedButton(
             onPressed: () async {
               if (_newFolderName.trim().isNotEmpty) {
@@ -269,7 +273,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                 _loadFoldersFromBackend();
               }
             },
-            child: const Text("Create"),
+            child: Text(tr("common.create")),
           )
         ],
       ),
@@ -281,16 +285,18 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Edit Folder"),
+        title: Text(tr("sidebar.editFolder")),
         content: TextField(
           autofocus: true,
           controller: TextEditingController(text: _editingFolderName),
           onChanged: (v) => _editingFolderName = v,
-          decoration: const InputDecoration(hintText: "Enter folder name"),
+          decoration:
+              InputDecoration(hintText: tr("sidebar.folderNamePlaceholder")),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr("common.cancel"))),
           ElevatedButton(
             onPressed: () async {
               if (_editingFolderName.trim().isNotEmpty) {
@@ -302,7 +308,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                 _loadFoldersFromBackend();
               }
             },
-            child: const Text("Save"),
+            child: Text(tr("common.save")),
           )
         ],
       ),
@@ -313,12 +319,13 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Delete Folder"),
+        title: Text(tr("sidebar.deleteFolder")),
         content: Text(
-            "Are you sure you want to delete '${folder['name']}'? Chats will be moved to default."),
+            tr("sidebar.deleteFolderConfirm", args: {'name': folder['name']})),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr("common.cancel"))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
@@ -329,7 +336,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                 setState(() => _folderSelected = false);
               }
             },
-            child: const Text("Delete"),
+            child: Text(tr("common.delete")),
           )
         ],
       ),
@@ -341,16 +348,18 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Rename Conversation"),
+        title: Text(tr("sidebar.renameChat")),
         content: TextField(
           autofocus: true,
           controller: TextEditingController(text: _newChatTitle),
           onChanged: (v) => _newChatTitle = v,
-          decoration: const InputDecoration(hintText: "Enter new title"),
+          decoration:
+              InputDecoration(hintText: tr("sidebar.chatTitlePlaceholder")),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr("common.cancel"))),
           ElevatedButton(
             onPressed: () async {
               if (_newChatTitle.trim().isNotEmpty) {
@@ -362,7 +371,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                 if (mounted) Navigator.pop(ctx);
               }
             },
-            child: const Text("Save"),
+            child: Text(tr("common.save")),
           )
         ],
       ),
@@ -375,7 +384,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: const Text("Move Chat"),
+          title: Text(tr("sidebar.moveChat")),
           content: DropdownButton<String>(
             value: _destinationFolderId,
             isExpanded: true,
@@ -390,7 +399,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("Cancel")),
+                child: Text(tr("common.cancel"))),
             ElevatedButton(
               onPressed: () async {
                 if (_destinationFolderId != null) {
@@ -402,7 +411,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                   _loadConversationsForCurrentTab();
                 }
               },
-              child: const Text("Move"),
+              child: Text(tr("common.move")),
             )
           ],
         ),
@@ -414,11 +423,12 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Delete Chat"),
-        content: const Text("This action cannot be undone. Are you sure?"),
+        title: Text(tr("sidebar.deleteChat")),
+        content: Text(tr("sidebar.deleteChatWarning")),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(tr("common.cancel"))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
@@ -437,7 +447,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                 if (mounted) Navigator.pop(ctx);
               }
             },
-            child: const Text("Delete"),
+            child: Text(tr("common.delete")),
           )
         ],
       ),
@@ -510,7 +520,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
         onChanged: _handleSearchInput,
         style: TextStyle(color: colors['text']),
         decoration: InputDecoration(
-          hintText: "Search conversations...",
+          hintText:
+              tr("sidebar.searchConversations"), // "Search conversations..."
           hintStyle:
               TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
           prefixIcon: Icon(Icons.search,
@@ -530,7 +541,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
 
   Widget _buildFoldersHeader({bool showBackButton = false}) {
     final theme = Theme.of(context);
-    String title = "FOLDERS";
+    String title = tr("sidebar.folders").toUpperCase(); // "FOLDERS"
     if (showBackButton) {
       final folder = _folders.firstWhere((f) => f['id'] == _selectedFolderId,
           orElse: () => {'name': 'Folder'});
@@ -586,8 +597,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
           children: [
             const Icon(Icons.folder_open, size: 48, color: Colors.black12),
             const SizedBox(height: 8),
-            const Text("No folders yet",
-                style: TextStyle(color: Colors.grey, fontSize: 13)),
+            Text(tr("sidebar.noFolders"), // "No folders yet"
+                style: const TextStyle(color: Colors.grey, fontSize: 13)),
           ],
         ),
       );
@@ -684,7 +695,8 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
         previewText = lastMsg.toString();
       }
     }
-    if (previewText.isEmpty) previewText = "New Conversation";
+    if (previewText.isEmpty)
+      previewText = tr("chatbot.newChat"); // "New Conversation"
 
     // 3. Date
     final String dateStr = _formatDate(chat['updated']);
@@ -717,7 +729,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                     : Icons.chat_bubble_outline,
                 size: 18,
                 color: theme.primaryColor)),
-        title: Text(chat['title'] ?? "Untitled",
+        title: Text(chat['title'] ?? tr("sidebar.untitled"), // "Untitled"
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -733,7 +745,7 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
                         theme.textTheme.bodyMedium?.color?.withOpacity(0.7))),
             const SizedBox(height: 4),
             Text(
-              "$dateStr • $msgCount messages",
+              "$dateStr • $msgCount ${tr('sidebar.messages').toLowerCase()}", // "messages"
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10, color: Colors.grey),
@@ -768,45 +780,48 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
         if (val == 'delete') _showDeleteConversationDialog(chat);
       },
       itemBuilder: (ctx) => [
-        const PopupMenuItem(
+        PopupMenuItem(
             value: 'rename',
             child: Row(children: [
-              Icon(Icons.edit, size: 18),
-              SizedBox(width: 8),
-              Text("Rename")
+              const Icon(Icons.edit, size: 18),
+              const SizedBox(width: 8),
+              Text(tr("sidebar.renameChat")) // "Rename"
             ])),
-        const PopupMenuItem(
+        PopupMenuItem(
             value: 'move',
             child: Row(children: [
-              Icon(Icons.folder_open, size: 18),
-              SizedBox(width: 8),
-              Text("Move to Folder")
+              const Icon(Icons.folder_open, size: 18),
+              const SizedBox(width: 8),
+              Text(tr("sidebar.moveChat")) // "Move to Folder"
             ])),
         PopupMenuItem(
             value: 'archive',
             child: Row(children: [
               const Icon(Icons.archive, size: 18),
               const SizedBox(width: 8),
-              Text(chat['isArchived'] == true ? "Unarchive" : "Archive")
+              Text(chat['isArchived'] == true
+                  ? tr("sidebar.unarchive")
+                  : tr("sidebar.archive")) // "Unarchive" / "Archive"
             ])),
         const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuItem(
             value: 'delete',
             child: Row(children: [
-              Icon(Icons.delete_outline, size: 18, color: Colors.red),
-              SizedBox(width: 8),
-              Text("Delete", style: TextStyle(color: Colors.red))
+              const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+              const SizedBox(width: 8),
+              Text(tr("common.delete"),
+                  style: const TextStyle(color: Colors.red)) // "Delete"
             ])),
       ],
     );
   }
 
   Widget _buildEmptyState() {
-    String msg = "No conversations found";
-    if (widget.activeTab == 'starred') msg = "No starred conversations";
-    if (widget.activeTab == 'archived') msg = "No archived conversations";
+    String msg = tr("sidebar.noConversations"); // "No conversations found"
+    if (widget.activeTab == 'starred') msg = tr("sidebar.noStarredChats");
+    if (widget.activeTab == 'archived') msg = tr("sidebar.noArchivedChats");
     if (widget.activeTab == 'folders' && _folderSelected)
-      msg = "Folder is empty";
+      msg = tr("sidebar.folderEmptyState"); // "Folder is empty"
 
     return Center(
       child: Column(
@@ -825,12 +840,16 @@ class _ChatFoldersPanelState extends State<ChatFoldersPanel> {
     if (dateStr == null) return "";
     final date = DateTime.tryParse(dateStr) ?? DateTime.now();
     final now = DateTime.now();
+
+    // Pass current locale code to DateFormat
+    final String localeCode = I18nService().currentLocale.languageCode;
+
     if (date.day == now.day &&
         date.month == now.month &&
         date.year == now.year) {
-      return DateFormat('h:mm a').format(date);
+      return DateFormat('h:mm a', localeCode).format(date);
     }
-    return DateFormat('MMM d, yyyy').format(date);
+    return DateFormat('MMM d, yyyy', localeCode).format(date);
   }
 
   void _handleFoldersTabActivation() {

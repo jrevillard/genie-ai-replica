@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:genie_ai_mobile/services/service_tree_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
+import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
 
 class ServiceTreePanel extends StatefulWidget {
   final String locale;
@@ -49,11 +50,15 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   String _searchQuery = "";
   Timer? _searchDebounce;
 
+  // Locale Tracking to trigger re-fetch on language change
+  String _lastLoadedLocale = "";
+
   @override
   void initState() {
     super.initState();
     debugPrint("[SERVICE_TREE] Component initialized. Loading categories...");
-    _loadCategories();
+    // Initial load happens via the check in build() or here. 
+    // We let build() handle it to ensure consistency with I18nService.
   }
 
   @override
@@ -68,9 +73,19 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
   // ===========================================================================
 
   Future<void> _loadCategories() async {
+    final currentLocale = I18nService().currentLocale.languageCode;
+    
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _lastLoadedLocale = currentLocale;
+    });
+
     try {
-      // Fetch categories using the correct proxy method
-      final categories = await _serviceTreeProxy.getAllCategories();
+      debugPrint("[SERVICE_TREE] Fetching categories for locale: $currentLocale");
+      
+      // Fetch categories using the correct proxy method with LOCALE
+      final categories = await _serviceTreeProxy.getAllCategories(locale: currentLocale);
 
       if (mounted) {
         setState(() {
@@ -83,8 +98,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage =
-              "Failed to load services. Please check your connection.";
+          // REMOVED defaultValue
+          _errorMessage = tr("userProfile.errors.loadingFailed");
           _isLoading = false;
         });
         debugPrint("[SERVICE_TREE] Error loading categories: $e");
@@ -196,6 +211,15 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
   @override
   Widget build(BuildContext context) {
+    // Check for language change and trigger reload if necessary
+    final currentLocale = I18nService().currentLocale.languageCode;
+    if (_lastLoadedLocale != currentLocale) {
+      // Use addPostFrameCallback to avoid state changes during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadCategories();
+      });
+    }
+
     if (_isLoading) {
       return Center(
         child: Column(
@@ -204,8 +228,9 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
             CircularProgressIndicator(
                 color: ThemeManager().getColors()['primary']),
             const SizedBox(height: 16),
-            const Text("Loading services...",
-                style: TextStyle(color: Colors.grey)),
+            // REMOVED defaultValue
+            Text(tr("common.loading"),
+                style: const TextStyle(color: Colors.grey)),
           ],
         ),
       );
@@ -230,7 +255,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
               OutlinedButton.icon(
                 onPressed: _loadCategories,
                 icon: const Icon(Icons.refresh),
-                label: const Text("Retry"),
+                // REMOVED defaultValue
+                label: Text(tr("settings.retry")),
               )
             ],
           ),
@@ -259,7 +285,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
         controller: _searchController,
         style: TextStyle(color: colors['text']),
         decoration: InputDecoration(
-          hintText: "Search services...",
+          // REMOVED defaultValue
+          hintText: tr("sidebar.searchPlaceholder"),
           hintStyle:
               TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
           prefixIcon: Icon(Icons.search,
@@ -282,7 +309,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
   Widget _buildTreeList() {
     if (_nodes.isEmpty) {
-      return const Center(child: Text("No services available"));
+      // REMOVED defaultValue
+      return Center(child: Text(tr("sidebar.noServices")));
     }
 
     return ListView.builder(
@@ -411,7 +439,8 @@ class _ServiceTreePanelState extends State<ServiceTreePanel> {
 
         // Subtitle for Search Matches
         subtitle: isSearchMatch
-            ? Text("Match found",
+            // REMOVED defaultValue
+            ? Text(tr("sidebar.matchFound"),
                 style: TextStyle(
                     fontSize: 10,
                     color: isSelected ? Colors.white70 : Colors.grey))

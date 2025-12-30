@@ -1,6 +1,7 @@
 // lib/i18n/locales/de.dart
 
 const Map<String, dynamic> deLocale = {
+  // ... [Previous countries list] ...
   "countries": {
     "AF": "Afghanistan",
     "AL": "Albanien",
@@ -202,10 +203,12 @@ const Map<String, dynamic> deLocale = {
     "verifying": "Verifiziere deine E-Mail...",
     "success": "E-Mail erfolgreich verifiziert!",
     "failed": "Verifizierung fehlgeschlagen",
-    "accountVerified": "Dein Konto wurde erfolgreich verifiziert. Du kannst dich jetzt anmelden.",
+    "accountVerified":
+        "Dein Konto wurde erfolgreich verifiziert. Du kannst dich jetzt anmelden.",
     "invalidLink": "Der Verifizierungslink ist ungültig oder abgelaufen.",
     "missingToken": "Verifizierungstoken fehlt.",
-    "generalError": "Ein Fehler ist während der Verifizierung aufgetreten. Bitte versuche es später erneut.",
+    "generalError":
+        "Ein Fehler ist während der Verifizierung aufgetreten. Bitte versuche es später erneut.",
     "proceedToLogin": "Weiter zur Anmeldung",
     "backToLogin": "Zurück zur Anmeldung"
   },
@@ -224,12 +227,15 @@ const Map<String, dynamic> deLocale = {
     "rememberedPassword": "Passwort eingefallen?",
     "backToLogin": "Zurück zur Anmeldung",
     "supportMessage": "Brauchst du Hilfe? Kontaktiere unseren Support",
-    "passwordRequirements": "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl, 1 Großbuchstaben und 1 Sonderzeichen",
+    "passwordRequirements":
+        "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl, 1 Großbuchstaben und 1 Sonderzeichen",
     "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
     "resetSuccess": "Dein Passwort wurde erfolgreich zurückgesetzt",
-    "resetFailed": "Passwort konnte nicht zurückgesetzt werden. Bitte versuche es erneut.",
+    "resetFailed":
+        "Passwort konnte nicht zurückgesetzt werden. Bitte versuche es erneut.",
     "noTokenProvided": "Bitte gib ein Reset-Token an",
-    "expiredToken": "Dieses Reset-Token ist abgelaufen. Bitte fordere ein neues an.",
+    "expiredToken":
+        "Dieses Reset-Token ist abgelaufen. Bitte fordere ein neues an.",
     "invalidToken": "Ungültiges oder unbekanntes Reset-Token",
     "validatingToken": "Validiere Token...",
     "redirecting": "Leite zur Anmeldeseite weiter...",
@@ -260,8 +266,10 @@ const Map<String, dynamic> deLocale = {
     "backToLogin": "Zurück zur Anmeldung",
     "supportMessage": "Brauchst du Hilfe? Kontaktiere unseren Support",
     "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "resetRequestSuccess": "Link zum Zurücksetzen des Passworts wurde an deine E-Mail gesendet",
-    "resetRequestFailed": "Link konnte nicht gesendet werden. Bitte versuche es erneut.",
+    "resetRequestSuccess":
+        "Link zum Zurücksetzen des Passworts wurde an deine E-Mail gesendet",
+    "resetRequestFailed":
+        "Link konnte nicht gesendet werden. Bitte versuche es erneut.",
     "checkEmail": "Bitte überprüfe deine E-Mails für weitere Anweisungen."
   },
   "register": {
@@ -281,25 +289,33 @@ const Map<String, dynamic> deLocale = {
     "processing": "Verarbeite...",
     "alreadyHaveAccount": "Hast du schon ein Konto?",
     "loginNow": "Anmelden",
-    "privacyNotice": "Durch die Registrierung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
+    "privacyNotice":
+        "Durch die Registrierung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
     "usernameMinLength": "Benutzername muss mindestens 3 Zeichen lang sein",
     "invalidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "passwordRequirements": "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl und 1 Großbuchstaben",
+    "passwordRequirements":
+        "Passwort muss mindestens 8 Zeichen lang sein, mit mindestens 1 Zahl und 1 Großbuchstaben",
     "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
     "mustAcceptTerms": "Du musst die Nutzungsbedingungen akzeptieren",
-    "registrationFailed": "Registrierung fehlgeschlagen. Bitte versuche es erneut.",
+    "registrationFailed":
+        "Registrierung fehlgeschlagen. Bitte versuche es erneut.",
     "usernameExists": "Benutzername existiert bereits",
     "emailExists": "E-Mail existiert bereits",
     "registrationSuccess": "Registrierung erfolgreich!",
-    "verificationEmailSent": "Eine Verifizierungs-E-Mail wurde an {email} gesendet",
-    "checkEmailInstructions": "Bitte überprüfe deine E-Mails und befolge die Anweisungen zur Verifizierung deines Kontos vor der Anmeldung.",
+    "verificationEmailSent":
+        "Eine Verifizierungs-E-Mail wurde an {email} gesendet",
+    "checkEmailInstructions":
+        "Bitte überprüfe deine E-Mails und befolge die Anweisungen zur Verifizierung deines Kontos vor der Anmeldung.",
     "backToLogin": "Zurück zur Anmeldung",
     "noEmailReceived": "Keine E-Mail erhalten?",
     "resendVerification": "Verifizierungs-E-Mail erneut senden",
     "verificationResent": "Verifizierungs-E-Mail wurde erneut gesendet",
-    "verificationResendFailed": "Konnte Verifizierungs-E-Mail nicht erneut senden. Bitte versuche es erneut.",
-    "usernameInvalidChars": "Benutzername darf nur Buchstaben, Zahlen, Unterstriche, Punkte und Bindestriche enthalten",
-    "networkError": "Netzwerkfehler. Bitte überprüfe deine Verbindung und versuche es erneut."
+    "verificationResendFailed":
+        "Konnte Verifizierungs-E-Mail nicht erneut senden. Bitte versuche es erneut.",
+    "usernameInvalidChars":
+        "Benutzername darf nur Buchstaben, Zahlen, Unterstriche, Punkte und Bindestriche enthalten",
+    "networkError":
+        "Netzwerkfehler. Bitte überprüfe deine Verbindung und versuche es erneut."
   },
   "login": {
     "appTitle": "Genie AI",
@@ -309,7 +325,8 @@ const Map<String, dynamic> deLocale = {
     "or": "oder",
     "savedAccounts": "Gespeicherte Konten",
     "loginSuccess": "Anmeldung erfolgreich",
-    "loginError": "Anmeldung fehlgeschlagen. Bitte überprüfe deine Anmeldedaten.",
+    "loginError":
+        "Anmeldung fehlgeschlagen. Bitte überprüfe deine Anmeldedaten.",
     "googleLogin": "Weiter mit Google",
     "facebookLogin": "Weiter mit Facebook",
     "rememberMe": "Angemeldet bleiben",
@@ -317,14 +334,17 @@ const Map<String, dynamic> deLocale = {
     "noAccount": "Kein Konto?",
     "createAccount": "Konto erstellen",
     "registerNow": "Jetzt registrieren",
-    "termsAndPolicy": "Durch die Anmeldung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
+    "termsAndPolicy":
+        "Durch die Anmeldung stimmst du unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu",
     "loggingIn": "Melde an...",
     "fieldsRequired": "Benutzername und Passwort sind erforderlich",
     "invalidCredentials": "Ungültiger Benutzername oder Passwort",
-    "tooManyAttempts": "Zu viele Anmeldeversuche. Bitte versuche es später erneut.",
+    "tooManyAttempts":
+        "Zu viele Anmeldeversuche. Bitte versuche es später erneut.",
     "loginFailed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
     "oauthNotImplemented": "Social Login ist noch nicht implementiert",
-    "savedLoginNotImplemented": "Anmeldung mit gespeichertem Konto ist noch nicht implementiert"
+    "savedLoginNotImplemented":
+        "Anmeldung mit gespeichertem Konto ist noch nicht implementiert"
   },
   "brandName": "Genie AI: Dein digitaler Regierungsassistent",
   "nav": {
@@ -385,20 +405,25 @@ const Map<String, dynamic> deLocale = {
     "moveChatTo": "Chat verschieben nach",
     "selectFolder": "Ordner auswählen",
     "deleteChat": "Chat löschen",
-    "deleteChatConfirm": "Bist du sicher, dass du diesen Chat löschen möchtest?",
+    "deleteChatConfirm":
+        "Bist du sicher, dass du diesen Chat löschen möchtest?",
     "deleteChatWarning": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "renameChat": "Chat umbenennen",
     "chatTitle": "Chat-Titel",
     "chatTitlePlaceholder": "Gib einen Titel für diesen Chat ein",
     "deleteFolder": "Ordner löschen",
-    "deleteFolderConfirm": "Bist du sicher, dass du den Ordner '{name}' löschen möchtest?",
-    "chatsMoveWarning": "Alle Chats in diesem Ordner werden in den Standardordner verschoben.",
-    "weatherError": "Wetterdaten konnten nicht geladen werden. Bitte versuche es erneut.",
+    "deleteFolderConfirm":
+        "Bist du sicher, dass du den Ordner '{name}' löschen möchtest?",
+    "chatsMoveWarning":
+        "Alle Chats in diesem Ordner werden in den Standardordner verschoben.",
+    "weatherError":
+        "Wetterdaten konnten nicht geladen werden. Bitte versuche es erneut.",
     "weatherTitle": "Wettervorhersage",
     "weatherLoading": "Lade Wetterdaten...",
     "weatherLocationLoading": "Lade Standort...",
     "weatherErrorDefault": "Wetterdaten konnten nicht abgerufen werden.",
-    "weatherGeolocationUnsupported": "Geolokalisierung wird von deinem Browser nicht unterstützt.",
+    "weatherGeolocationUnsupported":
+        "Geolokalisierung wird von deinem Browser nicht unterstützt.",
     "weatherRefresh": "Wetter aktualisieren",
     "weatherConditions": {
       "clear": "Klar",
@@ -411,7 +436,8 @@ const Map<String, dynamic> deLocale = {
       "snow": "Schnee"
     },
     "folders": "Ordner",
-    "emptyFolder": "Dieser Ordner ist leer. Verschiebe Unterhaltungen hierher aus dem Chat-Menü.",
+    "emptyFolder":
+        "Dieser Ordner ist leer. Verschiebe Unterhaltungen hierher aus dem Chat-Menü.",
     "title": "Infos & Ressourcen",
     "noChats": "Keine aktuellen Chats",
     "relatedDocs": "Verwandte Dokumente",
@@ -429,12 +455,15 @@ const Map<String, dynamic> deLocale = {
     "noFolder": "Kein Ordner",
     "starredChats": "Favorisierte Chats",
     "archivedChats": "Archivierte Chats",
-    "noStarredChats": "Noch keine favorisierten Unterhaltungen. Markiere eine Unterhaltung, um sie hier hinzuzufügen.",
+    "noStarredChats":
+        "Noch keine favorisierten Unterhaltungen. Markiere eine Unterhaltung, um sie hier hinzuzufügen.",
     "noArchivedChats": "Noch keine archivierten Unterhaltungen.",
     "noSearchResults": "Keine Unterhaltungen für \"{term}\" gefunden",
     "loadingChats": "Lade Unterhaltungen...",
-    "errorLoadingConversations": "Laden der Unterhaltungen fehlgeschlagen. Bitte versuche es erneut.",
-    "errorLoadingUser": "Benutzerdaten sind unvollständig. Bitte lade die Seite neu.",
+    "errorLoadingConversations":
+        "Laden der Unterhaltungen fehlgeschlagen. Bitte versuche es erneut.",
+    "errorLoadingUser":
+        "Benutzerdaten sind unvollständig. Bitte lade die Seite neu.",
     "errorNoUser": "Benutzerdaten fehlen. Bitte lade die Seite neu.",
     "retry": "Wiederholen",
     "message": "Nachricht",
@@ -457,7 +486,8 @@ const Map<String, dynamic> deLocale = {
     "errorMovingChat": "Verschieben der Unterhaltung fehlgeschlagen",
     "noPreview": "Keine Vorschau verfügbar",
     "searchConversations": "Unterhaltungen durchsuchen...",
-    "selectFolderInstruction": "Wähle einen Ordner, um seine Unterhaltungen anzuzeigen",
+    "selectFolderInstruction":
+        "Wähle einen Ordner, um seine Unterhaltungen anzuzeigen",
     "folderCreated": "Ordner erfolgreich erstellt",
     "errorCreatingFolder": "Erstellen des Ordners fehlgeschlagen",
     "errorLoadingFolders": "Laden der Ordner fehlgeschlagen",
@@ -482,51 +512,113 @@ const Map<String, dynamic> deLocale = {
   "leftPanel": {
     "cat1": {
       "name": "1. Identität & Zivilregistrierung",
-      "children": ["Geburtsurkunden", "Nationale Personalausweise", "Reisepässe", "Heirats- und Sterbeurkunden", "Wählerregistrierung"]
+      "children": [
+        "Geburtsurkunden",
+        "Nationale Personalausweise",
+        "Reisepässe",
+        "Heirats- und Sterbeurkunden",
+        "Wählerregistrierung"
+      ]
     },
     "cat2": {
       "name": "2. Gesundheitswesen & Soziale Dienste",
-      "children": ["Zugang zum öffentlichen Gesundheitswesen", "Impfprogramme", "Krankenversicherung", "Invaliditätsleistungen", "Sozialhilfe und Lebensmittelunterstützung"]
+      "children": [
+        "Zugang zum öffentlichen Gesundheitswesen",
+        "Impfprogramme",
+        "Krankenversicherung",
+        "Invaliditätsleistungen",
+        "Sozialhilfe und Lebensmittelunterstützung"
+      ]
     },
     "cat3": {
       "name": "3. Bildung & Lernen",
-      "children": ["Öffentliche Schulen und Universitäten", "Stipendien und Studienkredite", "Erwachsenenbildungsprogramme", "Online-Lernressourcen"]
+      "children": [
+        "Öffentliche Schulen und Universitäten",
+        "Stipendien und Studienkredite",
+        "Erwachsenenbildungsprogramme",
+        "Online-Lernressourcen"
+      ]
     },
     "cat4": {
       "name": "4. Beschäftigung & Arbeitsdienste",
-      "children": ["Arbeitssuche und Arbeitslosengeld", "Arbeitnehmerschutz und Arbeitsrechte", "Arbeitssicherheitsvorschriften", "Kompetenztraining und Ausbildung"]
+      "children": [
+        "Arbeitssuche und Arbeitslosengeld",
+        "Arbeitnehmerschutz und Arbeitsrechte",
+        "Arbeitssicherheitsvorschriften",
+        "Kompetenztraining und Ausbildung"
+      ]
     },
     "cat5": {
       "name": "5. Steuern & Einnahmen",
-      "children": ["Einkommensteuererklärung und Rückerstattungen", "Grundsteuerzahlungen", "Gewerbesteuer-Compliance", "Zoll und Einfuhrabgaben"]
+      "children": [
+        "Einkommensteuererklärung und Rückerstattungen",
+        "Grundsteuerzahlungen",
+        "Gewerbesteuer-Compliance",
+        "Zoll und Einfuhrabgaben"
+      ]
     },
     "cat6": {
       "name": "6. Öffentliche Sicherheit & Justiz",
-      "children": ["Polizei und Notdienste", "Gerichts- und Rechtshilfe", "Kriminalitätsmeldung", "Verbraucherschutzgesetze"]
+      "children": [
+        "Polizei und Notdienste",
+        "Gerichts- und Rechtshilfe",
+        "Kriminalitätsmeldung",
+        "Verbraucherschutzgesetze"
+      ]
     },
     "cat7": {
       "name": "7. Transport & Mobilität",
-      "children": ["Führerscheine und Fahrzeugregistrierung", "Öffentlicher Nahverkehr und Infrastruktur", "Verkehrsverstöße und Bußgelder", "Verkehrssicherheitsprogramme"]
+      "children": [
+        "Führerscheine und Fahrzeugregistrierung",
+        "Öffentlicher Nahverkehr und Infrastruktur",
+        "Verkehrsverstöße und Bußgelder",
+        "Verkehrssicherheitsprogramme"
+      ]
     },
     "cat8": {
       "name": "8. Wohnen & Stadtentwicklung",
-      "children": ["Öffentliche Wohnungsbauhilfe", "Eigentumsregistrierung und Grundbücher", "Wohnungsbaudarlehen und Zuschüsse", "Zoneneinteilung und Baugenehmigungen"]
+      "children": [
+        "Öffentliche Wohnungsbauhilfe",
+        "Eigentumsregistrierung und Grundbücher",
+        "Wohnungsbaudarlehen und Zuschüsse",
+        "Zoneneinteilung und Baugenehmigungen"
+      ]
     },
     "cat9": {
       "name": "9. Versorgung & Umwelt",
-      "children": ["Wasser- und Stromdienste", "Abfallwirtschaft und Recycling", "Umweltvorschriften", "Initiativen für erneuerbare Energien"]
+      "children": [
+        "Wasser- und Stromdienste",
+        "Abfallwirtschaft und Recycling",
+        "Umweltvorschriften",
+        "Initiativen für erneuerbare Energien"
+      ]
     },
     "cat10": {
       "name": "10. Wirtschaft & Handel",
-      "children": ["Unternehmensregistrierung und Lizenzierung", "Handelsvorschriften und Genehmigungen", "Zuschüsse und Anreize für Kleinunternehmen", "E-Commerce und digitale Geschäftsunterstützung"]
+      "children": [
+        "Unternehmensregistrierung und Lizenzierung",
+        "Handelsvorschriften und Genehmigungen",
+        "Zuschüsse und Anreize für Kleinunternehmen",
+        "E-Commerce und digitale Geschäftsunterstützung"
+      ]
     },
     "cat11": {
       "name": "11. Soziale Sicherheit & Renten",
-      "children": ["Rentenleistungen", "Pensionsfondsmanagement", "Hinterbliebenenleistungen", "Invaliditätsrenten"]
+      "children": [
+        "Rentenleistungen",
+        "Pensionsfondsmanagement",
+        "Hinterbliebenenleistungen",
+        "Invaliditätsrenten"
+      ]
     },
     "cat12": {
       "name": "12. Gemeinschaft & Bürgerbeteiligung",
-      "children": ["Wahlen und Abstimmungen", "Öffentliches Feedback und Bürgerbeschwerden", "Freiwilligenarbeit und Gemeinschaftsprogramme", "Teilnahme an der lokalen Regierung"]
+      "children": [
+        "Wahlen und Abstimmungen",
+        "Öffentliches Feedback und Bürgerbeschwerden",
+        "Freiwilligenarbeit und Gemeinschaftsprogramme",
+        "Teilnahme an der lokalen Regierung"
+      ]
     }
   },
   "settings": {
@@ -546,11 +638,9 @@ const Map<String, dynamic> deLocale = {
       "swahili": "Suaheli"
     },
     "theme": "Design",
-    "themes": {
-      "light": "Hell",
-      "dark": "Dunkel",
-      "system": "System"
-    },
+    "themes": {"light": "Hell", "dark": "Dunkel", "system": "System"},
+    "themeLight": "Hell",
+    "themeDark": "Dunkel",
     "fontSize": "Schriftgröße",
     "notifications": "Benachrichtigungen",
     "emailUpdates": "E-Mail-Updates",
@@ -561,9 +651,11 @@ const Map<String, dynamic> deLocale = {
     "password": "Passwort",
     "changePassword": "Passwort ändern",
     "resetUserData": "Benutzerdaten zurücksetzen",
-    "resetUserDataDesc": "Dies löscht alle deine Profildaten und den Chatverlauf.",
+    "resetUserDataDesc":
+        "Dies löscht alle deine Profildaten und den Chatverlauf.",
     "deleteAccount": "Konto löschen",
-    "deleteAccountDesc": "Dies löscht dein Konto und alle zugehörigen Daten dauerhaft.",
+    "deleteAccountDesc":
+        "Dies löscht dein Konto und alle zugehörigen Daten dauerhaft.",
     "edit": "Bearbeiten",
     "standardAccount": "Standardkonto",
     "confirmEmailChange": "E-Mail-Änderung bestätigen",
@@ -571,73 +663,92 @@ const Map<String, dynamic> deLocale = {
     "cancel": "Abbrechen",
     "account": {
       "title": "Konto",
-      "resetDescription": "Dies löscht alle deine Profildaten und den Chatverlauf.",
-      "confirmReset": "Bist du sicher, dass du alle deine Daten zurücksetzen möchtest? Dies kann nicht rückgängig gemacht werden.",
+      "resetDescription":
+          "Dies löscht alle deine Profildaten und den Chatverlauf.",
+      "confirmReset":
+          "Bist du sicher, dass du alle deine Daten zurücksetzen möchtest? Dies kann nicht rückgängig gemacht werden.",
       "resetComplete": "Deine Daten wurden zurückgesetzt."
     },
-    "language": {
-      "title": "Sprache",
-      "selectLabel": "Anzeigesprache"
-    },
+    "language": {"title": "Sprache", "selectLabel": "Anzeigesprache"},
     "appearance": {
       "title": "Erscheinungsbild",
       "lightTheme": "Hell",
       "darkTheme": "Dunkel",
       "systemTheme": "System"
     },
-    "confirmDeleteAccount": "Bist du sicher, dass du dein Konto löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "confirmDeleteAccount":
+        "Bist du sicher, dass du dein Konto löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden.",
     "confirmAccountDeletion": "Kontolöschung bestätigen",
-    "accountDeletionWarning": "Warnung: Diese Aktion ist dauerhaft und kann nicht rückgängig gemacht werden. Alle deine Daten werden unwiderruflich gelöscht.",
+    "accountDeletionWarning":
+        "Warnung: Diese Aktion ist dauerhaft und kann nicht rückgängig gemacht werden. Alle deine Daten werden unwiderruflich gelöscht.",
     "deletionReason": "Grund für die Löschung (optional):",
-    "deletionReasonPlaceholder": "Warum hast du dich entschieden, dein Konto zu löschen?",
+    "deletionReasonPlaceholder":
+        "Warum hast du dich entschieden, dein Konto zu löschen?",
     "enterPasswordConfirm": "Gib dein Passwort zur Bestätigung ein:",
     "currentPasswordPlaceholder": "Dein aktuelles Passwort",
     "deleting": "Lösche...",
     "permanentlyDeleteAccount": "Konto löschen",
     "accountDeletedSuccess": "Dein Konto wurde erfolgreich gelöscht.",
     "incorrectPassword": "Falsches Passwort",
-    "accountDeletionFailed": "Löschen des Kontos fehlgeschlagen. Bitte versuche es später erneut.",
+    "accountDeletionFailed":
+        "Löschen des Kontos fehlgeschlagen. Bitte versuche es später erneut.",
     "confirmChange": "Änderung bestätigen",
     "processing": "Verarbeite...",
     "userDataReset": "Deine Profildaten wurden erfolgreich zurückgesetzt.",
-    "failedToResetUserData": "Zurücksetzen der Profildaten fehlgeschlagen. Bitte versuche es später erneut.",
+    "failedToResetUserData":
+        "Zurücksetzen der Profildaten fehlgeschlagen. Bitte versuche es später erneut.",
     "changingEmailTo": "Ändere deine E-Mail zu",
     "will": "wird",
     "logOutSystem": "Dich aus dem System abmelden",
-    "sendVerificationLink": "Einen Verifizierungslink an deine neue E-Mail senden",
-    "requireVerification": "Verifizierung erfordern, bevor du dich wieder anmelden kannst",
-    "checkNewEmailVerification": "Bitte überprüfe deine neue E-Mail auf Verifizierungsanweisungen.",
-    "unableToVerifyEmail": "E-Mail konnte nicht verifiziert werden. Bitte versuche es erneut.",
+    "sendVerificationLink":
+        "Einen Verifizierungslink an deine neue E-Mail senden",
+    "requireVerification":
+        "Verifizierung erfordern, bevor du dich wieder anmelden kannst",
+    "checkNewEmailVerification":
+        "Bitte überprüfe deine neue E-Mail auf Verifizierungsanweisungen.",
+    "unableToVerifyEmail":
+        "E-Mail konnte nicht verifiziert werden. Bitte versuche es erneut.",
     "emailAlreadyInUse": "E-Mail bereits in Verwendung",
     "enterValidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
-    "failedToUpdateEmail": "Aktualisieren der E-Mail fehlgeschlagen. Bitte versuche es erneut.",
-    "passwordResetInitiated": "Ein Link zum Zurücksetzen des Passworts wurde an deine E-Mail-Adresse gesendet.",
-    "unableToLoadUser": "Benutzerinformationen konnten nicht geladen werden. Bitte versuche es erneut.",
+    "failedToUpdateEmail":
+        "Aktualisieren der E-Mail fehlgeschlagen. Bitte versuche es erneut.",
+    "passwordResetInitiated":
+        "Ein Link zum Zurücksetzen des Passworts wurde an deine E-Mail-Adresse gesendet.",
+    "unableToLoadUser":
+        "Benutzerinformationen konnten nicht geladen werden. Bitte versuche es erneut.",
     "retry": "Wiederholen",
     "user": "Benutzer",
     "loadingUserInfo": "Lade Benutzerinformationen...",
     "resetUserDataTitle": "Benutzerdaten zurücksetzen",
-    "confirmResetUserData": "Bist du sicher, dass du alle deine Profildaten zurücksetzen möchtest? Dies löscht alle Profilinformationen und den Chatverlauf, behält aber deine Zugangsdaten.",
+    "confirmResetUserData":
+        "Bist du sicher, dass du alle deine Profildaten zurücksetzen möchtest? Dies löscht alle Profilinformationen und den Chatverlauf, behält aber deine Zugangsdaten.",
     "reset": "Zurücksetzen",
     "deleteAccountTitle": "Konto löschen"
   },
   "userProfile": {
     "title": "Benutzerprofil",
-    "privacyInfo": "Durch die Bereitstellung weiterer Informationen erhältst du genauere und sinnvollere Antworten vom Chatbot. Bitte lies unsere",
+    "privacyInfo":
+        "Durch die Bereitstellung weiterer Informationen erhältst du genauere und sinnvollere Antworten vom Chatbot. Bitte lies unsere",
     "privacyPolicyLink": "Datenschutzrichtlinie",
-    "tabComingSoon": "Dieser Tab ist in Entwicklung und wird bald verfügbar sein.",
+    "tabComingSoon":
+        "Dieser Tab ist in Entwicklung und wird bald verfügbar sein.",
     "saveSuccess": "Profil erfolgreich gespeichert",
     "loadError": "Fehler beim Laden der Profildaten",
     "saveError": "Fehler beim Speichern des Profils",
     "confirmSaveTitle": "Profil speichern",
-    "confirmSave": "Bist du sicher, dass du diese Änderungen speichern möchtest?",
-    "confirmCancel": "Du hast ungespeicherte Änderungen. Bist du sicher, dass du abbrechen möchtest?",
-    "confirmLeave": "Bist du sicher, dass du gehen möchtest? Ungespeicherte Änderungen gehen verloren.",
+    "confirmSave":
+        "Bist du sicher, dass du diese Änderungen speichern möchtest?",
+    "confirmCancel":
+        "Du hast ungespeicherte Änderungen. Bist du sicher, dass du abbrechen möchtest?",
+    "confirmLeave":
+        "Bist du sicher, dass du gehen möchtest? Ungespeicherte Änderungen gehen verloren.",
     "confirmDiscardChanges": "Ungespeicherte Änderungen verwerfen?",
     "uploadPhoto": "Foto hochladen",
     "uploadFile": "Datei hochladen",
-    "photoRequirements": "Foto muss klar, aktuell sein und dein ganzes Gesicht zeigen",
-    "biometricRequirements": "Nur offizielle biometrische Daten werden akzeptiert",
+    "photoRequirements":
+        "Foto muss klar, aktuell sein und dein ganzes Gesicht zeigen",
+    "biometricRequirements":
+        "Nur offizielle biometrische Daten werden akzeptiert",
     "documentUpload": "Dokument-Upload",
     "validationTitle": "Bitte korrigiere die folgenden Fehler:",
     "profileIcon": "Profilsymbol",
@@ -743,7 +854,8 @@ const Map<String, dynamic> deLocale = {
       "childcare": "Kinderbetreuungsunterstützung",
       "foodAssistance": "Lebensmittelhilfe / Sozialhilfeprogramme",
       "housingAssistance": "Wohnungshilfe",
-      "policeRecords": "Polizeiakten (Kriminalgeschichte, Verhaftungen, Anklagen)",
+      "policeRecords":
+          "Polizeiakten (Kriminalgeschichte, Verhaftungen, Anklagen)",
       "courtCases": "Gerichtsfallhistorie",
       "finesPenalties": "Bußgelder und Strafen",
       "paroleProbation": "Bewährungs- oder Bewährungsstatus",
@@ -797,21 +909,26 @@ const Map<String, dynamic> deLocale = {
       "uploadSuccess": "Datei erfolgreich hochgeladen",
       "uploadFailed": "Fehler beim Hochladen der Datei",
       "formChanged": "Du hast ungespeicherte Änderungen",
-      "sessionExpired": "Deine Sitzung ist abgelaufen, bitte melde dich erneut an",
+      "sessionExpired":
+          "Deine Sitzung ist abgelaufen, bitte melde dich erneut an",
       "profileUpdated": "Dein Profil wurde aktualisiert",
       "profileIncomplete": "Dein Profil ist unvollständig"
     },
     "instructions": {
-      "fullNameHelp": "Gib deinen vollen gesetzlichen Namen ein, wie er auf deinen offiziellen Dokumenten erscheint",
+      "fullNameHelp":
+          "Gib deinen vollen gesetzlichen Namen ein, wie er auf deinen offiziellen Dokumenten erscheint",
       "dobHelp": "Gib dein Geburtsdatum im Format MM/TT/JJJJ ein",
-      "uploadPhotoHelp": "Lade ein aktuelles Foto hoch. Datei muss JPG, PNG oder GIF sein und weniger als 2MB",
-      "passwordHelp": "Passwort muss mindestens 8 Zeichen lang sein, mit einem Großbuchstaben, einer Zahl und einem Sonderzeichen",
+      "uploadPhotoHelp":
+          "Lade ein aktuelles Foto hoch. Datei muss JPG, PNG oder GIF sein und weniger als 2MB",
+      "passwordHelp":
+          "Passwort muss mindestens 8 Zeichen lang sein, mit einem Großbuchstaben, einer Zahl und einem Sonderzeichen",
       "documentHelp": "Akzeptierte Formate: PDF, JPG, PNG (max 5MB)",
       "requiredFields": "Mit * gekennzeichnete Felder sind Pflichtfelder",
       "selectFromList": "Bitte wähle eine Option aus der Liste",
       "nextTab": "Weiter zum nächsten Abschnitt",
       "previousTab": "Zurück zum vorherigen Abschnitt",
-      "saveInstructions": "Klicke auf Speichern, um deine Informationen zu speichern",
+      "saveInstructions":
+          "Klicke auf Speichern, um deine Informationen zu speichern",
       "cancelInstructions": "Klicke auf Abbrechen, um Änderungen zu verwerfen"
     },
     "completionStatus": {
@@ -895,46 +1012,142 @@ const Map<String, dynamic> deLocale = {
       "urdu": "Urdu",
       "other": "Andere"
     },
-    "yesNo": {
-      "yes": "Ja",
-      "no": "Nein"
-    },
+    "yesNo": {"yes": "Ja", "no": "Nein"},
     "select": "Bitte auswählen",
     "existingFile": "Vorhandene Datei",
     "noMatchingCountries": "Keine passenden Länder gefunden",
     "noMatchingDisciplines": "Keine passenden Disziplinen gefunden",
     "noMatchingDegrees": "Keine passenden Abschlüsse gefunden",
     "educationOptions": [
-      "Rechnungswesen", "Luft- und Raumfahrttechnik", "Agrarwissenschaften", "Anthropologie", "Architektur",
-      "Kunstgeschichte", "Künstliche Intelligenz", "Astronomie", "Astrophysik", "Biochemie",
-      "Biomedizintechnik", "Biotechnologie", "Betriebswirtschaftslehre", "Chemieingenieurwesen",
-      "Chemie", "Bauingenieurwesen", "Kommunikationswissenschaft", "Technische Informatik", "Informatik",
-      "Baumanagement", "Strafjustiz", "Cybersicherheit", "Data Science", "Zahnmedizin",
-      "Volkswirtschaftslehre", "Pädagogik", "Elektrotechnik", "Grundschulpädagogik", "Englische Literatur",
-      "Umweltingenieurwesen", "Umweltwissenschaften", "Modedesign", "Filmwissenschaft",
-      "Finanzen", "Bildende Kunst", "Lebensmittelwissenschaft", "Forensik", "Spieldesign", "Geographie",
-      "Geologie", "Grafikdesign", "Gesundheitsmanagement", "Geschichte", "Gastgewerbe-Management",
-      "Personalwesen", "Industriedesign", "Wirtschaftsingenieurwesen", "Wirtschaftsinformatik",
-      "Informationstechnologie", "Innenarchitektur", "Internationale Betriebswirtschaft", "Internationale Beziehungen",
-      "Journalismus", "Rechtswissenschaften", "Bibliothekswissenschaft", "Linguistik", "Management", "Marketing",
-      "Materialwissenschaft", "Mathematik", "Maschinenbau", "Medienwissenschaft", "Medizin",
-      "Meteorologie", "Mikrobiologie", "Musik", "Nanotechnologie", "Pflegewissenschaft", "Ernährungswissenschaft",
-      "Ergotherapie", "Ozeanographie", "Erdölingenieurwesen", "Pharmazie", "Philosophie",
-      "Fotografie", "Sportunterricht", "Physiotherapie", "Physik", "Politikwissenschaft",
-      "Psychologie", "Öffentliche Verwaltung", "Gesundheitswesen", "Öffentlichkeitsarbeit", "Robotik",
-      "Sekundarschulbildung", "Soziale Arbeit", "Soziologie", "Softwaretechnik", "Sonderpädagogik",
-      "Sportmanagement", "Statistik", "Systemtechnik", "Theaterwissenschaft", "Tourismus",
-      "Stadtplanung", "Veterinärmedizin", "Webentwicklung", "Wildbiologie", "Zoologie"
+      "Rechnungswesen",
+      "Luft- und Raumfahrttechnik",
+      "Agrarwissenschaften",
+      "Anthropologie",
+      "Architektur",
+      "Kunstgeschichte",
+      "Künstliche Intelligenz",
+      "Astronomie",
+      "Astrophysik",
+      "Biochemie",
+      "Biomedizintechnik",
+      "Biotechnologie",
+      "Betriebswirtschaftslehre",
+      "Chemieingenieurwesen",
+      "Chemie",
+      "Bauingenieurwesen",
+      "Kommunikationswissenschaft",
+      "Technische Informatik",
+      "Informatik",
+      "Baumanagement",
+      "Strafjustiz",
+      "Cybersicherheit",
+      "Data Science",
+      "Zahnmedizin",
+      "Volkswirtschaftslehre",
+      "Pädagogik",
+      "Elektrotechnik",
+      "Grundschulpädagogik",
+      "Englische Literatur",
+      "Umweltingenieurwesen",
+      "Umweltwissenschaften",
+      "Modedesign",
+      "Filmwissenschaft",
+      "Finanzen",
+      "Bildende Kunst",
+      "Lebensmittelwissenschaft",
+      "Forensik",
+      "Spieldesign",
+      "Geographie",
+      "Geologie",
+      "Grafikdesign",
+      "Gesundheitsmanagement",
+      "Geschichte",
+      "Gastgewerbe-Management",
+      "Personalwesen",
+      "Industriedesign",
+      "Wirtschaftsingenieurwesen",
+      "Wirtschaftsinformatik",
+      "Informationstechnologie",
+      "Innenarchitektur",
+      "Internationale Betriebswirtschaft",
+      "Internationale Beziehungen",
+      "Journalismus",
+      "Rechtswissenschaften",
+      "Bibliothekswissenschaft",
+      "Linguistik",
+      "Management",
+      "Marketing",
+      "Materialwissenschaft",
+      "Mathematik",
+      "Maschinenbau",
+      "Medienwissenschaft",
+      "Medizin",
+      "Meteorologie",
+      "Mikrobiologie",
+      "Musik",
+      "Nanotechnologie",
+      "Pflegewissenschaft",
+      "Ernährungswissenschaft",
+      "Ergotherapie",
+      "Ozeanographie",
+      "Erdölingenieurwesen",
+      "Pharmazie",
+      "Philosophie",
+      "Fotografie",
+      "Sportunterricht",
+      "Physiotherapie",
+      "Physik",
+      "Politikwissenschaft",
+      "Psychologie",
+      "Öffentliche Verwaltung",
+      "Gesundheitswesen",
+      "Öffentlichkeitsarbeit",
+      "Robotik",
+      "Sekundarschulbildung",
+      "Soziale Arbeit",
+      "Soziologie",
+      "Softwaretechnik",
+      "Sonderpädagogik",
+      "Sportmanagement",
+      "Statistik",
+      "Systemtechnik",
+      "Theaterwissenschaft",
+      "Tourismus",
+      "Stadtplanung",
+      "Veterinärmedizin",
+      "Webentwicklung",
+      "Wildbiologie",
+      "Zoologie"
     ],
     "degreeOptions": [
-      "Associate Degree", "Bachelor of Arts (BA)", "Bachelor of Science (BS)", "Bachelor of Engineering (BEng)",
-      "Bachelor of Business Administration (BBA)", "Bachelor of Fine Arts (BFA)", "Bachelor of Education (BEd)",
-      "Bachelor of Medicine (MBBS)", "Bachelor of Laws (LLB)", "Master of Arts (MA)", "Master of Science (MS)",
-      "Master of Business Administration (MBA)", "Master of Engineering (MEng)", "Master of Fine Arts (MFA)",
-      "Master of Education (MEd)", "Master of Laws (LLM)", "Master of Public Health (MPH)",
-      "Doctor of Philosophy (PhD)", "Doctor of Medicine (MD)", "Doctor of Education (EdD)",
-      "Doctor of Business Administration (DBA)", "Doctor of Jurisprudence (JD)", "Professional Diploma",
-      "Technical Diploma", "Vocational Certificate", "Graduate Certificate", "Post-Graduate Diploma", "Post-Doctoral"
+      "Associate Degree",
+      "Bachelor of Arts (BA)",
+      "Bachelor of Science (BS)",
+      "Bachelor of Engineering (BEng)",
+      "Bachelor of Business Administration (BBA)",
+      "Bachelor of Fine Arts (BFA)",
+      "Bachelor of Education (BEd)",
+      "Bachelor of Medicine (MBBS)",
+      "Bachelor of Laws (LLB)",
+      "Master of Arts (MA)",
+      "Master of Science (MS)",
+      "Master of Business Administration (MBA)",
+      "Master of Engineering (MEng)",
+      "Master of Fine Arts (MFA)",
+      "Master of Education (MEd)",
+      "Master of Laws (LLM)",
+      "Master of Public Health (MPH)",
+      "Doctor of Philosophy (PhD)",
+      "Doctor of Medicine (MD)",
+      "Doctor of Education (EdD)",
+      "Doctor of Business Administration (DBA)",
+      "Doctor of Jurisprudence (JD)",
+      "Professional Diploma",
+      "Technical Diploma",
+      "Vocational Certificate",
+      "Graduate Certificate",
+      "Post-Graduate Diploma",
+      "Post-Doctoral"
     ],
     "aria": {
       "tabList": "Profilformularabschnitte",
@@ -952,7 +1165,8 @@ const Map<String, dynamic> deLocale = {
     "fileReceived": "Datei erfolgreich empfangen.",
     "fileUploadError": "Fehler beim Hochladen der Datei.",
     "processingError": "Fehler bei der Verarbeitung deiner Anfrage.",
-    "welcomeMessage": "Willkommen! Wie kann ich dir heute bei kenianischen Regierungsdiensten helfen?",
+    "welcomeMessage":
+        "Willkommen! Wie kann ich dir heute bei kenianischen Regierungsdiensten helfen?",
     "attachFile": "Datei anhängen",
     "fileTooLarge": "Datei ist zu groß. Maximale Größe ist {maxSize}.",
     "saveChat": "Chat speichern",
@@ -962,7 +1176,8 @@ const Map<String, dynamic> deLocale = {
     "selectFolder": "Ordner auswählen",
     "newChat": "Neuer Chat",
     "clearContext": "Kontext löschen und neue Unterhaltung beginnen",
-    "unsavedChanges": "Du hast ungespeicherte Änderungen. Bist du sicher, dass du einen neuen Chat beginnen möchtest?",
+    "unsavedChanges":
+        "Du hast ungespeicherte Änderungen. Bist du sicher, dass du einen neuen Chat beginnen möchtest?",
     "whatCanIHelp": "Wie kann ich dir heute helfen?",
     "justChat": "Einfach chatten",
     "queryContext": "Abfragekontext",
@@ -977,7 +1192,8 @@ const Map<String, dynamic> deLocale = {
     "saveConfirmTitle": "Bestehende Unterhaltung speichern",
     "saveConfirmMessage": "Bestehende Unterhaltung speichern?",
     "loadConfirmTitle": "Bestehende Unterhaltung laden",
-    "loadConfirmMessage": "Du hast ungespeicherte Änderungen. Möchtest du sie verwerfen und die ausgewählte Unterhaltung laden oder die aktuelle Unterhaltung zuerst speichern?",
+    "loadConfirmMessage":
+        "Du hast ungespeicherte Änderungen. Möchtest du sie verwerfen und die ausgewählte Unterhaltung laden oder die aktuelle Unterhaltung zuerst speichern?",
     "loadAndDiscard": "Laden und verwerfen",
     "saveAndLoad": "Speichern und laden",
     "saveAndStartNew": "Speichern und neu beginnen",
@@ -988,13 +1204,15 @@ const Map<String, dynamic> deLocale = {
     "exportFilenamePlaceholder": "Dateinamen eingeben",
     "exportButton": "Exportieren",
     "exportSuccess": "Chat erfolgreich exportiert",
-    "exportError": "Exportieren des Chats fehlgeschlagen. Bitte versuche es erneut.",
+    "exportError":
+        "Exportieren des Chats fehlgeschlagen. Bitte versuche es erneut.",
     "thinking": "Genie denkt nach...",
     "contextPrefix": "Kontext:",
     "removeContext": "Kontext entfernen",
     "dialogs": {
       "newChatTitle": "Neuen Chat starten?",
-      "newChatContent": "Sie haben ungespeicherte Änderungen. Trotzdem neuen Chat starten?",
+      "newChatContent":
+          "Sie haben ungespeicherte Änderungen. Trotzdem neuen Chat starten?",
       "loadChatTitle": "Konversation laden?",
       "loadChatContent": "Sie haben ungespeicherte Änderungen. Trotzdem laden?",
       "saveTitle": "Konversation speichern",
@@ -1019,15 +1237,23 @@ const Map<String, dynamic> deLocale = {
     "housingPrograms": "Wohnungsprogramme",
     "findJobs": "Jobs finden",
     "justChat": "Einfach chatten",
-    "justChatPrompt": "Ich möchte über Regierungsdienste chatten",
-    "applyForIDPrompt": "Ich benötige Informationen zur Beantragung eines nationalen Personalausweises",
-    "payTaxesPrompt": "Wie ist der Prozess für die Online-Zahlung meiner Steuern?",
-    "startBusinessPrompt": "Führe mich durch die Schritte zur Registrierung eines neuen Unternehmens",
-    "findHealthcarePrompt": "Wo finde ich Informationen über öffentliche Gesundheitsdienste?",
-    "educationServicesPrompt": "Welche Bildungsdienste stehen meinen Kindern zur Verfügung?",
-    "transportLicensesPrompt": "Wie erneuere ich meinen Führerschein?",
-    "housingProgramsPrompt": "Erzähl mir von erschwinglichen Wohnbauprogrammen in Kenia",
-    "findJobsPrompt": "Welche staatlichen Stellenangebote sind derzeit verfügbar?"
+    "justChatPrompt":
+        "Ich möchte mich über staatliche Dienstleistungen in Kenia unterhalten",
+    "applyForIDPrompt":
+        "Ich benötige Informationen zur Beantragung eines nationalen Personalausweises in Kenia",
+    "payTaxesPrompt":
+        "Wie läuft der Prozess der Online-Steuerzahlung in Kenia ab?",
+    "startBusinessPrompt":
+        "Führe mich durch die Schritte zur Registrierung eines neuen Unternehmens in Kenia",
+    "findHealthcarePrompt":
+        "Wo finde ich Informationen über öffentliche Gesundheitsdienste in Kenia?",
+    "educationServicesPrompt":
+        "Welche Bildungsangebote stehen meinen Kindern in Kenia zur Verfügung?",
+    "transportLicensesPrompt": "Wie erneuere ich meinen Führerschein in Kenia?",
+    "housingProgramsPrompt":
+        "Erzähl mir von Programmen für bezahlbaren Wohnraum in Kenia",
+    "findJobsPrompt":
+        "Welche staatlichen Stellenangebote sind derzeit in Kenia verfügbar?",
   },
   "common": {
     "cancel": "Abbrechen",
@@ -1042,7 +1268,8 @@ const Map<String, dynamic> deLocale = {
     "refresh": "Aktualisieren",
     "open": "Öffnen",
     "done": "Fertig",
-    "confirm": "Bestätigen"
+    "confirm": "Bestätigen",
+    "edit": "Bearbeiten"
   },
   "feedback": {
     "title": "Feedback",
@@ -1060,7 +1287,8 @@ const Map<String, dynamic> deLocale = {
   },
   "responseRating": {
     "title": "Hilf uns zu verbessern",
-    "note": "Dein Feedback wird verwendet, um den Chatbot besser abzustimmen und die Antworten im Laufe der Zeit zu verbessern.",
+    "note":
+        "Dein Feedback wird verwendet, um den Chatbot besser abzustimmen und die Antworten im Laufe der Zeit zu verbessern.",
     "chatbotResponse": "Chatbot-Antwort:",
     "ratingLabels": {
       "1": "Nutzlos",
@@ -1073,9 +1301,7 @@ const Map<String, dynamic> deLocale = {
     "submit": "Senden",
     "cancel": "Abbrechen"
   },
-  "upload": {
-    "alt": "Hochladen"
-  },
+  "upload": {"alt": "Hochladen"},
   "uploadDialog": {
     "title": "Dateien hochladen",
     "dropzone": "Dateien hierher ziehen & ablegen, oder klicken zum Auswählen",
@@ -1084,9 +1310,11 @@ const Map<String, dynamic> deLocale = {
     "remove": "Entfernen",
     "uploading": "Hochladen...",
     "notifications": {
-      "dropError": "Nur Dateien können abgelegt werden. Bitte prüfen Sie, ob Sie eine gültige Datei von Ihrem Computer ziehen.",
+      "dropError":
+          "Nur Dateien können abgelegt werden. Bitte prüfen Sie, ob Sie eine gültige Datei von Ihrem Computer ziehen.",
       "typeNotAllowed": "Dateityp \"{extension}\" ist nicht erlaubt.",
-      "shortcutUnsupported": "Verknüpfungsdateien (.url) werden nicht unterstützt. Bitte ziehen Sie die eigentliche Datei.",
+      "shortcutUnsupported":
+          "Verknüpfungsdateien (.url) werden nicht unterstützt. Bitte ziehen Sie die eigentliche Datei.",
       "duplicate": "Datei \"{fileName}\" wurde bereits hinzugefügt.",
       "uploadSuccess": "{fileName} erfolgreich hochgeladen",
       "uploadFailed": "Fehler beim Hochladen von {fileName}."

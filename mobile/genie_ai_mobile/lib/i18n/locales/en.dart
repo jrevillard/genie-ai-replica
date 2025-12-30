@@ -202,10 +202,12 @@ const Map<String, dynamic> enLocale = {
     "verifying": "Verifying your email...",
     "success": "Email Verified Successfully!",
     "failed": "Verification Failed",
-    "accountVerified": "Your account has been successfully verified. You can now log in to your account.",
+    "accountVerified":
+        "Your account has been successfully verified. You can now log in to your account.",
     "invalidLink": "The verification link is invalid or has expired.",
     "missingToken": "Verification token is missing.",
-    "generalError": "An error occurred during verification. Please try again later.",
+    "generalError":
+        "An error occurred during verification. Please try again later.",
     "proceedToLogin": "Proceed to Login",
     "backToLogin": "Back to Login"
   },
@@ -224,7 +226,8 @@ const Map<String, dynamic> enLocale = {
     "rememberedPassword": "Remember your password?",
     "backToLogin": "Back to Login",
     "supportMessage": "Need help? Contact our support team",
-    "passwordRequirements": "Password must be at least 8 characters with at least 1 number, 1 uppercase letter, and 1 special character",
+    "passwordRequirements":
+        "Password must be at least 8 characters with at least 1 number, 1 uppercase letter, and 1 special character",
     "passwordsDoNotMatch": "Passwords do not match",
     "resetSuccess": "Your password has been successfully reset",
     "resetFailed": "Unable to reset password. Please try again.",
@@ -261,7 +264,8 @@ const Map<String, dynamic> enLocale = {
     "supportMessage": "Need help? Contact our support team",
     "invalidEmail": "Please enter a valid email address",
     "resetRequestSuccess": "Password reset link has been sent to your email",
-    "resetRequestFailed": "Unable to send password reset link. Please try again.",
+    "resetRequestFailed":
+        "Unable to send password reset link. Please try again.",
     "checkEmail": "Please check your email for further instructions."
   },
   "register": {
@@ -281,10 +285,12 @@ const Map<String, dynamic> enLocale = {
     "processing": "Processing...",
     "alreadyHaveAccount": "Already have an account?",
     "loginNow": "Log in",
-    "privacyNotice": "By registering, you agree to our Terms of Service and Privacy Policy",
+    "privacyNotice":
+        "By registering, you agree to our Terms of Service and Privacy Policy",
     "usernameMinLength": "Username must be at least 3 characters",
     "invalidEmail": "Please enter a valid email address",
-    "passwordRequirements": "Password must be at least 8 characters with at least 1 number and 1 uppercase letter",
+    "passwordRequirements":
+        "Password must be at least 8 characters with at least 1 number and 1 uppercase letter",
     "passwordsDoNotMatch": "Passwords do not match",
     "mustAcceptTerms": "You must accept the Terms of Service",
     "registrationFailed": "Registration failed. Please try again.",
@@ -292,13 +298,16 @@ const Map<String, dynamic> enLocale = {
     "emailExists": "Email already exists",
     "registrationSuccess": "Registration Successful!",
     "verificationEmailSent": "A verification email has been sent to {email}",
-    "checkEmailInstructions": "Please check your email and follow the instructions to verify your account before logging in.",
+    "checkEmailInstructions":
+        "Please check your email and follow the instructions to verify your account before logging in.",
     "backToLogin": "Back to Login",
     "noEmailReceived": "Didn't receive an email?",
     "resendVerification": "Resend verification email",
     "verificationResent": "Verification email has been resent",
-    "verificationResendFailed": "Failed to resend verification email. Please try again.",
-    "usernameInvalidChars": "Username can only contain letters, numbers, underscores, dots and hyphens",
+    "verificationResendFailed":
+        "Failed to resend verification email. Please try again.",
+    "usernameInvalidChars":
+        "Username can only contain letters, numbers, underscores, dots and hyphens",
     "networkError": "Network error. Please check your connection and try again."
   },
   "login": {
@@ -317,7 +326,8 @@ const Map<String, dynamic> enLocale = {
     "noAccount": "Don't have an account?",
     "createAccount": "Create account",
     "registerNow": "Register now",
-    "termsAndPolicy": "By logging in, you agree to our Terms of Service and Privacy Policy",
+    "termsAndPolicy":
+        "By logging in, you agree to our Terms of Service and Privacy Policy",
     "loggingIn": "Logging in...",
     "fieldsRequired": "Username and password are required",
     "invalidCredentials": "Invalid username or password",
@@ -334,9 +344,9 @@ const Map<String, dynamic> enLocale = {
     "settings": "Settings",
     "logout": "Log Out",
     "profile": "My Profile",
-    "relatedDocuments": "Related Documents",
     "toggleSidebar": "Toggle sidebar",
     "changeLanguage": "Change language",
+    "relatedDocuments": "Related Documents",
     "languages": {
       "english": "English",
       "french": "French",
@@ -392,13 +402,15 @@ const Map<String, dynamic> enLocale = {
     "chatTitlePlaceholder": "Enter a title for this chat",
     "deleteFolder": "Delete Folder",
     "deleteFolderConfirm": "Are you sure you want to delete '{name}' folder?",
-    "chatsMoveWarning": "All chats in this folder will be moved to the default folder.",
+    "chatsMoveWarning":
+        "All chats in this folder will be moved to the default folder.",
     "weatherError": "Unable to load weather data. Please try again.",
     "weatherTitle": "Weather Forecast",
     "weatherLoading": "Loading weather data...",
     "weatherLocationLoading": "Loading location...",
     "weatherErrorDefault": "Unable to retrieve weather data.",
-    "weatherGeolocationUnsupported": "Geolocation not supported by your browser.",
+    "weatherGeolocationUnsupported":
+        "Geolocation not supported by your browser.",
     "weatherRefresh": "Refresh Weather",
     "weatherConditions": {
       "clear": "Clear",
@@ -411,7 +423,8 @@ const Map<String, dynamic> enLocale = {
       "snow": "Snow"
     },
     "folders": "Folders",
-    "emptyFolder": "This folder is empty. Move conversations here from the chat menu.",
+    "emptyFolder":
+        "This folder is empty. Move conversations here from the chat menu.",
     "title": "Info & Resources",
     "noChats": "No recent chats",
     "relatedDocs": "Related Documents",
@@ -429,11 +442,13 @@ const Map<String, dynamic> enLocale = {
     "noFolder": "No Folder",
     "starredChats": "Starred Chats",
     "archivedChats": "Archived Chats",
-    "noStarredChats": "No starred conversations yet. Star a conversation to add it here.",
+    "noStarredChats":
+        "No starred conversations yet. Star a conversation to add it here.",
     "noArchivedChats": "No archived conversations yet.",
     "noSearchResults": "No conversations found for \"{term}\"",
     "loadingChats": "Loading conversations...",
-    "errorLoadingConversations": "Failed to load conversations. Please try again.",
+    "errorLoadingConversations":
+        "Failed to load conversations. Please try again.",
     "errorLoadingUser": "User data is incomplete. Please reload the page.",
     "errorNoUser": "User data is missing. Please reload the page.",
     "retry": "Retry",
@@ -471,8 +486,7 @@ const Map<String, dynamic> enLocale = {
     "labels": "Labels",
     "confidence": "Confidence",
     "unknown": "Unknown",
-    // --- NEW KEYS for Batch 2 ---
-    "open": "Open", 
+    "open": "Open",
     "faqError": "FAQ not available",
     "matchFound": "Match found",
     "noConversations": "No conversations found",
@@ -483,51 +497,113 @@ const Map<String, dynamic> enLocale = {
   "leftPanel": {
     "cat1": {
       "name": "1. Identity & Civil Registration",
-      "children": ["Birth certificates", "National ID cards", "Passports", "Marriage and death certificates", "Voter registration"]
+      "children": [
+        "Birth certificates",
+        "National ID cards",
+        "Passports",
+        "Marriage and death certificates",
+        "Voter registration"
+      ]
     },
     "cat2": {
       "name": "2. Healthcare & Social Services",
-      "children": ["Public healthcare access", "Vaccination programs", "Health insurance", "Disability benefits", "Welfare and food assistance"]
+      "children": [
+        "Public healthcare access",
+        "Vaccination programs",
+        "Health insurance",
+        "Disability benefits",
+        "Welfare and food assistance"
+      ]
     },
     "cat3": {
       "name": "3. Education & Learning",
-      "children": ["Public schools and universities", "Scholarships and student loans", "Adult education programs", "Online learning resources"]
+      "children": [
+        "Public schools and universities",
+        "Scholarships and student loans",
+        "Adult education programs",
+        "Online learning resources"
+      ]
     },
     "cat4": {
       "name": "4. Employment & Labor Services",
-      "children": ["Job search and unemployment benefits", "Worker protections and labor rights", "Workplace safety regulations", "Skills training and apprenticeships"]
+      "children": [
+        "Job search and unemployment benefits",
+        "Worker protections and labor rights",
+        "Workplace safety regulations",
+        "Skills training and apprenticeships"
+      ]
     },
     "cat5": {
       "name": "5. Taxes & Revenue",
-      "children": ["Income tax filing and refunds", "Property tax payments", "Business tax compliance", "Customs and import duties"]
+      "children": [
+        "Income tax filing and refunds",
+        "Property tax payments",
+        "Business tax compliance",
+        "Customs and import duties"
+      ]
     },
     "cat6": {
       "name": "6. Public Safety & Justice",
-      "children": ["Police and emergency services", "Court and legal aid services", "Crime reporting", "Consumer protection laws"]
+      "children": [
+        "Police and emergency services",
+        "Court and legal aid services",
+        "Crime reporting",
+        "Consumer protection laws"
+      ]
     },
     "cat7": {
       "name": "7. Transportation & Mobility",
-      "children": ["Driver's licenses and vehicle registration", "Public transit and infrastructure", "Traffic violations and fines", "Road safety programs"]
+      "children": [
+        "Driver's licenses and vehicle registration",
+        "Public transit and infrastructure",
+        "Traffic violations and fines",
+        "Road safety programs"
+      ]
     },
     "cat8": {
       "name": "8. Housing & Urban Development",
-      "children": ["Public housing assistance", "Property registration and land records", "Housing loans and subsidies", "Zoning and building permits"]
+      "children": [
+        "Public housing assistance",
+        "Property registration and land records",
+        "Housing loans and subsidies",
+        "Zoning and building permits"
+      ]
     },
     "cat9": {
       "name": "9. Utilities & Environment",
-      "children": ["Water and electricity services", "Waste management and recycling", "Environmental regulations", "Renewable energy initiatives"]
+      "children": [
+        "Water and electricity services",
+        "Waste management and recycling",
+        "Environmental regulations",
+        "Renewable energy initiatives"
+      ]
     },
     "cat10": {
       "name": "10. Business & Trade",
-      "children": ["Business registration and licensing", "Trade regulations and permits", "Small business grants and incentives", "E-commerce and digital business support"]
+      "children": [
+        "Business registration and licensing",
+        "Trade regulations and permits",
+        "Small business grants and incentives",
+        "E-commerce and digital business support"
+      ]
     },
     "cat11": {
       "name": "11. Social Security & Pensions",
-      "children": ["Retirement benefits", "Pension fund management", "Survivor benefits", "Disability pensions"]
+      "children": [
+        "Retirement benefits",
+        "Pension fund management",
+        "Survivor benefits",
+        "Disability pensions"
+      ]
     },
     "cat12": {
       "name": "12. Community & Civic Engagement",
-      "children": ["Voting and elections", "Public feedback and citizen complaints", "Volunteering and community programs", "Local government participation"]
+      "children": [
+        "Voting and elections",
+        "Public feedback and citizen complaints",
+        "Volunteering and community programs",
+        "Local government participation"
+      ]
     }
   },
   "settings": {
@@ -547,11 +623,9 @@ const Map<String, dynamic> enLocale = {
       "swahili": "Swahili"
     },
     "theme": "Theme",
-    "themes": {
-      "light": "Light",
-      "dark": "Dark",
-      "system": "System"
-    },
+    "themes": {"light": "Light", "dark": "Dark", "system": "System"},
+    "themeLight": "Light",
+    "themeDark": "Dark",
     "fontSize": "Font Size",
     "notifications": "Notifications",
     "emailUpdates": "Email updates",
@@ -562,9 +636,11 @@ const Map<String, dynamic> enLocale = {
     "password": "Password",
     "changePassword": "Change Password",
     "resetUserData": "Reset User Data",
-    "resetUserDataDesc": "This will clear all your profile data and chat history.",
+    "resetUserDataDesc":
+        "This will clear all your profile data and chat history.",
     "deleteAccount": "Delete Account",
-    "deleteAccountDesc": "This will permanently delete your account and all associated data.",
+    "deleteAccountDesc":
+        "This will permanently delete your account and all associated data.",
     "edit": "Edit",
     "standardAccount": "Standard Account",
     "confirmEmailChange": "Confirm Email Change",
@@ -572,23 +648,24 @@ const Map<String, dynamic> enLocale = {
     "cancel": "Cancel",
     "account": {
       "title": "Account",
-      "resetDescription": "This will clear all your profile data and chat history.",
-      "confirmReset": "Are you sure you want to reset all your data? This cannot be undone.",
+      "resetDescription":
+          "This will clear all your profile data and chat history.",
+      "confirmReset":
+          "Are you sure you want to reset all your data? This cannot be undone.",
       "resetComplete": "Your data has been reset."
     },
-    "language": {
-      "title": "Language",
-      "selectLabel": "Display Language"
-    },
+    "language": {"title": "Language", "selectLabel": "Display Language"},
     "appearance": {
       "title": "Appearance",
       "lightTheme": "Light",
       "darkTheme": "Dark",
       "systemTheme": "System"
     },
-    "confirmDeleteAccount": "Are you sure you want to delete your account? This action cannot be undone.",
+    "confirmDeleteAccount":
+        "Are you sure you want to delete your account? This action cannot be undone.",
     "confirmAccountDeletion": "Confirm Account Deletion",
-    "accountDeletionWarning": "Warning: This action is permanent and cannot be undone. All your data will be permanently deleted.",
+    "accountDeletionWarning":
+        "Warning: This action is permanent and cannot be undone. All your data will be permanently deleted.",
     "deletionReason": "Reason for deletion (optional):",
     "deletionReasonPlaceholder": "What made you decide to delete your account?",
     "enterPasswordConfirm": "Enter your password to confirm:",
@@ -597,43 +674,52 @@ const Map<String, dynamic> enLocale = {
     "permanentlyDeleteAccount": "Delete Account",
     "accountDeletedSuccess": "Your account has been deleted successfully.",
     "incorrectPassword": "Incorrect password",
-    "accountDeletionFailed": "Failed to delete account. Please try again later.",
+    "accountDeletionFailed":
+        "Failed to delete account. Please try again later.",
     "confirmChange": "Confirm Change",
     "processing": "Processing...",
     "userDataReset": "Your profile data has been successfully reset.",
-    "failedToResetUserData": "Failed to reset your profile data. Please try again later.",
+    "failedToResetUserData":
+        "Failed to reset your profile data. Please try again later.",
     "changingEmailTo": "Changing your email to",
     "will": "will",
     "logOutSystem": "Log you out of the system",
     "sendVerificationLink": "Send a verification link to your new email",
     "requireVerification": "Require verification before you can log in again",
-    "checkNewEmailVerification": "Please check your new email for verification instructions.",
+    "checkNewEmailVerification":
+        "Please check your new email for verification instructions.",
     "unableToVerifyEmail": "Unable to verify email. Please try again.",
     "emailAlreadyInUse": "Email already in use",
     "enterValidEmail": "Please enter a valid email address",
     "failedToUpdateEmail": "Failed to update email. Please try again.",
-    "passwordResetInitiated": "A password reset link has been sent to your email address.",
+    "passwordResetInitiated":
+        "A password reset link has been sent to your email address.",
     "unableToLoadUser": "Unable to load user information. Please try again.",
     "retry": "Retry",
     "user": "User",
     "loadingUserInfo": "Loading user information...",
     "resetUserDataTitle": "Reset User Data",
-    "confirmResetUserData": "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.",
+    "confirmResetUserData":
+        "Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.",
     "reset": "Reset",
     "deleteAccountTitle": "Delete Account"
   },
   "userProfile": {
     "title": "User Profile",
-    "privacyInfo": "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
+    "privacyInfo":
+        "By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our",
     "privacyPolicyLink": "Privacy Policy",
-    "tabComingSoon": "This tab is under development and will be available soon.",
+    "tabComingSoon":
+        "This tab is under development and will be available soon.",
     "saveSuccess": "Profile saved successfully",
     "loadError": "Error loading profile data",
     "saveError": "Error saving profile",
     "confirmSaveTitle": "Save Profile",
     "confirmSave": "Are you sure you want to save these changes?",
-    "confirmCancel": "You have unsaved changes. Are you sure you want to cancel?",
-    "confirmLeave": "Are you sure you want to leave? Any unsaved changes will be lost.",
+    "confirmCancel":
+        "You have unsaved changes. Are you sure you want to cancel?",
+    "confirmLeave":
+        "Are you sure you want to leave? Any unsaved changes will be lost.",
     "confirmDiscardChanges": "Discard unsaved changes?",
     "uploadPhoto": "Upload Photo",
     "uploadFile": "Upload File",
@@ -803,10 +889,13 @@ const Map<String, dynamic> enLocale = {
       "profileIncomplete": "Your profile is incomplete"
     },
     "instructions": {
-      "fullNameHelp": "Enter your full legal name as it appears on your official documents",
+      "fullNameHelp":
+          "Enter your full legal name as it appears on your official documents",
       "dobHelp": "Enter your date of birth in MM/DD/YYYY format",
-      "uploadPhotoHelp": "Upload a recent photo. File must be JPG, PNG, or GIF and less than 2MB",
-      "passwordHelp": "Password must be at least 8 characters with one uppercase letter, one number, and one special character",
+      "uploadPhotoHelp":
+          "Upload a recent photo. File must be JPG, PNG, or GIF and less than 2MB",
+      "passwordHelp":
+          "Password must be at least 8 characters with one uppercase letter, one number, and one special character",
       "documentHelp": "Accepted formats: PDF, JPG, PNG (max 5MB)",
       "requiredFields": "Fields marked with * are required",
       "selectFromList": "Please select an option from the list",
@@ -896,46 +985,142 @@ const Map<String, dynamic> enLocale = {
       "urdu": "Urdu",
       "other": "Other"
     },
-    "yesNo": {
-      "yes": "Yes",
-      "no": "No"
-    },
+    "yesNo": {"yes": "Yes", "no": "No"},
     "select": "Please select",
     "existingFile": "Existing file",
     "noMatchingCountries": "No matching countries found",
     "noMatchingDisciplines": "No matching disciplines found",
     "noMatchingDegrees": "No matching degrees found",
     "educationOptions": [
-      "Accounting", "Aerospace Engineering", "Agricultural Science", "Anthropology", "Architecture",
-      "Art History", "Artificial Intelligence", "Astronomy", "Astrophysics", "Biochemistry",
-      "Biomedical Engineering", "Biotechnology", "Business Administration", "Chemical Engineering",
-      "Chemistry", "Civil Engineering", "Communications", "Computer Engineering", "Computer Science",
-      "Construction Management", "Criminal Justice", "Cybersecurity", "Data Science", "Dentistry",
-      "Economics", "Education", "Electrical Engineering", "Elementary Education", "English Literature",
-      "Environmental Engineering", "Environmental Science", "Fashion Design", "Film Studies",
-      "Finance", "Fine Arts", "Food Science", "Forensic Science", "Game Design", "Geography",
-      "Geology", "Graphic Design", "Health Administration", "History", "Hospitality Management",
-      "Human Resources", "Industrial Design", "Industrial Engineering", "Information Systems",
-      "Information Technology", "Interior Design", "International Business", "International Relations",
-      "Journalism", "Law", "Library Science", "Linguistics", "Management", "Marketing",
-      "Materials Science", "Mathematics", "Mechanical Engineering", "Media Studies", "Medicine",
-      "Meteorology", "Microbiology", "Music", "Nanotechnology", "Nursing", "Nutrition",
-      "Occupational Therapy", "Oceanography", "Petroleum Engineering", "Pharmacy", "Philosophy",
-      "Photography", "Physical Education", "Physical Therapy", "Physics", "Political Science",
-      "Psychology", "Public Administration", "Public Health", "Public Relations", "Robotics",
-      "Secondary Education", "Social Work", "Sociology", "Software Engineering", "Special Education",
-      "Sports Management", "Statistics", "Systems Engineering", "Theatre Arts", "Tourism",
-      "Urban Planning", "Veterinary Medicine", "Web Development", "Wildlife Biology", "Zoology"
+      "Accounting",
+      "Aerospace Engineering",
+      "Agricultural Science",
+      "Anthropology",
+      "Architecture",
+      "Art History",
+      "Artificial Intelligence",
+      "Astronomy",
+      "Astrophysics",
+      "Biochemistry",
+      "Biomedical Engineering",
+      "Biotechnology",
+      "Business Administration",
+      "Chemical Engineering",
+      "Chemistry",
+      "Civil Engineering",
+      "Communications",
+      "Computer Engineering",
+      "Computer Science",
+      "Construction Management",
+      "Criminal Justice",
+      "Cybersecurity",
+      "Data Science",
+      "Dentistry",
+      "Economics",
+      "Education",
+      "Electrical Engineering",
+      "Elementary Education",
+      "English Literature",
+      "Environmental Engineering",
+      "Environmental Science",
+      "Fashion Design",
+      "Film Studies",
+      "Finance",
+      "Fine Arts",
+      "Food Science",
+      "Forensic Science",
+      "Game Design",
+      "Geography",
+      "Geology",
+      "Graphic Design",
+      "Health Administration",
+      "History",
+      "Hospitality Management",
+      "Human Resources",
+      "Industrial Design",
+      "Industrial Engineering",
+      "Information Systems",
+      "Information Technology",
+      "Interior Design",
+      "International Business",
+      "International Relations",
+      "Journalism",
+      "Law",
+      "Library Science",
+      "Linguistics",
+      "Management",
+      "Marketing",
+      "Materials Science",
+      "Mathematics",
+      "Mechanical Engineering",
+      "Media Studies",
+      "Medicine",
+      "Meteorology",
+      "Microbiology",
+      "Music",
+      "Nanotechnology",
+      "Nursing",
+      "Nutrition",
+      "Occupational Therapy",
+      "Oceanography",
+      "Petroleum Engineering",
+      "Pharmacy",
+      "Philosophy",
+      "Photography",
+      "Physical Education",
+      "Physical Therapy",
+      "Physics",
+      "Political Science",
+      "Psychology",
+      "Public Administration",
+      "Public Health",
+      "Public Relations",
+      "Robotics",
+      "Secondary Education",
+      "Social Work",
+      "Sociology",
+      "Software Engineering",
+      "Special Education",
+      "Sports Management",
+      "Statistics",
+      "Systems Engineering",
+      "Theatre Arts",
+      "Tourism",
+      "Urban Planning",
+      "Veterinary Medicine",
+      "Web Development",
+      "Wildlife Biology",
+      "Zoology"
     ],
     "degreeOptions": [
-      "Associate Degree", "Bachelor of Arts (BA)", "Bachelor of Science (BS)", "Bachelor of Engineering (BEng)",
-      "Bachelor of Business Administration (BBA)", "Bachelor of Fine Arts (BFA)", "Bachelor of Education (BEd)",
-      "Bachelor of Medicine (MBBS)", "Bachelor of Laws (LLB)", "Master of Arts (MA)", "Master of Science (MS)",
-      "Master of Business Administration (MBA)", "Master of Engineering (MEng)", "Master of Fine Arts (MFA)",
-      "Master of Education (MEd)", "Master of Laws (LLM)", "Master of Public Health (MPH)",
-      "Doctor of Philosophy (PhD)", "Doctor of Medicine (MD)", "Doctor of Education (EdD)",
-      "Doctor of Business Administration (DBA)", "Doctor of Jurisprudence (JD)", "Professional Diploma",
-      "Technical Diploma", "Vocational Certificate", "Graduate Certificate", "Post-Graduate Diploma", "Post-Doctoral"
+      "Associate Degree",
+      "Bachelor of Arts (BA)",
+      "Bachelor of Science (BS)",
+      "Bachelor of Engineering (BEng)",
+      "Bachelor of Business Administration (BBA)",
+      "Bachelor of Fine Arts (BFA)",
+      "Bachelor of Education (BEd)",
+      "Bachelor of Medicine (MBBS)",
+      "Bachelor of Laws (LLB)",
+      "Master of Arts (MA)",
+      "Master of Science (MS)",
+      "Master of Business Administration (MBA)",
+      "Master of Engineering (MEng)",
+      "Master of Fine Arts (MFA)",
+      "Master of Education (MEd)",
+      "Master of Laws (LLM)",
+      "Master of Public Health (MPH)",
+      "Doctor of Philosophy (PhD)",
+      "Doctor of Medicine (MD)",
+      "Doctor of Education (EdD)",
+      "Doctor of Business Administration (DBA)",
+      "Doctor of Jurisprudence (JD)",
+      "Professional Diploma",
+      "Technical Diploma",
+      "Vocational Certificate",
+      "Graduate Certificate",
+      "Post-Graduate Diploma",
+      "Post-Doctoral"
     ],
     "aria": {
       "tabList": "Profile form sections",
@@ -953,7 +1138,8 @@ const Map<String, dynamic> enLocale = {
     "fileReceived": "File received successfully.",
     "fileUploadError": "Error uploading file.",
     "processingError": "Error processing your request.",
-    "welcomeMessage": "Welcome! How can I assist you with Kenya government services today?",
+    "welcomeMessage":
+        "Welcome! How can I assist you with Kenya government services today?",
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",
     "saveChat": "Save Chat",
@@ -963,7 +1149,8 @@ const Map<String, dynamic> enLocale = {
     "selectFolder": "Select Folder",
     "newChat": "New Chat",
     "clearContext": "Clear context and start a new conversation",
-    "unsavedChanges": "You have unsaved changes. Are you sure you want to start a new chat?",
+    "unsavedChanges":
+        "You have unsaved changes. Are you sure you want to start a new chat?",
     "whatCanIHelp": "How can I help you today?",
     "justChat": "Just Chat",
     "queryContext": "Query Context",
@@ -978,7 +1165,8 @@ const Map<String, dynamic> enLocale = {
     "saveConfirmTitle": "Save Existing Conversation",
     "saveConfirmMessage": "Save existing conversation?",
     "loadConfirmTitle": "Load Existing Conversation",
-    "loadConfirmMessage": "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?",
+    "loadConfirmMessage":
+        "You have unsaved changes. Do you want to discard them and load the selected conversation, or save the current conversation first?",
     "loadAndDiscard": "Load and Discard",
     "saveAndLoad": "Save and Load",
     "saveAndStartNew": "Save and Start New",
@@ -1020,15 +1208,21 @@ const Map<String, dynamic> enLocale = {
     "housingPrograms": "Housing programs",
     "findJobs": "Find jobs",
     "justChat": "Just Chat",
-    "justChatPrompt": "I'd like to chat about government services",
-    "applyForIDPrompt": "I need information on how to apply for a national ID card",
-    "payTaxesPrompt": "What's the process for paying my taxes online?",
-    "startBusinessPrompt": "Guide me through the steps to register a new business",
-    "findHealthcarePrompt": "Where can I find information about public healthcare services?",
-    "educationServicesPrompt": "What education services are available for my children?",
-    "transportLicensesPrompt": "How do I renew my driving license?",
-    "housingProgramsPrompt": "Tell me about affordable housing programs in Kenya",
-    "findJobsPrompt": "What government job opportunities are currently available?"
+    "justChatPrompt": "I'd like to chat about government services in Kenya",
+    "applyForIDPrompt":
+        "I need information on how to apply for a national ID card in Kenya",
+    "payTaxesPrompt": "What's the process for paying my taxes online in Kenya?",
+    "startBusinessPrompt":
+        "Guide me through the steps to register a new business in Kenya",
+    "findHealthcarePrompt":
+        "Where can I find information about public healthcare services in Kenya?",
+    "educationServicesPrompt":
+        "What education services are available for my children in Kenya?",
+    "transportLicensesPrompt": "How do I renew my driving license in Kenya?",
+    "housingProgramsPrompt":
+        "Tell me about affordable housing programs in Kenya",
+    "findJobsPrompt":
+        "What government job opportunities are currently available in Kenya?"
   },
   "common": {
     "cancel": "Cancel",
@@ -1043,7 +1237,8 @@ const Map<String, dynamic> enLocale = {
     "refresh": "Refresh",
     "open": "Open",
     "done": "Done",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "edit": "Edit"
   },
   "feedback": {
     "title": "Feedback",
@@ -1061,7 +1256,8 @@ const Map<String, dynamic> enLocale = {
   },
   "responseRating": {
     "title": "Help Us Improve",
-    "note": "Your feedback will be used to better tune the chatbot and improve responses over time.",
+    "note":
+        "Your feedback will be used to better tune the chatbot and improve responses over time.",
     "chatbotResponse": "Chatbot Response:",
     "ratingLabels": {
       "1": "Useless",
@@ -1074,9 +1270,7 @@ const Map<String, dynamic> enLocale = {
     "submit": "Submit",
     "cancel": "Cancel"
   },
-  "upload": {
-    "alt": "Upload"
-  },
+  "upload": {"alt": "Upload"},
   "uploadDialog": {
     "title": "Upload Files",
     "dropzone": "Drag & drop files here, or click to select",
@@ -1085,9 +1279,11 @@ const Map<String, dynamic> enLocale = {
     "remove": "Remove",
     "uploading": "Uploading...",
     "notifications": {
-      "dropError": "Only files can be dropped. Please check you are dragging a valid file from your computer.",
+      "dropError":
+          "Only files can be dropped. Please check you are dragging a valid file from your computer.",
       "typeNotAllowed": "File type \"{extension}\" is not allowed.",
-      "shortcutUnsupported": "Shortcut files (.url) are not supported. Please drag the actual file.",
+      "shortcutUnsupported":
+          "Shortcut files (.url) are not supported. Please drag the actual file.",
       "duplicate": "File \"{fileName}\" has already been added.",
       "uploadSuccess": "Successfully uploaded {fileName}",
       "uploadFailed": "Failed to upload {fileName}."

@@ -8,6 +8,7 @@ import pymupdf
 import fitz 
 import cv2
 import numpy as np
+import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed 
 
 # Note:- imorted the os package

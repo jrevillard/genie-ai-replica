@@ -703,16 +703,26 @@ class ChatQnAService:
         full_chat_history = chat_request.messages
         original_language = chat_request.context.language if chat_request.context else None
         
-        # Alternative language detection using langdetect (however, seems to be less reliable in tests)
-        # try:
-        #     last_query = full_chat_history[-1].get("content", "") if full_chat_history else ""
-        #     detected_language = detect(last_query) if last_query else ""
-        #     if len(detected_language) >0 and detected_language != original_language.lower():
-        #         original_language = detected_language.upper()
-        #         logger.info(f"Detected language: {original_language}")
-        # except Exception as e:
-        #     logger.error(f"Language detection failed: {e}")
-        #     original_language = original_language  # Default to English if detection fails
+        # --- FIX: Re-enabled language detection as fallback ---
+        try:
+            if not original_language or original_language.strip() == "":
+                # Attempt to detect language from the last user message
+                last_user_content = ""
+                for msg in reversed(full_chat_history):
+                    if msg.get("role") == "user":
+                        last_user_content = msg.get("content", "")
+                        break
+                
+                if last_user_content:
+                    detected_lang = detect(last_user_content)
+                    if detected_lang and detected_lang.upper() != "EN":
+                        original_language = detected_lang.upper()
+                        logger.info(f"Auto-detected language: {original_language}")
+        except Exception as e:
+            logger.warning(f"Language detection failed: {e}")
+            # Fallback to English if detection fails
+            if not original_language:
+                original_language = "EN"
 
         translated_history_string = ""
         if original_language and original_language.strip() != "EN":
@@ -968,6 +978,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--without-rerank", action="store_true")
     parser.add_argument("--faqgen", action="store_true")
+    # FIX: Added --with-translation to prevent crash on unknown argument if CHATQNA_DAVID is used
+    parser.add_argument("--with-translation", action="store_true")
     parser.add_argument("--without-translation", action="store_true") 
     args = parser.parse_args()
 

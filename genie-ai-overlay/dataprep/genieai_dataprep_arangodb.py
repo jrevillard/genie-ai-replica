@@ -233,9 +233,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
     async def _load_and_chunk(self, doc_path: DocPath) -> List[str]:
         path = doc_path.path
-        if path.endswith(".pdf") and CONTENT_EXTRACTION_METHOD == "docling":
+        
+        # --- FIX: Expanded Docling Support ---
+        # Added .docx, .pptx, .xlsx, .md, .txt, .html support
+        docling_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
+        
+        if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
+            logger.info(f"Using Docling for file: {path}")
             content = await docling_document_loader(path)
         else:
+            logger.info(f"Using Standard Loader for file: {path}")
             content = await document_loader(path)
 
         if not content:

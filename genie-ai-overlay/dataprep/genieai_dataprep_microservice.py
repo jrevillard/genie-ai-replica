@@ -111,6 +111,10 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     EDGE_PROPERTIES = os.getenv("EDGE_PROPERTIES", "description").split(",")
     TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
     INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
+    
+    # --- FIX: Read Chunking Params from ENV ---
+    CHUNK_SIZE = int(os.getenv("DATAPREP_CHUNK_SIZE", 500))
+    CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
 
     try:
         # Decode and temporarily save file
@@ -140,6 +144,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             edge_properties=EDGE_PROPERTIES,
             text_capitalization_strategy=TEXT_CAPITALIZATION_STRATEGY,
             include_chunks=INCLUDE_CHUNKS,
+            # --- FIX: Pass Chunking Configuration ---
+            chunk_size=CHUNK_SIZE,
+            chunk_overlap=CHUNK_OVERLAP
         )
 
         # --- Trigger Tracked Background Task ---

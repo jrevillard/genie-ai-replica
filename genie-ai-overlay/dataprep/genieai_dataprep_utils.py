@@ -1,4 +1,3 @@
-
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,7 +7,7 @@ import pymupdf
 import fitz 
 import cv2
 import numpy as np
-import asyncio
+import asyncio 
 from concurrent.futures import ThreadPoolExecutor, as_completed 
 
 # Note:- imorted the os package
@@ -24,6 +23,8 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import (
     PdfPipelineOptions, 
     EasyOcrOptions, 
+    AcceleratorOptions, 
+    AcceleratorDevice,  
     )
 
 # Might need to check the path
@@ -40,10 +41,17 @@ try:
     # configuring Docling to use easyocr (more lightweight than OPEA default library)
     ocr_options = EasyOcrOptions(lang=['en']) 
     
+    # FIX: Force CPU usage to prevent CUDA OOM when GPU is full (e.g. running VLLM)
+    accelerator_options = AcceleratorOptions(
+        num_threads=4, 
+        device=AcceleratorDevice.CPU
+    )
+
     # Pipeline for PDFs and Images (for layout analysis and OCR)
     pdf_and_image_pipeline_config = PdfPipelineOptions(
         do_ocr=True,  
-        ocr_options=ocr_options
+        ocr_options=ocr_options,
+        accelerator_options=accelerator_options # FIX: Apply CPU config
     )
 
     # Map PDF file type to relevant pipeline
@@ -78,14 +86,13 @@ async def load_with_docling(doc_path: str) -> str:
     return content
 
 async def docling_document_loader(doc_path):
-    # other file formats to be added later (docx, csv, html, ...)
-    if (
-        doc_path.endswith(".pdf")
-        or doc_path.endswith(".xlsx") # Docling handles XLSX
-        ):
-
+    # Support for PDF, DOCX, PPTX, XLSX, HTML, Markdown, and Text
+    supported_extensions = (
+        ".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc"
+    )
+    
+    if doc_path.endswith(supported_extensions):
         return await load_with_docling(doc_path)
-
     else:
         print(f'File type {doc_path} not supported by Docling')
 
@@ -170,4 +177,3 @@ def is_valid_content(chunk):
         return False
     
     return True
-    

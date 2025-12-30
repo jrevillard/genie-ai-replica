@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/i18n/locales/en.dart';
 import 'package:genie_ai_mobile/i18n/locales/ar.dart';
 import 'package:genie_ai_mobile/i18n/locales/de.dart';
+import 'package:genie_ai_mobile/i18n/locales/es.dart'; 
+import 'package:genie_ai_mobile/i18n/locales/fr.dart';
+import 'package:genie_ai_mobile/i18n/locales/id.dart';
+import 'package:genie_ai_mobile/i18n/locales/pt.dart';
+import 'package:genie_ai_mobile/i18n/locales/ru.dart';
+import 'package:genie_ai_mobile/i18n/locales/sw.dart';
+import 'package:genie_ai_mobile/i18n/locales/th.dart';
+import 'package:genie_ai_mobile/i18n/locales/zh.dart';
 
 class I18nService extends ChangeNotifier {
   // Singleton Pattern
@@ -40,6 +48,14 @@ class I18nService extends ChangeNotifier {
     'en': enLocale,
     'ar': arLocale,
     'de': deLocale,
+    'es': esLocale, 
+    'fr': frLocale,
+    'id': idLocale,
+    'pt': ptLocale,
+    'ru': ruLocale,
+    'sw': swLocale,
+    'th': thLocale,
+    'zh': zhLocale,
   };
 
   /// Changes the language and notifies listeners to rebuild the app

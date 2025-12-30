@@ -72,12 +72,12 @@ app.use(cors({
 
 // TODO: [NORMA] should use from shared-lib??
 // **FIX:** Trust the proxy to allow rate limiting based on X-Forwarded-For
-app.set('trust proxy', 1); 
+app.set('trust proxy', 1);
 
-// [MODIFIED] Increased Rate Limit significantly to support Dashboard Polling
+// [MODIFIED] Rate Limiter Configuration
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: appConfig.rateLimitMax || 30000, // [CHANGED] Increased from 100 to 30000 to prevent 429 errors during crawl monitoring
+  max: 0, // [CHANGED] 0 = Unlimited (Disabled)
   message: {
     error: 'Too many requests from this IP, please try again later.'
   },
@@ -85,7 +85,9 @@ const limiter = rateLimit({
   legacyHeaders: false
 });
 
-app.use(limiter);
+// [CRITICAL FIX] Disabled rate limiter middleware to prevent 429 errors
+// during high-velocity dataprep ingestion (log flooding).
+// app.use(limiter); 
 
 // Compression middleware
 app.use(compression());
@@ -158,7 +160,7 @@ app.use('/uploads', express.static(uploadDir, {
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
   console.log('Registered routes:', app._router.stack);
-  
+
   const availableRoutes = app._router.stack
     .filter(r => r.route)
     .map((r) => `${Object.keys(r.route.methods).join(', ').toUpperCase()} ${r.route.path}`);

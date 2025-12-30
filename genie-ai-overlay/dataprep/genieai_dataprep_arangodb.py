@@ -96,6 +96,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # Token caching state
         self._cached_token = None
         self._token_expiry = None
+        # FIX: Async Lock to prevent race conditions where 50 tasks fetch token at once
+        self._token_lock = asyncio.Lock()
+        # FIX: Semaphore to limit concurrent log requests (prevents 429 on Doc Repo)
+        self._log_semaphore = asyncio.Semaphore(5) 
         
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
@@ -117,42 +121,51 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         print(f" LLM_ENDPOINT         : {os.getenv('VLLM_ENDPOINT')}")
         print(f" ARANGO_DB            : {os.getenv('ARANGO_DB_NAME')}")
         print(f" SYSTEM PROMPT LEN    : {len(LABEL_SELECTOR_SYSTEM_PROMPT)} chars")
-        print(f" MAX CONCURRENT BATCHES: {MAX_CONCURRENT_BATCHES}")
+        print(f" MAX CONCURRENT_BATCHES: {MAX_CONCURRENT_BATCHES}")
         print("="*60 + "\n")
 
     # --- Utilities (Spec 4.1, 5.2, 6.1) ---
 
     async def _get_auth_token(self):
-        """Fetches a fresh JWT from the internal http-service with caching to prevent 429 errors."""
+        """Fetches a fresh JWT from the internal http-service with locking and caching."""
         now = datetime.now()
         
-        # FIX: Check cache first
+        # 1. Fast Path: Check if valid token exists (No lock needed)
         if self._cached_token and self._token_expiry and now < self._token_expiry:
             return self._cached_token
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(GET_AUTH_TOKEN_URL) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        token = data.get("accessToken")
-                        if token:
-                            # Cache the token. Assuming standard 1h expiry, we cache for 50 mins to be safe.
-                            self._cached_token = token
-                            self._token_expiry = now + timedelta(minutes=50)
-                            return token
-                        logger.error(f"Auth Service returned 200 but no accessToken: {data}")
-                    else:
-                        logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
-        except Exception as e:
-            logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
-        return None
+        # 2. Slow Path: Acquire Lock to prevent thundering herd
+        async with self._token_lock:
+            # Check again (Double-Checked Locking) in case another task filled it while we waited
+            if self._cached_token and self._token_expiry and now < self._token_expiry:
+                return self._cached_token
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(GET_AUTH_TOKEN_URL) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            token = data.get("accessToken")
+                            if token:
+                                # Cache the token for 50 mins (assuming 1h life)
+                                self._cached_token = token
+                                self._token_expiry = now + timedelta(minutes=50)
+                                return token
+                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
+                        else:
+                            # Log but don't crash, caller handles None
+                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
+            except Exception as e:
+                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
+            
+            return None
 
     async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
         """Updates file status in Document Repository (Spec 4.1/6.1)."""
         token = await self._get_auth_token()
         if not token:
-            logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
+            if logflag:
+                logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
@@ -169,10 +182,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             payload["chunk_count"] = chunk_count
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.patch(url, json=payload, headers=headers) as response:
-                    if response.status != 200:
-                        logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
+            # Also apply semaphore here to be safe
+            async with self._log_semaphore:
+                async with aiohttp.ClientSession() as session:
+                    async with session.patch(url, json=payload, headers=headers) as response:
+                        if response.status != 200:
+                            logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Status API: {e}")
 
@@ -180,7 +195,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
         token = await self._get_auth_token()
         if not token:
-            logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
+            if logflag:
+                logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
         url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
@@ -194,10 +210,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             "message": message
         }
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload, headers=headers) as response:
-                    if response.status != 201:
-                        logger.error(f"Failed to write log for {file_id}: {await response.text()}")
+            # FIX: Limit concurrency of log writes to prevent 429 flooding
+            async with self._log_semaphore:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, headers=headers) as response:
+                        # Ignore 429s in logs specifically to prevent recursion or spam
+                        if response.status == 429:
+                            if logflag:
+                                logger.warning("Log write rate-limited (429). Dropping log message.")
+                            return
+                        if response.status != 201:
+                            logger.error(f"Failed to write log for {file_id}: {await response.text()}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Log API: {e}")
 
@@ -213,30 +236,31 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         headers = {"Authorization": f"Bearer {token}"}
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        labels = []
-                        # Backend returns a tree structure (Category -> Children)
-                        if isinstance(data, list):
-                            for category in data:
-                                # Add the Category Name
-                                if isinstance(category, dict) and 'name' in category:
-                                    labels.append(category['name'])
-                                    # Add all Children (Services)
-                                    if 'children' in category and isinstance(category['children'], list):
-                                        for child in category['children']:
-                                            # Children might be strings or objects depending on query
-                                            if isinstance(child, dict) and 'name' in child:
-                                                labels.append(child['name'])
-                                            elif isinstance(child, str):
-                                                labels.append(child)
+            async with self._log_semaphore: # Reuse semaphore to be polite to backend
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            labels = []
+                            # Backend returns a tree structure (Category -> Children)
+                            if isinstance(data, list):
+                                for category in data:
+                                    # Add the Category Name
+                                    if isinstance(category, dict) and 'name' in category:
+                                        labels.append(category['name'])
+                                        # Add all Children (Services)
+                                        if 'children' in category and isinstance(category['children'], list):
+                                            for child in category['children']:
+                                                # Children might be strings or objects depending on query
+                                                if isinstance(child, dict) and 'name' in child:
+                                                    labels.append(child['name'])
+                                                elif isinstance(child, str):
+                                                    labels.append(child)
+                            
+                            logger.info(f"Fetched {len(labels)} labels from Backend taxonomy.")
+                            return list(set(labels))
                         
-                        logger.info(f"Fetched {len(labels)} labels from Backend taxonomy.")
-                        return list(set(labels))
-                    
-                    logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
+                        logger.error(f"Label fetch failed. Status: {response.status}, Body: {await response.text()}")
         except Exception as e:
             logger.error(f"Error fetching labels from Backend: {e}")
         return []

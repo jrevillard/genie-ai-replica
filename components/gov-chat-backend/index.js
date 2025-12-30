@@ -553,8 +553,9 @@ try {
   });
 }
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// FIX: Increased payload size limit to 50mb to prevent 500 errors on large requests
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // Format timestamps in response data
 app.use((req, res, next) => {

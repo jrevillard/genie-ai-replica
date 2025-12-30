@@ -430,6 +430,13 @@ Configuration for how documents are chunked and prepared for the knowledge graph
 | DATAPREP\_HOST | Hostname for the Dataprep service. | http://dataprep-arango-service |
 | DATAPREP\_PORT | Port for the Dataprep service. | 5000 |
 | DATAPREP\_CHUNK\_SIZE | Token/Character count per document chunk. | 500 |
+| DATAPREP\_CHUNK\_SIZE\_PDF | The chunk size to use for PDF files | 500 |
+| DATAPREP\_CHUNK\_SIZE\_DOCX | The chunk size to use for DOCX files (better at 1000 or more) | 1000 |
+| DATAPREP\_CHUNK\_SIZE\_XLSX  | The chunk size to use for XLSX files (better to use 1500 or more \- rows can be large \- you don't want to split rows) | 1500 |
+| DATAPREP\_CHUNK\_SIZE\_PPTX  | The chunk size to use for PPTX files | 500 |
+| DATAPREP\_CHUNK\_SIZE\_HTML  | The chunk size to use for HTML files | 500 |
+| DATAPREP\_CHUNK\_SIZE\_TXT  | The chunk size to use for TXT files | 500 |
+| DATAPREP\_CHUNK\_SIZE\_MD | The chunk size to use for markdown files | 500 |
 | DATAPREP\_CHUNK\_OVERLAP | Overlap between chunks to preserve context. | 50 |
 | DATAPREP\_ARANGO\_GRAPH\_NAME | Graph name for storing ingested data. | GRAPH |
 | DATAPREP\_ARANGO\_INSERT\_ASYNC | Perform inserts asynchronously. | false |

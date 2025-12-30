@@ -53,6 +53,34 @@ loader = GenieDataprepLoader(
 active_ingestion_tasks = {}
 
 # ------------------------------------------------------------------------------
+# Configuration Helpers
+# ------------------------------------------------------------------------------
+def get_chunk_size_for_file(filename: str) -> int:
+    """
+    Determines the optimal chunk size based on file extension and environment overrides.
+    Falls back to the global DATAPREP_CHUNK_SIZE if no specific override is found.
+    """
+    global_default = int(os.getenv("DATAPREP_CHUNK_SIZE", 500))
+    _, ext = os.path.splitext(filename)
+    ext = ext.lower()
+
+    # Mapping of extensions to specific environment variable overrides
+    # If the specific env var is not set, it defaults to the global_default
+    config_map = {
+        ".pdf":  int(os.getenv("DATAPREP_CHUNK_SIZE_PDF", global_default)),
+        ".docx": int(os.getenv("DATAPREP_CHUNK_SIZE_DOCX", global_default)),
+        ".xlsx": int(os.getenv("DATAPREP_CHUNK_SIZE_XLSX", global_default)),
+        ".pptx": int(os.getenv("DATAPREP_CHUNK_SIZE_PPTX", global_default)),
+        ".html": int(os.getenv("DATAPREP_CHUNK_SIZE_HTML", global_default)),
+        ".txt":  int(os.getenv("DATAPREP_CHUNK_SIZE_TXT", global_default)),
+        ".md":   int(os.getenv("DATAPREP_CHUNK_SIZE_MD", global_default)),
+    }
+
+    size = config_map.get(ext, global_default)
+    logger.info(f"[ config ] Resolved chunk size for '{filename}' ({ext}): {size}")
+    return size
+
+# ------------------------------------------------------------------------------
 # Custom request payload models
 # ------------------------------------------------------------------------------
 class DocRepoIngestPayload(BaseModel):
@@ -112,8 +140,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
     TEXT_CAPITALIZATION_STRATEGY = os.getenv("TEXT_CAPITALIZATION_STRATEGY", "upper")
     INCLUDE_CHUNKS = os.getenv("INCLUDE_CHUNKS", "true").lower() == "true"
     
-    # --- FIX: Read Chunking Params from ENV ---
-    CHUNK_SIZE = int(os.getenv("DATAPREP_CHUNK_SIZE", 500))
+    # --- FIX: Dynamic Chunking Configuration ---
+    # Determine chunk size based on file extension
+    CHUNK_SIZE = get_chunk_size_for_file(payload.fileName)
     CHUNK_OVERLAP = int(os.getenv("DATAPREP_CHUNK_OVERLAP", 50))
 
     try:
@@ -144,7 +173,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             edge_properties=EDGE_PROPERTIES,
             text_capitalization_strategy=TEXT_CAPITALIZATION_STRATEGY,
             include_chunks=INCLUDE_CHUNKS,
-            # --- FIX: Pass Chunking Configuration ---
+            # --- FIX: Pass Dynamic Chunking Configuration ---
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP
         )

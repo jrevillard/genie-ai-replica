@@ -337,7 +337,7 @@ const Map<String, dynamic> arLocale = {
     "oauthNotImplemented": "تسجيل الدخول الاجتماعي غير مفعل حالياً",
     "savedLoginNotImplemented": "تسجيل الدخول بالحساب المحفوظ غير مفعل حالياً"
   },
-  "brandName": "Genie AI: مساعدك الحكومي الرقمي",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "حالة النظام",
     "menu": "القائمة",
@@ -1286,5 +1286,12 @@ const Map<String, dynamic> arLocale = {
       "uploadSuccess": "تم تحميل {fileName} بنجاح",
       "uploadFailed": "فشل تحميل {fileName}."
     }
+  },
+  "about": {
+    "title": "حول",
+    "version": "الإصدار",
+    "description": "Genie AI هو مساعدك الذكي للتنقل في الخدمات والمعلومات الحكومية.",
+    "techStack": "التقنيات المستخدمة",
+    "copyright": "جميع الحقوق محفوظة."
   }
 };

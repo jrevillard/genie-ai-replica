@@ -346,7 +346,7 @@ const Map<String, dynamic> deLocale = {
     "savedLoginNotImplemented":
         "Anmeldung mit gespeichertem Konto ist noch nicht implementiert"
   },
-  "brandName": "Genie AI: Dein digitaler Regierungsassistent",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "Systemstatus",
     "menu": "Menü",
@@ -1319,5 +1319,12 @@ const Map<String, dynamic> deLocale = {
       "uploadSuccess": "{fileName} erfolgreich hochgeladen",
       "uploadFailed": "Fehler beim Hochladen von {fileName}."
     }
+  },
+  "about": {
+    "title": "Über",
+    "version": "Version",
+    "description": "Genie AI ist dein intelligenter Assistent für die Navigation durch staatliche Dienstleistungen und Informationen.",
+    "techStack": "Tech-Stack",
+    "copyright": "Alle Rechte vorbehalten."
   }
 };

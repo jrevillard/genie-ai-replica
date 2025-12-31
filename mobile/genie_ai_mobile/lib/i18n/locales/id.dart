@@ -341,7 +341,7 @@ const Map<String, dynamic> idLocale = {
     "savedLoginNotImplemented":
         "Masuk dengan akun tersimpan belum diimplementasikan"
   },
-  "brandName": "Genie AI: Asisten Pemerintah Digital Anda",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "Status Sistem",
     "menu": "Menu",
@@ -1303,5 +1303,12 @@ const Map<String, dynamic> idLocale = {
       "uploadSuccess": "Berhasil mengunggah {fileName}",
       "uploadFailed": "Gagal mengunggah {fileName}."
     }
+  },
+  "about": {
+    "title": "Tentang",
+    "version": "Versi",
+    "description": "Genie AI adalah asisten cerdas Anda untuk menavigasi layanan dan informasi pemerintah.",
+    "techStack": "Tech Stack",
+    "copyright": "Hak cipta dilindungi undang-undang."
   }
 };

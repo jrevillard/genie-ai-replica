@@ -337,7 +337,7 @@ const Map<String, dynamic> thLocale = {
     "savedLoginNotImplemented":
         "การเข้าสู่ระบบด้วยบัญชีที่บันทึกไว้ยังไม่เปิดให้บริการ"
   },
-  "brandName": "Genie AI: ผู้ช่วยรัฐบาลดิจิทัลของคุณ",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "สถานะระบบ",
     "menu": "เมนู",
@@ -1288,5 +1288,12 @@ const Map<String, dynamic> thLocale = {
       "uploadSuccess": "อัปโหลด {fileName} สำเร็จ",
       "uploadFailed": "อัปโหลด {fileName} ล้มเหลว"
     }
+  },
+  "about": {
+    "title": "เกี่ยวกับ",
+    "version": "เวอร์ชัน",
+    "description": "Genie AI คือผู้ช่วยอัจฉริยะของคุณในการเข้าถึงบริการและข้อมูลภาครัฐ",
+    "techStack": "เทคโนโลยีที่ใช้",
+    "copyright": "สงวนลิขสิทธิ์"
   }
 };

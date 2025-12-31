@@ -326,7 +326,7 @@ const Map<String, dynamic> zhLocale = {
     "oauthNotImplemented": "社交登录尚未实现",
     "savedLoginNotImplemented": "已保存账户登录尚未实现"
   },
-  "brandName": "Genie AI: 您的数字政府助手",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "系统状态",
     "menu": "菜单",
@@ -1172,5 +1172,12 @@ const Map<String, dynamic> zhLocale = {
       "uploadSuccess": "成功上传 {fileName}",
       "uploadFailed": "上传 {fileName} 失败。"
     }
+  },
+  "about": {
+    "title": "关于",
+    "version": "版本",
+    "description": "Genie AI 是您浏览政府服务和信息的智能助手。",
+    "techStack": "技术栈",
+    "copyright": "版权所有。"
   }
 };

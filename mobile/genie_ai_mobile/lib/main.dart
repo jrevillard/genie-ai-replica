@@ -30,6 +30,7 @@ import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
 // FIX: Corrected import path from 'chat' to 'sidebar'
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
+import 'package:genie_ai_mobile/components/settings/about_screen.dart';
 
 // --- CONDITIONAL IMPORT FOR RIGHT SIDEBAR ---
 // This handles the Web vs Mobile stubbing for File Utils indirectly referenced
@@ -182,6 +183,7 @@ class _MyAppState extends State<MyApp> {
             '/password-reset': (context) => const PasswordResetInitiateScreen(),
             // Safety check: ensure _user is not null if accessed, though typically guarded by app logic
             '/profile': (context) => UserProfileScreen(user: _user ?? {}),
+            '/about': (context) => const AboutScreen(),
             '/password-reset-confirm': (context) {
               final settings = ModalRoute.of(context)?.settings;
               final String? token = settings?.arguments as String?;

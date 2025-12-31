@@ -336,7 +336,7 @@ const Map<String, dynamic> enLocale = {
     "oauthNotImplemented": "Social login is not yet implemented",
     "savedLoginNotImplemented": "Saved account login is not yet implemented"
   },
-  "brandName": "Genie AI: Your Digital Government Assistant",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "System Status",
     "menu": "Menu",
@@ -1288,5 +1288,13 @@ const Map<String, dynamic> enLocale = {
       "uploadSuccess": "Successfully uploaded {fileName}",
       "uploadFailed": "Failed to upload {fileName}."
     }
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "description":
+        "Genie AI is your intelligent assistant for navigating government services and information.",
+    "techStack": "Tech Stack",
+    "copyright": "All rights reserved."
   }
 };

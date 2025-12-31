@@ -342,7 +342,7 @@ const Map<String, dynamic> ptLocale = {
     "oauthNotImplemented": "Login social ainda não implementado",
     "savedLoginNotImplemented": "Login com conta salva ainda não implementado"
   },
-  "brandName": "Genie AI: Seu Assistente Governamental Digital",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "Status do Sistema",
     "menu": "Menu",
@@ -1311,5 +1311,12 @@ const Map<String, dynamic> ptLocale = {
       "uploadSuccess": "Carregado com sucesso {fileName}",
       "uploadFailed": "Falha ao carregar {fileName}."
     }
+  },
+  "about": {
+    "title": "Sobre",
+    "version": "Versão",
+    "description": "O Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.",
+    "techStack": "Tech Stack",
+    "copyright": "Todos os direitos reservados."
   }
 };

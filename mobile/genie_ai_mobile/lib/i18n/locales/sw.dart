@@ -342,7 +342,7 @@ const Map<String, dynamic> swLocale = {
     "savedLoginNotImplemented":
         "Kuingia kwa akaunti iliyohifadhiwa bado hakujatekelezwa"
   },
-  "brandName": "Genie AI: Msaidizi Wako wa Kidijitali wa Serikali",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "Hali ya Mfumo",
     "menu": "Menyu",
@@ -1312,5 +1312,12 @@ const Map<String, dynamic> swLocale = {
       "uploadSuccess": "Imefanikiwa kupakia {fileName}",
       "uploadFailed": "Imeshindwa kupakia {fileName}."
     }
+  },
+  "about": {
+    "title": "Kuhusu",
+    "version": "Toleo",
+    "description": "Genie AI ni msaidizi wako mahiri wa kuvinjari huduma na taarifa za serikali.",
+    "techStack": "Teknolojia",
+    "copyright": "Haki zote zimehifadhiwa."
   }
 };

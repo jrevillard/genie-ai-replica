@@ -344,7 +344,7 @@ const Map<String, dynamic> frLocale = {
     "savedLoginNotImplemented":
         "La connexion avec un compte enregistré n'est pas encore implémentée"
   },
-  "brandName": "Genie AI : Votre Assistant Gouvernemental Numérique",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "État du système",
     "menu": "Menu",
@@ -1321,5 +1321,12 @@ const Map<String, dynamic> frLocale = {
       "uploadSuccess": "{fileName} téléchargé avec succès",
       "uploadFailed": "Échec du téléchargement de {fileName}."
     }
+  },
+  "about": {
+    "title": "À propos",
+    "version": "Version",
+    "description": "Genie AI est votre assistant intelligent pour naviguer dans les services et informations gouvernementaux.",
+    "techStack": "Pile technologique",
+    "copyright": "Tous droits réservés."
   }
 };

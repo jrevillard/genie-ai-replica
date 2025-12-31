@@ -344,7 +344,7 @@ const Map<String, dynamic> ruLocale = {
     "savedLoginNotImplemented":
         "Вход через сохраненный аккаунт еще не реализован"
   },
-  "brandName": "Genie AI: Ваш цифровой правительственный помощник",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "Статус системы",
     "menu": "Меню",
@@ -1306,5 +1306,12 @@ const Map<String, dynamic> ruLocale = {
       "uploadSuccess": "Успешно загружен {fileName}",
       "uploadFailed": "Не удалось загрузить {fileName}."
     }
+  },
+  "about": {
+    "title": "О приложении",
+    "version": "Версия",
+    "description": "Genie AI — ваш интеллектуальный помощник для навигации по государственным услугам и информации.",
+    "techStack": "Технологический стек",
+    "copyright": "Все права защищены."
   }
 };

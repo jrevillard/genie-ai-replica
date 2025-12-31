@@ -45,6 +45,9 @@ dependencies:
   # Country picker 
   country_picker: ^2.0.26
 
+  # App Package Info (Version, Build Number)
+  package_info_plus: ^8.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

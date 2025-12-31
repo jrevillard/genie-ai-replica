@@ -550,6 +550,13 @@ class _SettingsComponentState extends State<SettingsComponent> {
                   fontWeight: FontWeight.bold,
                   color: titleColor)),
           Row(children: [
+            // ADDED: Link to About Screen
+            IconButton(
+              icon: Icon(Icons.info_outline, color: titleColor),
+              tooltip: translate("about.title", "About"),
+              onPressed: () => Navigator.pushNamed(context, '/about'),
+            ),
+            const SizedBox(width: 8),
             TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Text(translate("settings.close", "Close"))),

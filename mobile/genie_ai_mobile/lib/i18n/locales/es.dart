@@ -343,7 +343,7 @@ const Map<String, dynamic> esLocale = {
     "savedLoginNotImplemented":
         "El inicio con cuenta guardada aún no está implementado"
   },
-  "brandName": "Genie AI: Tu Asistente Digital de Gobierno",
+  "brandName": "Genie AI",
   "nav": {
     "systemStatus": "Estado del sistema",
     "menu": "Menú",
@@ -1308,5 +1308,12 @@ const Map<String, dynamic> esLocale = {
       "uploadSuccess": "Se subió {fileName} con éxito",
       "uploadFailed": "Error al subir {fileName}."
     }
+  },
+  "about": {
+    "title": "Acerca de",
+    "version": "Versión",
+    "description": "Genie AI es tu asistente inteligente para navegar por los servicios e información gubernamentales.",
+    "techStack": "Stack Tecnológico",
+    "copyright": "Todos los derechos reservados."
   }
 };

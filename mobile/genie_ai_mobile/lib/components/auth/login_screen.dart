@@ -3,7 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:genie_ai_mobile/services/user_service.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class LoginScreen extends StatefulWidget {
   final Function(Map<String, dynamic>) onLoginSuccess;
@@ -23,10 +25,9 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials(); // Mirrors created() hook in LoginScreen.vue
+    _loadSavedCredentials();
   }
 
-  /// Replicates the created() logic to fetch credentials from localStorage
   Future<void> _loadSavedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     final String? savedLoginName = prefs.getString('savedLoginName');
@@ -44,7 +45,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Replicates handleLogin logic for storing/clearing credentials
   Future<void> _handleRememberMe(String loginName, String password) async {
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
@@ -71,7 +71,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = await UserService()
           .login(_usernameController.text, _passwordController.text);
 
-      // Save or Clear credentials based on checkbox state
       await _handleRememberMe(
           _usernameController.text, _passwordController.text);
 
@@ -85,65 +84,89 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Dynamic Theme Data
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
 
-    return Scaffold(
-      backgroundColor: colors['background'], // Dynamic Background
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.all(24.0),
-            decoration: BoxDecoration(
-              color: colors['surface'], // Dynamic Surface
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4))
-              ],
+    // [MODIFIED] Wrapped Scaffold in FutureBuilder to load Config
+    return FutureBuilder(
+        future: GenieAiConfig.load(),
+        builder: (context, snapshot) {
+          // Show loading spinner while config is being read
+          if (!GenieAiConfig.isLoaded &&
+              snapshot.connectionState != ConnectionState.done) {
+            return Scaffold(
+                backgroundColor: colors['background'],
+                body: const Center(child: CircularProgressIndicator()));
+          }
+
+          return Scaffold(
+            backgroundColor: colors['background'],
+            body: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  padding: const EdgeInsets.all(24.0),
+                  decoration: BoxDecoration(
+                    color: colors['surface'],
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeader(colors, isDark),
+                      if (_error != null) _buildError(),
+                      _buildField(_usernameController, tr('login.username'),
+                          Icons.person, colors, isDark),
+                      const SizedBox(height: 10),
+                      _buildField(_passwordController, tr('login.password'),
+                          Icons.lock, colors, isDark,
+                          obscure: true),
+                      _buildRememberForgot(colors, isDark),
+                      _buildLoginButton(colors),
+                      _buildRegisterLink(colors, isDark),
+                      _buildDivider(isDark),
+                      _buildSocialButtons(colors, isDark),
+                      const SizedBox(height: 24),
+                      LanguageSelector(textColor: colors['text']),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildHeader(colors, isDark),
-                if (_error != null) _buildError(),
-                _buildField(_usernameController, tr('login.username'),
-                    Icons.person, colors, isDark),
-                const SizedBox(height: 10),
-                _buildField(_passwordController, tr('login.password'),
-                    Icons.lock, colors, isDark,
-                    obscure: true),
-                _buildRememberForgot(colors, isDark),
-                _buildLoginButton(colors),
-                _buildRegisterLink(colors, isDark),
-                _buildDivider(isDark),
-                _buildSocialButtons(colors, isDark),
-                const SizedBox(height: 24),
-                // Pass text color for visibility
-                LanguageSelector(textColor: colors['text']),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+          );
+        });
   }
 
   Widget _buildHeader(Map<String, dynamic> colors, bool isDark) {
     return Column(children: [
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration:
-            BoxDecoration(color: colors['primary'], shape: BoxShape.circle),
-        child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+      // [MODIFIED] Replaced hardcoded Icon with Dynamic Image from Config
+      SizedBox(
+        height: 80,
+        child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+            ? SvgPicture.asset(
+                GenieAiConfig.iconPath,
+                height: 80, // Adjust size as needed
+                fit: BoxFit.contain,
+              )
+            : Image.asset(
+                GenieAiConfig.iconPath,
+                height: 80,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.error, size: 40);
+                },
+              ),
       ),
-      const SizedBox(height: 10),
-      Text(tr('login.appTitle'),
+      const SizedBox(height: 20),
+      // [MODIFIED] Replaced tr('login.appTitle') with GenieAiConfig.title
+      Text(GenieAiConfig.title,
           style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -255,7 +278,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildSocialButtons(Map<String, dynamic> colors, bool isDark) {
     return Column(children: [
-      // UPDATED: Used colors['primary'] instead of colors['secondary']
       _socBtn(tr('login.googleLogin'), Icons.g_mobiledata, colors['primary']),
       const SizedBox(height: 8),
       _socBtn(tr('login.facebookLogin'), Icons.facebook,

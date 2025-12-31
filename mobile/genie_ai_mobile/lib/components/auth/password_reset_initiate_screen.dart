@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart'; // IMPORTED SVG
 import 'package:genie_ai_mobile/services/password_proxy.dart';
 import 'package:genie_ai_mobile/services/user_service.dart';
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart'; // IMPORTED CONFIG
 
 class PasswordResetInitiateScreen extends StatefulWidget {
   final bool isEmbedded; // Props from Vue
@@ -89,65 +91,88 @@ class _PasswordResetInitiateScreenState
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
 
-    return Scaffold(
-      backgroundColor: widget.isEmbedded
-          ? Colors.transparent
-          : colors['background'], // Dynamic Background
-      body: Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(widget.isEmbedded ? 0 : 16.0),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.all(24.0),
-            decoration: widget.isEmbedded
-                ? null
-                : BoxDecoration(
-                    color: colors['surface'], // Dynamic Surface
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.1), blurRadius: 10)
-                    ],
-                  ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildHeader(colors),
-                const SizedBox(height: 10),
-                Text(
-                  tr('passwordReset.resetPassword'),
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: colors['text'].withOpacity(0.7)),
+    // WRAPPER: Ensures Config is loaded
+    return FutureBuilder(
+      future: GenieAiConfig.load(),
+      builder: (context, snapshot) {
+        if (!GenieAiConfig.isLoaded && snapshot.connectionState != ConnectionState.done) {
+          return Scaffold(
+             backgroundColor: widget.isEmbedded ? Colors.transparent : colors['background'],
+             body: const Center(child: CircularProgressIndicator())
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: widget.isEmbedded
+              ? Colors.transparent
+              : colors['background'], // Dynamic Background
+          body: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(widget.isEmbedded ? 0 : 16.0),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 400),
+                padding: const EdgeInsets.all(24.0),
+                decoration: widget.isEmbedded
+                    ? null
+                    : BoxDecoration(
+                        color: colors['surface'], // Dynamic Surface
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.1), blurRadius: 10)
+                        ],
+                      ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeader(colors),
+                    const SizedBox(height: 10),
+                    Text(
+                      tr('passwordReset.resetPassword'),
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          color: colors['text'].withOpacity(0.7)),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_resetRequested)
+                      _buildSuccessView()
+                    else
+                      _buildFormView(colors, isDark),
+                    _buildFooter(colors, isDark),
+                    if (widget.isEmbedded) _buildCancelButton(colors),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                if (_resetRequested)
-                  _buildSuccessView()
-                else
-                  _buildFormView(colors, isDark),
-                _buildFooter(colors, isDark),
-                if (widget.isEmbedded) _buildCancelButton(colors),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      }
     );
   }
 
   Widget _buildHeader(Map<String, dynamic> colors) {
     return Column(children: [
-      Container(
-        width: 60,
-        height: 60,
-        decoration:
-            BoxDecoration(color: colors['primary'], shape: BoxShape.circle),
-        child: const Icon(Icons.auto_awesome, color: Colors.white, size: 30),
+      // [MODIFIED] Replaced hardcoded Icon with Dynamic SVG/Image
+      SizedBox(
+        height: 80,
+        child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+            ? SvgPicture.asset(
+                GenieAiConfig.iconPath,
+                fit: BoxFit.contain,
+              )
+            : Image.asset(
+                GenieAiConfig.iconPath,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                   return const Icon(Icons.error, size: 40);
+                },
+              ),
       ),
       const SizedBox(height: 10),
+      // [MODIFIED] Use Dynamic Title
       Text(
-        tr('passwordReset.appTitle'),
+        GenieAiConfig.title,
         style: TextStyle(
             fontSize: 28, fontWeight: FontWeight.bold, color: colors['text']),
       ),

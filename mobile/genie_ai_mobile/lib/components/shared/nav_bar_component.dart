@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart'; // ADDED: For SVG support
 import 'package:genie_ai_mobile/components/shared/language_selector.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart'; // ADDED: Config Service
 
 class NavBarComponent extends StatelessWidget {
   final Map<String, dynamic> user;
@@ -52,7 +54,7 @@ class NavBarComponent extends StatelessWidget {
         builder: (BuildContext drawerContext) {
           return IconButton(
             icon: Icon(Icons.menu, color: contentColor),
-            tooltip: tr('nav.toggleSidebar'), // TRANSLATED
+            tooltip: tr('nav.toggleSidebar'),
             onPressed: () {
               debugPrint("[NAVBAR] Hamburger button pressed!");
 
@@ -74,10 +76,26 @@ class NavBarComponent extends StatelessWidget {
       titleSpacing: 0,
       title: Row(
         children: [
-          Icon(Icons.auto_awesome, color: contentColor, size: 24),
+          // [MODIFIED] Dynamic Icon Logic (SVG or Image)
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+                ? SvgPicture.asset(
+                    GenieAiConfig.iconPath,
+                    fit: BoxFit.contain,
+                    // Optional: If you want the icon to match the text color, uncomment this:
+                    // colorFilter: ColorFilter.mode(contentColor, BlendMode.srcIn),
+                  )
+                : Image.asset(
+                    GenieAiConfig.iconPath,
+                    fit: BoxFit.contain,
+                  ),
+          ),
           const SizedBox(width: 8),
+          // [MODIFIED] Dynamic Title from Config
           Text(
-            tr('brandName'), // TRANSLATED (Genie AI...)
+            GenieAiConfig.title,
             style: TextStyle(
               color: contentColor,
               fontWeight: FontWeight.bold,
@@ -87,28 +105,12 @@ class NavBarComponent extends StatelessWidget {
         ],
       ),
       actions: [
-        // System Status Indicator
-        //const Padding(
-        //  padding: EdgeInsets.only(right: 8),
-        //  child: Row(
-        //    children: [
-        //      CircleAvatar(radius: 4, backgroundColor: Colors.orange),
-        //      SizedBox(width: 4),
-        //      Text("Issues",
-        //          style: TextStyle(color: Colors.white70, fontSize: 10)),
-        //    ],
-        //  ),
-        //),
-
-        // Language Selector
-        // const LanguageSelector(),
-
         // Right drawer button (Related Documents) – only on mobile/tablet
         if (showRightDrawerButton)
           Builder(
             builder: (context) => IconButton(
               icon: Icon(Icons.description_outlined, color: contentColor),
-              tooltip: tr('nav.relatedDocuments'), // TRANSLATED
+              tooltip: tr('nav.relatedDocuments'),
               onPressed: () {
                 Scaffold.of(context).openEndDrawer();
               },
@@ -118,7 +120,7 @@ class NavBarComponent extends StatelessWidget {
         // Settings Button
         IconButton(
           icon: Icon(Icons.settings_outlined, color: contentColor),
-          tooltip: tr('nav.settings'), // TRANSLATED
+          tooltip: tr('nav.settings'),
           onPressed: () {
             showModalBottomSheet(
               context: context,
@@ -136,7 +138,7 @@ class NavBarComponent extends StatelessWidget {
         // Profile Button
         IconButton(
           icon: Icon(Icons.person_outline, color: contentColor),
-          tooltip: tr('nav.userProfile'), // TRANSLATED
+          tooltip: tr('nav.userProfile'),
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
@@ -146,7 +148,7 @@ class NavBarComponent extends StatelessWidget {
         // Logout Button
         IconButton(
           icon: Icon(Icons.logout, color: contentColor),
-          tooltip: tr('nav.logout'), // TRANSLATED
+          tooltip: tr('nav.logout'),
           onPressed: onLogout,
         ),
         const SizedBox(width: 4),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart'; // IMPORTED SVG
 import 'package:genie_ai_mobile/services/password_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart'; // IMPORTED CONFIG
 
 class PasswordResetConfirmScreen extends StatefulWidget {
   final String token;
@@ -45,41 +47,64 @@ class _PasswordResetConfirmScreenState
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
 
-    if (_success) return _buildSuccessView(colors);
+    // WRAPPER: Ensures Config is loaded
+    return FutureBuilder(
+      future: GenieAiConfig.load(),
+      builder: (context, snapshot) {
+        if (!GenieAiConfig.isLoaded && snapshot.connectionState != ConnectionState.done) {
+          return Scaffold(
+            backgroundColor: colors['background'],
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    return Scaffold(
-      backgroundColor: colors['background'],
-      appBar: AppBar(
-        title: Text(tr('passwordResetConfirm.resetPassword')),
-        backgroundColor: colors['background'],
-        elevation: 0,
-        iconTheme: IconThemeData(color: colors['text']),
-        titleTextStyle: TextStyle(
-            color: colors['text'], fontSize: 20, fontWeight: FontWeight.bold),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(children: [
-          _buildTextField(_password,
-              tr('passwordResetConfirm.newPasswordLabel'), colors, isDark),
-          const SizedBox(height: 16),
-          _buildTextField(
-              _confirm,
-              tr('passwordResetConfirm.confirmNewPasswordLabel'),
-              colors,
-              isDark),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colors['primary'],
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 45),
-            ),
-            onPressed: _isLoading ? null : _handleReset,
-            child: Text(tr('passwordResetConfirm.resetButton')),
+        if (_success) return _buildSuccessView(colors);
+
+        return Scaffold(
+          backgroundColor: colors['background'],
+          appBar: AppBar(
+            // [MODIFIED] Use Dynamic Title
+            title: Text("${tr('passwordResetConfirm.resetPassword')} - ${GenieAiConfig.title}"),
+            backgroundColor: colors['background'],
+            elevation: 0,
+            iconTheme: IconThemeData(color: colors['text']),
+            titleTextStyle: TextStyle(
+                color: colors['text'], fontSize: 20, fontWeight: FontWeight.bold),
           ),
-        ]),
-      ),
+          body: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(children: [
+              // [ADDED] Dynamic Icon Display
+              SizedBox(
+                height: 60,
+                child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
+                    ? SvgPicture.asset(GenieAiConfig.iconPath, fit: BoxFit.contain)
+                    : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
+              ),
+              const SizedBox(height: 24),
+              
+              _buildTextField(_password,
+                  tr('passwordResetConfirm.newPasswordLabel'), colors, isDark),
+              const SizedBox(height: 16),
+              _buildTextField(
+                  _confirm,
+                  tr('passwordResetConfirm.confirmNewPasswordLabel'),
+                  colors,
+                  isDark),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors['primary'],
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 45),
+                ),
+                onPressed: _isLoading ? null : _handleReset,
+                child: Text(tr('passwordResetConfirm.resetButton')),
+              ),
+            ]),
+          ),
+        );
+      }
     );
   }
 

@@ -111,6 +111,28 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Check for language changes and update welcome message
+    final String newWelcomeMessage = tr('chatbot.welcomeMessage');
+
+    if (_welcomeMessage != newWelcomeMessage) {
+      // If the first message is the welcome message, update it in the UI
+      if (_messages.isNotEmpty &&
+          _messages.first['role'] == 'assistant' &&
+          _messages.first['content'] == _welcomeMessage) {
+        setState(() {
+          _messages.first['content'] = newWelcomeMessage;
+        });
+      }
+
+      // Update the state variable for future resets
+      _welcomeMessage = newWelcomeMessage;
+    }
+  }
+
   // Bridging method for translations
   String _t(String key, [String fallback = '']) {
     // tr() handles the lookup globally
@@ -123,16 +145,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           await rootBundle.loadString('assets/config/genie-ai-config.json');
       final Map<String, dynamic> config = jsonDecode(configString);
 
-      final String? welcome = config['features']?['chat']?['welcomeMessage'];
-      if (welcome != null && welcome.isNotEmpty) {
-        _welcomeMessage = welcome;
-        if (_messages.isNotEmpty &&
-            _messages.first['content'].contains('Welcome')) {
-          setState(() {
-            _messages.first['content'] = _welcomeMessage;
-          });
-        }
-      }
+      // FIX: Removed block that overwrites _welcomeMessage from config.
+      // We strictly use the i18n value initialized in initState.
 
       final List<dynamic> buttonsJson =
           config['features']?['chat']?['quickHelp']?['buttons'] ?? [];

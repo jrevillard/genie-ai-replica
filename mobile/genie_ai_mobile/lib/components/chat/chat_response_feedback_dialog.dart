@@ -50,12 +50,16 @@ class _ChatResponseFeedbackDialogState
   void _submit() {
     if (_selectedRating == null && _thumbFeedback == null) return;
 
+    // FIX: Get ID and strip 'messages/' prefix to prevent 404s in URL construction
+    String rawId = widget.message['id'] ?? widget.message['timestamp'];
+    String cleanId = rawId.toString().replaceFirst('messages/', '');
+
     widget.onSubmit({
       'rating': _selectedRating,
       'thumbFeedback': _thumbFeedback,
       'skinTone': _skinToneColor.value.toRadixString(16),
       'text': _feedbackText,
-      'messageId': widget.message['id'] ?? widget.message['timestamp'],
+      'messageId': cleanId, // Sending clean ID (e.g. "274711...")
     });
 
     Navigator.of(context).pop();
@@ -63,6 +67,7 @@ class _ChatResponseFeedbackDialogState
 
   @override
   Widget build(BuildContext context) {
+    // ... (Rest of your UI code remains exactly the same)
     final colors = ThemeManager().getColors();
     final bool isDark = ThemeManager().isDarkMode;
 
@@ -98,10 +103,9 @@ class _ChatResponseFeedbackDialogState
               ),
               const SizedBox(height: 24),
 
-              // Layout (Responsive Column in Flutter usually handles width fine)
+              // Layout
               LayoutBuilder(
                 builder: (context, constraints) {
-                  // If wide enough, could use Row, but Column is safer for mobile
                   return Column(
                     children: [
                       // --- MESSAGE PREVIEW ---
@@ -181,8 +185,8 @@ class _ChatResponseFeedbackDialogState
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          widget.translate(
-                              "feedback.promptText", "How would you rate this?"),
+                          widget.translate("feedback.promptText",
+                              "How would you rate this?"),
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
                             color: colors['text'].withOpacity(0.7),
@@ -202,8 +206,8 @@ class _ChatResponseFeedbackDialogState
                           hintText: widget.translate(
                               "responseRating.additionalComments",
                               "Additional comments..."),
-                          hintStyle: TextStyle(
-                              color: colors['text'].withOpacity(0.5)),
+                          hintStyle:
+                              TextStyle(color: colors['text'].withOpacity(0.5)),
                           filled: true,
                           fillColor: isDark
                               ? Colors.white.withOpacity(0.05)
@@ -265,6 +269,7 @@ class _ChatResponseFeedbackDialogState
     );
   }
 
+  // ... (Helper widgets _buildThumbButton, _buildSkinToneSelector, etc. remain the same)
   Widget _buildThumbButton({
     required String type,
     required String label,
@@ -274,12 +279,10 @@ class _ChatResponseFeedbackDialogState
   }) {
     final String fillColor =
         '#${_skinToneColor.value.toRadixString(16).substring(2)}';
-    // Dynamic styling
     final Color bgColor = isActive
         ? colors['primary'].withOpacity(0.1)
         : (isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF5F9FF));
-    final Color borderColor =
-        isActive ? colors['primary'] : colors['border'];
+    final Color borderColor = isActive ? colors['primary'] : colors['border'];
 
     return GestureDetector(
       onTap: () => _selectThumbFeedback(type),
@@ -293,7 +296,6 @@ class _ChatResponseFeedbackDialogState
         ),
         child: Column(
           children: [
-            // SVG Construction
             SvgPicture.string(
               _generateThumbSvg(type, isActive ? fillColor : 'none'),
               width: 28,
@@ -410,7 +412,6 @@ class _ChatResponseFeedbackDialogState
   }
 
   String _generateThumbSvg(String type, String fill) {
-    // These paths match the Vue template exactly
     if (type == 'up') {
       return '''
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">

@@ -11,7 +11,7 @@ class ChatbotProxy {
     required String userId,
     String? categoryId,
     String? contextLabels,
-    String? language, // ADDED: Language parameter
+    String? language,
   }) async {
     final Map<String, dynamic> payload = {
       'sessionId': sessionId,
@@ -20,20 +20,16 @@ class ChatbotProxy {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    // Add language to payload if present
     if (language != null && language.isNotEmpty) {
       payload['language'] = language;
     }
 
-    // Construct the 'context' object expected by the backend validation
     if ((categoryId != null && categoryId.isNotEmpty) ||
         (contextLabels != null && contextLabels.isNotEmpty)) {
       payload['context'] = {
         if (categoryId != null) 'categoryId': categoryId,
         if (contextLabels != null) 'labels': contextLabels,
       };
-
-      // Keep root categoryId for backward compatibility if needed
       if (categoryId != null) payload['categoryId'] = categoryId;
     }
 
@@ -42,7 +38,6 @@ class ChatbotProxy {
 
       final response = await _api.post('queries', payload);
 
-      // Accept both 200 and 201 as success
       if (response.statusCode == 200 || response.statusCode == 201) {
         final Map<String, dynamic> data = jsonDecode(response.body);
         debugPrint("[CHATBOT_PROXY] Query successful: $data");
@@ -62,6 +57,14 @@ class ChatbotProxy {
     required Map<String, dynamic> feedback,
   }) async {
     try {
+      // FIX: Ensure userId in body is clean (remove 'users/' prefix)
+      // This solves the backend warning "userId in body does not match token userId"
+      if (feedback.containsKey('userId') && feedback['userId'] is String) {
+        feedback['userId'] =
+            (feedback['userId'] as String).replaceFirst('users/', '');
+      }
+
+      // Note: queryId here should now be clean (e.g. "274711...") thanks to the fix in the Dialog.
       debugPrint("[CHATBOT_PROXY] Submitting feedback for $queryId: $feedback");
 
       final response = await _api.post('queries/$queryId/feedback', feedback);

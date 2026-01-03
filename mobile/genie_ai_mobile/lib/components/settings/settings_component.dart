@@ -511,18 +511,19 @@ class _SettingsComponentState extends State<SettingsComponent> {
               _buildStickyHeader(primaryColor, titleColor, previewIsDark),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
+                  // UPDATED: Reduced padding for handset screens
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
                       _buildIdentitySection(primaryColor, titleColor),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
                       _buildVerticalConfigurationStack(primaryColor, titleColor,
                           boxBg, previewTheme.cardColor),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       _buildAccountManagement(
                           primaryColor, titleColor, previewIsDark, boxBg),
-                      const SizedBox(height: 100),
+                      const SizedBox(height: 60),
                     ],
                   ),
                 ),
@@ -536,7 +537,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   Widget _buildStickyHeader(Color accent, Color titleColor, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      // UPDATED: Reduced padding for handset screens
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
           border: Border(
               bottom:
@@ -544,11 +546,15 @@ class _SettingsComponentState extends State<SettingsComponent> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(translate("settings.title", "Settings"),
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: titleColor)),
+          // UPDATED: Wrapped title in Flexible to prevent overflow on long translations
+          Flexible(
+            child: Text(translate("settings.title", "Settings"),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: titleColor)),
+          ),
           Row(children: [
             // ADDED: Link to About Screen
             IconButton(
@@ -556,16 +562,16 @@ class _SettingsComponentState extends State<SettingsComponent> {
               tooltip: translate("about.title", "About"),
               onPressed: () => Navigator.pushNamed(context, '/about'),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Text(translate("settings.close", "Close"))),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: accent, elevation: 0),
               onPressed: _handleSave,
-              child: Text(translate("settings.saveSettings", "Save Settings"),
+              child: Text(translate("settings.saveSettings", "Save"),
                   style: const TextStyle(color: Colors.white)),
             ),
           ]),
@@ -602,7 +608,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
                     color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold))),
-        const SizedBox(width: 20),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,7 +620,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
                       color: titleColor)),
               // BUG FIX: Rendering hydrated email state
               Text(_userData['email'],
-                  style: const TextStyle(color: Colors.grey, fontSize: 15)),
+                  style: const TextStyle(color: Colors.grey, fontSize: 14)),
               const SizedBox(height: 4),
               Text(_userData['accountType'],
                   style: TextStyle(
@@ -677,97 +683,87 @@ class _SettingsComponentState extends State<SettingsComponent> {
                 fontSize: 18, fontWeight: FontWeight.bold, color: titleColor)),
         const SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
               color: boxBg, borderRadius: BorderRadius.circular(10)),
+          // UPDATED: Changed Row to Column to stack Email and Password sections vertically on handset
           child: Column(
             children: [
-              Row(children: [
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                            translate("settings.emailAddress", "Email Address"),
-                            style: const TextStyle(
-                                fontSize: 13, color: Colors.grey)),
-                        if (_emailError != null) // USING _emailError
-                          Text(_emailError!,
-                              style: const TextStyle(
-                                  color: Colors.red, fontSize: 11)),
-                        const SizedBox(height: 8),
-                        Row(children: [
-                          Expanded(
-                              child: TextField(
-                                  controller: _emailController,
-                                  enabled:
-                                      _isEditingEmail, // Wired to toggle state
-                                  style: TextStyle(
-                                      color: titleColor), // Dynamic text color
-                                  decoration: InputDecoration(
-                                      filled: true,
-                                      // FIX: Logic to blend background when not editing
-                                      fillColor: _isEditingEmail
-                                          ? (isDark
-                                              ? Colors.white.withOpacity(0.1)
-                                              : Colors.white)
-                                          : Colors.transparent,
-                                      border: const OutlineInputBorder(
-                                          borderSide: BorderSide.none)))),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accent, // Primary Color
-                                foregroundColor: Colors.white, // White Text
-                              ),
-                              onPressed: _handleEmailToggle,
-                              child: Text(_isEditingEmail
-                                  ? translate("common.save", "Save")
-                                  : translate("common.edit", "Edit"))),
-                        ]),
-                      ]),
-                ),
-                const SizedBox(width: 28),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(translate("settings.password", "Password"),
-                            style: const TextStyle(
-                                fontSize: 13, color: Colors.grey)),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(double.infinity, 48),
-                              backgroundColor: accent, // Primary Color
-                              foregroundColor: Colors.white, // White Text
-                            ),
-                            onPressed: _renderPasswordResetOverlay,
-                            child: Text(translate(
-                                "settings.changePassword", "Change Password"))),
-                      ]),
-                ),
+              // 1. Email Section
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(translate("settings.emailAddress", "Email Address"),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                if (_emailError != null) // USING _emailError
+                  Text(_emailError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 11)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                      child: TextField(
+                          controller: _emailController,
+                          enabled: _isEditingEmail, // Wired to toggle state
+                          style: TextStyle(
+                              color: titleColor), // Dynamic text color
+                          decoration: InputDecoration(
+                              filled: true,
+                              // FIX: Logic to blend background when not editing
+                              fillColor: _isEditingEmail
+                                  ? (isDark
+                                      ? Colors.white.withOpacity(0.1)
+                                      : Colors.white)
+                                  : Colors.transparent,
+                              border: const OutlineInputBorder(
+                                  borderSide: BorderSide.none)))),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent, // Primary Color
+                        foregroundColor: Colors.white, // White Text
+                      ),
+                      onPressed: _handleEmailToggle,
+                      child: Text(_isEditingEmail
+                          ? translate("common.save", "Save")
+                          : translate("common.edit", "Edit"))),
+                ]),
               ]),
+              const SizedBox(height: 24), // Vertical spacing between sections
+
+              // 2. Password Section
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(translate("settings.password", "Password"),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      backgroundColor: accent, // Primary Color
+                      foregroundColor: Colors.white, // White Text
+                    ),
+                    onPressed: _renderPasswordResetOverlay,
+                    child: Text(translate(
+                        "settings.changePassword", "Change Password"))),
+              ]),
+
               const SizedBox(height: 32),
-              Row(children: [
-                Expanded(
-                    child: _buildActionBtnCard(
-                        translate("settings.resetUserData", "Reset User Data"),
-                        translate(
-                            "settings.resetUserDataDesc", "Wipe chat history."),
-                        _showResetDataWorkflow,
-                        isDark,
-                        // Custom Override: Darker red than delete button
-                        overrideColor: Colors.red[800])),
-                const SizedBox(width: 24),
-                Expanded(
-                    child: _buildActionBtnCard(
-                        translate("settings.deleteAccount", "Delete Account"),
-                        translate("settings.deleteAccountDesc",
-                            "Permanent deletion."),
-                        _initiateAccountDeletionFlow,
-                        isDark,
-                        isDanger: true)),
+
+              // 3. Danger Zone (Stacked Vertically for Mobile Safety)
+              Column(children: [
+                _buildActionBtnCard(
+                    translate("settings.resetUserData", "Reset User Data"),
+                    translate(
+                        "settings.resetUserDataDesc", "Wipe chat history."),
+                    _showResetDataWorkflow,
+                    isDark,
+                    // Custom Override: Darker red than delete button
+                    overrideColor: Colors.red[800]),
+                const SizedBox(height: 12),
+                _buildActionBtnCard(
+                    translate("settings.deleteAccount", "Delete Account"),
+                    translate(
+                        "settings.deleteAccountDesc", "Permanent deletion."),
+                    _initiateAccountDeletionFlow,
+                    isDark,
+                    isDanger: true),
               ]),
             ],
           ),
@@ -881,7 +877,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
   Widget _buildToggleRow(
       String label, bool value, Function(bool) onChanged, Color activeColor) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label, style: const TextStyle(fontSize: 14.5)),
+      // UPDATED: Wrapped text in Expanded to prevent overflow on long translations
+      Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
       Switch(
           value: value,
           onChanged: onChanged,
@@ -911,6 +908,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
               minimumSize: const Size(double.infinity, 50)),
           onPressed: onTap,
           child: Text(title,
+              textAlign: TextAlign
+                  .center, // UPDATED: Ensure center alignment if wrapping occurs
               style: TextStyle(color: txtColor, fontWeight: FontWeight.bold))),
       const SizedBox(height: 6),
       Text(desc,

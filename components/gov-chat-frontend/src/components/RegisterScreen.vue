@@ -1,4 +1,3 @@
-<!-- src/components/RegisterScreen.vue -->
 <template>
   <div class="register-container" :data-theme="theme">
     <div class="register-card">
@@ -65,6 +64,7 @@
             v-model="password"
             type="password"
             id="password"
+            autocomplete="new-password"
             :placeholder="$t('register.passwordPlaceholder')"
             class="form-control"
             required
@@ -80,6 +80,7 @@
             v-model="confirmPassword"
             type="password"
             id="confirmPassword"
+            autocomplete="new-password"
             :placeholder="$t('register.confirmPasswordPlaceholder')"
             class="form-control"
             required
@@ -281,7 +282,8 @@ export default {
   methods: {
     setMobileHeight() {
       const vh = window.innerHeight * 0.01;
-      document.documentElement.setProperty("--vh", `${vh}px`);
+      // PATCHED: Added .style before .setProperty
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
     },
     ensureViewportMeta() {
       if (!document.querySelector('meta[name="viewport"]')) {

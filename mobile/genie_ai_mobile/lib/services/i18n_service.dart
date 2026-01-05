@@ -35,12 +35,12 @@ class I18nService extends ChangeNotifier {
     'de': 'German',
     'es': 'Spanish',
     'fr': 'French',
+    'id': 'Indonesian',
     'sw': 'Kiswahili',
     'pt': 'Portuguese',
     'zh': 'Chinese',
     'ru': 'Russian',
     'th': 'Thai',
-    'id': 'Indonesian',
   };
 
   // Translation Data Store

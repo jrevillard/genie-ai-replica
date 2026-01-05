@@ -22,12 +22,13 @@ class ChatBotComponent extends StatefulWidget {
   final String userId;
   final VoidCallback onRefreshSidebar;
   final Function(List<dynamic>) onRelatedDocumentsUpdate;
-
+  final VoidCallback? onChatStateChanged;
   const ChatBotComponent({
     super.key,
     required this.userId,
     required this.onRefreshSidebar,
     required this.onRelatedDocumentsUpdate,
+    this.onChatStateChanged,
   });
 
   @override
@@ -43,6 +44,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   String? _currentConversationId;
   String _conversationTitle = "New Chat";
   List<Map<String, dynamic>> _messages = [];
+  List<Map<String, dynamic>> get messages => _messages;
+  bool get isQuickHelpVisible => _showQuickHelpOverlay;
   bool _isLoading = false;
 
   // Dirty State Tracking
@@ -185,6 +188,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     setState(() {
       _showQuickHelpOverlay = !hasInteraction;
     });
+    widget.onChatStateChanged?.call();
   }
 
   void _scrollToBottom({bool animated = true}) {

@@ -1196,7 +1196,8 @@ const Map<String, dynamic> arLocale = {
         "saveFirst": "حفظ أولاً",
         "export": "تصدير"
       }
-    }
+    },
+    "shareWhatsApp": "شارك على واتساب"
   },
   "quickhelp": {
     "applyForID": "طلب الهوية",

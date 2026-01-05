@@ -1213,7 +1213,8 @@ const Map<String, dynamic> esLocale = {
         "saveFirst": "Guardar Primero",
         "export": "Exportar"
       }
-    }
+    },
+    "shareWhatsApp": "Compartir en WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Solicitar ID",

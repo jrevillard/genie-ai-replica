@@ -1225,7 +1225,8 @@ const Map<String, dynamic> deLocale = {
         "saveFirst": "Zuerst speichern",
         "export": "Exportieren"
       }
-    }
+    },
+    "shareWhatsApp": "Auf WhatsApp teilen"
   },
   "quickhelp": {
     "applyForID": "Ausweis beantragen",

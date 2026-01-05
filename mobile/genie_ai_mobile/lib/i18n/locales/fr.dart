@@ -1224,7 +1224,8 @@ const Map<String, dynamic> frLocale = {
         "saveFirst": "Enregistrer d'abord",
         "export": "Exporter"
       }
-    }
+    },
+    "shareWhatsApp": "Partager sur WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Demander une carte d'identité",

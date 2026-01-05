@@ -1217,7 +1217,8 @@ const Map<String, dynamic> swLocale = {
         "saveFirst": "Hifadhi Kwanza",
         "export": "Hamisha"
       }
-    }
+    },
+    "shareWhatsApp": "Shiriki kwenye WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Omba Kitambulisho",

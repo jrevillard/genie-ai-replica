@@ -1216,7 +1216,8 @@ const Map<String, dynamic> ptLocale = {
         "saveFirst": "Salvar Primeiro",
         "export": "Exportar"
       }
-    }
+    },
+    "shareWhatsApp": "Compartilhar no WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Solicitar ID",

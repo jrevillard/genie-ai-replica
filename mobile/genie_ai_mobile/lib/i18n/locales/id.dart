@@ -1208,7 +1208,8 @@ const Map<String, dynamic> idLocale = {
         "saveFirst": "Simpan Dulu",
         "export": "Ekspor"
       }
-    }
+    },
+    "shareWhatsApp": "Bagikan di WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Ajukan ID",

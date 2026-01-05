@@ -1197,7 +1197,8 @@ const Map<String, dynamic> thLocale = {
         "saveFirst": "บันทึกก่อน",
         "export": "ส่งออก"
       }
-    }
+    },
+    "shareWhatsApp": "แชร์ทาง WhatsApp"
   },
   "quickhelp": {
     "applyForID": "ขอทำบัตรประชาชน",

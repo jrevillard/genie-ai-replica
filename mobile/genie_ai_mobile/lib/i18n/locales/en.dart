@@ -1196,7 +1196,8 @@ const Map<String, dynamic> enLocale = {
         "saveFirst": "Save First",
         "export": "Export"
       }
-    }
+    },
+    "shareWhatsApp": "Share on WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Apply for ID",

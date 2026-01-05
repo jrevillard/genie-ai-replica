@@ -1089,7 +1089,8 @@ const Map<String, dynamic> zhLocale = {
         "saveFirst": "先保存",
         "export": "导出"
       }
-    }
+    },
+    "shareWhatsApp": "分享到 WhatsApp"
   },
   "quickhelp": {
     "applyForID": "申请 ID",

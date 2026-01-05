@@ -1214,7 +1214,8 @@ const Map<String, dynamic> ruLocale = {
         "saveFirst": "Снач. Сохр.",
         "export": "Экспорт"
       }
-    }
+    },
+    "shareWhatsApp": "Поделиться в WhatsApp"
   },
   "quickhelp": {
     "applyForID": "Получить ID",

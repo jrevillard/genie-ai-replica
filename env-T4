@@ -244,6 +244,10 @@ RETRIEVER_OPENAI_EMBED_MODEL=text-embedding-3-small
 ARANGO_FILTER_STRATEGY=OR
 RETRIEVER_SUMMARIZER_ENABLED=false
 
+# ========= RERANKER SERVICE =========
+# Controls the number of chunks returned by reranker to LLM as context for response generation
+RERANKER_TOP_N = 3
+
 # ========= VLLM SERVICE =========
 VLLM_ENDPOINT=http://vllm:8000
 

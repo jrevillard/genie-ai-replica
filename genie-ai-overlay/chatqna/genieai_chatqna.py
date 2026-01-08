@@ -84,7 +84,7 @@ RETRIEVER_SCORE_THRESHOLD = os.getenv("RETRIEVER_ARANGO_SCORE_THRESHOLD", 0.1)
 RETRIEVER_DISTANCE_THRESHOLD = os.getenv("RETRIEVER_ARANGO_DISTANCE_THRESHOLD", None) 
 RETRIEVER_LAMBDA_MULT = os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5) 
 
-
+RERANKER_TOP_N = os.getenv("RERANKER_TOP_N", 2)
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
@@ -231,7 +231,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             if 'file_ids' in item:
                 file_id_list.extend(item['file_ids'])
 
-        # FIXED: Check if metadata is not None before checking length
+        # Check if metadata is not None before checking length
         metadata = data.get('metadata')
         if metadata and len(metadata) > 0:
             if RETRIEVER_SEARCH_START == 'node' or RETRIEVER_SEARCH_START == 'edge':
@@ -703,7 +703,7 @@ class ChatQnAService:
         full_chat_history = chat_request.messages
         original_language = chat_request.context.language if chat_request.context else None
         
-        # --- FIX: Re-enabled language detection as fallback ---
+        # Re-enabled language detection as fallback ---
         try:
             if not original_language or original_language.strip() == "":
                 # Attempt to detect language from the last user message
@@ -793,7 +793,8 @@ class ChatQnAService:
             score_threshold=chat_request.score_threshold if chat_request.score_threshold is not None else RETRIEVER_SCORE_THRESHOLD,
         )
         reranker_parameters = RerankerParms(
-            top_n=chat_request.top_n if chat_request.top_n else 1,
+            # top_n=chat_request.top_n if chat_request.top_n else 1,
+            top_n=chat_request.top_n if chat_request.top_n is not None else RERANKER_TOP_N,
         )
 
         result_dict, runtime_graph = await self.megaservice.schedule(
@@ -820,7 +821,7 @@ class ChatQnAService:
             # Load Language Codes
             language_codes = self.load_language_codes(LANGUAGE_CODES_FILEPATH)
             
-            # FIX: Fallback logic for language codes. If not in map, use the original code.
+            # Fallback logic for language codes. If not in map, use the original code.
             target_lang_name = original_language
             if original_language.lower() in language_codes:
                 target_lang_name = language_codes[original_language.lower()]
@@ -853,7 +854,7 @@ class ChatQnAService:
                     final_text_response = translated_blob.strip()
 
             except Exception as e:
-                # FIX: Corrected error message to refer to "response" translation, not "history"
+                # Corrected error message to refer to "response" translation, not "history"
                 logger.error(f"An error occurred during response translation: {e}")
                 final_text_response = llm_response
         else:
@@ -978,7 +979,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--without-rerank", action="store_true")
     parser.add_argument("--faqgen", action="store_true")
-    # FIX: Added --with-translation to prevent crash on unknown argument if CHATQNA_DAVID is used
+    # Added --with-translation to prevent crash on unknown argument if CHATQNA_DAVID is used
     parser.add_argument("--with-translation", action="store_true")
     parser.add_argument("--without-translation", action="store_true") 
     args = parser.parse_args()

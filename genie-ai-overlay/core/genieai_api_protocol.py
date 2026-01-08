@@ -165,7 +165,8 @@ class ChatCompletionRequest(BaseModel):
     index_name: Optional[str] = None
 
     # reranking
-    top_n: int = 2 # Need to highlight this variable in the documentation
+    # top_n: int = 2 Old version
+    top_n: Optional[int] = None
     reranked_docs: Union[List[RerankingResponseData], List[Dict[str, Any]]] = Field(default_factory=list)
 
     # define
@@ -233,5 +234,4 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self.file_type = file_type
         self.upload_date = upload_date
         self.file_labels = file_labels
-
 

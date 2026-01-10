@@ -289,15 +289,14 @@ class _SidebarComponentState extends State<SidebarComponent>
       );
     }
 
-    // FIX: DYNAMIC WIDTH CALCULATION FOR MOBILE DRAWER
-    // Calculate width: 85% of screen width, but capped at 420px.
-    final double drawerWidth = MediaQuery.of(context).size.width * 0.85;
-    final double effectiveWidth = drawerWidth > 420 ? 420 : drawerWidth;
+    // FIX: FULL WIDTH DRAWER FOR MOBILE
+    // Use full screen width instead of a percentage or capped width
+    final double drawerWidth = MediaQuery.of(context).size.width;
 
     // Mobile drawer: constrained to safe area below AppBar and above bottom input
     // We wrap the Drawer in a SizedBox to override the default narrow width.
     return SizedBox(
-      width: effectiveWidth,
+      width: drawerWidth,
       child: Drawer(
         elevation: 0,
         backgroundColor:
@@ -307,9 +306,20 @@ class _SidebarComponentState extends State<SidebarComponent>
           bottom: true, // Respect bottom safe area (home indicator)
           child: Column(
             children: [
-              // Empty space equal to AppBar height (60) so content starts below navbar
-              SizedBox(
-                height: kToolbarHeight + MediaQuery.of(context).padding.top,
+              // ADDED: GestureDetector to capture taps on the transparent header area
+              // This allows the user to close the drawer by tapping the "visible" navbar
+              GestureDetector(
+                onTap: () {
+                  // Standard way to close a Drawer
+                  Navigator.of(context).pop();
+                },
+                behavior: HitTestBehavior
+                    .translucent, // Catches taps even on transparent areas
+                child: SizedBox(
+                  // Space equal to AppBar height
+                  height: kToolbarHeight + MediaQuery.of(context).padding.top,
+                  width: double.infinity,
+                ),
               ),
               // The actual sidebar content
               Expanded(

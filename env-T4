@@ -135,6 +135,8 @@ RETRIEVER_SERVICE_PORT=7025
 # ---- reranker service
 RERANK_SERVER_HOST_IP=tei_reranker
 RERANK_SERVER_PORT=80
+# Controls the number of chunks returned by reranker to LLM as context for response generation
+RERANKER_TOP_N = 3
 # ---- LLM service
 LLM_SERVER_HOST_IP=vllm
 LLM_SERVER_PORT=8000
@@ -243,10 +245,6 @@ RETRIEVER_OPENAI_EMBED_ENABLED=true
 RETRIEVER_OPENAI_EMBED_MODEL=text-embedding-3-small
 ARANGO_FILTER_STRATEGY=OR
 RETRIEVER_SUMMARIZER_ENABLED=false
-
-# ========= RERANKER SERVICE =========
-# Controls the number of chunks returned by reranker to LLM as context for response generation
-RERANKER_TOP_N = 3
 
 # ========= VLLM SERVICE =========
 VLLM_ENDPOINT=http://vllm:8000

@@ -378,7 +378,7 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
   }
 
   // ===========================================================================
-  // MAIN BUILD METHOD (Restored Responsive Logic)
+  // MAIN BUILD METHOD (Responsive Logic with Full Screen Drawer Fix)
   // ===========================================================================
   @override
   Widget build(BuildContext context) {
@@ -397,25 +397,41 @@ class _RightSidebarComponentState extends State<RightSidebarComponent> {
       );
     }
 
-    // 2. Mobile Drawer (RESTORED)
-    // Using Drawer widget ensures correct width (approx 304dp standard) and overlay behavior
-    return Drawer(
-      elevation: 16,
-      backgroundColor: Colors.transparent, // Avoid double backgrounds
-      child: SafeArea(
-        top: false,
-        bottom: true,
-        child: Column(
-          children: [
-            // Spacer for AppBar
-            SizedBox(
-              height: kToolbarHeight + MediaQuery.of(context).padding.top,
-            ),
-            // Actual Content
-            Expanded(
-              child: _buildRightSidebarContent(context, theme, colors, isDark),
-            ),
-          ],
+    // 2. Mobile Drawer
+    // FIX: FULL WIDTH DRAWER FOR MOBILE
+    // Use full screen width instead of a percentage or capped width
+    final double drawerWidth = MediaQuery.of(context).size.width;
+
+    return SizedBox(
+      width: drawerWidth, // FORCE FULL WIDTH
+      child: Drawer(
+        elevation: 16,
+        backgroundColor: Colors.transparent, // Avoid double backgrounds
+        child: SafeArea(
+          top: false,
+          bottom: true,
+          child: Column(
+            children: [
+              // Spacer for AppBar with Tap-to-Close
+              // ADDED: GestureDetector to capture taps on the transparent header area
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                },
+                behavior: HitTestBehavior
+                    .translucent, // Catches taps even on transparent areas
+                child: SizedBox(
+                  height: kToolbarHeight + MediaQuery.of(context).padding.top,
+                  width: double.infinity,
+                ),
+              ),
+              // Actual Content
+              Expanded(
+                child:
+                    _buildRightSidebarContent(context, theme, colors, isDark),
+              ),
+            ],
+          ),
         ),
       ),
     );

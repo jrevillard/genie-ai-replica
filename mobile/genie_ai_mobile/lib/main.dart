@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart'; // For kIsWeb check
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Needed for rootBundle
 import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED FOR I18N
@@ -10,7 +11,8 @@ import 'package:flutter_localizations/flutter_localizations.dart'; // REQUIRED F
 // SERVICE & UTILS IMPORTS
 // ===========================================================================
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
-import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N SERVICE
+import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
 
 // ===========================================================================
 // AUTHENTICATION SCREEN IMPORTS
@@ -28,15 +30,8 @@ import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/components/shared/nav_bar_component.dart';
 import 'package:genie_ai_mobile/components/sidebar/sidebar_component.dart';
 import 'package:genie_ai_mobile/components/chat/chatbot_component.dart';
-// FIX: Corrected import path from 'chat' to 'sidebar'
 import 'package:genie_ai_mobile/components/chat/right_sidebar_component.dart';
 import 'package:genie_ai_mobile/components/settings/about_screen.dart';
-
-// --- CONDITIONAL IMPORT FOR RIGHT SIDEBAR ---
-// This handles the Web vs Mobile stubbing for File Utils indirectly referenced
-// inside RightSidebarComponent.
-// Note: Direct imports are usually handled inside the component files themselves,
-// but we keep structure clean here.
 
 /// SSL Override for local development to bypass self-signed certificate issues
 class MyHttpOverrides extends HttpOverrides {
@@ -48,12 +43,18 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-void main() {
+void main() async {
   // Ensure binding is initialized for rootBundle access
   WidgetsFlutterBinding.ensureInitialized();
 
   // Apply the HTTP overrides for development environment
-  HttpOverrides.global = MyHttpOverrides();
+  if (!kIsWeb) {
+    HttpOverrides.global = MyHttpOverrides();
+  }
+
+  // Initialize Connectivity (Online/Offline)
+  await ConnectivityService().init();
+
   runApp(const MyApp());
 }
 
@@ -100,7 +101,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _toggleTheme() {
-    // Delegate strictly to ThemeManager
     ThemeManager().toggleTheme();
   }
 
@@ -120,36 +120,23 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to ThemeManager AND I18nService for global changes
     return AnimatedBuilder(
       animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
-        // DEBUG: Confirm rebuild on language change
-        debugPrint(
-            "[MAIN] AnimatedBuilder rebuilding. Locale: ${I18nService().currentLocale.languageCode}");
-
         return MaterialApp(
           title: 'Genie AI',
           debugShowCheckedModeBanner: false,
-
-          // I18n Configuration
           locale: I18nService().currentLocale,
           supportedLocales:
               I18nService().supportedLanguages.keys.map((code) => Locale(code)),
-
-          // ADDED: Standard Flutter Localizations Delegates
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-
-          // Theme Configuration using dynamic properties from ThemeManager
           theme: ThemeManager().lightTheme,
           darkTheme: ThemeManager().darkTheme,
           themeMode: ThemeManager().themeMode,
-
-          // Global Builder to handle Loading State without breaking Routes
           builder: (context, child) {
             if (!_isConfigLoaded) {
               return Scaffold(
@@ -163,8 +150,6 @@ class _MyAppState extends State<MyApp> {
             }
             return child!;
           },
-
-          // Root Routing Logic
           home: _user == null
               ? LoginScreen(onLoginSuccess: _handleLogin)
               : MainScreen(
@@ -173,15 +158,12 @@ class _MyAppState extends State<MyApp> {
                   toggleTheme: _toggleTheme,
                   onLogout: _handleLogout,
                 ),
-
-          // Defined Routes for Navigation
           routes: {
             '/login': (context) => LoginScreen(onLoginSuccess: _handleLogin),
             '/register': (context) => const RegisterScreen(),
             '/registration-success': (context) =>
                 const RegistrationSuccessScreen(),
             '/password-reset': (context) => const PasswordResetInitiateScreen(),
-            // Safety check: ensure _user is not null if accessed, though typically guarded by app logic
             '/profile': (context) => UserProfileScreen(user: _user ?? {}),
             '/about': (context) => const AboutScreen(),
             '/password-reset-confirm': (context) {
@@ -222,11 +204,9 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // GlobalKey for programmatic control of ChatBotComponent
   final GlobalKey<ChatBotComponentState> _chatBotKey =
       GlobalKey<ChatBotComponentState>();
 
-  // Current related documents from ChatBot
   List<dynamic> _currentRelatedDocuments = [];
 
   void _updateRelatedDocuments(List<dynamic> docs) {
@@ -237,54 +217,34 @@ class _MainScreenState extends State<MainScreen> {
 
   void _refreshSidebar() {
     debugPrint("[MAIN] Sidebar refresh requested");
-    // This can be expanded to refresh folders if needed via another GlobalKey
   }
 
-  // ===========================================================================
-  // EVENT HANDLERS: Sidebar -> ChatBot Communication
-  // ===========================================================================
-
-  /// Called when a service is selected in the ServiceTreePanel (Sidebar)
   void _onServiceSelected(Map<String, dynamic> service) {
     final String name = service['name'] ?? 'Unknown Service';
-    // Use category_id if available (for API context), otherwise fallback to id
     final String id = service['category_id'] ?? service['id'] ?? '';
-
     debugPrint("[MAIN] Service Selected: $name (ID: $id)");
-
-    // Programmatically set context in the ChatBot
     _chatBotKey.currentState?.setCategoryContext(id, name);
   }
 
-  /// Called when a conversation is selected in ChatFoldersPanel (Sidebar)
   void _onConversationSelected(String conversationId) {
     debugPrint("[MAIN] Conversation Selected: $conversationId");
-
-    // Programmatically load conversation in the ChatBot
     _chatBotKey.currentState?.loadConversation(conversationId);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Responsive breakpoints
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isWideScreen = screenWidth > 1200;
-
-    // Extract access token from user object (from login response)
     final String? accessToken =
         widget.user['accessToken'] ?? widget.user['token'];
 
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60),
-        child: NavBarComponent(
-          user: widget.user,
-          onLogout: widget.onLogout,
-          showRightDrawerButton: !isWideScreen, // Show only on mobile/tablet
-        ),
-      ),
+    // Theme color logic for Binder Tabs
+    // Dark Mode -> Green (Primary), Light Mode -> Grey
+    final Color binderColor =
+        widget.isDarkMode ? ThemeManager().getColors()['primary'] : Colors.grey;
 
-      // Left sidebar as drawer on narrow screens
+    return Scaffold(
+      // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
       drawer: isWideScreen
           ? null
           : SidebarComponent(
@@ -292,53 +252,138 @@ class _MainScreenState extends State<MainScreen> {
               onServiceSelected: _onServiceSelected,
               onConversationSelected: _onConversationSelected,
             ),
-
-      // Right sidebar as endDrawer on narrow screens
       endDrawer: isWideScreen
           ? null
           : RightSidebarComponent(
               relatedDocuments: _currentRelatedDocuments,
               accessToken: accessToken,
             ),
-
-      // Scrim and edge drag apply to both drawer and endDrawer
       drawerScrimColor: Colors.black54,
       drawerEdgeDragWidth: 40,
 
-      body: Row(
-        children: [
-          // Persistent Left Sidebar on wide screens only
-          if (isWideScreen)
-            SizedBox(
-              width:
-                  420, // UPDATED: Increased width to 420 to fit translated tabs
-              child: SidebarComponent(
-                user: widget.user,
-                onServiceSelected: _onServiceSelected,
-                onConversationSelected: _onConversationSelected,
-              ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // 1. MAIN LAYOUT (Navbar + Content)
+            Column(
+              children: [
+                NavBarComponent(
+                  user: widget.user,
+                  onLogout: widget.onLogout,
+                  showRightDrawerButton: !isWideScreen,
+                ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      // Persistent Left Sidebar
+                      if (isWideScreen)
+                        SizedBox(
+                          width: 420,
+                          child: SidebarComponent(
+                            user: widget.user,
+                            onServiceSelected: _onServiceSelected,
+                            onConversationSelected: _onConversationSelected,
+                          ),
+                        ),
+
+                      // Center Chat Area
+                      Expanded(
+                        child: ChatBotComponent(
+                          key: _chatBotKey,
+                          userId: widget.user['id'] ?? widget.user['_id'],
+                          onRefreshSidebar: _refreshSidebar,
+                          onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                        ),
+                      ),
+
+                      // Persistent Right Sidebar
+                      if (isWideScreen)
+                        SizedBox(
+                          width: 420,
+                          child: RightSidebarComponent(
+                            relatedDocuments: _currentRelatedDocuments,
+                            accessToken: accessToken,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
 
-          // Center Chat Area – always visible
-          Expanded(
-            child: ChatBotComponent(
-              key: _chatBotKey,
-              userId: widget.user['id'] ?? widget.user['_id'],
-              onRefreshSidebar: _refreshSidebar,
-              onRelatedDocumentsUpdate: _updateRelatedDocuments,
-            ),
+            // 2. BINDER TABS (Overlay)
+            // Left Tab
+            if (!isWideScreen)
+              Positioned(
+                left: 0,
+                top: 0, // Adjacent to Navbar
+                child: _BinderTab(
+                  isLeft: true,
+                  color: binderColor,
+                  onTap: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+
+            // Right Tab
+            if (!isWideScreen)
+              Positioned(
+                right: 0,
+                top: 0, // Adjacent to Navbar
+                child: _BinderTab(
+                  isLeft: false,
+                  color: binderColor,
+                  onTap: () => Scaffold.of(context).openEndDrawer(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// PRIVATE COMPONENT: BINDER TAB VISUAL
+// -----------------------------------------------------------------------------
+class _BinderTab extends StatelessWidget {
+  final bool isLeft;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _BinderTab({
+    required this.isLeft,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 10, // Slim Width
+        height: 60, // Height matching Navbar approx
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.45), // Transparent
+          borderRadius: BorderRadius.horizontal(
+            right: isLeft ? const Radius.circular(10) : Radius.zero,
+            left: !isLeft ? const Radius.circular(10) : Radius.zero,
           ),
-
-          // Persistent Right Sidebar on wide screens only
-          if (isWideScreen)
-            SizedBox(
-              width: 420, // UPDATED: Kept consistent with Left Sidebar
-              child: RightSidebarComponent(
-                relatedDocuments: _currentRelatedDocuments,
-                accessToken: accessToken,
-              ),
-            ),
-        ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 4,
+              offset: isLeft ? const Offset(2, 0) : const Offset(-2, 0),
+            )
+          ],
+        ),
+        child: Center(
+          child: Icon(
+            isLeft ? Icons.chevron_right : Icons.chevron_left,
+            color: Colors.white.withOpacity(0.8),
+            size: 12,
+          ),
+        ),
       ),
     );
   }

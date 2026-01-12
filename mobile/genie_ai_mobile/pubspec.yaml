@@ -19,6 +19,7 @@ dependencies:
   http: ^1.6.0
   crypto: ^3.0.3
   shared_preferences: ^2.2.2
+  connectivity_plus: ^5.0.2 # Added for Online/Offline features
 
   # Markdown rendering for chatbot messages
   flutter_markdown: ^0.7.3

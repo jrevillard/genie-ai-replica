@@ -203,11 +203,57 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final GlobalKey<ChatBotComponentState> _chatBotKey =
       GlobalKey<ChatBotComponentState>();
 
   List<dynamic> _currentRelatedDocuments = [];
+
+  // Connectivity state
+  StreamSubscription<bool>? _connectivitySubscription;
+  bool _isOnline = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // 1. Observe lifecycle for App Resume -> Recheck Connectivity
+    WidgetsBinding.instance.addObserver(this);
+
+    // 2. Initialize current state
+    _isOnline = ConnectivityService().isOnline;
+
+    // 3. Listen to Connectivity Stream for Sync Trigger
+    _connectivitySubscription =
+        ConnectivityService().isOnlineStream.listen((isOnline) {
+      if (mounted) {
+        setState(() {
+          _isOnline = isOnline;
+        });
+
+        if (isOnline) {
+          debugPrint(
+              "[MAIN] App is Online. Placeholder for future Sync Trigger.");
+          // TODO: TRIGGER SYNC SERVICE HERE WHEN IMPLEMENTED
+          // e.g. SyncService().syncPendingData();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint("[MAIN] App resumed. Rechecking connectivity...");
+      ConnectivityService().recheckConnectivity();
+    }
+  }
 
   void _updateRelatedDocuments(List<dynamic> docs) {
     setState(() {
@@ -245,7 +291,8 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
-      drawer: isWideScreen
+      // DISABLE DRAWER WHEN OFFLINE: Setting to null prevents opening via gesture
+      drawer: (isWideScreen || !_isOnline)
           ? null
           : SidebarComponent(
               user: widget.user,
@@ -277,22 +324,36 @@ class _MainScreenState extends State<MainScreen> {
                     children: [
                       // Persistent Left Sidebar
                       if (isWideScreen)
-                        SizedBox(
-                          width: 420,
-                          child: SidebarComponent(
-                            user: widget.user,
-                            onServiceSelected: _onServiceSelected,
-                            onConversationSelected: _onConversationSelected,
+                        // DISABLE LEFT SIDEBAR WHEN OFFLINE
+                        IgnorePointer(
+                          ignoring: !_isOnline,
+                          child: Opacity(
+                            opacity: _isOnline ? 1.0 : 0.5,
+                            child: SizedBox(
+                              width: 420,
+                              child: SidebarComponent(
+                                user: widget.user,
+                                onServiceSelected: _onServiceSelected,
+                                onConversationSelected: _onConversationSelected,
+                              ),
+                            ),
                           ),
                         ),
 
                       // Center Chat Area
                       Expanded(
-                        child: ChatBotComponent(
-                          key: _chatBotKey,
-                          userId: widget.user['id'] ?? widget.user['_id'],
-                          onRefreshSidebar: _refreshSidebar,
-                          onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                        // DISABLE CHATBOT WHEN OFFLINE
+                        child: IgnorePointer(
+                          ignoring: !_isOnline,
+                          child: Opacity(
+                            opacity: _isOnline ? 1.0 : 0.5,
+                            child: ChatBotComponent(
+                              key: _chatBotKey,
+                              userId: widget.user['id'] ?? widget.user['_id'],
+                              onRefreshSidebar: _refreshSidebar,
+                              onRelatedDocumentsUpdate: _updateRelatedDocuments,
+                            ),
+                          ),
                         ),
                       ),
 
@@ -319,8 +380,14 @@ class _MainScreenState extends State<MainScreen> {
                 top: 0, // Adjacent to Navbar
                 child: _BinderTab(
                   isLeft: true,
-                  color: binderColor,
-                  onTap: () => Scaffold.of(context).openDrawer(),
+                  // VISUAL DISABLE: Grey out when offline
+                  color: _isOnline ? binderColor : Colors.grey,
+                  // FUNCTIONAL DISABLE: No-op if offline
+                  onTap: _isOnline
+                      ? () => Scaffold.of(context).openDrawer()
+                      : () {
+                          debugPrint("Drawer disabled (Offline)");
+                        },
                 ),
               ),
 

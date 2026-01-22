@@ -20,18 +20,23 @@ class NavBarComponent extends StatelessWidget {
     this.showRightDrawerButton = false,
   });
 
-  void _handleConnectivityToggle(BuildContext context, bool isOnline) {
-    final newState = ConnectivityService().toggleUserOfflineMode();
+  // FIX: Made async because toggleUserOfflineMode returns Future<bool>
+  Future<void> _handleConnectivityToggle(
+      BuildContext context, bool isOnline) async {
+    final bool newState = await ConnectivityService().toggleUserOfflineMode();
     final message =
         newState ? "Switched to Offline Mode" : "Switched to Online Mode";
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-        backgroundColor: newState ? Colors.grey[700] : Colors.green[700],
-      ),
-    );
+    // Check mounted mostly for safety, though Stateless usually fine for SnackBar if context valid
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+          backgroundColor: newState ? Colors.grey[700] : Colors.green[700],
+        ),
+      );
+    }
   }
 
   @override
@@ -110,52 +115,68 @@ class NavBarComponent extends StatelessWidget {
               ),
 
               // 5. MORE MENU (Replaces separate Settings/Profile buttons)
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: contentColor),
-                tooltip: "More",
-                onSelected: (value) {
-                  switch (value) {
-                    case 'profile':
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(user: user)),
-                      );
-                      break;
-                    case 'settings':
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (ctx) => FractionallySizedBox(
-                          heightFactor: 0.9,
-                          child: SettingsComponent(user: user),
+              // Wrapped in StreamBuilder to reactively disable Profile when Offline
+              StreamBuilder<bool>(
+                stream: ConnectivityService().isOnlineStream,
+                initialData: ConnectivityService().isOnline,
+                builder: (context, snapshot) {
+                  final bool isOnline = snapshot.data ?? false;
+
+                  return PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: contentColor),
+                    tooltip: "More",
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'profile':
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(user: user)),
+                          );
+                          break;
+                        case 'settings':
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (ctx) => FractionallySizedBox(
+                              heightFactor: 0.9,
+                              child: SettingsComponent(user: user),
+                            ),
+                          );
+                          break;
+                      }
+                    },
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<String>>[
+                      PopupMenuItem<String>(
+                        value: 'profile',
+                        enabled: isOnline, // DISABLE PROFILE IF OFFLINE
+                        child: ListTile(
+                          leading: Icon(Icons.person_outline,
+                              color: isOnline ? null : Colors.grey),
+                          title: Text(
+                            'Profile',
+                            style:
+                                TextStyle(color: isOnline ? null : Colors.grey),
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
                         ),
-                      );
-                      break;
-                  }
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'settings',
+                        child: ListTile(
+                          leading: Icon(Icons.settings_outlined),
+                          title: Text('Settings'),
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ),
+                    ],
+                  );
                 },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  const PopupMenuItem<String>(
-                    value: 'profile',
-                    child: ListTile(
-                      leading: Icon(Icons.person_outline),
-                      title: Text('Profile'),
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.settings_outlined),
-                      title: Text('Settings'),
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

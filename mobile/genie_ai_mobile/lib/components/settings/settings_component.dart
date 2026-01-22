@@ -7,6 +7,7 @@ import 'package:genie_ai_mobile/services/user_service.dart';
 import 'package:genie_ai_mobile/services/password_proxy.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/connectivity_service.dart'; // IMPORTED CONNECTIVITY
 
 // Component Imports
 import 'package:genie_ai_mobile/components/auth/password_reset_initiate_screen.dart';
@@ -201,17 +202,23 @@ class _SettingsComponentState extends State<SettingsComponent> {
     setState(() => _isLoading = true);
 
     try {
-      debugPrint("[SETTINGS] Syncing settings object to API...");
-      // FIX: Passing _currentUserId to resolve 500 greedy route collision
-      await _userService.updateAccountSettings(_currentUserId, {
-        'theme': _selectedTheme,
-        'language': _selectedLanguage,
-        'fontSize': _fontSize.toInt(),
-        'emailUpdates': _emailUpdates,
-        'soundNotifications': _soundNotifications,
-      });
+      final bool isOnline = ConnectivityService().isOnline;
 
-      // Apply Global Changes
+      if (isOnline) {
+        debugPrint("[SETTINGS] Syncing settings object to API...");
+        // FIX: Passing _currentUserId to resolve 500 greedy route collision
+        await _userService.updateAccountSettings(_currentUserId, {
+          'theme': _selectedTheme,
+          'language': _selectedLanguage,
+          'fontSize': _fontSize.toInt(),
+          'emailUpdates': _emailUpdates,
+          'soundNotifications': _soundNotifications,
+        });
+      } else {
+        debugPrint("[SETTINGS] Offline mode. Skipping API update.");
+      }
+
+      // Apply Global Changes (Always run locally)
       ThemeManager().setTheme(_selectedTheme);
       ThemeManager().setFontSize(_fontSize);
 
@@ -219,8 +226,11 @@ class _SettingsComponentState extends State<SettingsComponent> {
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(translate(
-              "settings.settingsSaved", "Settings saved successfully!"))));
+          content: Text(isOnline
+              ? translate(
+                  "settings.settingsSaved", "Settings saved successfully!")
+              : translate("settings.settingsSavedOffline",
+                  "Settings saved locally (Offline Mode)"))));
     } catch (e) {
       debugPrint("[SETTINGS] Save operation failed: $e");
       if (mounted) setState(() => _isLoading = false);
@@ -495,44 +505,54 @@ class _SettingsComponentState extends State<SettingsComponent> {
       return Container(color: bgColor);
     }
 
-    // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling preview
-    return MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: TextScaler.linear(_fontSize / 50.0)),
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16))),
-          child: Column(
-            children: [
-              _buildStickyHeader(primaryColor, titleColor, previewIsDark),
-              Expanded(
-                child: SingleChildScrollView(
-                  // UPDATED: Reduced padding for handset screens
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _buildIdentitySection(primaryColor, titleColor),
-                      const SizedBox(height: 16),
-                      // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
-                      _buildVerticalConfigurationStack(primaryColor, titleColor,
-                          boxBg, previewTheme.cardColor),
-                      const SizedBox(height: 16),
-                      _buildAccountManagement(
-                          primaryColor, titleColor, previewIsDark, boxBg),
-                      const SizedBox(height: 60),
-                    ],
-                  ),
+    // REFRESH: Using StreamBuilder to make Settings reactive to Connectivity
+    return StreamBuilder<bool>(
+        stream: ConnectivityService().isOnlineStream,
+        initialData: ConnectivityService().isOnline,
+        builder: (context, snapshot) {
+          final bool isOnline = snapshot.data ?? true;
+
+          // FIX: Wrapped in MediaQuery with TextScaler to enable real-time font scaling preview
+          return MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(_fontSize / 50.0)),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16))),
+                child: Column(
+                  children: [
+                    _buildStickyHeader(primaryColor, titleColor, previewIsDark),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        // UPDATED: Reduced padding for handset screens
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            _buildIdentitySection(primaryColor, titleColor),
+                            const SizedBox(height: 16),
+                            // FIX: Using vertical stack prevents RenderFlex overflows and enables Language Selector visibility
+                            _buildVerticalConfigurationStack(primaryColor,
+                                titleColor, boxBg, previewTheme.cardColor,
+                                isOnline: isOnline),
+                            const SizedBox(height: 16),
+                            _buildAccountManagement(
+                                primaryColor, titleColor, previewIsDark, boxBg,
+                                isOnline: isOnline),
+                            const SizedBox(height: 60),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
+            ),
+          );
+        });
   }
 
   Widget _buildStickyHeader(Color accent, Color titleColor, bool isDark) {
@@ -636,7 +656,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
 
   // FIX: Stacking configuration elements vertically gives the Language Selector full width
   Widget _buildVerticalConfigurationStack(
-      Color accent, Color titleColor, Color boxBg, Color dropdownBg) {
+      Color accent, Color titleColor, Color boxBg, Color dropdownBg,
+      {required bool isOnline}) {
     return Column(
       children: [
         _buildThemedGroupBox(
@@ -659,8 +680,12 @@ class _SettingsComponentState extends State<SettingsComponent> {
             boxBg,
             titleColor, [
           // FIX: Passing accent color for switch
-          _buildToggleRow(translate("settings.emailUpdates", "Email Updates"),
-              _emailUpdates, (v) => setState(() => _emailUpdates = v), accent),
+          // UPDATED: Disabled if OFFLINE
+          _buildToggleRow(
+              translate("settings.emailUpdates", "Email Updates"),
+              _emailUpdates,
+              isOnline ? (v) => setState(() => _emailUpdates = v) : null,
+              accent),
           const SizedBox(height: 16),
           // FIX: Passing accent color for switch
           _buildToggleRow(
@@ -674,7 +699,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
   }
 
   Widget _buildAccountManagement(
-      Color accent, Color titleColor, bool isDark, Color boxBg) {
+      Color accent, Color titleColor, bool isDark, Color boxBg,
+      {required bool isOnline}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -701,7 +727,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
                   Expanded(
                       child: TextField(
                           controller: _emailController,
-                          enabled: _isEditingEmail, // Wired to toggle state
+                          enabled: _isEditingEmail &&
+                              isOnline, // Wired to toggle state & ONLINE
                           style: TextStyle(
                               color: titleColor), // Dynamic text color
                           decoration: InputDecoration(
@@ -719,8 +746,11 @@ class _SettingsComponentState extends State<SettingsComponent> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accent, // Primary Color
                         foregroundColor: Colors.white, // White Text
+                        // DISABLED VISUALLY IF OFFLINE
+                        disabledBackgroundColor: Colors.grey.withOpacity(0.3),
                       ),
-                      onPressed: _handleEmailToggle,
+                      // UPDATED: Disable edit button if offline
+                      onPressed: isOnline ? _handleEmailToggle : null,
                       child: Text(_isEditingEmail
                           ? translate("common.save", "Save")
                           : translate("common.edit", "Edit"))),
@@ -738,8 +768,11 @@ class _SettingsComponentState extends State<SettingsComponent> {
                       minimumSize: const Size(double.infinity, 48),
                       backgroundColor: accent, // Primary Color
                       foregroundColor: Colors.white, // White Text
+                      // DISABLED VISUALLY IF OFFLINE
+                      disabledBackgroundColor: Colors.grey.withOpacity(0.3),
                     ),
-                    onPressed: _renderPasswordResetOverlay,
+                    // UPDATED: Disable password change if offline
+                    onPressed: isOnline ? _renderPasswordResetOverlay : null,
                     child: Text(translate(
                         "settings.changePassword", "Change Password"))),
               ]),
@@ -752,7 +785,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
                     translate("settings.resetUserData", "Reset User Data"),
                     translate(
                         "settings.resetUserDataDesc", "Wipe chat history."),
-                    _showResetDataWorkflow,
+                    // UPDATED: Disable if offline
+                    isOnline ? _showResetDataWorkflow : null,
                     isDark,
                     // Custom Override: Darker red than delete button
                     overrideColor: Colors.red[800]),
@@ -761,7 +795,8 @@ class _SettingsComponentState extends State<SettingsComponent> {
                     translate("settings.deleteAccount", "Delete Account"),
                     translate(
                         "settings.deleteAccountDesc", "Permanent deletion."),
-                    _initiateAccountDeletionFlow,
+                    // UPDATED: Disable if offline
+                    isOnline ? _initiateAccountDeletionFlow : null,
                     isDark,
                     isDanger: true),
               ]),
@@ -875,7 +910,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
   }
 
   Widget _buildToggleRow(
-      String label, bool value, Function(bool) onChanged, Color activeColor) {
+      String label, bool value, Function(bool)? onChanged, Color activeColor) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
       // UPDATED: Wrapped text in Expanded to prevent overflow on long translations
       Expanded(child: Text(label, style: const TextStyle(fontSize: 14.5))),
@@ -888,7 +923,7 @@ class _SettingsComponentState extends State<SettingsComponent> {
   }
 
   Widget _buildActionBtnCard(
-      String title, String desc, VoidCallback onTap, bool isDark,
+      String title, String desc, VoidCallback? onTap, bool isDark,
       {bool isDanger = false, Color? overrideColor}) {
     // Determine the effective background color
     // FIX: Added '!' to Colors.grey[200] to handle nullability strictness
@@ -904,8 +939,12 @@ class _SettingsComponentState extends State<SettingsComponent> {
     return Column(children: [
       ElevatedButton(
           style: ElevatedButton.styleFrom(
-              backgroundColor: bgColor,
-              minimumSize: const Size(double.infinity, 50)),
+            backgroundColor: bgColor,
+            minimumSize: const Size(double.infinity, 50),
+            // VISUAL CUE FOR DISABLED STATE
+            disabledBackgroundColor: bgColor.withOpacity(0.5),
+            disabledForegroundColor: txtColor.withOpacity(0.5),
+          ),
           onPressed: onTap,
           child: Text(title,
               textAlign: TextAlign

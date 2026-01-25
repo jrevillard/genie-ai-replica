@@ -1228,33 +1228,50 @@ const Map<String, dynamic> frLocale = {
     "shareWhatsApp": "Partager sur WhatsApp"
   },
   "quickhelp": {
-    "applyForID": "Demander une carte d'identité",
-    "payTaxes": "Payer les impôts",
-    "startBusiness": "Démarrer une entreprise",
-    "findHealthcare": "Trouver des soins de santé",
-    "educationServices": "Services d'éducation",
-    "transportLicenses": "Transports et licences",
-    "housingPrograms": "Programmes de logement",
-    "findJobs": "Trouver des emplois",
+    "applyForID": "Demander une ID",
+    "payTaxes": "Payer impôts",
+    "startBusiness": "Lancer affaire",
+    "findHealthcare": "Santé",
+    "educationServices": "Éducation",
+    "transportLicenses": "Transport",
+    "housingPrograms": "Logement",
+    "findJobs": "Trouver emploi",
     "justChat": "Juste discuter",
-    "justChatPrompt":
-        "J'aimerais discuter des services gouvernementaux au Kenya",
     "applyForIDPrompt":
-        "J'ai besoin d'informations sur la façon de demander une carte d'identité nationale au Kenya",
+        "Agissez en tant qu'expert utile de l'état civil kényan. Expliquez les étapes pour obtenir une carte d'identité nationale (Maisha Namba) ou remplacer une carte perdue. IMPORTANT : Fournissez une liste claire des documents requis (par ex. acte de naissance, copies des pièces d'identité des parents) et conseillez à l'utilisateur de se rendre au Huduma Centre ou au bureau du registraire des personnes le plus proche. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "payTaxesPrompt":
-        "Quelle est la procédure pour payer mes impôts en ligne au Kenya ?",
+        "Agissez en tant que guide de la KRA (Kenya Revenue Authority). Expliquez le processus de déclaration, de demande d'un code PIN KRA ou de réinitialisation d'un mot de passe sur le portail iTax. IMPORTANT : Rappelez à l'utilisateur la date limite du 30 juin pour les déclarations annuelles et guidez-le sur la façon de déposer des déclarations nulles (Nil returns) s'il n'a eu aucun revenu. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "startBusinessPrompt":
-        "Guide-moi à travers les étapes pour enregistrer une nouvelle entreprise au Kenya",
+        "Agissez en tant que consultant en affaires pour les services eCitizen. Guidez l'utilisateur à travers la réservation de nom commercial et l'enregistrement de l'entreprise au Kenya. IMPORTANT : Expliquez les coûts actuels pour la recherche de nom et l'enregistrement, et dirigez l'utilisateur vers le portail officiel eCitizen pour compléter la demande. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "findHealthcarePrompt":
-        "Où puis-je trouver des informations sur les services de santé publique au Kenya ?",
+        "Agissez en tant que navigateur des services de santé. Fournissez des informations sur la transition du NHIF au SHIF (Social Health Insurance Fund) et comment s'inscrire. IMPORTANT : Partagez les codes USSD officiels (comme *263#) ou les liens du site Web pour l'inscription et expliquez les avantages de la couverture santé publique. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "educationServicesPrompt":
-        "Quels services éducatifs sont disponibles pour mes enfants au Kenya ?",
+        "Agissez en tant que conseiller pédagogique. Discutez du programme CBC, de l'inscription NEMIS ou du placement universitaire via KUCCPS. IMPORTANT : Expliquez comment les parents peuvent vérifier les résultats des examens nationaux par SMS ou via le portail KNEC lors de leur publication. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "transportLicensesPrompt":
-        "Comment puis-je renouveler mon permis de conduire au Kenya ?",
+        "Agissez en tant que guide des services NTSA. Expliquez le processus de renouvellement du permis de conduire, d'inspection des véhicules ou de gestion de compte TIMS. IMPORTANT : Guidez l'utilisateur sur la façon de se connecter au portail eCitizen NTSA pour demander son Smart DL ou réserver une inspection de véhicule. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "housingProgramsPrompt":
-        "Parle-moi des programmes de logement abordable au Kenya",
+        "Agissez en tant que conseiller en programmes de logement. Expliquez l'inscription au programme de logement abordable (Boma Yangu) et le processus de contribution volontaire. IMPORTANT : Guidez l'utilisateur vers le portail Boma Yangu pour voir les projets et expliquez les critères d'éligibilité pour l'attribution. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
     "findJobsPrompt":
-        "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles au Kenya ?"
+        "Agissez en tant que coach de carrière pour la fonction publique. Guidez l'utilisateur sur la création d'un profil et la candidature aux postes vacants via le portail de la Commission de la fonction publique (PSC). IMPORTANT : Conseillez à l'utilisateur de garder ses certificats académiques prêts et de consulter régulièrement le site Web de la PSC ou les quotidiens locaux pour les annonces MyGov. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
+    "justChatPrompt":
+        "Agissez en tant que compagnon local amical. Soyez poli, serviable et bien informé sur la culture kényane et la vie quotidienne. IMPORTANT : Rappelez à l'utilisateur que bien que vous puissiez discuter de tout, votre force principale est de les aider à naviguer dans les services gouvernementaux kényans comme les **Pièces d'identité**, les **Impôts** et **l'Enregistrement des entreprises**. RÈGLE : Désignez toujours l'application sous le nom de 'Genie AI'.",
+    "applyForIDUserPrompt":
+        "Je veux me renseigner sur la demande de carte nationale d'identité au Kenya.",
+    "payTaxesUserPrompt":
+        "Je veux poser des questions sur le paiement des impôts ou le dépôt de mes déclarations KRA au Kenya.",
+    "startBusinessUserPrompt":
+        "Je veux me renseigner sur l'enregistrement d'une nouvelle entreprise ou société au Kenya.",
+    "findHealthcareUserPrompt":
+        "Je veux poser des questions sur les établissements de santé publique et l'assurance (NHIF/SHIF) au Kenya.",
+    "educationServicesUserPrompt":
+        "Je veux me renseigner sur les écoles et les services éducatifs au Kenya.",
+    "transportLicensesUserPrompt":
+        "Je veux poser des questions sur les permis de conduire et les services NTSA au Kenya.",
+    "housingProgramsUserPrompt":
+        "Je veux me renseigner sur le programme de logement abordable (Boma Yangu) au Kenya.",
+    "findJobsUserPrompt":
+        "Je veux poser des questions sur les opportunités d'emploi gouvernementales et les candidatures PSC au Kenya.",
+    "justChatUserPrompt": "Je veux discuter généralement de la vie au Kenya."
   },
   "common": {
     "cancel": "Annuler",
@@ -1326,7 +1343,8 @@ const Map<String, dynamic> frLocale = {
   "about": {
     "title": "À propos",
     "version": "Version",
-    "description": "Genie AI est votre assistant intelligent pour naviguer dans les services et informations gouvernementaux.",
+    "description":
+        "Genie AI est votre assistant intelligent pour naviguer dans les services et informations gouvernementaux.",
     "techStack": "Pile technologique",
     "copyright": "Tous droits réservés."
   }

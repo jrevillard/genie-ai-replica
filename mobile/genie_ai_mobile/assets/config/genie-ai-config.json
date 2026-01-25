@@ -114,8 +114,68 @@
             },
             "quickHelp": {
               "type": "object",
-              "description": "Quick Help button configurations",
+              "description": "Quick Help button panel configurations",
               "properties": {
+                "layout": {
+                  "type": "object",
+                  "description": "Grid system for buttons",
+                  "properties": {
+                    "columns": {
+                      "type": "integer",
+                      "default": 2
+                    },
+                    "gapX": {
+                      "type": "string",
+                      "default": "10px"
+                    },
+                    "gapY": {
+                      "type": "string",
+                      "default": "10px"
+                    },
+                    "childAspectRatio": {
+                      "type": "number",
+                      "default": 3.5
+                    }
+                  }
+                },
+                "defaults": {
+                  "type": "object",
+                  "description": "Base styles inherited by all buttons",
+                  "properties": {
+                    "height": {
+                      "type": "string"
+                    },
+                    "fontSize": {
+                      "type": "string"
+                    },
+                    "borderRadius": {
+                      "type": "string"
+                    },
+                    "showShadow": {
+                      "type": "boolean"
+                    },
+                    "shadow": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "blur": {
+                          "type": "string"
+                        },
+                        "opacity": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "showBorder": {
+                      "type": "boolean"
+                    }
+                  }
+                },
                 "buttons": {
                   "type": "array",
                   "description": "List of Quick Help buttons",
@@ -124,76 +184,125 @@
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "Unique identifier for the button"
-                      },
-                      "title": {
-                        "type": "string",
-                        "description": "i18n key for button label"
-                      },
-                      "icon": {
-                        "type": "object",
-                        "description": "Button icon configuration",
-                        "properties": {
-                          "type": {
-                            "type": "string",
-                            "enum": [
-                              "file",
-                              "inline"
-                            ],
-                            "description": "Type of icon source"
-                          },
-                          "value": {
-                            "type": "string",
-                            "description": "Path to SVG file or inline SVG content"
-                          }
-                        },
-                        "required": [
-                          "type",
-                          "value"
-                        ]
+                        "description": "Unique identifier"
                       },
                       "category": {
                         "type": [
                           "string",
                           "null"
                         ],
-                        "description": "Category ID for the button (null for general)"
+                        "description": "Optional category grouping"
                       },
-                      "prompt": {
-                        "type": "string",
-                        "description": "i18n key for the prompt to send when clicked"
-                      },
-                      "styles": {
+                      "action": {
                         "type": "object",
-                        "description": "Custom styles for the button",
+                        "description": "The 2-prompt mechanism",
                         "properties": {
-                          "backgroundColor": {
+                          "visibleText": {
                             "type": "string",
-                            "description": "Background color"
+                            "description": "What user sees in chat"
                           },
-                          "hoverColor": {
+                          "hiddenPrompt": {
                             "type": "string",
-                            "description": "Hover background color"
-                          },
-                          "outlineColor": {
-                            "type": "string",
-                            "description": "Border/outline color"
+                            "description": "What LLM sees"
                           }
                         },
                         "required": [
-                          "backgroundColor",
-                          "hoverColor",
-                          "outlineColor"
+                          "visibleText",
+                          "hiddenPrompt"
                         ]
+                      },
+                      "appearance": {
+                        "type": "object",
+                        "description": "Visual configuration",
+                        "properties": {
+                          "label": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "icon": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "style": {
+                            "type": "object",
+                            "properties": {
+                              "background": {
+                                "type": "object",
+                                "properties": {
+                                  "gradient": {
+                                    "type": "object",
+                                    "properties": {
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "direction": {
+                                        "type": "string",
+                                        "enum": [
+                                          "horizontal",
+                                          "vertical",
+                                          "diagonal"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "border": {
+                                "type": "object",
+                                "properties": {
+                                  "enabled": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              },
+                              "shadow": {
+                                "type": "object",
+                                "properties": {
+                                  "enabled": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "darkMode": {
+                            "type": "object",
+                            "description": "Overrides for dark mode",
+                            "properties": {
+                              "label": {
+                                "type": "object"
+                              },
+                              "icon": {
+                                "type": "object"
+                              },
+                              "style": {
+                                "type": "object"
+                              }
+                            }
+                          }
+                        }
                       }
                     },
                     "required": [
                       "id",
-                      "title",
-                      "icon",
-                      "category",
-                      "prompt",
-                      "styles"
+                      "action"
                     ]
                   }
                 }
@@ -239,140 +348,420 @@
       "welcomeMessage": "Welcome to Genie AI, for Global Empowerment, Intelligence and Equity",
       "botName": "Genie AI",
       "quickHelp": {
+        "layout": {
+          "columns": 2,
+          "gapX": "8px",
+          "gapY": "8px",
+          "childAspectRatio": 4.2
+        },
+        "defaults": {
+          "height": "38px",
+          "fontSize": "11px",
+          "borderRadius": "8px",
+          "showShadow": true,
+          "shadow": {
+            "enabled": true,
+            "color": "#000000",
+            "blur": "6px",
+            "opacity": 0.2
+          },
+          "showBorder": false
+        },
         "buttons": [
           {
             "id": "just-chat",
-            "title": "quickhelp.justChat",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/just-chat.svg"
-            },
             "category": null,
-            "prompt": "quickhelp.justChatPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.justChatUserPrompt",
+              "hiddenPrompt": "quickhelp.justChatPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.justChat",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/just-chat.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#4F4F4F",
+                      "end": "#333333",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "identity-civil",
-            "title": "quickhelp.applyForID",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/identity-civil.svg"
-            },
             "category": "1",
-            "prompt": "quickhelp.applyForIDPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.applyForIDUserPrompt",
+              "hiddenPrompt": "quickhelp.applyForIDPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.applyForID",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/identity-civil.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#2C3E50",
+                      "end": "#1A252F",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "taxes-revenue",
-            "title": "quickhelp.payTaxes",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/taxes-revenue.svg"
-            },
             "category": "5",
-            "prompt": "quickhelp.payTaxesPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.payTaxesUserPrompt",
+              "hiddenPrompt": "quickhelp.payTaxesPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.payTaxes",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/taxes-revenue.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#34495E",
+                      "end": "#2C3E50",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "business-trade",
-            "title": "quickhelp.startBusiness",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/business-trade.svg"
-            },
             "category": "8",
-            "prompt": "quickhelp.startBusinessPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.startBusinessUserPrompt",
+              "hiddenPrompt": "quickhelp.startBusinessPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.startBusiness",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/business-trade.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#2E4053",
+                      "end": "#212F3D",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "healthcare-social",
-            "title": "quickhelp.findHealthcare",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/healthcare-social.svg"
-            },
             "category": "2",
-            "prompt": "quickhelp.findHealthcarePrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.findHealthcareUserPrompt",
+              "hiddenPrompt": "quickhelp.findHealthcarePrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.findHealthcare",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/healthcare-social.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#2980B9",
+                      "end": "#1F618D",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "education-learning",
-            "title": "quickhelp.educationServices",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/education-learning.svg"
-            },
             "category": "3",
-            "prompt": "quickhelp.educationServicesPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.educationServicesUserPrompt",
+              "hiddenPrompt": "quickhelp.educationServicesPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.educationServices",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/education-learning.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#1ABC9C",
+                      "end": "#148F77",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "transportation-mobility",
-            "title": "quickhelp.transportLicenses",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/transportation-mobility.svg"
-            },
             "category": "7",
-            "prompt": "quickhelp.transportLicensesPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.transportLicensesUserPrompt",
+              "hiddenPrompt": "quickhelp.transportLicensesPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.transportLicenses",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/transportation-mobility.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#F39C12",
+                      "end": "#B9770E",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "housing-urban",
-            "title": "quickhelp.housingPrograms",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/housing-urban.svg"
-            },
             "category": "9",
-            "prompt": "quickhelp.housingProgramsPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.housingProgramsUserPrompt",
+              "hiddenPrompt": "quickhelp.housingProgramsPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.housingPrograms",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/housing-urban.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#D35400",
+                      "end": "#A04000",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           },
           {
             "id": "employment-labor",
-            "title": "quickhelp.findJobs",
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/employment-labor.svg"
-            },
             "category": "4",
-            "prompt": "quickhelp.findJobsPrompt",
-            "styles": {
-              "backgroundColor": "#D3E0EA",
-              "hoverColor": "#A3BFFA",
-              "outlineColor": "#87CEEB"
+            "action": {
+              "visibleText": "quickhelp.findJobsUserPrompt",
+              "hiddenPrompt": "quickhelp.findJobsPrompt"
+            },
+            "appearance": {
+              "label": {
+                "text": "quickhelp.findJobs",
+                "color": "#1C2526"
+              },
+              "icon": {
+                "value": "/config/quickhelp/employment-labor.svg",
+                "color": "#4682B4"
+              },
+              "style": {
+                "background": {
+                  "gradient": {
+                    "start": "#D3E0EA",
+                    "end": "#A3BFFA",
+                    "direction": "horizontal"
+                  }
+                }
+              },
+              "darkMode": {
+                "label": {
+                  "color": "#FFFFFF"
+                },
+                "icon": {
+                  "color": "#FFFFFF"
+                },
+                "style": {
+                  "background": {
+                    "gradient": {
+                      "start": "#8E44AD",
+                      "end": "#6C3483",
+                      "direction": "horizontal"
+                    }
+                  }
+                }
+              }
             }
           }
         ]

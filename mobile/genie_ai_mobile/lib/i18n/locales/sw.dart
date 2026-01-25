@@ -1222,32 +1222,50 @@ const Map<String, dynamic> swLocale = {
   },
   "quickhelp": {
     "applyForID": "Omba Kitambulisho",
-    "payTaxes": "Lipa Kodi",
+    "payTaxes": "Lipa Ushuru",
     "startBusiness": "Anzisha Biashara",
-    "findHealthcare": "Tafuta Huduma za Afya",
-    "educationServices": "Huduma za Elimu",
-    "transportLicenses": "Usafiri na Leseni",
-    "housingPrograms": "Mipango ya Makazi",
+    "findHealthcare": "Afya",
+    "educationServices": "Elimu",
+    "transportLicenses": "Usafiri",
+    "housingPrograms": "Makazi",
     "findJobs": "Tafuta Kazi",
-    "justChat": "Piga Gumzo Tu",
-    "justChatPrompt":
-        "Ningependa kuzungumza kuhusu huduma za serikali nchini Kenya",
+    "justChat": "Gumzo",
     "applyForIDPrompt":
-        "Ninahitaji taarifa kuhusu jinsi ya kuomba kitambulisho cha taifa nchini Kenya",
+        "Tenda kama mtaalamu wa usajili wa raia wa Kenya anayesaidia. Fafanua hatua za kupata Kitambulisho cha Taifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha wazi ya hati zinazohitajika (mfano, Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na umshauri mtumiaji kutembelea Huduma Centre iliyo karibu au ofisi ya Msajili wa Watu. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "payTaxesPrompt":
-        "Ni mchakato gani wa kulipa kodi yangu mtandaoni nchini Kenya?",
+        "Tenda kama mwongozo wa KRA (Mamlaka ya Ushuru ya Kenya). Fafanua mchakato wa kuwasilisha marejesho, kutuma maombi ya KRA PIN, au kuweka upya nenosiri kwenye tovuti ya iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa marejesho ya mwaka na umwelekeze jinsi ya kuwasilisha marejesho ya bila (Nil returns) ikiwa hakuwa na mapato. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "startBusinessPrompt":
-        "Niongoze kupitia hatua za kusajili biashara mpya nchini Kenya",
+        "Tenda kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji kupitia uhifadhi wa jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Fafanua gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "findHealthcarePrompt":
-        "Wapi ninaweza kupata taarifa kuhusu huduma za afya za umma nchini Kenya?",
+        "Tenda kama mwongozo wa huduma za afya. Toa maelezo kuhusu mabadiliko kutoka NHIF hadi SHIF (Mfuko wa Bima ya Afya ya Kijamii) na jinsi ya kujiandikisha. MUHIMU: Shiriki nambari rasmi za USSD (kama *263#) au viungo vya tovuti kwa usajili na ufafanue faida za bima ya afya ya umma. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "educationServicesPrompt":
-        "Ni huduma gani za elimu zinapatikana kwa watoto wangu nchini Kenya?",
+        "Tenda kama mshauri wa elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa chuo kikuu kupitia KUCCPS. MUHIMU: Fafanua jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotolewa. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "transportLicensesPrompt":
-        "Je, ninawezaje kuhuisha leseni yangu ya udereva nchini Kenya?",
+        "Tenda kama mwongozo wa huduma za NTSA. Fafanua mchakato wa kusasisha leseni ya kuendesha gari, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye tovuti ya eCitizen NTSA ili kutuma maombi ya Smart DL au kuweka nafasi ya ukaguzi wa gari. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "housingProgramsPrompt":
-        "Niambie kuhusu mipango ya nyumba za bei nafuu nchini Kenya",
+        "Tenda kama mshauri wa mpango wa makazi. Fafanua usajili wa Mpango wa Makazi ya Bei Nafuu (Boma Yangu) na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ufafanue vigezo vya kustahiki kwa ugawaji. KANUNI: Daima rejelea programu kama 'Genie AI'.",
     "findJobsPrompt":
-        "Ni fursa gani za kazi za serikali zinapatikana kwa sasa nchini Kenya?"
+        "Tenda kama kocha wa kazi kwa utumishi wa umma. Mwelekeze mtumiaji kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia tovuti ya Tume ya Utumishi wa Umma (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya ndani kwa matangazo ya MyGov. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+    "justChatPrompt":
+        "Tenda kama rafiki wa karibu na mwenye urafiki. Kuwa na heshima, msaada, na mwenye ujuzi kuhusu utamaduni wa Kenya na maisha ya kila siku. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kupiga gumzo kuhusu chochote, nguvu yako kuu ni kuwasaidia kuvinjari huduma za serikali ya Kenya kama **Vitambulisho**, **Ushuru**, na **Usajili wa Biashara**. KANUNI: Daima rejelea programu kama 'Genie AI'.",
+    "applyForIDUserPrompt":
+        "Nataka kujua kuhusu kutuma maombi ya Kitambulisho cha Taifa nchini Kenya.",
+    "payTaxesUserPrompt":
+        "Nataka kuuliza kuhusu kulipa ushuru au kuwasilisha marejesho yangu ya KRA nchini Kenya.",
+    "startBusinessUserPrompt":
+        "Nataka kujua kuhusu kusajili biashara mpya au kampuni nchini Kenya.",
+    "findHealthcareUserPrompt":
+        "Nataka kuuliza kuhusu vituo vya afya vya umma na bima (NHIF/SHIF) nchini Kenya.",
+    "educationServicesUserPrompt":
+        "Nataka kujua kuhusu shule na huduma za elimu nchini Kenya.",
+    "transportLicensesUserPrompt":
+        "Nataka kuuliza kuhusu leseni za kuendesha gari na huduma za NTSA nchini Kenya.",
+    "housingProgramsUserPrompt":
+        "Nataka kujua kuhusu Mpango wa Makazi ya Bei Nafuu (Boma Yangu) nchini Kenya.",
+    "findJobsUserPrompt":
+        "Nataka kuuliza kuhusu nafasi za kazi za serikali na maombi ya PSC nchini Kenya.",
+    "justChatUserPrompt":
+        "Nataka kupiga gumzo kwa ujumla kuhusu maisha nchini Kenya."
   },
   "common": {
     "cancel": "Ghairi",
@@ -1317,7 +1335,8 @@ const Map<String, dynamic> swLocale = {
   "about": {
     "title": "Kuhusu",
     "version": "Toleo",
-    "description": "Genie AI ni msaidizi wako mahiri wa kuvinjari huduma na taarifa za serikali.",
+    "description":
+        "Genie AI ni msaidizi wako mahiri wa kuvinjari huduma na taarifa za serikali.",
     "techStack": "Teknolojia",
     "copyright": "Haki zote zimehifadhiwa."
   }

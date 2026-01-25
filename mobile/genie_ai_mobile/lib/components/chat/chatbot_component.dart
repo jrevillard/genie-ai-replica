@@ -60,7 +60,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   String? _selectedCategoryId;
   String _selectedCategoryName = "";
   List<dynamic> _relatedDocuments = [];
+
+  // Quick Help Configuration
   List<Map<String, dynamic>> _quickHelpButtons = [];
+  Map<String, dynamic> _quickHelpLayout = {};
+  Map<String, dynamic> _quickHelpDefaults = {};
 
   // Dialog States
   bool _showNewChatConfirm = false;
@@ -148,27 +152,34 @@ class ChatBotComponentState extends State<ChatBotComponent> {
           await rootBundle.loadString('assets/config/genie-ai-config.json');
       final Map<String, dynamic> config = jsonDecode(configString);
 
-      // FIX: Removed block that overwrites _welcomeMessage from config.
-      // We strictly use the i18n value initialized in initState.
+      final Map<String, dynamic> quickHelpConfig =
+          config['features']?['chat']?['quickHelp'] ?? {};
 
-      final List<dynamic> buttonsJson =
-          config['features']?['chat']?['quickHelp']?['buttons'] ?? [];
+      setState(() {
+        _quickHelpLayout = quickHelpConfig['layout'] ?? {};
+        _quickHelpDefaults = quickHelpConfig['defaults'] ?? {};
+      });
 
+      final List<dynamic> buttonsJson = quickHelpConfig['buttons'] ?? [];
       final List<Map<String, dynamic>> loadedButtons = [];
 
       for (var btn in buttonsJson) {
-        final String iconPath = btn['icon']?['value'] ?? '';
+        // Safe parsing: use map access with defaults to prevent null crashes
+        final appearance = btn['appearance'] as Map<String, dynamic>?;
+        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
+        final iconPath = iconMap?['value']?.toString() ?? '';
+
         final String localIconAsset = iconPath.isNotEmpty
             ? 'assets/config/quickhelp/${iconPath.split('/').last}'
             : 'assets/config/quickhelp/default.svg';
 
         loadedButtons.add({
           'id': btn['id'],
-          'titleKey': btn['title'],
-          'promptKey': btn['prompt'],
-          'iconAsset': localIconAsset,
           'category': btn['category'],
-          'styles': btn['styles'],
+          'action': btn['action'] ?? {},
+          'appearance': appearance ?? {},
+          'iconAsset': localIconAsset,
+          'darkMode': appearance?['darkMode'] ?? {},
         });
       }
 
@@ -316,12 +327,13 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     _updateQuickHelpVisibility();
   }
 
-  void _sendMessage(String text) async {
+  void _sendMessage(String text, {String? hiddenPrompt}) async {
     if (text.trim().isEmpty || _isLoading) return;
 
     final userMessage = {
       'role': 'user',
-      'content': text.trim(),
+      'content': text.trim(), // Visible to user in UI
+      'actualContent': hiddenPrompt ?? text.trim(), // Hidden Prompt for LLM
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': false,
     };
@@ -342,11 +354,11 @@ class ChatBotComponentState extends State<ChatBotComponent> {
       final List<Map<String, dynamic>> messagesForApi = _messages.map((m) {
         return {
           'role': m['role'],
-          'content': m['content'],
+          // Send actualContent (hidden prompt) to the LLM if it exists, else content
+          'content': m['actualContent'] ?? m['content'],
         };
       }).toList();
 
-      // FIX: Pass the currently selected language to the backend
       final String currentLanguage = I18nService().currentLocale.languageCode;
 
       final response = await _chatBotProxy.submitQuery(
@@ -355,7 +367,7 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         userId: widget.userId,
         categoryId: _selectedCategoryId,
         contextLabels: _selectedCategoryName,
-        language: currentLanguage, // ADDED: Language Parameter
+        language: currentLanguage,
       );
 
       final String? queryId = response['queryId'];
@@ -417,15 +429,34 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   void _quickHelpPressed(Map<String, dynamic> button) {
-    final String promptKey = button['promptKey'] as String;
-    final String translatedPrompt = _t(promptKey);
+    final Map<String, dynamic> action = button['action'] ?? {};
+    final String visibleTextKey = action['visibleText']?.toString() ?? '';
+    final String hiddenPromptKey = action['hiddenPrompt']?.toString() ?? '';
+
+    // If both are empty, just enter Chat Mode (close overlay, focus is on input)
+    if (visibleTextKey.isEmpty && hiddenPromptKey.isEmpty) {
+      setState(() {
+        _showQuickHelpOverlay = false;
+      });
+      // Ensure the keyboard/input is ready
+      _inputFocusNode.requestFocus();
+      return;
+    }
+
+    // Translate both
+    final String visibleText =
+        visibleTextKey.isNotEmpty ? _t(visibleTextKey) : '';
+    // If hiddenPromptKey is empty, fallback to visible text
+    final String hiddenPrompt =
+        hiddenPromptKey.isNotEmpty ? _t(hiddenPromptKey) : visibleText;
 
     setState(() {
       _showQuickHelpOverlay = false;
     });
 
-    _inputController.text = translatedPrompt;
-    _sendMessage(translatedPrompt);
+    // Send using the 2-prompt system
+    // The UI shows 'visibleText', API receives 'hiddenPrompt'
+    _sendMessage(visibleText, hiddenPrompt: hiddenPrompt);
   }
 
   void _openFeedbackDialog(Map<String, dynamic> message) {
@@ -508,6 +539,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
         final msg = _messages[i];
         if (msg['isSaved'] == true) continue;
 
+        // CRITICAL: We save msg['content'] (Visible prompt), NOT actualContent (hidden prompt).
+        // This ensures the user sees exactly what they clicked in history.
         final messagePayload = {
           'conversationId': conversationIdClean,
           'content': msg['content'],
@@ -564,7 +597,8 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     for (final msg in _messages) {
       final bool isUser = msg['role'] == 'user';
-      final String sender = isUser ? "You" : "Genie AI";
+      final String sender = isUser ? "You" : "NAAT";
+      // Export visible content for PDF (user expectation)
       final String content = msg['content'] ?? '';
       final paragraphs = content.split('\n\n');
 
@@ -630,11 +664,12 @@ class ChatBotComponentState extends State<ChatBotComponent> {
 
     final StringBuffer buffer = StringBuffer();
     // Optional header
-    buffer.writeln("Conversation with Genie AI (${_conversationTitle}):\n");
+    buffer.writeln("Conversation with NAAT (${_conversationTitle}):\n");
 
     for (final msg in _messages) {
       // Skip system/welcome messages if desired, or keep them all
-      final String role = msg['role'] == 'user' ? "Me" : "Genie";
+      final String role = msg['role'] == 'user' ? "Me" : "NAAT";
+      // Share visible content
       final String content = msg['content'] ?? "";
 
       // clear formatting for cleaner text sharing if needed
@@ -664,6 +699,21 @@ class ChatBotComponentState extends State<ChatBotComponent> {
   }
 
   // ===========================================================================
+  // HELPER FOR GRADIENT
+  // ===========================================================================
+  Alignment _getGradientAlignment(String direction, bool isStart) {
+    switch (direction) {
+      case 'vertical':
+        return isStart ? Alignment.topCenter : Alignment.bottomCenter;
+      case 'diagonal':
+        return isStart ? Alignment.topLeft : Alignment.bottomRight;
+      case 'horizontal':
+      default:
+        return isStart ? Alignment.centerLeft : Alignment.centerRight;
+    }
+  }
+
+  // ===========================================================================
   // UI BUILD
   // ===========================================================================
   @override
@@ -672,430 +722,590 @@ class ChatBotComponentState extends State<ChatBotComponent> {
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;
 
-    return Stack(
-      children: [
-        Column(
-          children: [
-            // Context Bar
-            if (_selectedCategoryName.isNotEmpty)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: colors['primary'].withOpacity(0.1),
-                  border: Border(bottom: BorderSide(color: colors['border'])),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.lightbulb_outline,
-                        size: 20, color: colors['primary']),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                          "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: colors['text']),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    Tooltip(
-                        message: tr('chatbot.removeContext'),
-                        child: IconButton(
-                            icon: Icon(Icons.close,
-                                size: 18, color: colors['text']),
-                            onPressed: () => setCategoryContext("", ""),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            splashRadius: 20)),
-                  ],
-                ),
-              ),
-
-            // Messages
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: _messages.length + (_isLoading ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == _messages.length && _isLoading) {
-                    return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Row(children: [
-                          const CircularProgressIndicator(strokeWidth: 2),
-                          const SizedBox(width: 12),
-                          Text(tr('chatbot.thinking'))
-                        ]));
-                  }
-
-                  final msg = _messages[index];
-                  final bool isUser = msg['role'] == 'user';
-
-                  return Align(
-                    alignment:
-                        isUser ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      padding: const EdgeInsets.all(16),
-                      constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75),
-                      decoration: BoxDecoration(
-                        color: isUser
-                            ? colors['primary']
-                            : (isDark ? colors['surface'] : Colors.grey[200]),
-                        borderRadius: BorderRadius.circular(16),
+    // Wrap entire layout to detect taps outside input
+    return GestureDetector(
+      onTap: () {
+        // Explicitly kill focus node to prevent "phantom" keyboard popups
+        if (_inputFocusNode.hasFocus) _inputFocusNode.unfocus();
+      },
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              // Context Bar
+              if (_selectedCategoryName.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: colors['primary'].withOpacity(0.1),
+                    border: Border(bottom: BorderSide(color: colors['border'])),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.lightbulb_outline,
+                          size: 20, color: colors['primary']),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                            "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: colors['text']),
+                            overflow: TextOverflow.ellipsis),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          MarkdownBody(
-                            data: msg['content'] ?? '',
-                            styleSheet: MarkdownStyleSheet(
-                              p: TextStyle(
-                                  color: isUser ? Colors.white : colors['text'],
-                                  fontSize: 16,
-                                  height: 1.5),
-                              codeblockDecoration: BoxDecoration(
-                                  color: isUser
-                                      ? Colors.white.withOpacity(0.1)
-                                      : (isDark
-                                          ? Colors.white10
-                                          : Colors.black12),
-                                  borderRadius: BorderRadius.circular(8)),
-                            ),
-                            selectable: true,
-                            onTapLink: (text, href, title) {
-                              if (href != null) {
-                                launchUrl(Uri.parse(href),
-                                    mode: LaunchMode.externalApplication);
-                              }
-                            },
-                          ),
+                      Tooltip(
+                          message: tr('chatbot.removeContext'),
+                          child: IconButton(
+                              icon: Icon(Icons.close,
+                                  size: 18, color: colors['text']),
+                              onPressed: () => setCategoryContext("", ""),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              splashRadius: 20)),
+                    ],
+                  ),
+                ),
 
-                          // Footer: Confidence & Feedback
-                          if (!isUser)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  if (msg['confidence'] != null)
-                                    Text(
-                                      "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color:
-                                              colors['text'].withOpacity(0.6),
-                                          fontStyle: FontStyle.italic),
-                                    ),
-                                  // Feedback Button
-                                  Tooltip(
-                                    message: tr('feedback.title'),
-                                    child: InkWell(
-                                      onTap: () => _openFeedbackDialog(msg),
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(4.0),
-                                        child: Icon(
-                                          Icons.thumb_up_alt_outlined,
-                                          size: 16,
-                                          color:
-                                              colors['text'].withOpacity(0.5),
+              // Messages
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _messages.length && _isLoading) {
+                      return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Row(children: [
+                            const CircularProgressIndicator(strokeWidth: 2),
+                            const SizedBox(width: 12),
+                            Text(tr('chatbot.thinking'))
+                          ]));
+                    }
+
+                    final msg = _messages[index];
+                    final bool isUser = msg['role'] == 'user';
+
+                    return Align(
+                      alignment:
+                          isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.all(16),
+                        constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.75),
+                        decoration: BoxDecoration(
+                          color: isUser
+                              ? colors['primary']
+                              : (isDark ? colors['surface'] : Colors.grey[200]),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarkdownBody(
+                              data: msg['content'] ?? '',
+                              styleSheet: MarkdownStyleSheet(
+                                p: TextStyle(
+                                    color:
+                                        isUser ? Colors.white : colors['text'],
+                                    fontSize: 16,
+                                    height: 1.5),
+                                codeblockDecoration: BoxDecoration(
+                                    color: isUser
+                                        ? Colors.white.withOpacity(0.1)
+                                        : (isDark
+                                            ? Colors.white10
+                                            : Colors.black12),
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                              selectable: true,
+                              onTapLink: (text, href, title) {
+                                if (href != null) {
+                                  launchUrl(Uri.parse(href),
+                                      mode: LaunchMode.externalApplication);
+                                }
+                              },
+                            ),
+
+                            // Footer: Confidence & Feedback
+                            if (!isUser)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    if (msg['confidence'] != null)
+                                      Text(
+                                        "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color:
+                                                colors['text'].withOpacity(0.6),
+                                            fontStyle: FontStyle.italic),
+                                      ),
+                                    // Feedback Button
+                                    Tooltip(
+                                      message: tr('feedback.title'),
+                                      child: InkWell(
+                                        onTap: () => _openFeedbackDialog(msg),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(4.0),
+                                          child: Icon(
+                                            Icons.thumb_up_alt_outlined,
+                                            size: 16,
+                                            color:
+                                                colors['text'].withOpacity(0.5),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
 
-            // Input Area
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: colors['surface'],
-                  border: Border(top: BorderSide(color: colors['border']))),
-              child: Column(
-                children: [
-                  Row(children: [
-                    IconButton(
-                        icon: Icon(Icons.add_circle_outline,
-                            color: colors['text']),
-                        tooltip: tr('chatbot.newChatTitle'),
-                        onPressed: startNewChat),
-                    IconButton(
-                        icon: Icon(Icons.save_outlined, color: colors['text']),
-                        tooltip: tr('chatbot.saveChat'),
-                        onPressed: () {
-                          _titleController.text = _conversationTitle;
-                          setState(() => _showSaveDialog = true);
-                        }),
-                    IconButton(
-                        icon: Icon(Icons.picture_as_pdf_outlined,
-                            color: colors['text']),
-                        tooltip: tr('chatbot.exportChat'),
-                        onPressed: () {
-                          _exportFilename =
-                              "chat_${DateTime.now().toIso8601String().split('T').first}";
-                          setState(() => _showExportDialog = true);
-                        }),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: tr('chatbot.shareWhatsApp'),
-                      onPressed:
-                          _shareToWhatsApp, // Ensure you added the function from the previous step
-                      icon: SvgPicture.string(
-                        '''
+              // Input Area
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: colors['surface'],
+                    border: Border(top: BorderSide(color: colors['border']))),
+                child: Column(
+                  children: [
+                    Row(children: [
+                      IconButton(
+                          icon: Icon(Icons.add_circle_outline,
+                              color: colors['text']),
+                          tooltip: tr('chatbot.newChatTitle'),
+                          onPressed: startNewChat),
+                      IconButton(
+                          icon:
+                              Icon(Icons.save_outlined, color: colors['text']),
+                          tooltip: tr('chatbot.saveChat'),
+                          onPressed: () {
+                            _titleController.text = _conversationTitle;
+                            setState(() => _showSaveDialog = true);
+                          }),
+                      IconButton(
+                          icon: Icon(Icons.picture_as_pdf_outlined,
+                              color: colors['text']),
+                          tooltip: tr('chatbot.exportChat'),
+                          onPressed: () {
+                            _exportFilename =
+                                "chat_${DateTime.now().toIso8601String().split('T').first}";
+                            setState(() => _showExportDialog = true);
+                          }),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: tr('chatbot.shareWhatsApp'),
+                        onPressed:
+                            _shareToWhatsApp, // Ensure you added the function from the previous step
+                        icon: SvgPicture.string(
+                          '''
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
       <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
     </svg>
     ''',
-                        width: 24,
-                        height: 24,
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _inputController,
-                        focusNode: _inputFocusNode,
-                        style: TextStyle(color: colors['text']),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.placeholder'),
-                          hintStyle: TextStyle(
-                              color:
-                                  isDark ? Colors.grey[500] : Colors.grey[600]),
-                          filled: true,
-                          fillColor: isDark
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.transparent,
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: colors['border'])),
-                          enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: colors['border'])),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                          width: 24,
+                          height: 24,
                         ),
-                        maxLines: null,
-                        onSubmitted: (_) => _sendMessage(_inputController.text),
                       ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _inputController,
+                          focusNode: _inputFocusNode,
+                          style: TextStyle(color: colors['text']),
+                          decoration: InputDecoration(
+                            hintText: tr('chatbot.placeholder'),
+                            hintStyle: TextStyle(
+                                color: isDark
+                                    ? Colors.grey[500]
+                                    : Colors.grey[600]),
+                            filled: true,
+                            fillColor: isDark
+                                ? Colors.white.withOpacity(0.05)
+                                : Colors.transparent,
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: colors['border'])),
+                            enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: colors['border'])),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                          ),
+                          maxLines: null,
+                          onSubmitted: (_) =>
+                              _sendMessage(_inputController.text),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        color: colors['primary'],
+                        onPressed: _isLoading
+                            ? null
+                            : () => _sendMessage(_inputController.text),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Quick Help Overlay
+          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+            Container(
+              color: colors['background'].withOpacity(0.98),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    tr('chatbot.whatCanIHelp'),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold, color: colors['text']),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final int crossAxisCount =
+                            _quickHelpLayout['columns'] as int? ?? 2;
+                        final double aspectRatio =
+                            (_quickHelpLayout['childAspectRatio'] as num?)
+                                    ?.toDouble() ??
+                                3.5;
+
+                        return GridView.builder(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  childAspectRatio: aspectRatio,
+                                  mainAxisSpacing: 10,
+                                  crossAxisSpacing: 10),
+                          itemCount: _quickHelpButtons.length,
+                          itemBuilder: (context, index) {
+                            final button = _quickHelpButtons[index];
+                            // Use safe access with casting to Map to prevent null cast errors
+                            final appearance =
+                                button['appearance'] as Map<String, dynamic>? ??
+                                    {};
+                            final action =
+                                button['action'] as Map<String, dynamic>? ?? {};
+                            final darkMode =
+                                button['darkMode'] as Map<String, dynamic>? ??
+                                    {};
+
+                            // Determine active styles based on Theme
+                            // If in Dark Mode and darkMode overrides exist, merge them
+                            final Map<String, dynamic> activeAppearance;
+                            if (isDark && darkMode.isNotEmpty) {
+                              // Deep merge logic simplified: override top-level keys if present
+                              activeAppearance = {
+                                ...appearance,
+                                'label': {
+                                  ...(appearance['label']
+                                          as Map<String, dynamic>? ??
+                                      {}),
+                                  ...(darkMode['label']
+                                          as Map<String, dynamic>? ??
+                                      {})
+                                },
+                                'icon': {
+                                  ...(appearance['icon']
+                                          as Map<String, dynamic>? ??
+                                      {}),
+                                  ...(darkMode['icon']
+                                          as Map<String, dynamic>? ??
+                                      {})
+                                },
+                                'style': {
+                                  ...(appearance['style']
+                                          as Map<String, dynamic>? ??
+                                      {}),
+                                  ...(darkMode['style']
+                                          as Map<String, dynamic>? ??
+                                      {})
+                                },
+                              };
+
+                              // Handle nested background style merge if needed
+                              if (darkMode['style'] != null &&
+                                  (darkMode['style'] as Map)['background'] !=
+                                      null) {
+                                final baseStyle = appearance['style']
+                                        as Map<String, dynamic>? ??
+                                    {};
+                                final darkStyle = darkMode['style']
+                                        as Map<String, dynamic>? ??
+                                    {};
+
+                                final baseBg = baseStyle['background']
+                                        as Map<String, dynamic>? ??
+                                    {};
+                                final darkBg = darkStyle['background']
+                                        as Map<String, dynamic>? ??
+                                    {};
+
+                                final mergedBg = {...baseBg, ...darkBg};
+
+                                final mergedStyle = {
+                                  ...(activeAppearance['style']
+                                      as Map<String, dynamic>),
+                                  'background': mergedBg
+                                };
+                                activeAppearance['style'] = mergedStyle;
+                              }
+                            } else {
+                              activeAppearance = appearance;
+                            }
+
+                            // CORRECTED: Use label text key for button display
+                            final labelMap = activeAppearance['label']
+                                as Map<String, dynamic>?;
+                            final String titleKey =
+                                labelMap?['text']?.toString() ?? '';
+                            final String translatedTitle = _t(titleKey);
+                            final String iconAsset =
+                                button['iconAsset']?.toString() ?? '';
+
+                            // Style Extraction from Active Appearance
+                            final styles = activeAppearance['style']
+                                    as Map<String, dynamic>? ??
+                                {};
+                            final bg =
+                                styles['background'] as Map<String, dynamic>? ??
+                                    {};
+                            final gradientConfig =
+                                bg['gradient'] as Map<String, dynamic>? ?? {};
+                            final borderConfig =
+                                styles['border'] as Map<String, dynamic>? ?? {};
+                            final shadowConfig =
+                                styles['shadow'] as Map<String, dynamic>? ?? {};
+
+                            // Colors
+                            final String startColorHex =
+                                gradientConfig['start']?.toString() ??
+                                    '#FFFFFF';
+                            final String endColorHex =
+                                gradientConfig['end']?.toString() ??
+                                    startColorHex;
+                            final String gradientDirection =
+                                gradientConfig['direction']?.toString() ??
+                                    'horizontal';
+
+                            final Color startColor = Color(int.parse(
+                                startColorHex.replaceAll('#', '0xFF')));
+                            final Color endColor = Color(
+                                int.parse(endColorHex.replaceAll('#', '0xFF')));
+
+                            final bool showShadow =
+                                (_quickHelpDefaults['showShadow'] == true) ||
+                                    (shadowConfig['enabled'] == true);
+                            final bool showBorder =
+                                (_quickHelpDefaults['showBorder'] == true) ||
+                                    (borderConfig['enabled'] == true);
+
+                            // Label Color
+                            final labelConfig = activeAppearance['label']
+                                    as Map<String, dynamic>? ??
+                                {};
+                            final String labelColorHex =
+                                labelConfig['color']?.toString() ??
+                                    (isDark ? '#FFFFFF' : '#000000');
+                            final Color labelColor = Color(int.parse(
+                                labelColorHex.replaceAll('#', '0xFF')));
+
+                            // Icon Color (if you want to tint icons, though SVGs might have own colors)
+                            // final iconConfig = activeAppearance['icon'] as Map<String, dynamic>? ?? {};
+                            // final String iconColorHex = iconConfig['color']?.toString() ?? labelColorHex;
+                            // final Color iconColor = Color(int.parse(iconColorHex.replaceAll('#', '0xFF')));
+
+                            // Shadow Configuration (Stronger defaults)
+                            final defaultShadow = _quickHelpDefaults['shadow']
+                                    as Map<String, dynamic>? ??
+                                {};
+                            final double shadowOpacity =
+                                (defaultShadow['opacity'] as num?)
+                                        ?.toDouble() ??
+                                    0.25; // Stronger default
+                            final double shadowBlur = _parsePixelValue(
+                                defaultShadow['blur']?.toString() ??
+                                    '8px'); // Stronger default
+
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => _quickHelpPressed(button),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    // Gradient Fill with Direction
+                                    gradient: LinearGradient(
+                                      colors: [startColor, endColor],
+                                      begin: _getGradientAlignment(
+                                          gradientDirection, true),
+                                      end: _getGradientAlignment(
+                                          gradientDirection, false),
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    // Border
+                                    border: showBorder
+                                        ? Border.all(color: colors['border'])
+                                        : null,
+                                    // Shadow
+                                    boxShadow: showShadow
+                                        ? [
+                                            BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(shadowOpacity),
+                                                blurRadius: shadowBlur,
+                                                offset: const Offset(0, 2))
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Row(
+                                    // Changed to Row for Slimline
+                                    children: [
+                                      SvgPicture.asset(iconAsset,
+                                          width:
+                                              18, // Smaller icon for slimline
+                                          height: 18,
+                                          placeholderBuilder: (_) => Icon(
+                                              Icons.help_outline,
+                                              size: 20,
+                                              // Fallback icon color matches text if not specified in SVG
+                                              color: labelColor)),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(translatedTitle,
+                                            style: theme.textTheme.labelMedium
+                                                ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize:
+                                                        11, // Smaller font
+                                                    color: labelColor),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
                     ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      icon: const Icon(Icons.send),
-                      color: colors['primary'],
-                      onPressed: _isLoading
-                          ? null
-                          : () => _sendMessage(_inputController.text),
-                    ),
-                  ]),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
 
-        // Quick Help Overlay
-        if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-          Container(
-            color: colors['background'].withOpacity(0.98),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  tr('chatbot.whatCanIHelp'),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold, color: colors['text']),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final int crossAxisCount = constraints.maxWidth > 900
-                          ? 4
-                          : constraints.maxWidth > 600
-                              ? 3
-                              : 2;
-                      return GridView.builder(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            childAspectRatio: 2.2,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10),
-                        itemCount: _quickHelpButtons.length,
-                        itemBuilder: (context, index) {
-                          final button = _quickHelpButtons[index];
-                          final String titleKey = button['titleKey'] as String;
-                          final String translatedTitle = _t(titleKey);
-                          final String iconAsset =
-                              button['iconAsset'] as String;
-                          final Map<String, dynamic>? styles = button['styles'];
-                          final bool isJustChat = button['category'] == null;
-
-                          final Color btnBgColor = isDark
-                              ? colors['surface']
-                              : (styles != null
-                                  ? Color(int.parse(styles['backgroundColor']
-                                      .replaceAll('#', '0xFF')))
-                                  : theme.cardColor);
-
-                          final Color btnBorderColor = isDark
-                              ? colors['border']
-                              : (styles != null
-                                  ? Color(int.parse(styles['outlineColor']
-                                      .replaceAll('#', '0xFF')))
-                                  : (isJustChat
-                                      ? colors['primary']
-                                      : colors['border']));
-
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(10),
-                              onTap: () => _quickHelpPressed(button),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: btnBgColor,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                      color: btnBorderColor,
-                                      width: isJustChat ? 1.8 : 1),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2))
-                                  ],
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SvgPicture.asset(iconAsset,
-                                        width: 28,
-                                        height: 28,
-                                        placeholderBuilder: (_) => Icon(
-                                            Icons.help_outline,
-                                            size: 28,
-                                            color: colors['text'])),
-                                    const SizedBox(height: 6),
-                                    Text(translatedTitle,
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                height: 1.1,
-                                                color: isDark
-                                                    ? colors['text']
-                                                    : Colors.black87),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      );
+          // Confirm Dialogs & Save/Export Alerts
+          ConfirmDialog(
+            visible: _showNewChatConfirm,
+            title: tr('chatbot.dialogs.newChatTitle'),
+            message: tr('chatbot.dialogs.newChatContent'),
+            confirmText: tr('chatbot.dialogs.actions.discardAndNew'),
+            cancelText: tr('common.cancel'),
+            secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
+            onConfirm: () {
+              setState(() => _showNewChatConfirm = false);
+              _resetChat();
+            },
+            onCancel: () => setState(() => _showNewChatConfirm = false),
+            onSecondary: () {
+              setState(() => _showNewChatConfirm = false);
+              _titleController.text = _conversationTitle;
+              setState(() => _showSaveDialog = true);
+            },
+          ),
+          ConfirmDialog(
+            visible: _showLoadConfirm,
+            title: tr('chatbot.dialogs.loadChatTitle'),
+            message: tr('chatbot.dialogs.loadChatContent'),
+            confirmText: tr('chatbot.dialogs.actions.discardAndLoad'),
+            cancelText: tr('common.cancel'),
+            secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
+            onConfirm: () {
+              setState(() => _showLoadConfirm = false);
+              _loadConversationDirect(_pendingLoadConversationId!);
+            },
+            onCancel: () => setState(() => _showLoadConfirm = false),
+            onSecondary: () {
+              setState(() => _showLoadConfirm = false);
+              _titleController.text = _conversationTitle;
+              setState(() => _showSaveDialog = true);
+            },
+          ),
+          if (_showSaveDialog)
+            AlertDialog(
+              title: Text(tr('chatbot.dialogs.saveTitle')),
+              content: TextField(
+                  controller: _titleController,
+                  decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.saveHint'),
+                      border: const OutlineInputBorder()),
+                  onChanged: (v) => _conversationTitle = v,
+                  autofocus: true),
+              actions: [
+                TextButton(
+                    onPressed: () => setState(() => _showSaveDialog = false),
+                    child: Text(tr('common.cancel'))),
+                ElevatedButton(
+                    onPressed: () {
+                      saveConversation().then((_) {});
                     },
-                  ),
-                ),
+                    child: Text(tr('common.save')))
               ],
             ),
-          ),
-
-        // Confirm Dialogs & Save/Export Alerts
-        ConfirmDialog(
-          visible: _showNewChatConfirm,
-          title: tr('chatbot.dialogs.newChatTitle'),
-          message: tr('chatbot.dialogs.newChatContent'),
-          confirmText: tr('chatbot.dialogs.actions.discardAndNew'),
-          cancelText: tr('common.cancel'),
-          secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
-          onConfirm: () {
-            setState(() => _showNewChatConfirm = false);
-            _resetChat();
-          },
-          onCancel: () => setState(() => _showNewChatConfirm = false),
-          onSecondary: () {
-            setState(() => _showNewChatConfirm = false);
-            _titleController.text = _conversationTitle;
-            setState(() => _showSaveDialog = true);
-          },
-        ),
-        ConfirmDialog(
-          visible: _showLoadConfirm,
-          title: tr('chatbot.dialogs.loadChatTitle'),
-          message: tr('chatbot.dialogs.loadChatContent'),
-          confirmText: tr('chatbot.dialogs.actions.discardAndLoad'),
-          cancelText: tr('common.cancel'),
-          secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
-          onConfirm: () {
-            setState(() => _showLoadConfirm = false);
-            _loadConversationDirect(_pendingLoadConversationId!);
-          },
-          onCancel: () => setState(() => _showLoadConfirm = false),
-          onSecondary: () {
-            setState(() => _showLoadConfirm = false);
-            _titleController.text = _conversationTitle;
-            setState(() => _showSaveDialog = true);
-          },
-        ),
-        if (_showSaveDialog)
-          AlertDialog(
-            title: Text(tr('chatbot.dialogs.saveTitle')),
-            content: TextField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                    hintText: tr('chatbot.dialogs.saveHint'),
-                    border: const OutlineInputBorder()),
-                onChanged: (v) => _conversationTitle = v,
-                autofocus: true),
-            actions: [
-              TextButton(
-                  onPressed: () => setState(() => _showSaveDialog = false),
-                  child: Text(tr('common.cancel'))),
-              ElevatedButton(
-                  onPressed: () {
-                    saveConversation().then((_) {});
-                  },
-                  child: Text(tr('common.save')))
-            ],
-          ),
-        if (_showExportDialog)
-          AlertDialog(
-            title: Text(tr('chatbot.dialogs.exportTitle')),
-            content: TextField(
-                decoration:
-                    InputDecoration(hintText: tr('chatbot.dialogs.exportHint')),
-                onChanged: (v) => _exportFilename = v,
-                controller: TextEditingController(text: _exportFilename)),
-            actions: [
-              TextButton(
-                  onPressed: () => setState(() => _showExportDialog = false),
-                  child: Text(tr('common.cancel'))),
-              ElevatedButton(
-                  onPressed:
-                      _exportFilename.trim().isEmpty ? null : exportChatToPDF,
-                  child: Text(tr('chatbot.dialogs.actions.export')))
-            ],
-          ),
-      ],
+          if (_showExportDialog)
+            AlertDialog(
+              title: Text(tr('chatbot.dialogs.exportTitle')),
+              content: TextField(
+                  decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.exportHint')),
+                  onChanged: (v) => _exportFilename = v,
+                  controller: TextEditingController(text: _exportFilename)),
+              actions: [
+                TextButton(
+                    onPressed: () => setState(() => _showExportDialog = false),
+                    child: Text(tr('common.cancel'))),
+                ElevatedButton(
+                    onPressed:
+                        _exportFilename.trim().isEmpty ? null : exportChatToPDF,
+                    child: Text(tr('chatbot.dialogs.actions.export')))
+              ],
+            ),
+        ],
+      ),
     );
+  }
+
+  // Helper to parse pixel string to double
+  double _parsePixelValue(String val) {
+    return double.tryParse(val.replaceAll('px', '')) ?? 0.0;
   }
 }

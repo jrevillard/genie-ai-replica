@@ -1220,33 +1220,50 @@ const Map<String, dynamic> ptLocale = {
     "shareWhatsApp": "Compartilhar no WhatsApp"
   },
   "quickhelp": {
-    "applyForID": "Solicitar ID",
+    "applyForID": "Pedir ID",
     "payTaxes": "Pagar Impostos",
-    "startBusiness": "Iniciar um Negócio",
-    "findHealthcare": "Encontrar Assistência Médica",
-    "educationServices": "Serviços Educacionais",
-    "transportLicenses": "Transporte e Licenças",
-    "housingPrograms": "Programas de Habitação",
-    "findJobs": "Encontrar Empregos",
+    "startBusiness": "Iniciar Negócio",
+    "findHealthcare": "Saúde",
+    "educationServices": "Educação",
+    "transportLicenses": "Transporte",
+    "housingPrograms": "Habitação",
+    "findJobs": "Encontrar Emprego",
     "justChat": "Apenas Conversar",
-    "justChatPrompt":
-        "Gostaria de conversar sobre serviços governamentais no Quênia",
     "applyForIDPrompt":
-        "Preciso de informações sobre como solicitar uma carteira de identidade nacional no Quênia",
+        "Aja como um especialista útil em registo civil do Quénia. Explique os passos para obter uma Identidade Nacional (Maisha Namba) ou substituir uma perdida. IMPORTANTE: Forneça uma lista clara dos documentos necessários (ex: Certidão de Nascimento, cópias das identidades dos pais) e aconselhe o utilizador a visitar o Huduma Centre ou conservatória mais próxima. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "payTaxesPrompt":
-        "Qual é o processo para pagar meus impostos online no Quênia?",
+        "Aja como um guia da KRA (Autoridade Tributária do Quénia). Explique o processo de entrega de declarações, pedido de PIN da KRA ou redefinição de palavra-passe no portal iTax. IMPORTANTE: Relembre o utilizador do prazo de 30 de junho para declarações anuais e guie-o sobre como entregar declarações a zeros (Nil returns) se não teve rendimentos. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "startBusinessPrompt":
-        "Oriente-me sobre as etapas para registrar um novo negócio no Quênia",
+        "Aja como consultor de negócios para serviços eCitizen. Guie o utilizador através da reserva de nome comercial e registo de empresa no Quénia. IMPORTANTE: Explique os custos atuais para pesquisa de nome e registo, e direcione o utilizador para o portal oficial eCitizen para concluir a candidatura. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "findHealthcarePrompt":
-        "Onde posso encontrar informações sobre serviços de saúde pública no Quênia?",
+        "Aja como um navegador de serviços de saúde. Forneça informações sobre a transição do NHIF para o SHIF (Fundo de Seguro Social de Saúde) e como se registar. IMPORTANTE: Partilhe os códigos USSD oficiais (como *263#) ou links do site para registo e explique os benefícios da cobertura de saúde pública. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "educationServicesPrompt":
-        "Quais serviços educacionais estão disponíveis para meus filhos no Quênia?",
+        "Aja como conselheiro educacional. Discuta o currículo CBC, registo NEMIS ou colocação universitária via KUCCPS. IMPORTANTE: Explique como os pais podem verificar os resultados dos exames nacionais por SMS ou portal KNEC quando forem lançados. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "transportLicensesPrompt":
-        "Como renovo minha carteira de motorista no Quênia?",
+        "Aja como um guia de serviços da NTSA. Explique o processo para renovação da carta de condução, inspeção de veículos ou gestão de conta TIMS. IMPORTANTE: Guie o utilizador sobre como fazer login no portal eCitizen NTSA para solicitar o seu Smart DL ou marcar uma inspeção de veículo. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "housingProgramsPrompt":
-        "Fale-me sobre programas de habitação acessível no Quênia",
+        "Aja como consultor de programas habitacionais. Explique o registo no Programa de Habitação Acessível (Boma Yangu) e o processo de contribuição voluntária. IMPORTANTE: Guie o utilizador para o portal Boma Yangu para ver projetos e explique os critérios de elegibilidade para alocação. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
     "findJobsPrompt":
-        "Quais oportunidades de emprego governamental estão disponíveis atualmente no Quênia?"
+        "Aja como coach de carreira para a função pública. Guie o utilizador na criação de um perfil e candidatura a vagas através do portal da Comissão de Serviço Público (PSC). IMPORTANTE: Aconselhe o utilizador a manter os seus certificados académicos prontos e a verificar regularmente o site da PSC ou jornais locais para anúncios do MyGov. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+    "justChatPrompt":
+        "Aja como um companheiro local amigável. Seja educado, prestável e conhecedor da cultura queniana e da vida quotidiana. IMPORTANTE: Relembre o utilizador de que, embora possa conversar sobre qualquer coisa, o seu ponto forte é ajudá-lo a navegar nos serviços governamentais do Quénia como **IDs**, **Impostos** e **Registo de Negócios**. REGRA: Refira-se sempre à aplicação como 'Genie AI'.",
+    "applyForIDUserPrompt":
+        "Quero saber como solicitar um cartão de Identidade Nacional no Quénia.",
+    "payTaxesUserPrompt":
+        "Quero perguntar sobre pagamento de impostos ou entrega das minhas declarações KRA no Quénia.",
+    "startBusinessUserPrompt":
+        "Quero saber sobre como registar um novo negócio ou empresa no Quénia.",
+    "findHealthcareUserPrompt":
+        "Quero perguntar sobre instalações de saúde pública e seguros (NHIF/SHIF) no Quénia.",
+    "educationServicesUserPrompt":
+        "Quero saber sobre escolas e serviços educativos no Quénia.",
+    "transportLicensesUserPrompt":
+        "Quero perguntar sobre cartas de condução e serviços NTSA no Quénia.",
+    "housingProgramsUserPrompt":
+        "Quero saber sobre o Programa de Habitação Acessível (Boma Yangu) no Quénia.",
+    "findJobsUserPrompt":
+        "Quero perguntar sobre oportunidades de emprego governamentais e candidaturas PSC no Quénia.",
+    "justChatUserPrompt": "Quero conversar em geral sobre a vida no Quénia."
   },
   "common": {
     "cancel": "Cancelar",
@@ -1316,7 +1333,8 @@ const Map<String, dynamic> ptLocale = {
   "about": {
     "title": "Sobre",
     "version": "Versão",
-    "description": "O Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.",
+    "description":
+        "O Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.",
     "techStack": "Tech Stack",
     "copyright": "Todos os direitos reservados."
   }

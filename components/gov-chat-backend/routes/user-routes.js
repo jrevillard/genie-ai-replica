@@ -458,6 +458,68 @@ module.exports = (userService) => {
     }
   });
 
+
+/**
+   * @swagger
+   * /api/users/{userId}/context:
+   * get:
+   * summary: Get safe user context for AI
+   * description: Retrieves a sanitized subset of user data specifically for AI context enrichment
+   * tags: [User]
+   * parameters:
+   * - in: path
+   * name: userId
+   * required: true
+   * schema:
+   * type: string
+   * responses:
+   * 200:
+   * description: Safe user context
+   */
+  router.get('/:userId/context', (req, res, next) => {
+    // 1. Enforce Authentication
+    if (!req.headers.authorization) {
+      logger.warn(`Authentication required for fetching user context ${req.params.userId}`);
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    authMiddleware.authenticate(req, res, next);
+  }, async (req, res) => {
+    try {
+      logger.info(`Getting AI context for user ID: ${req.params.userId}`);
+      
+      // 2. Fetch the full profile internally
+      const user = await userService.getUserProfile(req.params.userId);
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // 3. Create the SANITIZED object strictly for the AI
+      const userContext = {
+        personalIdentification: {
+          fullName: user.personalIdentification?.fullName || 'User',
+          dob: user.personalIdentification?.dob || 'Not provided',
+          gender: user.personalIdentification?.gender || 'Not provided',
+          nationality: user.personalIdentification?.nationality || 'Not provided'
+        },
+        addressResidency: {
+          currentAddress: user.addressResidency?.currentAddress || 'Not provided'
+        },
+        // We might want role info to adjust the tone (e.g., "Answer as if speaking to a Manager")
+        role: user.role,
+        emailVerified: user.emailVerified
+      };
+      
+      logger.info(`User context retrieved successfully for ID: ${req.params.userId}`);
+      res.json(userContext); // Send ONLY the safe data
+    } catch (error) {
+      logger.error(`Error getting user context ${req.params.userId}: ${error.message}`, { stack: error.stack });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  
+
   /**
    * @swagger
    * /api/users:

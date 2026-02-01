@@ -415,6 +415,7 @@ These variables define the internal wiring and ports for the AI microservices.
 | RERANK\_SERVER\_PORT | Port for the TEI reranking service. | 80 |
 | LLM\_SERVER\_HOST\_IP | Hostname for the vLLM inference engine. | vllm |
 | LLM\_SERVER\_PORT | Port for the vLLM inference engine. | 8000 |
+| CHATQNA\_SYSTEM\_PROMPT | Main ChatQnA system prompt for responding to user queries based on retrieved content. | "You are a friendly and polite information assistant..." |
 | GUARDRAIL\_SERVICE\_HOST\_IP | Hostname for the guardrail service. | guardrail |
 | GUARDRAIL\_SERVICE\_PORT | Port for the guardrail service. | 9090 |
 | TRANSLATION\_SERVICE\_HOST\_IP | Hostname for the translation service. | translation |
@@ -483,6 +484,13 @@ Configuration for the retrieval logic (hybrid search, traversals, etc.).
 | RETRIEVER\_OPENAI\_EMBED\_ENABLED | Enable OpenAI embed format in retriever. | true |
 | RETRIEVER\_OPENAI\_EMBED\_MODEL | Embedding model used by the retriever. | text-embedding-3-small |
 | ARANGO\_FILTER\_STRATEGY | Strategy for applying filters (OR/AND). | OR |
+
+**RERANKER Configuration**  
+Configuration for the reranker logic
+
+| Variable | Description | Example Value |
+| :---- | :---- | :---- |
+| RERANKER\_TOP\_N | Regulates the number of chunks returned by the reranker to the ChatQnA workflow. Increasing the number may improve response quality, while decreasing the value may reduce latency. | 3 | 
 
 **Crawler Configuration (implemented in the doc repo)**  
 These variables control the specifics of how crawls are done.

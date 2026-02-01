@@ -2,7 +2,6 @@
 # Copyright (C) 2025 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 # Developed by Intel. Adapted by ITU
-
 import argparse
 import httpx
 import json
@@ -10,6 +9,7 @@ import os
 import re
 import aiohttp # for async http requests
 import requests
+import asyncio
 
 from comps import MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType, CustomLogger
 from comps.cores.mega.utils import handle_message
@@ -28,36 +28,12 @@ from fastapi.responses import StreamingResponse
 from langchain_core.prompts import PromptTemplate
 
 from langdetect import detect
+from datetime import datetime, timedelta
 from transformers import AutoTokenizer
 
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
 logflag = os.getenv("LOGFLAG", True)
-
-
-class ChatTemplate:
-    @staticmethod
-    def generate_rag_prompt(question, documents):
-        context_str = "\n".join(documents)
-        if context_str and len(re.findall("[\u4e00-\u9fff]", context_str)) / len(context_str) >= 0.3:
-            # chinese context
-            template = """
-### 你将扮演一个乐于助人、尊重他人并诚实的助手，你的目标是帮助用户解答问题。有效地利用来自本地知识库的搜索结果。确保你的回答中只包含相关信息。如果你不确定问题的答案，请避免分享不准确的信息。
-### 搜索结果：{context}
-### 问题：{question}
-### 回答：
-"""
-        else:
-            template = """
-### You are a helpful, respectful and honest assistant to help the user with questions. \
-Please refer to the search results obtained from the local knowledge base. \
-But be careful to not incorporate the information that you think is not relevant to the question. \
-If you don't know the answer to a question, please don't share false information. \n
-### Search results: {context} \n
-### Question: {question} \n
-### Answer:
-"""
-        return template.format(context=context_str, question=question)
 
 
 MEGA_SERVICE_PORT = int(os.getenv("MEGA_SERVICE_PORT", 8888))
@@ -87,6 +63,7 @@ RETRIEVER_LAMBDA_MULT = os.getenv("RETRIEVER_ARANGO_LAMBDA_MULT", 0.5)
 RERANKER_TOP_N = os.getenv("RERANKER_TOP_N", 2)
 
 DOC_REPO_URL = os.getenv("DOC_REPO_URL", "http://localhost:3001") # Document repository URL
+BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000") # Frontend backend service URL
 GET_AUTH_TOKEN_URL = os.getenv("GET_AUTH_TOKEN_URL", "http://http-service:6666/get-token")
 LANGUAGE_CODES_FILEPATH = os.getenv("LANGUAGE_CODES_FILEPATH", "language_codes.json")
 MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max token length for text generation models
@@ -94,8 +71,162 @@ MAX_MODEL_LEN_TEXTGEN = int(os.getenv("MAX_MODEL_LEN_TEXTGEN", 4096))  # max tok
 MAX_TRANSLATION_CHARS = int(os.getenv("MAX_TRANSLATION_CHARS", 2000))  # max characters for translation models
 USER_MSG_PATTERN = re.compile(r"USER:\s*(.*?)(?:\s*\|<-MSG->\||$)", re.DOTALL)
 
+CHATQNA_SYSTEM_PROMPT = os.getenv("CHATQNA_SYSTEM_PROMPT", None)
+
+##################################################################################################################################
+# HELPER CLASSES
+##################################################################################################################################
+class ChatTemplate:
+    @staticmethod
+    def generate_rag_prompt(question, documents):
+        context_str = "\n".join(documents)
+        if context_str and len(re.findall("[\u4e00-\u9fff]", context_str)) / len(context_str) >= 0.3:
+            # chinese context
+            template = """
+### 你将扮演一个乐于助人、尊重他人并诚实的助手，你的目标是帮助用户解答问题。有效地利用来自本地知识库的搜索结果。确保你的回答中只包含相关信息。如果你不确定问题的答案，请避免分享不准确的信息。
+### 搜索结果：{context}
+### 问题：{question}
+### 回答：
+"""
+        else:
+            template = """
+### You are a helpful, respectful and honest assistant to help the user with questions. \
+Please refer to the search results obtained from the local knowledge base. \
+But be careful to not incorporate the information that you think is not relevant to the question. \
+If you don't know the answer to a question, please don't share false information. \n
+### Search results: {context} \n
+### Question: {question} \n
+### Answer:
+"""
+        return template.format(context=context_str, question=question)
 
 
+
+class GenieUserProfileClient:
+    """
+    Client for fetching User Profile data from the Backend Service.
+    Designed to be used within the ChatQnA orchestrator.
+    """
+
+    def __init__(self):
+        # Token caching state (Reused from GenieArangoDataprep pattern)
+        self._cached_token = None
+        self._token_expiry = None
+        self._token_lock = asyncio.Lock()
+        
+        # Log initialization
+        logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
+
+    async def _get_auth_token(self):
+        """
+        Fetches a fresh JWT from the internal http-service with locking and caching.
+        (Identical logic to GenieArangoDataprep for consistency)
+        """
+        now = datetime.now()
+        
+        # 1. Fast Path: Check if valid token exists (No lock needed)
+        if self._cached_token and self._token_expiry and now < self._token_expiry:
+            return self._cached_token
+
+        # 2. Slow Path: Acquire Lock to prevent thundering herd
+        async with self._token_lock:
+            # Check again (Double-Checked Locking)
+            if self._cached_token and self._token_expiry and now < self._token_expiry:
+                return self._cached_token
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(GET_AUTH_TOKEN_URL) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            token = data.get("accessToken")
+                            if token:
+                                # Cache the token for 50 mins (assuming 1h life)
+                                self._cached_token = token
+                                self._token_expiry = now + timedelta(minutes=50)
+                                return token
+                            logger.error(f"Auth Service returned 200 but no accessToken: {data}")
+                        else:
+                            logger.error(f"Auth Service failed. Status: {response.status}, Body: {await response.text()}")
+            except Exception as e:
+                logger.error(f"Error connecting to Auth Service ({GET_AUTH_TOKEN_URL}): {e}")
+            
+            return None
+
+    async def get_user_profile(self, user_id: str):
+        """
+        Fetches the full user profile from the backend for context enrichment.
+        Target: GET /api/users/{userId}
+        """
+        if not user_id:
+            logger.warning("get_user_profile called with empty user_id")
+            return None
+
+        # 1. Get Authentication Token
+        token = await self._get_auth_token()
+        if not token:
+            logger.warning(f"Skipping profile fetch for user {user_id} due to missing auth token.")
+            return None
+
+        # 2. Construct URL based on user-routes.js definition
+        # Route in JS: router.get('/:userId', ...) mounted at /api/users
+        url = f"{BACKEND_SERVICE_URL}/api/users/{user_id}/context"
+        
+        # 3. Prepare Headers
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        profile_data = await response.json()
+                        
+                        # Optional: Mask sensitive fields before returning to LLM context
+                        if 'password' in profile_data: del profile_data['password']
+                        if 'salt' in profile_data: del profile_data['salt']
+                        
+                        logger.info(f"Successfully retrieved profile for user {user_id}")
+                        return profile_data
+                    
+                    elif response.status == 404:
+                        logger.warning(f"User profile not found for ID {user_id}")
+                        return None
+                    elif response.status == 401:
+                        logger.error(f"Authentication failed for user profile fetch. Token might be invalid.")
+                        # Invalidate cache so next retry fetches a fresh token
+                        self._cached_token = None 
+                        return None
+                    else:
+                        logger.error(f"Failed to fetch user profile. Status: {response.status}, Body: {await response.text()}")
+                        return None
+                        
+        except Exception as e:
+            logger.error(f"Error connecting to Backend Service for profile: {e}")
+            return None
+
+
+##################################################################################################################################
+# TOKENIZER
+##################################################################################################################################
+TOKENIZER = None
+
+def get_tokenizer():
+    global TOKENIZER
+    if TOKENIZER is None:
+        TOKENIZER = AutoTokenizer.from_pretrained(
+            LLM_MODEL,
+            use_fast=True,
+            # local_files_only=True
+        )
+    return TOKENIZER
+
+
+##################################################################################################################################
+# CHATQNA ORCHESTRATOR FUNCTIONS
+##################################################################################################################################
 def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **kwargs):
 
     if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
@@ -150,13 +281,40 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # Get the full translated history *string* from kwargs
         translated_history_string = kwargs.get("full_chat_history_string", "")
         
+        user_details = kwargs.get("user_details", {})
+
+        user_context_string = ""
+
+        if user_details:
+            # Safely extract nested dictionary fields
+            p_ident = user_details.get("personalIdentification", {})
+            addr = user_details.get("addressResidency", {})
+            
+            full_name = p_ident.get("fullName", "User")
+            dob = p_ident.get("dob", "N/A")
+            address = addr.get("currentAddress", "N/A")
+            
+            # Construct a clear instruction block for the System
+            user_context_string = (
+                f"- Name: {full_name}\n"
+                f"- Date of Birth: {dob}\n"
+                f"- Location/Address: {address}\n"
+                f"        ---\n"
+            )
+
+
         ##################################
         ###### Token limit handling ######
         ##################################
-        prompt_prefix = "Here is the conversation history so far:\n        ---\n"
-        prompt_suffix = "\n        ---\n        Now, using the provided search results, please answer the user's latest question.\n        "
-        final_llm_prompt = f"""{prompt_prefix}{translated_history_string}{prompt_suffix}{rag_augmented_prompt}"""
-        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL, use_fast=True)
+        system_instructions = CHATQNA_SYSTEM_PROMPT
+    
+        prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
+                         f"\n\nCHAT HISTORY:\n{translated_history_string}"
+                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
+        
+        final_llm_prompt = f"{system_instructions}{prompt_add_context}"
+
+        tokenizer = get_tokenizer()
         max_model_tokens = MAX_MODEL_LEN_TEXTGEN
         max_answer_tokens = llm_parameters_dict["max_tokens"]  # Typically 1024
         # Count tokens in prompt
@@ -164,9 +322,10 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # Check if the total token count exceeds the model's limit
         if prompt_tokens + max_answer_tokens > max_model_tokens - 200:  # Leave buffer
             # Calculate maximum tokens for history
-            prompt_prefix_tokens = len(tokenizer.encode(prompt_prefix))
-            prompt_suffix_tokens = len(tokenizer.encode(prompt_suffix + rag_augmented_prompt))
-            max_history_tokens = max_model_tokens - max_answer_tokens - prompt_prefix_tokens - prompt_suffix_tokens - 200
+            prompt_add_context_tokens = len(tokenizer.encode(prompt_add_context))
+            translated_history_tokens = len(tokenizer.encode(translated_history_string))
+
+            max_history_tokens = max_model_tokens + translated_history_tokens - max_answer_tokens - prompt_add_context_tokens - 200
             # Split the history into segments
             history_segments = translated_history_string.split(" |<-MSG->| ")
             truncated_history = []
@@ -181,7 +340,10 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             # Rebuild truncated history
             translated_history_string = " |<-MSG->| ".join(truncated_history)
             # Reconstruct final prompt
-            final_llm_prompt = f"""{prompt_prefix}{translated_history_string}{prompt_suffix}{rag_augmented_prompt}"""
+            prompt_add_context = (f"\n\nUSER INFORMATION:\n{user_context_string}"
+                         f"\n\nCHAT HISTORY:\n{translated_history_string}"
+                         f"\n\nCONTENT FROM THE KNOWLEDGE BASE:\n{rag_augmented_prompt}")
+            final_llm_prompt = f"{system_instructions}{prompt_add_context}"
         
 
         next_inputs["messages"] = [{"role": "user", "content": final_llm_prompt}]
@@ -388,6 +550,7 @@ class ChatQnAService:
         ServiceOrchestrator.align_generator = align_generator
         self.megaservice = ServiceOrchestrator()
         self.endpoint = str(MegaServiceEndpoint.CHAT_QNA)
+        self.user_profile_client = GenieUserProfileClient()
 
 
     def _find_node_key(self, service_name: str, result_dict: dict) -> str | None:
@@ -696,7 +859,37 @@ class ChatQnAService:
 
     async def handle_request(self, request: Request):
         data = await request.json()
+
+        # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
+        logger.info(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
+
+        user_id_header = data.get("user_id")
+        user_details = {}
+
+        if user_id_header:
+            try: 
+                user_details = await self.user_profile_client.get_user_profile(user_id_header)
+                logger.info(f"USER PROFILE RETRIEVED: {user_details}")
+            except Exception as e:
+                logger.error(f"USER PROFILE ERROR: {e}")
+
+        # -----------------------------------------------
+
+
         chat_request = ChatCompletionRequest.parse_obj(data)
+        
+        # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
+        logger.info(f"Parsed chat request: {chat_request}")
+        
+        retrieval_context = {}
+        
+        if chat_request.context:
+            try:
+                retrieval_context = chat_request.context.model_dump(exclude_unset=True)
+            except:
+                retrieval_context = chat_request.context.dict(exclude_unset=True)
+        logger.info(f"Context: {retrieval_context}")
+        # -----------------------------------------------
 
         if logflag:
             logger.debug(f'Incoming Chat Request: {chat_request}')
@@ -805,6 +998,7 @@ class ChatQnAService:
             full_chat_history_string=translated_history_string,
             retrieval_context=retrieval_context,
             original_language=original_language,
+            user_details = user_details,
         )
 
         if logflag:

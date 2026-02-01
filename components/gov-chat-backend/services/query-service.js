@@ -414,6 +414,7 @@ class QueryService {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels
             },
+            user_id: queryData.userId,
             stream: false
           };
         }

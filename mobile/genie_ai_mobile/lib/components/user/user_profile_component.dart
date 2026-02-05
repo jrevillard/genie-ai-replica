@@ -1090,8 +1090,9 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           if (_showIconSelector)
             Material(
               color: Colors.black.withOpacity(0.7),
-              child: Center(
-                child: Container(
+              child: SafeArea(
+                child: Center(
+                  child: Container(
                   width: MediaQuery.of(context).size.width * 0.9,
                   constraints: const BoxConstraints(maxWidth: 500),
                   padding: const EdgeInsets.all(24),
@@ -1239,6 +1240,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     ],
                   ),
                 ),
+              ),
               ),
             ),
         ],

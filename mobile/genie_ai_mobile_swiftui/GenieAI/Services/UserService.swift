@@ -17,17 +17,28 @@ class UserService {
         return try JSONDecoder().decode(User.self, from: data)
     }
 
-    func updateProfile(userId: String, profile: UserProfile) async throws -> User {
+    func updateProfile(
+        userId: String,
+        personalIdentification: PersonalIdentification,
+        addressResidency: AddressResidency
+    ) async throws -> User {
         isLoading = true
         error = nil
 
         defer { isLoading = false }
 
         let encoder = JSONEncoder()
-        let profileData = try encoder.encode(profile)
-        let profileDict = try JSONSerialization.jsonObject(with: profileData) as? [String: Any] ?? [:]
 
-        let data = try await api.put("users/\(userId)", data: ["profile": profileDict])
+        let personalData = try encoder.encode(personalIdentification)
+        let personalDict = try JSONSerialization.jsonObject(with: personalData) as? [String: Any] ?? [:]
+
+        let addressData = try encoder.encode(addressResidency)
+        let addressDict = try JSONSerialization.jsonObject(with: addressData) as? [String: Any] ?? [:]
+
+        let data = try await api.put("users/\(userId)", data: [
+            "personalIdentification": personalDict,
+            "addressResidency": addressDict
+        ])
         return try JSONDecoder().decode(User.self, from: data)
     }
 

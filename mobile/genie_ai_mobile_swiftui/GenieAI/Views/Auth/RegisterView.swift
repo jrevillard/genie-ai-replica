@@ -18,6 +18,17 @@ struct RegisterView: View {
     @State private var isLoading = false
     @State private var showSuccess = false
 
+    // Availability checking
+    @State private var usernameError: String?
+    @State private var emailError: String?
+    @State private var isCheckingUsername = false
+    @State private var isCheckingEmail = false
+    @State private var usernameCheckTask: Task<Void, Never>?
+    @State private var emailCheckTask: Task<Void, Never>?
+
+    // Password strength
+    @State private var passwordStrength = PasswordStrength(score: 0, isValid: false)
+
     var onBackToLogin: () -> Void
     var onRegistrationSuccess: (String) -> Void
 
@@ -49,6 +60,15 @@ struct RegisterView: View {
                             .textFieldStyle(GenieTextFieldStyle())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .onChange(of: username) { _, newValue in
+                                checkAvailability(type: "username", value: newValue)
+                            }
+
+                        if let error = usernameError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(theme.errorColor)
+                        }
                     }
 
                     // Email
@@ -62,6 +82,15 @@ struct RegisterView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.emailAddress)
+                            .onChange(of: email) { _, newValue in
+                                checkAvailability(type: "email", value: newValue)
+                            }
+
+                        if let error = emailError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(theme.errorColor)
+                        }
                     }
 
                     // Password
@@ -72,6 +101,21 @@ struct RegisterView: View {
 
                         SecureField(i18n.translate("register.passwordPlaceholder"), text: $password)
                             .textFieldStyle(GenieTextFieldStyle())
+                            .onChange(of: password) { _, newValue in
+                                passwordStrength = PasswordValidator.validateStrength(newValue)
+                            }
+
+                        // Password Strength Meter
+                        if !password.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ProgressView(value: passwordStrength.normalizedScore)
+                                    .tint(passwordStrength.color)
+
+                                Text(passwordStrengthLabel)
+                                    .font(.caption)
+                                    .foregroundColor(passwordStrength.color)
+                            }
+                        }
 
                         Text(i18n.translate("register.passwordRequirements"))
                             .font(.caption)
@@ -151,10 +195,24 @@ struct RegisterView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
+                // Language Selector
+                LanguageSelectorCompact()
+                    .padding(.horizontal)
+
                 Spacer()
             }
         }
         .background(theme.surfaceColor)
+    }
+
+    private var passwordStrengthLabel: String {
+        switch passwordStrength.score {
+        case 0: return i18n.translate("register.passwordVeryWeak")
+        case 1: return i18n.translate("register.passwordWeak")
+        case 2: return i18n.translate("register.passwordFair")
+        case 3: return i18n.translate("register.passwordStrong")
+        default: return i18n.translate("register.passwordVeryStrong")
+        }
     }
 
     private var canRegister: Bool {
@@ -163,11 +221,65 @@ struct RegisterView: View {
         !password.isEmpty &&
         !confirmPassword.isEmpty &&
         acceptTerms &&
-        password == confirmPassword
+        password == confirmPassword &&
+        usernameError == nil &&
+        emailError == nil &&
+        passwordStrength.isValid
+    }
+
+    // MARK: - Availability Checking
+
+    private func checkAvailability(type: String, value: String) {
+        if type == "username" {
+            usernameCheckTask?.cancel()
+            guard value.count >= 3 else {
+                usernameError = nil
+                return
+            }
+            isCheckingUsername = true
+            usernameCheckTask = Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
+                guard !Task.isCancelled else { return }
+                do {
+                    let userService = UserService()
+                    let available = try await userService.checkUsernameAvailability(value)
+                    await MainActor.run {
+                        isCheckingUsername = false
+                        usernameError = available ? nil : i18n.translate("register.usernameExists")
+                    }
+                } catch {
+                    await MainActor.run {
+                        isCheckingUsername = false
+                    }
+                }
+            }
+        } else {
+            emailCheckTask?.cancel()
+            guard value.count >= 3, isValidEmail(value) else {
+                emailError = nil
+                return
+            }
+            isCheckingEmail = true
+            emailCheckTask = Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
+                guard !Task.isCancelled else { return }
+                do {
+                    let userService = UserService()
+                    let available = try await userService.checkEmailAvailability(value)
+                    await MainActor.run {
+                        isCheckingEmail = false
+                        emailError = available ? nil : i18n.translate("register.emailExists")
+                    }
+                } catch {
+                    await MainActor.run {
+                        isCheckingEmail = false
+                    }
+                }
+            }
+        }
     }
 
     private func performRegistration() {
-        // Validation
         guard username.count >= 3 else {
             errorMessage = i18n.translate("register.usernameMinLength")
             showError = true
@@ -180,7 +292,7 @@ struct RegisterView: View {
             return
         }
 
-        guard isValidPassword(password) else {
+        guard passwordStrength.isValid else {
             errorMessage = i18n.translate("register.passwordRequirements")
             showError = true
             return
@@ -221,12 +333,6 @@ struct RegisterView: View {
     private func isValidEmail(_ email: String) -> Bool {
         let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
         return NSPredicate(format: "SELF MATCHES %@", emailRegex).evaluate(with: email)
-    }
-
-    private func isValidPassword(_ password: String) -> Bool {
-        // At least 8 characters, 1 uppercase, 1 number
-        let passwordRegex = "^(?=.*[A-Z])(?=.*[0-9]).{8,}$"
-        return NSPredicate(format: "SELF MATCHES %@", passwordRegex).evaluate(with: password)
     }
 }
 

@@ -11,7 +11,8 @@ struct UserProfileView: View {
 
     @State private var userService = UserService()
     @State private var selectedTab = 0
-    @State private var profile = UserProfile()
+    @State private var personalInfo = PersonalIdentification()
+    @State private var addressInfo = AddressResidency()
     @State private var isLoading = false
     @State private var isSaving = false
     @State private var hasChanges = false
@@ -65,13 +66,13 @@ struct UserProfileView: View {
 
                 // Tab Content
                 TabView(selection: $selectedTab) {
-                    PersonalDataTab(profile: $profile, hasChanges: $hasChanges)
+                    PersonalDataTab(personalInfo: $personalInfo, hasChanges: $hasChanges)
                         .tag(0)
 
                     ComingSoonTab()
                         .tag(1)
 
-                    AddressTab(profile: $profile, hasChanges: $hasChanges)
+                    AddressTab(addressInfo: $addressInfo, hasChanges: $hasChanges)
                         .tag(2)
 
                     ForEach(3..<12, id: \.self) { index in
@@ -161,7 +162,8 @@ struct UserProfileView: View {
 
         do {
             let user = try await userService.getProfile(userId: userId)
-            profile = user.profile ?? UserProfile()
+            personalInfo = user.personalIdentification ?? PersonalIdentification()
+            addressInfo = user.addressResidency ?? AddressResidency()
         } catch {
             print("[UserProfileView] Load error: \(error)")
         }
@@ -174,7 +176,11 @@ struct UserProfileView: View {
 
         Task {
             do {
-                _ = try await userService.updateProfile(userId: userId, profile: profile)
+                _ = try await userService.updateProfile(
+                    userId: userId,
+                    personalIdentification: personalInfo,
+                    addressResidency: addressInfo
+                )
                 await MainActor.run {
                     isSaving = false
                     hasChanges = false
@@ -195,7 +201,7 @@ struct PersonalDataTab: View {
     @Environment(ThemeManager.self) private var theme
     @Environment(I18nService.self) private var i18n
 
-    @Binding var profile: UserProfile
+    @Binding var personalInfo: PersonalIdentification
     @Binding var hasChanges: Bool
 
     var body: some View {
@@ -205,27 +211,28 @@ struct PersonalDataTab: View {
                 ProfileField(
                     label: i18n.translate("userProfile.fields.fullName"),
                     text: Binding(
-                        get: { profile.fullName ?? "" },
-                        set: { profile.fullName = $0; hasChanges = true }
+                        get: { personalInfo.fullName ?? "" },
+                        set: { personalInfo.fullName = $0; hasChanges = true }
                     ),
                     placeholder: i18n.translate("userProfile.placeholders.fullName")
                 )
 
                 // Date of Birth
-                ProfileDateField(
+                ProfileField(
                     label: i18n.translate("userProfile.fields.dob"),
-                    date: Binding(
-                        get: { profile.dateOfBirth ?? Date() },
-                        set: { profile.dateOfBirth = $0; hasChanges = true }
-                    )
+                    text: Binding(
+                        get: { personalInfo.dob ?? "" },
+                        set: { personalInfo.dob = $0; hasChanges = true }
+                    ),
+                    placeholder: "YYYY-MM-DD"
                 )
 
                 // Gender
                 ProfilePickerField(
                     label: i18n.translate("userProfile.fields.gender"),
                     selection: Binding(
-                        get: { profile.gender ?? "" },
-                        set: { profile.gender = $0; hasChanges = true }
+                        get: { personalInfo.gender ?? "" },
+                        set: { personalInfo.gender = $0; hasChanges = true }
                     ),
                     options: [
                         ("male", i18n.translate("userProfile.gender.male")),
@@ -239,8 +246,8 @@ struct PersonalDataTab: View {
                 ProfileField(
                     label: i18n.translate("userProfile.fields.nationality"),
                     text: Binding(
-                        get: { profile.nationality ?? "" },
-                        set: { profile.nationality = $0; hasChanges = true }
+                        get: { personalInfo.nationality ?? "" },
+                        set: { personalInfo.nationality = $0; hasChanges = true }
                     ),
                     placeholder: i18n.translate("userProfile.placeholders.nationality")
                 )
@@ -249,8 +256,8 @@ struct PersonalDataTab: View {
                 ProfilePickerField(
                     label: i18n.translate("userProfile.fields.maritalStatus"),
                     selection: Binding(
-                        get: { profile.maritalStatus ?? "" },
-                        set: { profile.maritalStatus = $0; hasChanges = true }
+                        get: { personalInfo.maritalStatus ?? "" },
+                        set: { personalInfo.maritalStatus = $0; hasChanges = true }
                     ),
                     options: [
                         ("single", i18n.translate("userProfile.maritalStatus.single")),
@@ -272,7 +279,7 @@ struct AddressTab: View {
     @Environment(ThemeManager.self) private var theme
     @Environment(I18nService.self) private var i18n
 
-    @Binding var profile: UserProfile
+    @Binding var addressInfo: AddressResidency
     @Binding var hasChanges: Bool
 
     var body: some View {
@@ -281,39 +288,17 @@ struct AddressTab: View {
                 ProfileField(
                     label: i18n.translate("userProfile.fields.currentAddress"),
                     text: Binding(
-                        get: { profile.currentAddress ?? "" },
-                        set: { profile.currentAddress = $0; hasChanges = true }
+                        get: { addressInfo.currentAddress ?? "" },
+                        set: { addressInfo.currentAddress = $0; hasChanges = true }
                     )
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.postalCode"),
+                    label: i18n.translate("userProfile.fields.homeOrRental"),
                     text: Binding(
-                        get: { profile.postalCode ?? "" },
-                        set: { profile.postalCode = $0; hasChanges = true }
+                        get: { addressInfo.homeOrRental ?? "" },
+                        set: { addressInfo.homeOrRental = $0; hasChanges = true }
                     )
-                )
-
-                ProfileField(
-                    label: i18n.translate("userProfile.fields.country"),
-                    text: Binding(
-                        get: { profile.country ?? "" },
-                        set: { profile.country = $0; hasChanges = true }
-                    )
-                )
-
-                ProfilePickerField(
-                    label: i18n.translate("userProfile.fields.residencyStatus"),
-                    selection: Binding(
-                        get: { profile.residencyStatus ?? "" },
-                        set: { profile.residencyStatus = $0; hasChanges = true }
-                    ),
-                    options: [
-                        ("citizen", i18n.translate("userProfile.residencyStatuses.citizen")),
-                        ("permanentResident", i18n.translate("userProfile.residencyStatuses.permanentResident")),
-                        ("temporaryResident", i18n.translate("userProfile.residencyStatuses.temporaryResident")),
-                        ("other", i18n.translate("userProfile.residencyStatuses.other"))
-                    ]
                 )
             }
             .padding()
@@ -357,25 +342,6 @@ struct ProfileField: View {
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(GenieTextFieldStyle())
-        }
-    }
-}
-
-struct ProfileDateField: View {
-    @Environment(ThemeManager.self) private var theme
-
-    let label: String
-    @Binding var date: Date
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            DatePicker("", selection: $date, displayedComponents: .date)
-                .datePickerStyle(.compact)
-                .labelsHidden()
         }
     }
 }

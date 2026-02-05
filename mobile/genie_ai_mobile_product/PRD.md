@@ -16,11 +16,11 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ### 1.1 Login
 <!-- Flutter: lib/components/auth/login_screen.dart, lib/services/user_service.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/LoginView.swift, GenieAI/Services/AuthService.swift -->
+<!-- SwiftUI: GenieAI/Views/Auth/LoginView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift -->
 
 **Requirements:**
 - Username/email and password fields with validation
-- "Remember me" checkbox to persist credentials locally
+- "Remember me" checkbox to persist username and password locally (not the auth token)
 - Password hashing (SHA-256) before transmission
 - Loading state during authentication
 - Error message display for failed login
@@ -32,7 +32,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ### 1.2 Registration
 <!-- Flutter: lib/components/auth/register_screen.dart, lib/services/user_service.dart, lib/services/password_proxy.dart -->
-<!-- SwiftUI: GenieAI/Views/Auth/RegisterView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift -->
+<!-- SwiftUI: GenieAI/Views/Auth/RegisterView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift, GenieAI/Services/PasswordValidator.swift -->
 
 **Requirements:**
 - Username, email, password, and confirm password fields
@@ -99,7 +99,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ### 2.1 Main Chat Interface
 <!-- Flutter: lib/components/chat/chatbot_component.dart, lib/services/chatbot_proxy.dart, lib/services/chat_history_proxy.dart -->
-<!-- SwiftUI: GenieAI/Views/Chat/ChatView.swift, GenieAI/Views/Chat/MessageBubble.swift, GenieAI/Views/Chat/ChatInputView.swift, GenieAI/Services/ChatService.swift, GenieAI/Services/ChatHistoryService.swift -->
+<!-- SwiftUI: GenieAI/Views/Chat/ChatView.swift, GenieAI/Views/Chat/MessageBubble.swift, GenieAI/Views/Chat/ChatInputView.swift, GenieAI/Services/ChatService.swift, GenieAI/Services/ChatHistoryService.swift, GenieAI/Models/Message.swift -->
 
 **Requirements:**
 - Message input field with send button
@@ -176,6 +176,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ### 2.5 PDF Export
 <!-- Flutter: lib/components/chat/chatbot_component.dart (uses pdf, printing packages) -->
+<!-- SwiftUI: GenieAI/Views/Chat/ChatView.swift, GenieAI/Views/Chat/ChatInputView.swift -->
 
 **Requirements:**
 - Export entire conversation to PDF
@@ -304,7 +305,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ## 5. Settings
 <!-- Flutter: lib/components/settings/settings_component.dart, lib/services/user_service.dart, lib/services/password_proxy.dart, lib/services/connectivity_service.dart -->
-<!-- SwiftUI: GenieAI/Views/Settings/SettingsView.swift, GenieAI/Services/UserService.swift, GenieAI/Services/ThemeManager.swift, GenieAI/Services/ConnectivityService.swift -->
+<!-- SwiftUI: GenieAI/Views/Settings/SettingsView.swift, GenieAI/Services/UserService.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/ThemeManager.swift, GenieAI/Services/ConnectivityService.swift, GenieAI/Services/PasswordValidator.swift -->
 
 ### 5.1 Theme Settings
 - Theme mode: Light, Dark, System

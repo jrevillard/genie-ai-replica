@@ -7,18 +7,24 @@ struct Message: Codable, Identifiable, Equatable {
     let id: String
     var role: MessageRole
     var content: String
+    var actualContent: String?
     var timestamp: Date
     var queryId: String?
     var feedbackSubmitted: Bool?
+    var isSaved: Bool?
+    var confidence: Double?
     var metadata: MessageMetadata?
 
     enum CodingKeys: String, CodingKey {
         case id = "_id"
         case role
         case content
+        case actualContent
         case timestamp
         case queryId
         case feedbackSubmitted
+        case isSaved
+        case confidence
         case metadata
     }
 
@@ -26,17 +32,23 @@ struct Message: Codable, Identifiable, Equatable {
         id: String = UUID().uuidString,
         role: MessageRole,
         content: String,
+        actualContent: String? = nil,
         timestamp: Date = Date(),
         queryId: String? = nil,
         feedbackSubmitted: Bool? = nil,
+        isSaved: Bool? = nil,
+        confidence: Double? = nil,
         metadata: MessageMetadata? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
+        self.actualContent = actualContent
         self.timestamp = timestamp
         self.queryId = queryId
         self.feedbackSubmitted = feedbackSubmitted
+        self.isSaved = isSaved
+        self.confidence = confidence
         self.metadata = metadata
     }
 
@@ -95,12 +107,14 @@ struct QueryResponse: Codable {
     let response: String?
     let content: String?
     let sources: [MessageMetadata.DocumentSource]?
+    let confidence: Double?
 
     enum CodingKeys: String, CodingKey {
         case id = "_id"
         case response
         case content
         case sources
+        case confidence
     }
 
     var messageContent: String {

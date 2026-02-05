@@ -1,5 +1,5 @@
 // MessageBubble.swift
-// Chat message bubble component
+// Chat message bubble component with markdown rendering
 
 import SwiftUI
 
@@ -25,22 +25,38 @@ struct MessageBubble: View {
             }
 
             VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 8) {
-                // Message Content
-                Text(message.content)
-                    .font(.body)
-                    .foregroundColor(message.role.isUser ? .white : theme.primaryTextColor)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        message.role.isUser
-                            ? AnyShapeStyle(theme.navbarGradient)
-                            : AnyShapeStyle(theme.secondarySurfaceColor)
-                    )
-                    .cornerRadius(16, corners: message.role.isUser ? [.topLeft, .topRight, .bottomLeft] : [.topLeft, .topRight, .bottomRight])
+                // Message Content with Markdown
+                Group {
+                    if message.role.isUser {
+                        Text(message.content)
+                            .font(.body)
+                            .foregroundColor(.white)
+                    } else {
+                        markdownContent(message.content)
+                            .font(.body)
+                            .foregroundColor(theme.primaryTextColor)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    message.role.isUser
+                        ? AnyShapeStyle(theme.navbarGradient)
+                        : AnyShapeStyle(theme.secondarySurfaceColor)
+                )
+                .cornerRadius(16, corners: message.role.isUser ? [.topLeft, .topRight, .bottomLeft] : [.topLeft, .topRight, .bottomRight])
 
                 // Sources (for assistant messages)
                 if let sources = message.metadata?.sources, !sources.isEmpty {
                     SourcesView(sources: sources)
+                }
+
+                // Confidence Score (for assistant messages)
+                if let confidence = message.confidence, message.role.isAssistant {
+                    Text("Confidence: \(String(format: "%.1f", confidence * 100))%")
+                        .font(.caption2)
+                        .italic()
+                        .foregroundColor(theme.secondaryTextColor)
                 }
 
                 // Feedback Button (for assistant messages)
@@ -84,6 +100,17 @@ struct MessageBubble: View {
         .padding(.horizontal)
     }
 
+    @ViewBuilder
+    private func markdownContent(_ text: String) -> some View {
+        if let attributedString = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            Text(attributedString)
+                .textSelection(.enabled)
+        } else {
+            Text(text)
+                .textSelection(.enabled)
+        }
+    }
+
     private func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -101,11 +128,11 @@ struct SourcesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(sources.prefix(3)) { source in
-                if let url = source.url {
-                    Link(destination: URL(string: url)!) {
+                if let urlString = source.url, let url = URL(string: urlString) {
+                    Link(destination: url) {
                         HStack(spacing: 4) {
                             Image(systemName: "link")
-                            Text(source.title ?? url)
+                            Text(source.title ?? urlString)
                                 .lineLimit(1)
                         }
                         .font(.caption)
@@ -152,8 +179,9 @@ struct RoundedCorner: Shape {
         MessageBubble(
             message: Message(
                 role: .assistant,
-                content: "To apply for a national ID in Kenya, you'll need to visit your nearest Huduma Centre with your birth certificate and copies of your parents' IDs.",
-                queryId: "123"
+                content: "To apply for a **national ID** in Kenya, you'll need to visit your nearest *Huduma Centre* with:\n\n1. Birth certificate\n2. Copies of parents' IDs\n\nFor more info, visit [Huduma](https://example.com).",
+                queryId: "123",
+                confidence: 0.95
             ),
             onFeedbackTapped: {}
         )

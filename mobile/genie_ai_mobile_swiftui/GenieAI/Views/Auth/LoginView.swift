@@ -104,6 +104,36 @@ struct LoginView: View {
                 .disabled(isLoading || username.isEmpty || password.isEmpty)
                 .padding(.horizontal)
 
+                // Social Login Buttons
+                VStack(spacing: 12) {
+                    Button(action: { /* Social login not yet implemented */ }) {
+                        HStack {
+                            Image(systemName: "g.circle.fill")
+                                .font(.title3)
+                            Text(i18n.translate("login.signInWithGoogle"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(theme.primaryColor.opacity(0.9))
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+
+                    Button(action: { /* Social login not yet implemented */ }) {
+                        HStack {
+                            Image(systemName: "f.circle.fill")
+                                .font(.title3)
+                            Text(i18n.translate("login.signInWithFacebook"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(red: 0.23, green: 0.35, blue: 0.60))
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal)
+
                 // Register Link
                 HStack {
                     Text(i18n.translate("login.noAccount"))
@@ -124,10 +154,37 @@ struct LoginView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
+                // Language Selector
+                LanguageSelectorCompact()
+                    .padding(.horizontal)
+
                 Spacer()
             }
         }
         .background(theme.surfaceColor)
+        .onAppear(perform: loadSavedCredentials)
+    }
+
+    private func loadSavedCredentials() {
+        let defaults = UserDefaults.standard
+        if let savedUsername = defaults.string(forKey: "savedLoginName"),
+           let savedPassword = defaults.string(forKey: "savedPassword"),
+           !savedUsername.isEmpty, !savedPassword.isEmpty {
+            username = savedUsername
+            password = savedPassword
+            rememberMe = true
+        }
+    }
+
+    private func handleRememberMe() {
+        let defaults = UserDefaults.standard
+        if rememberMe {
+            defaults.set(username, forKey: "savedLoginName")
+            defaults.set(password, forKey: "savedPassword")
+        } else {
+            defaults.removeObject(forKey: "savedLoginName")
+            defaults.removeObject(forKey: "savedPassword")
+        }
     }
 
     private func performLogin() {
@@ -145,6 +202,7 @@ struct LoginView: View {
                 try await authService.login(loginName: username, password: password)
                 await MainActor.run {
                     isLoading = false
+                    handleRememberMe()
                     onLoginSuccess()
                 }
             } catch {
@@ -154,6 +212,39 @@ struct LoginView: View {
                     showError = true
                 }
             }
+        }
+    }
+}
+
+// MARK: - Compact Language Selector (inline for login/register)
+
+struct LanguageSelectorCompact: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(I18nService.self) private var i18n
+
+    var body: some View {
+        Menu {
+            ForEach(i18n.supportedLanguages, id: \.code) { language in
+                Button {
+                    i18n.changeLanguage(language.code)
+                } label: {
+                    HStack {
+                        Text(language.name)
+                        if i18n.currentLocale == language.code {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "globe")
+                Text(i18n.supportedLanguages.first { $0.code == i18n.currentLocale }?.name ?? "English")
+                Image(systemName: "chevron.down")
+            }
+            .font(.subheadline)
+            .foregroundColor(theme.secondaryTextColor)
+            .padding(.vertical, 8)
         }
     }
 }

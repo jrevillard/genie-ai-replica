@@ -15,6 +15,7 @@ struct PasswordResetView: View {
     @State private var showSuccess = false
 
     var onBackToLogin: () -> Void
+    var prefilledEmail: String? = nil
 
     var body: some View {
         ScrollView {
@@ -124,6 +125,11 @@ struct PasswordResetView: View {
             }
         }
         .background(theme.surfaceColor)
+        .onAppear {
+            if let prefilled = prefilledEmail, !prefilled.isEmpty {
+                email = prefilled
+            }
+        }
     }
 
     private func performReset() {

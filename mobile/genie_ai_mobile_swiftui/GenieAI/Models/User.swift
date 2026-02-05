@@ -5,53 +5,57 @@ import Foundation
 
 struct User: Codable, Identifiable, Equatable {
     let id: String
-    var username: String
+    var loginName: String
     var email: String
+    var emailVerified: Bool?
     var displayName: String?
     var profileImageUrl: String?
     var role: String?
-    var isVerified: Bool?
-    var createdAt: Date?
-    var updatedAt: Date?
+    var createdAt: String?
+    var updatedAt: String?
 
-    // Profile data
-    var profile: UserProfile?
+    // Profile data (matches API nested objects)
+    var personalIdentification: PersonalIdentification?
+    var addressResidency: AddressResidency?
 
     enum CodingKeys: String, CodingKey {
         case id = "_id"
-        case username
+        case loginName
         case email
+        case emailVerified
         case displayName
         case profileImageUrl
         case role
-        case isVerified
         case createdAt
         case updatedAt
-        case profile
+        case personalIdentification
+        case addressResidency
     }
 
     init(
         id: String,
-        username: String,
+        loginName: String,
         email: String,
+        emailVerified: Bool? = nil,
         displayName: String? = nil,
         profileImageUrl: String? = nil,
         role: String? = nil,
-        isVerified: Bool? = nil,
-        createdAt: Date? = nil,
-        updatedAt: Date? = nil,
-        profile: UserProfile? = nil
+        createdAt: String? = nil,
+        updatedAt: String? = nil,
+        personalIdentification: PersonalIdentification? = nil,
+        addressResidency: AddressResidency? = nil
     ) {
         self.id = id
-        self.username = username
+        self.loginName = loginName
         self.email = email
+        self.emailVerified = emailVerified
         self.displayName = displayName
         self.profileImageUrl = profileImageUrl
         self.role = role
-        self.isVerified = isVerified
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.profile = profile
+        self.personalIdentification = personalIdentification
+        self.addressResidency = addressResidency
     }
 
     static func == (lhs: User, rhs: User) -> Bool {
@@ -59,36 +63,21 @@ struct User: Codable, Identifiable, Equatable {
     }
 }
 
-struct UserProfile: Codable {
+struct PersonalIdentification: Codable {
     var fullName: String?
-    var dateOfBirth: Date?
+    var dob: String?
     var gender: String?
     var nationality: String?
     var maritalStatus: String?
-    var currentAddress: String?
-    var postalCode: String?
-    var country: String?
-    var residencyStatus: String?
-    var nationalIdNumber: String?
-    var passportNumber: String?
-    var driversLicense: String?
-    var bloodType: String?
+    var profileIcon: String?
+}
 
-    enum CodingKeys: String, CodingKey {
-        case fullName
-        case dateOfBirth
-        case gender
-        case nationality
-        case maritalStatus
-        case currentAddress
-        case postalCode
-        case country
-        case residencyStatus
-        case nationalIdNumber
-        case passportNumber
-        case driversLicense
-        case bloodType
-    }
+struct AddressResidency: Codable {
+    var currentAddress: String?
+    var previousAddresses: String?
+    var homeOrRental: String?
+    var utilityBills: String?
+    var landRecords: String?
 }
 
 // Authentication response from the API

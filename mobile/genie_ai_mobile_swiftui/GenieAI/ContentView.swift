@@ -28,6 +28,12 @@ struct ContentView: View {
     @State private var showProfile = false
     @State private var currentConversation: Conversation?
     @State private var chatViewKey = UUID()
+    @State private var relatedDocs: [DocumentItem] = []
+
+    // Category/service context to pass to ChatView
+    @State private var pendingCategoryId: String?
+    @State private var pendingCategoryName: String?
+    @State private var pendingContextLabels: String?
 
     // For wide screens
     private let wideScreenThreshold: CGFloat = 1200
@@ -120,14 +126,13 @@ struct ContentView: View {
                             onLogoutTapped: logout
                         )
 
-                        ChatView(onNewChat: startNewChat)
-                            .id(chatViewKey)
+                        chatView
                     }
 
                     Divider()
 
                     // Right Sidebar
-                    RightSidebarView(relatedDocs: [], faqItems: [])
+                    RightSidebarView(relatedDocs: relatedDocs, faqItems: [])
                         .frame(width: 280)
                 }
             } else {
@@ -141,8 +146,7 @@ struct ContentView: View {
                         onLogoutTapped: logout
                     )
 
-                    ChatView(onNewChat: startNewChat)
-                        .id(chatViewKey)
+                    chatView
                 }
 
                 // Left Sidebar Drawer
@@ -172,6 +176,22 @@ struct ContentView: View {
         .sheet(isPresented: $showProfile) {
             UserProfileView()
         }
+    }
+
+    // MARK: - Chat View Builder
+
+    @ViewBuilder
+    private var chatView: some View {
+        ChatView(
+            onNewChat: { /* handled by startNewChat */ },
+            onRelatedDocumentsUpdate: { docs in
+                // Merge unique documents
+                let existingUrls = Set(relatedDocs.map { $0.url })
+                let newDocs = docs.filter { !existingUrls.contains($0.url) }
+                relatedDocs.append(contentsOf: newDocs)
+            }
+        )
+        .id(chatViewKey)
     }
 
     // MARK: - Sidebar Overlay
@@ -207,21 +227,32 @@ struct ContentView: View {
     private func startNewChat() {
         chatViewKey = UUID()
         currentConversation = nil
+        relatedDocs = []
+        pendingCategoryId = nil
+        pendingCategoryName = nil
+        pendingContextLabels = nil
     }
 
     private func loadConversation(_ conversation: Conversation) {
         currentConversation = conversation
+        relatedDocs = []
         chatViewKey = UUID()
     }
 
     private func selectCategory(_ category: ServiceCategory) {
-        // TODO: Add category context to chat
-        print("Selected category: \(category.name)")
+        pendingCategoryId = category.id
+        pendingCategoryName = category.name
+        pendingContextLabels = nil
+        // Create a new chat with this category context
+        chatViewKey = UUID()
     }
 
     private func selectService(_ service: ServiceItem) {
-        // TODO: Add service context to chat
-        print("Selected service: \(service.name)")
+        pendingCategoryId = service.categoryId
+        pendingCategoryName = service.name
+        pendingContextLabels = service.name
+        // Create a new chat with this service context
+        chatViewKey = UUID()
     }
 
     private func logout() {

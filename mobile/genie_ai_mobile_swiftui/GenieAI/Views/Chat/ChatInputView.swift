@@ -1,5 +1,5 @@
 // ChatInputView.swift
-// Chat input field with send button
+// Chat input field with send button and action toolbar
 
 import SwiftUI
 
@@ -11,6 +11,9 @@ struct ChatInputView: View {
     var isLoading: Bool
     var onSend: () -> Void
     var onAttach: (() -> Void)?
+    var onNewChat: (() -> Void)?
+    var onSave: (() -> Void)?
+    var onExportPDF: (() -> Void)?
 
     @FocusState private var isFocused: Bool
 
@@ -18,6 +21,41 @@ struct ChatInputView: View {
         VStack(spacing: 0) {
             Divider()
 
+            // Action Buttons Toolbar
+            HStack(spacing: 16) {
+                if let onNewChat = onNewChat {
+                    Button(action: onNewChat) {
+                        SwiftUI.Label(i18n.translate("chatbot.newChat"), systemImage: "plus.circle")
+                            .font(.caption)
+                            .foregroundColor(isLoading ? .gray : theme.primaryColor)
+                    }
+                    .disabled(isLoading)
+                }
+
+                if let onSave = onSave {
+                    Button(action: onSave) {
+                        SwiftUI.Label(i18n.translate("chatbot.save"), systemImage: "square.and.arrow.down")
+                            .font(.caption)
+                            .foregroundColor(isLoading ? .gray : theme.primaryColor)
+                    }
+                    .disabled(isLoading)
+                }
+
+                if let onExportPDF = onExportPDF {
+                    Button(action: onExportPDF) {
+                        SwiftUI.Label(i18n.translate("chatbot.exportPDF"), systemImage: "doc.richtext")
+                            .font(.caption)
+                            .foregroundColor(isLoading ? .gray : theme.primaryColor)
+                    }
+                    .disabled(isLoading)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 6)
+
+            // Input Row
             HStack(spacing: 12) {
                 // Attachment Button
                 if let onAttach = onAttach {
@@ -66,7 +104,10 @@ struct ChatInputView: View {
             text: .constant(""),
             isLoading: false,
             onSend: {},
-            onAttach: {}
+            onAttach: {},
+            onNewChat: {},
+            onSave: {},
+            onExportPDF: {}
         )
     }
     .environment(ThemeManager())

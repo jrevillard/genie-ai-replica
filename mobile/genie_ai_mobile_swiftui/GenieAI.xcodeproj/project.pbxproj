@@ -41,6 +41,7 @@
 		D09719C02F34B35E00E0EE08 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */; };
 		D09719C12F34B35E00E0EE08 /* String+SHA256.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */; };
 		D09719C22F34B35E00E0EE08 /* View+Conditional.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */; };
+		D09719D02F34B40000E0EE08 /* PasswordValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -79,6 +80,7 @@
 		D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+SHA256.swift"; sourceTree = "<group>"; };
 		D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Conditional.swift"; sourceTree = "<group>"; };
+		D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordValidator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -158,6 +160,7 @@
 				D097196A2F34B30300E0EE08 /* ServiceTreeService.swift */,
 				D097196B2F34B30300E0EE08 /* ThemeManager.swift */,
 				D097196C2F34B30300E0EE08 /* UserService.swift */,
+				D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -322,6 +325,7 @@
 				D09719602F34B2E600E0EE08 /* QuickHelpButton.swift in Sources */,
 				D09719612F34B2E600E0EE08 /* User.swift in Sources */,
 				D09719622F34B2E600E0EE08 /* ServiceCategory.swift in Sources */,
+				D09719D02F34B40000E0EE08 /* PasswordValidator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

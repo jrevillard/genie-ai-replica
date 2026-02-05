@@ -1,5 +1,5 @@
 // FeedbackSheet.swift
-// Feedback submission sheet for chat responses
+// Feedback submission sheet for chat responses with star rating, thumbs, and skin tones
 
 import SwiftUI
 
@@ -11,9 +11,19 @@ struct FeedbackSheet: View {
     var onSubmit: (Int, String?, Bool) -> Void
     var onDismiss: () -> Void
 
-    @State private var rating: Int = 3
+    @State private var rating: Int? = nil
+    @State private var thumbFeedback: String? = nil
     @State private var comment = ""
     @State private var isSubmitting = false
+    @State private var selectedSkinTone: Color = Color(hex: "#FFDCAC")
+
+    private let skinTones: [(hex: String, color: Color)] = [
+        ("#FFDCAC", Color(hex: "#FFDCAC")),
+        ("#F1C27D", Color(hex: "#F1C27D")),
+        ("#E0AC69", Color(hex: "#E0AC69")),
+        ("#C68642", Color(hex: "#C68642")),
+        ("#8D5524", Color(hex: "#8D5524"))
+    ]
 
     private let ratingLabels = [
         1: "Useless",
@@ -25,95 +35,132 @@ struct FeedbackSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Title
-                Text(i18n.translate("responseRating.title"))
-                    .font(.title2)
-                    .fontWeight(.bold)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Title
+                    Text(i18n.translate("responseRating.title"))
+                        .font(.title2)
+                        .fontWeight(.bold)
 
-                // Description
-                Text(i18n.translate("responseRating.note"))
-                    .font(.subheadline)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .multilineTextAlignment(.center)
+                    // Description
+                    Text(i18n.translate("responseRating.note"))
+                        .font(.subheadline)
+                        .foregroundColor(theme.secondaryTextColor)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+
+                    // Response Preview
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(i18n.translate("responseRating.chatbotResponse"))
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor)
+
+                        Text(message.content)
+                            .font(.subheadline)
+                            .lineLimit(3)
+                            .padding()
+                            .background(theme.secondarySurfaceColor)
+                            .cornerRadius(8)
+                    }
                     .padding(.horizontal)
 
-                // Response Preview
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("responseRating.chatbotResponse"))
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
+                    // Thumbs Up/Down
+                    VStack(spacing: 8) {
+                        Text(i18n.translate("responseRating.quickFeedback"))
+                            .font(.subheadline)
+                            .foregroundColor(theme.secondaryTextColor)
 
-                    Text(message.content)
-                        .font(.subheadline)
-                        .lineLimit(3)
-                        .padding()
-                        .background(theme.secondarySurfaceColor)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal)
+                        HStack(spacing: 24) {
+                            thumbButton(type: "up", icon: "hand.thumbsup.fill")
+                            thumbButton(type: "down", icon: "hand.thumbsdown.fill")
+                        }
+                    }
 
-                // Rating Stars
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        ForEach(1...5, id: \.self) { value in
-                            Button(action: { rating = value }) {
-                                Image(systemName: value <= rating ? "star.fill" : "star")
-                                    .font(.title)
-                                    .foregroundColor(value <= rating ? .yellow : .gray)
+                    // Star Rating
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(1...5, id: \.self) { value in
+                                Button(action: { rating = value }) {
+                                    Image(systemName: value <= (rating ?? 0) ? "star.fill" : "star")
+                                        .font(.title)
+                                        .foregroundColor(value <= (rating ?? 0) ? .yellow : .gray)
+                                }
+                            }
+                        }
+
+                        if let currentRating = rating {
+                            Text(ratingLabels[currentRating] ?? "")
+                                .font(.subheadline)
+                                .foregroundColor(theme.secondaryTextColor)
+                        }
+                    }
+
+                    // Skin Tone Selector
+                    VStack(spacing: 8) {
+                        Text(i18n.translate("responseRating.skinTone"))
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor)
+
+                        HStack(spacing: 12) {
+                            ForEach(skinTones, id: \.hex) { tone in
+                                Circle()
+                                    .fill(tone.color)
+                                    .frame(width: 32, height: 32)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(selectedSkinTone == tone.color ? theme.primaryColor : Color.clear, lineWidth: 2)
+                                    )
+                                    .shadow(color: selectedSkinTone == tone.color ? theme.primaryColor.opacity(0.4) : .clear, radius: 4)
+                                    .onTapGesture {
+                                        selectedSkinTone = tone.color
+                                    }
                             }
                         }
                     }
 
-                    Text(ratingLabels[rating] ?? "")
-                        .font(.subheadline)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
+                    // Comment Field
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField(i18n.translate("responseRating.additionalComments"), text: $comment, axis: .vertical)
+                            .lineLimit(3...5)
+                            .textFieldStyle(.plain)
+                            .padding()
+                            .background(theme.secondarySurfaceColor)
+                            .cornerRadius(8)
+                    }
+                    .padding(.horizontal)
 
-                // Comment Field
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField(i18n.translate("responseRating.additionalComments"), text: $comment, axis: .vertical)
-                        .lineLimit(3...5)
-                        .textFieldStyle(.plain)
-                        .padding()
-                        .background(theme.secondarySurfaceColor)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal)
+                    // Buttons
+                    HStack(spacing: 16) {
+                        Button(action: onDismiss) {
+                            Text(i18n.translate("responseRating.cancel"))
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.gray.opacity(0.2))
+                                .foregroundColor(theme.primaryTextColor)
+                                .cornerRadius(12)
+                        }
 
-                Spacer()
-
-                // Buttons
-                HStack(spacing: 16) {
-                    Button(action: onDismiss) {
-                        Text(i18n.translate("responseRating.cancel"))
+                        Button(action: submit) {
+                            HStack {
+                                if isSubmitting {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                }
+                                Text(i18n.translate("responseRating.submit"))
+                            }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.gray.opacity(0.2))
-                            .foregroundColor(theme.primaryTextColor)
+                            .background(canSubmit ? theme.primaryColor : Color.gray)
+                            .foregroundColor(.white)
                             .cornerRadius(12)
-                    }
-
-                    Button(action: submit) {
-                        HStack {
-                            if isSubmitting {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            }
-                            Text(i18n.translate("responseRating.submit"))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(theme.primaryColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .disabled(!canSubmit || isSubmitting)
                     }
-                    .disabled(isSubmitting)
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
-                .padding(.horizontal)
-                .padding(.bottom)
+                .padding(.top)
             }
-            .padding(.top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -127,10 +174,41 @@ struct FeedbackSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    @ViewBuilder
+    private func thumbButton(type: String, icon: String) -> some View {
+        Button {
+            thumbFeedback = thumbFeedback == type ? nil : type
+            // Auto-set rating based on thumb feedback
+            if thumbFeedback == "up" {
+                rating = 4
+            } else if thumbFeedback == "down" {
+                rating = 2
+            }
+        } label: {
+            Image(systemName: icon)
+                .font(.title)
+                .foregroundColor(thumbFeedback == type ? theme.primaryColor : .gray)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(thumbFeedback == type ? theme.primaryColor : Color.gray.opacity(0.3), lineWidth: 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(thumbFeedback == type ? theme.primaryColor.opacity(0.1) : Color.clear)
+                        )
+                )
+        }
+    }
+
+    private var canSubmit: Bool {
+        rating != nil || thumbFeedback != nil
+    }
+
     private func submit() {
         isSubmitting = true
-        let isPositive = rating >= 4
-        onSubmit(rating, comment.isEmpty ? nil : comment, isPositive)
+        let finalRating = rating ?? (thumbFeedback == "up" ? 4 : thumbFeedback == "down" ? 2 : 3)
+        let isPositive = thumbFeedback == "up" || finalRating >= 4
+        onSubmit(finalRating, comment.isEmpty ? nil : comment, isPositive)
     }
 }
 

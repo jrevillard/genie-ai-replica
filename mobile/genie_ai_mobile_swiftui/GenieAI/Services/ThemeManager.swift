@@ -25,12 +25,26 @@ class ThemeManager {
         }
     }
 
+    var fontSize: Double = 50.0 {
+        didSet {
+            UserDefaults.standard.set(fontSize, forKey: "app_font_size")
+        }
+    }
+
+    var fontScale: Double {
+        fontSize / 50.0
+    }
+
     private let configService = ConfigService.shared
 
     init() {
         if let saved = UserDefaults.standard.string(forKey: "app_theme"),
            let theme = AppTheme(rawValue: saved) {
             currentTheme = theme
+        }
+        let savedFontSize = UserDefaults.standard.double(forKey: "app_font_size")
+        if savedFontSize > 0 {
+            fontSize = savedFontSize
         }
     }
 
@@ -122,5 +136,9 @@ class ThemeManager {
         case .system:
             currentTheme = .light
         }
+    }
+
+    func setFontSize(_ size: Double) {
+        fontSize = max(30, min(100, size))
     }
 }

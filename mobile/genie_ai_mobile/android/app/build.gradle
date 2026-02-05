@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.genie_ai_mobile"
-    ndkVersion = "25.1.8937393"
+    ndkVersion = "27.0.12077973"
     compileSdk = 36
 
     compileOptions {

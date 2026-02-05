@@ -859,7 +859,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       ),
       body: Stack(
         children: [
-          Column(
+          SafeArea(
+            child: Column(
             children: [
               Container(
                 padding: const EdgeInsets.all(20),
@@ -1086,6 +1087,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 ),
               ),
             ],
+          ),
           ),
           if (_showIconSelector)
             Material(

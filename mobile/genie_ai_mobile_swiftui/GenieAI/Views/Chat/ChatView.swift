@@ -36,6 +36,10 @@ struct ChatView: View {
         messages.count > lastSavedMessageCount && messages.contains(where: { $0.role == .user })
     }
 
+    private var showQuickHelpOverlay: Bool {
+        messages.isEmpty || (messages.count == 1 && messages.first?.role == .assistant)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Category Context Bar
@@ -43,66 +47,76 @@ struct ChatView: View {
                 categoryContextBar(categoryName)
             }
 
-            // Messages List
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        // Welcome message when empty (only shows QuickHelp if no messages beyond welcome)
-                        if messages.count <= 1, let first = messages.first, first.role == .assistant {
-                            QuickHelpGrid(onButtonTapped: handleQuickHelp)
-                                .padding(.horizontal)
-                        } else if messages.isEmpty {
+            // Messages area with quick help overlay
+            ZStack {
+                VStack(spacing: 0) {
+                    // Messages List
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                // Messages
+                                ForEach(messages) { message in
+                                    MessageBubble(
+                                        message: message,
+                                        onFeedbackTapped: {
+                                            selectedMessageForFeedback = message
+                                            showFeedbackSheet = true
+                                        }
+                                    )
+                                    .id(message.id)
+                                }
+
+                                // Loading indicator
+                                if isLoading {
+                                    HStack {
+                                        ProgressView()
+                                        Text(i18n.translate("chatbot.thinking"))
+                                            .font(.subheadline)
+                                            .foregroundColor(theme.secondaryTextColor)
+                                    }
+                                    .padding()
+                                }
+                            }
+                            .padding(.vertical)
+                        }
+                        .onChange(of: messages.count) { _, _ in
+                            if let lastMessage = messages.last {
+                                withAnimation {
+                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                }
+                            }
+                        }
+                    }
+
+                    // Input Area
+                    ChatInputView(
+                        text: $inputText,
+                        isLoading: isLoading,
+                        onSend: sendMessage,
+                        onAttach: handleAttachment,
+                        onNewChat: { handleNewChat() },
+                        onSave: { showSaveDialog = true },
+                        onExportPDF: { showExportPDFSheet = true }
+                    )
+                }
+
+                // Quick Help Overlay (matches Flutter's Stack-based overlay)
+                if showQuickHelpOverlay {
+                    ScrollView {
+                        VStack(spacing: 16) {
                             WelcomeView()
                                 .padding()
 
                             QuickHelpGrid(onButtonTapped: handleQuickHelp)
                                 .padding(.horizontal)
                         }
-
-                        // Messages
-                        ForEach(messages) { message in
-                            MessageBubble(
-                                message: message,
-                                onFeedbackTapped: {
-                                    selectedMessageForFeedback = message
-                                    showFeedbackSheet = true
-                                }
-                            )
-                            .id(message.id)
-                        }
-
-                        // Loading indicator
-                        if isLoading {
-                            HStack {
-                                ProgressView()
-                                Text(i18n.translate("chatbot.thinking"))
-                                    .font(.subheadline)
-                                    .foregroundColor(theme.secondaryTextColor)
-                            }
-                            .padding()
-                        }
+                        .padding(.bottom)
                     }
-                    .padding(.vertical)
-                }
-                .onChange(of: messages.count) { _, _ in
-                    if let lastMessage = messages.last {
-                        withAnimation {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                        }
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(theme.backgroundColor.opacity(0.98))
+                    .transition(.opacity)
                 }
             }
-
-            // Input Area
-            ChatInputView(
-                text: $inputText,
-                isLoading: isLoading,
-                onSend: sendMessage,
-                onAttach: handleAttachment,
-                onNewChat: { handleNewChat() },
-                onSave: { showSaveDialog = true },
-                onExportPDF: { showExportPDFSheet = true }
-            )
         }
         .sheet(isPresented: $showFeedbackSheet) {
             if let message = selectedMessageForFeedback {

@@ -7,7 +7,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.1
+  sdk: ^3.10.8
 
 dependencies:
   flutter:
@@ -19,10 +19,10 @@ dependencies:
   http: ^1.6.0
   crypto: ^3.0.3
   shared_preferences: ^2.2.2
-  connectivity_plus: ^5.0.2 # Added for Online/Offline features
+  connectivity_plus: ^7.0.0 # Added for Online/Offline features
 
   # Markdown rendering for chatbot messages
-  flutter_markdown: ^0.7.3
+  flutter_markdown: ^0.7.7
 
   # PDF generation and printing/export
   pdf: ^3.11.1
@@ -41,21 +41,20 @@ dependencies:
   image_picker: ^1.1.2     
 
   # Document uploads (birth cert, ID, etc.)
-  file_picker: ^8.1.2      
+  file_picker: ^10.3.10      
 
   # Country picker 
   country_picker: ^2.0.26
 
   # App Package Info (Version, Build Number)
-  package_info_plus: ^8.0.0
+  package_info_plus: ^9.0.0
 
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

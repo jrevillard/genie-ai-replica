@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "com.example.genie_ai_mobile"
     ndkVersion = "25.1.8937393"
-    compileSdk = 35
+    compileSdk = 36
 
     compileOptions {
         // Updated to Java 17 for Gradle 8.5 compatibility

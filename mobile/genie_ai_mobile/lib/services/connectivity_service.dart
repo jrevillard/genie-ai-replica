@@ -41,8 +41,10 @@ class ConnectivityService {
     await recheckConnectivity();
 
     // 2. Listen for Stream changes (Immediate reaction)
-    _connectivity.onConnectivityChanged.listen((ConnectivityResult result) {
-      debugPrint('[Connectivity] Stream Event: $result');
+    _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      debugPrint('[Connectivity] Stream Event: $results');
+      // Use first result or default to none
+      final result = results.isNotEmpty ? results.first : ConnectivityResult.none;
       _updateHardwareStatus(result);
     });
 
@@ -76,7 +78,9 @@ class ConnectivityService {
     _isChecking = true;
 
     try {
-      ConnectivityResult result = await _connectivity.checkConnectivity();
+      List<ConnectivityResult> results = await _connectivity.checkConnectivity();
+      // Use first result or default to none
+      ConnectivityResult result = results.isNotEmpty ? results.first : ConnectivityResult.none;
       // debugPrint('[Connectivity] Raw hardware check result: $result');
 
       // FALLBACK CHECK:

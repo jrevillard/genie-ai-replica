@@ -43,8 +43,9 @@ class ConfirmDialog extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: Center(
-        child: Container(
+      child: SafeArea(
+        child: Center(
+          child: Container(
           width: 400,
           constraints: const BoxConstraints(maxWidth: 400),
           margin: const EdgeInsets.all(24),
@@ -101,8 +102,10 @@ class ConfirmDialog extends StatelessWidget {
                     top: BorderSide(color: theme.dividerColor),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     if (secondaryText != null)
                       TextButton(
@@ -123,7 +126,6 @@ class ConfirmDialog extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: onConfirm,
                       style: ElevatedButton.styleFrom(
@@ -138,6 +140,7 @@ class ConfirmDialog extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

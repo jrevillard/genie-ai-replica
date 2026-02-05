@@ -75,7 +75,8 @@ class _ChatResponseFeedbackDialogState
       backgroundColor: colors['surface'],
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       insetPadding: const EdgeInsets.all(16),
-      child: Container(
+      child: SafeArea(
+        child: Container(
         width: 700, // Max width from CSS
         padding: const EdgeInsets.all(24),
         child: SingleChildScrollView(
@@ -265,6 +266,7 @@ class _ChatResponseFeedbackDialogState
             ],
           ),
         ),
+      ),
       ),
     );
   }

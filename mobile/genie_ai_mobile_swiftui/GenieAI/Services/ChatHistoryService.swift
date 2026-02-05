@@ -28,7 +28,7 @@ class ChatHistoryService {
         let data = try await api.get("chat/conversations", params: params)
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         let response = try decoder.decode(ConversationsResponse.self, from: data)
         conversations = response.conversations ?? []
@@ -49,7 +49,7 @@ class ChatHistoryService {
         let data = try await api.post("chat/conversations", data: payload)
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         let conversation = try decoder.decode(Conversation.self, from: data)
         conversations.insert(conversation, at: 0)
@@ -65,7 +65,7 @@ class ChatHistoryService {
         let data = try await api.patch("chat/conversations/\(id)", data: updates)
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         let conversation = try decoder.decode(Conversation.self, from: data)
 
@@ -108,7 +108,7 @@ class ChatHistoryService {
         let data = try await api.get("chat/folders", params: ["userId": userId])
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         folders = try decoder.decode([Folder].self, from: data)
     }
@@ -127,7 +127,7 @@ class ChatHistoryService {
         let data = try await api.post("chat/folders", data: payload)
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         let folder = try decoder.decode(Folder.self, from: data)
         folders.append(folder)
@@ -143,7 +143,7 @@ class ChatHistoryService {
         let data = try await api.patch("chat/folders/\(id)", data: ["name": name])
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         let folder = try decoder.decode(Folder.self, from: data)
 
@@ -174,6 +174,10 @@ class ChatHistoryService {
     }
 
     // MARK: - Helpers
+
+    func getAllNonArchivedConversations() -> [Conversation] {
+        conversations.filter { !$0.isArchived }
+    }
 
     func getStarredConversations() -> [Conversation] {
         conversations.filter { $0.isStarred }

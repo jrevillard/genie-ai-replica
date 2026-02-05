@@ -14,7 +14,7 @@ class UserService {
 
     func getProfile(userId: String) async throws -> User {
         let data = try await api.get("users/\(userId)")
-        return try JSONDecoder().decode(User.self, from: data)
+        return try JSONDecoder.withFlexibleDates().decode(User.self, from: data)
     }
 
     func updateProfile(
@@ -39,7 +39,7 @@ class UserService {
             "personalIdentification": personalDict,
             "addressResidency": addressDict
         ])
-        return try JSONDecoder().decode(User.self, from: data)
+        return try JSONDecoder.withFlexibleDates().decode(User.self, from: data)
     }
 
     // MARK: - Account Settings
@@ -100,7 +100,7 @@ class UserService {
             let available: Bool
         }
 
-        let response = try JSONDecoder().decode(Response.self, from: data)
+        let response = try JSONDecoder.withFlexibleDates().decode(Response.self, from: data)
         return response.available
     }
 
@@ -111,7 +111,7 @@ class UserService {
             let available: Bool
         }
 
-        let response = try JSONDecoder().decode(Response.self, from: data)
+        let response = try JSONDecoder.withFlexibleDates().decode(Response.self, from: data)
         return response.available
     }
 }

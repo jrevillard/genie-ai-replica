@@ -17,10 +17,16 @@ class ServiceTreeService {
 
         defer { isLoading = false }
 
-        let data = try await api.get("services/categories", params: ["locale": locale])
+        do {
+            let data = try await api.get("services/categories", params: ["locale": locale])
 
-        let decoder = JSONDecoder()
-        categories = try decoder.decode([ServiceCategory].self, from: data)
+            let decoder = JSONDecoder()
+            categories = try decoder.decode([ServiceCategory].self, from: data)
+        } catch {
+            self.error = error.localizedDescription
+            print("[ServiceTreeService] Error loading categories: \(error)")
+            throw error
+        }
     }
 
     func getCategoryServices(categoryId: String, locale: String = "en") async throws -> [ServiceItem] {

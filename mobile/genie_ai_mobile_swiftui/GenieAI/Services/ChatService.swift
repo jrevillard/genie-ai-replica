@@ -53,7 +53,7 @@ class ChatService {
         let data = try await api.post("queries", data: payload)
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
 
         return try decoder.decode(QueryResponse.self, from: data)
     }

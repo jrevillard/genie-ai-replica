@@ -38,7 +38,7 @@ class AuthService {
             "encPassword": hashedPassword
         ])
 
-        let response = try JSONDecoder().decode(AuthResponse.self, from: data)
+        let response = try JSONDecoder.withFlexibleDates().decode(AuthResponse.self, from: data)
 
         await api.setToken(response.accessToken)
         saveToken(response.accessToken)
@@ -71,7 +71,7 @@ class AuthService {
         ])
 
         // Registration successful - user needs to verify email
-        let _ = try JSONDecoder().decode([String: AnyCodable].self, from: data)
+        let _ = try JSONDecoder.withFlexibleDates().decode([String: AnyCodable].self, from: data)
     }
 
     func logout() async {
@@ -100,7 +100,7 @@ class AuthService {
             let user: User?
         }
 
-        let response = try JSONDecoder().decode(MeResponse.self, from: data)
+        let response = try JSONDecoder.withFlexibleDates().decode(MeResponse.self, from: data)
         currentUser = response.user
     }
 
@@ -113,7 +113,7 @@ class AuthService {
             "refreshToken": refreshToken
         ])
 
-        let response = try JSONDecoder().decode(AuthResponse.self, from: data)
+        let response = try JSONDecoder.withFlexibleDates().decode(AuthResponse.self, from: data)
 
         await api.setToken(response.accessToken)
         saveToken(response.accessToken)

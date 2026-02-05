@@ -37,34 +37,46 @@ struct ChatHistoryView: View {
     @State private var selectedTab: ChatHistoryTab = .all
     @State private var showCreateFolder = false
     @State private var selectedFolder: Folder?
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
+    @State private var conversationToRename: Conversation?
+    @State private var showMoveToFolder = false
+    @State private var conversationToMove: Conversation?
 
     var searchText: String
     var onConversationSelected: ((Conversation) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
-            // Sub-tabs
+            // Sub-tabs (underline indicator style matching Flutter)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 0) {
                     ForEach(ChatHistoryTab.allCases, id: \.self) { tab in
+                        let isActive = selectedTab == tab
                         Button(action: { selectedTab = tab }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: tab.icon)
-                                    .font(.caption)
-                                Text(tab.title(i18n))
-                                    .font(.caption)
+                            VStack(spacing: 0) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 14))
+                                    Text(tab.title(i18n))
+                                        .font(.system(size: 12, weight: isActive ? .bold : .semibold))
+                                }
+                                .foregroundColor(isActive ? theme.primaryColor : theme.secondaryTextColor)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+
+                                // Underline indicator
+                                Rectangle()
+                                    .fill(isActive ? theme.primaryColor : Color.clear)
+                                    .frame(height: 3)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(selectedTab == tab ? theme.primaryColor : theme.secondarySurfaceColor)
-                            .foregroundColor(selectedTab == tab ? .white : theme.primaryTextColor)
-                            .cornerRadius(16)
                         }
                     }
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 8)
             }
+            .frame(height: 48)
+            .background(theme.surfaceColor)
 
             Divider()
 
@@ -73,7 +85,7 @@ struct ChatHistoryView: View {
                 LazyVStack(spacing: 0) {
                     switch selectedTab {
                     case .all:
-                        conversationsList(historyService.getUnfolderedConversations())
+                        conversationsList(historyService.getAllNonArchivedConversations())
 
                     case .folders:
                         foldersList()
@@ -92,6 +104,23 @@ struct ChatHistoryView: View {
         }
         .sheet(isPresented: $showCreateFolder) {
             CreateFolderSheet(onSave: createFolder, onDismiss: { showCreateFolder = false })
+        }
+        .alert(i18n.translate("sidebar.renameChat"), isPresented: $showRenameAlert) {
+            TextField(i18n.translate("sidebar.renameChat"), text: $renameText)
+            Button(i18n.translate("common.cancel"), role: .cancel) {}
+            Button(i18n.translate("common.save")) {
+                renameConversation()
+            }
+        }
+        .sheet(isPresented: $showMoveToFolder) {
+            MoveToFolderSheet(
+                folders: historyService.folders,
+                onSelect: moveConversationToFolder,
+                onDismiss: {
+                    showMoveToFolder = false
+                    conversationToMove = nil
+                }
+            )
         }
     }
 
@@ -112,6 +141,8 @@ struct ChatHistoryView: View {
                 ConversationRow(
                     conversation: conversation,
                     onTapped: { onConversationSelected?(conversation) },
+                    onRename: { promptRename(conversation) },
+                    onMoveToFolder: { promptMoveToFolder(conversation) },
                     onStar: { toggleStar(conversation) },
                     onArchive: { toggleArchive(conversation) },
                     onDelete: { deleteConversation(conversation) }
@@ -152,6 +183,8 @@ struct ChatHistoryView: View {
                     ConversationRow(
                         conversation: conversation,
                         onTapped: { onConversationSelected?(conversation) },
+                        onRename: { promptRename(conversation) },
+                        onMoveToFolder: { promptMoveToFolder(conversation) },
                         onStar: { toggleStar(conversation) },
                         onArchive: { toggleArchive(conversation) },
                         onDelete: { deleteConversation(conversation) }
@@ -222,6 +255,41 @@ struct ChatHistoryView: View {
             try? await historyService.deleteFolder(id: folder.id, userId: userId)
         }
     }
+
+    private func promptRename(_ conversation: Conversation) {
+        conversationToRename = conversation
+        renameText = conversation.title
+        showRenameAlert = true
+    }
+
+    private func renameConversation() {
+        guard let conversation = conversationToRename, !renameText.isEmpty else { return }
+        Task {
+            _ = try? await historyService.updateConversation(
+                id: conversation.id,
+                updates: ["title": renameText]
+            )
+        }
+    }
+
+    private func promptMoveToFolder(_ conversation: Conversation) {
+        conversationToMove = conversation
+        showMoveToFolder = true
+    }
+
+    private func moveConversationToFolder(_ folderId: String) {
+        guard let conversation = conversationToMove,
+              let userId = authService.currentUser?.id else { return }
+        Task {
+            try? await historyService.addConversationToFolder(
+                folderId: folderId,
+                conversationId: conversation.id,
+                userId: userId
+            )
+            showMoveToFolder = false
+            conversationToMove = nil
+        }
+    }
 }
 
 // MARK: - Conversation Row
@@ -232,6 +300,8 @@ struct ConversationRow: View {
 
     let conversation: Conversation
     var onTapped: () -> Void
+    var onRename: (() -> Void)?
+    var onMoveToFolder: (() -> Void)?
     var onStar: () -> Void
     var onArchive: () -> Void
     var onDelete: () -> Void
@@ -266,31 +336,44 @@ struct ConversationRow: View {
                 Spacer()
 
                 Menu {
+                    if let onRename {
+                        Button {
+                            onRename()
+                        } label: {
+                            SwiftUI.Label(i18n.translate("sidebar.renameChat"), systemImage: "pencil")
+                        }
+                    }
+
+                    if let onMoveToFolder {
+                        Button {
+                            onMoveToFolder()
+                        } label: {
+                            SwiftUI.Label(i18n.translate("sidebar.moveChat"), systemImage: "folder")
+                        }
+                    }
+
                     Button {
                         onStar()
                     } label: {
-                        HStack {
-                            Image(systemName: conversation.isStarred ? "star.slash" : "star")
-                            Text(conversation.isStarred ? i18n.translate("sidebar.unstar") : i18n.translate("sidebar.star"))
-                        }
+                        SwiftUI.Label(
+                            conversation.isStarred ? i18n.translate("sidebar.unstar") : i18n.translate("sidebar.star"),
+                            systemImage: conversation.isStarred ? "star.slash" : "star"
+                        )
                     }
 
                     Button {
                         onArchive()
                     } label: {
-                        HStack {
-                            Image(systemName: "archivebox")
-                            Text(i18n.translate("sidebar.archive"))
-                        }
+                        SwiftUI.Label(
+                            conversation.isArchived ? i18n.translate("sidebar.unarchive") : i18n.translate("sidebar.archive"),
+                            systemImage: "archivebox"
+                        )
                     }
 
                     Divider()
 
                     Button(role: .destructive, action: onDelete) {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text(i18n.translate("sidebar.deleteChat"))
-                        }
+                        SwiftUI.Label(i18n.translate("sidebar.deleteChat"), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -391,6 +474,44 @@ struct CreateFolderSheet: View {
                         onSave(folderName)
                     }
                     .disabled(folderName.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+// MARK: - Move to Folder Sheet
+
+struct MoveToFolderSheet: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(I18nService.self) private var i18n
+
+    let folders: [Folder]
+    var onSelect: (String) -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(folders) { folder in
+                    Button {
+                        onSelect(folder.id)
+                    } label: {
+                        HStack {
+                            Image(systemName: "folder")
+                                .foregroundColor(theme.primaryColor)
+                            Text(folder.name)
+                                .foregroundColor(theme.primaryTextColor)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(i18n.translate("sidebar.moveChatTo"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(i18n.translate("common.cancel"), action: onDismiss)
                 }
             }
         }

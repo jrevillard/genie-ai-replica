@@ -18,8 +18,10 @@ struct User: Codable, Identifiable, Equatable {
     var personalIdentification: PersonalIdentification?
     var addressResidency: AddressResidency?
 
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
+    private enum CodingKeys: String, CodingKey {
+        case underscoreId = "_id"
+        case underscoreKey = "_key"
+        case plainId = "id"
         case loginName
         case email
         case emailVerified
@@ -56,6 +58,47 @@ struct User: Codable, Identifiable, Equatable {
         self.updatedAt = updatedAt
         self.personalIdentification = personalIdentification
         self.addressResidency = addressResidency
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Flutter: userData['_key'] ?? userData['id']
+        if let key = try container.decodeIfPresent(String.self, forKey: .underscoreKey) {
+            self.id = key
+        } else if let uid = try container.decodeIfPresent(String.self, forKey: .underscoreId) {
+            self.id = uid
+        } else if let pid = try container.decodeIfPresent(String.self, forKey: .plainId) {
+            self.id = pid
+        } else {
+            self.id = UUID().uuidString
+        }
+
+        self.loginName = try container.decodeIfPresent(String.self, forKey: .loginName) ?? ""
+        self.email = try container.decodeIfPresent(String.self, forKey: .email) ?? ""
+        self.emailVerified = try container.decodeIfPresent(Bool.self, forKey: .emailVerified)
+        self.displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        self.profileImageUrl = try container.decodeIfPresent(String.self, forKey: .profileImageUrl)
+        self.role = try container.decodeIfPresent(String.self, forKey: .role)
+        self.createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        self.updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        self.personalIdentification = try container.decodeIfPresent(PersonalIdentification.self, forKey: .personalIdentification)
+        self.addressResidency = try container.decodeIfPresent(AddressResidency.self, forKey: .addressResidency)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .underscoreId)
+        try container.encode(loginName, forKey: .loginName)
+        try container.encode(email, forKey: .email)
+        try container.encodeIfPresent(emailVerified, forKey: .emailVerified)
+        try container.encodeIfPresent(displayName, forKey: .displayName)
+        try container.encodeIfPresent(profileImageUrl, forKey: .profileImageUrl)
+        try container.encodeIfPresent(role, forKey: .role)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(personalIdentification, forKey: .personalIdentification)
+        try container.encodeIfPresent(addressResidency, forKey: .addressResidency)
     }
 
     static func == (lhs: User, rhs: User) -> Bool {

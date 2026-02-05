@@ -15,8 +15,10 @@ struct Conversation: Codable, Identifiable, Equatable {
     var createdAt: Date
     var updatedAt: Date
 
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
+    private enum CodingKeys: String, CodingKey {
+        case underscoreId = "_id"
+        case underscoreKey = "_key"
+        case plainId = "id"
         case title
         case userId
         case sessionId
@@ -24,6 +26,9 @@ struct Conversation: Codable, Identifiable, Equatable {
         case isStarred
         case isArchived
         case folderId
+        case category
+        case created
+        case updated
         case createdAt
         case updatedAt
     }
@@ -50,6 +55,60 @@ struct Conversation: Codable, Identifiable, Equatable {
         self.folderId = folderId
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Flutter strips "conversations/" prefix from _id
+        if let uid = try container.decodeIfPresent(String.self, forKey: .underscoreId) {
+            self.id = uid.replacingOccurrences(of: "conversations/", with: "")
+        } else if let key = try container.decodeIfPresent(String.self, forKey: .underscoreKey) {
+            self.id = key
+        } else if let pid = try container.decodeIfPresent(String.self, forKey: .plainId) {
+            self.id = pid
+        } else {
+            self.id = UUID().uuidString
+        }
+
+        self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? "Untitled"
+        self.userId = try container.decodeIfPresent(String.self, forKey: .userId) ?? ""
+        self.sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId) ?? ""
+        self.messages = try container.decodeIfPresent([Message].self, forKey: .messages)
+        self.isStarred = try container.decodeIfPresent(Bool.self, forKey: .isStarred) ?? false
+        self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        self.folderId = try container.decodeIfPresent(String.self, forKey: .folderId)
+
+        // API returns "created"/"updated", not "createdAt"/"updatedAt"
+        if let date = try container.decodeIfPresent(Date.self, forKey: .created) {
+            self.createdAt = date
+        } else if let date = try container.decodeIfPresent(Date.self, forKey: .createdAt) {
+            self.createdAt = date
+        } else {
+            self.createdAt = Date()
+        }
+
+        if let date = try container.decodeIfPresent(Date.self, forKey: .updated) {
+            self.updatedAt = date
+        } else if let date = try container.decodeIfPresent(Date.self, forKey: .updatedAt) {
+            self.updatedAt = date
+        } else {
+            self.updatedAt = Date()
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .underscoreId)
+        try container.encode(title, forKey: .title)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(sessionId, forKey: .sessionId)
+        try container.encodeIfPresent(messages, forKey: .messages)
+        try container.encode(isStarred, forKey: .isStarred)
+        try container.encode(isArchived, forKey: .isArchived)
+        try container.encodeIfPresent(folderId, forKey: .folderId)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
     }
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool {

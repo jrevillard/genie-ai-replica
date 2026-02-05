@@ -109,8 +109,7 @@ struct ContentView: View {
                     // Left Sidebar
                     LeftSidebarView(
                         onConversationSelected: loadConversation,
-                        onCategorySelected: selectCategory,
-                        onServiceSelected: selectService
+                        onServiceSelectionChanged: handleServiceSelection
                     )
                     .frame(width: 280)
 
@@ -157,13 +156,9 @@ struct ContentView: View {
                                 loadConversation(conversation)
                                 showLeftSidebar = false
                             },
-                            onCategorySelected: { category in
-                                selectCategory(category)
-                                showLeftSidebar = false
-                            },
-                            onServiceSelected: { service in
-                                selectService(service)
-                                showLeftSidebar = false
+                            onServiceSelectionChanged: { categoryId, name, contextLabels in
+                                handleServiceSelection(categoryId: categoryId, name: name, contextLabels: contextLabels)
+                                // Don't close sidebar — allow multi-select (matching Flutter)
                             }
                         )
                     }
@@ -183,6 +178,10 @@ struct ContentView: View {
     @ViewBuilder
     private var chatView: some View {
         ChatView(
+            initialConversation: currentConversation,
+            initialCategoryId: pendingCategoryId,
+            initialCategoryName: pendingCategoryName,
+            initialContextLabels: pendingContextLabels,
             onNewChat: { /* handled by startNewChat */ },
             onRelatedDocumentsUpdate: { docs in
                 // Merge unique documents
@@ -239,20 +238,19 @@ struct ContentView: View {
         chatViewKey = UUID()
     }
 
-    private func selectCategory(_ category: ServiceCategory) {
-        pendingCategoryId = category.id
-        pendingCategoryName = category.name
-        pendingContextLabels = nil
-        // Create a new chat with this category context
-        chatViewKey = UUID()
-    }
-
-    private func selectService(_ service: ServiceItem) {
-        pendingCategoryId = service.categoryId
-        pendingCategoryName = service.name
-        pendingContextLabels = service.name
-        // Create a new chat with this service context
-        chatViewKey = UUID()
+    private func handleServiceSelection(categoryId: String, name: String, contextLabels: String) {
+        if categoryId.isEmpty {
+            // Selection cleared
+            pendingCategoryId = nil
+            pendingCategoryName = nil
+            pendingContextLabels = nil
+        } else {
+            pendingCategoryId = categoryId
+            pendingCategoryName = name
+            pendingContextLabels = contextLabels
+        }
+        // Don't recreate ChatView — let it reactively pick up context changes
+        // This keeps the sidebar open for multi-select (matching Flutter)
     }
 
     private func logout() {

@@ -125,10 +125,21 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Folder organization (create, rename, delete folders)
 - Move conversations between folders
 - Delete conversations
-- Sort by date
+- Sort by date (descending)
 - Load conversation on selection
 - Create new chat button
 - Empty state handling
+- **Sub-tabs:** All Chats | Folders | Starred | Archived
+  - "All Chats": all non-archived conversations (including those in folders)
+  - "Folders": folder list with create button, expandable to show contained conversations
+  - "Starred": conversations where isStarred=true
+  - "Archived": conversations where isArchived=true
+- **Conversation context menu actions:**
+  - Rename conversation
+  - Move to folder
+  - Star / unstar
+  - Archive / unarchive
+  - Delete (with confirmation)
 
 **APIs:**
 - `GET /chat/conversations`
@@ -194,14 +205,29 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 **Requirements:**
 - Tab navigation: Services | History
-- **Services Tab:**
-  - Sub-tabs: All Services | Recent | Favorites
-  - Hierarchical category/service tree
-  - Multi-select services for chat context
-  - Search with debouncing
-  - Locale-aware service names
+- **Services Tab (Knowledge Areas):**
+  - No sub-tabs — flat expandable category tree with search
+  - Hierarchical category/service tree (categories expand to show child services)
+  - Multi-select services for chat context: ordered selection list with toggle on/off; emits comma-separated service names as `contextLabels` and primary `categoryId` from first selection
+  - Selection visualization: selected services show primary-color background, white text, and checkmark icon
+  - Sidebar drawer (mobile) must NOT auto-close on service selection — stays open to allow multi-select; only closes on conversation selection or explicit dismiss
+  - Chat context bar updates reactively as services are toggled without resetting the conversation
+  - Clearing all selections resets the chat category context
+  - Search with debouncing (300ms), client-side filtering with auto-expand on match
+  - Locale-aware service names (reload categories on language change)
+  - API response field flexibility: handle `_id`/`id`/`key` for identifiers and `label`/`name` for display names
+  - Children may be objects (with id/name) or plain strings
+  - Loading state: spinner while fetching
+  - Error state: error message with retry button
+  - Empty state: "No knowledge areas available" (distinct from chat history empty state)
 - **History Tab:**
-  - Conversation list with folder grouping
+  - Sub-tabs: All Chats | Folders | Starred | Archived
+  - Sub-tab styling: horizontal scroll, icon + text, underline indicator (3px primary color) on active tab
+  - "All Chats": all non-archived conversations sorted by date desc
+  - "Folders": folder list with create button, expandable to show contained conversations
+  - "Starred": conversations where isStarred=true
+  - "Archived": conversations where isArchived=true
+  - Conversation context menu: Rename, Move to Folder, Star/Unstar, Archive/Unarchive, Delete
   - (Same requirements as 2.2 Chat History)
 
 **API:** `GET /services/categories`
@@ -585,6 +611,21 @@ All platforms should maintain similar:
 - **SwiftUI (iOS 17+):** Use @Observable macro for services, @Environment for injection; NavigationStack for routing
 - **Jetpack Compose:** Use ViewModel + StateFlow for services; NavHost for routing
 - **Flutter:** Use ChangeNotifier + StatefulWidget; Navigator with named routes
+
+### Data Model JSON Decoding
+The backend API (ArangoDB) returns varying field names. All platforms must handle flexible decoding:
+- **ID fields:** `_id`, `_key`, or `id` — prefer `_key` for folders/users, `_id` for conversations (strip collection prefix like `conversations/`, `folders/`)
+- **Display name fields:** `label` or `name` for service categories/items
+- **Children:** Service category children may be full objects or plain strings
+- **Boolean defaults:** `isStarred`, `isArchived`, `isDefault` may be absent — default to `false`
+- **Date fields:** API uses `created`/`updated` (NOT `createdAt`/`updatedAt`). May be absent or `null` — default to current date. Date formats vary: ISO 8601 with fractional seconds (`2026-02-05T23:07:00.123Z`), without fractional seconds (`2026-02-05T23:07:00Z`), or Unix timestamps. All platforms must handle all three formats.
+- **Optional fields:** Many fields present in the model may not be returned by the API (e.g., `userId`, `sessionId` absent from conversation list responses; `userId` absent from folder responses). All non-essential fields must be decoded as optional with sensible defaults.
+- **Folder API fields:** `name`, `description`, `isArchived`, `color`, `icon`, `parentFolderId`, `order`, `conversationCount`, `childFolderCount`, `userRole`, `lastAccessedAt` — no `userId` in response
+- **Conversation list API fields:** `title`, `lastMessage`, `messageCount`, `isStarred`, `isArchived`, `category`, `tags`, `userRole`, `lastViewedAt`, `lastMessagePreview` — no `userId`, `sessionId`, `messages`, or `folderId` in list response
+- **Message API fields:** API returns `sender` (not `role`) with values `"user"`/`"assistant"`. Clients must normalize `sender` → `role`. Message IDs use `_id`/`_key`/`id` like other models. Timestamp field uses same flexible date format.
+- **Flexible date decoder:** All services decoding JSON with Date fields must use a flexible date strategy (not strict `.iso8601`). This applies to all services: auth, user, chat history, chat queries.
+
+<!-- SwiftUI: GenieAI/Models/User.swift, GenieAI/Models/Conversation.swift, GenieAI/Models/Folder.swift, GenieAI/Models/Message.swift, GenieAI/Models/ServiceCategory.swift, GenieAI/Extensions/JSONDecoder+FlexibleDate.swift -->
 
 ### File Structure Mapping
 ```

@@ -31,8 +31,7 @@ struct LeftSidebarView: View {
     @State private var searchText = ""
 
     var onConversationSelected: ((Conversation) -> Void)?
-    var onCategorySelected: ((ServiceCategory) -> Void)?
-    var onServiceSelected: ((ServiceItem) -> Void)?
+    var onServiceSelectionChanged: ((_ categoryId: String, _ name: String, _ contextLabels: String) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,8 +83,7 @@ struct LeftSidebarView: View {
             case .services:
                 ServiceTreeView(
                     searchText: searchText,
-                    onCategorySelected: onCategorySelected,
-                    onServiceSelected: onServiceSelected
+                    onSelectionChanged: onServiceSelectionChanged
                 )
 
             case .history:

@@ -29,6 +29,12 @@ struct ChatView: View {
     @State private var showNewChatConfirmation = false
     @State private var showExportPDFSheet = false
 
+    // Initial state passed from sidebar
+    var initialConversation: Conversation?
+    var initialCategoryId: String?
+    var initialCategoryName: String?
+    var initialContextLabels: String?
+
     var onNewChat: (() -> Void)?
     var onRelatedDocumentsUpdate: (([DocumentItem]) -> Void)?
 
@@ -152,7 +158,27 @@ struct ChatView: View {
             Text(i18n.translate("chatbot.unsavedChangesMessage"))
         }
         .onAppear {
-            addWelcomeMessage()
+            if let conversation = initialConversation {
+                loadConversation(conversation)
+            } else {
+                addWelcomeMessage()
+                if let categoryId = initialCategoryId {
+                    setCategoryContext(
+                        categoryId: categoryId,
+                        categoryName: initialCategoryName,
+                        labels: initialContextLabels
+                    )
+                }
+            }
+        }
+        .onChange(of: initialCategoryName) { _, newValue in
+            // Reactively update category context as user toggles services
+            // in the sidebar (without recreating the view)
+            setCategoryContext(
+                categoryId: initialCategoryId,
+                categoryName: newValue,
+                labels: initialContextLabels
+            )
         }
     }
 
@@ -411,7 +437,7 @@ struct ChatView: View {
                 )
 
                 let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
+                decoder.dateDecodingStrategy = JSONDecoder.flexibleDateStrategy
                 let fullConversation = try decoder.decode(Conversation.self, from: data)
 
                 await MainActor.run {

@@ -15,9 +15,12 @@ struct Message: Codable, Identifiable, Equatable {
     var confidence: Double?
     var metadata: MessageMetadata?
 
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
+    private enum CodingKeys: String, CodingKey {
+        case underscoreId = "_id"
+        case underscoreKey = "_key"
+        case plainId = "id"
         case role
+        case sender  // API returns "sender", Flutter normalizes to "role"
         case content
         case actualContent
         case timestamp
@@ -50,6 +53,53 @@ struct Message: Codable, Identifiable, Equatable {
         self.isSaved = isSaved
         self.confidence = confidence
         self.metadata = metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // ID: _id, _key, or id
+        if let uid = try container.decodeIfPresent(String.self, forKey: .underscoreId) {
+            self.id = uid
+        } else if let key = try container.decodeIfPresent(String.self, forKey: .underscoreKey) {
+            self.id = key
+        } else if let pid = try container.decodeIfPresent(String.self, forKey: .plainId) {
+            self.id = pid
+        } else {
+            self.id = UUID().uuidString
+        }
+
+        // Role: API returns "sender" (user/assistant), Flutter normalizes to "role"
+        if let role = try container.decodeIfPresent(MessageRole.self, forKey: .role) {
+            self.role = role
+        } else if let sender = try container.decodeIfPresent(String.self, forKey: .sender) {
+            self.role = sender == "user" ? .user : .assistant
+        } else {
+            self.role = .assistant
+        }
+
+        self.content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        self.actualContent = try container.decodeIfPresent(String.self, forKey: .actualContent)
+        self.timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+        self.queryId = try container.decodeIfPresent(String.self, forKey: .queryId)
+        self.feedbackSubmitted = try container.decodeIfPresent(Bool.self, forKey: .feedbackSubmitted)
+        self.isSaved = try container.decodeIfPresent(Bool.self, forKey: .isSaved)
+        self.confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+        self.metadata = try container.decodeIfPresent(MessageMetadata.self, forKey: .metadata)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .underscoreId)
+        try container.encode(role, forKey: .role)
+        try container.encode(content, forKey: .content)
+        try container.encodeIfPresent(actualContent, forKey: .actualContent)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(queryId, forKey: .queryId)
+        try container.encodeIfPresent(feedbackSubmitted, forKey: .feedbackSubmitted)
+        try container.encodeIfPresent(isSaved, forKey: .isSaved)
+        try container.encodeIfPresent(confidence, forKey: .confidence)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
     }
 
     static func == (lhs: Message, rhs: Message) -> Bool {
@@ -102,19 +152,32 @@ struct QueryRequest: Codable {
 }
 
 // Query response from the API
-struct QueryResponse: Codable {
+struct QueryResponse: Decodable {
     let id: String?
     let response: String?
     let content: String?
     let sources: [MessageMetadata.DocumentSource]?
     let confidence: Double?
 
-    enum CodingKeys: String, CodingKey {
-        case id = "_id"
+    private enum CodingKeys: String, CodingKey {
+        case underscoreId = "_id"
+        case underscoreKey = "_key"
+        case plainId = "id"
         case response
         case content
         case sources
         case confidence
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(String.self, forKey: .underscoreId)
+            ?? container.decodeIfPresent(String.self, forKey: .underscoreKey)
+            ?? container.decodeIfPresent(String.self, forKey: .plainId)
+        self.response = try container.decodeIfPresent(String.self, forKey: .response)
+        self.content = try container.decodeIfPresent(String.self, forKey: .content)
+        self.sources = try container.decodeIfPresent([MessageMetadata.DocumentSource].self, forKey: .sources)
+        self.confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
     }
 
     var messageContent: String {

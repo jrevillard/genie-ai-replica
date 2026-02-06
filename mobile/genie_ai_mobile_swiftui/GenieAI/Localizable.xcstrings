@@ -30933,9 +30933,6 @@
         }
       }
     },
-    "Export PDF" : {
-
-    },
     "Export this conversation to a PDF file" : {
       "extractionState" : "manual",
       "localizations" : {

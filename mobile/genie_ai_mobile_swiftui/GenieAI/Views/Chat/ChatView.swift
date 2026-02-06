@@ -108,18 +108,18 @@ struct ChatView: View {
                                 }
                             }
                         }
+                        .safeAreaInset(edge: .bottom) {
+                            ChatInputView(
+                                text: $inputText,
+                                isLoading: isLoading,
+                                onSend: sendMessage,
+                                onNewChat: { handleNewChat() },
+                                onSave: { showSaveDialog = true },
+                                onExportPDF: { showExportPDFSheet = true },
+                                onShareWhatsApp: { shareToWhatsApp() }
+                            )
+                        }
                     }
-
-                    // Input Area
-                    ChatInputView(
-                        text: $inputText,
-                        isLoading: isLoading,
-                        onSend: sendMessage,
-                        onNewChat: { handleNewChat() },
-                        onSave: { showSaveDialog = true },
-                        onExportPDF: { showExportPDFSheet = true },
-                        onShareWhatsApp: { shareToWhatsApp() }
-                    )
                 }
 
                 // Quick Help Overlay (matches Flutter's Stack-based overlay)

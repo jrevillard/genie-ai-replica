@@ -1,5 +1,5 @@
 // ChatInputView.swift
-// Floating chat input bar with animated highlighting border
+// Floating translucent chat input bar with plus menu and send button
 
 import SwiftUI
 
@@ -15,7 +15,6 @@ struct ChatInputView: View {
     var onShareWhatsApp: (() -> Void)?
 
     @FocusState private var isFocused: Bool
-    @State private var isHighlighting: Bool = false
 
     private let sendSize: CGFloat = 44
     private let plusSize: CGFloat = 35
@@ -30,7 +29,7 @@ struct ChatInputView: View {
             // Main bar (plus button + text field)
             mainBar
 
-            // Send button — floating circle outside the bar
+            // Send button — floating circle
             Button(action: onSend) {
                 Image(systemName: "paperplane.fill")
                     .font(.body.weight(.medium))
@@ -55,7 +54,7 @@ struct ChatInputView: View {
 
     @ViewBuilder
     private var mainBar: some View {
-        let shape = RoundedRectangle(cornerRadius: isFocused ? 25 : 30)
+        let cornerRadius: CGFloat = isFocused ? 25 : 30
 
         HStack(alignment: .bottom, spacing: 0) {
             // Plus menu button
@@ -73,16 +72,12 @@ struct ChatInputView: View {
                 .padding(.trailing, 15)
                 .padding(.vertical, 14)
         }
-        .background {
-            ZStack {
-                highlightingBorder(shape: shape)
-
-                shape
-                    .fill(.bar)
-                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 5)
-                    .shadow(color: .black.opacity(0.08), radius: 15, x: 0, y: -5)
-            }
-        }
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        )
+        .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 5)
+        .shadow(color: .black.opacity(0.08), radius: 15, x: 0, y: -5)
         .animation(.easeOut(duration: 0.25), value: isFocused)
     }
 
@@ -129,40 +124,6 @@ struct ChatInputView: View {
         .hapticOnTap(theme: theme)
     }
 
-    // MARK: - Highlighting Border
-
-    @ViewBuilder
-    private func highlightingBorder(shape: RoundedRectangle) -> some View {
-        if !isFocused && text.isEmpty {
-            let clearColors: [Color] = Array(repeating: .clear, count: 3)
-
-            shape
-                .stroke(
-                    theme.primaryColor.gradient,
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-                )
-                .mask {
-                    shape
-                        .fill(AngularGradient(
-                            colors: clearColors + [.white] + clearColors,
-                            center: .center,
-                            angle: .degrees(isHighlighting ? 360 : 0)
-                        ))
-                }
-                .padding(-1.25)
-                .blur(radius: 1)
-                .onAppear {
-                    withAnimation(.linear(duration: 2.5).repeatForever(autoreverses: false)) {
-                        isHighlighting = true
-                    }
-                }
-                .onDisappear {
-                    isHighlighting = false
-                }
-                .transition(.blurReplace)
-        }
-    }
-
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
     }
@@ -170,7 +131,8 @@ struct ChatInputView: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        LinearGradient(colors: [.blue, .purple], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
         VStack {
             Spacer()
             ChatInputView(

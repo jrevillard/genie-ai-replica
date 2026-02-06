@@ -31,9 +31,9 @@
 		D09719C02F34B35E00E0EE08 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */; };
 		D09719C12F34B35E00E0EE08 /* String+SHA256.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */; };
 		D09719C22F34B35E00E0EE08 /* View+Conditional.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */; };
-		D097GLASS2F34B35E00E0EE09 /* View+GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */; };
 		D09719D02F34B40000E0EE08 /* PasswordValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */; };
 		D09719D22F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719D12F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift */; };
+		D097GLASS2F34B35E00E0EE09 /* View+GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */; };
 		F0A1B2C3D4E5F6A7B8C9D0E1 /* FAQ.md in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */; };
 /* End PBXBuildFile section */
 
@@ -63,9 +63,9 @@
 		D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+SHA256.swift"; sourceTree = "<group>"; };
 		D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Conditional.swift"; sourceTree = "<group>"; };
-		D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+GlassStyle.swift"; sourceTree = "<group>"; };
 		D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordValidator.swift; sourceTree = "<group>"; };
 		D09719D12F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JSONDecoder+FlexibleDate.swift"; sourceTree = "<group>"; };
+		D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+GlassStyle.swift"; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FAQ.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 

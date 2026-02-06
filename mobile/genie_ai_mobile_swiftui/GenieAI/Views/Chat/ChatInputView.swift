@@ -20,45 +20,49 @@ struct ChatInputView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Action Buttons Toolbar
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 if let onNewChat = onNewChat {
                     Button(action: onNewChat) {
-                        SwiftUI.Label("New Chat", systemImage: "plus.circle")
-                            .font(.caption)
+                        Image(systemName: "plus.circle")
+                            .font(.subheadline)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
                     .disabled(isLoading)
                     .hapticOnTap(theme: theme)
+                    .accessibilityLabel("New Chat")
                 }
 
                 if let onSave = onSave {
                     Button(action: onSave) {
-                        SwiftUI.Label("Save Chat", systemImage: "square.and.arrow.down")
-                            .font(.caption)
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.subheadline)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
                     .disabled(isLoading)
                     .hapticOnTap(theme: theme)
+                    .accessibilityLabel("Save Chat")
                 }
 
                 if let onExportPDF = onExportPDF {
                     Button(action: onExportPDF) {
-                        SwiftUI.Label("Export Chat to PDF", systemImage: "doc.richtext")
-                            .font(.caption)
+                        Image(systemName: "doc.richtext")
+                            .font(.subheadline)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
                     .disabled(isLoading)
                     .hapticOnTap(theme: theme)
+                    .accessibilityLabel("Export Chat to PDF")
                 }
 
                 if let onShareWhatsApp = onShareWhatsApp {
                     Button(action: onShareWhatsApp) {
-                        SwiftUI.Label("Share on WhatsApp", systemImage: "bubble.left.fill")
-                            .font(.caption)
+                        Image(systemName: "bubble.left.fill")
+                            .font(.subheadline)
                             .foregroundColor(isLoading ? .gray : theme.whatsAppGreen)
                     }
                     .disabled(isLoading)
                     .hapticOnTap(theme: theme)
+                    .accessibilityLabel("Share on WhatsApp")
                 }
 
                 Spacer()

@@ -9,6 +9,7 @@ struct RightSidebarView: View {
 
     var relatedDocs: [DocumentItem]
     var accessToken: String?
+    var showHeader: Bool = true
 
     @State private var faqItems: [FAQItem] = []
     @State private var isLoadingFaq = false
@@ -16,16 +17,18 @@ struct RightSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Info & Resources")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(theme.primaryTextColor)
-                Spacer()
+            // Header (hidden when presented in a sheet with its own navigation title)
+            if showHeader {
+                HStack {
+                    Text("Info & Resources")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(theme.primaryTextColor)
+                    Spacer()
+                }
+                .padding()
+                .overlay(alignment: .bottom) { Divider() }
             }
-            .padding()
-            .overlay(alignment: .bottom) { Divider() }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {

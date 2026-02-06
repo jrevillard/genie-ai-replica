@@ -63,13 +63,15 @@ GenieAI/
 ```
 
 ### Navigation
-- `NavigationStack` with `NavigationPath` for programmatic navigation
-- Sheet presentations for modals
-- Responsive layout using `GeometryReader` for width-based sidebars
+- Native `NavigationStack` with `.toolbar()` for the navigation bar (no custom NavBarView)
+- Mobile: toolbar buttons open `.sheet()` presentations for Chat History, Knowledge Areas, and Info & Resources
+- Profile menu via native `Menu` dropdown in toolbar (Profile, Settings, Log Out)
+- `.tint(theme.primaryColor)` for brand-colored toolbar icons
+- Auth flow uses `NavigationStack` with `NavigationPath` for programmatic navigation
 
 ### Responsive Design
-- Wide screens (≥1200px): 3-column layout (Sidebar | Chat | RightPanel)
-- Narrow screens: Drawer-based sidebars with overlay
+- Wide screens (≥1200px): 3-column layout (LeftSidebar | Chat | RightSidebar) inside NavigationStack
+- Narrow screens: Native toolbar + sheet-based panels (no drawer sidebars or binder tabs)
 
 ## Critical Build Notes
 

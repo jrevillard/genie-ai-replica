@@ -49541,6 +49541,9 @@
         }
       }
     },
+    "No internet connection" : {
+
+    },
     "No knowledge areas available" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -61685,6 +61688,9 @@
         }
       }
     },
+    "Search chats..." : {
+
+    },
     "Search conversations..." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -62039,6 +62045,9 @@
           }
         }
       }
+    },
+    "Search services..." : {
+
     },
     "Select a country" : {
       "extractionState" : "manual",

@@ -21,8 +21,9 @@ struct ContentView: View {
     @Environment(ConnectivityService.self) private var connectivity
 
     @State private var navigationPath = NavigationPath()
-    @State private var showLeftSidebar = false
-    @State private var showRightSidebar = false
+    @State private var showHistorySheet = false
+    @State private var showServicesSheet = false
+    @State private var showInfoSheet = false
     @State private var showSettings = false
     @State private var showProfile = false
     @State private var currentConversation: Conversation?
@@ -37,18 +38,14 @@ struct ContentView: View {
 
     // For wide screens
     private let wideScreenThreshold: CGFloat = 1200
-    private let mediumScreenThreshold: CGFloat = 768
 
     var body: some View {
         GeometryReader { geometry in
             let isWideScreen = geometry.size.width >= wideScreenThreshold
-            let isMediumScreen = geometry.size.width >= mediumScreenThreshold
 
             if authService.isAuthenticated {
-                // Main App Layout
-                mainAppLayout(isWideScreen: isWideScreen, isMediumScreen: isMediumScreen)
+                mainAppLayout(isWideScreen: isWideScreen)
             } else {
-                // Auth Flow
                 authFlow
             }
         }
@@ -101,111 +98,194 @@ struct ContentView: View {
     // MARK: - Main App Layout
 
     @ViewBuilder
-    private func mainAppLayout(isWideScreen: Bool, isMediumScreen: Bool) -> some View {
-        ZStack {
-            if isWideScreen {
-                // 3-Column Layout for wide screens
-                HStack(spacing: 0) {
-                    // Left Sidebar
-                    LeftSidebarView(
-                        onConversationSelected: loadConversation,
-                        onServiceSelectionChanged: handleServiceSelection
-                    )
-                    .frame(width: 280)
+    private func mainAppLayout(isWideScreen: Bool) -> some View {
+        if isWideScreen {
+            wideScreenLayout
+        } else {
+            mobileLayout
+        }
+    }
 
-                    Divider()
+    // MARK: - Mobile Layout
 
-                    // Chat View
-                    VStack(spacing: 0) {
-                        NavBarView(
-                            onMenuTapped: {},
-                            onNewChatTapped: startNewChat,
-                            onProfileTapped: { showProfile = true },
-                            onSettingsTapped: { showSettings = true },
-                            onLogoutTapped: logout
-                        )
-
-                        chatView
+    @ViewBuilder
+    private var mobileLayout: some View {
+        NavigationStack {
+            chatView
+                .navigationTitle(ConfigService.shared.appTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showHistorySheet = true
+                        } label: {
+                            Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                        }
+                        .hapticOnTap(theme: theme)
+                        .accessibilityLabel("Chat History")
                     }
 
-                    Divider()
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        if !connectivity.isOnline {
+                            Image(systemName: "wifi.slash")
+                                .foregroundColor(.orange)
+                                .accessibilityLabel("No internet connection")
+                        }
 
-                    // Right Sidebar
-                    RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken)
-                        .frame(width: 280)
+                        Button {
+                            showServicesSheet = true
+                        } label: {
+                            Image(systemName: "square.grid.2x2")
+                        }
+                        .hapticOnTap(theme: theme)
+                        .accessibilityLabel("Knowledge Areas")
+
+                        Button(action: startNewChat) {
+                            Image(systemName: "plus.message")
+                        }
+                        .hapticOnTap(theme: theme)
+                        .accessibilityLabel("New Chat")
+
+                        profileMenu
+                    }
                 }
-            } else {
-                // Standard mobile layout with drawers
-                ZStack {
-                    VStack(spacing: 0) {
-                        NavBarView(
-                            onMenuTapped: { showLeftSidebar.toggle() },
-                            onNewChatTapped: startNewChat,
-                            onProfileTapped: { showProfile = true },
-                            onSettingsTapped: { showSettings = true },
-                            onLogoutTapped: logout
-                        )
-
-                        chatView
-                    }
-
-                    // Binder tabs (slim edge tabs matching Flutter's _BinderTab)
-                    if !showLeftSidebar && !showRightSidebar {
-                        // Right binder tab
-                        VStack {
-                            Spacer().frame(height: 80)
-                            Button {
-                                withAnimation(theme.animationSmooth) { showRightSidebar = true }
-                            } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(.caption2)
-                                    .foregroundColor(theme.navbarTextColor.opacity(0.7))
-                                    .frame(width: 10, height: 44)
-                                    .background(.thinMaterial)
-                                    .clipShape(UnevenRoundedRectangle(
-                                        topLeadingRadius: 4,
-                                        bottomLeadingRadius: 4
-                                    ))
+                .tint(theme.primaryColor)
+                .sheet(isPresented: $showHistorySheet) {
+                    NavigationStack {
+                        ChatHistorySheetContent(
+                            onConversationSelected: { conversation in
+                                loadConversation(conversation)
+                                showHistorySheet = false
                             }
-                            .hapticOnTap(theme: theme)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-
-                    // Left Sidebar Drawer
-                    if showLeftSidebar {
-                        sidebarOverlay(isLeft: true) {
-                            LeftSidebarView(
-                                onConversationSelected: { conversation in
-                                    loadConversation(conversation)
-                                    showLeftSidebar = false
-                                },
-                                onServiceSelectionChanged: { categoryId, name, contextLabels in
-                                    handleServiceSelection(categoryId: categoryId, name: name, contextLabels: contextLabels)
-                                    // Don't close sidebar — allow multi-select (matching Flutter)
-                                }
-                            )
+                        )
+                        .navigationTitle("Chat History")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showHistorySheet = false }
+                            }
                         }
                     }
-
-                    // Right Sidebar Drawer
-                    if showRightSidebar {
-                        sidebarOverlay(isLeft: false) {
-                            RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken)
-                        }
-                    }
+                    .tint(theme.primaryColor)
                 }
+                .sheet(isPresented: $showServicesSheet) {
+                    NavigationStack {
+                        ServicesSheetContent(
+                            onSelectionChanged: handleServiceSelection
+                        )
+                        .navigationTitle("Knowledge Areas")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showServicesSheet = false }
+                            }
+                        }
+                    }
+                    .tint(theme.primaryColor)
+                }
+                .sheet(isPresented: $showInfoSheet) {
+                    NavigationStack {
+                        RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken, showHeader: false)
+                            .navigationTitle("Info & Resources")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button("Done") { showInfoSheet = false }
+                                }
+                            }
+                    }
+                    .tint(theme.primaryColor)
+                }
+                .sheet(isPresented: $showSettings) {
+                    SettingsView()
+                }
+                .sheet(isPresented: $showProfile) {
+                    UserProfileView()
+                }
+        }
+        .task {
+            currentAccessToken = await APIService.shared.getToken()
+        }
+    }
+
+    // MARK: - Wide Screen Layout
+
+    @ViewBuilder
+    private var wideScreenLayout: some View {
+        NavigationStack {
+            HStack(spacing: 0) {
+                LeftSidebarView(
+                    onConversationSelected: loadConversation,
+                    onServiceSelectionChanged: handleServiceSelection
+                )
+                .frame(width: 280)
+
+                Divider()
+
+                chatView
+
+                Divider()
+
+                RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken)
+                    .frame(width: 280)
+            }
+            .navigationTitle(ConfigService.shared.appTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if !connectivity.isOnline {
+                        Image(systemName: "wifi.slash")
+                            .foregroundColor(.orange)
+                            .accessibilityLabel("No internet connection")
+                    }
+
+                    Button(action: startNewChat) {
+                        Image(systemName: "plus.message")
+                    }
+                    .hapticOnTap(theme: theme)
+                    .accessibilityLabel("New Chat")
+
+                    profileMenu
+                }
+            }
+            .tint(theme.primaryColor)
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+            }
+            .sheet(isPresented: $showProfile) {
+                UserProfileView()
             }
         }
         .task {
             currentAccessToken = await APIService.shared.getToken()
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showProfile) {
-            UserProfileView()
+    }
+
+    // MARK: - Profile Menu
+
+    @ViewBuilder
+    private var profileMenu: some View {
+        Menu {
+            Button {
+                showProfile = true
+            } label: {
+                SwiftUI.Label("My Profile", systemImage: "person")
+            }
+
+            Button {
+                showSettings = true
+            } label: {
+                SwiftUI.Label("Settings", systemImage: "gear")
+            }
+
+            Divider()
+
+            Button(role: .destructive, action: logout) {
+                SwiftUI.Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        } label: {
+            Image(systemName: "person.circle.fill")
+                .font(.title3)
         }
     }
 
@@ -220,7 +300,6 @@ struct ContentView: View {
             initialContextLabels: pendingContextLabels,
             onNewChat: { /* handled by startNewChat */ },
             onRelatedDocumentsUpdate: { docs in
-                // Merge unique documents
                 let existingUrls = Set(relatedDocs.map { $0.url })
                 let newDocs = docs.filter { !existingUrls.contains($0.url) }
                 relatedDocs.append(contentsOf: newDocs)
@@ -229,48 +308,12 @@ struct ContentView: View {
         .id(chatViewKey)
     }
 
-    // MARK: - Sidebar Overlay
-
-    @ViewBuilder
-    private func sidebarOverlay<Content: View>(isLeft: Bool, @ViewBuilder content: @escaping () -> Content) -> some View {
-        GeometryReader { geometry in
-            ZStack(alignment: isLeft ? .leading : .trailing) {
-                // Frosted glass backdrop
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        if isLeft {
-                            showLeftSidebar = false
-                        } else {
-                            showRightSidebar = false
-                        }
-                    }
-
-                // Sidebar Content
-                content()
-                    .frame(width: min(320, geometry.size.width * 0.85))
-                    .background(.regularMaterial)
-                    .shadow(
-                        color: .black.opacity(0.15),
-                        radius: 12,
-                        x: isLeft ? 4 : -4,
-                        y: 0
-                    )
-                    .transition(.move(edge: isLeft ? .leading : .trailing))
-            }
-        }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showLeftSidebar)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showRightSidebar)
-    }
-
     // MARK: - Actions
 
     private func startNewChat() {
         chatViewKey = UUID()
         currentConversation = nil
         relatedDocs = []
-        showRightSidebar = false
         pendingCategoryId = nil
         pendingCategoryName = nil
         pendingContextLabels = nil
@@ -284,7 +327,6 @@ struct ContentView: View {
 
     private func handleServiceSelection(categoryId: String, name: String, contextLabels: String) {
         if categoryId.isEmpty {
-            // Selection cleared
             pendingCategoryId = nil
             pendingCategoryName = nil
             pendingContextLabels = nil
@@ -293,14 +335,34 @@ struct ContentView: View {
             pendingCategoryName = name
             pendingContextLabels = contextLabels
         }
-        // Don't recreate ChatView — let it reactively pick up context changes
-        // This keeps the sidebar open for multi-select (matching Flutter)
     }
 
     private func logout() {
         Task {
             await authService.logout()
         }
+    }
+}
+
+// MARK: - Sheet Content Wrappers
+
+private struct ChatHistorySheetContent: View {
+    @State private var searchText = ""
+    var onConversationSelected: ((Conversation) -> Void)?
+
+    var body: some View {
+        ChatHistoryView(searchText: searchText, onConversationSelected: onConversationSelected)
+            .searchable(text: $searchText, prompt: "Search chats...")
+    }
+}
+
+private struct ServicesSheetContent: View {
+    @State private var searchText = ""
+    var onSelectionChanged: ((_ categoryId: String, _ name: String, _ contextLabels: String) -> Void)?
+
+    var body: some View {
+        ServiceTreeView(searchText: searchText, onSelectionChanged: onSelectionChanged)
+            .searchable(text: $searchText, prompt: "Search services...")
     }
 }
 

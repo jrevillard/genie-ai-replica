@@ -84,7 +84,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ### 1.6 Logout
 <!-- Flutter: lib/components/shared/nav_bar_component.dart, lib/services/user_service.dart -->
-<!-- SwiftUI: GenieAI/Views/Shared/NavBarView.swift, GenieAI/Services/AuthService.swift -->
+<!-- SwiftUI: GenieAI/ContentView.swift, GenieAI/Services/AuthService.swift -->
 
 **Requirements:**
 - Clear authentication token
@@ -453,7 +453,7 @@ All platforms must have identical localized strings for every supported language
 
 ### 9.1 Navigation Bar
 <!-- Flutter: lib/components/shared/nav_bar_component.dart -->
-<!-- SwiftUI: GenieAI/Views/Shared/NavBarView.swift -->
+<!-- SwiftUI: GenieAI/ContentView.swift (native NavigationStack + .toolbar) -->
 
 **Requirements:**
 - App logo/icon (configurable)
@@ -496,7 +496,7 @@ All platforms must have identical localized strings for every supported language
 
 ### 9.3 Binder Tabs
 <!-- Flutter: lib/main.dart -->
-<!-- SwiftUI: GenieAI/ContentView.swift (drawer-based on mobile) -->
+<!-- SwiftUI: GenieAI/ContentView.swift (replaced with sheet-based navigation on mobile) -->
 
 **Requirements:**
 - 10px wide vertical tabs on screen edges

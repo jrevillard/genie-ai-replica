@@ -2,6 +2,7 @@
 // User profile with tabbed sections matching Flutter's 12-tab layout
 
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 
 struct UserProfileView: View {
@@ -28,6 +29,7 @@ struct UserProfileView: View {
     @State private var isSaving = false
     @State private var hasChanges = false
     @State private var showDiscardAlert = false
+    @State private var showIconSelector = false
     @State private var pickedFiles: [String: URL] = [:]
 
     private let tabs = [
@@ -48,12 +50,30 @@ struct UserProfileView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Privacy Notice
-                Text(i18n.translate("userProfile.privacyInfo"))
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .padding()
-                    .background(theme.secondarySurfaceColor)
+                // Profile Avatar + Privacy Notice
+                VStack(spacing: 20) {
+                    ProfileAvatarSection(
+                        personalInfo: $personalInfo,
+                        hasChanges: $hasChanges,
+                        pickedFiles: $pickedFiles,
+                        showIconSelector: $showIconSelector
+                    )
+
+                    Text(i18n.translate("userProfile.privacyInfo"))
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+
+                    Button(action: {
+                        // Privacy policy link placeholder
+                    }) {
+                        Text(i18n.translate("userProfile.privacyPolicyLink"))
+                            .font(.subheadline)
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity)
+                .background(theme.secondarySurfaceColor)
 
                 // Tab Selector
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -170,6 +190,13 @@ struct UserProfileView: View {
                     dismiss()
                 }
             }
+            .sheet(isPresented: $showIconSelector) {
+                ProfileIconSelectorSheet(
+                    personalInfo: $personalInfo,
+                    hasChanges: $hasChanges,
+                    pickedFiles: $pickedFiles
+                )
+            }
             .task {
                 await loadProfile()
             }
@@ -246,6 +273,268 @@ struct UserProfileView: View {
                     isSaving = false
                 }
                 print("[UserProfileView] Save error: \(error)")
+            }
+        }
+    }
+}
+
+// MARK: - Profile Avatar Section
+
+struct ProfileAvatarSection: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(I18nService.self) private var i18n
+
+    @Binding var personalInfo: PersonalIdentification
+    @Binding var hasChanges: Bool
+    @Binding var pickedFiles: [String: URL]
+    @Binding var showIconSelector: Bool
+
+    private var initials: String {
+        guard let name = personalInfo.fullName, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return "?"
+        }
+        let parts = name.trimmingCharacters(in: .whitespaces).split(separator: " ")
+        if parts.count >= 2, let first = parts[0].first, let second = parts[1].first {
+            return "\(first)\(second)".uppercased()
+        }
+        return String(name.prefix(1)).uppercased()
+    }
+
+    private var initialsColor: Color {
+        if let icon = personalInfo.profileIcon, icon.hasPrefix("initials:") {
+            let hex = String(icon.dropFirst("initials:".count))
+            return Color(hex: hex)
+        }
+        return Color(red: 78/255, green: 151/255, blue: 209/255)
+    }
+
+    private var isImageURL: Bool {
+        guard let icon = personalInfo.profileIcon else { return false }
+        return icon.hasPrefix("http")
+    }
+
+    private var localPickedImage: URL? {
+        pickedFiles["personalIdentification-profileIcon"]
+    }
+
+    var body: some View {
+        Button(action: { showIconSelector = true }) {
+            ZStack(alignment: .bottomTrailing) {
+                // Avatar circle
+                Group {
+                    if let localURL = localPickedImage {
+                        AsyncImage(url: localURL) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            initialsCircle
+                        }
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
+                    } else if isImageURL, let urlString = personalInfo.profileIcon, let url = URL(string: urlString) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            initialsCircle
+                        }
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
+                    } else {
+                        initialsCircle
+                    }
+                }
+
+                // Edit overlay
+                Circle()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Image(systemName: "pencil")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+                    .offset(x: -4, y: -4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var initialsCircle: some View {
+        Circle()
+            .fill(initialsColor)
+            .frame(width: 120, height: 120)
+            .overlay(
+                Text(initials)
+                    .font(.system(size: 50, weight: .bold))
+                    .foregroundColor(.white)
+            )
+    }
+}
+
+// MARK: - Profile Icon Selector Sheet
+
+struct ProfileIconSelectorSheet: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(I18nService.self) private var i18n
+    @Environment(\.dismiss) private var dismiss
+
+    @Binding var personalInfo: PersonalIdentification
+    @Binding var hasChanges: Bool
+    @Binding var pickedFiles: [String: URL]
+
+    @State private var selectedTabIndex = 0
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var selectedInitialsColor = Color(red: 78/255, green: 151/255, blue: 209/255)
+
+    private let colorOptions: [(Color, String)] = [
+        (Color(red: 78/255, green: 151/255, blue: 209/255), "#4E97D1"),
+        (.green, "#4CAF50"),
+        (.red, "#F44336"),
+        (.purple, "#9C27B0"),
+        (.orange, "#FF9800"),
+        (.teal, "#009688"),
+        (.pink, "#E91E63"),
+        (.indigo, "#3F51B5"),
+    ]
+
+    private var initials: String {
+        guard let name = personalInfo.fullName, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return "?"
+        }
+        let parts = name.trimmingCharacters(in: .whitespaces).split(separator: " ")
+        if parts.count >= 2, let first = parts[0].first, let second = parts[1].first {
+            return "\(first)\(second)".uppercased()
+        }
+        return String(name.prefix(1)).uppercased()
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                // Tab selector
+                Picker("", selection: $selectedTabIndex) {
+                    Text(i18n.translate("userProfile.upload")).tag(0)
+                    Text(i18n.translate("userProfile.initials")).tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
+                if selectedTabIndex == 0 {
+                    uploadTab
+                } else {
+                    initialsTab
+                }
+
+                Spacer()
+            }
+            .padding(.top)
+            .navigationTitle(i18n.translate("userProfile.chooseProfileIcon"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Upload Tab
+
+    private var uploadTab: some View {
+        VStack(spacing: 24) {
+            // Preview
+            if let localURL = pickedFiles["personalIdentification-profileIcon"] {
+                AsyncImage(url: localURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ProgressView()
+                }
+                .frame(width: 140, height: 140)
+                .clipShape(Circle())
+            }
+
+            PhotosPicker(
+                selection: $selectedPhotoItem,
+                matching: .images
+            ) {
+                SwiftUI.Label(i18n.translate("userProfile.uploadPhoto"), systemImage: "photo.on.rectangle")
+                    .font(.headline)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(theme.primaryColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal)
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    guard let data = try? await newItem.loadTransferable(type: Data.self) else { return }
+                    let tempDir = FileManager.default.temporaryDirectory
+                    let filename = "profile_photo_\(UUID().uuidString).jpg"
+                    let destURL = tempDir.appendingPathComponent(filename)
+                    do {
+                        try data.write(to: destURL)
+                        await MainActor.run {
+                            pickedFiles["personalIdentification-profileIcon"] = destURL
+                            personalInfo.profileIcon = filename
+                            hasChanges = true
+                        }
+                    } catch {
+                        print("[ProfileIconSelector] Photo save error: \(error)")
+                    }
+                }
+            }
+        }
+        .padding(.top, 20)
+    }
+
+    // MARK: Initials Tab
+
+    private var initialsTab: some View {
+        VStack(spacing: 24) {
+            // Preview circle
+            Circle()
+                .fill(selectedInitialsColor)
+                .frame(width: 140, height: 140)
+                .overlay(
+                    Text(initials)
+                        .font(.system(size: 70, weight: .bold))
+                        .foregroundColor(.white)
+                )
+
+            // Color swatches
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+                ForEach(colorOptions, id: \.1) { color, hex in
+                    Button(action: {
+                        selectedInitialsColor = color
+                        personalInfo.profileIcon = "initials:\(hex)"
+                        pickedFiles.removeValue(forKey: "personalIdentification-profileIcon")
+                        hasChanges = true
+                    }) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: selectedInitialsColor == color ? 4 : 0)
+                            )
+                            .shadow(radius: selectedInitialsColor == color ? 10 : 4)
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.top, 20)
+        .onAppear {
+            // Initialize from current profileIcon if it's an initials value
+            if let icon = personalInfo.profileIcon, icon.hasPrefix("initials:") {
+                let hex = String(icon.dropFirst("initials:".count))
+                if let match = colorOptions.first(where: { $0.1 == hex }) {
+                    selectedInitialsColor = match.0
+                }
             }
         }
     }

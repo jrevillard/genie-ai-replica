@@ -256,6 +256,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 <!-- SwiftUI: GenieAI/Views/Profile/UserProfileView.swift, GenieAI/Models/User.swift, GenieAI/Services/UserService.swift (all 12 tabs: Personal, Civil Registration, Address, Identity/Travel, Health/Medical, Employment, Education, Financial/Tax, Social Security, Criminal/Legal, Transportation, Civic Participation) -->
 
 **Requirements:**
+- Privacy info text with privacy policy link displayed above tabs
 - Multi-tab interface with the following sections:
 
 ### 4.1 Personal Information

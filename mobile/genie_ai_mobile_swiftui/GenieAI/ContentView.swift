@@ -115,7 +115,7 @@ struct ContentView: View {
                 .navigationTitle(ConfigService.shared.appTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
+                    ToolbarItemGroup(placement: .topBarLeading) {
                         Button {
                             showHistorySheet = true
                         } label: {
@@ -123,6 +123,14 @@ struct ContentView: View {
                         }
                         .hapticOnTap(theme: theme)
                         .accessibilityLabel("Chat History")
+
+                        Button {
+                            showInfoSheet = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .hapticOnTap(theme: theme)
+                        .accessibilityLabel("Info & Resources")
                     }
 
                     ToolbarItemGroup(placement: .topBarTrailing) {

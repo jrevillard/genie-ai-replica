@@ -159,9 +159,6 @@
         }
       }
     },
-    "%@: " : {
-
-    },
     "%@% complete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -44654,6 +44651,9 @@
           }
         }
       }
+    },
+    "Loading FAQ..." : {
+
     },
     "Loading location..." : {
       "extractionState" : "manual",

@@ -14,6 +14,15 @@ struct RightSidebarView: View {
     @State private var faqItems: [FAQItem] = []
     @State private var isLoadingFaq = false
     @State private var lastFaqLangCode = "en"
+    @State private var visibleCount = 0
+
+    /// Total number of animatable items (section headers + cards/empty states)
+    private var totalItemCount: Int {
+        // Section header for docs + doc cards (or 1 empty state) + section header for FAQ + FAQ cards (or 1 empty/loading state)
+        let docCount = relatedDocs.isEmpty ? 1 : relatedDocs.count
+        let faqCount = faqItems.isEmpty ? 1 : faqItems.count
+        return 1 + docCount + 1 + faqCount
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,35 +40,33 @@ struct RightSidebarView: View {
             }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: theme.spacingLG) {
                     // Related Documents Section
-                    sectionTitle("Related Documents", icon: "doc.text")
+                    sectionTitle("Related Documents", icon: "doc.text", index: 0)
 
                     if relatedDocs.isEmpty {
-                        emptyState("No related documents")
+                        emptyState("No related documents", icon: "doc.text.magnifyingglass", index: 1)
                     } else {
-                        ForEach(relatedDocs) { doc in
+                        ForEach(Array(relatedDocs.enumerated()), id: \.element.id) { offset, doc in
                             DocumentRow(document: doc, accessToken: accessToken)
+                                .staggeredAppearance(index: 1 + offset, visibleCount: visibleCount, theme: theme)
                         }
                     }
 
-                    Spacer().frame(height: 16)
+                    Spacer().frame(height: theme.spacingLG)
 
                     // FAQ Section
-                    sectionTitle("Frequently Asked Questions", icon: "questionmark.circle")
+                    let faqHeaderIndex = 1 + (relatedDocs.isEmpty ? 1 : relatedDocs.count)
+                    sectionTitle("Frequently Asked Questions", icon: "questionmark.circle", index: faqHeaderIndex)
 
                     if isLoadingFaq {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                                .padding()
-                            Spacer()
-                        }
+                        faqLoadingState(index: faqHeaderIndex + 1)
                     } else if faqItems.isEmpty {
-                        emptyState("FAQ not available")
+                        emptyState("FAQ not available", icon: "questionmark.bubble", index: faqHeaderIndex + 1)
                     } else {
-                        ForEach(faqItems) { item in
+                        ForEach(Array(faqItems.enumerated()), id: \.element.id) { offset, item in
                             FAQRow(item: item)
+                                .staggeredAppearance(index: faqHeaderIndex + 1 + offset, visibleCount: visibleCount, theme: theme)
                         }
                     }
 
@@ -68,41 +75,85 @@ struct RightSidebarView: View {
                 .padding()
             }
         }
-        .background(theme.surfaceColor)
+        .background(.ultraThinMaterial)
         .task {
             await loadFAQ()
         }
         .onChange(of: appLocale.currentLocale) { _, _ in
             Task { await loadFAQ() }
         }
+        .onAppear { triggerStaggeredAnimation() }
+        .onChange(of: faqItems.count) { _, _ in triggerStaggeredAnimation() }
+    }
+
+    // MARK: - Staggered Animation Trigger
+
+    private func triggerStaggeredAnimation() {
+        visibleCount = 0
+        DispatchQueue.main.async {
+            visibleCount = totalItemCount
+        }
     }
 
     // MARK: - Section Title
 
     @ViewBuilder
-    private func sectionTitle(_ title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
+    private func sectionTitle(_ title: String, icon: String, index: Int) -> some View {
+        HStack(spacing: theme.spacingMD) {
             Image(systemName: icon)
                 .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
+                .fontWeight(.medium)
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(theme.primaryColor.opacity(0.85), in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
+
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.bold)
-                .foregroundColor(theme.secondaryTextColor)
+                .foregroundColor(theme.primaryTextColor)
         }
+        .staggeredAppearance(index: index, visibleCount: visibleCount, theme: theme)
     }
 
     // MARK: - Empty State
 
     @ViewBuilder
-    private func emptyState(_ message: String) -> some View {
-        Text(message)
-            .font(.caption)
-            .foregroundColor(theme.secondaryTextColor)
-            .italic()
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
+    private func emptyState(_ message: String, icon: String, index: Int) -> some View {
+        VStack(spacing: theme.spacingMD) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundColor(theme.secondaryTextColor.opacity(0.5))
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+                .italic()
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous)
+                .stroke(theme.glassBorder, lineWidth: 1)
+        )
+        .staggeredAppearance(index: index, visibleCount: visibleCount, theme: theme)
+    }
+
+    // MARK: - FAQ Loading State
+
+    @ViewBuilder
+    private func faqLoadingState(index: Int) -> some View {
+        VStack(spacing: theme.spacingMD) {
+            ProgressView()
+                .tint(theme.primaryColor)
+            Text("Loading FAQ...")
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+        .staggeredAppearance(index: index, visibleCount: visibleCount, theme: theme)
     }
 
     // MARK: - FAQ Loading
@@ -181,6 +232,23 @@ struct RightSidebarView: View {
         }
 
         return faqs
+    }
+}
+
+// MARK: - Staggered Appearance Modifier
+
+private extension View {
+    func staggeredAppearance(index: Int, visibleCount: Int, theme: ThemeManager) -> some View {
+        self
+            .opacity(index < visibleCount ? 1 : 0)
+            .offset(y: index < visibleCount ? 0 : 12)
+            .scaleEffect(index < visibleCount ? 1 : 0.95)
+            .animation(
+                theme.animationsEnabled
+                    ? .spring(response: 0.4, dampingFraction: 0.75).delay(0.2 + Double(index) * 0.06)
+                    : nil,
+                value: visibleCount
+            )
     }
 }
 
@@ -312,7 +380,7 @@ struct DocumentItem: Identifiable {
 
     static func formatScore(_ score: Double?) -> String {
         guard let score = score else { return "Unknown" }
-        return String(format: "%.2f%%", score * 100)
+        return String(format: "%.0f%%", score * 100)
     }
 
     private static func collectLabels(
@@ -337,70 +405,109 @@ struct DocumentRow: View {
     let document: DocumentItem
     var accessToken: String?
 
+    /// Split labels string into individual label strings, max 3
+    private var labelPills: [String] {
+        guard let labels = document.labels else { return [] }
+        return Array(
+            labels.components(separatedBy: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .prefix(3)
+        )
+    }
+
+    /// Confidence color: green >= 80%, orange >= 50%, gray below
+    private var confidenceColor: Color {
+        guard let score = document.confidence else { return .gray }
+        if score >= 0.8 { return .green }
+        if score >= 0.5 { return .orange }
+        return .gray
+    }
+
     var body: some View {
         Button(action: openDocument) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Title row with icon
-                HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: theme.spacingMD) {
+                // Top row: icon + title + confidence badge
+                HStack(alignment: .top, spacing: theme.spacingMD) {
+                    // Prominent colored circle icon
                     Image(systemName: document.type.icon)
-                        .font(.subheadline)
-                        .foregroundColor(document.type.color)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(document.type.color, in: Circle())
 
-                    Text(document.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(theme.primaryTextColor)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(document.title)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(theme.primaryTextColor)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        // Show file name as caption only when different from title
+                        if let fileName = document.fileName, fileName != document.title {
+                            Text(fileName)
+                                .font(.caption2)
+                                .foregroundColor(theme.secondaryTextColor)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    // Confidence badge
+                    if let score = document.confidence {
+                        Text(DocumentItem.formatScore(score))
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(confidenceColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(confidenceColor.opacity(0.12), in: Capsule())
+                    }
                 }
-                .padding(.bottom, 6)
 
-                Divider()
-                    .padding(.vertical, 4)
+                // Metadata pills row
+                HStack(spacing: 6) {
+                    metadataPill(document.fileFormat ?? "FILE")
 
-                // Detail rows
-                if let fileName = document.fileName, fileName != document.title {
-                    detailRow(label: "File Name", value: fileName)
+                    if let size = document.fileSize, size > 0 {
+                        metadataPill(DocumentItem.formatFileSize(size))
+                    }
+
+                    Spacer(minLength: 0)
                 }
 
-                HStack(spacing: 0) {
-                    detailRow(label: "Format", value: document.fileFormat ?? "FILE")
-                    detailRow(label: "Size", value: DocumentItem.formatFileSize(document.fileSize))
+                // Label pills row
+                if !labelPills.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(labelPills, id: \.self) { label in
+                            Text(label)
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundColor(theme.primaryColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(theme.primaryColor.opacity(0.08), in: Capsule())
+                        }
+                    }
                 }
-
-                if let docId = document.documentId, !docId.isEmpty {
-                    detailRow(label: "ID", value: docId)
-                }
-
-                detailRow(label: "Labels", value: document.labels ?? "Unknown")
-                detailRow(label: "Confidence", value: DocumentItem.formatScore(document.confidence))
             }
-            .padding(12)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
-                    .stroke(theme.glassBorder, lineWidth: 1)
-            )
-            .shadow(theme.shadowSoft)
+            .padding(theme.spacingMD)
+            .glassCard(theme: theme)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
     }
 
     @ViewBuilder
-    private func detailRow(label: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            Text("\(label): ")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(theme.secondaryTextColor)
-
-            Text(value)
-                .font(.caption2)
-                .foregroundColor(theme.primaryTextColor)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
+    private func metadataPill(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.medium)
+            .foregroundColor(theme.secondaryTextColor)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(.ultraThinMaterial, in: Capsule())
     }
 
     private func openDocument() {
@@ -423,6 +530,48 @@ struct DocumentRow: View {
     }
 }
 
+// MARK: - Flow Layout (for label pills)
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrangeSubviews(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrangeSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            positions.append(CGPoint(x: currentX, y: currentY))
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+            maxX = max(maxX, currentX - spacing)
+        }
+
+        return (positions, CGSize(width: maxX, height: currentY + lineHeight))
+    }
+}
+
 // MARK: - FAQ Item
 
 struct FAQItem: Identifiable {
@@ -439,42 +588,75 @@ struct FAQRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: {
-                withAnimation(theme.animationStandard) { isExpanded.toggle() }
-            }) {
-                HStack(alignment: .top) {
-                    Text(item.question)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(theme.primaryTextColor)
-                        .multilineTextAlignment(.leading)
+            // Question header — entire row is tappable
+            HStack(alignment: .center, spacing: theme.spacingMD) {
+                // Leading icon
+                Image(systemName: isExpanded ? "lightbulb.fill" : "lightbulb")
+                    .font(.body)
+                    .foregroundColor(isExpanded ? theme.primaryColor : theme.secondaryTextColor)
+                    .frame(width: 24)
 
-                    Spacer()
+                Text(item.question)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(theme.primaryTextColor)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .padding(.top, 2)
-                }
-                .padding(12)
+                Image(systemName: "chevron.forward")
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isExpanded ? theme.primaryColor : theme.secondaryTextColor)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, theme.spacingLG)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(theme.animationSmooth) { isExpanded.toggle() }
+                if theme.hapticsEnabled {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            }
+            .zIndex(1)
 
+            // Answer body — clipped so it reveals downward without leaking behind the header
             if isExpanded {
-                Text(item.answer)
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .lineSpacing(4)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider()
+                        .padding(.horizontal, theme.spacingLG)
+
+                    HStack(alignment: .top, spacing: theme.spacingMD) {
+                        // Align with question text via matching icon width
+                        Image(systemName: "text.quote")
+                            .font(.caption)
+                            .foregroundColor(theme.primaryColor.opacity(0.4))
+                            .frame(width: 24)
+                            .padding(.top, 2)
+
+                        Text(LocalizedStringKey(item.answer))
+                            .font(.subheadline)
+                            .foregroundColor(theme.secondaryTextColor)
+                            .lineSpacing(4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(.horizontal, theme.spacingLG)
+                    .padding(.top, theme.spacingMD)
+                    .padding(.bottom, theme.spacingLG)
+                }
+                .clipped()
+                .transition(.opacity)
             }
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
-                .stroke(theme.glassBorder, lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
+        .background {
+            if isExpanded {
+                RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous)
+                    .fill(theme.primaryColor.opacity(0.04))
+            }
+        }
+        .glassCard(theme: theme, radius: theme.radiusMD)
     }
 }
 
@@ -502,6 +684,17 @@ struct FAQRow: View {
                 documentId: nil,
                 labels: nil,
                 confidence: 0.72
+            ),
+            DocumentItem(
+                title: "Internal Policy Document",
+                url: nil,
+                type: .word,
+                fileName: "internal_policy_v2.docx",
+                fileFormat: "DOCX",
+                fileSize: 450_000,
+                documentId: "doc-456",
+                labels: nil,
+                confidence: nil
             )
         ],
         accessToken: nil

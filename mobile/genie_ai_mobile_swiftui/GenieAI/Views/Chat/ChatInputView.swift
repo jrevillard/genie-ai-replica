@@ -10,7 +10,6 @@ struct ChatInputView: View {
     @Binding var text: String
     var isLoading: Bool
     var onSend: () -> Void
-    var onAttach: (() -> Void)?
     var onNewChat: (() -> Void)?
     var onSave: (() -> Void)?
     var onExportPDF: (() -> Void)?
@@ -57,15 +56,6 @@ struct ChatInputView: View {
 
             // Input Row
             HStack(spacing: 12) {
-                // Attachment Button
-                if let onAttach = onAttach {
-                    Button(action: onAttach) {
-                        Image(systemName: "paperclip")
-                            .font(.title3)
-                            .foregroundColor(theme.secondaryTextColor)
-                    }
-                }
-
                 // Text Input
                 HStack {
                     TextField(i18n.translate("chatbot.placeholder"), text: $text, axis: .vertical)
@@ -104,7 +94,6 @@ struct ChatInputView: View {
             text: .constant(""),
             isLoading: false,
             onSend: {},
-            onAttach: {},
             onNewChat: {},
             onSave: {},
             onExportPDF: {}

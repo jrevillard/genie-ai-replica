@@ -99,7 +99,6 @@ struct ChatView: View {
                         text: $inputText,
                         isLoading: isLoading,
                         onSend: sendMessage,
-                        onAttach: handleAttachment,
                         onNewChat: { handleNewChat() },
                         onSave: { showSaveDialog = true },
                         onExportPDF: { showExportPDFSheet = true }
@@ -532,10 +531,6 @@ struct ChatView: View {
         }
     }
 
-    private func handleAttachment() {
-        // TODO: Implement file attachment
-        print("Attachment tapped")
-    }
 }
 
 // MARK: - Save Conversation Sheet

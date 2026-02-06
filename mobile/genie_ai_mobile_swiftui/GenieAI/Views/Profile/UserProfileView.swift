@@ -1203,12 +1203,11 @@ struct ProfileDateField: View {
 
     var body: some View {
         DatePicker(
-            "",
+            "Date of birth",
             selection: $selectedDate,
             in: ...Date(),
             displayedComponents: .date
         )
-        .labelsHidden()
         .onChange(of: selectedDate) { _, newValue in
             dateString = Self.displayFormatter.string(from: newValue)
         }

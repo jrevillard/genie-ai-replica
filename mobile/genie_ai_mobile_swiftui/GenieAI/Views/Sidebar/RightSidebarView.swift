@@ -576,7 +576,7 @@ struct FAQRow: View {
                 // Leading icon
                 Image(systemName: isExpanded ? "lightbulb.fill" : "lightbulb")
                     .font(.body)
-                    .foregroundColor(isExpanded ? theme.primaryColor : theme.secondaryTextColor)
+                    .foregroundColor(isExpanded ? Color(red: 0.92, green: 0.75, blue: 0.20) : Color(red: 0.78, green: 0.65, blue: 0.30))
                     .frame(width: 24)
 
                 Text(item.question)

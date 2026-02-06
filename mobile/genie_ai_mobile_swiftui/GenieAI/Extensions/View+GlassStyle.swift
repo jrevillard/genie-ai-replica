@@ -87,6 +87,34 @@ struct GlassPressButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - Category Color Palette
+
+/// Light pastel palette for category badges, conversation accents, and visual variety.
+/// Deterministic: the same name always maps to the same color.
+/// Colors are bright and airy — candy pastels with minimal earthiness.
+enum CategoryPalette {
+    static let colors: [Color] = [
+        Color(red: 0.58, green: 0.84, blue: 0.86), // Aqua
+        Color(red: 0.70, green: 0.86, blue: 0.60), // Mint
+        Color(red: 0.95, green: 0.65, blue: 0.62), // Peach
+        Color(red: 0.80, green: 0.68, blue: 0.92), // Lavender
+        Color(red: 0.65, green: 0.80, blue: 0.95), // Periwinkle
+        Color(red: 0.98, green: 0.88, blue: 0.50), // Sunshine
+        Color(red: 0.93, green: 0.62, blue: 0.72), // Pink
+        Color(red: 0.73, green: 0.70, blue: 0.92), // Wisteria
+        Color(red: 0.78, green: 0.88, blue: 0.60), // Lime
+        Color(red: 0.92, green: 0.75, blue: 0.62), // Apricot
+        Color(red: 0.95, green: 0.78, blue: 0.55), // Tangerine
+        Color(red: 0.55, green: 0.85, blue: 0.80), // Seafoam
+    ]
+
+    /// Returns a deterministic color for a given string (e.g., category name, conversation title).
+    static func color(for name: String) -> Color {
+        let hash = abs(name.hashValue)
+        return colors[hash % colors.count]
+    }
+}
+
 // MARK: - Bouncing Dots Typing Indicator
 
 struct BouncingDotsView: View {

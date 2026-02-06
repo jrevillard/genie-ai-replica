@@ -49,12 +49,12 @@
         "primaryColor": {
           "type": "string",
           "description": "Primary color for buttons and accents",
-          "default": "#4E97D1"
+          "default": "#5B9FD6"
         },
         "secondaryColor": {
           "type": "string",
           "description": "Secondary color for accents and highlights",
-          "default": "#2C5F8A"
+          "default": "#7DBFB8"
         },
         "backgroundColor": {
           "type": "string",
@@ -73,12 +73,12 @@
             "gradientStart": {
               "type": "string",
               "description": "Start color for navbar gradient",
-              "default": "#4E97D1"
+              "default": "#5B9FD6"
             },
             "gradientEnd": {
               "type": "string",
               "description": "End color for navbar gradient",
-              "default": "#2C5F8A"
+              "default": "#7DBFB8"
             },
             "textColor": {
               "type": "string",
@@ -333,13 +333,13 @@
     }
   },
   "theme": {
-    "primaryColor": "#4682B4",
-    "secondaryColor": "#5F9EA0",
+    "primaryColor": "#5B9FD6",
+    "secondaryColor": "#7DBFB8",
     "backgroundColor": "#D3E0EA",
     "textColor": "#1C2526",
     "navbar": {
-      "gradientStart": "#4682B4",
-      "gradientEnd": "#5F9EA0",
+      "gradientStart": "#5B9FD6",
+      "gradientEnd": "#7DBFB8",
       "textColor": "#F0F8FF"
     }
   },
@@ -382,7 +382,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/just-chat.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -426,7 +426,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/identity-civil.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -470,7 +470,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/taxes-revenue.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -514,7 +514,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/business-trade.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -558,7 +558,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/healthcare-social.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -602,7 +602,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/education-learning.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -646,7 +646,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/transportation-mobility.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -690,7 +690,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/housing-urban.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {
@@ -734,7 +734,7 @@
               },
               "icon": {
                 "value": "/config/quickhelp/employment-labor.svg",
-                "color": "#4682B4"
+                "color": "#5B9FD6"
               },
               "style": {
                 "background": {

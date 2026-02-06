@@ -38,18 +38,18 @@ struct UserProfileView: View {
     }
 
     private let categories: [ProfileCategory] = [
-        ProfileCategory(id: 0, title: "Personal Identification Data", icon: "person.text.rectangle", color: .blue),
-        ProfileCategory(id: 1, title: "Civil Registration & Documentation", icon: "doc.text", color: .orange),
-        ProfileCategory(id: 2, title: "Address & Residency Information", icon: "house", color: .green),
-        ProfileCategory(id: 3, title: "Identity & Travel Documents", icon: "airplane", color: .cyan),
-        ProfileCategory(id: 4, title: "Health & Medical Records", icon: "heart.text.square", color: .red),
-        ProfileCategory(id: 5, title: "Employment & Economic Data", icon: "briefcase", color: .brown),
-        ProfileCategory(id: 6, title: "Education & Academic Records", icon: "graduationcap", color: .purple),
-        ProfileCategory(id: 7, title: "Financial & Tax Data", icon: "dollarsign.circle", color: .mint),
-        ProfileCategory(id: 8, title: "Social Security & Welfare", icon: "person.2", color: .indigo),
-        ProfileCategory(id: 9, title: "Criminal & Legal Records", icon: "building.columns", color: .gray),
-        ProfileCategory(id: 10, title: "Transportation & Mobility", icon: "car", color: .teal),
-        ProfileCategory(id: 11, title: "Civic & Political Participation", icon: "flag", color: .pink),
+        ProfileCategory(id: 0, title: "Personal Identification Data", icon: "person.text.rectangle", color: CategoryPalette.colors[4]),
+        ProfileCategory(id: 1, title: "Civil Registration & Documentation", icon: "doc.text", color: CategoryPalette.colors[10]),
+        ProfileCategory(id: 2, title: "Address & Residency Information", icon: "house", color: CategoryPalette.colors[1]),
+        ProfileCategory(id: 3, title: "Identity & Travel Documents", icon: "airplane", color: CategoryPalette.colors[0]),
+        ProfileCategory(id: 4, title: "Health & Medical Records", icon: "heart.text.square", color: CategoryPalette.colors[2]),
+        ProfileCategory(id: 5, title: "Employment & Economic Data", icon: "briefcase", color: CategoryPalette.colors[9]),
+        ProfileCategory(id: 6, title: "Education & Academic Records", icon: "graduationcap", color: CategoryPalette.colors[3]),
+        ProfileCategory(id: 7, title: "Financial & Tax Data", icon: "dollarsign.circle", color: CategoryPalette.colors[11]),
+        ProfileCategory(id: 8, title: "Social Security & Welfare", icon: "person.2", color: CategoryPalette.colors[7]),
+        ProfileCategory(id: 9, title: "Criminal & Legal Records", icon: "building.columns", color: CategoryPalette.colors[8]),
+        ProfileCategory(id: 10, title: "Transportation & Mobility", icon: "car", color: CategoryPalette.colors[5]),
+        ProfileCategory(id: 11, title: "Civic & Political Participation", icon: "flag", color: CategoryPalette.colors[6]),
     ]
 
     var body: some View {
@@ -321,7 +321,7 @@ struct ProfileAvatarSection: View {
             let hex = String(icon.dropFirst("initials:".count))
             return Color(hex: hex)
         }
-        return Color(red: 78/255, green: 151/255, blue: 209/255)
+        return theme.primaryColor
     }
 
     private var isImageURL: Bool {
@@ -397,10 +397,10 @@ struct ProfileIconSelectorSheet: View {
 
     @State private var selectedTabIndex = 0
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var selectedInitialsColor = Color(red: 78/255, green: 151/255, blue: 209/255)
+    @State private var selectedInitialsColor = Color(red: 91/255, green: 159/255, blue: 214/255)
 
     private let colorOptions: [(Color, String)] = [
-        (Color(red: 78/255, green: 151/255, blue: 209/255), "#4E97D1"),
+        (Color(red: 91/255, green: 159/255, blue: 214/255), "#5B9FD6"),
         (.green, "#4CAF50"),
         (.red, "#F44336"),
         (.purple, "#9C27B0"),

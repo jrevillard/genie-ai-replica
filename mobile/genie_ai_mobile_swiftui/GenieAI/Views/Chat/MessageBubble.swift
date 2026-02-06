@@ -32,7 +32,7 @@ struct MessageBubble: View {
                     if message.role.isUser {
                         Text(message.content)
                             .font(.body)
-                            .foregroundColor(.white)
+                            .foregroundColor(theme.primaryTextColor)
                     } else {
                         markdownContent(message.content)
                             .font(.body)
@@ -43,32 +43,15 @@ struct MessageBubble: View {
                 .padding(.vertical, 12)
                 .background {
                     if message.role.isUser {
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: theme.radiusLG,
-                            bottomLeadingRadius: theme.radiusLG,
-                            bottomTrailingRadius: theme.radiusSM,
-                            topTrailingRadius: theme.radiusLG
-                        )
-                        .fill(AnyShapeStyle(theme.navbarGradient))
-                        .shadow(theme.shadowSoft)
+                        userBubbleShape
+                            .fill(theme.primaryColor.opacity(0.12))
+                            .overlay(userBubbleShape.stroke(theme.primaryColor.opacity(0.25), lineWidth: 1))
+                            .shadow(theme.shadowSoft)
                     } else {
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: theme.radiusLG,
-                            bottomLeadingRadius: theme.radiusSM,
-                            bottomTrailingRadius: theme.radiusLG,
-                            topTrailingRadius: theme.radiusLG
-                        )
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: theme.radiusLG,
-                                bottomLeadingRadius: theme.radiusSM,
-                                bottomTrailingRadius: theme.radiusLG,
-                                topTrailingRadius: theme.radiusLG
-                            )
-                            .stroke(theme.glassBorder, lineWidth: 1)
-                        )
-                        .shadow(theme.shadowSoft)
+                        botBubbleShape
+                            .fill(.ultraThinMaterial)
+                            .overlay(botBubbleShape.stroke(theme.glassBorder, lineWidth: 1))
+                            .shadow(theme.shadowSoft)
                     }
                 }
 
@@ -138,6 +121,26 @@ struct MessageBubble: View {
                 appeared = true
             }
         }
+    }
+
+    // MARK: - Bubble Shapes
+
+    private var userBubbleShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: theme.radiusLG,
+            bottomLeadingRadius: theme.radiusLG,
+            bottomTrailingRadius: theme.radiusSM,
+            topTrailingRadius: theme.radiusLG
+        )
+    }
+
+    private var botBubbleShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: theme.radiusLG,
+            bottomLeadingRadius: theme.radiusSM,
+            bottomTrailingRadius: theme.radiusLG,
+            topTrailingRadius: theme.radiusLG
+        )
     }
 
     @ViewBuilder

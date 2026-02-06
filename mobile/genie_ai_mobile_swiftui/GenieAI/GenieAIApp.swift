@@ -20,6 +20,7 @@ struct GenieAIApp: App {
                 .environment(\.locale, appLocale.locale)
                 .preferredColorScheme(themeManager.colorScheme)
                 .environment(\.layoutDirection, appLocale.isRtl ? .rightToLeft : .leftToRight)
+                .fontDesign(.rounded)
         }
     }
 }

@@ -200,16 +200,19 @@ struct ServiceTreeView: View {
     }
 
     private func toggleServiceSelection(_ service: ServiceItem, categoryId: String) {
-        if let index = selectedServices.firstIndex(where: { $0.id == service.id || $0.name == service.name }) {
-            // Deselect
-            selectedServices.remove(at: index)
-        } else {
-            // Select
-            selectedServices.append(ServiceSelection(
-                id: service.id,
-                name: service.name,
-                categoryId: categoryId
-            ))
+        withAnimation(theme.animationSmooth) {
+            if let index = selectedServices.firstIndex(where: { $0.id == service.id || $0.name == service.name }) {
+                selectedServices.remove(at: index)
+            } else {
+                selectedServices.append(ServiceSelection(
+                    id: service.id,
+                    name: service.name,
+                    categoryId: categoryId
+                ))
+            }
+        }
+        if theme.hapticsEnabled {
+            UISelectionFeedbackGenerator().selectionChanged()
         }
         emitSelectionChange()
     }
@@ -243,28 +246,17 @@ struct CategoryRow: View {
         selectedServices.filter { $0.categoryId == category.id }.count
     }
 
-    /// Deterministic icon based on category name hash
-    private var categoryIcon: String {
-        let icons = [
-            "globe", "building.2", "heart.text.square", "graduationcap",
-            "briefcase", "leaf", "gearshape.2", "chart.bar",
-            "person.3", "shield.checkered", "lightbulb", "doc.text"
-        ]
-        let hash = abs(category.name.hashValue)
-        return icons[hash % icons.count]
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Category Header
             Button(action: onToggle) {
                 HStack(spacing: theme.spacingMD) {
-                    // Colored circle icon badge
-                    Image(systemName: categoryIcon)
+                    // Colored circle icon badge (deterministic color per category)
+                    Image(systemName: "book.closed")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
-                        .background(theme.primaryColor.opacity(0.85), in: Circle())
+                        .background(CategoryPalette.color(for: category.name), in: Circle())
 
                     Text(category.name)
                         .font(.subheadline)
@@ -303,6 +295,7 @@ struct CategoryRow: View {
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(theme.spacingMD)
+                .contentShape(Rectangle())
             }
             .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
 
@@ -349,6 +342,7 @@ struct ServiceRow: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18))
                     .foregroundColor(isSelected ? theme.primaryColor : theme.secondaryTextColor.opacity(0.5))
+                    .contentTransition(.symbolEffect(.replace))
 
                 Text(service.name)
                     .font(.subheadline)

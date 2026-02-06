@@ -610,6 +610,17 @@ All platforms must have identical localized strings for every supported language
 - Interactive rows in lists should have generous vertical padding (at least 14pt / 14dp) for comfortable tapping.
 - Every interactive element must provide immediate visual and/or haptic feedback on tap.
 
+**Delight & engagement principles (all platforms):**
+- **Category color coding**: Every knowledge area category, conversation, and folder should display a distinct color on its icon badge. Use a shared palette of 12 bright candy pastels (aqua, mint, peach, lavender, periwinkle, sunshine, pink, wisteria, lime, apricot, tangerine, seafoam). Avoid earthy or brownish tones — keep colors light and cheerful. Colors are deterministic — the same name always maps to the same color across sessions. This breaks visual monotony, aids scanning, and makes the app feel alive.
+- **Animated state transitions**: When interactive elements toggle between states (selected/deselected, expanded/collapsed, starred/unstarred), the transition should be animated — never an abrupt swap. Use platform-native symbol animation APIs (SF Symbol effects on iOS, animated vector drawables on Android).
+- **Selection feedback**: Every selection action should be accompanied by both visual animation and haptic/tactile feedback. Users should *feel* the toggle.
+- **Warm, friendly tone**: Empty states, loading states, and onboarding copy should feel encouraging and human, not sterile or corporate. Example: "No starred chats yet" not "No results found."
+- **Iconography consistency**: Use one icon set per platform (SF Symbols on iOS, Material Symbols on Android). Prefer clean, geometric, consistent stroke weight across all icons. Use outline variants for inactive states and filled variants for active/selected states. Always pair icons with text labels.
+- **Semantic icon colors**: Use contextually appropriate colors for icons (e.g., amber/yellow for lightbulbs, green for success, red for errors) rather than coloring all icons with the brand primary. This adds visual variety and reduces color monotony.
+- **No gradient fills on chat bubbles**: User message bubbles should use a subtle tinted surface (e.g., frosted glass with a light primary color overlay) rather than a solid or gradient color fill. Gradient chat bubbles look dated. The tinted approach is modern, lighter, and cohesive with glass/material design systems.
+- **Rounded typography**: Prefer rounded font families (SF Pro Rounded on iOS, Google Sans Rounded or equivalent on Android) for a warm, approachable feel. Applied at the app root level.
+- **Elderly-friendly sizing**: Quick help tiles, action buttons, and primary interactive elements should be generously sized — minimum 52pt/52dp height, 14pt+ text, 20pt+ icons. The app serves a healthcare-focused population that includes elderly users.
+
 ---
 
 ## 13. API Service Architecture

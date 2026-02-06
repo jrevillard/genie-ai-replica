@@ -434,12 +434,12 @@ struct ConversationRow: View {
     var body: some View {
         Button(action: onTapped) {
             HStack(alignment: .top, spacing: theme.spacingMD) {
-                // Colored circle icon badge
+                // Colored circle icon badge (deterministic color per conversation)
                 Image(systemName: "bubble.left.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
-                    .background(theme.primaryColor.opacity(0.85), in: Circle())
+                    .background(CategoryPalette.color(for: conversation.title), in: Circle())
 
                 VStack(alignment: .leading, spacing: theme.spacingXS) {
                     HStack(spacing: 6) {
@@ -544,12 +544,12 @@ struct FolderRow: View {
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: theme.spacingMD) {
-                // Colored circle icon badge
+                // Colored circle icon badge (deterministic color per folder)
                 Image(systemName: isExpanded ? "folder.fill" : "folder")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
-                    .background(theme.primaryColor.opacity(0.85), in: Circle())
+                    .background(CategoryPalette.color(for: folder.name), in: Circle())
 
                 Text(folder.name)
                     .font(.subheadline)

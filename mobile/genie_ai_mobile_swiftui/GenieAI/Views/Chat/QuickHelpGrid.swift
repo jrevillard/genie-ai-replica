@@ -51,21 +51,22 @@ struct QuickHelpButtonView: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: iconName)
-                    .font(.system(size: 16))
+                    .font(.system(size: 20))
                     .foregroundColor(theme.primaryColor)
 
                 Text(button.label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.primaryTextColor)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 52)
             .background(.thinMaterial)
             .overlay(
                 RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous)

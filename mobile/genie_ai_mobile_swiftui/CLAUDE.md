@@ -233,6 +233,18 @@ All design tokens are centralized in `ThemeManager.swift`:
 - Haptics on every interactive element
 - Brand consistency: navbar gradient and primaryColor are shared with Flutter
 
+### Delight & Engagement
+- **Category color coding**: Use `CategoryPalette.color(for: name)` (defined in `View+GlassStyle.swift`) to give each category, conversation, or folder a distinct color on its icon badge. The palette contains 12 bright, airy candy pastels (aqua, mint, peach, lavender, periwinkle, sunshine, pink, wisteria, lime, apricot, tangerine, seafoam). Colors are deterministic — the same name always maps to the same color. Avoid earthy/muddy tones — keep pastels light and cheerful.
+- **Animated symbol transitions**: Use `.contentTransition(.symbolEffect(.replace))` on SF Symbol images that toggle between states (e.g., checkmark/circle, star/star.fill) for smooth, satisfying icon swaps instead of abrupt changes.
+- **Selection feedback**: Wrap selection state changes in `withAnimation(theme.animationSmooth)` and fire `UISelectionFeedbackGenerator().selectionChanged()` so users feel the toggle.
+- **Warmth over corporate**: Empty states, loading states, and onboarding copy should feel friendly and encouraging, not sterile. Prefer "No starred chats yet" over "Error: empty result set".
+- **Iconography**: Use SF Symbols exclusively. Keep icon usage consistent: outline for inactive states, filled for active/selected states. Always pair icons with text labels for accessibility. For dynamic/server-driven data (e.g., knowledge area categories), use a single consistent icon (e.g., `book.closed`) rather than randomly-assigned icons that won't match the content. Specific icons are fine for static, known data (e.g., profile categories).
+- **Semantic icon colors**: Use contextually meaningful colors for icons — e.g., warm amber/yellow for lightbulbs, not the primary brand color. This adds visual variety and makes the UI feel less monochrome.
+- **Typography**: The app uses SF Pro Rounded (`.fontDesign(.rounded)`) applied at the root level for a warm, friendly feel. Do not override with `.fontDesign(.default)` unless there is a specific reason.
+- **Color variety**: Avoid over-reliance on the primary blue. Use the `CategoryPalette`, semantic icon colors, and document type colors to introduce visual variety throughout the UI.
+- **No gradient fills on chat bubbles**: User message bubbles use a light solid tint (`primaryColor.opacity(0.12)` + colored border), not gradient or material fills. Gradient fills on chat bubbles look dated, and material-based fills look too grayish. Bot bubbles use `.ultraThinMaterial` + `glassBorder`. The clear color difference makes user/bot messages immediately distinguishable.
+- **Elderly-friendly tap targets**: Quick help tiles and interactive elements must be generously sized. Quick help buttons use 20pt icons, 14pt text, 14pt padding, and 52pt min height. Always consider elderly and accessibility users when sizing interactive elements.
+
 ### Tap Target & Interaction Guidelines
 - **Minimum tap target**: 44pt in the smallest dimension (Apple HIG). Rows, buttons, and interactive elements must meet this.
 - **Full-row tappability**: Every list row or selectable item must be tappable across its entire width, not just the text or icon. Use `.contentShape(Rectangle())` or wrap in `Button` to ensure the full bounds are hit-testable.

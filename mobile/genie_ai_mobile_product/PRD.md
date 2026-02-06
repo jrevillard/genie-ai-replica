@@ -261,6 +261,8 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ### 4.1 Personal Information
 - Display name, date of birth, gender, marital status
+- Date of birth: date picker (no future dates allowed)
+- Nationality: searchable country picker with flags
 - Blood type selection
 - Avatar: preset icon selection or custom upload
 - Initials color customization

@@ -561,13 +561,12 @@ struct PersonalDataTab: View {
                     placeholder: i18n.translate("userProfile.placeholders.fullName")
                 )
 
-                ProfileField(
+                ProfileDateField(
                     label: i18n.translate("userProfile.fields.dob"),
-                    text: Binding(
+                    dateString: Binding(
                         get: { personalInfo.dob ?? "" },
                         set: { personalInfo.dob = $0; hasChanges = true }
-                    ),
-                    placeholder: "YYYY-MM-DD"
+                    )
                 )
 
                 ProfilePickerField(
@@ -584,13 +583,12 @@ struct PersonalDataTab: View {
                     ]
                 )
 
-                ProfileField(
+                ProfileCountryPickerField(
                     label: i18n.translate("userProfile.fields.nationality"),
-                    text: Binding(
+                    selection: Binding(
                         get: { personalInfo.nationality ?? "" },
                         set: { personalInfo.nationality = $0; hasChanges = true }
-                    ),
-                    placeholder: i18n.translate("userProfile.placeholders.nationality")
+                    )
                 )
 
                 ProfilePickerField(
@@ -1516,6 +1514,191 @@ struct ProfileFileUploadField: View {
             }
         }
     }
+}
+
+// MARK: - Date Picker Field
+
+struct ProfileDateField: View {
+    @Environment(ThemeManager.self) private var theme
+
+    let label: String
+    @Binding var dateString: String
+
+    @State private var showDatePicker = false
+    @State private var selectedDate = Date()
+
+    private static let displayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+
+            Button(action: { showDatePicker = true }) {
+                HStack {
+                    Text(dateString.isEmpty ? "YYYY-MM-DD" : dateString)
+                        .foregroundColor(dateString.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
+                    Spacer()
+                    Image(systemName: "calendar")
+                        .foregroundColor(theme.primaryColor)
+                }
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(10)
+            }
+            .sheet(isPresented: $showDatePicker) {
+                NavigationStack {
+                    DatePicker(
+                        "",
+                        selection: $selectedDate,
+                        in: ...Date(),
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .padding()
+                    .navigationTitle(label)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                dateString = Self.displayFormatter.string(from: selectedDate)
+                                showDatePicker = false
+                            }
+                        }
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                showDatePicker = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
+        }
+        .onAppear {
+            if !dateString.isEmpty, let parsed = Self.displayFormatter.date(from: dateString) {
+                selectedDate = parsed
+            }
+        }
+        .onChange(of: dateString) { _, newValue in
+            if let parsed = Self.displayFormatter.date(from: newValue) {
+                selectedDate = parsed
+            }
+        }
+    }
+}
+
+// MARK: - Country Picker Field
+
+struct ProfileCountryPickerField: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(I18nService.self) private var i18n
+
+    let label: String
+    @Binding var selection: String
+
+    @State private var showCountryPicker = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+
+            Button(action: { showCountryPicker = true }) {
+                HStack {
+                    Image(systemName: "flag")
+                        .foregroundColor(theme.primaryColor)
+                    Text(selection.isEmpty
+                         ? i18n.translate("userProfile.placeholders.selectCountry")
+                         : selection)
+                        .foregroundColor(selection.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(theme.secondaryTextColor)
+                }
+                .padding()
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(10)
+            }
+            .sheet(isPresented: $showCountryPicker) {
+                CountryPickerSheet(selection: $selection)
+            }
+        }
+    }
+}
+
+// MARK: - Country Picker Sheet
+
+struct CountryPickerSheet: View {
+    @Environment(ThemeManager.self) private var theme
+    @Environment(I18nService.self) private var i18n
+    @Environment(\.dismiss) private var dismiss
+
+    @Binding var selection: String
+    @State private var searchText = ""
+
+    private var filteredCountries: [(String, String)] {
+        let list = Self.countries
+        if searchText.isEmpty { return list }
+        return list.filter { $0.1.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredCountries, id: \.1) { flag, name in
+                Button(action: {
+                    selection = name
+                    dismiss()
+                }) {
+                    HStack(spacing: 12) {
+                        Text(flag)
+                            .font(.title2)
+                        Text(name)
+                            .foregroundColor(theme.primaryTextColor)
+                        Spacer()
+                        if selection == name {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(theme.primaryColor)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: i18n.translate("userProfile.placeholders.searchCountries"))
+            .navigationTitle(i18n.translate("userProfile.placeholders.selectCountry"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(theme.secondaryTextColor)
+                    }
+                }
+            }
+        }
+    }
+
+    // ISO 3166-1 countries with flag emoji
+    static let countries: [(String, String)] = {
+        var result: [(String, String)] = []
+        for code in Locale.Region.isoRegions {
+            let identifier = code.identifier
+            guard identifier.count == 2 else { continue }
+            let flag = identifier.unicodeScalars.reduce("") { str, scalar in
+                str + String(UnicodeScalar(127397 + scalar.value)!)
+            }
+            if let name = Locale.current.localizedString(forRegionCode: identifier) {
+                result.append((flag, name))
+            }
+        }
+        return result.sorted { $0.1 < $1.1 }
+    }()
 }
 
 #Preview {

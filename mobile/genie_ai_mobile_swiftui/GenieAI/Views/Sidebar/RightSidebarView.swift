@@ -235,23 +235,6 @@ struct RightSidebarView: View {
     }
 }
 
-// MARK: - Staggered Appearance Modifier
-
-private extension View {
-    func staggeredAppearance(index: Int, visibleCount: Int, theme: ThemeManager) -> some View {
-        self
-            .opacity(index < visibleCount ? 1 : 0)
-            .offset(y: index < visibleCount ? 0 : 12)
-            .scaleEffect(index < visibleCount ? 1 : 0.95)
-            .animation(
-                theme.animationsEnabled
-                    ? .spring(response: 0.4, dampingFraction: 0.75).delay(0.2 + Double(index) * 0.06)
-                    : nil,
-                value: visibleCount
-            )
-    }
-}
-
 // MARK: - Document Item
 
 struct DocumentItem: Identifiable {

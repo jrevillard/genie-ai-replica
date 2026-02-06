@@ -232,3 +232,9 @@ All design tokens are centralized in `ThemeManager.swift`:
 - Spring animations (`animationSmooth`, `animationBounce`) over linear/easeInOut
 - Haptics on every interactive element
 - Brand consistency: navbar gradient and primaryColor are shared with Flutter
+
+### Tap Target & Interaction Guidelines
+- **Minimum tap target**: 44pt in the smallest dimension (Apple HIG). Rows, buttons, and interactive elements must meet this.
+- **Full-row tappability**: Every list row or selectable item must be tappable across its entire width, not just the text or icon. Use `.contentShape(Rectangle())` or wrap in `Button` to ensure the full bounds are hit-testable.
+- **Generous vertical padding**: List rows should use at least 14pt vertical padding (`theme.spacingMD` or more) to ensure comfortable tapping.
+- **Visual feedback on all interactive elements**: Use `GlassPressButtonStyle` or `.hapticOnTap()` so users get immediate confirmation of their tap.

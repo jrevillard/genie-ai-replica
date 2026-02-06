@@ -53,6 +53,20 @@ extension View {
     func shadow(_ style: ThemeManager.ShadowStyle) -> some View {
         self.shadow(color: style.color, radius: style.radius, x: style.x, y: style.y)
     }
+
+    /// Staggered entrance animation: fade + slide + scale, delayed by index
+    func staggeredAppearance(index: Int, visibleCount: Int, theme: ThemeManager) -> some View {
+        self
+            .opacity(index < visibleCount ? 1 : 0)
+            .offset(y: index < visibleCount ? 0 : 12)
+            .scaleEffect(index < visibleCount ? 1 : 0.95)
+            .animation(
+                theme.animationsEnabled
+                    ? .spring(response: 0.4, dampingFraction: 0.75).delay(0.2 + Double(index) * 0.06)
+                    : nil,
+                value: visibleCount
+            )
+    }
 }
 
 // MARK: - Glass Press Button Style

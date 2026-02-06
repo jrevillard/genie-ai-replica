@@ -1,5 +1,5 @@
 // ChatHistoryView.swift
-// Chat history list with folders
+// Chat history list with folders — Liquid Glass design
 
 import SwiftUI
 
@@ -26,6 +26,25 @@ enum ChatHistoryTab: String, CaseIterable {
         case .archived: return String(localized: "Archived")
         }
     }
+
+    /// Icon for tab-specific empty states
+    var emptyIcon: String {
+        switch self {
+        case .all: return "bubble.left.and.bubble.right"
+        case .folders: return "folder"
+        case .starred: return "star.slash"
+        case .archived: return "archivebox"
+        }
+    }
+
+    var emptyMessage: String {
+        switch self {
+        case .all: return String(localized: "No recent chats")
+        case .folders: return String(localized: "No folders yet")
+        case .starred: return String(localized: "No starred chats")
+        case .archived: return String(localized: "No archived chats")
+        }
+    }
 }
 
 struct ChatHistoryView: View {
@@ -41,47 +60,36 @@ struct ChatHistoryView: View {
     @State private var conversationToRename: Conversation?
     @State private var showMoveToFolder = false
     @State private var conversationToMove: Conversation?
+    @State private var visibleCount = 0
 
     var searchText: String
     var onConversationSelected: ((Conversation) -> Void)?
 
+    /// Total items for staggered animation
+    private var totalItemCount: Int {
+        switch selectedTab {
+        case .all:
+            let items = filterConversations(historyService.getAllNonArchivedConversations())
+            return max(items.count, 1)
+        case .folders:
+            return 1 + historyService.folders.count // create button + folders
+        case .starred:
+            let items = filterConversations(historyService.getStarredConversations())
+            return max(items.count, 1)
+        case .archived:
+            let items = filterConversations(historyService.getArchivedConversations())
+            return max(items.count, 1)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Sub-tabs (underline indicator style matching Flutter)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    ForEach(ChatHistoryTab.allCases, id: \.self) { tab in
-                        let isActive = selectedTab == tab
-                        Button(action: { selectedTab = tab }) {
-                            VStack(spacing: 0) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: tab.icon)
-                                        .font(.system(size: 14))
-                                    Text(tab.localizedTitle)
-                                        .font(.system(size: 12, weight: isActive ? .bold : .semibold))
-                                }
-                                .foregroundColor(isActive ? theme.primaryColor : theme.secondaryTextColor)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-
-                                // Underline indicator
-                                Rectangle()
-                                    .fill(isActive ? theme.primaryColor : Color.clear)
-                                    .frame(height: 3)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 8)
-            }
-            .frame(height: 48)
-            .background(theme.surfaceColor)
-
-            Divider()
+            // Glass pill tab bar
+            tabBar
 
             // Content
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: theme.spacingMD) {
                     switch selectedTab {
                     case .all:
                         conversationsList(historyService.getAllNonArchivedConversations())
@@ -96,11 +104,16 @@ struct ChatHistoryView: View {
                         conversationsList(historyService.getArchivedConversations())
                     }
                 }
+                .padding(.horizontal, theme.spacingMD)
+                .padding(.top, theme.spacingMD)
+                .padding(.bottom, theme.spacingXL)
             }
         }
         .task {
             await loadData()
         }
+        .onAppear { triggerStaggeredAnimation() }
+        .onChange(of: selectedTab) { _, _ in triggerStaggeredAnimation() }
         .sheet(isPresented: $showCreateFolder) {
             CreateFolderSheet(onSave: createFolder, onDismiss: { showCreateFolder = false })
         }
@@ -123,20 +136,74 @@ struct ChatHistoryView: View {
         }
     }
 
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        HStack(spacing: theme.spacingXS) {
+            ForEach(ChatHistoryTab.allCases, id: \.self) { tab in
+                let isActive = selectedTab == tab
+                Button {
+                    withAnimation(theme.animationSmooth) {
+                        selectedTab = tab
+                    }
+                    if theme.hapticsEnabled {
+                        UISelectionFeedbackGenerator().selectionChanged()
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 16))
+                        Text(tab.localizedTitle)
+                            .font(.system(size: 11, weight: isActive ? .bold : .semibold))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .foregroundColor(isActive ? theme.primaryColor : theme.secondaryTextColor)
+                    .background {
+                        if isActive {
+                            RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                                .fill(.thinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                                        .stroke(theme.glassBorder, lineWidth: 1)
+                                )
+                                .shadow(theme.shadowSoft)
+                                .padding(theme.spacingXS)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, theme.spacingXS)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Staggered Animation
+
+    private func triggerStaggeredAnimation() {
+        visibleCount = 0
+        DispatchQueue.main.async {
+            visibleCount = totalItemCount
+        }
+    }
+
+    // MARK: - Conversations List
+
     @ViewBuilder
     private func conversationsList(_ conversations: [Conversation]) -> some View {
         let filtered = filterConversations(conversations)
 
         if historyService.isLoading {
-            ProgressView()
-                .padding()
+            loadingState
         } else if filtered.isEmpty {
-            Text("No recent chats")
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-                .padding()
+            emptyState(
+                message: selectedTab.emptyMessage,
+                icon: selectedTab.emptyIcon,
+                index: 0
+            )
         } else {
-            ForEach(filtered) { conversation in
+            ForEach(Array(filtered.enumerated()), id: \.element.id) { offset, conversation in
                 ConversationRow(
                     conversation: conversation,
                     onTapped: { onConversationSelected?(conversation) },
@@ -146,53 +213,112 @@ struct ChatHistoryView: View {
                     onArchive: { toggleArchive(conversation) },
                     onDelete: { deleteConversation(conversation) }
                 )
+                .staggeredAppearance(index: offset, visibleCount: visibleCount, theme: theme)
             }
         }
     }
+
+    // MARK: - Folders List
 
     @ViewBuilder
     private func foldersList() -> some View {
         // Create Folder Button
         Button(action: { showCreateFolder = true }) {
-            HStack {
-                Image(systemName: "plus.circle.fill")
+            HStack(spacing: theme.spacingMD) {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(theme.primaryColor.opacity(0.85), in: Circle())
+
                 Text("Create Folder")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(theme.primaryTextColor)
+
+                Spacer()
             }
-            .font(.subheadline)
-            .foregroundColor(theme.primaryColor)
-            .padding()
+            .padding(theme.spacingMD)
+            .glassCard(theme: theme)
         }
+        .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
+        .staggeredAppearance(index: 0, visibleCount: visibleCount, theme: theme)
 
-        ForEach(historyService.folders) { folder in
-            FolderRow(
-                folder: folder,
-                isExpanded: selectedFolder?.id == folder.id,
-                conversationCount: historyService.getConversationsInFolder(folder.id).count,
-                onToggle: {
-                    withAnimation {
-                        selectedFolder = selectedFolder?.id == folder.id ? nil : folder
+        ForEach(Array(historyService.folders.enumerated()), id: \.element.id) { offset, folder in
+            VStack(spacing: 0) {
+                FolderRow(
+                    folder: folder,
+                    isExpanded: selectedFolder?.id == folder.id,
+                    conversationCount: historyService.getConversationsInFolder(folder.id).count,
+                    onToggle: {
+                        withAnimation(theme.animationSmooth) {
+                            selectedFolder = selectedFolder?.id == folder.id ? nil : folder
+                        }
+                    },
+                    onDelete: { deleteFolder(folder) }
+                )
+
+                if selectedFolder?.id == folder.id {
+                    let conversations = historyService.getConversationsInFolder(folder.id)
+                    ForEach(conversations) { conversation in
+                        ConversationRow(
+                            conversation: conversation,
+                            onTapped: { onConversationSelected?(conversation) },
+                            onRename: { promptRename(conversation) },
+                            onMoveToFolder: { promptMoveToFolder(conversation) },
+                            onStar: { toggleStar(conversation) },
+                            onArchive: { toggleArchive(conversation) },
+                            onDelete: { deleteConversation(conversation) }
+                        )
+                        .padding(.leading, theme.spacingLG)
+                        .padding(.top, theme.spacingXS)
                     }
-                },
-                onDelete: { deleteFolder(folder) }
-            )
-
-            if selectedFolder?.id == folder.id {
-                let conversations = historyService.getConversationsInFolder(folder.id)
-                ForEach(conversations) { conversation in
-                    ConversationRow(
-                        conversation: conversation,
-                        onTapped: { onConversationSelected?(conversation) },
-                        onRename: { promptRename(conversation) },
-                        onMoveToFolder: { promptMoveToFolder(conversation) },
-                        onStar: { toggleStar(conversation) },
-                        onArchive: { toggleArchive(conversation) },
-                        onDelete: { deleteConversation(conversation) }
-                    )
-                    .padding(.leading, 20)
                 }
             }
+            .staggeredAppearance(index: 1 + offset, visibleCount: visibleCount, theme: theme)
         }
     }
+
+    // MARK: - Empty State
+
+    @ViewBuilder
+    private func emptyState(message: String, icon: String, index: Int) -> some View {
+        VStack(spacing: theme.spacingMD) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+                .foregroundColor(theme.secondaryTextColor.opacity(0.5))
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+                .italic()
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous)
+                .stroke(theme.glassBorder, lineWidth: 1)
+        )
+        .staggeredAppearance(index: index, visibleCount: visibleCount, theme: theme)
+    }
+
+    // MARK: - Loading State
+
+    private var loadingState: some View {
+        VStack(spacing: theme.spacingMD) {
+            ProgressView()
+                .tint(theme.primaryColor)
+            Text("Loading chats...")
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+    }
+
+    // MARK: - Helpers
 
     private func filterConversations(_ conversations: [Conversation]) -> [Conversation] {
         if searchText.isEmpty {
@@ -210,6 +336,7 @@ struct ChatHistoryView: View {
         do {
             try await historyService.getUserConversations(userId: userId)
             try await historyService.getUserFolders(userId: userId)
+            triggerStaggeredAnimation()
         } catch {
             print("[ChatHistoryView] Load error: \(error)")
         }
@@ -305,19 +432,27 @@ struct ConversationRow: View {
     var onDelete: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+        Button(action: onTapped) {
+            HStack(alignment: .top, spacing: theme.spacingMD) {
+                // Colored circle icon badge
+                Image(systemName: "bubble.left.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(theme.primaryColor.opacity(0.85), in: Circle())
+
+                VStack(alignment: .leading, spacing: theme.spacingXS) {
+                    HStack(spacing: 6) {
                         Text(conversation.title)
                             .font(.subheadline)
-                            .fontWeight(.medium)
+                            .fontWeight(.semibold)
+                            .foregroundColor(theme.primaryTextColor)
                             .lineLimit(1)
 
                         if conversation.isStarred {
                             Image(systemName: "star.fill")
                                 .font(.caption2)
-                                .foregroundColor(.yellow)
+                                .foregroundColor(theme.primaryColor)
                         }
                     }
 
@@ -328,11 +463,12 @@ struct ConversationRow: View {
 
                     Text(formatDate(conversation.updatedAt))
                         .font(.caption2)
-                        .foregroundColor(theme.secondaryTextColor)
+                        .foregroundColor(theme.secondaryTextColor.opacity(0.7))
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
 
+                // Ellipsis menu with glass background
                 Menu {
                     if let onRename {
                         Button {
@@ -375,17 +511,16 @@ struct ConversationRow: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
+                        .font(.system(size: 14))
                         .foregroundColor(theme.secondaryTextColor)
-                        .padding(8)
+                        .frame(width: 32, height: 32)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
             }
-            .padding()
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onTapped)
-
-            Divider()
-                .padding(.leading)
+            .padding(theme.spacingMD)
+            .glassCard(theme: theme)
         }
+        .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -407,36 +542,42 @@ struct FolderRow: View {
     var onDelete: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
+        Button(action: onToggle) {
+            HStack(spacing: theme.spacingMD) {
+                // Colored circle icon badge
                 Image(systemName: isExpanded ? "folder.fill" : "folder")
-                    .foregroundColor(theme.primaryColor)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(theme.primaryColor.opacity(0.85), in: Circle())
 
                 Text(folder.name)
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
+                    .foregroundColor(theme.primaryTextColor)
 
                 Spacer()
 
+                // Count pill
                 Text("\(conversationCount)")
                     .font(.caption2)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(theme.secondaryColor)
-                    .cornerRadius(8)
+                    .fontWeight(.semibold)
+                    .foregroundColor(theme.primaryColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(theme.primaryColor.opacity(0.12), in: Capsule())
 
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
+                // Rotating chevron
+                Image(systemName: "chevron.forward")
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isExpanded ? theme.primaryColor : theme.secondaryTextColor)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
-            .padding()
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onToggle)
-
-            Divider()
-                .padding(.leading)
+            .padding(theme.spacingMD)
+            .glassCard(theme: theme)
         }
+        .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
     }
 }
 

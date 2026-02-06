@@ -44581,6 +44581,9 @@
         }
       }
     },
+    "Loading chats..." : {
+
+    },
     "Loading conversations..." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -44653,6 +44656,9 @@
       }
     },
     "Loading FAQ..." : {
+
+    },
+    "Loading knowledge areas..." : {
 
     },
     "Loading location..." : {
@@ -49276,6 +49282,9 @@
         }
       }
     },
+    "No archived chats" : {
+
+    },
     "No archived conversations" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -49631,6 +49640,9 @@
         }
       }
     },
+    "No folders yet" : {
+
+    },
     "No internet connection" : {
 
     },
@@ -49704,9 +49716,6 @@
           }
         }
       }
-    },
-    "No knowledge areas found for \"\\(searchText)\"" : {
-
     },
     "No knowledge areas found for \"%@\"" : {
       "extractionState" : "manual",
@@ -50204,6 +50213,9 @@
           }
         }
       }
+    },
+    "No starred chats" : {
+
     },
     "No starred conversations" : {
       "extractionState" : "manual",

@@ -604,6 +604,12 @@ All platforms must have identical localized strings for every supported language
 - Interaction patterns (haptics, spring animations)
 - Component styling (glass cards vs Material cards)
 
+**Interaction defaults (all platforms):**
+- Every list row, selectable item, or interactive card must be tappable across its entire width/height — not just the text or icon. Ensure the full bounds are hit-testable.
+- Minimum tap target size: 44pt (iOS) / 48dp (Android) in the smallest dimension per platform HIG.
+- Interactive rows in lists should have generous vertical padding (at least 14pt / 14dp) for comfortable tapping.
+- Every interactive element must provide immediate visual and/or haptic feedback on tap.
+
 ---
 
 ## 13. API Service Architecture

@@ -1,5 +1,5 @@
 // LeftSidebarView.swift
-// Left sidebar with services and chat history tabs
+// Left sidebar with services and chat history tabs — Liquid Glass design
 
 import SwiftUI
 
@@ -28,23 +28,25 @@ struct LeftSidebarView: View {
 
     @State private var selectedTab: LeftSidebarTab = .services
     @State private var searchText = ""
+    @Namespace private var tabNamespace
 
     var onConversationSelected: ((Conversation) -> Void)?
     var onServiceSelectionChanged: ((_ categoryId: String, _ name: String, _ contextLabels: String) -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
-            // Tab Selector
+            // Glass pill tab selector
             HStack(spacing: 0) {
                 ForEach(LeftSidebarTab.allCases, id: \.self) { tab in
-                    Button(action: {
-                        withAnimation(theme.animationQuick) {
+                    let isActive = selectedTab == tab
+                    Button {
+                        withAnimation(theme.animationSmooth) {
                             selectedTab = tab
                         }
                         if theme.hapticsEnabled {
                             UISelectionFeedbackGenerator().selectionChanged()
                         }
-                    }) {
+                    } label: {
                         VStack(spacing: 4) {
                             Image(systemName: tab.icon)
                                 .font(.title3)
@@ -55,18 +57,25 @@ struct LeftSidebarView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(
-                            selectedTab == tab
-                                ? RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
-                                    .fill(theme.primaryColor.opacity(0.1))
-                                    .padding(4)
-                                : nil
-                        )
-                        .foregroundColor(selectedTab == tab ? theme.primaryColor : theme.secondaryTextColor)
+                        .foregroundColor(isActive ? theme.primaryColor : theme.secondaryTextColor)
+                        .background {
+                            if isActive {
+                                RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                                    .fill(.thinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                                            .stroke(theme.glassBorder, lineWidth: 1)
+                                    )
+                                    .shadow(theme.shadowSoft)
+                                    .matchedGeometryEffect(id: "activeTab", in: tabNamespace)
+                                    .padding(theme.spacingXS)
+                            }
+                        }
                     }
                 }
             }
-            .background(.thinMaterial)
+            .padding(.horizontal, theme.spacingXS)
+            .background(.ultraThinMaterial)
 
             Divider()
 

@@ -1,5 +1,5 @@
 // ServiceTreeView.swift
-// Hierarchical display of service categories with multi-select
+// Hierarchical display of service categories with multi-select — Liquid Glass design
 
 import SwiftUI
 
@@ -17,6 +17,7 @@ struct ServiceTreeView: View {
     @State private var serviceTreeService = ServiceTreeService()
     @State private var expandedCategories: Set<String> = []
     @State private var selectedServices: [ServiceSelection] = []
+    @State private var visibleCount = 0
 
     var searchText: String
     var onSelectionChanged: ((_ categoryId: String, _ name: String, _ contextLabels: String) -> Void)?
@@ -31,72 +32,57 @@ struct ServiceTreeView: View {
         }
     }
 
+    private var totalItemCount: Int {
+        max(filteredCategories.count, 1)
+    }
+
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: theme.spacingMD) {
                 if serviceTreeService.isLoading {
-                    ProgressView()
-                        .padding()
+                    loadingState
                 } else if let _ = serviceTreeService.error {
-                    // Error state
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.title2)
-                            .foregroundColor(.orange)
-                        Text("Failed to load knowledge areas. Please try again.")
-                            .font(.subheadline)
-                            .foregroundColor(theme.secondaryTextColor)
-                            .multilineTextAlignment(.center)
-                        Button("Retry") {
-                            Task {
-                                try? await serviceTreeService.getAllCategories(locale: appLocale.currentLocale)
-                            }
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(theme.primaryColor)
-                    }
-                    .padding()
+                    errorState
                 } else if filteredCategories.isEmpty {
-                    if searchText.isEmpty {
-                        Text("No knowledge areas available")
-                            .font(.subheadline)
-                            .foregroundColor(theme.secondaryTextColor)
-                            .padding()
-                    } else {
-                        Text(String(localized: "No knowledge areas found for \"\\(searchText)\""))
-                            .font(.subheadline)
-                            .foregroundColor(theme.secondaryTextColor)
-                            .padding()
-                    }
+                    emptyState
                 } else {
-                    ForEach(filteredCategories) { category in
+                    ForEach(Array(filteredCategories.enumerated()), id: \.element.id) { offset, category in
                         CategoryRow(
                             category: category,
                             isExpanded: expandedCategories.contains(category.id),
                             searchText: searchText,
                             selectedServices: selectedServices,
                             onToggle: {
-                                withAnimation {
+                                withAnimation(theme.animationSmooth) {
                                     if expandedCategories.contains(category.id) {
                                         expandedCategories.remove(category.id)
                                     } else {
                                         expandedCategories.insert(category.id)
                                     }
                                 }
+                                if theme.hapticsEnabled {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                }
                             },
                             onServiceToggled: { service in
                                 toggleServiceSelection(service, categoryId: category.id)
                             }
                         )
+                        .staggeredAppearance(index: offset, visibleCount: visibleCount, theme: theme)
                     }
                 }
             }
+            .padding(.horizontal, theme.spacingMD)
+            .padding(.top, theme.spacingMD)
+            .padding(.bottom, theme.spacingXL)
         }
         .task {
             if serviceTreeService.categories.isEmpty {
                 await loadCategories()
             }
         }
+        .onAppear { triggerStaggeredAnimation() }
+        .onChange(of: serviceTreeService.categories.count) { _, _ in triggerStaggeredAnimation() }
         .onChange(of: searchText) { _, newValue in
             // Auto-expand categories with matching children on search
             if newValue.isEmpty {
@@ -117,6 +103,93 @@ struct ServiceTreeView: View {
             }
         }
     }
+
+    // MARK: - Staggered Animation
+
+    private func triggerStaggeredAnimation() {
+        visibleCount = 0
+        DispatchQueue.main.async {
+            visibleCount = totalItemCount
+        }
+    }
+
+    // MARK: - Loading State
+
+    private var loadingState: some View {
+        VStack(spacing: theme.spacingMD) {
+            ProgressView()
+                .tint(theme.primaryColor)
+            Text("Loading knowledge areas...")
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+    }
+
+    // MARK: - Error State
+
+    private var errorState: some View {
+        VStack(spacing: theme.spacingMD) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 32))
+                .foregroundColor(.orange.opacity(0.7))
+
+            Text("Failed to load knowledge areas. Please try again.")
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+                .italic()
+                .multilineTextAlignment(.center)
+
+            Button {
+                Task {
+                    try? await serviceTreeService.getAllCategories(locale: appLocale.currentLocale)
+                }
+            } label: {
+                Text("Retry")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(theme.primaryColor, in: Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous)
+                .stroke(theme.glassBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: theme.spacingMD) {
+            Image(systemName: searchText.isEmpty ? "square.grid.2x2" : "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundColor(theme.secondaryTextColor.opacity(0.5))
+
+            Text(searchText.isEmpty
+                 ? String(localized: "No knowledge areas available")
+                 : String(localized: "No knowledge areas found for \"\(searchText)\""))
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryTextColor)
+                .italic()
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(theme.spacingXL)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous)
+                .stroke(theme.glassBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Helpers
 
     private func loadCategories() async {
         do {
@@ -149,11 +222,12 @@ struct ServiceTreeView: View {
 
         let contextString = selectedServices.map { $0.name }.joined(separator: ", ")
         let primaryCategoryId = selectedServices.first?.categoryId ?? ""
-        let combinedIds = selectedServices.map { $0.id }.joined(separator: ",")
 
         onSelectionChanged?(primaryCategoryId, contextString, contextString)
     }
 }
+
+// MARK: - Category Row
 
 struct CategoryRow: View {
     @Environment(ThemeManager.self) private var theme
@@ -169,57 +243,87 @@ struct CategoryRow: View {
         selectedServices.filter { $0.categoryId == category.id }.count
     }
 
+    /// Deterministic icon based on category name hash
+    private var categoryIcon: String {
+        let icons = [
+            "globe", "building.2", "heart.text.square", "graduationcap",
+            "briefcase", "leaf", "gearshape.2", "chart.bar",
+            "person.3", "shield.checkered", "lightbulb", "doc.text"
+        ]
+        let hash = abs(category.name.hashValue)
+        return icons[hash % icons.count]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Category Header
-            HStack {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .frame(width: 20)
+            Button(action: onToggle) {
+                HStack(spacing: theme.spacingMD) {
+                    // Colored circle icon badge
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(theme.primaryColor.opacity(0.85), in: Circle())
 
-                Image(systemName: "folder.fill")
-                    .font(.caption)
-                    .foregroundColor(theme.primaryColor)
+                    Text(category.name)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(theme.primaryTextColor)
+                        .lineLimit(1)
 
-                Text(category.name)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(theme.primaryTextColor)
+                    Spacer()
 
-                Spacer()
+                    // Selected count badge
+                    if selectedCountInCategory > 0 {
+                        Text("\(selectedCountInCategory)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .frame(width: 20, height: 20)
+                            .background(theme.primaryColor, in: Circle())
+                    }
 
-                if let count = category.children?.count, count > 0 {
-                    Text("\(count)")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(theme.primaryColor)
-                        .cornerRadius(8)
+                    // Children count pill
+                    if let count = category.children?.count, count > 0 {
+                        Text("\(count)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(theme.primaryColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(theme.primaryColor.opacity(0.12), in: Capsule())
+                    }
+
+                    // Rotating chevron
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isExpanded ? theme.primaryColor : theme.secondaryTextColor)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
+                .padding(theme.spacingMD)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onToggle)
+            .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
 
             // Children (if expanded)
             if isExpanded, let children = category.children {
-                ForEach(filteredChildren(children)) { service in
-                    let isSelected = selectedServices.contains { $0.id == service.id || $0.name == service.name }
-                    ServiceRow(
-                        service: service,
-                        isSelected: isSelected
-                    ) {
-                        onServiceToggled?(service)
+                VStack(spacing: theme.spacingXS) {
+                    ForEach(filteredChildren(children)) { service in
+                        let isSelected = selectedServices.contains { $0.id == service.id || $0.name == service.name }
+                        ServiceRow(
+                            service: service,
+                            isSelected: isSelected
+                        ) {
+                            onServiceToggled?(service)
+                        }
                     }
                 }
+                .padding(.horizontal, theme.spacingMD)
+                .padding(.bottom, theme.spacingMD)
             }
-
-            Divider()
-                .padding(.leading)
         }
+        .glassCard(theme: theme)
     }
 
     private func filteredChildren(_ children: [ServiceItem]) -> [ServiceItem] {
@@ -230,6 +334,8 @@ struct CategoryRow: View {
     }
 }
 
+// MARK: - Service Row
+
 struct ServiceRow: View {
     @Environment(ThemeManager.self) private var theme
 
@@ -238,29 +344,32 @@ struct ServiceRow: View {
     var onTapped: () -> Void
 
     var body: some View {
-        HStack {
-            Text(service.name)
-                .font(.system(size: 13))
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? .white : theme.primaryTextColor)
+        Button(action: onTapped) {
+            HStack(spacing: theme.spacingMD) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(isSelected ? theme.primaryColor : theme.secondaryTextColor.opacity(0.5))
 
-            Spacer()
+                Text(service.name)
+                    .font(.subheadline)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundColor(isSelected ? theme.primaryColor : theme.primaryTextColor)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white)
+                Spacer()
             }
+            .padding(.horizontal, theme.spacingMD)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+            .background(
+                isSelected
+                    ? RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                        .fill(theme.primaryColor.opacity(0.08))
+                    : nil
+            )
         }
-        .padding(.leading, 48)
-        .padding(.trailing, 16)
-        .padding(.vertical, 10)
-        .background(isSelected ? theme.primaryColor : Color.clear)
-        .cornerRadius(8)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTapped)
+        .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
     }
 }
 

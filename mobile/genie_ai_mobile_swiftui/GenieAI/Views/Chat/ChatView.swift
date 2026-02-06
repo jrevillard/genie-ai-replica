@@ -28,6 +28,7 @@ struct ChatView: View {
     @State private var showSaveDialog = false
     @State private var showNewChatConfirmation = false
     @State private var showExportPDFSheet = false
+    @State private var welcomeAppeared = false
 
     // Initial state passed from sidebar
     var initialConversation: Conversation?
@@ -72,15 +73,30 @@ struct ChatView: View {
                                     .id(message.id)
                                 }
 
-                                // Loading indicator
+                                // Typing indicator
                                 if isLoading {
-                                    HStack {
-                                        ProgressView()
-                                        Text("Genie is thinking...")
-                                            .font(.subheadline)
-                                            .foregroundColor(theme.secondaryTextColor)
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Image(systemName: "sparkles")
+                                            .font(.title3)
+                                            .foregroundStyle(theme.navbarGradient)
+                                            .frame(width: 36, height: 36)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(Circle())
+
+                                        HStack(spacing: 8) {
+                                            BouncingDotsView(color: theme.primaryColor)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 14)
+                                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: theme.radiusLG, style: .continuous)
+                                                .stroke(theme.glassBorder, lineWidth: 1)
+                                        )
+
+                                        Spacer(minLength: 60)
                                     }
-                                    .padding()
+                                    .padding(.horizontal)
                                 }
                             }
                             .padding(.vertical)
@@ -119,8 +135,8 @@ struct ChatView: View {
                         .padding(.bottom)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(theme.backgroundColor.opacity(0.98))
-                    .transition(.opacity)
+                    .background(.ultraThinMaterial)
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
                 }
             }
         }
@@ -187,6 +203,11 @@ struct ChatView: View {
     @ViewBuilder
     private func categoryContextBar(_ categoryName: String) -> some View {
         HStack {
+            // Left accent bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(theme.primaryColor)
+                .frame(width: 3, height: 24)
+
             Image(systemName: "lightbulb.fill")
                 .foregroundColor(theme.primaryColor)
 
@@ -207,7 +228,7 @@ struct ChatView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(theme.primaryColor.opacity(0.1))
+        .background(.thinMaterial)
     }
 
     // MARK: - Welcome View
@@ -218,16 +239,25 @@ struct ChatView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 50))
                 .foregroundStyle(theme.navbarGradient)
+                .scaleEffect(welcomeAppeared ? 1.0 : 0.5)
+                .opacity(welcomeAppeared ? 1.0 : 0)
 
             Text(ConfigService.shared.botName)
                 .font(.title)
                 .fontWeight(.bold)
+                .opacity(welcomeAppeared ? 1.0 : 0)
 
             Text("How can I help you today?")
                 .font(.headline)
                 .foregroundColor(theme.secondaryTextColor)
+                .opacity(welcomeAppeared ? 1.0 : 0)
         }
         .padding(.top, 40)
+        .onAppear {
+            withAnimation(theme.animationBounce) {
+                welcomeAppeared = true
+            }
+        }
     }
 
     // MARK: - Welcome Message

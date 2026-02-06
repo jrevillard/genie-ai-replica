@@ -37,7 +37,14 @@ struct LeftSidebarView: View {
             // Tab Selector
             HStack(spacing: 0) {
                 ForEach(LeftSidebarTab.allCases, id: \.self) { tab in
-                    Button(action: { selectedTab = tab }) {
+                    Button(action: {
+                        withAnimation(theme.animationQuick) {
+                            selectedTab = tab
+                        }
+                        if theme.hapticsEnabled {
+                            UISelectionFeedbackGenerator().selectionChanged()
+                        }
+                    }) {
                         VStack(spacing: 4) {
                             Image(systemName: tab.icon)
                                 .font(.title3)
@@ -48,12 +55,18 @@ struct LeftSidebarView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(selectedTab == tab ? theme.primaryColor.opacity(0.1) : Color.clear)
+                        .background(
+                            selectedTab == tab
+                                ? RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                                    .fill(theme.primaryColor.opacity(0.1))
+                                    .padding(4)
+                                : nil
+                        )
                         .foregroundColor(selectedTab == tab ? theme.primaryColor : theme.secondaryTextColor)
                     }
                 }
             }
-            .background(theme.secondarySurfaceColor)
+            .background(.thinMaterial)
 
             Divider()
 
@@ -73,8 +86,7 @@ struct LeftSidebarView: View {
                 }
             }
             .padding(8)
-            .background(theme.secondarySurfaceColor)
-            .cornerRadius(8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
             .padding()
 
             // Content
@@ -92,7 +104,6 @@ struct LeftSidebarView: View {
                 )
             }
         }
-        .background(theme.surfaceColor)
     }
 }
 

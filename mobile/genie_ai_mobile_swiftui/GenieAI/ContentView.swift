@@ -155,18 +155,19 @@ struct ContentView: View {
                         VStack {
                             Spacer().frame(height: 80)
                             Button {
-                                withAnimation { showRightSidebar = true }
+                                withAnimation(theme.animationSmooth) { showRightSidebar = true }
                             } label: {
                                 Image(systemName: "chevron.left")
                                     .font(.caption2)
                                     .foregroundColor(theme.navbarTextColor.opacity(0.7))
                                     .frame(width: 10, height: 44)
-                                    .background(theme.primaryColor.opacity(0.3))
+                                    .background(.thinMaterial)
                                     .clipShape(UnevenRoundedRectangle(
                                         topLeadingRadius: 4,
                                         bottomLeadingRadius: 4
                                     ))
                             }
+                            .hapticOnTap(theme: theme)
                             Spacer()
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -234,8 +235,9 @@ struct ContentView: View {
     private func sidebarOverlay<Content: View>(isLeft: Bool, @ViewBuilder content: @escaping () -> Content) -> some View {
         GeometryReader { geometry in
             ZStack(alignment: isLeft ? .leading : .trailing) {
-                // Backdrop
-                Color.black.opacity(0.4)
+                // Frosted glass backdrop
+                Rectangle()
+                    .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
                     .onTapGesture {
                         if isLeft {
@@ -248,12 +250,18 @@ struct ContentView: View {
                 // Sidebar Content
                 content()
                     .frame(width: min(320, geometry.size.width * 0.85))
-                    .background(theme.surfaceColor)
+                    .background(.regularMaterial)
+                    .shadow(
+                        color: .black.opacity(0.15),
+                        radius: 12,
+                        x: isLeft ? 4 : -4,
+                        y: 0
+                    )
                     .transition(.move(edge: isLeft ? .leading : .trailing))
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: showLeftSidebar)
-        .animation(.easeInOut(duration: 0.25), value: showRightSidebar)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showLeftSidebar)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showRightSidebar)
     }
 
     // MARK: - Actions

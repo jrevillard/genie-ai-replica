@@ -80,6 +80,28 @@ struct SettingsView: View {
                         Slider(value: $fontSize, in: 30...100, step: 5)
                             .tint(theme.primaryColor)
                     }
+
+                    // Animations Toggle
+                    Toggle(isOn: Binding(
+                        get: { theme.animationsEnabled },
+                        set: { theme.animationsEnabled = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "sparkles.rectangle.stack")
+                            Text("Animations")
+                        }
+                    }
+
+                    // Haptic Feedback Toggle
+                    Toggle(isOn: Binding(
+                        get: { theme.hapticsEnabled },
+                        set: { theme.hapticsEnabled = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "hand.tap")
+                            Text("Haptic Feedback")
+                        }
+                    }
                 }
 
                 // Notifications Section
@@ -233,6 +255,7 @@ struct SettingsView: View {
                     Circle()
                         .fill(theme.primaryColor)
                         .frame(width: 68, height: 68)
+                        .shadow(color: theme.primaryColor.opacity(0.3), radius: 8, y: 2)
 
                     Text(userInitials)
                         .font(.title2)

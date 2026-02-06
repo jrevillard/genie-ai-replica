@@ -2172,6 +2172,9 @@
         }
       }
     },
+    "Animations" : {
+
+    },
     "Anthropology" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36183,6 +36186,9 @@
           }
         }
       }
+    },
+    "Haptic Feedback" : {
+
     },
     "Health" : {
       "extractionState" : "manual",

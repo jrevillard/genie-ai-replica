@@ -19,6 +19,8 @@ struct LoginView: View {
     var onForgotPasswordTapped: () -> Void
     var onLoginSuccess: () -> Void
 
+    @State private var logoAppeared = false
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -27,15 +29,18 @@ struct LoginView: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 60))
                         .foregroundStyle(theme.navbarGradient)
+                        .scaleEffect(logoAppeared ? 1.0 : 0.5)
+                        .opacity(logoAppeared ? 1.0 : 0)
 
                     Text("Genie AI")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(theme.primaryTextColor)
+                        .opacity(logoAppeared ? 1.0 : 0)
                 }
                 .padding(.top, 40)
 
-                // Login Form
+                // Login Form — wrapped in glass card
                 VStack(spacing: 16) {
                     // Username Field
                     VStack(alignment: .leading, spacing: 8) {
@@ -75,33 +80,34 @@ struct LoginView: View {
                                 .foregroundColor(theme.primaryColor)
                         }
                     }
-                }
-                .padding(.horizontal)
 
-                // Error Message
-                if showError {
-                    Text(errorMessage)
-                        .font(.subheadline)
-                        .foregroundColor(theme.errorColor)
-                        .padding(.horizontal)
-                }
-
-                // Login Button
-                Button(action: performLogin) {
-                    HStack {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        }
-                        Text(isLoading ? String(localized: "Logging in...") : String(localized: "Login"))
+                    // Error Message
+                    if showError {
+                        Text(errorMessage)
+                            .font(.subheadline)
+                            .foregroundColor(theme.errorColor)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(theme.primaryColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+
+                    // Login Button
+                    Button(action: performLogin) {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            }
+                            Text(isLoading ? String(localized: "Logging in...") : String(localized: "Login"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(theme.primaryColor)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
+                    }
+                    .disabled(isLoading || username.isEmpty || password.isEmpty)
+                    .hapticOnTap(.medium, theme: theme)
                 }
-                .disabled(isLoading || username.isEmpty || password.isEmpty)
+                .padding(theme.spacingXL)
+                .glassCardElevated(theme: theme)
                 .padding(.horizontal)
 
                 // Social Login Buttons
@@ -116,7 +122,7 @@ struct LoginView: View {
                         .padding()
                         .background(theme.primaryColor.opacity(0.9))
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                     }
 
                     Button(action: { /* Social login not yet implemented */ }) {
@@ -127,9 +133,9 @@ struct LoginView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color(red: 0.23, green: 0.35, blue: 0.60))
+                        .background(theme.facebookBlue)
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                     }
                 }
                 .padding(.horizontal)
@@ -161,8 +167,20 @@ struct LoginView: View {
                 Spacer()
             }
         }
-        .background(theme.surfaceColor)
-        .onAppear(perform: loadSavedCredentials)
+        .background(
+            LinearGradient(
+                colors: [theme.backgroundColor, theme.surfaceColor],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
+        .onAppear {
+            loadSavedCredentials()
+            withAnimation(theme.animationBounce) {
+                logoAppeared = true
+            }
+        }
     }
 
     private func loadSavedCredentials() {
@@ -245,8 +263,12 @@ struct GenieTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .padding()
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(10)
+            .background(Color(.secondarySystemBackground).opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.3), lineWidth: 1)
+            )
     }
 }
 

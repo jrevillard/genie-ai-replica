@@ -53,8 +53,9 @@ struct ConfirmDialog: View {
                         .padding()
                         .background(Color.gray.opacity(0.2))
                         .foregroundColor(theme.primaryTextColor)
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                 }
+                .hapticOnTap(theme: theme)
 
                 Button(action: onConfirm) {
                     Text(confirmText ?? String(localized: "Confirm"))
@@ -62,14 +63,13 @@ struct ConfirmDialog: View {
                         .padding()
                         .background(isDestructive ? Color.red : theme.primaryColor)
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                 }
+                .hapticOnTap(.medium, theme: theme)
             }
         }
         .padding(24)
-        .background(theme.surfaceColor)
-        .cornerRadius(16)
-        .shadow(radius: 10)
+        .glassCardElevated(theme: theme)
         .padding(32)
     }
 }
@@ -88,7 +88,8 @@ struct ConfirmDialogModifier: ViewModifier {
         content
             .overlay {
                 if isPresented {
-                    Color.black.opacity(0.4)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
                         .ignoresSafeArea()
                         .onTapGesture {
                             isPresented = false

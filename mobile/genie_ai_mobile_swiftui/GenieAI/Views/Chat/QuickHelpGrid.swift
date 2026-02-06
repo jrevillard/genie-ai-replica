@@ -5,7 +5,6 @@ import SwiftUI
 
 struct QuickHelpGrid: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(\.colorScheme) private var colorScheme
 
     var onButtonTapped: (QuickHelpButton) -> Void
 
@@ -27,7 +26,6 @@ struct QuickHelpGrid: View {
 
 struct QuickHelpButtonView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(\.colorScheme) private var colorScheme
 
     let button: QuickHelpButton
     let action: () -> Void
@@ -37,11 +35,11 @@ struct QuickHelpButtonView: View {
             HStack(spacing: 8) {
                 Image(systemName: iconName)
                     .font(.system(size: 16))
-                    .foregroundColor(button.iconColor(for: colorScheme))
+                    .foregroundColor(theme.primaryColor)
 
                 Text(button.label)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(button.labelColor(for: colorScheme))
+                    .foregroundColor(theme.primaryTextColor)
                     .lineLimit(1)
 
                 Spacer()
@@ -49,11 +47,19 @@ struct QuickHelpButtonView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(button.gradient(for: colorScheme))
-            .cornerRadius(8)
-            .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 2)
+            .background(.thinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous)
+                    .fill(theme.primaryColor.opacity(0.06))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous)
+                    .stroke(theme.glassBorder, lineWidth: 1)
+            )
+            .shadow(theme.shadowSoft)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
     }
 
     private var iconName: String {

@@ -570,7 +570,7 @@ All platforms must have identical localized strings for every supported language
 
 ## 12. Theme System
 <!-- Flutter: lib/utils/theme_manager.dart -->
-<!-- SwiftUI: GenieAI/Services/ThemeManager.swift -->
+<!-- SwiftUI: GenieAI/Services/ThemeManager.swift, GenieAI/Extensions/View+GlassStyle.swift -->
 
 **Requirements:**
 - Light and dark theme support
@@ -585,6 +585,24 @@ All platforms must have identical localized strings for every supported language
 - Secondary: #5F9EA0
 - Background (light): #F5F7FA
 - Text (light): #333333
+
+---
+
+## 12.1 Platform-Specific Design
+
+**SwiftUI (iOS):** Uses an iOS-native "Liquid Glass" design with `.material` backgrounds, depth via layered glass + border + shadow, spring animations, and haptic feedback. Design tokens (spacing, radii, shadows, animations) are centralized in `ThemeManager`. User preferences for animations and haptics are toggleable in Settings.
+
+**Flutter:** Uses Material Design components and styling.
+
+**Shared across platforms:**
+- Brand colors (from `genie-ai-config.json`): primaryColor, secondaryColor, navbar gradient
+- Feature parity: all screens and functionality must match
+- Component architecture: similar structure across platforms
+
+**Platform-specific (may differ):**
+- Visual language (materials vs Material Design)
+- Interaction patterns (haptics, spring animations)
+- Component styling (glass cards vs Material cards)
 
 ---
 

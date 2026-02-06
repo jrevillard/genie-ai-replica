@@ -180,3 +180,53 @@ class MyService {
 let data = try await APIService.shared.get("endpoint")
 let decoded = try JSONDecoder().decode(Response.self, from: data)
 ```
+
+## Design System — Liquid Glass
+
+The SwiftUI app uses an iOS-native "Liquid Glass" design language with materials, depth, haptics, and spring animations. This diverges from Flutter's Material Design but shares brand colors (navbar gradient, primaryColor).
+
+### Design Tokens (ThemeManager)
+
+All design tokens are centralized in `ThemeManager.swift`:
+- **Spacing**: `spacingXS` (4) through `spacingXXL` (32)
+- **Corner Radius**: `radiusSM` (8) through `radiusFull` (999) — always use `style: .continuous` for iOS super-ellipse
+- **Shadows**: `shadowSoft`, `shadowMedium`, `shadowStrong`, `shadowGlow` (struct with color, radius, x, y)
+- **Animations**: `animationQuick`, `animationStandard`, `animationSmooth`, `animationBounce` — return `nil` when `animationsEnabled` is false
+- **Glass Colors**: `glassBackground`, `glassBorder`
+- **Brand Colors**: `whatsAppGreen`, `facebookBlue`
+
+### Glass Card Pattern (View+GlassStyle.swift)
+
+```swift
+// Standard glass card
+.glassCard(theme: theme)                    // .thinMaterial + glassBorder + shadowSoft
+.glassCardElevated(theme: theme)            // .regularMaterial + radiusXL + shadowMedium
+
+// Haptic feedback on tap
+.hapticOnTap(theme: theme)                  // light impact, no-op when hapticsEnabled=false
+.hapticOnTap(.medium, theme: theme)         // medium impact
+
+// Press-scale button style
+.buttonStyle(GlassPressButtonStyle(hapticsEnabled: theme.hapticsEnabled))
+
+// Shadow from token
+.shadow(theme.shadowSoft)
+```
+
+### Material Usage Guide
+- **`.ultraThinMaterial`**: Backdrops, overlays, input backgrounds
+- **`.thinMaterial`**: Cards, search fields, tab bars, binder tabs
+- **`.regularMaterial`**: Sidebar panels, elevated glass cards
+
+### User Preferences
+- `theme.animationsEnabled` / `theme.hapticsEnabled` — persisted in UserDefaults, toggleable in Settings
+- Animations: `withAnimation(theme.animationSmooth)` returns nil when disabled (instant changes)
+- Haptics: `.hapticOnTap(theme:)` no-ops when disabled
+
+### Design Principles
+- Materials over opaque backgrounds
+- Continuous corners (`style: .continuous`) everywhere
+- Depth through glass material + glassBorder stroke + soft shadow
+- Spring animations (`animationSmooth`, `animationBounce`) over linear/easeInOut
+- Haptics on every interactive element
+- Brand consistency: navbar gradient and primaryColor are shared with Flutter

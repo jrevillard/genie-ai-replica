@@ -15,11 +15,10 @@ struct ChatInputView: View {
     var onShareWhatsApp: (() -> Void)?
 
     @FocusState private var isFocused: Bool
+    @State private var sendScale: CGFloat = 1.0
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
-
             // Action Buttons Toolbar
             HStack(spacing: 16) {
                 if let onNewChat = onNewChat {
@@ -29,6 +28,7 @@ struct ChatInputView: View {
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
                     .disabled(isLoading)
+                    .hapticOnTap(theme: theme)
                 }
 
                 if let onSave = onSave {
@@ -38,6 +38,7 @@ struct ChatInputView: View {
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
                     .disabled(isLoading)
+                    .hapticOnTap(theme: theme)
                 }
 
                 if let onExportPDF = onExportPDF {
@@ -47,15 +48,17 @@ struct ChatInputView: View {
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
                     .disabled(isLoading)
+                    .hapticOnTap(theme: theme)
                 }
 
                 if let onShareWhatsApp = onShareWhatsApp {
                     Button(action: onShareWhatsApp) {
                         SwiftUI.Label("Share on WhatsApp", systemImage: "bubble.left.fill")
                             .font(.caption)
-                            .foregroundColor(isLoading ? .gray : Color(red: 37/255, green: 211/255, blue: 102/255))
+                            .foregroundColor(isLoading ? .gray : theme.whatsAppGreen)
                     }
                     .disabled(isLoading)
+                    .hapticOnTap(theme: theme)
                 }
 
                 Spacer()
@@ -74,20 +77,35 @@ struct ChatInputView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                 }
-                .background(theme.secondarySurfaceColor)
-                .cornerRadius(20)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(theme.glassBorder, lineWidth: 1)
+                )
 
                 // Send Button
-                Button(action: onSend) {
+                Button(action: {
+                    withAnimation(theme.animationQuick) {
+                        sendScale = 0.85
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(theme.animationBounce) {
+                            sendScale = 1.0
+                        }
+                    }
+                    onSend()
+                }) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 32))
                         .foregroundStyle(canSend ? AnyShapeStyle(theme.navbarGradient) : AnyShapeStyle(Color.gray))
+                        .scaleEffect(sendScale)
                 }
                 .disabled(!canSend)
+                .hapticOnTap(.medium, theme: theme)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
-            .background(theme.surfaceColor)
+            .background(.ultraThinMaterial)
         }
     }
 

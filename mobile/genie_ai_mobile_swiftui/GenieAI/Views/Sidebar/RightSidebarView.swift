@@ -99,10 +99,7 @@ struct RightSidebarView: View {
             .italic()
             .frame(maxWidth: .infinity)
             .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(theme.secondaryTextColor.opacity(0.2))
-            )
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
     }
 
     // MARK: - FAQ Loading
@@ -376,14 +373,12 @@ struct DocumentRow: View {
                 detailRow(label: "Confidence", value: DocumentItem.formatScore(document.confidence))
             }
             .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(theme.surfaceColor)
-            )
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(theme.secondaryTextColor.opacity(0.2))
+                RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                    .stroke(theme.glassBorder, lineWidth: 1)
             )
+            .shadow(theme.shadowSoft)
         }
         .buttonStyle(.plain)
     }
@@ -441,7 +436,9 @@ struct FAQRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
+            Button(action: {
+                withAnimation(theme.animationStandard) { isExpanded.toggle() }
+            }) {
                 HStack(alignment: .top) {
                     Text(item.question)
                         .font(.subheadline)
@@ -451,9 +448,10 @@ struct FAQRow: View {
 
                     Spacer()
 
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundColor(theme.secondaryTextColor)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .padding(.top, 2)
                 }
                 .padding(12)
@@ -469,13 +467,10 @@ struct FAQRow: View {
                     .padding(.bottom, 12)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(theme.secondaryTextColor.opacity(0.04))
-        )
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(theme.secondaryTextColor.opacity(0.15))
+            RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous)
+                .stroke(theme.glassBorder, lineWidth: 1)
         )
     }
 }

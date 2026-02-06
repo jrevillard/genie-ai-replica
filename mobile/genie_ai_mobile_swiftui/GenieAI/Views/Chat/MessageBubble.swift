@@ -9,6 +9,8 @@ struct MessageBubble: View {
     let message: Message
     var onFeedbackTapped: (() -> Void)?
 
+    @State private var appeared = false
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if message.role.isUser {
@@ -19,8 +21,9 @@ struct MessageBubble: View {
                     .font(.title3)
                     .foregroundStyle(theme.navbarGradient)
                     .frame(width: 36, height: 36)
-                    .background(theme.secondarySurfaceColor)
+                    .background(.ultraThinMaterial)
                     .clipShape(Circle())
+                    .shadow(color: theme.primaryColor.opacity(0.15), radius: 6, y: 2)
             }
 
             VStack(alignment: message.role.isUser ? .trailing : .leading, spacing: 8) {
@@ -38,12 +41,36 @@ struct MessageBubble: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(
-                    message.role.isUser
-                        ? AnyShapeStyle(theme.navbarGradient)
-                        : AnyShapeStyle(theme.secondarySurfaceColor)
-                )
-                .cornerRadius(16, corners: message.role.isUser ? [.topLeft, .topRight, .bottomLeft] : [.topLeft, .topRight, .bottomRight])
+                .background {
+                    if message.role.isUser {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: theme.radiusLG,
+                            bottomLeadingRadius: theme.radiusLG,
+                            bottomTrailingRadius: theme.radiusSM,
+                            topTrailingRadius: theme.radiusLG
+                        )
+                        .fill(AnyShapeStyle(theme.navbarGradient))
+                        .shadow(theme.shadowSoft)
+                    } else {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: theme.radiusLG,
+                            bottomLeadingRadius: theme.radiusSM,
+                            bottomTrailingRadius: theme.radiusLG,
+                            topTrailingRadius: theme.radiusLG
+                        )
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            UnevenRoundedRectangle(
+                                topLeadingRadius: theme.radiusLG,
+                                bottomLeadingRadius: theme.radiusSM,
+                                bottomTrailingRadius: theme.radiusLG,
+                                topTrailingRadius: theme.radiusLG
+                            )
+                            .stroke(theme.glassBorder, lineWidth: 1)
+                        )
+                        .shadow(theme.shadowSoft)
+                    }
+                }
 
                 // Sources (for assistant messages)
                 if let sources = message.metadata?.sources, !sources.isEmpty {
@@ -73,7 +100,14 @@ struct MessageBubble: View {
                                 }
                                 .font(.caption)
                                 .foregroundColor(theme.primaryColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(theme.primaryColor.opacity(0.08))
+                                )
                             }
+                            .hapticOnTap(theme: theme)
                         }
                     }
                 }
@@ -97,6 +131,13 @@ struct MessageBubble: View {
             }
         }
         .padding(.horizontal)
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 12)
+        .onAppear {
+            withAnimation(theme.animationSmooth) {
+                appeared = true
+            }
+        }
     }
 
     @ViewBuilder

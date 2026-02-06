@@ -12,13 +12,14 @@ struct LoadingView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
+                .tint(theme.primaryColor)
 
             Text(message ?? String(localized: "Loading..."))
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryTextColor)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.surfaceColor.opacity(0.9))
+        .background(.ultraThinMaterial)
     }
 }
 

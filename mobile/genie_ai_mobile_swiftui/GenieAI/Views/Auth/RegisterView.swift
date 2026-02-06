@@ -169,9 +169,10 @@ struct RegisterView: View {
                     .padding()
                     .background(canRegister ? theme.primaryColor : Color.gray)
                     .foregroundColor(.white)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                 }
                 .disabled(!canRegister || isLoading)
+                .hapticOnTap(.medium, theme: theme)
                 .padding(.horizontal)
 
                 // Back to Login
@@ -201,7 +202,14 @@ struct RegisterView: View {
                 Spacer()
             }
         }
-        .background(theme.surfaceColor)
+        .background(
+            LinearGradient(
+                colors: [theme.backgroundColor, theme.surfaceColor],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
     }
 
     private var passwordStrengthLabel: String {

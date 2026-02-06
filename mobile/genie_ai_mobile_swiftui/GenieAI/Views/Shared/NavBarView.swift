@@ -14,6 +14,8 @@ struct NavBarView: View {
     var onSettingsTapped: () -> Void
     var onLogoutTapped: () -> Void
 
+    @State private var iconAppeared = false
+
     var body: some View {
         HStack(spacing: 16) {
             // Menu Button
@@ -22,11 +24,14 @@ struct NavBarView: View {
                     .font(.title2)
                     .foregroundColor(theme.navbarTextColor)
             }
+            .hapticOnTap(theme: theme)
 
             // App Title
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .font(.title3)
+                    .scaleEffect(iconAppeared ? 1.0 : 0.5)
+                    .opacity(iconAppeared ? 1.0 : 0)
 
                 Text(ConfigService.shared.appTitle)
                     .font(.headline)
@@ -48,6 +53,7 @@ struct NavBarView: View {
                     .font(.title3)
                     .foregroundColor(theme.navbarTextColor)
             }
+            .hapticOnTap(theme: theme)
 
             // Profile Menu
             Menu {
@@ -82,10 +88,23 @@ struct NavBarView: View {
                     .font(.title2)
                     .foregroundColor(theme.navbarTextColor)
             }
+            .hapticOnTap(theme: theme)
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
-        .background(theme.navbarGradient)
+        .background(
+            ZStack {
+                theme.navbarGradient
+                // Glass sheen overlay
+                Color.white.opacity(0.05)
+            }
+        )
+        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+        .onAppear {
+            withAnimation(theme.animationBounce) {
+                iconAppeared = true
+            }
+        }
     }
 }
 

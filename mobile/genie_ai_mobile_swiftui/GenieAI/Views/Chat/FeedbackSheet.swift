@@ -58,8 +58,7 @@ struct FeedbackSheet: View {
                             .font(.subheadline)
                             .lineLimit(3)
                             .padding()
-                            .background(theme.secondarySurfaceColor)
-                            .cornerRadius(8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
                     }
                     .padding(.horizontal)
 
@@ -79,11 +78,17 @@ struct FeedbackSheet: View {
                     VStack(spacing: 8) {
                         HStack(spacing: 8) {
                             ForEach(1...5, id: \.self) { value in
-                                Button(action: { rating = value }) {
+                                Button(action: {
+                                    withAnimation(theme.animationQuick) {
+                                        rating = value
+                                    }
+                                }) {
                                     Image(systemName: value <= (rating ?? 0) ? "star.fill" : "star")
                                         .font(.title)
                                         .foregroundColor(value <= (rating ?? 0) ? .yellow : .gray)
+                                        .scaleEffect(rating == value ? 1.15 : 1.0)
                                 }
+                                .hapticOnTap(theme: theme)
                             }
                         }
 
@@ -123,8 +128,7 @@ struct FeedbackSheet: View {
                             .lineLimit(3...5)
                             .textFieldStyle(.plain)
                             .padding()
-                            .background(theme.secondarySurfaceColor)
-                            .cornerRadius(8)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: theme.radiusSM, style: .continuous))
                     }
                     .padding(.horizontal)
 
@@ -176,7 +180,9 @@ struct FeedbackSheet: View {
     @ViewBuilder
     private func thumbButton(type: String, icon: String) -> some View {
         Button {
-            thumbFeedback = thumbFeedback == type ? nil : type
+            withAnimation(theme.animationQuick) {
+                thumbFeedback = thumbFeedback == type ? nil : type
+            }
             // Auto-set rating based on thumb feedback
             if thumbFeedback == "up" {
                 rating = 4
@@ -187,16 +193,18 @@ struct FeedbackSheet: View {
             Image(systemName: icon)
                 .font(.title)
                 .foregroundColor(thumbFeedback == type ? theme.primaryColor : .gray)
+                .scaleEffect(thumbFeedback == type ? 1.1 : 1.0)
                 .padding(12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous)
                         .stroke(thumbFeedback == type ? theme.primaryColor : Color.gray.opacity(0.3), lineWidth: 2)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous)
                                 .fill(thumbFeedback == type ? theme.primaryColor.opacity(0.1) : Color.clear)
                         )
                 )
         }
+        .hapticOnTap(theme: theme)
     }
 
     private var canSubmit: Bool {

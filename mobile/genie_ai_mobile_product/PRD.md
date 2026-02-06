@@ -244,6 +244,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
   - Click to view/download (authenticated)
 - **FAQ Section:**
   - Load FAQ from bundled Markdown file
+  - **Source of truth:** The Flutter app's `assets/FAQ.md` is the single source of truth for FAQ content across all platforms. Other platforms (SwiftUI, Jetpack Compose) must copy their FAQ from the Flutter asset when updating.
   - Translate to current language via API
   - Accordion-style expandable items
   - Re-translate on language change

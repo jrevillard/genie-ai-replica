@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var currentConversation: Conversation?
     @State private var chatViewKey = UUID()
     @State private var relatedDocs: [DocumentItem] = []
+    @State private var currentAccessToken: String?
 
     // Category/service context to pass to ChatView
     @State private var pendingCategoryId: String?
@@ -130,39 +131,74 @@ struct ContentView: View {
                     Divider()
 
                     // Right Sidebar
-                    RightSidebarView(relatedDocs: relatedDocs, faqItems: [])
+                    RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken)
                         .frame(width: 280)
                 }
             } else {
                 // Standard mobile layout with drawers
-                VStack(spacing: 0) {
-                    NavBarView(
-                        onMenuTapped: { showLeftSidebar.toggle() },
-                        onNewChatTapped: startNewChat,
-                        onProfileTapped: { showProfile = true },
-                        onSettingsTapped: { showSettings = true },
-                        onLogoutTapped: logout
-                    )
-
-                    chatView
-                }
-
-                // Left Sidebar Drawer
-                if showLeftSidebar {
-                    sidebarOverlay(isLeft: true) {
-                        LeftSidebarView(
-                            onConversationSelected: { conversation in
-                                loadConversation(conversation)
-                                showLeftSidebar = false
-                            },
-                            onServiceSelectionChanged: { categoryId, name, contextLabels in
-                                handleServiceSelection(categoryId: categoryId, name: name, contextLabels: contextLabels)
-                                // Don't close sidebar — allow multi-select (matching Flutter)
-                            }
+                ZStack {
+                    VStack(spacing: 0) {
+                        NavBarView(
+                            onMenuTapped: { showLeftSidebar.toggle() },
+                            onNewChatTapped: startNewChat,
+                            onProfileTapped: { showProfile = true },
+                            onSettingsTapped: { showSettings = true },
+                            onLogoutTapped: logout
                         )
+
+                        chatView
+                    }
+
+                    // Binder tabs (slim edge tabs matching Flutter's _BinderTab)
+                    if !showLeftSidebar && !showRightSidebar {
+                        // Right binder tab
+                        VStack {
+                            Spacer().frame(height: 80)
+                            Button {
+                                withAnimation { showRightSidebar = true }
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.navbarTextColor.opacity(0.7))
+                                    .frame(width: 10, height: 44)
+                                    .background(theme.primaryColor.opacity(0.3))
+                                    .clipShape(UnevenRoundedRectangle(
+                                        topLeadingRadius: 4,
+                                        bottomLeadingRadius: 4
+                                    ))
+                            }
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+
+                    // Left Sidebar Drawer
+                    if showLeftSidebar {
+                        sidebarOverlay(isLeft: true) {
+                            LeftSidebarView(
+                                onConversationSelected: { conversation in
+                                    loadConversation(conversation)
+                                    showLeftSidebar = false
+                                },
+                                onServiceSelectionChanged: { categoryId, name, contextLabels in
+                                    handleServiceSelection(categoryId: categoryId, name: name, contextLabels: contextLabels)
+                                    // Don't close sidebar — allow multi-select (matching Flutter)
+                                }
+                            )
+                        }
+                    }
+
+                    // Right Sidebar Drawer
+                    if showRightSidebar {
+                        sidebarOverlay(isLeft: false) {
+                            RightSidebarView(relatedDocs: relatedDocs, accessToken: currentAccessToken)
+                        }
                     }
                 }
             }
+        }
+        .task {
+            currentAccessToken = await APIService.shared.getToken()
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -226,6 +262,7 @@ struct ContentView: View {
         chatViewKey = UUID()
         currentConversation = nil
         relatedDocs = []
+        showRightSidebar = false
         pendingCategoryId = nil
         pendingCategoryName = nil
         pendingContextLabels = nil

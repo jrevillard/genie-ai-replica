@@ -342,11 +342,7 @@ struct ChatView: View {
     // MARK: - Related Documents
 
     private func updateRelatedDocuments(from sources: [MessageMetadata.DocumentSource]) {
-        let newDocs = sources.compactMap { source -> DocumentItem? in
-            guard let url = source.url else { return nil }
-            let docType: DocumentItem.DocumentType = url.hasSuffix(".pdf") ? .pdf : .web
-            return DocumentItem(title: source.title ?? url, url: url, type: docType)
-        }
+        let newDocs = sources.compactMap { DocumentItem.from($0) }
         onRelatedDocumentsUpdate?(newDocs)
     }
 

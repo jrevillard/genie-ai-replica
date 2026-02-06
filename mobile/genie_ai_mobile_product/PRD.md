@@ -253,7 +253,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ## 4. User Profile
 <!-- Flutter: lib/components/user/user_profile_component.dart, lib/services/user_profile_proxy.dart -->
-<!-- SwiftUI: GenieAI/Views/Profile/UserProfileView.swift, GenieAI/Services/UserService.swift -->
+<!-- SwiftUI: GenieAI/Views/Profile/UserProfileView.swift, GenieAI/Models/User.swift, GenieAI/Services/UserService.swift (all 12 tabs: Personal, Civil Registration, Address, Identity/Travel, Health/Medical, Employment, Education, Financial/Tax, Social Security, Criminal/Legal, Transportation, Civic Participation) -->
 
 **Requirements:**
 - Multi-tab interface with the following sections:

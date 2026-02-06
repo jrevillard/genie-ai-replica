@@ -123,6 +123,54 @@ actor APIService {
         return try await performRequest(request)
     }
 
+    func putMultipart(
+        _ endpoint: String,
+        jsonField: (name: String, data: Data),
+        files: [(fieldName: String, fileURL: URL, filename: String)]
+    ) async throws -> Data {
+        guard let url = URL(string: "\(baseURL)/\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        let boundary = UUID().uuidString
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body = Data()
+
+        // JSON data field
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(jsonField.name)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
+        body.append(jsonField.data)
+        body.append("\r\n".data(using: .utf8)!)
+
+        // File parts
+        for file in files {
+            let fileData = try Data(contentsOf: file.fileURL)
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(file.fieldName)\"; filename=\"\(file.filename)\"\r\n".data(using: .utf8)!)
+            body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+            body.append(fileData)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        print("----------------------------------------------------------------")
+        print("[API Request] PUT multipart")
+        print("URL: \(url)")
+        print("Files: \(files.map { $0.fieldName })")
+
+        return try await performRequest(request)
+    }
+
     func delete(_ endpoint: String, params: [String: String]? = nil) async throws -> Data {
         var urlString = "\(baseURL)/\(endpoint)"
         if let params = params, !params.isEmpty {

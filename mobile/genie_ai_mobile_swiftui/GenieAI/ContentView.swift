@@ -162,7 +162,11 @@ struct ContentView: View {
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showHistorySheet = false }
+                                Button { showHistorySheet = false } label: {
+                                    Image(systemName: "checkmark")
+                                        .fontWeight(.semibold)
+                                }
+                                .accessibilityLabel(Text("Done"))
                             }
                         }
                     }
@@ -177,7 +181,11 @@ struct ContentView: View {
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showServicesSheet = false }
+                                Button { showServicesSheet = false } label: {
+                                    Image(systemName: "checkmark")
+                                        .fontWeight(.semibold)
+                                }
+                                .accessibilityLabel(Text("Done"))
                             }
                         }
                     }
@@ -190,7 +198,11 @@ struct ContentView: View {
                             .navigationBarTitleDisplayMode(.inline)
                             .toolbar {
                                 ToolbarItem(placement: .confirmationAction) {
-                                    Button("Done") { showInfoSheet = false }
+                                    Button { showInfoSheet = false } label: {
+                                        Image(systemName: "checkmark")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .accessibilityLabel(Text("Done"))
                                 }
                             }
                     }

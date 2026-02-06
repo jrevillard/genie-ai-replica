@@ -8,17 +8,36 @@ struct QuickHelpGrid: View {
 
     var onButtonTapped: (QuickHelpButton) -> Void
 
+    @State private var visibleCount = 0
+
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
     ]
 
+    private let buttons = QuickHelpButton.defaults
+
     var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(QuickHelpButton.defaults) { button in
+            ForEach(Array(buttons.enumerated()), id: \.element.id) { index, button in
                 QuickHelpButtonView(button: button) {
                     onButtonTapped(button)
                 }
+                .opacity(index < visibleCount ? 1 : 0)
+                .offset(y: index < visibleCount ? 0 : 12)
+                .scaleEffect(index < visibleCount ? 1 : 0.95)
+                .animation(
+                    theme.animationsEnabled
+                        ? .spring(response: 0.4, dampingFraction: 0.75).delay(0.2 + Double(index) * 0.06)
+                        : nil,
+                    value: visibleCount
+                )
+            }
+        }
+        .onAppear {
+            visibleCount = 0
+            DispatchQueue.main.async {
+                visibleCount = buttons.count
             }
         }
     }

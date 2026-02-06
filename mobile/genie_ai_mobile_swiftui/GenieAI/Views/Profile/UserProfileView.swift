@@ -1,5 +1,5 @@
 // UserProfileView.swift
-// User profile with tabbed sections matching Flutter's 12-tab layout
+// User profile with navigation-based sections matching Flutter's 12-tab layout
 
 import SwiftUI
 import PhotosUI
@@ -11,7 +11,6 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var userService = UserService()
-    @State private var selectedTab = 0
     @State private var personalInfo = PersonalIdentification()
     @State private var civilInfo = CivilRegistration()
     @State private var addressInfo = AddressResidency()
@@ -31,156 +30,94 @@ struct UserProfileView: View {
     @State private var showIconSelector = false
     @State private var pickedFiles: [String: URL] = [:]
 
-    private let tabs: [LocalizedStringResource] = [
-        "Personal Identification Data",
-        "Civil Registration & Documentation",
-        "Address & Residency Information",
-        "Identity & Travel Documents",
-        "Health & Medical Records",
-        "Employment & Economic Data",
-        "Education & Academic Records",
-        "Financial & Tax Data",
-        "Social Security & Welfare",
-        "Criminal & Legal Records",
-        "Transportation & Mobility",
-        "Civic & Political Participation"
+    private struct ProfileCategory: Identifiable {
+        let id: Int
+        let title: LocalizedStringResource
+        let icon: String
+        let color: Color
+    }
+
+    private let categories: [ProfileCategory] = [
+        ProfileCategory(id: 0, title: "Personal Identification Data", icon: "person.text.rectangle", color: .blue),
+        ProfileCategory(id: 1, title: "Civil Registration & Documentation", icon: "doc.text", color: .orange),
+        ProfileCategory(id: 2, title: "Address & Residency Information", icon: "house", color: .green),
+        ProfileCategory(id: 3, title: "Identity & Travel Documents", icon: "airplane", color: .cyan),
+        ProfileCategory(id: 4, title: "Health & Medical Records", icon: "heart.text.square", color: .red),
+        ProfileCategory(id: 5, title: "Employment & Economic Data", icon: "briefcase", color: .brown),
+        ProfileCategory(id: 6, title: "Education & Academic Records", icon: "graduationcap", color: .purple),
+        ProfileCategory(id: 7, title: "Financial & Tax Data", icon: "dollarsign.circle", color: .mint),
+        ProfileCategory(id: 8, title: "Social Security & Welfare", icon: "person.2", color: .indigo),
+        ProfileCategory(id: 9, title: "Criminal & Legal Records", icon: "building.columns", color: .gray),
+        ProfileCategory(id: 10, title: "Transportation & Mobility", icon: "car", color: .teal),
+        ProfileCategory(id: 11, title: "Civic & Political Participation", icon: "flag", color: .pink),
     ]
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Profile Avatar + Privacy Notice
-                VStack(spacing: 20) {
+            List {
+                Section {
                     ProfileAvatarSection(
                         personalInfo: $personalInfo,
                         hasChanges: $hasChanges,
                         pickedFiles: $pickedFiles,
                         showIconSelector: $showIconSelector
                     )
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .frame(maxWidth: .infinity)
 
-                    Text("By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-
-                    Button(action: {
-                        // Privacy policy link placeholder
-                    }) {
-                        Text("Privacy Policy")
-                            .font(.subheadline)
-                    }
+                    privacyNotice
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                 }
-                .padding(20)
-                .frame(maxWidth: .infinity)
-                .background(theme.secondarySurfaceColor)
 
-                // Tab Selector
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        ForEach(0..<tabs.count, id: \.self) { index in
-                            Button(action: { selectedTab = index }) {
-                                Text(tabs[index])
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(selectedTab == index ? theme.primaryColor : Color.clear)
-                                    .foregroundColor(selectedTab == index ? .white : theme.primaryTextColor)
-                                    .cornerRadius(16)
-                            }
-                        }
-                    }
-                    .padding()
-                }
-                .background(theme.secondarySurfaceColor)
-
-                Divider()
-
-                // Tab Content
-                TabView(selection: $selectedTab) {
-                    PersonalDataTab(personalInfo: $personalInfo, hasChanges: $hasChanges)
-                        .tag(0)
-
-                    CivilRegistrationTab(civilInfo: $civilInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(1)
-
-                    AddressTab(addressInfo: $addressInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(2)
-
-                    IdentityTravelTab(identityInfo: $identityInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(3)
-
-                    HealthMedicalTab(healthInfo: $healthInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(4)
-
-                    EmploymentTab(employmentInfo: $employmentInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(5)
-
-                    EducationTab(educationInfo: $educationInfo, hasChanges: $hasChanges)
-                        .tag(6)
-
-                    FinancialTaxTab(financialInfo: $financialInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(7)
-
-                    SocialSecurityTab(socialInfo: $socialInfo, hasChanges: $hasChanges)
-                        .tag(8)
-
-                    CriminalLegalTab(criminalInfo: $criminalInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(9)
-
-                    TransportationTab(transportInfo: $transportInfo, hasChanges: $hasChanges, pickedFiles: $pickedFiles)
-                        .tag(10)
-
-                    CivicParticipationTab(civicInfo: $civicInfo, hasChanges: $hasChanges)
-                        .tag(11)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-
-                // Navigation Buttons
-                HStack {
-                    Button(action: previousTab) {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                            Text("Previous")
-                        }
-                    }
-                    .disabled(selectedTab == 0)
-
-                    Spacer()
-
-                    if selectedTab < tabs.count - 1 {
-                        Button(action: nextTab) {
-                            HStack {
-                                Text("Next")
-                                Image(systemName: "chevron.right")
+                Section {
+                    ForEach(categories) { category in
+                        NavigationLink {
+                            categoryDetailView(category)
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: category.icon)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 30, height: 30)
+                                    .background(category.color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                Text(category.title)
                             }
                         }
                     }
                 }
-                .padding()
-                .background(theme.secondarySurfaceColor)
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("User Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
                         if hasChanges {
                             showDiscardAlert = true
                         } else {
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
                     }
+                    .accessibilityLabel(Text("Close"))
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button(action: saveProfile) {
                         if isSaving {
                             ProgressView()
                         } else {
-                            Text("Save Profile")
+                            Image(systemName: "checkmark")
+                                .fontWeight(.semibold)
+                                .foregroundColor(theme.primaryColor)
                         }
                     }
                     .disabled(!hasChanges || isSaving)
+                    .accessibilityLabel(Text("Save"))
                 }
             }
             .alert("Discard unsaved changes?", isPresented: $showDiscardAlert) {
@@ -202,17 +139,69 @@ struct UserProfileView: View {
         }
     }
 
-    private func previousTab() {
-        withAnimation {
-            selectedTab = max(0, selectedTab - 1)
+    // MARK: - Privacy Notice
+
+    private var privacyNotice: some View {
+        VStack(spacing: 8) {
+            Text("By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+
+            Button(action: {
+                // Privacy policy link placeholder
+            }) {
+                Text("Privacy Policy")
+                    .font(.subheadline)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Category Detail Views
+
+    @ViewBuilder
+    private func categoryDetailView(_ category: ProfileCategory) -> some View {
+        switch category.id {
+        case 0:
+            PersonalDataTab(personalInfo: $personalInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile)
+        case 1:
+            CivilRegistrationTab(civilInfo: $civilInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 2:
+            AddressTab(addressInfo: $addressInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 3:
+            IdentityTravelTab(identityInfo: $identityInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 4:
+            HealthMedicalTab(healthInfo: $healthInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 5:
+            EmploymentTab(employmentInfo: $employmentInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 6:
+            EducationTab(educationInfo: $educationInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile)
+        case 7:
+            FinancialTaxTab(financialInfo: $financialInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 8:
+            SocialSecurityTab(socialInfo: $socialInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile)
+        case 9:
+            CriminalLegalTab(criminalInfo: $criminalInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 10:
+            TransportationTab(transportInfo: $transportInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile, fileBinding: fileBinding)
+        case 11:
+            CivicParticipationTab(civicInfo: $civicInfo, hasChanges: $hasChanges, isSaving: $isSaving, onSave: saveProfile)
+        default:
+            EmptyView()
         }
     }
 
-    private func nextTab() {
-        withAnimation {
-            selectedTab = min(tabs.count - 1, selectedTab + 1)
-        }
+    // MARK: - File Binding Helper
+
+    func fileBinding(_ key: String) -> Binding<URL?> {
+        Binding(
+            get: { pickedFiles[key] },
+            set: { pickedFiles[key] = $0 }
+        )
     }
+
+    // MARK: - Load / Save
 
     private func loadProfile() async {
         guard let userId = authService.currentUser?.id else { return }
@@ -266,6 +255,7 @@ struct UserProfileView: View {
                     isSaving = false
                     hasChanges = false
                     pickedFiles.removeAll()
+                    dismiss()
                 }
             } catch {
                 await MainActor.run {
@@ -274,6 +264,34 @@ struct UserProfileView: View {
                 print("[UserProfileView] Save error: \(error)")
             }
         }
+    }
+}
+
+// MARK: - Profile Save Toolbar Modifier
+
+private struct ProfileSaveToolbar: ViewModifier {
+    @Environment(ThemeManager.self) private var theme
+    @Binding var hasChanges: Bool
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: onSave) {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "checkmark")
+                                .fontWeight(.semibold)
+                                .foregroundColor(theme.primaryColor)
+                        }
+                    }
+                    .disabled(!hasChanges || isSaving)
+                    .accessibilityLabel(Text("Save"))
+                }
+            }
     }
 }
 
@@ -318,7 +336,6 @@ struct ProfileAvatarSection: View {
     var body: some View {
         Button(action: { showIconSelector = true }) {
             ZStack(alignment: .bottomTrailing) {
-                // Avatar circle
                 Group {
                     if let localURL = localPickedImage {
                         AsyncImage(url: localURL) { image in
@@ -341,7 +358,6 @@ struct ProfileAvatarSection: View {
                     }
                 }
 
-                // Edit overlay
                 Circle()
                     .fill(Color.black.opacity(0.6))
                     .frame(width: 36, height: 36)
@@ -354,6 +370,7 @@ struct ProfileAvatarSection: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
     }
 
     private var initialsCircle: some View {
@@ -407,7 +424,6 @@ struct ProfileIconSelectorSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                // Tab selector
                 Picker("", selection: $selectedTabIndex) {
                     Text("Upload").tag(0)
                     Text("Initials").tag(1)
@@ -427,21 +443,19 @@ struct ProfileIconSelectorSheet: View {
             .navigationTitle("Choose a Profile Icon")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(theme.secondaryTextColor)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
                     }
+                    .accessibilityLabel(Text("Close"))
                 }
             }
         }
     }
 
-    // MARK: Upload Tab
-
     private var uploadTab: some View {
         VStack(spacing: 24) {
-            // Preview
             if let localURL = pickedFiles["personalIdentification-profileIcon"] {
                 AsyncImage(url: localURL) { image in
                     image.resizable().scaledToFill()
@@ -462,7 +476,7 @@ struct ProfileIconSelectorSheet: View {
                     .frame(maxWidth: .infinity)
                     .background(theme.primaryColor)
                     .foregroundColor(.white)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .padding(.horizontal)
             .onChange(of: selectedPhotoItem) { _, newItem in
@@ -488,11 +502,8 @@ struct ProfileIconSelectorSheet: View {
         .padding(.top, 20)
     }
 
-    // MARK: Initials Tab
-
     private var initialsTab: some View {
         VStack(spacing: 24) {
-            // Preview circle
             Circle()
                 .fill(selectedInitialsColor)
                 .frame(width: 140, height: 140)
@@ -502,7 +513,6 @@ struct ProfileIconSelectorSheet: View {
                         .foregroundColor(.white)
                 )
 
-            // Color swatches
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
                 ForEach(colorOptions, id: \.1) { color, hex in
                     Button(action: {
@@ -526,7 +536,6 @@ struct ProfileIconSelectorSheet: View {
         }
         .padding(.top, 20)
         .onAppear {
-            // Initialize from current profileIcon if it's an initials value
             if let icon = personalInfo.profileIcon, icon.hasPrefix("initials:") {
                 let hex = String(icon.dropFirst("initials:".count))
                 if let match = colorOptions.first(where: { $0.1 == hex }) {
@@ -537,903 +546,583 @@ struct ProfileIconSelectorSheet: View {
     }
 }
 
-// MARK: - Personal Data Tab (Tab 0)
+// MARK: - Personal Data Tab
 
 struct PersonalDataTab: View {
-    @Environment(ThemeManager.self) private var theme
-
     @Binding var personalInfo: PersonalIdentification
     @Binding var hasChanges: Bool
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileField(
-                    label: "Full name (including aliases)",
-                    text: Binding(
-                        get: { personalInfo.fullName ?? "" },
-                        set: { personalInfo.fullName = $0; hasChanges = true }
-                    ),
-                    placeholder: String(localized: "Enter your full legal name")
-                )
-
+        Form {
+            Section("Basic Information") {
+                TextField("Full name (including aliases)", text: Binding(
+                    get: { personalInfo.fullName ?? "" },
+                    set: { personalInfo.fullName = $0; hasChanges = true }
+                ))
                 ProfileDateField(
-                    label: "Date of birth",
                     dateString: Binding(
                         get: { personalInfo.dob ?? "" },
                         set: { personalInfo.dob = $0; hasChanges = true }
                     )
                 )
+                Picker("Gender", selection: Binding(
+                    get: { personalInfo.gender ?? "" },
+                    set: { personalInfo.gender = $0; hasChanges = true }
+                )) {
+                    Text("Please select").tag("")
+                    Text("Male").tag("male")
+                    Text("Female").tag("female")
+                    Text(String(localized: "userProfile.gender.other")).tag("other")
+                    Text("Prefer not to say").tag("preferNot")
+                }
+            }
 
-                ProfilePickerField(
-                    label: "Gender",
-                    selection: Binding(
-                        get: { personalInfo.gender ?? "" },
-                        set: { personalInfo.gender = $0; hasChanges = true }
-                    ),
-                    options: [
-                        ("male", String(localized: "Male")),
-                        ("female", String(localized: "Female")),
-                        ("other", String(localized: "userProfile.gender.other")),
-                        ("preferNot", String(localized: "Prefer not to say"))
-                    ]
-                )
-
+            Section("Nationality & Status") {
                 ProfileCountryPickerField(
-                    label: "Nationality",
                     selection: Binding(
                         get: { personalInfo.nationality ?? "" },
                         set: { personalInfo.nationality = $0; hasChanges = true }
                     )
                 )
-
-                ProfilePickerField(
-                    label: "Marital status",
-                    selection: Binding(
-                        get: { personalInfo.maritalStatus ?? "" },
-                        set: { personalInfo.maritalStatus = $0; hasChanges = true }
-                    ),
-                    options: [
-                        ("single", String(localized: "Single")),
-                        ("married", String(localized: "Married")),
-                        ("divorced", String(localized: "Divorced")),
-                        ("widowed", String(localized: "Widowed")),
-                        ("other", String(localized: "userProfile.maritalStatus.other"))
-                    ]
-                )
+                Picker("Marital status", selection: Binding(
+                    get: { personalInfo.maritalStatus ?? "" },
+                    set: { personalInfo.maritalStatus = $0; hasChanges = true }
+                )) {
+                    Text("Please select").tag("")
+                    Text("Single").tag("single")
+                    Text("Married").tag("married")
+                    Text("Divorced").tag("divorced")
+                    Text("Widowed").tag("widowed")
+                    Text(String(localized: "userProfile.maritalStatus.other")).tag("other")
+                }
             }
-            .padding()
         }
+        .navigationTitle("Personal Identification")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Civil Registration Tab (Tab 1)
+// MARK: - Civil Registration Tab
 
 struct CivilRegistrationTab: View {
-
     @Binding var civilInfo: CivilRegistration
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
+        Form {
+            Section("Certificates") {
                 ProfileFileUploadField(
                     label: "Birth certificate",
-                    filename: Binding(
-                        get: { civilInfo.birthCert ?? "" },
-                        set: { civilInfo.birthCert = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { civilInfo.birthCert ?? "" }, set: { civilInfo.birthCert = $0; hasChanges = true }),
                     fileURL: fileBinding("civilRegistration-birthCert")
                 )
-
                 ProfileFileUploadField(
                     label: "Death certificate",
-                    filename: Binding(
-                        get: { civilInfo.deathCert ?? "" },
-                        set: { civilInfo.deathCert = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { civilInfo.deathCert ?? "" }, set: { civilInfo.deathCert = $0; hasChanges = true }),
                     fileURL: fileBinding("civilRegistration-deathCert")
                 )
-
                 ProfileFileUploadField(
                     label: "Marriage / Divorce records",
-                    filename: Binding(
-                        get: { civilInfo.marriageDivorce ?? "" },
-                        set: { civilInfo.marriageDivorce = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { civilInfo.marriageDivorce ?? "" }, set: { civilInfo.marriageDivorce = $0; hasChanges = true }),
                     fileURL: fileBinding("civilRegistration-marriageDivorce")
                 )
-
                 ProfileFileUploadField(
                     label: "Adoption records",
-                    filename: Binding(
-                        get: { civilInfo.adoption ?? "" },
-                        set: { civilInfo.adoption = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { civilInfo.adoption ?? "" }, set: { civilInfo.adoption = $0; hasChanges = true }),
                     fileURL: fileBinding("civilRegistration-adoption")
                 )
-
+            }
+            Section("Citizenship & Immigration") {
                 ProfileFileUploadField(
                     label: "Citizenship / Naturalization documents",
-                    filename: Binding(
-                        get: { civilInfo.citizenship ?? "" },
-                        set: { civilInfo.citizenship = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { civilInfo.citizenship ?? "" }, set: { civilInfo.citizenship = $0; hasChanges = true }),
                     fileURL: fileBinding("civilRegistration-citizenship")
                 )
-
                 ProfileFileUploadField(
                     label: "Immigration & visa history",
-                    filename: Binding(
-                        get: { civilInfo.immigration ?? "" },
-                        set: { civilInfo.immigration = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { civilInfo.immigration ?? "" }, set: { civilInfo.immigration = $0; hasChanges = true }),
                     fileURL: fileBinding("civilRegistration-immigration")
                 )
             }
-            .padding()
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Civil Registration")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Address Tab (Tab 2)
+// MARK: - Address Tab
 
 struct AddressTab: View {
-
     @Binding var addressInfo: AddressResidency
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileField(
-                    label: "Current residential address",
-                    text: Binding(
-                        get: { addressInfo.currentAddress ?? "" },
-                        set: { addressInfo.currentAddress = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileTextAreaField(
-                    label: "Previous addresses",
-                    text: Binding(
-                        get: { addressInfo.previousAddresses ?? "" },
-                        set: { addressInfo.previousAddresses = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Homeownership or rental details",
-                    text: Binding(
-                        get: { addressInfo.homeOrRental ?? "" },
-                        set: { addressInfo.homeOrRental = $0; hasChanges = true }
-                    )
-                )
-
+        Form {
+            Section("Address") {
+                TextField("Current residential address", text: Binding(
+                    get: { addressInfo.currentAddress ?? "" },
+                    set: { addressInfo.currentAddress = $0; hasChanges = true }
+                ))
+                TextField("Previous addresses", text: Binding(
+                    get: { addressInfo.previousAddresses ?? "" },
+                    set: { addressInfo.previousAddresses = $0; hasChanges = true }
+                ), axis: .vertical)
+                .lineLimit(3...6)
+                TextField("Homeownership or rental details", text: Binding(
+                    get: { addressInfo.homeOrRental ?? "" },
+                    set: { addressInfo.homeOrRental = $0; hasChanges = true }
+                ))
+            }
+            Section("Documents") {
                 ProfileFileUploadField(
                     label: "Utility bills linked to the address",
-                    filename: Binding(
-                        get: { addressInfo.utilityBills ?? "" },
-                        set: { addressInfo.utilityBills = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { addressInfo.utilityBills ?? "" }, set: { addressInfo.utilityBills = $0; hasChanges = true }),
                     fileURL: fileBinding("addressResidency-utilityBills")
                 )
-
                 ProfileFileUploadField(
                     label: "Land and property ownership records",
-                    filename: Binding(
-                        get: { addressInfo.landRecords ?? "" },
-                        set: { addressInfo.landRecords = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { addressInfo.landRecords ?? "" }, set: { addressInfo.landRecords = $0; hasChanges = true }),
                     fileURL: fileBinding("addressResidency-landRecords")
                 )
             }
-            .padding()
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Address & Residency")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Identity & Travel Tab (Tab 3)
+// MARK: - Identity & Travel Tab
 
 struct IdentityTravelTab: View {
-
     @Binding var identityInfo: IdentityTravel
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileField(
-                    label: "National ID card number",
-                    text: Binding(
-                        get: { identityInfo.idCard ?? "" },
-                        set: { identityInfo.idCard = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Passport details",
-                    text: Binding(
-                        get: { identityInfo.passport ?? "" },
-                        set: { identityInfo.passport = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Driver's license",
-                    text: Binding(
-                        get: { identityInfo.driversLicense ?? "" },
-                        set: { identityInfo.driversLicense = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Voter ID",
-                    text: Binding(
-                        get: { identityInfo.voterId ?? "" },
-                        set: { identityInfo.voterId = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Social Security / National Insurance Number",
-                    text: Binding(
-                        get: { identityInfo.ssn ?? "" },
-                        set: { identityInfo.ssn = $0; hasChanges = true }
-                    )
-                )
-
+        Form {
+            Section("Identity Documents") {
+                TextField("National ID card number", text: Binding(
+                    get: { identityInfo.idCard ?? "" },
+                    set: { identityInfo.idCard = $0; hasChanges = true }
+                ))
+                TextField("Passport details", text: Binding(
+                    get: { identityInfo.passport ?? "" },
+                    set: { identityInfo.passport = $0; hasChanges = true }
+                ))
+                TextField("Driver's license", text: Binding(
+                    get: { identityInfo.driversLicense ?? "" },
+                    set: { identityInfo.driversLicense = $0; hasChanges = true }
+                ))
+                TextField("Voter ID", text: Binding(
+                    get: { identityInfo.voterId ?? "" },
+                    set: { identityInfo.voterId = $0; hasChanges = true }
+                ))
+                TextField("Social Security / National Insurance Number", text: Binding(
+                    get: { identityInfo.ssn ?? "" },
+                    set: { identityInfo.ssn = $0; hasChanges = true }
+                ))
+            }
+            Section("Records") {
                 ProfileFileUploadField(
                     label: "Military service records",
-                    filename: Binding(
-                        get: { identityInfo.militaryRecords ?? "" },
-                        set: { identityInfo.militaryRecords = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { identityInfo.militaryRecords ?? "" }, set: { identityInfo.militaryRecords = $0; hasChanges = true }),
                     fileURL: fileBinding("identityTravel-militaryRecords")
                 )
             }
-            .padding()
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Identity & Travel")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Health & Medical Tab (Tab 4)
+// MARK: - Health & Medical Tab
 
 struct HealthMedicalTab: View {
-
     @Binding var healthInfo: HealthMedical
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileTextAreaField(
-                    label: "Medical history and health conditions",
-                    text: Binding(
-                        get: { healthInfo.medicalHistory ?? "" },
-                        set: { healthInfo.medicalHistory = $0; hasChanges = true }
-                    )
-                )
-
+        Form {
+            Section("General") {
+                TextField("Medical history and health conditions", text: Binding(
+                    get: { healthInfo.medicalHistory ?? "" },
+                    set: { healthInfo.medicalHistory = $0; hasChanges = true }
+                ), axis: .vertical)
+                .lineLimit(3...6)
+                Picker("Blood Type", selection: Binding(
+                    get: { healthInfo.bloodType ?? "" },
+                    set: { healthInfo.bloodType = $0; hasChanges = true }
+                )) {
+                    Text("Please select").tag("")
+                    Text("A+").tag("aPositive")
+                    Text("A-").tag("aNegative")
+                    Text("B+").tag("bPositive")
+                    Text("B-").tag("bNegative")
+                    Text("AB+").tag("abPositive")
+                    Text("AB-").tag("abNegative")
+                    Text("O+").tag("oPositive")
+                    Text("O-").tag("oNegative")
+                    Text("Unknown").tag("unknown")
+                }
+                TextField("Disability status", text: Binding(
+                    get: { healthInfo.disability ?? "" },
+                    set: { healthInfo.disability = $0; hasChanges = true }
+                ))
+                TextField("Organ donor status", text: Binding(
+                    get: { healthInfo.organDonor ?? "" },
+                    set: { healthInfo.organDonor = $0; hasChanges = true }
+                ))
+            }
+            Section("Insurance & Records") {
+                TextField("Health insurance details", text: Binding(
+                    get: { healthInfo.insuranceDetails ?? "" },
+                    set: { healthInfo.insuranceDetails = $0; hasChanges = true }
+                ))
                 ProfileFileUploadField(
                     label: "Vaccination records",
-                    filename: Binding(
-                        get: { healthInfo.vaccinations ?? "" },
-                        set: { healthInfo.vaccinations = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { healthInfo.vaccinations ?? "" }, set: { healthInfo.vaccinations = $0; hasChanges = true }),
                     fileURL: fileBinding("healthMedical-vaccinations")
                 )
-
-                ProfileField(
-                    label: "Health insurance details",
-                    text: Binding(
-                        get: { healthInfo.insuranceDetails ?? "" },
-                        set: { healthInfo.insuranceDetails = $0; hasChanges = true }
-                    )
-                )
-
-                ProfilePickerField(
-                    label: "Blood Type",
-                    selection: Binding(
-                        get: { healthInfo.bloodType ?? "" },
-                        set: { healthInfo.bloodType = $0; hasChanges = true }
-                    ),
-                    options: [
-                        ("aPositive", "A+"),
-                        ("aNegative", "A-"),
-                        ("bPositive", "B+"),
-                        ("bNegative", "B-"),
-                        ("abPositive", "AB+"),
-                        ("abNegative", "AB-"),
-                        ("oPositive", "O+"),
-                        ("oNegative", "O-"),
-                        ("unknown", String(localized: "Unknown"))
-                    ]
-                )
-
-                ProfileField(
-                    label: "Disability status",
-                    text: Binding(
-                        get: { healthInfo.disability ?? "" },
-                        set: { healthInfo.disability = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Organ donor status",
-                    text: Binding(
-                        get: { healthInfo.organDonor ?? "" },
-                        set: { healthInfo.organDonor = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileTextAreaField(
-                    label: "Prescriptions and treatments received",
-                    text: Binding(
-                        get: { healthInfo.prescriptions ?? "" },
-                        set: { healthInfo.prescriptions = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileTextAreaField(
-                    label: "Mental health history",
-                    text: Binding(
-                        get: { healthInfo.mentalHealth ?? "" },
-                        set: { healthInfo.mentalHealth = $0; hasChanges = true }
-                    )
-                )
             }
-            .padding()
+            Section("Treatment History") {
+                TextField("Prescriptions and treatments received", text: Binding(
+                    get: { healthInfo.prescriptions ?? "" },
+                    set: { healthInfo.prescriptions = $0; hasChanges = true }
+                ), axis: .vertical)
+                .lineLimit(3...6)
+                TextField("Mental health history", text: Binding(
+                    get: { healthInfo.mentalHealth ?? "" },
+                    set: { healthInfo.mentalHealth = $0; hasChanges = true }
+                ), axis: .vertical)
+                .lineLimit(3...6)
+            }
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Health & Medical")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Employment Tab (Tab 5)
+// MARK: - Employment Tab
 
 struct EmploymentTab: View {
-
     @Binding var employmentInfo: Employment
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileTextAreaField(
-                    label: "Employment history",
-                    text: Binding(
-                        get: { employmentInfo.eHistory ?? "" },
-                        set: { employmentInfo.eHistory = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Current employer details",
-                    text: Binding(
-                        get: { employmentInfo.currentEmployer ?? "" },
-                        set: { employmentInfo.currentEmployer = $0; hasChanges = true }
-                    )
-                )
-
+        Form {
+            Section("Employment") {
+                TextField("Current employer details", text: Binding(
+                    get: { employmentInfo.currentEmployer ?? "" },
+                    set: { employmentInfo.currentEmployer = $0; hasChanges = true }
+                ))
+                TextField("Employment history", text: Binding(
+                    get: { employmentInfo.eHistory ?? "" },
+                    set: { employmentInfo.eHistory = $0; hasChanges = true }
+                ), axis: .vertical)
+                .lineLimit(3...6)
+                TextField("Unemployment status and benefits received", text: Binding(
+                    get: { employmentInfo.unemployment ?? "" },
+                    set: { employmentInfo.unemployment = $0; hasChanges = true }
+                ))
+            }
+            Section("Business & Tax") {
+                TextField("Taxpayer identification number (TIN)", text: Binding(
+                    get: { employmentInfo.tin ?? "" },
+                    set: { employmentInfo.tin = $0; hasChanges = true }
+                ))
+                TextField("Business ownership and company affiliations", text: Binding(
+                    get: { employmentInfo.businessAffiliations ?? "" },
+                    set: { employmentInfo.businessAffiliations = $0; hasChanges = true }
+                ))
+            }
+            Section("Documents") {
                 ProfileFileUploadField(
                     label: "Work permits and labor contracts",
-                    filename: Binding(
-                        get: { employmentInfo.workPermits ?? "" },
-                        set: { employmentInfo.workPermits = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { employmentInfo.workPermits ?? "" }, set: { employmentInfo.workPermits = $0; hasChanges = true }),
                     fileURL: fileBinding("employment-workPermits")
                 )
-
                 ProfileFileUploadField(
                     label: "Professional certifications and licenses",
-                    filename: Binding(
-                        get: { employmentInfo.certifications ?? "" },
-                        set: { employmentInfo.certifications = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { employmentInfo.certifications ?? "" }, set: { employmentInfo.certifications = $0; hasChanges = true }),
                     fileURL: fileBinding("employment-certifications")
                 )
-
-                ProfileField(
-                    label: "Unemployment status and benefits received",
-                    text: Binding(
-                        get: { employmentInfo.unemployment ?? "" },
-                        set: { employmentInfo.unemployment = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Taxpayer identification number (TIN)",
-                    text: Binding(
-                        get: { employmentInfo.tin ?? "" },
-                        set: { employmentInfo.tin = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Business ownership and company affiliations",
-                    text: Binding(
-                        get: { employmentInfo.businessAffiliations ?? "" },
-                        set: { employmentInfo.businessAffiliations = $0; hasChanges = true }
-                    )
-                )
             }
-            .padding()
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Employment & Economic")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Education Tab (Tab 6)
+// MARK: - Education Tab
 
 struct EducationTab: View {
-
     @Binding var educationInfo: Education
     @Binding var hasChanges: Bool
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileTextAreaField(
-                    label: "School and university attended",
-                    text: Binding(
-                        get: { educationInfo.schools ?? "" },
-                        set: { educationInfo.schools = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Diplomas, degrees, and certifications",
-                    text: Binding(
-                        get: { educationInfo.diplomas ?? "" },
-                        set: { educationInfo.diplomas = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Academic performance and test scores",
-                    text: Binding(
-                        get: { educationInfo.performance ?? "" },
-                        set: { educationInfo.performance = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Scholarships and financial aid received",
-                    text: Binding(
-                        get: { educationInfo.scholarships ?? "" },
-                        set: { educationInfo.scholarships = $0; hasChanges = true }
-                    )
-                )
+        Form {
+            Section("Academic Background") {
+                TextField("School and university attended", text: Binding(
+                    get: { educationInfo.schools ?? "" },
+                    set: { educationInfo.schools = $0; hasChanges = true }
+                ), axis: .vertical)
+                .lineLimit(3...6)
+                TextField("Diplomas, degrees, and certifications", text: Binding(
+                    get: { educationInfo.diplomas ?? "" },
+                    set: { educationInfo.diplomas = $0; hasChanges = true }
+                ))
+                TextField("Academic performance and test scores", text: Binding(
+                    get: { educationInfo.performance ?? "" },
+                    set: { educationInfo.performance = $0; hasChanges = true }
+                ))
             }
-            .padding()
+            Section("Financial Aid") {
+                TextField("Scholarships and financial aid received", text: Binding(
+                    get: { educationInfo.scholarships ?? "" },
+                    set: { educationInfo.scholarships = $0; hasChanges = true }
+                ))
+            }
         }
+        .navigationTitle("Education & Academic")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Financial & Tax Tab (Tab 7)
+// MARK: - Financial & Tax Tab
 
 struct FinancialTaxTab: View {
-
     @Binding var financialInfo: FinancialTax
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
+        Form {
+            Section("Accounts") {
+                TextField("Banking and financial accounts", text: Binding(
+                    get: { financialInfo.bankAccounts ?? "" },
+                    set: { financialInfo.bankAccounts = $0; hasChanges = true }
+                ))
+            }
+            Section("Tax & Financial Documents") {
                 ProfileFileUploadField(
                     label: "Income tax records",
-                    filename: Binding(
-                        get: { financialInfo.incomeTax ?? "" },
-                        set: { financialInfo.incomeTax = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { financialInfo.incomeTax ?? "" }, set: { financialInfo.incomeTax = $0; hasChanges = true }),
                     fileURL: fileBinding("financialTax-incomeTax")
                 )
-
-                ProfileField(
-                    label: "Banking and financial accounts",
-                    text: Binding(
-                        get: { financialInfo.bankAccounts ?? "" },
-                        set: { financialInfo.bankAccounts = $0; hasChanges = true }
-                    )
-                )
-
                 ProfileFileUploadField(
                     label: "Property tax payments",
-                    filename: Binding(
-                        get: { financialInfo.propertyTax ?? "" },
-                        set: { financialInfo.propertyTax = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { financialInfo.propertyTax ?? "" }, set: { financialInfo.propertyTax = $0; hasChanges = true }),
                     fileURL: fileBinding("financialTax-propertyTax")
                 )
-
                 ProfileFileUploadField(
                     label: "Business tax filings",
-                    filename: Binding(
-                        get: { financialInfo.businessTax ?? "" },
-                        set: { financialInfo.businessTax = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { financialInfo.businessTax ?? "" }, set: { financialInfo.businessTax = $0; hasChanges = true }),
                     fileURL: fileBinding("financialTax-businessTax")
                 )
-
                 ProfileFileUploadField(
                     label: "Pension contributions and withdrawals",
-                    filename: Binding(
-                        get: { financialInfo.pensionContrib ?? "" },
-                        set: { financialInfo.pensionContrib = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { financialInfo.pensionContrib ?? "" }, set: { financialInfo.pensionContrib = $0; hasChanges = true }),
                     fileURL: fileBinding("financialTax-pensionContrib")
                 )
-
                 ProfileFileUploadField(
                     label: "Loan and government aid records",
-                    filename: Binding(
-                        get: { financialInfo.loanAid ?? "" },
-                        set: { financialInfo.loanAid = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { financialInfo.loanAid ?? "" }, set: { financialInfo.loanAid = $0; hasChanges = true }),
                     fileURL: fileBinding("financialTax-loanAid")
                 )
             }
-            .padding()
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Financial & Tax")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Social Security Tab (Tab 8)
+// MARK: - Social Security Tab
 
 struct SocialSecurityTab: View {
-
     @Binding var socialInfo: SocialSecurity
     @Binding var hasChanges: Bool
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileField(
-                    label: "Pension status and contributions",
-                    text: Binding(
-                        get: { socialInfo.pensionStatus ?? "" },
-                        set: { socialInfo.pensionStatus = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Unemployment status and benefits received",
-                    text: Binding(
-                        get: { socialInfo.unemployment ?? "" },
-                        set: { socialInfo.unemployment = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Disability status",
-                    text: Binding(
-                        get: { socialInfo.disability ?? "" },
-                        set: { socialInfo.disability = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Childcare support",
-                    text: Binding(
-                        get: { socialInfo.childcare ?? "" },
-                        set: { socialInfo.childcare = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Food assistance / welfare programs",
-                    text: Binding(
-                        get: { socialInfo.foodAssistance ?? "" },
-                        set: { socialInfo.foodAssistance = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Housing assistance",
-                    text: Binding(
-                        get: { socialInfo.housingAssistance ?? "" },
-                        set: { socialInfo.housingAssistance = $0; hasChanges = true }
-                    )
-                )
+        Form {
+            Section("Benefits & Contributions") {
+                TextField("Pension status and contributions", text: Binding(
+                    get: { socialInfo.pensionStatus ?? "" },
+                    set: { socialInfo.pensionStatus = $0; hasChanges = true }
+                ))
+                TextField("Unemployment status and benefits received", text: Binding(
+                    get: { socialInfo.unemployment ?? "" },
+                    set: { socialInfo.unemployment = $0; hasChanges = true }
+                ))
+                TextField("Disability status", text: Binding(
+                    get: { socialInfo.disability ?? "" },
+                    set: { socialInfo.disability = $0; hasChanges = true }
+                ))
             }
-            .padding()
+            Section("Assistance Programs") {
+                TextField("Childcare support", text: Binding(
+                    get: { socialInfo.childcare ?? "" },
+                    set: { socialInfo.childcare = $0; hasChanges = true }
+                ))
+                TextField("Food assistance / welfare programs", text: Binding(
+                    get: { socialInfo.foodAssistance ?? "" },
+                    set: { socialInfo.foodAssistance = $0; hasChanges = true }
+                ))
+                TextField("Housing assistance", text: Binding(
+                    get: { socialInfo.housingAssistance ?? "" },
+                    set: { socialInfo.housingAssistance = $0; hasChanges = true }
+                ))
+            }
         }
+        .navigationTitle("Social Security & Welfare")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Criminal & Legal Tab (Tab 9)
+// MARK: - Criminal & Legal Tab
 
 struct CriminalLegalTab: View {
-
     @Binding var criminalInfo: CriminalLegal
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
+        Form {
+            Section("Records & Documents") {
                 ProfileFileUploadField(
                     label: "Police records (criminal history, arrests, charges)",
-                    filename: Binding(
-                        get: { criminalInfo.policeRecords ?? "" },
-                        set: { criminalInfo.policeRecords = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { criminalInfo.policeRecords ?? "" }, set: { criminalInfo.policeRecords = $0; hasChanges = true }),
                     fileURL: fileBinding("criminalLegal-policeRecords")
                 )
-
                 ProfileFileUploadField(
                     label: "Court case history",
-                    filename: Binding(
-                        get: { criminalInfo.courtCases ?? "" },
-                        set: { criminalInfo.courtCases = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { criminalInfo.courtCases ?? "" }, set: { criminalInfo.courtCases = $0; hasChanges = true }),
                     fileURL: fileBinding("criminalLegal-courtCases")
                 )
-
                 ProfileFileUploadField(
                     label: "Fines and penalties",
-                    filename: Binding(
-                        get: { criminalInfo.finesPenalties ?? "" },
-                        set: { criminalInfo.finesPenalties = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { criminalInfo.finesPenalties ?? "" }, set: { criminalInfo.finesPenalties = $0; hasChanges = true }),
                     fileURL: fileBinding("criminalLegal-finesPenalties")
                 )
-
-                ProfileField(
-                    label: "Parole or probation status",
-                    text: Binding(
-                        get: { criminalInfo.paroleProbation ?? "" },
-                        set: { criminalInfo.paroleProbation = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Citizenship revocation (if applicable)",
-                    text: Binding(
-                        get: { criminalInfo.citizenshipRevocation ?? "" },
-                        set: { criminalInfo.citizenshipRevocation = $0; hasChanges = true }
-                    )
-                )
             }
-            .padding()
+            Section("Status") {
+                TextField("Parole or probation status", text: Binding(
+                    get: { criminalInfo.paroleProbation ?? "" },
+                    set: { criminalInfo.paroleProbation = $0; hasChanges = true }
+                ))
+                TextField("Citizenship revocation (if applicable)", text: Binding(
+                    get: { criminalInfo.citizenshipRevocation ?? "" },
+                    set: { criminalInfo.citizenshipRevocation = $0; hasChanges = true }
+                ))
+            }
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Criminal & Legal")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Transportation Tab (Tab 10)
+// MARK: - Transportation Tab
 
 struct TransportationTab: View {
-
     @Binding var transportInfo: Transportation
     @Binding var hasChanges: Bool
-    @Binding var pickedFiles: [String: URL]
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
+    var fileBinding: (String) -> Binding<URL?>
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileField(
-                    label: "Vehicle registration details",
-                    text: Binding(
-                        get: { transportInfo.vehicleReg ?? "" },
-                        set: { transportInfo.vehicleReg = $0; hasChanges = true }
-                    )
-                )
-
+        Form {
+            Section("Vehicles & Licenses") {
+                TextField("Vehicle registration details", text: Binding(
+                    get: { transportInfo.vehicleReg ?? "" },
+                    set: { transportInfo.vehicleReg = $0; hasChanges = true }
+                ))
+                TextField("Driving license history and endorsements", text: Binding(
+                    get: { transportInfo.licenseHistory ?? "" },
+                    set: { transportInfo.licenseHistory = $0; hasChanges = true }
+                ))
+                TextField("Public transport card usage", text: Binding(
+                    get: { transportInfo.publicTransportCard ?? "" },
+                    set: { transportInfo.publicTransportCard = $0; hasChanges = true }
+                ))
+            }
+            Section("Records") {
                 ProfileFileUploadField(
                     label: "Traffic violations and fines",
-                    filename: Binding(
-                        get: { transportInfo.trafficViolations ?? "" },
-                        set: { transportInfo.trafficViolations = $0; hasChanges = true }
-                    ),
+                    filename: Binding(get: { transportInfo.trafficViolations ?? "" }, set: { transportInfo.trafficViolations = $0; hasChanges = true }),
                     fileURL: fileBinding("transportation-trafficViolations")
                 )
-
-                ProfileField(
-                    label: "Driving license history and endorsements",
-                    text: Binding(
-                        get: { transportInfo.licenseHistory ?? "" },
-                        set: { transportInfo.licenseHistory = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Public transport card usage",
-                    text: Binding(
-                        get: { transportInfo.publicTransportCard ?? "" },
-                        set: { transportInfo.publicTransportCard = $0; hasChanges = true }
-                    )
-                )
             }
-            .padding()
         }
-    }
-
-    private func fileBinding(_ key: String) -> Binding<URL?> {
-        Binding(
-            get: { pickedFiles[key] },
-            set: { pickedFiles[key] = $0 }
-        )
+        .navigationTitle("Transportation & Mobility")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-// MARK: - Civic & Political Participation Tab (Tab 11)
+// MARK: - Civic & Political Participation Tab
 
 struct CivicParticipationTab: View {
-
     @Binding var civicInfo: CivicParticipation
     @Binding var hasChanges: Bool
+    @Binding var isSaving: Bool
+    var onSave: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                ProfileField(
-                    label: "Voter registration details",
-                    text: Binding(
-                        get: { civicInfo.voterRegistration ?? "" },
-                        set: { civicInfo.voterRegistration = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Election participation history",
-                    text: Binding(
-                        get: { civicInfo.electionHistory ?? "" },
-                        set: { civicInfo.electionHistory = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Political party membership",
-                    text: Binding(
-                        get: { civicInfo.partyMembership ?? "" },
-                        set: { civicInfo.partyMembership = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Military service or conscription status",
-                    text: Binding(
-                        get: { civicInfo.militaryStatus ?? "" },
-                        set: { civicInfo.militaryStatus = $0; hasChanges = true }
-                    )
-                )
-
-                ProfileField(
-                    label: "Public service roles",
-                    text: Binding(
-                        get: { civicInfo.publicServiceRoles ?? "" },
-                        set: { civicInfo.publicServiceRoles = $0; hasChanges = true }
-                    )
-                )
+        Form {
+            Section("Electoral") {
+                TextField("Voter registration details", text: Binding(
+                    get: { civicInfo.voterRegistration ?? "" },
+                    set: { civicInfo.voterRegistration = $0; hasChanges = true }
+                ))
+                TextField("Election participation history", text: Binding(
+                    get: { civicInfo.electionHistory ?? "" },
+                    set: { civicInfo.electionHistory = $0; hasChanges = true }
+                ))
+                TextField("Political party membership", text: Binding(
+                    get: { civicInfo.partyMembership ?? "" },
+                    set: { civicInfo.partyMembership = $0; hasChanges = true }
+                ))
             }
-            .padding()
-        }
-    }
-}
-
-// MARK: - Profile Field Components
-
-struct ProfileField: View {
-    @Environment(ThemeManager.self) private var theme
-
-    let label: String
-    @Binding var text: String
-    var placeholder: String = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            TextField(placeholder, text: $text)
-                .textFieldStyle(GenieTextFieldStyle())
-        }
-    }
-}
-
-struct ProfilePickerField: View {
-    @Environment(ThemeManager.self) private var theme
-
-    let label: String
-    @Binding var selection: String
-    let options: [(String, String)]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            Picker("", selection: $selection) {
-                Text("Please select")
-                    .tag("")
-                ForEach(options, id: \.0) { option in
-                    Text(option.1).tag(option.0)
-                }
+            Section("Service") {
+                TextField("Military service or conscription status", text: Binding(
+                    get: { civicInfo.militaryStatus ?? "" },
+                    set: { civicInfo.militaryStatus = $0; hasChanges = true }
+                ))
+                TextField("Public service roles", text: Binding(
+                    get: { civicInfo.publicServiceRoles ?? "" },
+                    set: { civicInfo.publicServiceRoles = $0; hasChanges = true }
+                ))
             }
-            .pickerStyle(.menu)
-            .padding()
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(10)
         }
+        .navigationTitle("Civic & Political")
+        .modifier(ProfileSaveToolbar(hasChanges: $hasChanges, isSaving: $isSaving, onSave: onSave))
     }
 }
 
-struct ProfileTextAreaField: View {
-    @Environment(ThemeManager.self) private var theme
-
-    let label: String
-    @Binding var text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            TextEditor(text: $text)
-                .frame(minHeight: 100)
-                .padding(8)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
-                .scrollContentBackground(.hidden)
-        }
-    }
-}
+// MARK: - Profile File Upload Field
 
 struct ProfileFileUploadField: View {
     @Environment(ThemeManager.self) private var theme
@@ -1445,55 +1134,54 @@ struct ProfileFileUploadField: View {
     @State private var showFilePicker = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            Button(action: {
-                showFilePicker = true
-            }) {
-                HStack {
-                    Image(systemName: "doc.badge.arrow.up")
-                        .foregroundColor(theme.primaryColor)
-                    Text(filename.isEmpty
-                         ? String(localized: "Upload File")
-                         : filename)
-                        .foregroundColor(filename.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
-                    Spacer()
+        Button(action: { showFilePicker = true }) {
+            HStack {
+                Image(systemName: "doc.badge.arrow.up")
+                    .foregroundColor(theme.primaryColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.subheadline)
+                        .foregroundColor(theme.primaryTextColor)
                     if !filename.isEmpty {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                        Text(filename)
+                            .font(.caption)
+                            .foregroundColor(theme.secondaryTextColor)
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
+                Spacer()
+                if filename.isEmpty {
+                    Text("Upload")
+                        .font(.subheadline)
+                        .foregroundColor(theme.secondaryTextColor)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                }
             }
-            .fileImporter(
-                isPresented: $showFilePicker,
-                allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    guard let sourceURL = urls.first else { return }
-                    guard sourceURL.startAccessingSecurityScopedResource() else { return }
-                    defer { sourceURL.stopAccessingSecurityScopedResource() }
+        }
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.pdf, .png, .jpeg, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let sourceURL = urls.first else { return }
+                guard sourceURL.startAccessingSecurityScopedResource() else { return }
+                defer { sourceURL.stopAccessingSecurityScopedResource() }
 
-                    let tempDir = FileManager.default.temporaryDirectory
-                    let destURL = tempDir.appendingPathComponent(sourceURL.lastPathComponent)
-                    try? FileManager.default.removeItem(at: destURL)
-                    do {
-                        try FileManager.default.copyItem(at: sourceURL, to: destURL)
-                        filename = sourceURL.lastPathComponent
-                        fileURL = destURL
-                    } catch {
-                        print("[ProfileFileUploadField] Copy error: \(error)")
-                    }
-                case .failure(let error):
-                    print("[ProfileFileUploadField] Picker error: \(error)")
+                let tempDir = FileManager.default.temporaryDirectory
+                let destURL = tempDir.appendingPathComponent(sourceURL.lastPathComponent)
+                try? FileManager.default.removeItem(at: destURL)
+                do {
+                    try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                    filename = sourceURL.lastPathComponent
+                    fileURL = destURL
+                } catch {
+                    print("[ProfileFileUploadField] Copy error: \(error)")
                 }
+            case .failure(let error):
+                print("[ProfileFileUploadField] Picker error: \(error)")
             }
         }
     }
@@ -1502,13 +1190,10 @@ struct ProfileFileUploadField: View {
 // MARK: - Date Picker Field
 
 struct ProfileDateField: View {
-    @Environment(ThemeManager.self) private var theme
-
-    let label: String
     @Binding var dateString: String
 
-    @State private var showDatePicker = false
     @State private var selectedDate = Date()
+    @State private var hasPickedDate = false
 
     private static let displayFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -1517,59 +1202,18 @@ struct ProfileDateField: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            Button(action: { showDatePicker = true }) {
-                HStack {
-                    Text(dateString.isEmpty ? "YYYY-MM-DD" : dateString)
-                        .foregroundColor(dateString.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
-                    Spacer()
-                    Image(systemName: "calendar")
-                        .foregroundColor(theme.primaryColor)
-                }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
-            }
-            .sheet(isPresented: $showDatePicker) {
-                NavigationStack {
-                    DatePicker(
-                        "",
-                        selection: $selectedDate,
-                        in: ...Date(),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .padding()
-                    .navigationTitle(label)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
-                                dateString = Self.displayFormatter.string(from: selectedDate)
-                                showDatePicker = false
-                            }
-                        }
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") {
-                                showDatePicker = false
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium])
-            }
+        DatePicker(
+            "",
+            selection: $selectedDate,
+            in: ...Date(),
+            displayedComponents: .date
+        )
+        .labelsHidden()
+        .onChange(of: selectedDate) { _, newValue in
+            dateString = Self.displayFormatter.string(from: newValue)
         }
         .onAppear {
             if !dateString.isEmpty, let parsed = Self.displayFormatter.date(from: dateString) {
-                selectedDate = parsed
-            }
-        }
-        .onChange(of: dateString) { _, newValue in
-            if let parsed = Self.displayFormatter.date(from: newValue) {
                 selectedDate = parsed
             }
         }
@@ -1581,37 +1225,25 @@ struct ProfileDateField: View {
 struct ProfileCountryPickerField: View {
     @Environment(ThemeManager.self) private var theme
 
-    let label: String
     @Binding var selection: String
 
     @State private var showCountryPicker = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .foregroundColor(theme.secondaryTextColor)
-
-            Button(action: { showCountryPicker = true }) {
-                HStack {
-                    Image(systemName: "flag")
-                        .foregroundColor(theme.primaryColor)
-                    Text(selection.isEmpty
-                         ? String(localized: "Select a country")
-                         : selection)
-                        .foregroundColor(selection.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(theme.secondaryTextColor)
-                }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(10)
+        Button(action: { showCountryPicker = true }) {
+            HStack {
+                Text(selection.isEmpty
+                     ? String(localized: "Select a country")
+                     : selection)
+                    .foregroundColor(selection.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption)
+                    .foregroundColor(theme.secondaryTextColor)
             }
-            .sheet(isPresented: $showCountryPicker) {
-                CountryPickerSheet(selection: $selection)
-            }
+        }
+        .sheet(isPresented: $showCountryPicker) {
+            CountryPickerSheet(selection: $selection)
         }
     }
 }
@@ -1657,15 +1289,15 @@ struct CountryPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(theme.secondaryTextColor)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
                     }
+                    .accessibilityLabel(Text("Close"))
                 }
             }
         }
     }
 
-    // ISO 3166-1 countries with flag emoji
     static let countries: [(String, String)] = {
         var result: [(String, String)] = []
         for code in Locale.Region.isoRegions {

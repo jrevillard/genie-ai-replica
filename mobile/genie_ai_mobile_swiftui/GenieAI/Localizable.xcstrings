@@ -397,6 +397,18 @@
         }
       }
     },
+    "A-" : {
+
+    },
+    "A+" : {
+
+    },
+    "AB-" : {
+
+    },
+    "AB+" : {
+
+    },
     "About" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -467,6 +479,9 @@
           }
         }
       }
+    },
+    "Academic Background" : {
+
     },
     "Academic performance and test scores" : {
       "extractionState" : "manual",
@@ -894,6 +909,9 @@
         }
       }
     },
+    "Accounts" : {
+
+    },
     "Add lowercase letters" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1319,6 +1337,9 @@
           }
         }
       }
+    },
+    "Address & Residency" : {
+
     },
     "Address & Residency Information" : {
       "extractionState" : "manual",
@@ -3311,6 +3332,9 @@
         }
       }
     },
+    "Assistance Programs" : {
+
+    },
     "Associate Degree" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3594,6 +3618,12 @@
           }
         }
       }
+    },
+    "B-" : {
+
+    },
+    "B+" : {
+
     },
     "Bachelor of Arts (BA)" : {
       "extractionState" : "manual",
@@ -4447,6 +4477,12 @@
         }
       }
     },
+    "Basic Information" : {
+
+    },
+    "Benefits & Contributions" : {
+
+    },
     "Biochemistry" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4801,6 +4837,9 @@
           }
         }
       }
+    },
+    "Business & Tax" : {
+
     },
     "Business Administration" : {
       "extractionState" : "manual",
@@ -5440,6 +5479,9 @@
           }
         }
       }
+    },
+    "Certificates" : {
+
     },
     "Change" : {
       "extractionState" : "manual",
@@ -7145,6 +7187,9 @@
         }
       }
     },
+    "Citizenship & Immigration" : {
+
+    },
     "Citizenship revocation (if applicable)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7286,6 +7331,9 @@
           }
         }
       }
+    },
+    "Civic & Political" : {
+
     },
     "Civic & Political Participation" : {
       "extractionState" : "manual",
@@ -7499,6 +7547,9 @@
           }
         }
       }
+    },
+    "Civil Registration" : {
+
     },
     "Civil Registration & Documentation" : {
       "extractionState" : "manual",
@@ -24756,6 +24807,9 @@
         }
       }
     },
+    "Criminal & Legal" : {
+
+    },
     "Criminal & Legal Records" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27454,6 +27508,9 @@
         }
       }
     },
+    "Documents" : {
+
+    },
     "Don't have an account?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28164,6 +28221,9 @@
         }
       }
     },
+    "Education & Academic" : {
+
+    },
     "Education & Academic Records" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28305,6 +28365,9 @@
           }
         }
       }
+    },
+    "Electoral" : {
+
     },
     "Electrical Engineering" : {
       "extractionState" : "manual",
@@ -28944,6 +29007,9 @@
           }
         }
       }
+    },
+    "Employment & Economic" : {
+
     },
     "Employment & Economic Data" : {
       "extractionState" : "manual",
@@ -33773,6 +33839,9 @@
         }
       }
     },
+    "Financial & Tax" : {
+
+    },
     "Financial & Tax Data" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33843,6 +33912,9 @@
           }
         }
       }
+    },
+    "Financial Aid" : {
+
     },
     "Fine Arts" : {
       "extractionState" : "manual",
@@ -35335,6 +35407,9 @@
         }
       }
     },
+    "General" : {
+
+    },
     "Genie AI" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36260,6 +36335,9 @@
           }
         }
       }
+    },
+    "Health & Medical" : {
+
     },
     "Health & Medical Records" : {
       "extractionState" : "manual",
@@ -37610,6 +37688,9 @@
         }
       }
     },
+    "Identity & Travel" : {
+
+    },
     "Identity & Travel Documents" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -37680,6 +37761,9 @@
           }
         }
       }
+    },
+    "Identity Documents" : {
+
     },
     "Immigration & visa history" : {
       "extractionState" : "manual",
@@ -38461,6 +38545,9 @@
           }
         }
       }
+    },
+    "Insurance & Records" : {
+
     },
     "Interior Design" : {
       "extractionState" : "manual",
@@ -48476,6 +48563,9 @@
         }
       }
     },
+    "Nationality & Status" : {
+
+    },
     "Native" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -50541,6 +50631,12 @@
         }
       }
     },
+    "O-" : {
+
+    },
+    "O+" : {
+
+    },
     "Occupational Therapy" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -52528,6 +52624,9 @@
           }
         }
       }
+    },
+    "Personal Identification" : {
+
     },
     "Personal Identification Data" : {
       "extractionState" : "manual",
@@ -58351,6 +58450,12 @@
         }
       }
     },
+    "Records" : {
+
+    },
+    "Records & Documents" : {
+
+    },
     "Redirecting to login page..." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -62830,6 +62935,9 @@
         }
       }
     },
+    "Service" : {
+
+    },
     "Service Status" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -65315,6 +65423,9 @@
         }
       }
     },
+    "Status" : {
+
+    },
     "Strong" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -66095,6 +66206,9 @@
           }
         }
       }
+    },
+    "Tax & Financial Documents" : {
+
     },
     "Tax Filing Deadline" : {
       "extractionState" : "manual",
@@ -67870,6 +67984,9 @@
           }
         }
       }
+    },
+    "Treatment History" : {
+
     },
     "Type your query here..." : {
       "extractionState" : "manual",
@@ -71704,6 +71821,9 @@
           }
         }
       }
+    },
+    "Vehicles & Licenses" : {
+
     },
     "Verification email has been resent" : {
       "extractionState" : "manual",

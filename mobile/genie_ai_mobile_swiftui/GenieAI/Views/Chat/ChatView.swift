@@ -136,9 +136,16 @@ struct ChatView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.ultraThinMaterial)
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 20)),
+                        removal: .scale(scale: 0.92)
+                            .combined(with: .offset(y: 30))
+                            .combined(with: .opacity)
+                            .animation(.easeIn(duration: 0.5))
+                    ))
                 }
             }
+            .animation(theme.animationSmooth, value: showQuickHelpOverlay)
         }
         .sheet(isPresented: $showFeedbackSheet) {
             if let message = selectedMessageForFeedback {
@@ -239,21 +246,23 @@ struct ChatView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 50))
                 .foregroundStyle(theme.navbarGradient)
-                .scaleEffect(welcomeAppeared ? 1.0 : 0.5)
-                .opacity(welcomeAppeared ? 1.0 : 0)
+                .scaleEffect(welcomeAppeared ? 1.0 : 0.6)
+                .rotationEffect(.degrees(welcomeAppeared ? 0 : -20))
 
             Text(ConfigService.shared.botName)
                 .font(.title)
                 .fontWeight(.bold)
-                .opacity(welcomeAppeared ? 1.0 : 0)
 
             Text("How can I help you today?")
                 .font(.headline)
                 .foregroundColor(theme.secondaryTextColor)
-                .opacity(welcomeAppeared ? 1.0 : 0)
         }
+        .opacity(welcomeAppeared ? 1.0 : 0)
+        .offset(y: welcomeAppeared ? 0 : 16)
         .padding(.top, 40)
+        .animation(theme.animationBounce, value: welcomeAppeared)
         .onAppear {
+            guard !welcomeAppeared else { return }
             withAnimation(theme.animationBounce) {
                 welcomeAppeared = true
             }
@@ -507,6 +516,7 @@ struct ChatView: View {
     }
 
     private func performNewChat() {
+        welcomeAppeared = false
         messages = []
         sessionId = UUID().uuidString
         selectedCategoryId = nil

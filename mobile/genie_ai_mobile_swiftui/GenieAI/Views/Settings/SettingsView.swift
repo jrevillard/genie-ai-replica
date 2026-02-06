@@ -209,10 +209,12 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
-                        dismiss()
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "checkmark")
+                            .fontWeight(.semibold)
                     }
+                    .accessibilityLabel(Text("Done"))
                 }
             }
             .onAppear {

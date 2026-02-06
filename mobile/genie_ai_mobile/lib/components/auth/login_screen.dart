@@ -45,6 +45,13 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _handleRememberMe(String loginName, String password) async {
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {

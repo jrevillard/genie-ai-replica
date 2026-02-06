@@ -87,6 +87,12 @@ class _PasswordResetInitiateScreenState
   }
 
   @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;

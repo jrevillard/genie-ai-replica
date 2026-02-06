@@ -43,6 +43,13 @@ class _PasswordResetConfirmScreenState
   }
 
   @override
+  void dispose() {
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = ThemeManager().getColors();
     final isDark = ThemeManager().isDarkMode;

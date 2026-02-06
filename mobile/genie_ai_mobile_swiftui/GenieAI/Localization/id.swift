@@ -705,6 +705,10 @@ struct IdLocale {
     "emailAlreadyInUse": "Email sudah digunakan",
     "enterValidEmail": "Harap masukkan alamat email yang valid",
     "failedToUpdateEmail": "Gagal memperbarui email. Silakan coba lagi.",
+    "changeEmail": "Ubah Email",
+    "changeEmailWarning": "Anda akan keluar setelah mengubah email",
+    "newEmail": "Alamat Email Baru",
+    "saveEmail": "Perbarui Email",
     "passwordResetInitiated":
         "Tautan setel ulang kata sandi telah dikirim ke alamat email Anda.",
     "unableToLoadUser":
@@ -1215,7 +1219,11 @@ struct IdLocale {
         "export": "Ekspor"
       ]
     ],
-    "shareWhatsApp": "Bagikan di WhatsApp"
+    "shareWhatsApp": "Bagikan di WhatsApp",
+    "defaultConversationTitle": "Percakapan Tanpa Judul",
+    "discard": "Buang",
+    "exportPDFDescription": "Ekspor percakapan ini ke file PDF",
+    "messages": "pesan"
   ],
   "quickhelp": [
     "applyForID": "Ajukan KTP",
@@ -1308,7 +1316,9 @@ struct IdLocale {
     ],
     "additionalComments": "Komentar tambahan...",
     "submit": "Kirim",
-    "cancel": "Batal"
+    "cancel": "Batal",
+    "quickFeedback": "Umpan Balik Cepat",
+    "skinTone": "Warna Kulit"
   ],
   "upload": ["alt": "Unggah"],
   "uploadDialog": [

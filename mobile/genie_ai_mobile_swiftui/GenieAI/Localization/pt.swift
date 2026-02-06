@@ -712,6 +712,10 @@ struct PtLocale {
     "enterValidEmail": "Por favor, insira um endereço de e-mail válido",
     "failedToUpdateEmail":
         "Falha ao atualizar o e-mail. Por favor, tente novamente.",
+    "changeEmail": "Alterar E-mail",
+    "changeEmailWarning": "Você será desconectado após alterar seu e-mail",
+    "newEmail": "Novo Endereço de E-mail",
+    "saveEmail": "Atualizar E-mail",
     "passwordResetInitiated":
         "Um link de redefinição de senha foi enviado para o seu endereço de e-mail.",
     "unableToLoadUser":
@@ -1223,7 +1227,11 @@ struct PtLocale {
         "export": "Exportar"
       ]
     ],
-    "shareWhatsApp": "Compartilhar no WhatsApp"
+    "shareWhatsApp": "Compartilhar no WhatsApp",
+    "defaultConversationTitle": "Conversa sem título",
+    "discard": "Descartar",
+    "exportPDFDescription": "Exportar esta conversa para um arquivo PDF",
+    "messages": "mensagens"
   ],
   "quickhelp": [
     "applyForID": "Pedir ID",
@@ -1315,7 +1323,9 @@ struct PtLocale {
     ],
     "additionalComments": "Comentários adicionais...",
     "submit": "Enviar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "quickFeedback": "Feedback Rápido",
+    "skinTone": "Tom de Pele"
   ],
   "upload": ["alt": "Carregar"],
   "uploadDialog": [

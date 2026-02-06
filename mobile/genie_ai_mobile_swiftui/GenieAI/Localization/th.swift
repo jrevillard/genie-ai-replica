@@ -696,6 +696,10 @@ struct ThLocale {
     "emailAlreadyInUse": "อีเมลถูกใช้งานแล้ว",
     "enterValidEmail": "โปรดป้อนที่อยู่อีเมลที่ถูกต้อง",
     "failedToUpdateEmail": "อัปเดตอีเมลล้มเหลว โปรดลองอีกครั้ง",
+    "changeEmail": "เปลี่ยนอีเมล",
+    "changeEmailWarning": "คุณจะถูกออกจากระบบหลังจากเปลี่ยนอีเมล",
+    "newEmail": "ที่อยู่อีเมลใหม่",
+    "saveEmail": "อัปเดตอีเมล",
     "passwordResetInitiated":
         "ลิงก์รีเซ็ตรหัสผ่านถูกส่งไปยังที่อยู่อีเมลของคุณแล้ว",
     "unableToLoadUser": "ไม่สามารถโหลดข้อมูลผู้ใช้ได้ โปรดลองอีกครั้ง",
@@ -1204,7 +1208,11 @@ struct ThLocale {
         "export": "ส่งออก"
       ]
     ],
-    "shareWhatsApp": "แชร์ทาง WhatsApp"
+    "shareWhatsApp": "แชร์ทาง WhatsApp",
+    "defaultConversationTitle": "การสนทนาไม่มีชื่อ",
+    "discard": "ทิ้ง",
+    "exportPDFDescription": "ส่งออกการสนทนานี้เป็นไฟล์ PDF",
+    "messages": "ข้อความ"
   ],
   "quickhelp": [
     "applyForID": "ทำบัตรประชาชน",
@@ -1296,7 +1304,9 @@ struct ThLocale {
     ],
     "additionalComments": "ความคิดเห็นเพิ่มเติม...",
     "submit": "ส่ง",
-    "cancel": "ยกเลิก"
+    "cancel": "ยกเลิก",
+    "quickFeedback": "ข้อเสนอแนะด่วน",
+    "skinTone": "สีผิว"
   ],
   "upload": ["alt": "อัปโหลด"],
   "uploadDialog": [

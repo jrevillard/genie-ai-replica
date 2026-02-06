@@ -710,6 +710,10 @@ struct EsLocale {
     "emailAlreadyInUse": "El correo ya está en uso",
     "enterValidEmail": "Por favor ingresa un correo válido",
     "failedToUpdateEmail": "Error al actualizar el correo. Inténtalo de nuevo.",
+    "changeEmail": "Cambiar correo electrónico",
+    "changeEmailWarning": "Se cerrará su sesión después de cambiar su correo electrónico",
+    "newEmail": "Nueva dirección de correo electrónico",
+    "saveEmail": "Actualizar correo electrónico",
     "passwordResetInitiated":
         "Se ha enviado un enlace de restablecimiento a tu correo.",
     "unableToLoadUser":
@@ -1220,7 +1224,11 @@ struct EsLocale {
         "export": "Exportar"
       ]
     ],
-    "shareWhatsApp": "Compartir en WhatsApp"
+    "shareWhatsApp": "Compartir en WhatsApp",
+    "defaultConversationTitle": "Conversación sin título",
+    "discard": "Descartar",
+    "exportPDFDescription": "Exportar esta conversación a un archivo PDF",
+    "messages": "mensajes"
   ],
   "quickhelp": [
     "applyForID": "Solicitar ID",
@@ -1312,7 +1320,9 @@ struct EsLocale {
     ],
     "additionalComments": "Comentarios adicionales...",
     "submit": "Enviar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "quickFeedback": "Comentario rápido",
+    "skinTone": "Tono de piel"
   ],
   "upload": ["alt": "Subir"],
   "uploadDialog": [

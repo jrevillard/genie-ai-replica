@@ -709,6 +709,10 @@ struct RuLocale {
     "enterValidEmail": "Пожалуйста, введите действительный email",
     "failedToUpdateEmail":
         "Не удалось обновить email. Пожалуйста, попробуйте снова.",
+    "changeEmail": "Изменить электронную почту",
+    "changeEmailWarning": "После изменения электронной почты вы будете выведены из системы",
+    "newEmail": "Новый адрес электронной почты",
+    "saveEmail": "Обновить электронную почту",
     "passwordResetInitiated":
         "Ссылка для сброса пароля отправлена на ваш email.",
     "unableToLoadUser":
@@ -1221,7 +1225,11 @@ struct RuLocale {
         "export": "Экспорт"
       ]
     ],
-    "shareWhatsApp": "Поделиться в WhatsApp"
+    "shareWhatsApp": "Поделиться в WhatsApp",
+    "defaultConversationTitle": "Беседа без названия",
+    "discard": "Отменить",
+    "exportPDFDescription": "Экспортировать эту беседу в файл PDF",
+    "messages": "сообщения"
   ],
   "quickhelp": [
     "applyForID": "Заявка на ID",
@@ -1313,7 +1321,9 @@ struct RuLocale {
     ],
     "additionalComments": "Дополнительные комментарии...",
     "submit": "Отправить",
-    "cancel": "Отмена"
+    "cancel": "Отмена",
+    "quickFeedback": "Быстрый отзыв",
+    "skinTone": "Тон кожи"
   ],
   "upload": ["alt": "Загрузить"],
   "uploadDialog": [

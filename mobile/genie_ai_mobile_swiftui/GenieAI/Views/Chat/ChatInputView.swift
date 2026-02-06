@@ -34,7 +34,7 @@ struct ChatInputView: View {
 
                 if let onSave = onSave {
                     Button(action: onSave) {
-                        SwiftUI.Label(i18n.translate("chatbot.save"), systemImage: "square.and.arrow.down")
+                        SwiftUI.Label(i18n.translate("chatbot.saveChat"), systemImage: "square.and.arrow.down")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
@@ -43,7 +43,7 @@ struct ChatInputView: View {
 
                 if let onExportPDF = onExportPDF {
                     Button(action: onExportPDF) {
-                        SwiftUI.Label(i18n.translate("chatbot.exportPDF"), systemImage: "doc.richtext")
+                        SwiftUI.Label(i18n.translate("chatbot.dialogs.exportTitle"), systemImage: "doc.richtext")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }

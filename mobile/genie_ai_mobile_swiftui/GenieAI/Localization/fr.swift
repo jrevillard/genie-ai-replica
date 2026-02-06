@@ -717,6 +717,10 @@ struct FrLocale {
     "enterValidEmail": "Veuillez entrer une adresse e-mail valide",
     "failedToUpdateEmail":
         "Échec de la mise à jour de l'e-mail. Veuillez réessayer.",
+    "changeEmail": "Changer l'adresse e-mail",
+    "changeEmailWarning": "Vous serez déconnecté après avoir changé votre adresse e-mail",
+    "newEmail": "Nouvelle adresse e-mail",
+    "saveEmail": "Mettre à jour l'e-mail",
     "passwordResetInitiated":
         "Un lien de réinitialisation du mot de passe a été envoyé à votre adresse e-mail.",
     "unableToLoadUser":
@@ -1231,7 +1235,11 @@ struct FrLocale {
         "export": "Exporter"
       ]
     ],
-    "shareWhatsApp": "Partager sur WhatsApp"
+    "shareWhatsApp": "Partager sur WhatsApp",
+    "defaultConversationTitle": "Conversation sans titre",
+    "discard": "Abandonner",
+    "exportPDFDescription": "Exporter cette conversation en fichier PDF",
+    "messages": "messages"
   ],
   "quickhelp": [
     "applyForID": "Demander une ID",
@@ -1323,7 +1331,9 @@ struct FrLocale {
     ],
     "additionalComments": "Commentaires supplémentaires...",
     "submit": "Envoyer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "quickFeedback": "Commentaire rapide",
+    "skinTone": "Teint de peau"
   ],
   "upload": ["alt": "Télécharger"],
   "uploadDialog": [

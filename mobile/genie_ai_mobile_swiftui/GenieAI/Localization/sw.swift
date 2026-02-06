@@ -712,6 +712,10 @@ struct SwLocale {
     "enterValidEmail": "Tafadhali weka barua pepe sahihi",
     "failedToUpdateEmail":
         "Imeshindwa kusasisha barua pepe. Tafadhali jaribu tena.",
+    "changeEmail": "Badilisha Barua Pepe",
+    "changeEmailWarning": "Utaondolewa baada ya kubadilisha barua pepe yako",
+    "newEmail": "Anwani Mpya ya Barua Pepe",
+    "saveEmail": "Sasisha Barua Pepe",
     "passwordResetInitiated":
         "Kiungo cha kuweka upya nenosiri kimetumwa kwa anwani yako ya barua pepe.",
     "unableToLoadUser":
@@ -1224,7 +1228,11 @@ struct SwLocale {
         "export": "Hamisha"
       ]
     ],
-    "shareWhatsApp": "Shiriki kwenye WhatsApp"
+    "shareWhatsApp": "Shiriki kwenye WhatsApp",
+    "defaultConversationTitle": "Mazungumzo Bila Jina",
+    "discard": "Tupa",
+    "exportPDFDescription": "Hamisha mazungumzo haya kwa faili ya PDF",
+    "messages": "ujumbe"
   ],
   "quickhelp": [
     "applyForID": "Omba Kitambulisho",
@@ -1317,7 +1325,9 @@ struct SwLocale {
     ],
     "additionalComments": "Maoni ya ziada...",
     "submit": "Tuma",
-    "cancel": "Ghairi"
+    "cancel": "Ghairi",
+    "quickFeedback": "Maoni ya Haraka",
+    "skinTone": "Rangi ya Ngozi"
   ],
   "upload": ["alt": "Pakia"],
   "uploadDialog": [

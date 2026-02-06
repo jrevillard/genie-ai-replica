@@ -207,11 +207,11 @@ struct RegisterView: View {
 
     private var passwordStrengthLabel: String {
         switch passwordStrength.score {
-        case 0: return i18n.translate("register.passwordVeryWeak")
-        case 1: return i18n.translate("register.passwordWeak")
-        case 2: return i18n.translate("register.passwordFair")
-        case 3: return i18n.translate("register.passwordStrong")
-        default: return i18n.translate("register.passwordVeryStrong")
+        case 0: return i18n.translate("passwordResetConfirm.strengthLabels.veryWeak")
+        case 1: return i18n.translate("passwordResetConfirm.strengthLabels.weak")
+        case 2: return i18n.translate("passwordResetConfirm.strengthLabels.fair")
+        case 3: return i18n.translate("passwordResetConfirm.strengthLabels.good")
+        default: return i18n.translate("passwordResetConfirm.strengthLabels.strong")
         }
     }
 

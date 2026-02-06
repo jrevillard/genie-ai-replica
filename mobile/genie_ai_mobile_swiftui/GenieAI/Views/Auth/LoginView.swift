@@ -110,7 +110,7 @@ struct LoginView: View {
                         HStack {
                             Image(systemName: "g.circle.fill")
                                 .font(.title3)
-                            Text(i18n.translate("login.signInWithGoogle"))
+                            Text(i18n.translate("login.googleLogin"))
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -123,7 +123,7 @@ struct LoginView: View {
                         HStack {
                             Image(systemName: "f.circle.fill")
                                 .font(.title3)
-                            Text(i18n.translate("login.signInWithFacebook"))
+                            Text(i18n.translate("login.facebookLogin"))
                         }
                         .frame(maxWidth: .infinity)
                         .padding()

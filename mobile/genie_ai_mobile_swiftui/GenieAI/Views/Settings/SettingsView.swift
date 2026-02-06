@@ -474,7 +474,7 @@ struct EmailEditSheet: View {
             } catch {
                 await MainActor.run {
                     isSubmitting = false
-                    errorMessage = i18n.translate("settings.emailUpdateError")
+                    errorMessage = i18n.translate("settings.failedToUpdateEmail")
                     showError = true
                 }
             }

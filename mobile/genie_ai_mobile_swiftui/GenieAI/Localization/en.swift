@@ -698,6 +698,10 @@ struct EnLocale {
     "emailAlreadyInUse": "Email already in use",
     "enterValidEmail": "Please enter a valid email address",
     "failedToUpdateEmail": "Failed to update email. Please try again.",
+    "changeEmail": "Change Email",
+    "changeEmailWarning": "You will be logged out after changing your email",
+    "newEmail": "New Email Address",
+    "saveEmail": "Update Email",
     "passwordResetInitiated":
         "A password reset link has been sent to your email address.",
     "unableToLoadUser": "Unable to load user information. Please try again.",
@@ -1203,7 +1207,11 @@ struct EnLocale {
         "export": "Export"
       ]
     ],
-    "shareWhatsApp": "Share on WhatsApp"
+    "shareWhatsApp": "Share on WhatsApp",
+    "defaultConversationTitle": "Untitled Conversation",
+    "discard": "Discard",
+    "exportPDFDescription": "Export this conversation to a PDF file",
+    "messages": "messages"
   ],
   "quickhelp": [
     // Labels (Short for UI)
@@ -1308,7 +1316,9 @@ struct EnLocale {
     ],
     "additionalComments": "Additional comments...",
     "submit": "Submit",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "quickFeedback": "Quick Feedback",
+    "skinTone": "Skin Tone"
   ],
   "upload": ["alt": "Upload"],
   "uploadDialog": [

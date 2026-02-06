@@ -146,16 +146,16 @@ struct ChatView: View {
                 onDismiss: { showExportPDFSheet = false }
             )
         }
-        .alert(i18n.translate("chatbot.unsavedChangesTitle"), isPresented: $showNewChatConfirmation) {
+        .alert(i18n.translate("chatbot.dialogs.newChatTitle"), isPresented: $showNewChatConfirmation) {
             Button(i18n.translate("chatbot.discard"), role: .destructive) {
                 performNewChat()
             }
-            Button(i18n.translate("chatbot.saveFirst")) {
+            Button(i18n.translate("chatbot.dialogs.actions.saveFirst")) {
                 showSaveDialog = true
             }
             Button(i18n.translate("common.cancel"), role: .cancel) {}
         } message: {
-            Text(i18n.translate("chatbot.unsavedChangesMessage"))
+            Text(i18n.translate("chatbot.unsavedChanges"))
         }
         .onAppear {
             if let conversation = initialConversation {
@@ -570,16 +570,16 @@ struct SaveConversationSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text(i18n.translate("chatbot.saveConversation"))
+                Text(i18n.translate("chatbot.dialogs.saveTitle"))
                     .font(.title2)
                     .fontWeight(.bold)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("chatbot.conversationTitle"))
+                    Text(i18n.translate("chatbot.chatTitle"))
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
-                    TextField(i18n.translate("chatbot.enterTitle"), text: $title)
+                    TextField(i18n.translate("chatbot.chatTitlePlaceholder"), text: $title)
                         .textFieldStyle(GenieTextFieldStyle())
                 }
                 .padding(.horizontal)
@@ -597,7 +597,7 @@ struct SaveConversationSheet: View {
                     }
 
                     Button(action: onSave) {
-                        Text(i18n.translate("chatbot.save"))
+                        Text(i18n.translate("common.save"))
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(theme.primaryColor)
@@ -641,7 +641,7 @@ struct ExportPDFSheet: View {
                     .font(.system(size: 50))
                     .foregroundColor(theme.primaryColor)
 
-                Text(i18n.translate("chatbot.exportPDF"))
+                Text(i18n.translate("chatbot.dialogs.exportTitle"))
                     .font(.title2)
                     .fontWeight(.bold)
 
@@ -664,7 +664,7 @@ struct ExportPDFSheet: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
                         Image(systemName: "square.and.arrow.up")
-                        Text(i18n.translate("chatbot.exportPDF"))
+                        Text(i18n.translate("chatbot.dialogs.exportTitle"))
                     }
                     .frame(maxWidth: .infinity)
                     .padding()

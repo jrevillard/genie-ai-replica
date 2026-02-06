@@ -697,6 +697,10 @@ struct ArLocale {
     "enterValidEmail": "يرجى إدخال بريد إلكتروني صالح",
     "failedToUpdateEmail":
         "فشل تحديث البريد الإلكتروني. يرجى المحاولة مرة أخرى.",
+    "changeEmail": "تغيير البريد الإلكتروني",
+    "changeEmailWarning": "سيتم تسجيل خروجك بعد تغيير بريدك الإلكتروني",
+    "newEmail": "عنوان بريد إلكتروني جديد",
+    "saveEmail": "تحديث البريد الإلكتروني",
     "passwordResetInitiated":
         "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.",
     "unableToLoadUser": "تعذر تحميل معلومات المستخدم. يرجى المحاولة مرة أخرى.",
@@ -1203,7 +1207,11 @@ struct ArLocale {
         "export": "تصدير"
       ]
     ],
-    "shareWhatsApp": "شارك على واتساب"
+    "shareWhatsApp": "شارك على واتساب",
+    "defaultConversationTitle": "محادثة بدون عنوان",
+    "discard": "تجاهل",
+    "exportPDFDescription": "تصدير هذه المحادثة كملف PDF",
+    "messages": "رسائل"
   ],
   "quickhelp": [
     "applyForID": "طلب الهوية",
@@ -1295,7 +1303,9 @@ struct ArLocale {
     ],
     "additionalComments": "تعليقات إضافية...",
     "submit": "إرسال",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "quickFeedback": "تعليق سريع",
+    "skinTone": "لون البشرة"
   ],
   "upload": ["alt": "تحميل"],
   "uploadDialog": [

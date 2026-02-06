@@ -431,6 +431,16 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - RTL layout support for Arabic
 - Locale persistence
 
+**Cross-Platform Localization Consistency:**
+
+All platforms must have identical localized strings for every supported language. When a string is added, modified, or removed on one platform, the same change must be applied to all other platforms.
+
+- The set of localized strings and their translations must be identical across Flutter, SwiftUI, and Jetpack Compose
+- Translation keys, where used, must also be identical across platforms (e.g. Flutter and SwiftUI both use `chatbot.saveChat` for the same string)
+- Some localization frameworks (e.g. SwiftUI String Catalogs, Android string resources) do not use dot-notation keys; in those cases the translated string values themselves must still match
+- The Flutter implementation is the reference: new strings should be added to Flutter first, then propagated to all other platforms
+- Each language file must contain the complete set of strings — no platform may have a partial translation
+
 ---
 
 ## 9. Navigation & Layout

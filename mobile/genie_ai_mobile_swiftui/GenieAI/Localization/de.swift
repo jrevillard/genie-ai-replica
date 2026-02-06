@@ -718,6 +718,10 @@ struct DeLocale {
     "enterValidEmail": "Bitte gib eine gültige E-Mail-Adresse ein",
     "failedToUpdateEmail":
         "Aktualisieren der E-Mail fehlgeschlagen. Bitte versuche es erneut.",
+    "changeEmail": "E-Mail ändern",
+    "changeEmailWarning": "Sie werden nach der Änderung Ihrer E-Mail-Adresse abgemeldet",
+    "newEmail": "Neue E-Mail-Adresse",
+    "saveEmail": "E-Mail aktualisieren",
     "passwordResetInitiated":
         "Ein Link zum Zurücksetzen des Passworts wurde an deine E-Mail-Adresse gesendet.",
     "unableToLoadUser":
@@ -1232,7 +1236,11 @@ struct DeLocale {
         "export": "Exportieren"
       ]
     ],
-    "shareWhatsApp": "Auf WhatsApp teilen"
+    "shareWhatsApp": "Auf WhatsApp teilen",
+    "defaultConversationTitle": "Unbenannte Unterhaltung",
+    "discard": "Verwerfen",
+    "exportPDFDescription": "Diese Unterhaltung als PDF-Datei exportieren",
+    "messages": "Nachrichten"
   ],
   "quickhelp": [
     "applyForID": "ID beantragen",
@@ -1325,7 +1333,9 @@ struct DeLocale {
     ],
     "additionalComments": "Zusätzliche Kommentare...",
     "submit": "Senden",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "quickFeedback": "Schnelles Feedback",
+    "skinTone": "Hautfarbe"
   ],
   "upload": ["alt": "Hochladen"],
   "uploadDialog": [

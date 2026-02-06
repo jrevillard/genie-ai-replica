@@ -608,6 +608,10 @@ struct ZhLocale {
     "emailAlreadyInUse": "电子邮件已被使用",
     "enterValidEmail": "请输入有效的电子邮件地址",
     "failedToUpdateEmail": "更新电子邮件失败。请重试。",
+    "changeEmail": "更改电子邮件",
+    "changeEmailWarning": "更改电子邮件后您将被注销",
+    "newEmail": "新电子邮件地址",
+    "saveEmail": "更新电子邮件",
     "passwordResetInitiated": "密码重置链接已发送到您的电子邮件地址。",
     "unableToLoadUser": "无法加载用户信息。请重试。",
     "retry": "重试",
@@ -1096,7 +1100,11 @@ struct ZhLocale {
         "export": "导出"
       ]
     ],
-    "shareWhatsApp": "分享到 WhatsApp"
+    "shareWhatsApp": "分享到 WhatsApp",
+    "defaultConversationTitle": "未命名对话",
+    "discard": "丢弃",
+    "exportPDFDescription": "将此对话导出为PDF文件",
+    "messages": "消息"
   ],
   "quickhelp": [
     "applyForID": "申请身份证",
@@ -1179,7 +1187,9 @@ struct ZhLocale {
     ],
     "additionalComments": "其他意见...",
     "submit": "提交",
-    "cancel": "取消"
+    "cancel": "取消",
+    "quickFeedback": "快速反馈",
+    "skinTone": "肤色"
   ],
   "upload": ["alt": "上传"],
   "uploadDialog": [

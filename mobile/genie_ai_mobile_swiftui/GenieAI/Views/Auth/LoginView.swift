@@ -22,150 +22,162 @@ struct LoginView: View {
     @State private var logoAppeared = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Logo and Title
-                VStack(spacing: 16) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 60))
-                        .foregroundStyle(theme.navbarGradient)
-                        .scaleEffect(logoAppeared ? 1.0 : 0.5)
-                        .opacity(logoAppeared ? 1.0 : 0)
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
 
-                    Text("Genie AI")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(theme.primaryTextColor)
-                        .opacity(logoAppeared ? 1.0 : 0)
+            // Logo and Title
+            VStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 40))
+                    .foregroundStyle(theme.navbarGradient)
+                    .scaleEffect(logoAppeared ? 1.0 : 0.5)
+                    .opacity(logoAppeared ? 1.0 : 0)
+
+                Text("Genie AI")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(theme.primaryTextColor)
+                    .opacity(logoAppeared ? 1.0 : 0)
+
+                // Language Selector
+                LanguageSelectorCompact()
+            }
+
+            Spacer().frame(maxHeight: 20)
+
+            // Login Form — wrapped in glass card
+            VStack(spacing: 10) {
+                // Username Field
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("login.username")
+                        .font(.subheadline)
+                        .foregroundColor(theme.secondaryTextColor)
+
+                    TextField("", text: $username)
+                        .textFieldStyle(GenieTextFieldStyle())
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
-                .padding(.top, 40)
 
-                // Login Form — wrapped in glass card
-                VStack(spacing: 16) {
-                    // Username Field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("login.username")
+                // Password Field
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Password")
+                        .font(.subheadline)
+                        .foregroundColor(theme.secondaryTextColor)
+
+                    SecureField("", text: $password)
+                        .textFieldStyle(GenieTextFieldStyle())
+                }
+
+                // Remember Me & Forgot Password
+                HStack {
+                    Toggle(isOn: $rememberMe) {
+                        Text("Remember me")
                             .font(.subheadline)
-                            .foregroundColor(theme.secondaryTextColor)
-
-                        TextField("", text: $username)
-                            .textFieldStyle(GenieTextFieldStyle())
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
                     }
+                    .toggleStyle(CheckboxToggleStyle())
 
-                    // Password Field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Password")
+                    Spacer()
+
+                    Button(action: onForgotPasswordTapped) {
+                        Text("Forgot password?")
                             .font(.subheadline)
-                            .foregroundColor(theme.secondaryTextColor)
-
-                        SecureField("", text: $password)
-                            .textFieldStyle(GenieTextFieldStyle())
+                            .foregroundColor(theme.primaryColor)
                     }
+                }
 
-                    // Remember Me & Forgot Password
+                // Error Message
+                if showError {
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundColor(theme.errorColor)
+                }
+
+                // Login Button
+                Button(action: performLogin) {
                     HStack {
-                        Toggle(isOn: $rememberMe) {
-                            Text("Remember me")
-                                .font(.subheadline)
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
-                        .toggleStyle(CheckboxToggleStyle())
-
-                        Spacer()
-
-                        Button(action: onForgotPasswordTapped) {
-                            Text("Forgot password?")
-                                .font(.subheadline)
-                                .foregroundColor(theme.primaryColor)
-                        }
+                        Text(isLoading ? String(localized: "Logging in...") : String(localized: "Login"))
                     }
-
-                    // Error Message
-                    if showError {
-                        Text(errorMessage)
-                            .font(.subheadline)
-                            .foregroundColor(theme.errorColor)
-                    }
-
-                    // Login Button
-                    Button(action: performLogin) {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            }
-                            Text(isLoading ? String(localized: "Logging in...") : String(localized: "Login"))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(theme.primaryColor)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
-                    }
-                    .disabled(isLoading || username.isEmpty || password.isEmpty)
-                    .hapticOnTap(.medium, theme: theme)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(theme.primaryColor)
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                 }
-                .padding(theme.spacingXL)
-                .glassCardElevated(theme: theme)
-                .padding(.horizontal)
+                .disabled(isLoading || username.isEmpty || password.isEmpty)
+                .hapticOnTap(.medium, theme: theme)
 
-                // Social Login Buttons
-                VStack(spacing: 12) {
+                // Social Login Divider
+                HStack {
+                    Rectangle().fill(theme.secondaryTextColor.opacity(0.2)).frame(height: 1)
+                    Text("or")
+                        .font(.caption)
+                        .foregroundColor(theme.secondaryTextColor)
+                    Rectangle().fill(theme.secondaryTextColor.opacity(0.2)).frame(height: 1)
+                }
+                .padding(.vertical, 2)
+
+                // Social Login Buttons — side by side
+                HStack(spacing: 10) {
                     Button(action: { /* Social login not yet implemented */ }) {
-                        HStack {
+                        HStack(spacing: 6) {
                             Image(systemName: "g.circle.fill")
-                                .font(.title3)
-                            Text("Continue with Google")
+                            Text("Google")
                         }
+                        .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 10)
                         .background(theme.primaryColor.opacity(0.9))
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                     }
 
                     Button(action: { /* Social login not yet implemented */ }) {
-                        HStack {
+                        HStack(spacing: 6) {
                             Image(systemName: "f.circle.fill")
-                                .font(.title3)
-                            Text("Continue with Facebook")
+                            Text("Facebook")
                         }
+                        .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 10)
                         .background(theme.facebookBlue)
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD, style: .continuous))
                     }
                 }
-                .padding(.horizontal)
-
-                // Register Link
-                HStack {
-                    Text("Don't have an account?")
-                        .foregroundColor(theme.secondaryTextColor)
-
-                    Button(action: onRegisterTapped) {
-                        Text("Register now")
-                            .fontWeight(.semibold)
-                            .foregroundColor(theme.primaryColor)
-                    }
-                }
-                .font(.subheadline)
-
-                // Terms
-                Text("By logging in, you agree to our Terms of Service and Privacy Policy")
-                    .font(.caption)
-                    .foregroundColor(theme.secondaryTextColor)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-
-                // Language Selector
-                LanguageSelectorCompact()
-                    .padding(.horizontal)
-
-                Spacer()
             }
+            .padding(theme.spacingLG)
+            .glassCardElevated(theme: theme)
+            .padding(.horizontal)
+
+            Spacer().frame(maxHeight: 16)
+
+            // Register Link
+            HStack(spacing: 4) {
+                Text("Don't have an account?")
+                    .foregroundColor(theme.secondaryTextColor)
+
+                Button(action: onRegisterTapped) {
+                    Text("Register now")
+                        .fontWeight(.semibold)
+                        .foregroundColor(theme.primaryColor)
+                }
+            }
+            .font(.subheadline)
+
+            // Terms
+            Text("By logging in, you agree to our Terms of Service and Privacy Policy")
+                .font(.caption2)
+                .foregroundColor(theme.secondaryTextColor)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .padding(.top, 4)
+
+            Spacer(minLength: 0)
         }
         .background(
             LinearGradient(

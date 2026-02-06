@@ -5,7 +5,6 @@ import SwiftUI
 
 struct ChatInputView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @Binding var text: String
     var isLoading: Bool
@@ -25,7 +24,7 @@ struct ChatInputView: View {
             HStack(spacing: 16) {
                 if let onNewChat = onNewChat {
                     Button(action: onNewChat) {
-                        SwiftUI.Label(i18n.translate("chatbot.newChat"), systemImage: "plus.circle")
+                        SwiftUI.Label("New Chat", systemImage: "plus.circle")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
@@ -34,7 +33,7 @@ struct ChatInputView: View {
 
                 if let onSave = onSave {
                     Button(action: onSave) {
-                        SwiftUI.Label(i18n.translate("chatbot.saveChat"), systemImage: "square.and.arrow.down")
+                        SwiftUI.Label("Save Chat", systemImage: "square.and.arrow.down")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
@@ -43,7 +42,7 @@ struct ChatInputView: View {
 
                 if let onExportPDF = onExportPDF {
                     Button(action: onExportPDF) {
-                        SwiftUI.Label(i18n.translate("chatbot.dialogs.exportTitle"), systemImage: "doc.richtext")
+                        SwiftUI.Label("Export Chat to PDF", systemImage: "doc.richtext")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
                     }
@@ -52,7 +51,7 @@ struct ChatInputView: View {
 
                 if let onShareWhatsApp = onShareWhatsApp {
                     Button(action: onShareWhatsApp) {
-                        SwiftUI.Label(i18n.translate("chatbot.shareWhatsApp"), systemImage: "bubble.left.fill")
+                        SwiftUI.Label("Share on WhatsApp", systemImage: "bubble.left.fill")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : Color(red: 37/255, green: 211/255, blue: 102/255))
                     }
@@ -68,7 +67,7 @@ struct ChatInputView: View {
             HStack(spacing: 12) {
                 // Text Input
                 HStack {
-                    TextField(i18n.translate("chatbot.placeholder"), text: $text, axis: .vertical)
+                    TextField("Type your query here...", text: $text, axis: .vertical)
                         .focused($isFocused)
                         .lineLimit(1...5)
                         .textFieldStyle(.plain)
@@ -111,5 +110,4 @@ struct ChatInputView: View {
         )
     }
     .environment(ThemeManager())
-    .environment(I18nService())
 }

@@ -18,7 +18,6 @@ enum AppRoute: Hashable {
 struct ContentView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(ConnectivityService.self) private var connectivity
 
     @State private var navigationPath = NavigationPath()
@@ -263,7 +262,6 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environment(ThemeManager())
-        .environment(I18nService())
         .environment(AuthService())
         .environment(ConnectivityService())
 }

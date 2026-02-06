@@ -1,6 +1,7 @@
 // QuickHelpButton.swift
 // Model for Quick Help buttons in the chat view
 
+import Foundation
 import SwiftUI
 
 struct QuickHelpButton: Identifiable, Equatable {
@@ -18,15 +19,15 @@ struct QuickHelpButton: Identifiable, Equatable {
     let darkIconColor: String?
 
     var label: String {
-        tr(labelKey)
+        NSLocalizedString(labelKey, bundle: AppLocaleService.shared.localizedBundle, comment: "")
     }
 
     var visibleText: String {
-        tr(visibleTextKey)
+        NSLocalizedString(visibleTextKey, bundle: AppLocaleService.shared.localizedBundle, comment: "")
     }
 
     var hiddenPrompt: String {
-        tr(hiddenPromptKey)
+        NSLocalizedString(hiddenPromptKey, bundle: AppLocaleService.shared.localizedBundle, comment: "")
     }
 
     func gradient(for colorScheme: ColorScheme) -> LinearGradient {

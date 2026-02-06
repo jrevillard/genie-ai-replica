@@ -12,7 +12,7 @@ struct ServiceSelection: Equatable {
 
 struct ServiceTreeView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
+    @Environment(AppLocaleService.self) private var appLocale
 
     @State private var serviceTreeService = ServiceTreeService()
     @State private var expandedCategories: Set<String> = []
@@ -43,13 +43,13 @@ struct ServiceTreeView: View {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.title2)
                             .foregroundColor(.orange)
-                        Text(i18n.translate("sidebar.errorLoadingServices"))
+                        Text("Failed to load knowledge areas. Please try again.")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
                             .multilineTextAlignment(.center)
-                        Button(i18n.translate("sidebar.retry")) {
+                        Button("Retry") {
                             Task {
-                                try? await serviceTreeService.getAllCategories(locale: i18n.currentLocale)
+                                try? await serviceTreeService.getAllCategories(locale: appLocale.currentLocale)
                             }
                         }
                         .font(.subheadline)
@@ -58,12 +58,12 @@ struct ServiceTreeView: View {
                     .padding()
                 } else if filteredCategories.isEmpty {
                     if searchText.isEmpty {
-                        Text(i18n.translate("sidebar.noServices"))
+                        Text("No knowledge areas available")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
                             .padding()
                     } else {
-                        Text(i18n.translate("sidebar.noServiceResults", args: ["term": searchText]))
+                        Text(String(localized: "No knowledge areas found for \"\\(searchText)\""))
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
                             .padding()
@@ -120,7 +120,7 @@ struct ServiceTreeView: View {
 
     private func loadCategories() async {
         do {
-            try await serviceTreeService.getAllCategories(locale: i18n.currentLocale)
+            try await serviceTreeService.getAllCategories(locale: appLocale.currentLocale)
         } catch {
             print("[ServiceTreeView] Failed to load categories: \(error)")
         }
@@ -267,5 +267,5 @@ struct ServiceRow: View {
 #Preview {
     ServiceTreeView(searchText: "")
         .environment(ThemeManager())
-        .environment(I18nService())
+        .environment(AppLocaleService.shared)
 }

@@ -5,14 +5,14 @@ import SwiftUI
 
 struct LanguageSelector: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
+    @Environment(AppLocaleService.self) private var appLocale
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
-            ForEach(i18n.supportedLanguages, id: \.code) { language in
+            ForEach(appLocale.supportedLanguages, id: \.code) { language in
                 Button {
-                    i18n.changeLanguage(language.code)
+                    appLocale.changeLanguage(language.code)
                     dismiss()
                 } label: {
                     HStack {
@@ -21,7 +21,7 @@ struct LanguageSelector: View {
 
                         Spacer()
 
-                        if i18n.currentLocale == language.code {
+                        if appLocale.currentLocale == language.code {
                             Image(systemName: "checkmark")
                                 .foregroundColor(theme.primaryColor)
                         }
@@ -29,7 +29,7 @@ struct LanguageSelector: View {
                 }
             }
         }
-        .navigationTitle(i18n.translate("settings.displayLanguage"))
+        .navigationTitle("Display Language")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -39,5 +39,5 @@ struct LanguageSelector: View {
         LanguageSelector()
     }
     .environment(ThemeManager())
-    .environment(I18nService())
+    .environment(AppLocaleService.shared)
 }

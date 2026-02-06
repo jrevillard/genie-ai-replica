@@ -5,7 +5,6 @@ import SwiftUI
 
 struct ConfirmDialog: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let title: String
     let message: String
@@ -49,7 +48,7 @@ struct ConfirmDialog: View {
             // Buttons
             HStack(spacing: 16) {
                 Button(action: onCancel) {
-                    Text(cancelText ?? i18n.translate("common.cancel"))
+                    Text(cancelText ?? String(localized: "Cancel"))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.gray.opacity(0.2))
@@ -58,7 +57,7 @@ struct ConfirmDialog: View {
                 }
 
                 Button(action: onConfirm) {
-                    Text(confirmText ?? i18n.translate("common.confirm"))
+                    Text(confirmText ?? String(localized: "Confirm"))
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(isDestructive ? Color.red : theme.primaryColor)
@@ -142,5 +141,4 @@ extension View {
         onCancel: {}
     )
     .environment(ThemeManager())
-    .environment(I18nService())
 }

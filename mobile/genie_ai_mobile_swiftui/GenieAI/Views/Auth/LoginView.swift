@@ -6,7 +6,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
+    @Environment(AppLocaleService.self) private var appLocale
 
     @State private var username = ""
     @State private var password = ""
@@ -28,7 +28,7 @@ struct LoginView: View {
                         .font(.system(size: 60))
                         .foregroundStyle(theme.navbarGradient)
 
-                    Text(i18n.translate("login.appTitle"))
+                    Text("Genie AI")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(theme.primaryTextColor)
@@ -39,7 +39,7 @@ struct LoginView: View {
                 VStack(spacing: 16) {
                     // Username Field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("login.username"))
+                        Text("login.username")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
@@ -51,7 +51,7 @@ struct LoginView: View {
 
                     // Password Field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("login.password"))
+                        Text("Password")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
@@ -62,7 +62,7 @@ struct LoginView: View {
                     // Remember Me & Forgot Password
                     HStack {
                         Toggle(isOn: $rememberMe) {
-                            Text(i18n.translate("login.rememberMe"))
+                            Text("Remember me")
                                 .font(.subheadline)
                         }
                         .toggleStyle(CheckboxToggleStyle())
@@ -70,7 +70,7 @@ struct LoginView: View {
                         Spacer()
 
                         Button(action: onForgotPasswordTapped) {
-                            Text(i18n.translate("login.forgotPassword"))
+                            Text("Forgot password?")
                                 .font(.subheadline)
                                 .foregroundColor(theme.primaryColor)
                         }
@@ -93,7 +93,7 @@ struct LoginView: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
-                        Text(isLoading ? i18n.translate("login.loggingIn") : i18n.translate("login.loginButton"))
+                        Text(isLoading ? String(localized: "Logging in...") : String(localized: "Login"))
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -110,7 +110,7 @@ struct LoginView: View {
                         HStack {
                             Image(systemName: "g.circle.fill")
                                 .font(.title3)
-                            Text(i18n.translate("login.googleLogin"))
+                            Text("Continue with Google")
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -123,7 +123,7 @@ struct LoginView: View {
                         HStack {
                             Image(systemName: "f.circle.fill")
                                 .font(.title3)
-                            Text(i18n.translate("login.facebookLogin"))
+                            Text("Continue with Facebook")
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -136,11 +136,11 @@ struct LoginView: View {
 
                 // Register Link
                 HStack {
-                    Text(i18n.translate("login.noAccount"))
+                    Text("Don't have an account?")
                         .foregroundColor(theme.secondaryTextColor)
 
                     Button(action: onRegisterTapped) {
-                        Text(i18n.translate("login.registerNow"))
+                        Text("Register now")
                             .fontWeight(.semibold)
                             .foregroundColor(theme.primaryColor)
                     }
@@ -148,7 +148,7 @@ struct LoginView: View {
                 .font(.subheadline)
 
                 // Terms
-                Text(i18n.translate("login.termsAndPolicy"))
+                Text("By logging in, you agree to our Terms of Service and Privacy Policy")
                     .font(.caption)
                     .foregroundColor(theme.secondaryTextColor)
                     .multilineTextAlignment(.center)
@@ -189,7 +189,7 @@ struct LoginView: View {
 
     private func performLogin() {
         guard !username.isEmpty, !password.isEmpty else {
-            errorMessage = i18n.translate("login.fieldsRequired")
+            errorMessage = String(localized: "Username and password are required")
             showError = true
             return
         }
@@ -208,7 +208,7 @@ struct LoginView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = i18n.translate("login.loginError")
+                    errorMessage = String(localized: "Login failed. Please check your credentials.")
                     showError = true
                 }
             }
@@ -220,17 +220,17 @@ struct LoginView: View {
 
 struct LanguageSelectorCompact: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
+    @Environment(AppLocaleService.self) private var appLocale
 
     var body: some View {
         Menu {
-            ForEach(i18n.supportedLanguages, id: \.code) { language in
+            ForEach(appLocale.supportedLanguages, id: \.code) { language in
                 Button {
-                    i18n.changeLanguage(language.code)
+                    appLocale.changeLanguage(language.code)
                 } label: {
                     HStack {
                         Text(language.name)
-                        if i18n.currentLocale == language.code {
+                        if appLocale.currentLocale == language.code {
                             Image(systemName: "checkmark")
                         }
                     }
@@ -239,7 +239,7 @@ struct LanguageSelectorCompact: View {
         } label: {
             HStack {
                 Image(systemName: "globe")
-                Text(i18n.supportedLanguages.first { $0.code == i18n.currentLocale }?.name ?? "English")
+                Text(appLocale.supportedLanguages.first { $0.code == appLocale.currentLocale }?.name ?? "English")
                 Image(systemName: "chevron.down")
             }
             .font(.subheadline)
@@ -284,5 +284,5 @@ struct CheckboxToggleStyle: ToggleStyle {
     )
     .environment(AuthService())
     .environment(ThemeManager())
-    .environment(I18nService())
+    .environment(AppLocaleService.shared)
 }

@@ -14,17 +14,16 @@ enum LeftSidebarTab: String, CaseIterable {
         }
     }
 
-    func title(_ i18n: I18nService) -> String {
+    var localizedTitle: String {
         switch self {
-        case .services: return i18n.translate("sidebar.governmentServices")
-        case .history: return i18n.translate("sidebar.chatHistory")
+        case .services: return String(localized: "Knowledge Areas")
+        case .history: return String(localized: "Chat History")
         }
     }
 }
 
 struct LeftSidebarView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(AuthService.self) private var authService
 
     @State private var selectedTab: LeftSidebarTab = .services
@@ -43,7 +42,7 @@ struct LeftSidebarView: View {
                             Image(systemName: tab.icon)
                                 .font(.title3)
 
-                            Text(tab.title(i18n))
+                            Text(tab.localizedTitle)
                                 .font(.caption2)
                                 .lineLimit(1)
                         }
@@ -63,7 +62,7 @@ struct LeftSidebarView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(theme.secondaryTextColor)
 
-                TextField(i18n.translate("sidebar.searchPlaceholder"), text: $searchText)
+                TextField("Search knowledge areas...", text: $searchText)
                     .textFieldStyle(.plain)
 
                 if !searchText.isEmpty {
@@ -101,6 +100,5 @@ struct LeftSidebarView: View {
     LeftSidebarView()
         .frame(width: 300)
         .environment(ThemeManager())
-        .environment(I18nService())
         .environment(AuthService())
 }

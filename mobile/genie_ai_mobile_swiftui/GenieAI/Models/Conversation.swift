@@ -124,7 +124,7 @@ struct Conversation: Codable, Identifiable, Equatable {
     }
 
     var preview: String {
-        lastMessage?.content ?? tr("sidebar.noPreview")
+        lastMessage?.content ?? String(localized: "No preview available")
     }
 }
 

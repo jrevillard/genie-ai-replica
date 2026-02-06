@@ -23,7 +23,7 @@ xcodebuild clean -project GenieAI.xcodeproj -scheme GenieAI
 ### State Management (iOS 17+)
 Uses `@Observable` macro for all service classes (replaces ObservableObject):
 - **ThemeManager** - Theme switching, loads config from `genie-ai-config.json`
-- **I18nService** - 11 languages, nested key translations via global `tr()` function
+- **AppLocaleService** - Runtime language switching, locale/bundle management (String Catalogs via `Localizable.xcstrings`)
 - **ConnectivityService** - Network monitoring with NWPathMonitor
 - **AuthService** - Authentication with Keychain token storage
 - **APIService** - Actor-based HTTP client with async/await
@@ -55,8 +55,7 @@ GenieAI/
 │   ├── Profile/               # User profile
 │   ├── Settings/              # Settings screens
 │   └── Shared/                # Reusable components
-├── Localization/              # Translation dictionaries
-│   └── *.swift                # en.swift, ar.swift, etc.
+├── Localizable.xcstrings      # String Catalog (11 languages)
 ├── Extensions/                # Swift extensions
 └── Resources/
     ├── Assets.xcassets/
@@ -81,12 +80,21 @@ GenieAI/
 
 ## Translations
 
-```swift
-import Foundation
+Uses Apple String Catalogs (`Localizable.xcstrings`) with 11 languages.
 
-// Use global helper (requires I18nService in environment)
-let text = tr("chatbot.welcomeMessage")
-let text = tr("key", args: ["name": "John"])
+```swift
+// In SwiftUI views — auto-localized via .environment(\.locale, appLocale.locale)
+Text("Welcome! How can I assist you today?")
+Button("Save") { ... }
+
+// In non-view code — use String(localized:)
+let text = String(localized: "No preview available")
+
+// With arguments — use string interpolation
+Text(String(localized: "A verification email has been sent to \(email)"))
+
+// Dynamic keys (QuickHelpButton) — use NSLocalizedString + localizedBundle
+NSLocalizedString(key, bundle: AppLocaleService.shared.localizedBundle, comment: "")
 ```
 
 ## Configuration
@@ -139,12 +147,13 @@ This project is part of a coordinated multi-platform development effort. The sam
 // In App
 ContentView()
     .environment(themeManager)
-    .environment(i18nService)
+    .environment(appLocale)
     .environment(authService)
+    .environment(\.locale, appLocale.locale)
 
 // In Views
 @Environment(ThemeManager.self) private var theme
-@Environment(I18nService.self) private var i18n
+@Environment(AppLocaleService.self) private var appLocale  // only where needed
 ```
 
 ### Service Initialization

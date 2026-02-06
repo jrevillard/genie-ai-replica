@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 struct UserProfileView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(\.dismiss) private var dismiss
 
     @State private var userService = UserService()
@@ -32,19 +31,19 @@ struct UserProfileView: View {
     @State private var showIconSelector = false
     @State private var pickedFiles: [String: URL] = [:]
 
-    private let tabs = [
-        "userProfile.tabs.tab1",
-        "userProfile.tabs.tab2",
-        "userProfile.tabs.tab3",
-        "userProfile.tabs.tab4",
-        "userProfile.tabs.tab5",
-        "userProfile.tabs.tab6",
-        "userProfile.tabs.tab7",
-        "userProfile.tabs.tab8",
-        "userProfile.tabs.tab9",
-        "userProfile.tabs.tab10",
-        "userProfile.tabs.tab11",
-        "userProfile.tabs.tab12"
+    private let tabs: [LocalizedStringResource] = [
+        "Personal Identification Data",
+        "Civil Registration & Documentation",
+        "Address & Residency Information",
+        "Identity & Travel Documents",
+        "Health & Medical Records",
+        "Employment & Economic Data",
+        "Education & Academic Records",
+        "Financial & Tax Data",
+        "Social Security & Welfare",
+        "Criminal & Legal Records",
+        "Transportation & Mobility",
+        "Civic & Political Participation"
     ]
 
     var body: some View {
@@ -59,7 +58,7 @@ struct UserProfileView: View {
                         showIconSelector: $showIconSelector
                     )
 
-                    Text(i18n.translate("userProfile.privacyInfo"))
+                    Text("By providing more information, you'll get more accurate and meaningful responses from the chatbot. Please review our")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
@@ -67,7 +66,7 @@ struct UserProfileView: View {
                     Button(action: {
                         // Privacy policy link placeholder
                     }) {
-                        Text(i18n.translate("userProfile.privacyPolicyLink"))
+                        Text("Privacy Policy")
                             .font(.subheadline)
                     }
                 }
@@ -80,7 +79,7 @@ struct UserProfileView: View {
                     HStack(spacing: 0) {
                         ForEach(0..<tabs.count, id: \.self) { index in
                             Button(action: { selectedTab = index }) {
-                                Text(i18n.translate(tabs[index]))
+                                Text(tabs[index])
                                     .font(.caption)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
@@ -141,7 +140,7 @@ struct UserProfileView: View {
                     Button(action: previousTab) {
                         HStack {
                             Image(systemName: "chevron.left")
-                            Text(i18n.translate("userProfile.actions.previous"))
+                            Text("Previous")
                         }
                     }
                     .disabled(selectedTab == 0)
@@ -151,7 +150,7 @@ struct UserProfileView: View {
                     if selectedTab < tabs.count - 1 {
                         Button(action: nextTab) {
                             HStack {
-                                Text(i18n.translate("userProfile.actions.next"))
+                                Text("Next")
                                 Image(systemName: "chevron.right")
                             }
                         }
@@ -160,11 +159,11 @@ struct UserProfileView: View {
                 .padding()
                 .background(theme.secondarySurfaceColor)
             }
-            .navigationTitle(i18n.translate("userProfile.title"))
+            .navigationTitle("User Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(i18n.translate("userProfile.actions.cancel")) {
+                    Button("Cancel") {
                         if hasChanges {
                             showDiscardAlert = true
                         } else {
@@ -178,15 +177,15 @@ struct UserProfileView: View {
                         if isSaving {
                             ProgressView()
                         } else {
-                            Text(i18n.translate("userProfile.actions.save"))
+                            Text("Save Profile")
                         }
                     }
                     .disabled(!hasChanges || isSaving)
                 }
             }
-            .alert(i18n.translate("userProfile.confirmDiscardChanges"), isPresented: $showDiscardAlert) {
-                Button(i18n.translate("common.cancel"), role: .cancel) {}
-                Button(i18n.translate("common.confirm"), role: .destructive) {
+            .alert("Discard unsaved changes?", isPresented: $showDiscardAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Confirm", role: .destructive) {
                     dismiss()
                 }
             }
@@ -282,7 +281,6 @@ struct UserProfileView: View {
 
 struct ProfileAvatarSection: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @Binding var personalInfo: PersonalIdentification
     @Binding var hasChanges: Bool
@@ -374,7 +372,6 @@ struct ProfileAvatarSection: View {
 
 struct ProfileIconSelectorSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(\.dismiss) private var dismiss
 
     @Binding var personalInfo: PersonalIdentification
@@ -412,8 +409,8 @@ struct ProfileIconSelectorSheet: View {
             VStack(spacing: 20) {
                 // Tab selector
                 Picker("", selection: $selectedTabIndex) {
-                    Text(i18n.translate("userProfile.upload")).tag(0)
-                    Text(i18n.translate("userProfile.initials")).tag(1)
+                    Text("Upload").tag(0)
+                    Text("Initials").tag(1)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -427,7 +424,7 @@ struct ProfileIconSelectorSheet: View {
                 Spacer()
             }
             .padding(.top)
-            .navigationTitle(i18n.translate("userProfile.chooseProfileIcon"))
+            .navigationTitle("Choose a Profile Icon")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -459,7 +456,7 @@ struct ProfileIconSelectorSheet: View {
                 selection: $selectedPhotoItem,
                 matching: .images
             ) {
-                SwiftUI.Label(i18n.translate("userProfile.uploadPhoto"), systemImage: "photo.on.rectangle")
+                SwiftUI.Label("Upload Photo", systemImage: "photo.on.rectangle")
                     .font(.headline)
                     .padding()
                     .frame(maxWidth: .infinity)
@@ -544,7 +541,6 @@ struct ProfileIconSelectorSheet: View {
 
 struct PersonalDataTab: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @Binding var personalInfo: PersonalIdentification
     @Binding var hasChanges: Bool
@@ -553,16 +549,16 @@ struct PersonalDataTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.fullName"),
+                    label: "Full name (including aliases)",
                     text: Binding(
                         get: { personalInfo.fullName ?? "" },
                         set: { personalInfo.fullName = $0; hasChanges = true }
                     ),
-                    placeholder: i18n.translate("userProfile.placeholders.fullName")
+                    placeholder: String(localized: "Enter your full legal name")
                 )
 
                 ProfileDateField(
-                    label: i18n.translate("userProfile.fields.dob"),
+                    label: "Date of birth",
                     dateString: Binding(
                         get: { personalInfo.dob ?? "" },
                         set: { personalInfo.dob = $0; hasChanges = true }
@@ -570,21 +566,21 @@ struct PersonalDataTab: View {
                 )
 
                 ProfilePickerField(
-                    label: i18n.translate("userProfile.fields.gender"),
+                    label: "Gender",
                     selection: Binding(
                         get: { personalInfo.gender ?? "" },
                         set: { personalInfo.gender = $0; hasChanges = true }
                     ),
                     options: [
-                        ("male", i18n.translate("userProfile.gender.male")),
-                        ("female", i18n.translate("userProfile.gender.female")),
-                        ("other", i18n.translate("userProfile.gender.other")),
-                        ("preferNot", i18n.translate("userProfile.gender.preferNot"))
+                        ("male", String(localized: "Male")),
+                        ("female", String(localized: "Female")),
+                        ("other", String(localized: "userProfile.gender.other")),
+                        ("preferNot", String(localized: "Prefer not to say"))
                     ]
                 )
 
                 ProfileCountryPickerField(
-                    label: i18n.translate("userProfile.fields.nationality"),
+                    label: "Nationality",
                     selection: Binding(
                         get: { personalInfo.nationality ?? "" },
                         set: { personalInfo.nationality = $0; hasChanges = true }
@@ -592,17 +588,17 @@ struct PersonalDataTab: View {
                 )
 
                 ProfilePickerField(
-                    label: i18n.translate("userProfile.fields.maritalStatus"),
+                    label: "Marital status",
                     selection: Binding(
                         get: { personalInfo.maritalStatus ?? "" },
                         set: { personalInfo.maritalStatus = $0; hasChanges = true }
                     ),
                     options: [
-                        ("single", i18n.translate("userProfile.maritalStatus.single")),
-                        ("married", i18n.translate("userProfile.maritalStatus.married")),
-                        ("divorced", i18n.translate("userProfile.maritalStatus.divorced")),
-                        ("widowed", i18n.translate("userProfile.maritalStatus.widowed")),
-                        ("other", i18n.translate("userProfile.maritalStatus.other"))
+                        ("single", String(localized: "Single")),
+                        ("married", String(localized: "Married")),
+                        ("divorced", String(localized: "Divorced")),
+                        ("widowed", String(localized: "Widowed")),
+                        ("other", String(localized: "userProfile.maritalStatus.other"))
                     ]
                 )
             }
@@ -614,7 +610,6 @@ struct PersonalDataTab: View {
 // MARK: - Civil Registration Tab (Tab 1)
 
 struct CivilRegistrationTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var civilInfo: CivilRegistration
     @Binding var hasChanges: Bool
@@ -624,7 +619,7 @@ struct CivilRegistrationTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.birthCert"),
+                    label: "Birth certificate",
                     filename: Binding(
                         get: { civilInfo.birthCert ?? "" },
                         set: { civilInfo.birthCert = $0; hasChanges = true }
@@ -633,7 +628,7 @@ struct CivilRegistrationTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.deathCert"),
+                    label: "Death certificate",
                     filename: Binding(
                         get: { civilInfo.deathCert ?? "" },
                         set: { civilInfo.deathCert = $0; hasChanges = true }
@@ -642,7 +637,7 @@ struct CivilRegistrationTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.marriageDivorce"),
+                    label: "Marriage / Divorce records",
                     filename: Binding(
                         get: { civilInfo.marriageDivorce ?? "" },
                         set: { civilInfo.marriageDivorce = $0; hasChanges = true }
@@ -651,7 +646,7 @@ struct CivilRegistrationTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.adoption"),
+                    label: "Adoption records",
                     filename: Binding(
                         get: { civilInfo.adoption ?? "" },
                         set: { civilInfo.adoption = $0; hasChanges = true }
@@ -660,7 +655,7 @@ struct CivilRegistrationTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.citizenship"),
+                    label: "Citizenship / Naturalization documents",
                     filename: Binding(
                         get: { civilInfo.citizenship ?? "" },
                         set: { civilInfo.citizenship = $0; hasChanges = true }
@@ -669,7 +664,7 @@ struct CivilRegistrationTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.immigration"),
+                    label: "Immigration & visa history",
                     filename: Binding(
                         get: { civilInfo.immigration ?? "" },
                         set: { civilInfo.immigration = $0; hasChanges = true }
@@ -692,7 +687,6 @@ struct CivilRegistrationTab: View {
 // MARK: - Address Tab (Tab 2)
 
 struct AddressTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var addressInfo: AddressResidency
     @Binding var hasChanges: Bool
@@ -702,7 +696,7 @@ struct AddressTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.currentAddress"),
+                    label: "Current residential address",
                     text: Binding(
                         get: { addressInfo.currentAddress ?? "" },
                         set: { addressInfo.currentAddress = $0; hasChanges = true }
@@ -710,7 +704,7 @@ struct AddressTab: View {
                 )
 
                 ProfileTextAreaField(
-                    label: i18n.translate("userProfile.fields.previousAddresses"),
+                    label: "Previous addresses",
                     text: Binding(
                         get: { addressInfo.previousAddresses ?? "" },
                         set: { addressInfo.previousAddresses = $0; hasChanges = true }
@@ -718,7 +712,7 @@ struct AddressTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.homeOrRental"),
+                    label: "Homeownership or rental details",
                     text: Binding(
                         get: { addressInfo.homeOrRental ?? "" },
                         set: { addressInfo.homeOrRental = $0; hasChanges = true }
@@ -726,7 +720,7 @@ struct AddressTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.utilityBills"),
+                    label: "Utility bills linked to the address",
                     filename: Binding(
                         get: { addressInfo.utilityBills ?? "" },
                         set: { addressInfo.utilityBills = $0; hasChanges = true }
@@ -735,7 +729,7 @@ struct AddressTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.landRecords"),
+                    label: "Land and property ownership records",
                     filename: Binding(
                         get: { addressInfo.landRecords ?? "" },
                         set: { addressInfo.landRecords = $0; hasChanges = true }
@@ -758,7 +752,6 @@ struct AddressTab: View {
 // MARK: - Identity & Travel Tab (Tab 3)
 
 struct IdentityTravelTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var identityInfo: IdentityTravel
     @Binding var hasChanges: Bool
@@ -768,7 +761,7 @@ struct IdentityTravelTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.idCard"),
+                    label: "National ID card number",
                     text: Binding(
                         get: { identityInfo.idCard ?? "" },
                         set: { identityInfo.idCard = $0; hasChanges = true }
@@ -776,7 +769,7 @@ struct IdentityTravelTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.passport"),
+                    label: "Passport details",
                     text: Binding(
                         get: { identityInfo.passport ?? "" },
                         set: { identityInfo.passport = $0; hasChanges = true }
@@ -784,7 +777,7 @@ struct IdentityTravelTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.driversLicense"),
+                    label: "Driver's license",
                     text: Binding(
                         get: { identityInfo.driversLicense ?? "" },
                         set: { identityInfo.driversLicense = $0; hasChanges = true }
@@ -792,7 +785,7 @@ struct IdentityTravelTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.voterId"),
+                    label: "Voter ID",
                     text: Binding(
                         get: { identityInfo.voterId ?? "" },
                         set: { identityInfo.voterId = $0; hasChanges = true }
@@ -800,7 +793,7 @@ struct IdentityTravelTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.ssn"),
+                    label: "Social Security / National Insurance Number",
                     text: Binding(
                         get: { identityInfo.ssn ?? "" },
                         set: { identityInfo.ssn = $0; hasChanges = true }
@@ -808,7 +801,7 @@ struct IdentityTravelTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.militaryRecords"),
+                    label: "Military service records",
                     filename: Binding(
                         get: { identityInfo.militaryRecords ?? "" },
                         set: { identityInfo.militaryRecords = $0; hasChanges = true }
@@ -831,7 +824,6 @@ struct IdentityTravelTab: View {
 // MARK: - Health & Medical Tab (Tab 4)
 
 struct HealthMedicalTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var healthInfo: HealthMedical
     @Binding var hasChanges: Bool
@@ -841,7 +833,7 @@ struct HealthMedicalTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileTextAreaField(
-                    label: i18n.translate("userProfile.fields.medicalHistory"),
+                    label: "Medical history and health conditions",
                     text: Binding(
                         get: { healthInfo.medicalHistory ?? "" },
                         set: { healthInfo.medicalHistory = $0; hasChanges = true }
@@ -849,7 +841,7 @@ struct HealthMedicalTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.vaccinations"),
+                    label: "Vaccination records",
                     filename: Binding(
                         get: { healthInfo.vaccinations ?? "" },
                         set: { healthInfo.vaccinations = $0; hasChanges = true }
@@ -858,7 +850,7 @@ struct HealthMedicalTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.insuranceDetails"),
+                    label: "Health insurance details",
                     text: Binding(
                         get: { healthInfo.insuranceDetails ?? "" },
                         set: { healthInfo.insuranceDetails = $0; hasChanges = true }
@@ -866,26 +858,26 @@ struct HealthMedicalTab: View {
                 )
 
                 ProfilePickerField(
-                    label: i18n.translate("userProfile.fields.bloodType"),
+                    label: "Blood Type",
                     selection: Binding(
                         get: { healthInfo.bloodType ?? "" },
                         set: { healthInfo.bloodType = $0; hasChanges = true }
                     ),
                     options: [
-                        ("aPositive", i18n.translate("userProfile.bloodTypes.aPositive")),
-                        ("aNegative", i18n.translate("userProfile.bloodTypes.aNegative")),
-                        ("bPositive", i18n.translate("userProfile.bloodTypes.bPositive")),
-                        ("bNegative", i18n.translate("userProfile.bloodTypes.bNegative")),
-                        ("abPositive", i18n.translate("userProfile.bloodTypes.abPositive")),
-                        ("abNegative", i18n.translate("userProfile.bloodTypes.abNegative")),
-                        ("oPositive", i18n.translate("userProfile.bloodTypes.oPositive")),
-                        ("oNegative", i18n.translate("userProfile.bloodTypes.oNegative")),
-                        ("unknown", i18n.translate("userProfile.bloodTypes.unknown"))
+                        ("aPositive", "A+"),
+                        ("aNegative", "A-"),
+                        ("bPositive", "B+"),
+                        ("bNegative", "B-"),
+                        ("abPositive", "AB+"),
+                        ("abNegative", "AB-"),
+                        ("oPositive", "O+"),
+                        ("oNegative", "O-"),
+                        ("unknown", String(localized: "Unknown"))
                     ]
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.disability"),
+                    label: "Disability status",
                     text: Binding(
                         get: { healthInfo.disability ?? "" },
                         set: { healthInfo.disability = $0; hasChanges = true }
@@ -893,7 +885,7 @@ struct HealthMedicalTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.organDonor"),
+                    label: "Organ donor status",
                     text: Binding(
                         get: { healthInfo.organDonor ?? "" },
                         set: { healthInfo.organDonor = $0; hasChanges = true }
@@ -901,7 +893,7 @@ struct HealthMedicalTab: View {
                 )
 
                 ProfileTextAreaField(
-                    label: i18n.translate("userProfile.fields.prescriptions"),
+                    label: "Prescriptions and treatments received",
                     text: Binding(
                         get: { healthInfo.prescriptions ?? "" },
                         set: { healthInfo.prescriptions = $0; hasChanges = true }
@@ -909,7 +901,7 @@ struct HealthMedicalTab: View {
                 )
 
                 ProfileTextAreaField(
-                    label: i18n.translate("userProfile.fields.mentalHealth"),
+                    label: "Mental health history",
                     text: Binding(
                         get: { healthInfo.mentalHealth ?? "" },
                         set: { healthInfo.mentalHealth = $0; hasChanges = true }
@@ -931,7 +923,6 @@ struct HealthMedicalTab: View {
 // MARK: - Employment Tab (Tab 5)
 
 struct EmploymentTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var employmentInfo: Employment
     @Binding var hasChanges: Bool
@@ -941,7 +932,7 @@ struct EmploymentTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileTextAreaField(
-                    label: i18n.translate("userProfile.fields.eHistory"),
+                    label: "Employment history",
                     text: Binding(
                         get: { employmentInfo.eHistory ?? "" },
                         set: { employmentInfo.eHistory = $0; hasChanges = true }
@@ -949,7 +940,7 @@ struct EmploymentTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.currentEmployer"),
+                    label: "Current employer details",
                     text: Binding(
                         get: { employmentInfo.currentEmployer ?? "" },
                         set: { employmentInfo.currentEmployer = $0; hasChanges = true }
@@ -957,7 +948,7 @@ struct EmploymentTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.workPermits"),
+                    label: "Work permits and labor contracts",
                     filename: Binding(
                         get: { employmentInfo.workPermits ?? "" },
                         set: { employmentInfo.workPermits = $0; hasChanges = true }
@@ -966,7 +957,7 @@ struct EmploymentTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.certifications"),
+                    label: "Professional certifications and licenses",
                     filename: Binding(
                         get: { employmentInfo.certifications ?? "" },
                         set: { employmentInfo.certifications = $0; hasChanges = true }
@@ -975,7 +966,7 @@ struct EmploymentTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.unemployment"),
+                    label: "Unemployment status and benefits received",
                     text: Binding(
                         get: { employmentInfo.unemployment ?? "" },
                         set: { employmentInfo.unemployment = $0; hasChanges = true }
@@ -983,7 +974,7 @@ struct EmploymentTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.tin"),
+                    label: "Taxpayer identification number (TIN)",
                     text: Binding(
                         get: { employmentInfo.tin ?? "" },
                         set: { employmentInfo.tin = $0; hasChanges = true }
@@ -991,7 +982,7 @@ struct EmploymentTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.businessAffiliations"),
+                    label: "Business ownership and company affiliations",
                     text: Binding(
                         get: { employmentInfo.businessAffiliations ?? "" },
                         set: { employmentInfo.businessAffiliations = $0; hasChanges = true }
@@ -1013,7 +1004,6 @@ struct EmploymentTab: View {
 // MARK: - Education Tab (Tab 6)
 
 struct EducationTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var educationInfo: Education
     @Binding var hasChanges: Bool
@@ -1022,7 +1012,7 @@ struct EducationTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileTextAreaField(
-                    label: i18n.translate("userProfile.fields.schools"),
+                    label: "School and university attended",
                     text: Binding(
                         get: { educationInfo.schools ?? "" },
                         set: { educationInfo.schools = $0; hasChanges = true }
@@ -1030,7 +1020,7 @@ struct EducationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.degrees"),
+                    label: "Diplomas, degrees, and certifications",
                     text: Binding(
                         get: { educationInfo.diplomas ?? "" },
                         set: { educationInfo.diplomas = $0; hasChanges = true }
@@ -1038,7 +1028,7 @@ struct EducationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.performance"),
+                    label: "Academic performance and test scores",
                     text: Binding(
                         get: { educationInfo.performance ?? "" },
                         set: { educationInfo.performance = $0; hasChanges = true }
@@ -1046,7 +1036,7 @@ struct EducationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.scholarships"),
+                    label: "Scholarships and financial aid received",
                     text: Binding(
                         get: { educationInfo.scholarships ?? "" },
                         set: { educationInfo.scholarships = $0; hasChanges = true }
@@ -1061,7 +1051,6 @@ struct EducationTab: View {
 // MARK: - Financial & Tax Tab (Tab 7)
 
 struct FinancialTaxTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var financialInfo: FinancialTax
     @Binding var hasChanges: Bool
@@ -1071,7 +1060,7 @@ struct FinancialTaxTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.incomeTax"),
+                    label: "Income tax records",
                     filename: Binding(
                         get: { financialInfo.incomeTax ?? "" },
                         set: { financialInfo.incomeTax = $0; hasChanges = true }
@@ -1080,7 +1069,7 @@ struct FinancialTaxTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.bankAccounts"),
+                    label: "Banking and financial accounts",
                     text: Binding(
                         get: { financialInfo.bankAccounts ?? "" },
                         set: { financialInfo.bankAccounts = $0; hasChanges = true }
@@ -1088,7 +1077,7 @@ struct FinancialTaxTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.propertyTax"),
+                    label: "Property tax payments",
                     filename: Binding(
                         get: { financialInfo.propertyTax ?? "" },
                         set: { financialInfo.propertyTax = $0; hasChanges = true }
@@ -1097,7 +1086,7 @@ struct FinancialTaxTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.businessTax"),
+                    label: "Business tax filings",
                     filename: Binding(
                         get: { financialInfo.businessTax ?? "" },
                         set: { financialInfo.businessTax = $0; hasChanges = true }
@@ -1106,7 +1095,7 @@ struct FinancialTaxTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.pensionContrib"),
+                    label: "Pension contributions and withdrawals",
                     filename: Binding(
                         get: { financialInfo.pensionContrib ?? "" },
                         set: { financialInfo.pensionContrib = $0; hasChanges = true }
@@ -1115,7 +1104,7 @@ struct FinancialTaxTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.loanAid"),
+                    label: "Loan and government aid records",
                     filename: Binding(
                         get: { financialInfo.loanAid ?? "" },
                         set: { financialInfo.loanAid = $0; hasChanges = true }
@@ -1138,7 +1127,6 @@ struct FinancialTaxTab: View {
 // MARK: - Social Security Tab (Tab 8)
 
 struct SocialSecurityTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var socialInfo: SocialSecurity
     @Binding var hasChanges: Bool
@@ -1147,7 +1135,7 @@ struct SocialSecurityTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.pensionStatus"),
+                    label: "Pension status and contributions",
                     text: Binding(
                         get: { socialInfo.pensionStatus ?? "" },
                         set: { socialInfo.pensionStatus = $0; hasChanges = true }
@@ -1155,7 +1143,7 @@ struct SocialSecurityTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.unemployment"),
+                    label: "Unemployment status and benefits received",
                     text: Binding(
                         get: { socialInfo.unemployment ?? "" },
                         set: { socialInfo.unemployment = $0; hasChanges = true }
@@ -1163,7 +1151,7 @@ struct SocialSecurityTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.disability"),
+                    label: "Disability status",
                     text: Binding(
                         get: { socialInfo.disability ?? "" },
                         set: { socialInfo.disability = $0; hasChanges = true }
@@ -1171,7 +1159,7 @@ struct SocialSecurityTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.childcare"),
+                    label: "Childcare support",
                     text: Binding(
                         get: { socialInfo.childcare ?? "" },
                         set: { socialInfo.childcare = $0; hasChanges = true }
@@ -1179,7 +1167,7 @@ struct SocialSecurityTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.foodAssistance"),
+                    label: "Food assistance / welfare programs",
                     text: Binding(
                         get: { socialInfo.foodAssistance ?? "" },
                         set: { socialInfo.foodAssistance = $0; hasChanges = true }
@@ -1187,7 +1175,7 @@ struct SocialSecurityTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.housingAssistance"),
+                    label: "Housing assistance",
                     text: Binding(
                         get: { socialInfo.housingAssistance ?? "" },
                         set: { socialInfo.housingAssistance = $0; hasChanges = true }
@@ -1202,7 +1190,6 @@ struct SocialSecurityTab: View {
 // MARK: - Criminal & Legal Tab (Tab 9)
 
 struct CriminalLegalTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var criminalInfo: CriminalLegal
     @Binding var hasChanges: Bool
@@ -1212,7 +1199,7 @@ struct CriminalLegalTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.policeRecords"),
+                    label: "Police records (criminal history, arrests, charges)",
                     filename: Binding(
                         get: { criminalInfo.policeRecords ?? "" },
                         set: { criminalInfo.policeRecords = $0; hasChanges = true }
@@ -1221,7 +1208,7 @@ struct CriminalLegalTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.courtCases"),
+                    label: "Court case history",
                     filename: Binding(
                         get: { criminalInfo.courtCases ?? "" },
                         set: { criminalInfo.courtCases = $0; hasChanges = true }
@@ -1230,7 +1217,7 @@ struct CriminalLegalTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.finesPenalties"),
+                    label: "Fines and penalties",
                     filename: Binding(
                         get: { criminalInfo.finesPenalties ?? "" },
                         set: { criminalInfo.finesPenalties = $0; hasChanges = true }
@@ -1239,7 +1226,7 @@ struct CriminalLegalTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.paroleProbation"),
+                    label: "Parole or probation status",
                     text: Binding(
                         get: { criminalInfo.paroleProbation ?? "" },
                         set: { criminalInfo.paroleProbation = $0; hasChanges = true }
@@ -1247,7 +1234,7 @@ struct CriminalLegalTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.citizenshipRevocation"),
+                    label: "Citizenship revocation (if applicable)",
                     text: Binding(
                         get: { criminalInfo.citizenshipRevocation ?? "" },
                         set: { criminalInfo.citizenshipRevocation = $0; hasChanges = true }
@@ -1269,7 +1256,6 @@ struct CriminalLegalTab: View {
 // MARK: - Transportation Tab (Tab 10)
 
 struct TransportationTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var transportInfo: Transportation
     @Binding var hasChanges: Bool
@@ -1279,7 +1265,7 @@ struct TransportationTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.vehicleReg"),
+                    label: "Vehicle registration details",
                     text: Binding(
                         get: { transportInfo.vehicleReg ?? "" },
                         set: { transportInfo.vehicleReg = $0; hasChanges = true }
@@ -1287,7 +1273,7 @@ struct TransportationTab: View {
                 )
 
                 ProfileFileUploadField(
-                    label: i18n.translate("userProfile.fields.trafficViolations"),
+                    label: "Traffic violations and fines",
                     filename: Binding(
                         get: { transportInfo.trafficViolations ?? "" },
                         set: { transportInfo.trafficViolations = $0; hasChanges = true }
@@ -1296,7 +1282,7 @@ struct TransportationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.licenseHistory"),
+                    label: "Driving license history and endorsements",
                     text: Binding(
                         get: { transportInfo.licenseHistory ?? "" },
                         set: { transportInfo.licenseHistory = $0; hasChanges = true }
@@ -1304,7 +1290,7 @@ struct TransportationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.publicTransportCard"),
+                    label: "Public transport card usage",
                     text: Binding(
                         get: { transportInfo.publicTransportCard ?? "" },
                         set: { transportInfo.publicTransportCard = $0; hasChanges = true }
@@ -1326,7 +1312,6 @@ struct TransportationTab: View {
 // MARK: - Civic & Political Participation Tab (Tab 11)
 
 struct CivicParticipationTab: View {
-    @Environment(I18nService.self) private var i18n
 
     @Binding var civicInfo: CivicParticipation
     @Binding var hasChanges: Bool
@@ -1335,7 +1320,7 @@ struct CivicParticipationTab: View {
         ScrollView {
             VStack(spacing: 20) {
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.voterRegistration"),
+                    label: "Voter registration details",
                     text: Binding(
                         get: { civicInfo.voterRegistration ?? "" },
                         set: { civicInfo.voterRegistration = $0; hasChanges = true }
@@ -1343,7 +1328,7 @@ struct CivicParticipationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.electionHistory"),
+                    label: "Election participation history",
                     text: Binding(
                         get: { civicInfo.electionHistory ?? "" },
                         set: { civicInfo.electionHistory = $0; hasChanges = true }
@@ -1351,7 +1336,7 @@ struct CivicParticipationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.partyMembership"),
+                    label: "Political party membership",
                     text: Binding(
                         get: { civicInfo.partyMembership ?? "" },
                         set: { civicInfo.partyMembership = $0; hasChanges = true }
@@ -1359,7 +1344,7 @@ struct CivicParticipationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.militaryStatus"),
+                    label: "Military service or conscription status",
                     text: Binding(
                         get: { civicInfo.militaryStatus ?? "" },
                         set: { civicInfo.militaryStatus = $0; hasChanges = true }
@@ -1367,7 +1352,7 @@ struct CivicParticipationTab: View {
                 )
 
                 ProfileField(
-                    label: i18n.translate("userProfile.fields.publicServiceRoles"),
+                    label: "Public service roles",
                     text: Binding(
                         get: { civicInfo.publicServiceRoles ?? "" },
                         set: { civicInfo.publicServiceRoles = $0; hasChanges = true }
@@ -1402,7 +1387,6 @@ struct ProfileField: View {
 
 struct ProfilePickerField: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let label: String
     @Binding var selection: String
@@ -1415,7 +1399,7 @@ struct ProfilePickerField: View {
                 .foregroundColor(theme.secondaryTextColor)
 
             Picker("", selection: $selection) {
-                Text(i18n.translate("userProfile.select"))
+                Text("Please select")
                     .tag("")
                 ForEach(options, id: \.0) { option in
                     Text(option.1).tag(option.0)
@@ -1453,7 +1437,6 @@ struct ProfileTextAreaField: View {
 
 struct ProfileFileUploadField: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let label: String
     @Binding var filename: String
@@ -1474,7 +1457,7 @@ struct ProfileFileUploadField: View {
                     Image(systemName: "doc.badge.arrow.up")
                         .foregroundColor(theme.primaryColor)
                     Text(filename.isEmpty
-                         ? i18n.translate("userProfile.uploadFile")
+                         ? String(localized: "Upload File")
                          : filename)
                         .foregroundColor(filename.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
                     Spacer()
@@ -1597,7 +1580,6 @@ struct ProfileDateField: View {
 
 struct ProfileCountryPickerField: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let label: String
     @Binding var selection: String
@@ -1615,7 +1597,7 @@ struct ProfileCountryPickerField: View {
                     Image(systemName: "flag")
                         .foregroundColor(theme.primaryColor)
                     Text(selection.isEmpty
-                         ? i18n.translate("userProfile.placeholders.selectCountry")
+                         ? String(localized: "Select a country")
                          : selection)
                         .foregroundColor(selection.isEmpty ? theme.secondaryTextColor : theme.primaryTextColor)
                     Spacer()
@@ -1638,7 +1620,6 @@ struct ProfileCountryPickerField: View {
 
 struct CountryPickerSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(\.dismiss) private var dismiss
 
     @Binding var selection: String
@@ -1670,8 +1651,8 @@ struct CountryPickerSheet: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: i18n.translate("userProfile.placeholders.searchCountries"))
-            .navigationTitle(i18n.translate("userProfile.placeholders.selectCountry"))
+            .searchable(text: $searchText, prompt: String(localized: "Search countries..."))
+            .navigationTitle("Select a country")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1705,5 +1686,4 @@ struct CountryPickerSheet: View {
     UserProfileView()
         .environment(AuthService())
         .environment(ThemeManager())
-        .environment(I18nService())
 }

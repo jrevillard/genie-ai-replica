@@ -6,7 +6,7 @@ import SwiftUI
 @main
 struct GenieAIApp: App {
     @State private var themeManager = ThemeManager()
-    @State private var i18nService = I18nService()
+    @State private var appLocale = AppLocaleService.shared
     @State private var authService = AuthService()
     @State private var connectivityService = ConnectivityService()
 
@@ -14,11 +14,12 @@ struct GenieAIApp: App {
         WindowGroup {
             ContentView()
                 .environment(themeManager)
-                .environment(i18nService)
+                .environment(appLocale)
                 .environment(authService)
                 .environment(connectivityService)
+                .environment(\.locale, appLocale.locale)
                 .preferredColorScheme(themeManager.colorScheme)
-                .environment(\.layoutDirection, i18nService.isRtl ? .rightToLeft : .leftToRight)
+                .environment(\.layoutDirection, appLocale.isRtl ? .rightToLeft : .leftToRight)
         }
     }
 }

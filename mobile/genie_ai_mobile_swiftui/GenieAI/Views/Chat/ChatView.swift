@@ -7,7 +7,7 @@ import PDFKit
 struct ChatView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
+    @Environment(AppLocaleService.self) private var appLocale
 
     @State private var chatService = ChatService()
     @State private var chatHistoryService = ChatHistoryService()
@@ -76,7 +76,7 @@ struct ChatView: View {
                                 if isLoading {
                                     HStack {
                                         ProgressView()
-                                        Text(i18n.translate("chatbot.thinking"))
+                                        Text("Genie is thinking...")
                                             .font(.subheadline)
                                             .foregroundColor(theme.secondaryTextColor)
                                     }
@@ -146,16 +146,16 @@ struct ChatView: View {
                 onDismiss: { showExportPDFSheet = false }
             )
         }
-        .alert(i18n.translate("chatbot.dialogs.newChatTitle"), isPresented: $showNewChatConfirmation) {
-            Button(i18n.translate("chatbot.discard"), role: .destructive) {
+        .alert("chatbot.dialogs.newChatTitle", isPresented: $showNewChatConfirmation) {
+            Button("Discard", role: .destructive) {
                 performNewChat()
             }
-            Button(i18n.translate("chatbot.dialogs.actions.saveFirst")) {
+            Button("Save First") {
                 showSaveDialog = true
             }
-            Button(i18n.translate("common.cancel"), role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text(i18n.translate("chatbot.unsavedChanges"))
+            Text("You have unsaved changes. Are you sure you want to start a new chat?")
         }
         .onAppear {
             if let conversation = initialConversation {
@@ -190,7 +190,7 @@ struct ChatView: View {
             Image(systemName: "lightbulb.fill")
                 .foregroundColor(theme.primaryColor)
 
-            Text("\(i18n.translate("chatbot.contextPrefix")) \(categoryName)")
+            Text("\(String(localized: "Context:")) \(categoryName)")
                 .font(.subheadline)
                 .foregroundColor(theme.primaryTextColor)
 
@@ -223,7 +223,7 @@ struct ChatView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text(i18n.translate("chatbot.whatCanIHelp"))
+            Text("How can I help you today?")
                 .font(.headline)
                 .foregroundColor(theme.secondaryTextColor)
         }
@@ -236,7 +236,7 @@ struct ChatView: View {
         guard messages.isEmpty else { return }
         let welcomeMsg = Message(
             role: .assistant,
-            content: i18n.translate("chatbot.welcomeMessage"),
+            content: String(localized: "Welcome! How can I assist you with Kenya government services today?"),
             isSaved: true
         )
         messages.append(welcomeMsg)
@@ -305,7 +305,7 @@ struct ChatView: View {
                     userId: userId,
                     categoryId: selectedCategoryId,
                     contextLabels: contextLabels,
-                    language: i18n.currentLocale
+                    language: appLocale.currentLocale
                 )
 
                 // Add assistant response
@@ -331,7 +331,7 @@ struct ChatView: View {
                     isLoading = false
                     let errorMessage = Message(
                         role: .assistant,
-                        content: i18n.translate("chatbot.processingError")
+                        content: String(localized: "Error processing your request.")
                     )
                     messages.append(errorMessage)
                 }
@@ -356,7 +356,7 @@ struct ChatView: View {
         guard let userId = authService.currentUser?.id else { return }
         guard !messages.isEmpty else { return }
 
-        let title = conversationTitle.isEmpty ? i18n.translate("chatbot.defaultConversationTitle") : conversationTitle
+        let title = conversationTitle.isEmpty ? String(localized: "Untitled Conversation") : conversationTitle
 
         Task {
             do {
@@ -536,7 +536,7 @@ struct ChatView: View {
         guard !messages.isEmpty else { return }
 
         let title = conversationTitle.isEmpty
-            ? i18n.translate("chatbot.defaultConversationTitle")
+            ? String(localized: "Untitled Conversation")
             : conversationTitle
 
         var text = "Conversation with NAAT (\(title)):\n\n"
@@ -561,7 +561,6 @@ struct ChatView: View {
 
 struct SaveConversationSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @Binding var title: String
     var onSave: () -> Void
@@ -570,16 +569,16 @@ struct SaveConversationSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text(i18n.translate("chatbot.dialogs.saveTitle"))
+                Text("Save Conversation")
                     .font(.title2)
                     .fontWeight(.bold)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("chatbot.chatTitle"))
+                    Text("Chat Title")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
-                    TextField(i18n.translate("chatbot.chatTitlePlaceholder"), text: $title)
+                    TextField("chatbot.chatTitlePlaceholder", text: $title)
                         .textFieldStyle(GenieTextFieldStyle())
                 }
                 .padding(.horizontal)
@@ -588,7 +587,7 @@ struct SaveConversationSheet: View {
 
                 HStack(spacing: 16) {
                     Button(action: onDismiss) {
-                        Text(i18n.translate("common.cancel"))
+                        Text("Cancel")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.gray.opacity(0.2))
@@ -597,7 +596,7 @@ struct SaveConversationSheet: View {
                     }
 
                     Button(action: onSave) {
-                        Text(i18n.translate("common.save"))
+                        Text("Save")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(theme.primaryColor)
@@ -627,7 +626,6 @@ struct SaveConversationSheet: View {
 
 struct ExportPDFSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let messages: [Message]
     var onDismiss: () -> Void
@@ -641,17 +639,17 @@ struct ExportPDFSheet: View {
                     .font(.system(size: 50))
                     .foregroundColor(theme.primaryColor)
 
-                Text(i18n.translate("chatbot.dialogs.exportTitle"))
+                Text("Export Chat to PDF")
                     .font(.title2)
                     .fontWeight(.bold)
 
-                Text(i18n.translate("chatbot.exportPDFDescription"))
+                Text("Export this conversation to a PDF file")
                     .font(.subheadline)
                     .foregroundColor(theme.secondaryTextColor)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                Text("\(messages.filter { $0.role != .system }.count) \(i18n.translate("chatbot.messages"))")
+                Text("\(messages.filter { $0.role != .system }.count) \(String(localized: "messages"))")
                     .font(.headline)
                     .foregroundColor(theme.primaryColor)
 
@@ -664,7 +662,7 @@ struct ExportPDFSheet: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
                         Image(systemName: "square.and.arrow.up")
-                        Text(i18n.translate("chatbot.dialogs.exportTitle"))
+                        Text("Export Chat to PDF")
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -780,5 +778,5 @@ struct ExportPDFSheet: View {
     ChatView()
         .environment(AuthService())
         .environment(ThemeManager())
-        .environment(I18nService())
+        .environment(AppLocaleService.shared)
 }

@@ -5,7 +5,6 @@ import SwiftUI
 
 struct FeedbackSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let message: Message
     var onSubmit: (Int, String?, Bool) -> Void
@@ -38,12 +37,12 @@ struct FeedbackSheet: View {
             ScrollView {
                 VStack(spacing: 24) {
                     // Title
-                    Text(i18n.translate("responseRating.title"))
+                    Text("Help Us Improve")
                         .font(.title2)
                         .fontWeight(.bold)
 
                     // Description
-                    Text(i18n.translate("responseRating.note"))
+                    Text("Your feedback will be used to better tune the chatbot and improve responses over time.")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
                         .multilineTextAlignment(.center)
@@ -51,7 +50,7 @@ struct FeedbackSheet: View {
 
                     // Response Preview
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("responseRating.chatbotResponse"))
+                        Text("Chatbot Response:")
                             .font(.caption)
                             .foregroundColor(theme.secondaryTextColor)
 
@@ -66,7 +65,7 @@ struct FeedbackSheet: View {
 
                     // Thumbs Up/Down
                     VStack(spacing: 8) {
-                        Text(i18n.translate("responseRating.quickFeedback"))
+                        Text("Quick Feedback")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
@@ -97,7 +96,7 @@ struct FeedbackSheet: View {
 
                     // Skin Tone Selector
                     VStack(spacing: 8) {
-                        Text(i18n.translate("responseRating.skinTone"))
+                        Text("Skin Tone")
                             .font(.caption)
                             .foregroundColor(theme.secondaryTextColor)
 
@@ -120,7 +119,7 @@ struct FeedbackSheet: View {
 
                     // Comment Field
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField(i18n.translate("responseRating.additionalComments"), text: $comment, axis: .vertical)
+                        TextField("Additional comments...", text: $comment, axis: .vertical)
                             .lineLimit(3...5)
                             .textFieldStyle(.plain)
                             .padding()
@@ -132,7 +131,7 @@ struct FeedbackSheet: View {
                     // Buttons
                     HStack(spacing: 16) {
                         Button(action: onDismiss) {
-                            Text(i18n.translate("responseRating.cancel"))
+                            Text("Cancel")
                                 .frame(maxWidth: .infinity)
                                 .padding()
                                 .background(Color.gray.opacity(0.2))
@@ -146,7 +145,7 @@ struct FeedbackSheet: View {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 }
-                                Text(i18n.translate("responseRating.submit"))
+                                Text("Submit")
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -222,5 +221,4 @@ struct FeedbackSheet: View {
         onDismiss: {}
     )
     .environment(ThemeManager())
-    .environment(I18nService())
 }

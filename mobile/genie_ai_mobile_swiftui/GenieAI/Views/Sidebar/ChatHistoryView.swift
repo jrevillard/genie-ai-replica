@@ -18,19 +18,18 @@ enum ChatHistoryTab: String, CaseIterable {
         }
     }
 
-    func title(_ i18n: I18nService) -> String {
+    var localizedTitle: String {
         switch self {
-        case .all: return i18n.translate("sidebar.tab.all")
-        case .folders: return i18n.translate("sidebar.tab.folders")
-        case .starred: return i18n.translate("sidebar.tab.starred")
-        case .archived: return i18n.translate("sidebar.tab.archived")
+        case .all: return String(localized: "All Chats")
+        case .folders: return String(localized: "Folders")
+        case .starred: return String(localized: "Starred")
+        case .archived: return String(localized: "Archived")
         }
     }
 }
 
 struct ChatHistoryView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(AuthService.self) private var authService
 
     @State private var historyService = ChatHistoryService()
@@ -58,7 +57,7 @@ struct ChatHistoryView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: tab.icon)
                                         .font(.system(size: 14))
-                                    Text(tab.title(i18n))
+                                    Text(tab.localizedTitle)
                                         .font(.system(size: 12, weight: isActive ? .bold : .semibold))
                                 }
                                 .foregroundColor(isActive ? theme.primaryColor : theme.secondaryTextColor)
@@ -105,10 +104,10 @@ struct ChatHistoryView: View {
         .sheet(isPresented: $showCreateFolder) {
             CreateFolderSheet(onSave: createFolder, onDismiss: { showCreateFolder = false })
         }
-        .alert(i18n.translate("sidebar.renameChat"), isPresented: $showRenameAlert) {
-            TextField(i18n.translate("sidebar.renameChat"), text: $renameText)
-            Button(i18n.translate("common.cancel"), role: .cancel) {}
-            Button(i18n.translate("common.save")) {
+        .alert("Rename Chat", isPresented: $showRenameAlert) {
+            TextField("Rename Chat", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
                 renameConversation()
             }
         }
@@ -132,7 +131,7 @@ struct ChatHistoryView: View {
             ProgressView()
                 .padding()
         } else if filtered.isEmpty {
-            Text(i18n.translate("sidebar.noChats"))
+            Text("No recent chats")
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryTextColor)
                 .padding()
@@ -157,7 +156,7 @@ struct ChatHistoryView: View {
         Button(action: { showCreateFolder = true }) {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                Text(i18n.translate("sidebar.createFolder"))
+                Text("Create Folder")
             }
             .font(.subheadline)
             .foregroundColor(theme.primaryColor)
@@ -296,7 +295,6 @@ struct ChatHistoryView: View {
 
 struct ConversationRow: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let conversation: Conversation
     var onTapped: () -> Void
@@ -340,7 +338,7 @@ struct ConversationRow: View {
                         Button {
                             onRename()
                         } label: {
-                            SwiftUI.Label(i18n.translate("sidebar.renameChat"), systemImage: "pencil")
+                            SwiftUI.Label("Rename Chat", systemImage: "pencil")
                         }
                     }
 
@@ -348,7 +346,7 @@ struct ConversationRow: View {
                         Button {
                             onMoveToFolder()
                         } label: {
-                            SwiftUI.Label(i18n.translate("sidebar.moveChat"), systemImage: "folder")
+                            SwiftUI.Label("Move Chat", systemImage: "folder")
                         }
                     }
 
@@ -356,7 +354,7 @@ struct ConversationRow: View {
                         onStar()
                     } label: {
                         SwiftUI.Label(
-                            conversation.isStarred ? i18n.translate("sidebar.unstar") : i18n.translate("sidebar.star"),
+                            conversation.isStarred ? String(localized: "Unstar") : String(localized: "Star"),
                             systemImage: conversation.isStarred ? "star.slash" : "star"
                         )
                     }
@@ -365,7 +363,7 @@ struct ConversationRow: View {
                         onArchive()
                     } label: {
                         SwiftUI.Label(
-                            conversation.isArchived ? i18n.translate("sidebar.unarchive") : i18n.translate("sidebar.archive"),
+                            conversation.isArchived ? String(localized: "Unarchive") : String(localized: "Archive"),
                             systemImage: "archivebox"
                         )
                     }
@@ -373,7 +371,7 @@ struct ConversationRow: View {
                     Divider()
 
                     Button(role: .destructive, action: onDelete) {
-                        SwiftUI.Label(i18n.translate("sidebar.deleteChat"), systemImage: "trash")
+                        SwiftUI.Label("Delete Chat", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -446,7 +444,6 @@ struct FolderRow: View {
 
 struct CreateFolderSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @State private var folderName = ""
 
@@ -456,21 +453,21 @@ struct CreateFolderSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                TextField(i18n.translate("sidebar.folderNamePlaceholder"), text: $folderName)
+                TextField("Enter folder name", text: $folderName)
                     .textFieldStyle(GenieTextFieldStyle())
                     .padding()
 
                 Spacer()
             }
-            .navigationTitle(i18n.translate("sidebar.createFolder"))
+            .navigationTitle("Create Folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(i18n.translate("common.cancel"), action: onDismiss)
+                    Button("Cancel", action: onDismiss)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(i18n.translate("common.create")) {
+                    Button("Create") {
                         onSave(folderName)
                     }
                     .disabled(folderName.isEmpty)
@@ -485,7 +482,6 @@ struct CreateFolderSheet: View {
 
 struct MoveToFolderSheet: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let folders: [Folder]
     var onSelect: (String) -> Void
@@ -507,11 +503,11 @@ struct MoveToFolderSheet: View {
                     }
                 }
             }
-            .navigationTitle(i18n.translate("sidebar.moveChatTo"))
+            .navigationTitle("Move Chat To")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(i18n.translate("common.cancel"), action: onDismiss)
+                    Button("Cancel", action: onDismiss)
                 }
             }
         }
@@ -522,6 +518,5 @@ struct MoveToFolderSheet: View {
 #Preview {
     ChatHistoryView(searchText: "")
         .environment(ThemeManager())
-        .environment(I18nService())
         .environment(AuthService())
 }

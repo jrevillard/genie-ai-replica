@@ -5,7 +5,6 @@ import SwiftUI
 
 struct MessageBubble: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let message: Message
     var onFeedbackTapped: (() -> Void)?
@@ -63,14 +62,14 @@ struct MessageBubble: View {
                 if message.role.isAssistant && message.queryId != nil {
                     HStack {
                         if message.feedbackSubmitted == true {
-                            Text(i18n.translate("feedback.success"))
+                            Text("Thank you for your feedback!")
                                 .font(.caption)
                                 .foregroundColor(theme.successColor)
                         } else {
                             Button(action: { onFeedbackTapped?() }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "hand.thumbsup")
-                                    Text(i18n.translate("feedback.button"))
+                                    Text("Feedback")
                                 }
                                 .font(.caption)
                                 .foregroundColor(theme.primaryColor)
@@ -187,5 +186,4 @@ struct RoundedCorner: Shape {
         )
     }
     .environment(ThemeManager())
-    .environment(I18nService())
 }

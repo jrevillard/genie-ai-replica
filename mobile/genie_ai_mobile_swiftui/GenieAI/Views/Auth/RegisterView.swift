@@ -6,7 +6,6 @@ import SwiftUI
 struct RegisterView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @State private var username = ""
     @State private var email = ""
@@ -41,7 +40,7 @@ struct RegisterView: View {
                         .font(.system(size: 50))
                         .foregroundStyle(theme.navbarGradient)
 
-                    Text(i18n.translate("register.createAccount"))
+                    Text("Create New Account")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(theme.primaryTextColor)
@@ -52,11 +51,11 @@ struct RegisterView: View {
                 VStack(spacing: 16) {
                     // Username
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("register.username"))
+                        Text("register.username")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
-                        TextField(i18n.translate("register.usernamePlaceholder"), text: $username)
+                        TextField("Enter a username", text: $username)
                             .textFieldStyle(GenieTextFieldStyle())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -73,11 +72,11 @@ struct RegisterView: View {
 
                     // Email
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("register.email"))
+                        Text("Email")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
-                        TextField(i18n.translate("register.emailPlaceholder"), text: $email)
+                        TextField("Enter your email", text: $email)
                             .textFieldStyle(GenieTextFieldStyle())
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -95,11 +94,11 @@ struct RegisterView: View {
 
                     // Password
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("register.password"))
+                        Text("Password")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
-                        SecureField(i18n.translate("register.passwordPlaceholder"), text: $password)
+                        SecureField(String(localized: "Create a password"), text: $password)
                             .textFieldStyle(GenieTextFieldStyle())
                             .onChange(of: password) { _, newValue in
                                 passwordStrength = PasswordValidator.validateStrength(newValue)
@@ -117,18 +116,18 @@ struct RegisterView: View {
                             }
                         }
 
-                        Text(i18n.translate("register.passwordRequirements"))
+                        Text("Password must be at least 8 characters with at least 1 number and 1 uppercase letter")
                             .font(.caption)
                             .foregroundColor(theme.secondaryTextColor)
                     }
 
                     // Confirm Password
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(i18n.translate("register.confirmPassword"))
+                        Text("Confirm Password")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
 
-                        SecureField(i18n.translate("register.confirmPasswordPlaceholder"), text: $confirmPassword)
+                        SecureField(String(localized: "Confirm your password"), text: $confirmPassword)
                             .textFieldStyle(GenieTextFieldStyle())
                     }
 
@@ -136,8 +135,8 @@ struct RegisterView: View {
                     HStack {
                         Toggle(isOn: $acceptTerms) {
                             HStack(spacing: 4) {
-                                Text(i18n.translate("register.acceptTerms"))
-                                Text(i18n.translate("register.termsOfService"))
+                                Text("I accept the")
+                                Text("Terms of Service")
                                     .foregroundColor(theme.primaryColor)
                             }
                             .font(.subheadline)
@@ -164,7 +163,7 @@ struct RegisterView: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
-                        Text(isLoading ? i18n.translate("register.processing") : i18n.translate("register.registerButton"))
+                        Text(isLoading ? String(localized: "Processing...") : String(localized: "register.registerButton"))
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -177,11 +176,11 @@ struct RegisterView: View {
 
                 // Back to Login
                 HStack {
-                    Text(i18n.translate("register.alreadyHaveAccount"))
+                    Text("Already have an account?")
                         .foregroundColor(theme.secondaryTextColor)
 
                     Button(action: onBackToLogin) {
-                        Text(i18n.translate("register.loginNow"))
+                        Text("Log in")
                             .fontWeight(.semibold)
                             .foregroundColor(theme.primaryColor)
                     }
@@ -189,7 +188,7 @@ struct RegisterView: View {
                 .font(.subheadline)
 
                 // Privacy Notice
-                Text(i18n.translate("register.privacyNotice"))
+                Text("By registering, you agree to our Terms of Service and Privacy Policy")
                     .font(.caption)
                     .foregroundColor(theme.secondaryTextColor)
                     .multilineTextAlignment(.center)
@@ -207,11 +206,11 @@ struct RegisterView: View {
 
     private var passwordStrengthLabel: String {
         switch passwordStrength.score {
-        case 0: return i18n.translate("passwordResetConfirm.strengthLabels.veryWeak")
-        case 1: return i18n.translate("passwordResetConfirm.strengthLabels.weak")
-        case 2: return i18n.translate("passwordResetConfirm.strengthLabels.fair")
-        case 3: return i18n.translate("passwordResetConfirm.strengthLabels.good")
-        default: return i18n.translate("passwordResetConfirm.strengthLabels.strong")
+        case 0: return String(localized: "Very Weak")
+        case 1: return String(localized: "Weak")
+        case 2: return String(localized: "Fair")
+        case 3: return String(localized: "Good")
+        default: return String(localized: "Strong")
         }
     }
 
@@ -245,7 +244,7 @@ struct RegisterView: View {
                     let available = try await userService.checkUsernameAvailability(value)
                     await MainActor.run {
                         isCheckingUsername = false
-                        usernameError = available ? nil : i18n.translate("register.usernameExists")
+                        usernameError = available ? nil : String(localized: "Username already exists")
                     }
                 } catch {
                     await MainActor.run {
@@ -268,7 +267,7 @@ struct RegisterView: View {
                     let available = try await userService.checkEmailAvailability(value)
                     await MainActor.run {
                         isCheckingEmail = false
-                        emailError = available ? nil : i18n.translate("register.emailExists")
+                        emailError = available ? nil : String(localized: "Email already exists")
                     }
                 } catch {
                     await MainActor.run {
@@ -281,31 +280,31 @@ struct RegisterView: View {
 
     private func performRegistration() {
         guard username.count >= 3 else {
-            errorMessage = i18n.translate("register.usernameMinLength")
+            errorMessage = String(localized: "Username must be at least 3 characters")
             showError = true
             return
         }
 
         guard isValidEmail(email) else {
-            errorMessage = i18n.translate("register.invalidEmail")
+            errorMessage = String(localized: "register.invalidEmail")
             showError = true
             return
         }
 
         guard passwordStrength.isValid else {
-            errorMessage = i18n.translate("register.passwordRequirements")
+            errorMessage = String(localized: "Password must be at least 8 characters with at least 1 number and 1 uppercase letter")
             showError = true
             return
         }
 
         guard password == confirmPassword else {
-            errorMessage = i18n.translate("register.passwordsDoNotMatch")
+            errorMessage = String(localized: "Passwords do not match")
             showError = true
             return
         }
 
         guard acceptTerms else {
-            errorMessage = i18n.translate("register.mustAcceptTerms")
+            errorMessage = String(localized: "You must accept the Terms of Service")
             showError = true
             return
         }
@@ -323,7 +322,7 @@ struct RegisterView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = i18n.translate("register.registrationFailed")
+                    errorMessage = String(localized: "Registration failed. Please try again.")
                     showError = true
                 }
             }
@@ -343,5 +342,4 @@ struct RegisterView: View {
     )
     .environment(AuthService())
     .environment(ThemeManager())
-    .environment(I18nService())
 }

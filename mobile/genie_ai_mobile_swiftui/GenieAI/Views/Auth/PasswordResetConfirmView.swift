@@ -6,7 +6,6 @@ import SwiftUI
 struct PasswordResetConfirmView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @State private var token = ""
     @State private var newPassword = ""
@@ -29,7 +28,7 @@ struct PasswordResetConfirmView: View {
                         .font(.system(size: 50))
                         .foregroundStyle(theme.navbarGradient)
 
-                    Text(i18n.translate("passwordResetConfirm.resetPassword"))
+                    Text("Create New Password")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(theme.primaryTextColor)
@@ -43,12 +42,12 @@ struct PasswordResetConfirmView: View {
                             .font(.system(size: 60))
                             .foregroundColor(theme.successColor)
 
-                        Text(i18n.translate("passwordResetConfirm.resetSuccess"))
+                        Text("Your password has been successfully reset")
                             .font(.headline)
                             .multilineTextAlignment(.center)
 
                         Button(action: onBackToLogin) {
-                            Text(i18n.translate("passwordResetConfirm.backToLogin"))
+                            Text("Back to Login")
                                 .frame(maxWidth: .infinity)
                                 .padding()
                                 .background(theme.primaryColor)
@@ -64,11 +63,11 @@ struct PasswordResetConfirmView: View {
                         if !tokenValidated {
                             // Token Entry
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(i18n.translate("passwordResetConfirm.tokenLabel"))
+                                Text("Reset Token")
                                     .font(.subheadline)
                                     .foregroundColor(theme.secondaryTextColor)
 
-                                TextField(i18n.translate("passwordResetConfirm.tokenPlaceholder"), text: $token)
+                                TextField("Enter reset token", text: $token)
                                     .textFieldStyle(GenieTextFieldStyle())
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
@@ -78,25 +77,25 @@ struct PasswordResetConfirmView: View {
                         if tokenValidated {
                             // New Password
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(i18n.translate("passwordResetConfirm.newPasswordLabel"))
+                                Text("New Password")
                                     .font(.subheadline)
                                     .foregroundColor(theme.secondaryTextColor)
 
-                                SecureField(i18n.translate("passwordResetConfirm.newPasswordPlaceholder"), text: $newPassword)
+                                SecureField(String(localized: "Create a new password"), text: $newPassword)
                                     .textFieldStyle(GenieTextFieldStyle())
 
-                                Text(i18n.translate("passwordResetConfirm.passwordRequirements"))
+                                Text("Password must be at least 8 characters with at least 1 number, 1 uppercase letter, and 1 special character")
                                     .font(.caption)
                                     .foregroundColor(theme.secondaryTextColor)
                             }
 
                             // Confirm Password
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(i18n.translate("passwordResetConfirm.confirmNewPasswordLabel"))
+                                Text("Confirm New Password")
                                     .font(.subheadline)
                                     .foregroundColor(theme.secondaryTextColor)
 
-                                SecureField(i18n.translate("passwordResetConfirm.confirmNewPasswordPlaceholder"), text: $confirmPassword)
+                                SecureField(String(localized: "Confirm your new password"), text: $confirmPassword)
                                     .textFieldStyle(GenieTextFieldStyle())
                             }
                         }
@@ -131,11 +130,11 @@ struct PasswordResetConfirmView: View {
 
                     // Back to Login
                     HStack {
-                        Text(i18n.translate("passwordResetConfirm.rememberedPassword"))
+                        Text("Remember your password?")
                             .foregroundColor(theme.secondaryTextColor)
 
                         Button(action: onBackToLogin) {
-                            Text(i18n.translate("passwordResetConfirm.backToLogin"))
+                            Text("Back to Login")
                                 .fontWeight(.semibold)
                                 .foregroundColor(theme.primaryColor)
                         }
@@ -157,9 +156,9 @@ struct PasswordResetConfirmView: View {
 
     private var buttonText: String {
         if isLoading {
-            return i18n.translate("passwordResetConfirm.processing")
+            return String(localized: "Resetting...")
         }
-        return tokenValidated ? i18n.translate("passwordResetConfirm.resetButton") : i18n.translate("passwordResetConfirm.validateButton")
+        return tokenValidated ? String(localized: "Reset Password") : String(localized: "Validate Token")
     }
 
     private var canProceed: Bool {
@@ -171,7 +170,7 @@ struct PasswordResetConfirmView: View {
 
     private func validateToken() {
         guard !token.isEmpty else {
-            errorMessage = i18n.translate("passwordResetConfirm.noTokenProvided")
+            errorMessage = String(localized: "Please provide a reset token")
             showError = true
             return
         }
@@ -183,7 +182,7 @@ struct PasswordResetConfirmView: View {
 
     private func performReset() {
         guard newPassword == confirmPassword else {
-            errorMessage = i18n.translate("passwordResetConfirm.passwordsDoNotMatch")
+            errorMessage = String(localized: "Passwords do not match")
             showError = true
             return
         }
@@ -201,7 +200,7 @@ struct PasswordResetConfirmView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = i18n.translate("passwordResetConfirm.resetFailed")
+                    errorMessage = String(localized: "Unable to reset password. Please try again.")
                     showError = true
                 }
             }
@@ -213,5 +212,4 @@ struct PasswordResetConfirmView: View {
     PasswordResetConfirmView(onBackToLogin: {})
         .environment(AuthService())
         .environment(ThemeManager())
-        .environment(I18nService())
 }

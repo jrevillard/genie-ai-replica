@@ -6,7 +6,6 @@ import SwiftUI
 struct NavBarView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
     @Environment(ConnectivityService.self) private var connectivity
 
     var onMenuTapped: () -> Void
@@ -57,7 +56,7 @@ struct NavBarView: View {
                 } label: {
                     HStack {
                         Image(systemName: "person")
-                        Text(i18n.translate("nav.profile"))
+                        Text("My Profile")
                     }
                 }
 
@@ -66,7 +65,7 @@ struct NavBarView: View {
                 } label: {
                     HStack {
                         Image(systemName: "gear")
-                        Text(i18n.translate("nav.settings"))
+                        Text("Settings")
                     }
                 }
 
@@ -75,7 +74,7 @@ struct NavBarView: View {
                 Button(role: .destructive, action: onLogoutTapped) {
                     HStack {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                        Text(i18n.translate("nav.logout"))
+                        Text("Log Out")
                     }
                 }
             } label: {
@@ -103,6 +102,5 @@ struct NavBarView: View {
     }
     .environment(AuthService())
     .environment(ThemeManager())
-    .environment(I18nService())
     .environment(ConnectivityService())
 }

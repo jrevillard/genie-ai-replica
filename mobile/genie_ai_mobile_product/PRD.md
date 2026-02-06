@@ -408,7 +408,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ## 8. Internationalization
 <!-- Flutter: lib/services/i18n_service.dart, lib/i18n/locales/*.dart -->
-<!-- SwiftUI: GenieAI/Services/I18nService.swift, GenieAI/Localization/*.swift -->
+<!-- SwiftUI: GenieAI/Services/AppLocaleService.swift, GenieAI/Localizable.xcstrings -->
 
 **Supported Languages (11):**
 1. English (en) - Default
@@ -424,9 +424,8 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 11. Thai (th)
 
 **Requirements:**
-- Global translation function: `tr('section.key')`
-- Argument substitution: `tr('key', args: {'name': 'John'})`
-- Nested key structure
+- Platform-native localization (Flutter: `tr('section.key')`, SwiftUI: String Catalogs with `Localizable.xcstrings`)
+- Argument substitution (Flutter: `tr('key', args: {'name': 'John'})`, SwiftUI: `String(localized:)` with interpolation)
 - Real-time language switching
 - RTL layout support for Arabic
 - Locale persistence
@@ -653,6 +652,6 @@ lib/components/user/       GenieAI/Views/Profile/            ui/screens/user/
 lib/components/shared/     GenieAI/Views/Shared/             ui/components/
 lib/services/              GenieAI/Services/                 data/repository/
 lib/utils/                 GenieAI/Extensions/               util/
-lib/i18n/locales/          GenieAI/Localization/             res/values/
+lib/i18n/locales/          GenieAI/Localizable.xcstrings     res/values/
 assets/config/             GenieAI/Resources/                assets/
 ```

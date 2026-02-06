@@ -6,7 +6,6 @@ import SwiftUI
 struct PasswordResetView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @State private var email = ""
     @State private var showError = false
@@ -26,7 +25,7 @@ struct PasswordResetView: View {
                         .font(.system(size: 50))
                         .foregroundStyle(theme.navbarGradient)
 
-                    Text(i18n.translate("passwordReset.resetPassword"))
+                    Text("Reset Your Password")
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(theme.primaryTextColor)
@@ -40,17 +39,17 @@ struct PasswordResetView: View {
                             .font(.system(size: 60))
                             .foregroundColor(theme.successColor)
 
-                        Text(i18n.translate("passwordReset.resetRequestSuccess"))
+                        Text("Password reset link has been sent to your email")
                             .font(.headline)
                             .multilineTextAlignment(.center)
 
-                        Text(i18n.translate("passwordReset.checkEmail"))
+                        Text("Please check your email for further instructions.")
                             .font(.subheadline)
                             .foregroundColor(theme.secondaryTextColor)
                             .multilineTextAlignment(.center)
 
                         Button(action: onBackToLogin) {
-                            Text(i18n.translate("passwordReset.backToLogin"))
+                            Text("Back to Login")
                                 .fontWeight(.semibold)
                                 .foregroundColor(theme.primaryColor)
                         }
@@ -61,11 +60,11 @@ struct PasswordResetView: View {
                     // Reset Form
                     VStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(i18n.translate("passwordReset.emailLabel"))
+                            Text("passwordReset.emailLabel")
                                 .font(.subheadline)
                                 .foregroundColor(theme.secondaryTextColor)
 
-                            TextField(i18n.translate("passwordReset.emailPlaceholder"), text: $email)
+                            TextField("Enter your email", text: $email)
                                 .textFieldStyle(GenieTextFieldStyle())
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
@@ -89,7 +88,7 @@ struct PasswordResetView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             }
-                            Text(isLoading ? i18n.translate("passwordReset.processing") : i18n.translate("passwordReset.resetButton"))
+                            Text(isLoading ? String(localized: "Sending...") : String(localized: "Send Reset Link"))
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -102,11 +101,11 @@ struct PasswordResetView: View {
 
                     // Back to Login
                     HStack {
-                        Text(i18n.translate("passwordReset.rememberPassword"))
+                        Text("Remember your password?")
                             .foregroundColor(theme.secondaryTextColor)
 
                         Button(action: onBackToLogin) {
-                            Text(i18n.translate("passwordReset.backToLogin"))
+                            Text("Back to Login")
                                 .fontWeight(.semibold)
                                 .foregroundColor(theme.primaryColor)
                         }
@@ -114,7 +113,7 @@ struct PasswordResetView: View {
                     .font(.subheadline)
 
                     // Support Message
-                    Text(i18n.translate("passwordReset.supportMessage"))
+                    Text("Need help? Contact our support team")
                         .font(.caption)
                         .foregroundColor(theme.secondaryTextColor)
                         .multilineTextAlignment(.center)
@@ -134,7 +133,7 @@ struct PasswordResetView: View {
 
     private func performReset() {
         guard !email.isEmpty else {
-            errorMessage = i18n.translate("passwordReset.invalidEmail")
+            errorMessage = String(localized: "passwordReset.invalidEmail")
             showError = true
             return
         }
@@ -152,7 +151,7 @@ struct PasswordResetView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = i18n.translate("passwordReset.resetRequestFailed")
+                    errorMessage = String(localized: "Unable to send password reset link. Please try again.")
                     showError = true
                 }
             }
@@ -164,5 +163,4 @@ struct PasswordResetView: View {
     PasswordResetView(onBackToLogin: {})
         .environment(AuthService())
         .environment(ThemeManager())
-        .environment(I18nService())
 }

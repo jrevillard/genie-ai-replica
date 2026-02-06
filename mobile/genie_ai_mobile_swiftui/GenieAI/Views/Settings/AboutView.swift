@@ -5,7 +5,6 @@ import SwiftUI
 
 struct AboutView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     var body: some View {
         ScrollView {
@@ -20,14 +19,14 @@ struct AboutView: View {
                         .font(.title)
                         .fontWeight(.bold)
 
-                    Text("\(i18n.translate("about.version")) 1.0.0")
+                    Text("\(String(localized: "Version")) 1.0.0")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
                 }
                 .padding(.top, 40)
 
                 // Description
-                Text(i18n.translate("about.description"))
+                Text("Genie AI is your intelligent assistant for navigating government services and information.")
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundColor(theme.secondaryTextColor)
@@ -35,7 +34,7 @@ struct AboutView: View {
 
                 // Tech Stack
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(i18n.translate("about.techStack"))
+                    Text("Tech Stack")
                         .font(.headline)
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -53,13 +52,13 @@ struct AboutView: View {
                 Spacer()
 
                 // Copyright
-                Text("2024 ITU. \(i18n.translate("about.copyright"))")
+                Text("2024 ITU. \(String(localized: "All rights reserved."))")
                     .font(.caption)
                     .foregroundColor(theme.secondaryTextColor)
                     .padding(.bottom)
             }
         }
-        .navigationTitle(i18n.translate("about.title"))
+        .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -90,5 +89,4 @@ struct TechStackRow: View {
         AboutView()
     }
     .environment(ThemeManager())
-    .environment(I18nService())
 }

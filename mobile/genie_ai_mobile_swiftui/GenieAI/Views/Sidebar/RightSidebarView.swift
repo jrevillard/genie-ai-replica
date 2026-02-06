@@ -5,7 +5,6 @@ import SwiftUI
 
 struct RightSidebarView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     var relatedDocs: [DocumentItem]
     var faqItems: [FAQItem]
@@ -14,21 +13,21 @@ struct RightSidebarView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Header
-                Text(i18n.translate("sidebar.title"))
+                Text("Info & Resources")
                     .font(.headline)
                     .fontWeight(.bold)
                     .padding(.horizontal)
 
                 // Related Documents Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(i18n.translate("sidebar.relatedDocs"))
+                    Text("Related Documents")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(theme.secondaryTextColor)
                         .padding(.horizontal)
 
                     if relatedDocs.isEmpty {
-                        Text(i18n.translate("sidebar.noDocuments"))
+                        Text("No related documents")
                             .font(.caption)
                             .foregroundColor(theme.secondaryTextColor)
                             .padding(.horizontal)
@@ -44,7 +43,7 @@ struct RightSidebarView: View {
 
                 // FAQ Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(i18n.translate("sidebar.faq"))
+                    Text("Frequently Asked Questions")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(theme.secondaryTextColor)
@@ -184,5 +183,4 @@ struct FAQRow: View {
     )
     .frame(width: 300)
     .environment(ThemeManager())
-    .environment(I18nService())
 }

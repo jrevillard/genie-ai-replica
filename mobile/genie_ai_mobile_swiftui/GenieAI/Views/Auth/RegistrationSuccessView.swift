@@ -5,7 +5,6 @@ import SwiftUI
 
 struct RegistrationSuccessView: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let email: String
     var onBackToLogin: () -> Void
@@ -20,18 +19,18 @@ struct RegistrationSuccessView: View {
                 .foregroundColor(theme.successColor)
 
             // Title
-            Text(i18n.translate("register.registrationSuccess"))
+            Text("Registration Successful!")
                 .font(.title)
                 .fontWeight(.bold)
                 .foregroundColor(theme.primaryTextColor)
 
             // Message
             VStack(spacing: 16) {
-                Text(i18n.translate("register.verificationEmailSent", args: ["email": email]))
+                Text(String(localized: "A verification email has been sent to \\(email)"))
                     .font(.body)
                     .multilineTextAlignment(.center)
 
-                Text(i18n.translate("register.checkEmailInstructions"))
+                Text("Please check your email and follow the instructions to verify your account before logging in.")
                     .font(.subheadline)
                     .foregroundColor(theme.secondaryTextColor)
                     .multilineTextAlignment(.center)
@@ -53,7 +52,7 @@ struct RegistrationSuccessView: View {
 
             // Back to Login Button
             Button(action: onBackToLogin) {
-                Text(i18n.translate("register.backToLogin"))
+                Text("Back to Login")
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(theme.primaryColor)
@@ -74,5 +73,4 @@ struct RegistrationSuccessView: View {
         onBackToLogin: {}
     )
     .environment(ThemeManager())
-    .environment(I18nService())
 }

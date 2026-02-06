@@ -26,18 +26,8 @@
 		D09719732F34B30300E0EE08 /* ConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719672F34B30300E0EE08 /* ConfigService.swift */; };
 		D09719742F34B30300E0EE08 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719662F34B30300E0EE08 /* ChatService.swift */; };
 		D09719752F34B30300E0EE08 /* ChatHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719652F34B30300E0EE08 /* ChatHistoryService.swift */; };
-		D09719762F34B30300E0EE08 /* I18nService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719692F34B30300E0EE08 /* I18nService.swift */; };
-		D09719B22F34B34B00E0EE08 /* en.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719A92F34B34B00E0EE08 /* en.swift */; };
-		D09719B32F34B34B00E0EE08 /* ar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719A72F34B34B00E0EE08 /* ar.swift */; };
-		D09719B42F34B34B00E0EE08 /* es.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719AA2F34B34B00E0EE08 /* es.swift */; };
-		D09719B52F34B34B00E0EE08 /* de.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719A82F34B34B00E0EE08 /* de.swift */; };
-		D09719B62F34B34B00E0EE08 /* fr.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719AB2F34B34B00E0EE08 /* fr.swift */; };
-		D09719B72F34B34B00E0EE08 /* pt.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719AD2F34B34B00E0EE08 /* pt.swift */; };
-		D09719B82F34B34B00E0EE08 /* ru.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719AE2F34B34B00E0EE08 /* ru.swift */; };
-		D09719B92F34B34B00E0EE08 /* zh.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719B12F34B34B00E0EE08 /* zh.swift */; };
-		D09719BA2F34B34B00E0EE08 /* sw.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719AF2F34B34B00E0EE08 /* sw.swift */; };
-		D09719BB2F34B34B00E0EE08 /* th.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719B02F34B34B00E0EE08 /* th.swift */; };
-		D09719BC2F34B34B00E0EE08 /* id.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719AC2F34B34B00E0EE08 /* id.swift */; };
+		A0B1C2D3E4F5A6B7C8D9E0F2 /* AppLocaleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */; };
+		A0B1C2D3E4F5A6B7C8D9E0F4 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */; };
 		D09719C02F34B35E00E0EE08 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */; };
 		D09719C12F34B35E00E0EE08 /* String+SHA256.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */; };
 		D09719C22F34B35E00E0EE08 /* View+Conditional.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */; };
@@ -63,21 +53,11 @@
 		D09719662F34B30300E0EE08 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatService.swift; sourceTree = "<group>"; };
 		D09719672F34B30300E0EE08 /* ConfigService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigService.swift; sourceTree = "<group>"; };
 		D09719682F34B30300E0EE08 /* ConnectivityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectivityService.swift; sourceTree = "<group>"; };
-		D09719692F34B30300E0EE08 /* I18nService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = I18nService.swift; sourceTree = "<group>"; };
 		D097196A2F34B30300E0EE08 /* ServiceTreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceTreeService.swift; sourceTree = "<group>"; };
 		D097196B2F34B30300E0EE08 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		D097196C2F34B30300E0EE08 /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
-		D09719A72F34B34B00E0EE08 /* ar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ar.swift; sourceTree = "<group>"; };
-		D09719A82F34B34B00E0EE08 /* de.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = de.swift; sourceTree = "<group>"; };
-		D09719A92F34B34B00E0EE08 /* en.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = en.swift; sourceTree = "<group>"; };
-		D09719AA2F34B34B00E0EE08 /* es.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = es.swift; sourceTree = "<group>"; };
-		D09719AB2F34B34B00E0EE08 /* fr.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = fr.swift; sourceTree = "<group>"; };
-		D09719AC2F34B34B00E0EE08 /* id.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = id.swift; sourceTree = "<group>"; };
-		D09719AD2F34B34B00E0EE08 /* pt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = pt.swift; sourceTree = "<group>"; };
-		D09719AE2F34B34B00E0EE08 /* ru.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ru.swift; sourceTree = "<group>"; };
-		D09719AF2F34B34B00E0EE08 /* sw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = sw.swift; sourceTree = "<group>"; };
-		D09719B02F34B34B00E0EE08 /* th.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = th.swift; sourceTree = "<group>"; };
-		D09719B12F34B34B00E0EE08 /* zh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = zh.swift; sourceTree = "<group>"; };
+		A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocaleService.swift; sourceTree = "<group>"; };
+		A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+SHA256.swift"; sourceTree = "<group>"; };
 		D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Conditional.swift"; sourceTree = "<group>"; };
@@ -121,7 +101,7 @@
 				40000004 /* Models */,
 				40000005 /* Services */,
 				40000006 /* Views */,
-				40000007 /* Localization */,
+				A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */,
 				40000008 /* Extensions */,
 				40000009 /* Resources */,
 			);
@@ -158,7 +138,7 @@
 				D09719662F34B30300E0EE08 /* ChatService.swift */,
 				D09719672F34B30300E0EE08 /* ConfigService.swift */,
 				D09719682F34B30300E0EE08 /* ConnectivityService.swift */,
-				D09719692F34B30300E0EE08 /* I18nService.swift */,
+				A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */,
 				D097196A2F34B30300E0EE08 /* ServiceTreeService.swift */,
 				D097196B2F34B30300E0EE08 /* ThemeManager.swift */,
 				D097196C2F34B30300E0EE08 /* UserService.swift */,
@@ -178,24 +158,6 @@
 				D09719912F34B31600E0EE08 /* Sidebar */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		40000007 /* Localization */ = {
-			isa = PBXGroup;
-			children = (
-				D09719A72F34B34B00E0EE08 /* ar.swift */,
-				D09719A82F34B34B00E0EE08 /* de.swift */,
-				D09719A92F34B34B00E0EE08 /* en.swift */,
-				D09719AA2F34B34B00E0EE08 /* es.swift */,
-				D09719AB2F34B34B00E0EE08 /* fr.swift */,
-				D09719AC2F34B34B00E0EE08 /* id.swift */,
-				D09719AD2F34B34B00E0EE08 /* pt.swift */,
-				D09719AE2F34B34B00E0EE08 /* ru.swift */,
-				D09719AF2F34B34B00E0EE08 /* sw.swift */,
-				D09719B02F34B34B00E0EE08 /* th.swift */,
-				D09719B12F34B34B00E0EE08 /* zh.swift */,
-			);
-			path = Localization;
 			sourceTree = "<group>";
 		};
 		40000008 /* Extensions */ = {
@@ -286,6 +248,7 @@
 			files = (
 				00000003 /* Assets.xcassets in Resources */,
 				00000004 /* genie-ai-config.json in Resources */,
+				A0B1C2D3E4F5A6B7C8D9E0F4 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -310,18 +273,7 @@
 				D09719C12F34B35E00E0EE08 /* String+SHA256.swift in Sources */,
 				D09719C22F34B35E00E0EE08 /* View+Conditional.swift in Sources */,
 				D09719752F34B30300E0EE08 /* ChatHistoryService.swift in Sources */,
-				D09719B22F34B34B00E0EE08 /* en.swift in Sources */,
-				D09719B32F34B34B00E0EE08 /* ar.swift in Sources */,
-				D09719B42F34B34B00E0EE08 /* es.swift in Sources */,
-				D09719B52F34B34B00E0EE08 /* de.swift in Sources */,
-				D09719B62F34B34B00E0EE08 /* fr.swift in Sources */,
-				D09719B72F34B34B00E0EE08 /* pt.swift in Sources */,
-				D09719B82F34B34B00E0EE08 /* ru.swift in Sources */,
-				D09719B92F34B34B00E0EE08 /* zh.swift in Sources */,
-				D09719BA2F34B34B00E0EE08 /* sw.swift in Sources */,
-				D09719BB2F34B34B00E0EE08 /* th.swift in Sources */,
-				D09719BC2F34B34B00E0EE08 /* id.swift in Sources */,
-				D09719762F34B30300E0EE08 /* I18nService.swift in Sources */,
+				A0B1C2D3E4F5A6B7C8D9E0F2 /* AppLocaleService.swift in Sources */,
 				D097195D2F34B2E600E0EE08 /* Conversation.swift in Sources */,
 				D097195E2F34B2E600E0EE08 /* Folder.swift in Sources */,
 				D097195F2F34B2E600E0EE08 /* Message.swift in Sources */,

@@ -6,7 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
+    @Environment(AppLocaleService.self) private var appLocale
     @Environment(ConnectivityService.self) private var connectivity
     @Environment(\.dismiss) private var dismiss
 
@@ -29,14 +29,14 @@ struct SettingsView: View {
                 userIdentitySection
 
                 // Display Section
-                Section(header: Text(i18n.translate("settings.display"))) {
+                Section(header: Text("Display")) {
                     // Language
                     NavigationLink {
                         LanguageSelector()
                     } label: {
                         HStack {
                             Image(systemName: "globe")
-                            Text(i18n.translate("settings.displayLanguage"))
+                            Text("Display Language")
                             Spacer()
                             Text(currentLanguageName)
                                 .foregroundColor(theme.secondaryTextColor)
@@ -54,7 +54,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "paintbrush")
-                            Text(i18n.translate("settings.theme"))
+                            Text("Theme")
                         }
                     }
 
@@ -62,7 +62,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "textformat.size")
-                            Text(i18n.translate("settings.fontSize"))
+                            Text("Font Size")
                             Spacer()
                             Text("\(Int(fontSize))%")
                                 .foregroundColor(theme.secondaryTextColor)
@@ -74,11 +74,11 @@ struct SettingsView: View {
                 }
 
                 // Notifications Section
-                Section(header: Text(i18n.translate("settings.notifications"))) {
+                Section(header: Text("Notifications")) {
                     Toggle(isOn: $emailUpdates) {
                         HStack {
                             Image(systemName: "envelope")
-                            Text(i18n.translate("settings.emailUpdates"))
+                            Text("Email updates")
                         }
                     }
                     .disabled(!connectivity.isOnline)
@@ -86,18 +86,18 @@ struct SettingsView: View {
                     Toggle(isOn: $soundNotifications) {
                         HStack {
                             Image(systemName: "speaker.wave.2")
-                            Text(i18n.translate("settings.soundNotifications"))
+                            Text("Sound notifications")
                         }
                     }
                     .disabled(!connectivity.isOnline)
                 }
 
                 // Account Section
-                Section(header: Text(i18n.translate("settings.accountManagement"))) {
+                Section(header: Text("Account Management")) {
                     // Email with Edit
                     HStack {
                         Image(systemName: "envelope")
-                        Text(i18n.translate("settings.emailAddress"))
+                        Text("settings.emailAddress")
                         Spacer()
                         Text(authService.currentUser?.email ?? "")
                             .foregroundColor(theme.secondaryTextColor)
@@ -118,7 +118,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "key")
-                            Text(i18n.translate("settings.changePassword"))
+                            Text("Change Password")
                         }
                     }
                     .disabled(!connectivity.isOnline)
@@ -129,7 +129,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "arrow.counterclockwise")
-                            Text(i18n.translate("settings.resetUserData"))
+                            Text("Reset User Data")
                         }
                     }
                     .disabled(!connectivity.isOnline)
@@ -140,7 +140,7 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "trash")
-                            Text(i18n.translate("settings.deleteAccount"))
+                            Text("Delete Account")
                         }
                     }
                     .disabled(!connectivity.isOnline)
@@ -155,7 +155,7 @@ struct SettingsView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
                             }
-                            Text(i18n.translate("settings.saveSettings"))
+                            Text("Save Settings")
                                 .fontWeight(.semibold)
                             Spacer()
                         }
@@ -170,16 +170,16 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "info.circle")
-                            Text(i18n.translate("about.title"))
+                            Text("About")
                         }
                     }
                 }
             }
-            .navigationTitle(i18n.translate("settings.title"))
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(i18n.translate("settings.close")) {
+                    Button("Close") {
                         dismiss()
                     }
                 }
@@ -187,13 +187,13 @@ struct SettingsView: View {
             .onAppear {
                 fontSize = theme.fontSize
             }
-            .alert(i18n.translate("settings.resetUserDataTitle"), isPresented: $showResetDataAlert) {
-                Button(i18n.translate("common.cancel"), role: .cancel) {}
-                Button(i18n.translate("settings.reset"), role: .destructive) {
+            .alert("Reset User Data", isPresented: $showResetDataAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Reset", role: .destructive) {
                     resetUserData()
                 }
             } message: {
-                Text(i18n.translate("settings.confirmResetUserData"))
+                Text("Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.")
             }
             .sheet(isPresented: $showDeleteAccountSheet) {
                 DeleteAccountSheet(onDismiss: { showDeleteAccountSheet = false })
@@ -240,7 +240,7 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
-                    Text(authService.currentUser?.role?.capitalized ?? i18n.translate("settings.standardAccount"))
+                    Text(authService.currentUser?.role?.capitalized ?? String(localized: "Standard Account"))
                         .font(.caption)
                         .foregroundColor(theme.primaryColor)
                 }
@@ -263,7 +263,7 @@ struct SettingsView: View {
     }
 
     private var currentLanguageName: String {
-        i18n.supportedLanguages.first { $0.code == i18n.currentLocale }?.name ?? "English"
+        appLocale.supportedLanguages.first { $0.code == appLocale.currentLocale }?.name ?? "English"
     }
 
     // MARK: - Actions
@@ -284,7 +284,7 @@ struct SettingsView: View {
                         "emailUpdates": emailUpdates,
                         "soundNotifications": soundNotifications,
                         "theme": theme.currentTheme.rawValue,
-                        "language": i18n.currentLocale
+                        "language": appLocale.currentLocale
                     ])
                     await MainActor.run {
                         isSaving = false
@@ -326,7 +326,6 @@ struct SettingsView: View {
 
 struct PasswordResetOverlay: View {
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let prefilledEmail: String
     var onDismiss: () -> Void
@@ -355,7 +354,6 @@ struct PasswordResetOverlay: View {
 struct EmailEditSheet: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     let currentEmail: String
     var onDismiss: () -> Void
@@ -369,18 +367,18 @@ struct EmailEditSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text(i18n.translate("settings.changeEmail"))
+                Text("Change Email")
                     .font(.title2)
                     .fontWeight(.bold)
 
-                Text(i18n.translate("settings.changeEmailWarning"))
+                Text("You will be logged out after changing your email")
                     .font(.subheadline)
                     .foregroundColor(theme.secondaryTextColor)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("settings.newEmail"))
+                    Text("New Email Address")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
@@ -392,11 +390,11 @@ struct EmailEditSheet: View {
                 .padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("settings.enterPasswordConfirm"))
+                    Text("Enter your password to confirm:")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
-                    SecureField(i18n.translate("settings.currentPasswordPlaceholder"), text: $password)
+                    SecureField(String(localized: "Your current password"), text: $password)
                         .textFieldStyle(GenieTextFieldStyle())
                 }
                 .padding(.horizontal)
@@ -412,7 +410,7 @@ struct EmailEditSheet: View {
 
                 HStack(spacing: 16) {
                     Button(action: onDismiss) {
-                        Text(i18n.translate("common.cancel"))
+                        Text("Cancel")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.gray.opacity(0.2))
@@ -426,7 +424,7 @@ struct EmailEditSheet: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             }
-                            Text(i18n.translate("settings.saveEmail"))
+                            Text("Update Email")
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -474,7 +472,7 @@ struct EmailEditSheet: View {
             } catch {
                 await MainActor.run {
                     isSubmitting = false
-                    errorMessage = i18n.translate("settings.failedToUpdateEmail")
+                    errorMessage = String(localized: "Failed to update email. Please try again.")
                     showError = true
                 }
             }
@@ -487,7 +485,6 @@ struct EmailEditSheet: View {
 struct DeleteAccountSheet: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
-    @Environment(I18nService.self) private var i18n
 
     @State private var password = ""
     @State private var reason = ""
@@ -505,10 +502,10 @@ struct DeleteAccountSheet: View {
                         .font(.largeTitle)
                         .foregroundColor(theme.warningColor)
 
-                    Text(i18n.translate("settings.confirmAccountDeletion"))
+                    Text("Confirm Account Deletion")
                         .font(.headline)
 
-                    Text(i18n.translate("settings.accountDeletionWarning"))
+                    Text("Warning: This action is permanent and cannot be undone. All your data will be permanently deleted.")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
                         .multilineTextAlignment(.center)
@@ -517,11 +514,11 @@ struct DeleteAccountSheet: View {
 
                 // Reason
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("settings.deletionReason"))
+                    Text("Reason for deletion (optional):")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
-                    TextField(i18n.translate("settings.deletionReasonPlaceholder"), text: $reason, axis: .vertical)
+                    TextField("What made you decide to delete your account?", text: $reason, axis: .vertical)
                         .lineLimit(3)
                         .textFieldStyle(GenieTextFieldStyle())
                 }
@@ -529,11 +526,11 @@ struct DeleteAccountSheet: View {
 
                 // Password
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(i18n.translate("settings.enterPasswordConfirm"))
+                    Text("Enter your password to confirm:")
                         .font(.subheadline)
                         .foregroundColor(theme.secondaryTextColor)
 
-                    SecureField(i18n.translate("settings.currentPasswordPlaceholder"), text: $password)
+                    SecureField(String(localized: "Your current password"), text: $password)
                         .textFieldStyle(GenieTextFieldStyle())
                 }
                 .padding(.horizontal)
@@ -547,7 +544,7 @@ struct DeleteAccountSheet: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         }
-                        Text(isDeleting ? i18n.translate("settings.deleting") : i18n.translate("settings.permanentlyDeleteAccount"))
+                        Text(isDeleting ? String(localized: "Deleting...") : String(localized: "Delete Account"))
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -559,11 +556,11 @@ struct DeleteAccountSheet: View {
                 .padding(.horizontal)
                 .padding(.bottom)
             }
-            .navigationTitle(i18n.translate("settings.deleteAccountTitle"))
+            .navigationTitle("Delete Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(i18n.translate("common.cancel"), action: onDismiss)
+                    Button("Cancel", action: onDismiss)
                 }
             }
         }
@@ -594,6 +591,6 @@ struct DeleteAccountSheet: View {
     SettingsView()
         .environment(AuthService())
         .environment(ThemeManager())
-        .environment(I18nService())
+        .environment(AppLocaleService.shared)
         .environment(ConnectivityService())
 }

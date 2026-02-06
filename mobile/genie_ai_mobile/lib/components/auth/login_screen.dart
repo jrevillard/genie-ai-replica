@@ -82,6 +82,11 @@ class _LoginScreenState extends State<LoginScreen> {
           _usernameController.text, _passwordController.text);
 
       widget.onLoginSuccess(user);
+
+      // Pop all routes and return to home after successful login
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     } catch (e) {
       setState(() => _error = tr('login.loginError'));
     } finally {

@@ -23,7 +23,7 @@ xcodebuild clean -project GenieAI.xcodeproj -scheme GenieAI
 ### State Management (iOS 17+)
 Uses `@Observable` macro for all service classes (replaces ObservableObject):
 - **ThemeManager** - Theme switching, loads config from `genie-ai-config.json`
-- **AppLocaleService** - Runtime language switching, locale/bundle management (String Catalogs via `Localizable.xcstrings`)
+- **AppLocaleService** - Observes iOS per-app language setting, locale/bundle management (String Catalogs via `Localizable.xcstrings`)
 - **ConnectivityService** - Network monitoring with NWPathMonitor
 - **AuthService** - Authentication with Keychain token storage
 - **APIService** - Actor-based HTTP client with async/await
@@ -81,6 +81,8 @@ GenieAI/
 ## Translations
 
 Uses Apple String Catalogs (`Localizable.xcstrings`) with 11 languages.
+
+**Language setting**: Managed via the iOS per-app language setting (Settings > Apps > GenieAI > Language), not an in-app picker. `AppLocaleService` reads from `Bundle.main.preferredLocalizations`. Both Settings and Login/Register screens show a button that opens the app's iOS Settings page via `AppLocaleService.openLanguageSettings()`.
 
 ```swift
 // In SwiftUI views — auto-localized via .environment(\.locale, appLocale.locale)

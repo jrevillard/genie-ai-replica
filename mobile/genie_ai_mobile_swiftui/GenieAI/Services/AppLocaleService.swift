@@ -1,5 +1,5 @@
 // AppLocaleService.swift
-// Minimal locale management for runtime language switching with String Catalogs
+// Locale management that observes the iOS per-app language setting (Settings > Apps > GenieAI > Language)
 
 import SwiftUI
 
@@ -7,25 +7,14 @@ import SwiftUI
 class AppLocaleService {
     static let shared = AppLocaleService()
 
-    var currentLocale: String = "en" {
-        didSet {
-            UserDefaults.standard.set(currentLocale, forKey: "app_locale")
-        }
-    }
+    /// Current language code, derived from the iOS per-app language setting
+    private(set) var currentLocale: String
 
-    let supportedLanguages: [(code: String, name: String)] = [
-        ("en", "English"),
-        ("ar", "Arabic"),
-        ("de", "German"),
-        ("es", "Spanish"),
-        ("fr", "French"),
-        ("id", "Indonesian"),
-        ("sw", "Kiswahili"),
-        ("pt", "Portuguese"),
-        ("zh", "Chinese"),
-        ("ru", "Russian"),
-        ("th", "Thai")
-    ]
+    /// Display name for the current language (e.g. "English", "Français"), localized to itself
+    var currentLanguageName: String {
+        let id = Locale(identifier: currentLocale)
+        return id.localizedString(forLanguageCode: currentLocale)?.localizedCapitalized ?? currentLocale
+    }
 
     var isRtl: Bool {
         currentLocale == "ar" || currentLocale == "he" || currentLocale == "fa"
@@ -46,18 +35,14 @@ class AppLocaleService {
     }
 
     init() {
-        if let saved = UserDefaults.standard.string(forKey: "app_locale") {
-            currentLocale = saved
-        }
+        // Read the system per-app language preference
+        currentLocale = Bundle.main.preferredLocalizations.first ?? "en"
     }
 
-    func changeLanguage(_ languageCode: String) {
-        guard supportedLanguages.contains(where: { $0.code == languageCode }) else {
-            return
+    /// Opens the app's page in iOS Settings where the user can change the language
+    static func openLanguageSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
         }
-        guard currentLocale != languageCode else {
-            return
-        }
-        currentLocale = languageCode
     }
 }

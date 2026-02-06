@@ -216,31 +216,21 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Compact Language Selector (inline for login/register)
+// MARK: - Compact Language Selector (opens iOS per-app language setting)
 
 struct LanguageSelectorCompact: View {
     @Environment(ThemeManager.self) private var theme
     @Environment(AppLocaleService.self) private var appLocale
 
     var body: some View {
-        Menu {
-            ForEach(appLocale.supportedLanguages, id: \.code) { language in
-                Button {
-                    appLocale.changeLanguage(language.code)
-                } label: {
-                    HStack {
-                        Text(language.name)
-                        if appLocale.currentLocale == language.code {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
+        Button {
+            AppLocaleService.openLanguageSettings()
         } label: {
             HStack {
                 Image(systemName: "globe")
-                Text(appLocale.supportedLanguages.first { $0.code == appLocale.currentLocale }?.name ?? "English")
-                Image(systemName: "chevron.down")
+                Text(appLocale.currentLanguageName)
+                Image(systemName: "arrow.up.forward.square")
+                    .font(.caption)
             }
             .font(.subheadline)
             .foregroundColor(theme.secondaryTextColor)

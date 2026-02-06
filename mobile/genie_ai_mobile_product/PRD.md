@@ -348,6 +348,8 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - 11 supported languages (see Section 8)
 - Real-time UI language switch
 
+**Platform-specific:** SwiftUI uses the iOS per-app language setting (Settings > Apps > GenieAI > Language) instead of an in-app picker. The Settings screen and Login/Register screens show a button that opens the app's iOS Settings page.
+
 ### 5.3 Notification Settings
 - Email updates toggle
 - Sound notifications toggle
@@ -431,6 +433,10 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - RTL layout support for Arabic
 - Locale persistence
 
+**Platform-specific language UX:**
+- **Flutter**: In-app language selector dropdown with real-time switching
+- **SwiftUI**: Uses iOS per-app language setting (Settings > Apps > GenieAI > Language); in-app UI provides a button that opens the system settings page
+
 **Cross-Platform Localization Consistency:**
 
 All platforms must have identical localized strings for every supported language. When a string is added, modified, or removed on one platform, the same change must be applied to all other platforms.
@@ -513,11 +519,12 @@ All platforms must have identical localized strings for every supported language
 
 ### 10.1 Language Selector
 <!-- Flutter: lib/components/shared/language_selector.dart -->
-<!-- SwiftUI: GenieAI/Views/Shared/LanguageSelector.swift -->
+<!-- SwiftUI: (uses iOS per-app language setting; button in GenieAI/Views/Auth/LoginView.swift LanguageSelectorCompact, GenieAI/Views/Settings/SettingsView.swift) -->
 
 - Dropdown with flag icons
 - Language name display
 - Real-time language change
+- **SwiftUI**: Opens iOS Settings instead of in-app picker
 
 ### 10.2 Confirm Dialog
 <!-- Flutter: lib/components/shared/confirm_dialog.dart -->

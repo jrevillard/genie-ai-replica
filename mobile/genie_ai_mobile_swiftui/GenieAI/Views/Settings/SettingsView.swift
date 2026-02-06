@@ -30,18 +30,27 @@ struct SettingsView: View {
 
                 // Display Section
                 Section(header: Text("Display")) {
-                    // Language
-                    NavigationLink {
-                        LanguageSelector()
+                    // Language — opens iOS per-app language setting
+                    Button {
+                        AppLocaleService.openLanguageSettings()
                     } label: {
                         HStack {
                             Image(systemName: "globe")
-                            Text("Display Language")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Display Language")
+                                Text("Managed in iOS Settings")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.secondaryTextColor)
+                            }
                             Spacer()
                             Text(currentLanguageName)
                                 .foregroundColor(theme.secondaryTextColor)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(theme.secondaryTextColor)
                         }
                     }
+                    .foregroundColor(theme.primaryTextColor)
 
                     // Theme
                     Picker(selection: Binding(
@@ -263,7 +272,7 @@ struct SettingsView: View {
     }
 
     private var currentLanguageName: String {
-        appLocale.supportedLanguages.first { $0.code == appLocale.currentLocale }?.name ?? "English"
+        appLocale.currentLanguageName
     }
 
     // MARK: - Actions

@@ -11,6 +11,8 @@
 		00000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000002 /* ContentView.swift */; };
 		00000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10000003 /* Assets.xcassets */; };
 		00000004 /* genie-ai-config.json in Resources */ = {isa = PBXBuildFile; fileRef = 10000004 /* genie-ai-config.json */; };
+		A0B1C2D3E4F5A6B7C8D9E0F2 /* AppLocaleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */; };
+		A0B1C2D3E4F5A6B7C8D9E0F4 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */; };
 		D097195D2F34B2E600E0EE08 /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719572F34B2E600E0EE08 /* Conversation.swift */; };
 		D097195E2F34B2E600E0EE08 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719582F34B2E600E0EE08 /* Folder.swift */; };
 		D097195F2F34B2E600E0EE08 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719592F34B2E600E0EE08 /* Message.swift */; };
@@ -26,8 +28,6 @@
 		D09719732F34B30300E0EE08 /* ConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719672F34B30300E0EE08 /* ConfigService.swift */; };
 		D09719742F34B30300E0EE08 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719662F34B30300E0EE08 /* ChatService.swift */; };
 		D09719752F34B30300E0EE08 /* ChatHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719652F34B30300E0EE08 /* ChatHistoryService.swift */; };
-		A0B1C2D3E4F5A6B7C8D9E0F2 /* AppLocaleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */; };
-		A0B1C2D3E4F5A6B7C8D9E0F4 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */; };
 		D09719C02F34B35E00E0EE08 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */; };
 		D09719C12F34B35E00E0EE08 /* String+SHA256.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */; };
 		D09719C22F34B35E00E0EE08 /* View+Conditional.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */; };
@@ -42,6 +42,8 @@
 		10000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		10000004 /* genie-ai-config.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "genie-ai-config.json"; sourceTree = "<group>"; };
 		20000001 /* GenieAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GenieAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocaleService.swift; sourceTree = "<group>"; };
+		A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D09719572F34B2E600E0EE08 /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		D09719582F34B2E600E0EE08 /* Folder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
 		D09719592F34B2E600E0EE08 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
@@ -57,8 +59,6 @@
 		D097196A2F34B30300E0EE08 /* ServiceTreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceTreeService.swift; sourceTree = "<group>"; };
 		D097196B2F34B30300E0EE08 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		D097196C2F34B30300E0EE08 /* UserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserService.swift; sourceTree = "<group>"; };
-		A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocaleService.swift; sourceTree = "<group>"; };
-		A0B1C2D3E4F5A6B7C8D9E0F3 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D09719BD2F34B35E00E0EE08 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		D09719BE2F34B35E00E0EE08 /* String+SHA256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+SHA256.swift"; sourceTree = "<group>"; };
 		D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Conditional.swift"; sourceTree = "<group>"; };
@@ -233,6 +233,16 @@
 			knownRegions = (
 				en,
 				Base,
+				ar,
+				de,
+				es,
+				fr,
+				id,
+				sw,
+				pt,
+				zh,
+				ru,
+				th,
 			);
 			mainGroup = 40000001;
 			productRefGroup = 40000003 /* Products */;

@@ -101,7 +101,8 @@ struct ChatView: View {
                         onSend: sendMessage,
                         onNewChat: { handleNewChat() },
                         onSave: { showSaveDialog = true },
-                        onExportPDF: { showExportPDFSheet = true }
+                        onExportPDF: { showExportPDFSheet = true },
+                        onShareWhatsApp: { shareToWhatsApp() }
                     )
                 }
 
@@ -531,6 +532,29 @@ struct ChatView: View {
         }
     }
 
+    private func shareToWhatsApp() {
+        guard !messages.isEmpty else { return }
+
+        let title = conversationTitle.isEmpty
+            ? i18n.translate("chatbot.defaultConversationTitle")
+            : conversationTitle
+
+        var text = "Conversation with NAAT (\(title)):\n\n"
+        for msg in messages {
+            let role = msg.role == .user ? "Me" : "NAAT"
+            text += "*\(role)*: \(msg.content)\n\n"
+        }
+
+        let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+
+        // Try native WhatsApp app first, fall back to wa.me
+        if let appURL = URL(string: "whatsapp://send?text=\(encoded)"),
+           UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = URL(string: "https://wa.me/?text=\(encoded)") {
+            UIApplication.shared.open(webURL)
+        }
+    }
 }
 
 // MARK: - Save Conversation Sheet

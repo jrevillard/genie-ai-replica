@@ -111,6 +111,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Service/category context integration
 - Related documents display in responses
 - PDF export option for conversation
+- Share conversation to WhatsApp (native app with web fallback)
 - Message timestamp display
 
 **API:** `POST /queries`

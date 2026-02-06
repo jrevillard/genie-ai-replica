@@ -13,6 +13,7 @@ struct ChatInputView: View {
     var onNewChat: (() -> Void)?
     var onSave: (() -> Void)?
     var onExportPDF: (() -> Void)?
+    var onShareWhatsApp: (() -> Void)?
 
     @FocusState private var isFocused: Bool
 
@@ -45,6 +46,15 @@ struct ChatInputView: View {
                         SwiftUI.Label(i18n.translate("chatbot.exportPDF"), systemImage: "doc.richtext")
                             .font(.caption)
                             .foregroundColor(isLoading ? .gray : theme.primaryColor)
+                    }
+                    .disabled(isLoading)
+                }
+
+                if let onShareWhatsApp = onShareWhatsApp {
+                    Button(action: onShareWhatsApp) {
+                        SwiftUI.Label(i18n.translate("chatbot.shareWhatsApp"), systemImage: "bubble.left.fill")
+                            .font(.caption)
+                            .foregroundColor(isLoading ? .gray : Color(red: 37/255, green: 211/255, blue: 102/255))
                     }
                     .disabled(isLoading)
                 }
@@ -96,7 +106,8 @@ struct ChatInputView: View {
             onSend: {},
             onNewChat: {},
             onSave: {},
-            onExportPDF: {}
+            onExportPDF: {},
+            onShareWhatsApp: {}
         )
     }
     .environment(ThemeManager())

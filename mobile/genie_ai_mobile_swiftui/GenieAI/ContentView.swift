@@ -135,7 +135,7 @@ struct ContentView: View {
                         Button {
                             showServicesSheet = true
                         } label: {
-                            Image(systemName: "square.grid.2x2")
+                            Image(systemName: "books.vertical")
                         }
                         .hapticOnTap(theme: theme)
                         .accessibilityLabel("Knowledge Areas")

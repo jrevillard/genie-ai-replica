@@ -33,6 +33,7 @@
 		D09719C22F34B35E00E0EE08 /* View+Conditional.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */; };
 		D09719D02F34B40000E0EE08 /* PasswordValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */; };
 		D09719D22F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09719D12F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift */; };
+		D0971DD62F366F8B00E0EE08 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = D0971DD52F366F8B00E0EE08 /* AppIcon.icon */; };
 		D097GLASS2F34B35E00E0EE09 /* View+GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */; };
 		F0A1B2C3D4E5F6A7B8C9D0E1 /* FAQ.md in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */; };
 /* End PBXBuildFile section */
@@ -65,6 +66,7 @@
 		D09719BF2F34B35E00E0EE08 /* View+Conditional.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Conditional.swift"; sourceTree = "<group>"; };
 		D09719CF2F34B40000E0EE08 /* PasswordValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordValidator.swift; sourceTree = "<group>"; };
 		D09719D12F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JSONDecoder+FlexibleDate.swift"; sourceTree = "<group>"; };
+		D0971DD52F366F8B00E0EE08 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+GlassStyle.swift"; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FAQ.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -100,6 +102,7 @@
 		40000002 /* GenieAI */ = {
 			isa = PBXGroup;
 			children = (
+				D0971DD52F366F8B00E0EE08 /* AppIcon.icon */,
 				10000001 /* GenieAIApp.swift */,
 				10000002 /* ContentView.swift */,
 				40000004 /* Models */,
@@ -266,6 +269,7 @@
 				00000004 /* genie-ai-config.json in Resources */,
 				A0B1C2D3E4F5A6B7C8D9E0F4 /* Localizable.xcstrings in Resources */,
 				F0A1B2C3D4E5F6A7B8C9D0E1 /* FAQ.md in Resources */,
+				D0971DD62F366F8B00E0EE08 /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

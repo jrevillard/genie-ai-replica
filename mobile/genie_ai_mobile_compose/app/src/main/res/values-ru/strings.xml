@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">Имя пользователя</string>
+    <string name="login_password">Пароль</string>
+    <string name="login_button">Войти</string>
+    <string name="login_logging_in">Вход…</string>
+    <string name="login_remember_me">Запомнить меня</string>
+    <string name="login_forgot_password">Забыли пароль?</string>
+    <string name="login_no_account">Нет аккаунта?</string>
+    <string name="login_create_account">Создать аккаунт</string>
+    <string name="login_terms">Входя в систему, вы соглашаетесь с нашими Условиями использования и Политикой конфиденциальности</string>
+    <string name="login_error">Ошибка входа. Пожалуйста, проверьте ваши учётные данные.</string>
+    <string name="login_fields_required">Имя пользователя и пароль обязательны</string>
+
+    <!-- Register -->
+    <string name="register_create_account">Создать новый аккаунт</string>
+    <string name="register_username">Имя пользователя</string>
+    <string name="register_username_placeholder">Введите имя пользователя</string>
+    <string name="register_email">Электронная почта</string>
+    <string name="register_email_placeholder">Введите вашу электронную почту</string>
+    <string name="register_password">Пароль</string>
+    <string name="register_password_placeholder">Создайте пароль</string>
+    <string name="register_confirm_password">Подтвердите пароль</string>
+    <string name="register_confirm_password_placeholder">Подтвердите ваш пароль</string>
+    <string name="register_accept_terms">Я принимаю Условия использования</string>
+    <string name="register_button">Создать аккаунт</string>
+    <string name="register_processing">Обработка…</string>
+    <string name="register_already_have_account">Уже есть аккаунт?</string>
+    <string name="register_login_now">Войти</string>
+    <string name="register_passwords_mismatch">Пароли не совпадают</string>
+    <string name="register_success_title">Регистрация успешна!</string>
+    <string name="register_verification_sent">Письмо для подтверждения отправлено на %1$s</string>
+    <string name="register_check_email_instructions">Пожалуйста, проверьте вашу электронную почту и следуйте инструкциям для подтверждения аккаунта перед входом.</string>
+    <string name="register_back_to_login">Вернуться к входу</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">Сброс пароля</string>
+    <string name="password_reset_description">Введите ваш адрес электронной почты, и мы отправим вам инструкции по сбросу пароля.</string>
+    <string name="password_reset_email_label">Адрес электронной почты</string>
+    <string name="password_reset_email_placeholder">Введите вашу электронную почту</string>
+    <string name="password_reset_button">Отправить ссылку для сброса</string>
+    <string name="password_reset_sending">Отправка…</string>
+    <string name="password_reset_back_to_login">Вернуться к входу</string>
+    <string name="password_reset_success">Ссылка для сброса пароля отправлена на вашу электронную почту</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">Создать новый пароль</string>
+    <string name="password_reset_confirm_instructions">Введите код сброса из электронного письма и создайте новый пароль.</string>
+    <string name="password_reset_confirm_token_label">Код сброса</string>
+    <string name="password_reset_confirm_token_placeholder">Введите код сброса</string>
+    <string name="password_reset_confirm_new_password">Новый пароль</string>
+    <string name="password_reset_confirm_new_password_placeholder">Создайте новый пароль</string>
+    <string name="password_reset_confirm_confirm_password">Подтвердите новый пароль</string>
+    <string name="password_reset_confirm_requirements">Пароль должен содержать не менее 8 символов, включая минимум 1 цифру, 1 заглавную букву и 1 специальный символ</string>
+    <string name="password_reset_confirm_button">Сбросить пароль</string>
+    <string name="password_reset_confirm_processing">Сброс…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">Мой профиль</string>
+    <string name="nav_settings">Настройки</string>
+    <string name="nav_logout">Выйти</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">Области знаний</string>
+    <string name="sidebar_chat_history">История чатов</string>
+    <string name="sidebar_search_placeholder">Поиск областей знаний…</string>
+    <string name="sidebar_search_conversations">Поиск бесед…</string>
+    <string name="sidebar_title">Информация и ресурсы</string>
+    <string name="sidebar_related_docs">Связанные документы</string>
+    <string name="sidebar_no_documents">Нет связанных документов</string>
+    <string name="sidebar_faq">Часто задаваемые вопросы</string>
+    <string name="sidebar_no_chats">Нет недавних чатов</string>
+    <string name="sidebar_tab_all">Все чаты</string>
+    <string name="sidebar_tab_folders">Папки</string>
+    <string name="sidebar_tab_starred">Избранные</string>
+    <string name="sidebar_tab_archived">Архивные</string>
+    <string name="sidebar_messages">сообщений</string>
+    <string name="sidebar_star">В избранное</string>
+    <string name="sidebar_unstar">Из избранного</string>
+    <string name="sidebar_archive">Архивировать</string>
+    <string name="sidebar_delete_chat">Удалить чат</string>
+    <string name="sidebar_rename_chat">Переименовать чат</string>
+    <string name="sidebar_move_chat">Переместить чат</string>
+    <string name="sidebar_create_folder">Создать папку</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">Введите ваш вопрос здесь…</string>
+    <string name="chatbot_send_button">Отправить</string>
+    <string name="chatbot_welcome">Добро пожаловать в Genie AI</string>
+    <string name="chatbot_what_can_i_help">Чем я могу вам помочь сегодня?</string>
+    <string name="chatbot_new_chat">Новый чат</string>
+    <string name="chatbot_thinking">Genie думает…</string>
+    <string name="chatbot_context_prefix">Контекст:</string>
+    <string name="chatbot_remove_context">Удалить контекст</string>
+    <string name="chatbot_save_chat">Сохранить чат</string>
+    <string name="chatbot_export_chat">Экспортировать чат</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">Просто пообщаться</string>
+    <string name="quickhelp_apply_for_id">Получить удостоверение</string>
+    <string name="quickhelp_pay_taxes">Уплатить налоги</string>
+    <string name="quickhelp_start_business">Открыть бизнес</string>
+    <string name="quickhelp_find_healthcare">Здравоохранение</string>
+    <string name="quickhelp_education_services">Образование</string>
+    <string name="quickhelp_transport_licenses">Транспорт</string>
+    <string name="quickhelp_housing_programs">Жильё</string>
+    <string name="quickhelp_find_jobs">Найти работу</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">Помогите нам стать лучше</string>
+    <string name="feedback_note">Ваш отзыв будет использован для улучшения чат-бота и повышения качества ответов со временем.</string>
+    <string name="feedback_comment_placeholder">Дополнительные комментарии…</string>
+    <string name="feedback_submit">Отправить</string>
+    <string name="feedback_rating_1">Бесполезно</string>
+    <string name="feedback_rating_2">Немного полезно</string>
+    <string name="feedback_rating_3">Умеренно полезно</string>
+    <string name="feedback_rating_4">Очень полезно</string>
+    <string name="feedback_rating_5">Меняет жизнь</string>
+    <string name="feedback_thank_you">Спасибо за ваш отзыв!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_display">Отображение</string>
+    <string name="settings_display_language">Язык интерфейса</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_theme_system">Системная</string>
+    <string name="settings_font_size">Размер шрифта</string>
+    <string name="settings_animations">Анимации</string>
+    <string name="settings_haptics">Тактильная обратная связь</string>
+    <string name="settings_notifications">Уведомления</string>
+    <string name="settings_email_updates">Обновления по электронной почте</string>
+    <string name="settings_sound_notifications">Звуковые уведомления</string>
+    <string name="settings_account_management">Управление аккаунтом</string>
+    <string name="settings_email_address">Адрес электронной почты</string>
+    <string name="settings_password">Пароль</string>
+    <string name="settings_change_password">Изменить пароль</string>
+    <string name="settings_edit">Редактировать</string>
+    <string name="settings_reset_user_data">Сбросить данные пользователя</string>
+    <string name="settings_reset_user_data_desc">Это удалит все данные вашего профиля и историю чатов.</string>
+    <string name="settings_delete_account">Удалить аккаунт</string>
+    <string name="settings_delete_account_desc">Это навсегда удалит ваш аккаунт и все связанные данные.</string>
+    <string name="settings_confirm_email_change">Подтвердить изменение электронной почты</string>
+    <string name="settings_confirm_account_deletion">Подтвердить удаление аккаунта</string>
+    <string name="settings_account_deletion_warning">Предупреждение: Это действие необратимо. Все ваши данные будут безвозвратно удалены.</string>
+    <string name="settings_deletion_reason">Причина удаления (необязательно)</string>
+    <string name="settings_confirm_reset_user_data">Вы уверены, что хотите сбросить все данные профиля? Это удалит всю информацию вашего профиля и историю чатов, но сохранит учётные данные аккаунта.</string>
+    <string name="settings_reset">Сбросить</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">Профиль пользователя</string>
+    <string name="user_profile_save">Сохранить профиль</string>
+    <string name="user_profile_previous">Назад</string>
+    <string name="user_profile_next">Далее</string>
+    <string name="user_profile_full_name">Полное имя</string>
+    <string name="user_profile_dob">Дата рождения</string>
+    <string name="user_profile_gender">Пол</string>
+    <string name="user_profile_nationality">Гражданство</string>
+    <string name="user_profile_marital_status">Семейное положение</string>
+
+    <!-- About -->
+    <string name="about_title">О приложении</string>
+    <string name="about_version">Версия</string>
+    <string name="about_description">Genie AI — ваш умный помощник для навигации по государственным услугам и информации.</string>
+    <string name="about_tech_stack">Технологический стек</string>
+    <string name="about_copyright">Все права защищены.</string>
+
+    <!-- Common -->
+    <string name="common_cancel">Отмена</string>
+    <string name="common_confirm">Подтвердить</string>
+    <string name="common_save">Сохранить</string>
+    <string name="common_delete">Удалить</string>
+    <string name="common_ok">ОК</string>
+    <string name="common_loading">Загрузка…</string>
+    <string name="common_refresh">Обновить</string>
+    <string name="common_edit">Редактировать</string>
+    <string name="common_done">Готово</string>
+    <string name="common_clear">Очистить</string>
+    <string name="common_retry">Повторить</string>
+</resources>

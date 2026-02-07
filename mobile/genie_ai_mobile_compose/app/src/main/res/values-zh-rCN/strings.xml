@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">用户名</string>
+    <string name="login_password">密码</string>
+    <string name="login_button">登录</string>
+    <string name="login_logging_in">正在登录…</string>
+    <string name="login_remember_me">记住我</string>
+    <string name="login_forgot_password">忘记密码？</string>
+    <string name="login_no_account">没有账号？</string>
+    <string name="login_create_account">创建账号</string>
+    <string name="login_terms">登录即表示您同意我们的服务条款和隐私政策</string>
+    <string name="login_error">登录失败，请检查您的凭证。</string>
+    <string name="login_fields_required">用户名和密码为必填项</string>
+
+    <!-- Register -->
+    <string name="register_create_account">创建新账号</string>
+    <string name="register_username">用户名</string>
+    <string name="register_username_placeholder">输入用户名</string>
+    <string name="register_email">电子邮箱</string>
+    <string name="register_email_placeholder">输入您的电子邮箱</string>
+    <string name="register_password">密码</string>
+    <string name="register_password_placeholder">创建密码</string>
+    <string name="register_confirm_password">确认密码</string>
+    <string name="register_confirm_password_placeholder">确认您的密码</string>
+    <string name="register_accept_terms">我接受服务条款</string>
+    <string name="register_button">创建账号</string>
+    <string name="register_processing">处理中…</string>
+    <string name="register_already_have_account">已有账号？</string>
+    <string name="register_login_now">登录</string>
+    <string name="register_passwords_mismatch">密码不匹配</string>
+    <string name="register_success_title">注册成功！</string>
+    <string name="register_verification_sent">验证邮件已发送至 %1$s</string>
+    <string name="register_check_email_instructions">请查看您的电子邮箱，按照指示验证您的账号后再登录。</string>
+    <string name="register_back_to_login">返回登录</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">重置密码</string>
+    <string name="password_reset_description">输入您的电子邮箱地址，我们将向您发送重置密码的说明。</string>
+    <string name="password_reset_email_label">电子邮箱地址</string>
+    <string name="password_reset_email_placeholder">输入您的电子邮箱</string>
+    <string name="password_reset_button">发送重置链接</string>
+    <string name="password_reset_sending">正在发送…</string>
+    <string name="password_reset_back_to_login">返回登录</string>
+    <string name="password_reset_success">密码重置链接已发送至您的电子邮箱</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">创建新密码</string>
+    <string name="password_reset_confirm_instructions">输入邮件中的重置代码并创建新密码。</string>
+    <string name="password_reset_confirm_token_label">重置代码</string>
+    <string name="password_reset_confirm_token_placeholder">输入重置代码</string>
+    <string name="password_reset_confirm_new_password">新密码</string>
+    <string name="password_reset_confirm_new_password_placeholder">创建新密码</string>
+    <string name="password_reset_confirm_confirm_password">确认新密码</string>
+    <string name="password_reset_confirm_requirements">密码必须至少包含8个字符，其中至少包含1个数字、1个大写字母和1个特殊字符</string>
+    <string name="password_reset_confirm_button">重置密码</string>
+    <string name="password_reset_confirm_processing">正在重置…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">我的个人资料</string>
+    <string name="nav_settings">设置</string>
+    <string name="nav_logout">退出登录</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">知识领域</string>
+    <string name="sidebar_chat_history">聊天记录</string>
+    <string name="sidebar_search_placeholder">搜索知识领域…</string>
+    <string name="sidebar_search_conversations">搜索对话…</string>
+    <string name="sidebar_title">信息和资源</string>
+    <string name="sidebar_related_docs">相关文档</string>
+    <string name="sidebar_no_documents">没有相关文档</string>
+    <string name="sidebar_faq">常见问题</string>
+    <string name="sidebar_no_chats">没有最近的聊天</string>
+    <string name="sidebar_tab_all">所有聊天</string>
+    <string name="sidebar_tab_folders">文件夹</string>
+    <string name="sidebar_tab_starred">已收藏</string>
+    <string name="sidebar_tab_archived">已归档</string>
+    <string name="sidebar_messages">条消息</string>
+    <string name="sidebar_star">收藏</string>
+    <string name="sidebar_unstar">取消收藏</string>
+    <string name="sidebar_archive">归档</string>
+    <string name="sidebar_delete_chat">删除聊天</string>
+    <string name="sidebar_rename_chat">重命名聊天</string>
+    <string name="sidebar_move_chat">移动聊天</string>
+    <string name="sidebar_create_folder">创建文件夹</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">在此输入您的问题…</string>
+    <string name="chatbot_send_button">发送</string>
+    <string name="chatbot_welcome">欢迎使用 Genie AI</string>
+    <string name="chatbot_what_can_i_help">今天我能为您做什么？</string>
+    <string name="chatbot_new_chat">新建聊天</string>
+    <string name="chatbot_thinking">Genie 正在思考…</string>
+    <string name="chatbot_context_prefix">上下文：</string>
+    <string name="chatbot_remove_context">移除上下文</string>
+    <string name="chatbot_save_chat">保存聊天</string>
+    <string name="chatbot_export_chat">导出聊天</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">随便聊聊</string>
+    <string name="quickhelp_apply_for_id">申请身份证</string>
+    <string name="quickhelp_pay_taxes">缴纳税款</string>
+    <string name="quickhelp_start_business">创办企业</string>
+    <string name="quickhelp_find_healthcare">医疗保健</string>
+    <string name="quickhelp_education_services">教育</string>
+    <string name="quickhelp_transport_licenses">交通</string>
+    <string name="quickhelp_housing_programs">住房</string>
+    <string name="quickhelp_find_jobs">找工作</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">帮助我们改进</string>
+    <string name="feedback_note">您的反馈将用于优化聊天机器人并随时间改进回复质量。</string>
+    <string name="feedback_comment_placeholder">补充意见…</string>
+    <string name="feedback_submit">提交</string>
+    <string name="feedback_rating_1">没有帮助</string>
+    <string name="feedback_rating_2">略有帮助</string>
+    <string name="feedback_rating_3">有一定帮助</string>
+    <string name="feedback_rating_4">非常有帮助</string>
+    <string name="feedback_rating_5">改变生活</string>
+    <string name="feedback_thank_you">感谢您的反馈！</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_display">显示</string>
+    <string name="settings_display_language">显示语言</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_font_size">字体大小</string>
+    <string name="settings_animations">动画</string>
+    <string name="settings_haptics">触觉反馈</string>
+    <string name="settings_notifications">通知</string>
+    <string name="settings_email_updates">邮件更新</string>
+    <string name="settings_sound_notifications">声音通知</string>
+    <string name="settings_account_management">账号管理</string>
+    <string name="settings_email_address">电子邮箱地址</string>
+    <string name="settings_password">密码</string>
+    <string name="settings_change_password">更改密码</string>
+    <string name="settings_edit">编辑</string>
+    <string name="settings_reset_user_data">重置用户数据</string>
+    <string name="settings_reset_user_data_desc">这将清除您的所有个人资料数据和聊天记录。</string>
+    <string name="settings_delete_account">删除账号</string>
+    <string name="settings_delete_account_desc">这将永久删除您的账号和所有相关数据。</string>
+    <string name="settings_confirm_email_change">确认更改电子邮箱</string>
+    <string name="settings_confirm_account_deletion">确认删除账号</string>
+    <string name="settings_account_deletion_warning">警告：此操作不可撤销。您的所有数据将被永久删除。</string>
+    <string name="settings_deletion_reason">删除原因（可选）</string>
+    <string name="settings_confirm_reset_user_data">您确定要重置所有个人资料数据吗？这将清除您的所有个人资料信息和聊天记录，但会保留您的账号凭证。</string>
+    <string name="settings_reset">重置</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">用户资料</string>
+    <string name="user_profile_save">保存资料</string>
+    <string name="user_profile_previous">上一步</string>
+    <string name="user_profile_next">下一步</string>
+    <string name="user_profile_full_name">全名</string>
+    <string name="user_profile_dob">出生日期</string>
+    <string name="user_profile_gender">性别</string>
+    <string name="user_profile_nationality">国籍</string>
+    <string name="user_profile_marital_status">婚姻状况</string>
+
+    <!-- About -->
+    <string name="about_title">关于</string>
+    <string name="about_version">版本</string>
+    <string name="about_description">Genie AI 是您浏览政府服务和信息的智能助手。</string>
+    <string name="about_tech_stack">技术栈</string>
+    <string name="about_copyright">保留所有权利。</string>
+
+    <!-- Common -->
+    <string name="common_cancel">取消</string>
+    <string name="common_confirm">确认</string>
+    <string name="common_save">保存</string>
+    <string name="common_delete">删除</string>
+    <string name="common_ok">确定</string>
+    <string name="common_loading">加载中…</string>
+    <string name="common_refresh">刷新</string>
+    <string name="common_edit">编辑</string>
+    <string name="common_done">完成</string>
+    <string name="common_clear">清除</string>
+    <string name="common_retry">重试</string>
+</resources>

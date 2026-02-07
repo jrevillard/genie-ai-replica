@@ -17,6 +17,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 1.1 Login
 <!-- Flutter: lib/components/auth/login_screen.dart, lib/services/user_service.dart -->
 <!-- SwiftUI: GenieAI/Views/Auth/LoginView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/LoginScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt, app/src/main/java/com/genieai/mobile/data/repository/AuthRepository.kt -->
 
 **Requirements:**
 - Username/email and password fields with validation
@@ -33,6 +34,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 1.2 Registration
 <!-- Flutter: lib/components/auth/register_screen.dart, lib/services/user_service.dart, lib/services/password_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Auth/RegisterView.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/UserService.swift, GenieAI/Services/PasswordValidator.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/RegisterScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
 **Requirements:**
 - Username, email, password, and confirm password fields
@@ -49,6 +51,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 1.3 Password Reset - Initiation
 <!-- Flutter: lib/components/auth/password_reset_initiate_screen.dart, lib/services/password_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Auth/PasswordResetView.swift, GenieAI/Services/AuthService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/PasswordResetScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
 **Requirements:**
 - Email input field with validation
@@ -63,6 +66,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 1.4 Password Reset - Confirmation
 <!-- Flutter: lib/components/auth/password_reset_confirm_screen.dart, lib/services/password_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Auth/PasswordResetConfirmView.swift, GenieAI/Services/AuthService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/PasswordResetConfirmScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
 **Requirements:**
 - Token-based reset (token from URL/deep link)
@@ -76,6 +80,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 1.5 Registration Success
 <!-- Flutter: lib/components/auth/registration_success_screen.dart -->
 <!-- SwiftUI: GenieAI/Views/Auth/RegistrationSuccessView.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/auth/RegistrationSuccessScreen.kt -->
 
 **Requirements:**
 - Confirmation message display
@@ -85,6 +90,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 1.6 Logout
 <!-- Flutter: lib/components/shared/nav_bar_component.dart, lib/services/user_service.dart -->
 <!-- SwiftUI: GenieAI/ContentView.swift, GenieAI/Services/AuthService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/main/MainScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/AuthViewModel.kt -->
 
 **Requirements:**
 - Clear authentication token
@@ -100,6 +106,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 2.1 Main Chat Interface
 <!-- Flutter: lib/components/chat/chatbot_component.dart, lib/services/chatbot_proxy.dart, lib/services/chat_history_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Chat/ChatView.swift, GenieAI/Views/Chat/MessageBubble.swift, GenieAI/Views/Chat/ChatInputView.swift, GenieAI/Services/ChatService.swift, GenieAI/Services/ChatHistoryService.swift, GenieAI/Models/Message.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/chat/ChatScreen.kt, app/src/main/java/com/genieai/mobile/ui/screens/chat/MessageBubble.kt, app/src/main/java/com/genieai/mobile/ui/screens/chat/ChatInputBar.kt, app/src/main/java/com/genieai/mobile/viewmodel/ChatViewModel.kt, app/src/main/java/com/genieai/mobile/data/repository/ChatRepository.kt -->
 
 **Requirements:**
 - Message input field with send button
@@ -119,6 +126,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 2.2 Chat History
 <!-- Flutter: lib/components/sidebar/chat_folders_panel.dart, lib/services/chat_history_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Sidebar/ChatHistoryView.swift, GenieAI/Services/ChatHistoryService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/sidebar/ChatHistorySheet.kt, app/src/main/java/com/genieai/mobile/viewmodel/ChatHistoryViewModel.kt, app/src/main/java/com/genieai/mobile/data/repository/ChatHistoryRepository.kt -->
 
 **Requirements:**
 - List of past conversations with titles
@@ -155,6 +163,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 2.3 Response Feedback
 <!-- Flutter: lib/components/chat/chat_response_feedback_dialog.dart, lib/services/chatbot_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Chat/FeedbackSheet.swift, GenieAI/Services/ChatService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/chat/FeedbackDialog.kt, app/src/main/java/com/genieai/mobile/viewmodel/ChatViewModel.kt -->
 
 **Requirements:**
 - Star rating (1-5 stars)
@@ -169,6 +178,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 2.4 Quick Help Buttons
 <!-- Flutter: lib/components/chat/chatbot_component.dart, assets/config/genie-ai-config.json -->
 <!-- SwiftUI: GenieAI/Views/Chat/QuickHelpGrid.swift, GenieAI/Models/QuickHelpButton.swift, GenieAI/Resources/genie-ai-config.json -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/chat/QuickHelpGrid.kt, app/src/main/java/com/genieai/mobile/data/model/QuickHelpButton.kt, app/src/main/res/raw/genie_ai_config.json -->
 
 **Requirements:**
 - Grid layout (configurable columns, default 2)
@@ -189,6 +199,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 2.5 PDF Export
 <!-- Flutter: lib/components/chat/chatbot_component.dart (uses pdf, printing packages) -->
 <!-- SwiftUI: GenieAI/Views/Chat/ChatView.swift, GenieAI/Views/Chat/ChatInputView.swift -->
+<!-- Compose: (not yet implemented) -->
 
 **Requirements:**
 - Export entire conversation to PDF
@@ -203,6 +214,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 3.1 Left Sidebar - Services & History
 <!-- Flutter: lib/components/sidebar/sidebar_component.dart, lib/components/sidebar/service_tree_panel.dart, lib/components/sidebar/chat_folders_panel.dart -->
 <!-- SwiftUI: GenieAI/Views/Sidebar/LeftSidebarView.swift, GenieAI/Views/Sidebar/ServiceTreeView.swift, GenieAI/Views/Sidebar/ChatHistoryView.swift, GenieAI/Services/ServiceTreeService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/sidebar/ServiceTreeSheet.kt, app/src/main/java/com/genieai/mobile/ui/screens/sidebar/ChatHistorySheet.kt, app/src/main/java/com/genieai/mobile/viewmodel/ServiceTreeViewModel.kt, app/src/main/java/com/genieai/mobile/viewmodel/ChatHistoryViewModel.kt, app/src/main/java/com/genieai/mobile/data/repository/ServiceTreeRepository.kt -->
 
 **Requirements:**
 - Tab navigation: Services | History
@@ -236,6 +248,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ### 3.2 Right Sidebar - Documents & FAQ
 <!-- Flutter: lib/components/chat/right_sidebar_component.dart -->
 <!-- SwiftUI: GenieAI/Views/Sidebar/RightSidebarView.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/sidebar/InfoResourcesSheet.kt -->
 
 **Requirements:**
 - **Related Documents Section:**
@@ -256,6 +269,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ## 4. User Profile
 <!-- Flutter: lib/components/user/user_profile_component.dart, lib/services/user_profile_proxy.dart -->
 <!-- SwiftUI: GenieAI/Views/Profile/UserProfileView.swift, GenieAI/Models/User.swift, GenieAI/Services/UserService.swift (all 12 tabs: Personal, Civil Registration, Address, Identity/Travel, Health/Medical, Employment, Education, Financial/Tax, Social Security, Criminal/Legal, Transportation, Civic Participation) -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/profile/UserProfileScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/UserProfileViewModel.kt, app/src/main/java/com/genieai/mobile/data/repository/UserRepository.kt, app/src/main/java/com/genieai/mobile/data/model/User.kt -->
 
 **Requirements:**
 - Privacy info text with privacy policy link displayed above tabs
@@ -337,6 +351,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ## 5. Settings
 <!-- Flutter: lib/components/settings/settings_component.dart, lib/services/user_service.dart, lib/services/password_proxy.dart, lib/services/connectivity_service.dart -->
 <!-- SwiftUI: GenieAI/Views/Settings/SettingsView.swift, GenieAI/Services/UserService.swift, GenieAI/Services/AuthService.swift, GenieAI/Services/ThemeManager.swift, GenieAI/Services/ConnectivityService.swift, GenieAI/Services/PasswordValidator.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/settings/SettingsScreen.kt, app/src/main/java/com/genieai/mobile/viewmodel/SettingsViewModel.kt, app/src/main/java/com/genieai/mobile/viewmodel/ThemeViewModel.kt, app/src/main/java/com/genieai/mobile/service/ConnectivityService.kt -->
 
 ### 5.1 Theme Settings
 - Theme mode: Light, Dark, System
@@ -380,6 +395,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ## 6. About Screen
 <!-- Flutter: lib/components/settings/about_screen.dart -->
 <!-- SwiftUI: GenieAI/Views/Settings/AboutView.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/settings/AboutScreen.kt -->
 
 **Requirements:**
 - App name and version display
@@ -392,6 +408,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ## 7. Offline Mode
 <!-- Flutter: lib/services/connectivity_service.dart -->
 <!-- SwiftUI: GenieAI/Services/ConnectivityService.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/service/ConnectivityService.kt, app/src/main/java/com/genieai/mobile/data/repository/ConnectivityRepository.kt -->
 
 **Requirements:**
 - Real-time connectivity monitoring
@@ -412,6 +429,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 ## 8. Internationalization
 <!-- Flutter: lib/services/i18n_service.dart, lib/i18n/locales/*.dart -->
 <!-- SwiftUI: GenieAI/Services/AppLocaleService.swift, GenieAI/Localizable.xcstrings -->
+<!-- Compose: app/src/main/res/values/strings.xml, app/src/main/res/values-ar/strings.xml, app/src/main/res/values-de/strings.xml, app/src/main/res/values-es/strings.xml, app/src/main/res/values-fr/strings.xml, app/src/main/res/values-in/strings.xml, app/src/main/res/values-sw/strings.xml, app/src/main/res/values-pt/strings.xml, app/src/main/res/values-zh-rCN/strings.xml, app/src/main/res/values-ru/strings.xml, app/src/main/res/values-th/strings.xml -->
 
 **Supported Languages (11):**
 1. English (en) - Default
@@ -454,6 +472,7 @@ All platforms must have identical localized strings for every supported language
 ### 9.1 Navigation Bar
 <!-- Flutter: lib/components/shared/nav_bar_component.dart -->
 <!-- SwiftUI: GenieAI/ContentView.swift (native NavigationStack + .toolbar) -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/main/MainScreen.kt -->
 
 **Requirements:**
 - App logo/icon (configurable)
@@ -468,6 +487,7 @@ All platforms must have identical localized strings for every supported language
 ### 9.2 Responsive Layout
 <!-- Flutter: lib/main.dart -->
 <!-- SwiftUI: GenieAI/ContentView.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/main/MainScreen.kt -->
 
 **Breakpoint:** 1200px
 
@@ -497,6 +517,7 @@ All platforms must have identical localized strings for every supported language
 ### 9.3 Binder Tabs
 <!-- Flutter: lib/main.dart -->
 <!-- SwiftUI: GenieAI/ContentView.swift (replaced with sheet-based navigation on mobile) -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/screens/main/MainScreen.kt (replaced with ModalBottomSheet-based navigation on mobile) -->
 
 **Requirements:**
 - 10px wide vertical tabs on screen edges
@@ -520,6 +541,7 @@ All platforms must have identical localized strings for every supported language
 ### 10.1 Language Selector
 <!-- Flutter: lib/components/shared/language_selector.dart -->
 <!-- SwiftUI: (uses iOS per-app language setting; button in GenieAI/Views/Auth/LoginView.swift LanguageSelectorCompact, GenieAI/Views/Settings/SettingsView.swift) -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/components/LanguageSelector.kt -->
 
 - Dropdown with flag icons
 - Language name display
@@ -529,6 +551,7 @@ All platforms must have identical localized strings for every supported language
 ### 10.2 Confirm Dialog
 <!-- Flutter: lib/components/shared/confirm_dialog.dart -->
 <!-- SwiftUI: GenieAI/Views/Shared/ConfirmDialog.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/components/ConfirmDialog.kt -->
 
 - Reusable confirmation modal
 - Custom title and message
@@ -540,6 +563,7 @@ All platforms must have identical localized strings for every supported language
 ## 11. Configuration
 <!-- Flutter: lib/services/genie_ai_config.dart, assets/config/genie-ai-config.json -->
 <!-- SwiftUI: GenieAI/Services/ConfigService.swift, GenieAI/Resources/genie-ai-config.json -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/service/ConfigService.kt, app/src/main/res/raw/genie_ai_config.json -->
 
 **Configuration File Structure:**
 ```json
@@ -571,6 +595,7 @@ All platforms must have identical localized strings for every supported language
 ## 12. Theme System
 <!-- Flutter: lib/utils/theme_manager.dart -->
 <!-- SwiftUI: GenieAI/Services/ThemeManager.swift, GenieAI/Extensions/View+GlassStyle.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/ui/theme/Theme.kt, app/src/main/java/com/genieai/mobile/ui/theme/Color.kt, app/src/main/java/com/genieai/mobile/ui/theme/Type.kt, app/src/main/java/com/genieai/mobile/ui/theme/Shape.kt, app/src/main/java/com/genieai/mobile/ui/theme/GlassModifiers.kt, app/src/main/java/com/genieai/mobile/ui/theme/CategoryPalette.kt -->
 
 **Requirements:**
 - Light and dark theme support
@@ -593,6 +618,8 @@ All platforms must have identical localized strings for every supported language
 **SwiftUI (iOS):** Uses an iOS-native "Liquid Glass" design with `.material` backgrounds, depth via layered glass + border + shadow, spring animations, and haptic feedback. Design tokens (spacing, radii, shadows, animations) are centralized in `ThemeManager`. User preferences for animations and haptics are toggleable in Settings.
 
 **Flutter:** Uses Material Design components and styling.
+
+**Jetpack Compose (Android):** Uses an Android-adapted "Frosted Glass" design with translucent surface composables, depth via glass card + border + shadow modifiers, spring animations, and haptic feedback. Design tokens (spacing, radii, shadows, animations, brand colors) are centralized in the theme package (`ui/theme/`). User preferences for animations and haptics are toggleable in Settings.
 
 **Shared across platforms:**
 - Brand colors (from `genie-ai-config.json`): primaryColor, secondaryColor, navbar gradient
@@ -626,6 +653,9 @@ All platforms must have identical localized strings for every supported language
 ## 13. API Service Architecture
 <!-- Flutter: lib/services/api_service.dart, lib/services/*_proxy.dart -->
 <!-- SwiftUI: GenieAI/Services/APIService.swift, GenieAI/Services/*Service.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/data/remote/ApiService.kt, app/src/main/java/com/genieai/mobile/data/repository/AuthRepository.kt, app/src/main/java/com/genieai/mobile/data/repository/ChatRepository.kt, app/src/main/java/com/genieai/mobile/data/repository/ChatHistoryRepository.kt, app/src/main/java/com/genieai/mobile/data/repository/UserRepository.kt, app/src/main/java/com/genieai/mobile/data/repository/ServiceTreeRepository.kt -->
+
+> **Full API Specification:** See [API.md](./API.md) for all endpoint details, request/response formats, and cross-platform implementation notes extracted from the backend source code.
 
 **Base Service:**
 - HTTP client wrapper
@@ -682,6 +712,7 @@ The backend API (ArangoDB) returns varying field names. All platforms must handl
 - **Flexible date decoder:** All services decoding JSON with Date fields must use a flexible date strategy (not strict `.iso8601`). This applies to all services: auth, user, chat history, chat queries.
 
 <!-- SwiftUI: GenieAI/Models/User.swift, GenieAI/Models/Conversation.swift, GenieAI/Models/Folder.swift, GenieAI/Models/Message.swift, GenieAI/Models/ServiceCategory.swift, GenieAI/Extensions/JSONDecoder+FlexibleDate.swift -->
+<!-- Compose: app/src/main/java/com/genieai/mobile/data/model/User.kt, app/src/main/java/com/genieai/mobile/data/model/Conversation.kt, app/src/main/java/com/genieai/mobile/data/model/Folder.kt, app/src/main/java/com/genieai/mobile/data/model/Message.kt, app/src/main/java/com/genieai/mobile/data/model/ServiceCategory.kt, app/src/main/java/com/genieai/mobile/util/FlexibleDateParser.kt -->
 
 ### File Structure Mapping
 ```

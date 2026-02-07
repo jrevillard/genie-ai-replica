@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_button">Login</string>
+    <string name="login_logging_in">Logging in…</string>
+    <string name="login_remember_me">Remember me</string>
+    <string name="login_forgot_password">Forgot password?</string>
+    <string name="login_no_account">Don\'t have an account?</string>
+    <string name="login_create_account">Create account</string>
+    <string name="login_terms">By logging in, you agree to our Terms of Service and Privacy Policy</string>
+    <string name="login_error">Login failed. Please check your credentials.</string>
+    <string name="login_fields_required">Username and password are required</string>
+
+    <!-- Register -->
+    <string name="register_create_account">Create New Account</string>
+    <string name="register_username">Username</string>
+    <string name="register_username_placeholder">Enter a username</string>
+    <string name="register_email">Email</string>
+    <string name="register_email_placeholder">Enter your email</string>
+    <string name="register_password">Password</string>
+    <string name="register_password_placeholder">Create a password</string>
+    <string name="register_confirm_password">Confirm Password</string>
+    <string name="register_confirm_password_placeholder">Confirm your password</string>
+    <string name="register_accept_terms">I accept the Terms of Service</string>
+    <string name="register_button">Create Account</string>
+    <string name="register_processing">Processing…</string>
+    <string name="register_already_have_account">Already have an account?</string>
+    <string name="register_login_now">Log in</string>
+    <string name="register_passwords_mismatch">Passwords do not match</string>
+    <string name="register_success_title">Registration Successful!</string>
+    <string name="register_verification_sent">A verification email has been sent to %1$s</string>
+    <string name="register_check_email_instructions">Please check your email and follow the instructions to verify your account before logging in.</string>
+    <string name="register_back_to_login">Back to Login</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">Reset Your Password</string>
+    <string name="password_reset_description">Enter your email address and we\'ll send you instructions to reset your password.</string>
+    <string name="password_reset_email_label">Email Address</string>
+    <string name="password_reset_email_placeholder">Enter your email</string>
+    <string name="password_reset_button">Send Reset Link</string>
+    <string name="password_reset_sending">Sending…</string>
+    <string name="password_reset_back_to_login">Back to Login</string>
+    <string name="password_reset_success">Password reset link has been sent to your email</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">Create New Password</string>
+    <string name="password_reset_confirm_instructions">Enter the reset token from your email and create a new password.</string>
+    <string name="password_reset_confirm_token_label">Reset Token</string>
+    <string name="password_reset_confirm_token_placeholder">Enter reset token</string>
+    <string name="password_reset_confirm_new_password">New Password</string>
+    <string name="password_reset_confirm_new_password_placeholder">Create a new password</string>
+    <string name="password_reset_confirm_confirm_password">Confirm New Password</string>
+    <string name="password_reset_confirm_requirements">Password must be at least 8 characters with at least 1 number, 1 uppercase letter, and 1 special character</string>
+    <string name="password_reset_confirm_button">Reset Password</string>
+    <string name="password_reset_confirm_processing">Resetting…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">My Profile</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_logout">Log Out</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">Knowledge Areas</string>
+    <string name="sidebar_chat_history">Chat History</string>
+    <string name="sidebar_search_placeholder">Search knowledge areas…</string>
+    <string name="sidebar_search_conversations">Search conversations…</string>
+    <string name="sidebar_title">Info &amp; Resources</string>
+    <string name="sidebar_related_docs">Related Documents</string>
+    <string name="sidebar_no_documents">No related documents</string>
+    <string name="sidebar_faq">Frequently Asked Questions</string>
+    <string name="sidebar_no_chats">No recent chats</string>
+    <string name="sidebar_tab_all">All Chats</string>
+    <string name="sidebar_tab_folders">Folders</string>
+    <string name="sidebar_tab_starred">Starred</string>
+    <string name="sidebar_tab_archived">Archived</string>
+    <string name="sidebar_messages">messages</string>
+    <string name="sidebar_star">Star</string>
+    <string name="sidebar_unstar">Unstar</string>
+    <string name="sidebar_archive">Archive</string>
+    <string name="sidebar_delete_chat">Delete Chat</string>
+    <string name="sidebar_rename_chat">Rename Chat</string>
+    <string name="sidebar_move_chat">Move Chat</string>
+    <string name="sidebar_create_folder">Create Folder</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">Type your query here…</string>
+    <string name="chatbot_send_button">Send</string>
+    <string name="chatbot_welcome">Welcome to Genie AI</string>
+    <string name="chatbot_what_can_i_help">How can I help you today?</string>
+    <string name="chatbot_new_chat">New Chat</string>
+    <string name="chatbot_thinking">Genie is thinking…</string>
+    <string name="chatbot_context_prefix">Context:</string>
+    <string name="chatbot_remove_context">Remove Context</string>
+    <string name="chatbot_save_chat">Save Chat</string>
+    <string name="chatbot_export_chat">Export Chat</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">Just Chat</string>
+    <string name="quickhelp_apply_for_id">Apply for ID</string>
+    <string name="quickhelp_pay_taxes">Pay Taxes</string>
+    <string name="quickhelp_start_business">Start Business</string>
+    <string name="quickhelp_find_healthcare">Healthcare</string>
+    <string name="quickhelp_education_services">Education</string>
+    <string name="quickhelp_transport_licenses">Transport</string>
+    <string name="quickhelp_housing_programs">Housing</string>
+    <string name="quickhelp_find_jobs">Find Jobs</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">Help Us Improve</string>
+    <string name="feedback_note">Your feedback will be used to better tune the chatbot and improve responses over time.</string>
+    <string name="feedback_comment_placeholder">Additional comments…</string>
+    <string name="feedback_submit">Submit</string>
+    <string name="feedback_rating_1">Useless</string>
+    <string name="feedback_rating_2">Slightly Helpful</string>
+    <string name="feedback_rating_3">Moderately Helpful</string>
+    <string name="feedback_rating_4">Very Helpful</string>
+    <string name="feedback_rating_5">Life Changing</string>
+    <string name="feedback_thank_you">Thank you for your feedback!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_display">Display</string>
+    <string name="settings_display_language">Display Language</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_font_size">Font Size</string>
+    <string name="settings_animations">Animations</string>
+    <string name="settings_haptics">Haptic Feedback</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_email_updates">Email updates</string>
+    <string name="settings_sound_notifications">Sound notifications</string>
+    <string name="settings_account_management">Account Management</string>
+    <string name="settings_email_address">Email Address</string>
+    <string name="settings_password">Password</string>
+    <string name="settings_change_password">Change Password</string>
+    <string name="settings_edit">Edit</string>
+    <string name="settings_reset_user_data">Reset User Data</string>
+    <string name="settings_reset_user_data_desc">This will clear all your profile data and chat history.</string>
+    <string name="settings_delete_account">Delete Account</string>
+    <string name="settings_delete_account_desc">This will permanently delete your account and all associated data.</string>
+    <string name="settings_confirm_email_change">Confirm Email Change</string>
+    <string name="settings_confirm_account_deletion">Confirm Account Deletion</string>
+    <string name="settings_account_deletion_warning">Warning: This action is permanent and cannot be undone. All your data will be permanently deleted.</string>
+    <string name="settings_deletion_reason">Reason for deletion (optional)</string>
+    <string name="settings_confirm_reset_user_data">Are you sure you want to reset all your profile data? This will clear all your profile information and chat history, but keep your account credentials.</string>
+    <string name="settings_reset">Reset</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">User Profile</string>
+    <string name="user_profile_save">Save Profile</string>
+    <string name="user_profile_previous">Previous</string>
+    <string name="user_profile_next">Next</string>
+    <string name="user_profile_full_name">Full name</string>
+    <string name="user_profile_dob">Date of birth</string>
+    <string name="user_profile_gender">Gender</string>
+    <string name="user_profile_nationality">Nationality</string>
+    <string name="user_profile_marital_status">Marital status</string>
+
+    <!-- About -->
+    <string name="about_title">About</string>
+    <string name="about_version">Version</string>
+    <string name="about_description">Genie AI is your intelligent assistant for navigating government services and information.</string>
+    <string name="about_tech_stack">Tech Stack</string>
+    <string name="about_copyright">All rights reserved.</string>
+
+    <!-- Common -->
+    <string name="common_cancel">Cancel</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_save">Save</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_ok">OK</string>
+    <string name="common_loading">Loading…</string>
+    <string name="common_refresh">Refresh</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_done">Done</string>
+    <string name="common_clear">Clear</string>
+    <string name="common_retry">Retry</string>
+</resources>

@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">Nome de utilizador</string>
+    <string name="login_password">Palavra-passe</string>
+    <string name="login_button">Entrar</string>
+    <string name="login_logging_in">A entrar…</string>
+    <string name="login_remember_me">Lembrar-me</string>
+    <string name="login_forgot_password">Esqueceu a palavra-passe?</string>
+    <string name="login_no_account">Não tem uma conta?</string>
+    <string name="login_create_account">Criar conta</string>
+    <string name="login_terms">Ao entrar, concorda com os nossos Termos de Serviço e Política de Privacidade</string>
+    <string name="login_error">Falha no início de sessão. Verifique as suas credenciais.</string>
+    <string name="login_fields_required">Nome de utilizador e palavra-passe são obrigatórios</string>
+
+    <!-- Register -->
+    <string name="register_create_account">Criar Nova Conta</string>
+    <string name="register_username">Nome de utilizador</string>
+    <string name="register_username_placeholder">Introduza um nome de utilizador</string>
+    <string name="register_email">E-mail</string>
+    <string name="register_email_placeholder">Introduza o seu e-mail</string>
+    <string name="register_password">Palavra-passe</string>
+    <string name="register_password_placeholder">Crie uma palavra-passe</string>
+    <string name="register_confirm_password">Confirmar Palavra-passe</string>
+    <string name="register_confirm_password_placeholder">Confirme a sua palavra-passe</string>
+    <string name="register_accept_terms">Aceito os Termos de Serviço</string>
+    <string name="register_button">Criar Conta</string>
+    <string name="register_processing">A processar…</string>
+    <string name="register_already_have_account">Já tem uma conta?</string>
+    <string name="register_login_now">Entrar</string>
+    <string name="register_passwords_mismatch">As palavras-passe não coincidem</string>
+    <string name="register_success_title">Registo Bem-sucedido!</string>
+    <string name="register_verification_sent">Foi enviado um e-mail de verificação para %1$s</string>
+    <string name="register_check_email_instructions">Verifique o seu e-mail e siga as instruções para validar a sua conta antes de entrar.</string>
+    <string name="register_back_to_login">Voltar ao Início de Sessão</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">Redefinir a Sua Palavra-passe</string>
+    <string name="password_reset_description">Introduza o seu endereço de e-mail e enviaremos instruções para redefinir a sua palavra-passe.</string>
+    <string name="password_reset_email_label">Endereço de E-mail</string>
+    <string name="password_reset_email_placeholder">Introduza o seu e-mail</string>
+    <string name="password_reset_button">Enviar Link de Redefinição</string>
+    <string name="password_reset_sending">A enviar…</string>
+    <string name="password_reset_back_to_login">Voltar ao Início de Sessão</string>
+    <string name="password_reset_success">O link de redefinição de palavra-passe foi enviado para o seu e-mail</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">Criar Nova Palavra-passe</string>
+    <string name="password_reset_confirm_instructions">Introduza o código de redefinição do seu e-mail e crie uma nova palavra-passe.</string>
+    <string name="password_reset_confirm_token_label">Código de Redefinição</string>
+    <string name="password_reset_confirm_token_placeholder">Introduza o código de redefinição</string>
+    <string name="password_reset_confirm_new_password">Nova Palavra-passe</string>
+    <string name="password_reset_confirm_new_password_placeholder">Crie uma nova palavra-passe</string>
+    <string name="password_reset_confirm_confirm_password">Confirmar Nova Palavra-passe</string>
+    <string name="password_reset_confirm_requirements">A palavra-passe deve ter pelo menos 8 caracteres com pelo menos 1 número, 1 letra maiúscula e 1 caractere especial</string>
+    <string name="password_reset_confirm_button">Redefinir Palavra-passe</string>
+    <string name="password_reset_confirm_processing">A redefinir…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">O Meu Perfil</string>
+    <string name="nav_settings">Definições</string>
+    <string name="nav_logout">Terminar Sessão</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">Áreas de Conhecimento</string>
+    <string name="sidebar_chat_history">Histórico de Conversas</string>
+    <string name="sidebar_search_placeholder">Pesquisar áreas de conhecimento…</string>
+    <string name="sidebar_search_conversations">Pesquisar conversas…</string>
+    <string name="sidebar_title">Info &amp; Recursos</string>
+    <string name="sidebar_related_docs">Documentos Relacionados</string>
+    <string name="sidebar_no_documents">Sem documentos relacionados</string>
+    <string name="sidebar_faq">Perguntas Frequentes</string>
+    <string name="sidebar_no_chats">Sem conversas recentes</string>
+    <string name="sidebar_tab_all">Todas as Conversas</string>
+    <string name="sidebar_tab_folders">Pastas</string>
+    <string name="sidebar_tab_starred">Favoritos</string>
+    <string name="sidebar_tab_archived">Arquivados</string>
+    <string name="sidebar_messages">mensagens</string>
+    <string name="sidebar_star">Favoritar</string>
+    <string name="sidebar_unstar">Remover Favorito</string>
+    <string name="sidebar_archive">Arquivar</string>
+    <string name="sidebar_delete_chat">Eliminar Conversa</string>
+    <string name="sidebar_rename_chat">Renomear Conversa</string>
+    <string name="sidebar_move_chat">Mover Conversa</string>
+    <string name="sidebar_create_folder">Criar Pasta</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">Escreva a sua pergunta aqui…</string>
+    <string name="chatbot_send_button">Enviar</string>
+    <string name="chatbot_welcome">Bem-vindo ao Genie AI</string>
+    <string name="chatbot_what_can_i_help">Como posso ajudá-lo hoje?</string>
+    <string name="chatbot_new_chat">Nova Conversa</string>
+    <string name="chatbot_thinking">Genie está a pensar…</string>
+    <string name="chatbot_context_prefix">Contexto:</string>
+    <string name="chatbot_remove_context">Remover Contexto</string>
+    <string name="chatbot_save_chat">Guardar Conversa</string>
+    <string name="chatbot_export_chat">Exportar Conversa</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">Apenas Conversar</string>
+    <string name="quickhelp_apply_for_id">Pedir Identificação</string>
+    <string name="quickhelp_pay_taxes">Pagar Impostos</string>
+    <string name="quickhelp_start_business">Iniciar Negócio</string>
+    <string name="quickhelp_find_healthcare">Saúde</string>
+    <string name="quickhelp_education_services">Educação</string>
+    <string name="quickhelp_transport_licenses">Transportes</string>
+    <string name="quickhelp_housing_programs">Habitação</string>
+    <string name="quickhelp_find_jobs">Encontrar Emprego</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">Ajude-nos a Melhorar</string>
+    <string name="feedback_note">O seu feedback será usado para melhorar o chatbot e aprimorar as respostas ao longo do tempo.</string>
+    <string name="feedback_comment_placeholder">Comentários adicionais…</string>
+    <string name="feedback_submit">Enviar</string>
+    <string name="feedback_rating_1">Inútil</string>
+    <string name="feedback_rating_2">Pouco Útil</string>
+    <string name="feedback_rating_3">Moderadamente Útil</string>
+    <string name="feedback_rating_4">Muito Útil</string>
+    <string name="feedback_rating_5">Transformador</string>
+    <string name="feedback_thank_you">Obrigado pelo seu feedback!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Definições</string>
+    <string name="settings_display">Ecrã</string>
+    <string name="settings_display_language">Idioma de Exibição</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Escuro</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_font_size">Tamanho da Letra</string>
+    <string name="settings_animations">Animações</string>
+    <string name="settings_haptics">Feedback Háptico</string>
+    <string name="settings_notifications">Notificações</string>
+    <string name="settings_email_updates">Atualizações por e-mail</string>
+    <string name="settings_sound_notifications">Notificações sonoras</string>
+    <string name="settings_account_management">Gestão de Conta</string>
+    <string name="settings_email_address">Endereço de E-mail</string>
+    <string name="settings_password">Palavra-passe</string>
+    <string name="settings_change_password">Alterar Palavra-passe</string>
+    <string name="settings_edit">Editar</string>
+    <string name="settings_reset_user_data">Repor Dados do Utilizador</string>
+    <string name="settings_reset_user_data_desc">Isto irá apagar todos os seus dados de perfil e histórico de conversas.</string>
+    <string name="settings_delete_account">Eliminar Conta</string>
+    <string name="settings_delete_account_desc">Isto irá eliminar permanentemente a sua conta e todos os dados associados.</string>
+    <string name="settings_confirm_email_change">Confirmar Alteração de E-mail</string>
+    <string name="settings_confirm_account_deletion">Confirmar Eliminação de Conta</string>
+    <string name="settings_account_deletion_warning">Aviso: Esta ação é permanente e não pode ser desfeita. Todos os seus dados serão eliminados permanentemente.</string>
+    <string name="settings_deletion_reason">Motivo da eliminação (opcional)</string>
+    <string name="settings_confirm_reset_user_data">Tem a certeza de que pretende repor todos os seus dados de perfil? Isto irá apagar todas as suas informações de perfil e histórico de conversas, mas manterá as credenciais da sua conta.</string>
+    <string name="settings_reset">Repor</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">Perfil do Utilizador</string>
+    <string name="user_profile_save">Guardar Perfil</string>
+    <string name="user_profile_previous">Anterior</string>
+    <string name="user_profile_next">Seguinte</string>
+    <string name="user_profile_full_name">Nome completo</string>
+    <string name="user_profile_dob">Data de nascimento</string>
+    <string name="user_profile_gender">Género</string>
+    <string name="user_profile_nationality">Nacionalidade</string>
+    <string name="user_profile_marital_status">Estado civil</string>
+
+    <!-- About -->
+    <string name="about_title">Sobre</string>
+    <string name="about_version">Versão</string>
+    <string name="about_description">Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.</string>
+    <string name="about_tech_stack">Stack Tecnológica</string>
+    <string name="about_copyright">Todos os direitos reservados.</string>
+
+    <!-- Common -->
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_confirm">Confirmar</string>
+    <string name="common_save">Guardar</string>
+    <string name="common_delete">Eliminar</string>
+    <string name="common_ok">OK</string>
+    <string name="common_loading">A carregar…</string>
+    <string name="common_refresh">Atualizar</string>
+    <string name="common_edit">Editar</string>
+    <string name="common_done">Concluído</string>
+    <string name="common_clear">Limpar</string>
+    <string name="common_retry">Tentar novamente</string>
+</resources>

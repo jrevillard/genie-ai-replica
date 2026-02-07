@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">ชื่อผู้ใช้</string>
+    <string name="login_password">รหัสผ่าน</string>
+    <string name="login_button">เข้าสู่ระบบ</string>
+    <string name="login_logging_in">กำลังเข้าสู่ระบบ…</string>
+    <string name="login_remember_me">จดจำฉัน</string>
+    <string name="login_forgot_password">ลืมรหัสผ่าน?</string>
+    <string name="login_no_account">ยังไม่มีบัญชี?</string>
+    <string name="login_create_account">สร้างบัญชี</string>
+    <string name="login_terms">การเข้าสู่ระบบหมายความว่าคุณยอมรับข้อกำหนดการใช้บริการและนโยบายความเป็นส่วนตัวของเรา</string>
+    <string name="login_error">เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูลรับรองของคุณ</string>
+    <string name="login_fields_required">ต้องระบุชื่อผู้ใช้และรหัสผ่าน</string>
+
+    <!-- Register -->
+    <string name="register_create_account">สร้างบัญชีใหม่</string>
+    <string name="register_username">ชื่อผู้ใช้</string>
+    <string name="register_username_placeholder">กรอกชื่อผู้ใช้</string>
+    <string name="register_email">อีเมล</string>
+    <string name="register_email_placeholder">กรอกอีเมลของคุณ</string>
+    <string name="register_password">รหัสผ่าน</string>
+    <string name="register_password_placeholder">สร้างรหัสผ่าน</string>
+    <string name="register_confirm_password">ยืนยันรหัสผ่าน</string>
+    <string name="register_confirm_password_placeholder">ยืนยันรหัสผ่านของคุณ</string>
+    <string name="register_accept_terms">ฉันยอมรับข้อกำหนดการใช้บริการ</string>
+    <string name="register_button">สร้างบัญชี</string>
+    <string name="register_processing">กำลังดำเนินการ…</string>
+    <string name="register_already_have_account">มีบัญชีอยู่แล้ว?</string>
+    <string name="register_login_now">เข้าสู่ระบบ</string>
+    <string name="register_passwords_mismatch">รหัสผ่านไม่ตรงกัน</string>
+    <string name="register_success_title">ลงทะเบียนสำเร็จ!</string>
+    <string name="register_verification_sent">อีเมลยืนยันได้ถูกส่งไปที่ %1$s</string>
+    <string name="register_check_email_instructions">กรุณาตรวจสอบอีเมลของคุณและทำตามขั้นตอนเพื่อยืนยันบัญชีก่อนเข้าสู่ระบบ</string>
+    <string name="register_back_to_login">กลับไปหน้าเข้าสู่ระบบ</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">รีเซ็ตรหัสผ่านของคุณ</string>
+    <string name="password_reset_description">กรอกที่อยู่อีเมลของคุณ แล้วเราจะส่งคำแนะนำในการรีเซ็ตรหัสผ่านให้คุณ</string>
+    <string name="password_reset_email_label">ที่อยู่อีเมล</string>
+    <string name="password_reset_email_placeholder">กรอกอีเมลของคุณ</string>
+    <string name="password_reset_button">ส่งลิงก์รีเซ็ต</string>
+    <string name="password_reset_sending">กำลังส่ง…</string>
+    <string name="password_reset_back_to_login">กลับไปหน้าเข้าสู่ระบบ</string>
+    <string name="password_reset_success">ลิงก์รีเซ็ตรหัสผ่านได้ถูกส่งไปที่อีเมลของคุณแล้ว</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">สร้างรหัสผ่านใหม่</string>
+    <string name="password_reset_confirm_instructions">กรอกรหัสรีเซ็ตจากอีเมลของคุณและสร้างรหัสผ่านใหม่</string>
+    <string name="password_reset_confirm_token_label">รหัสรีเซ็ต</string>
+    <string name="password_reset_confirm_token_placeholder">กรอกรหัสรีเซ็ต</string>
+    <string name="password_reset_confirm_new_password">รหัสผ่านใหม่</string>
+    <string name="password_reset_confirm_new_password_placeholder">สร้างรหัสผ่านใหม่</string>
+    <string name="password_reset_confirm_confirm_password">ยืนยันรหัสผ่านใหม่</string>
+    <string name="password_reset_confirm_requirements">รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วยตัวเลขอย่างน้อย 1 ตัว ตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว และอักขระพิเศษอย่างน้อย 1 ตัว</string>
+    <string name="password_reset_confirm_button">รีเซ็ตรหัสผ่าน</string>
+    <string name="password_reset_confirm_processing">กำลังรีเซ็ต…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">โปรไฟล์ของฉัน</string>
+    <string name="nav_settings">การตั้งค่า</string>
+    <string name="nav_logout">ออกจากระบบ</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">หมวดความรู้</string>
+    <string name="sidebar_chat_history">ประวัติการสนทนา</string>
+    <string name="sidebar_search_placeholder">ค้นหาหมวดความรู้…</string>
+    <string name="sidebar_search_conversations">ค้นหาการสนทนา…</string>
+    <string name="sidebar_title">ข้อมูลและทรัพยากร</string>
+    <string name="sidebar_related_docs">เอกสารที่เกี่ยวข้อง</string>
+    <string name="sidebar_no_documents">ไม่มีเอกสารที่เกี่ยวข้อง</string>
+    <string name="sidebar_faq">คำถามที่พบบ่อย</string>
+    <string name="sidebar_no_chats">ไม่มีการสนทนาล่าสุด</string>
+    <string name="sidebar_tab_all">การสนทนาทั้งหมด</string>
+    <string name="sidebar_tab_folders">โฟลเดอร์</string>
+    <string name="sidebar_tab_starred">ติดดาว</string>
+    <string name="sidebar_tab_archived">เก็บถาวร</string>
+    <string name="sidebar_messages">ข้อความ</string>
+    <string name="sidebar_star">ติดดาว</string>
+    <string name="sidebar_unstar">เลิกติดดาว</string>
+    <string name="sidebar_archive">เก็บถาวร</string>
+    <string name="sidebar_delete_chat">ลบการสนทนา</string>
+    <string name="sidebar_rename_chat">เปลี่ยนชื่อการสนทนา</string>
+    <string name="sidebar_move_chat">ย้ายการสนทนา</string>
+    <string name="sidebar_create_folder">สร้างโฟลเดอร์</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">พิมพ์คำถามของคุณที่นี่…</string>
+    <string name="chatbot_send_button">ส่ง</string>
+    <string name="chatbot_welcome">ยินดีต้อนรับสู่ Genie AI</string>
+    <string name="chatbot_what_can_i_help">วันนี้ฉันช่วยอะไรคุณได้บ้าง?</string>
+    <string name="chatbot_new_chat">สนทนาใหม่</string>
+    <string name="chatbot_thinking">Genie กำลังคิด…</string>
+    <string name="chatbot_context_prefix">บริบท:</string>
+    <string name="chatbot_remove_context">ลบบริบท</string>
+    <string name="chatbot_save_chat">บันทึกการสนทนา</string>
+    <string name="chatbot_export_chat">ส่งออกการสนทนา</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">แค่พูดคุย</string>
+    <string name="quickhelp_apply_for_id">สมัครบัตรประชาชน</string>
+    <string name="quickhelp_pay_taxes">ชำระภาษี</string>
+    <string name="quickhelp_start_business">เริ่มต้นธุรกิจ</string>
+    <string name="quickhelp_find_healthcare">สาธารณสุข</string>
+    <string name="quickhelp_education_services">การศึกษา</string>
+    <string name="quickhelp_transport_licenses">การขนส่ง</string>
+    <string name="quickhelp_housing_programs">ที่อยู่อาศัย</string>
+    <string name="quickhelp_find_jobs">หางาน</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">ช่วยเราปรับปรุง</string>
+    <string name="feedback_note">ความคิดเห็นของคุณจะถูกนำไปใช้เพื่อปรับปรุงแชทบอทและพัฒนาคำตอบให้ดีขึ้นเรื่อย ๆ</string>
+    <string name="feedback_comment_placeholder">ความคิดเห็นเพิ่มเติม…</string>
+    <string name="feedback_submit">ส่ง</string>
+    <string name="feedback_rating_1">ไม่มีประโยชน์</string>
+    <string name="feedback_rating_2">มีประโยชน์เล็กน้อย</string>
+    <string name="feedback_rating_3">มีประโยชน์ปานกลาง</string>
+    <string name="feedback_rating_4">มีประโยชน์มาก</string>
+    <string name="feedback_rating_5">เปลี่ยนชีวิต</string>
+    <string name="feedback_thank_you">ขอบคุณสำหรับความคิดเห็นของคุณ!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">การตั้งค่า</string>
+    <string name="settings_display">การแสดงผล</string>
+    <string name="settings_display_language">ภาษาที่แสดง</string>
+    <string name="settings_theme">ธีม</string>
+    <string name="settings_theme_light">สว่าง</string>
+    <string name="settings_theme_dark">มืด</string>
+    <string name="settings_theme_system">ระบบ</string>
+    <string name="settings_font_size">ขนาดตัวอักษร</string>
+    <string name="settings_animations">แอนิเมชัน</string>
+    <string name="settings_haptics">การตอบสนองสัมผัส</string>
+    <string name="settings_notifications">การแจ้งเตือน</string>
+    <string name="settings_email_updates">อัปเดตทางอีเมล</string>
+    <string name="settings_sound_notifications">การแจ้งเตือนเสียง</string>
+    <string name="settings_account_management">การจัดการบัญชี</string>
+    <string name="settings_email_address">ที่อยู่อีเมล</string>
+    <string name="settings_password">รหัสผ่าน</string>
+    <string name="settings_change_password">เปลี่ยนรหัสผ่าน</string>
+    <string name="settings_edit">แก้ไข</string>
+    <string name="settings_reset_user_data">รีเซ็ตข้อมูลผู้ใช้</string>
+    <string name="settings_reset_user_data_desc">การดำเนินการนี้จะลบข้อมูลโปรไฟล์และประวัติการสนทนาทั้งหมดของคุณ</string>
+    <string name="settings_delete_account">ลบบัญชี</string>
+    <string name="settings_delete_account_desc">การดำเนินการนี้จะลบบัญชีของคุณและข้อมูลที่เกี่ยวข้องทั้งหมดอย่างถาวร</string>
+    <string name="settings_confirm_email_change">ยืนยันการเปลี่ยนอีเมล</string>
+    <string name="settings_confirm_account_deletion">ยืนยันการลบบัญชี</string>
+    <string name="settings_account_deletion_warning">คำเตือน: การดำเนินการนี้ถาวรและไม่สามารถยกเลิกได้ ข้อมูลทั้งหมดของคุณจะถูกลบอย่างถาวร</string>
+    <string name="settings_deletion_reason">เหตุผลในการลบ (ไม่บังคับ)</string>
+    <string name="settings_confirm_reset_user_data">คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตข้อมูลโปรไฟล์ทั้งหมด? การดำเนินการนี้จะลบข้อมูลโปรไฟล์และประวัติการสนทนาทั้งหมดของคุณ แต่จะเก็บข้อมูลรับรองบัญชีของคุณไว้</string>
+    <string name="settings_reset">รีเซ็ต</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">โปรไฟล์ผู้ใช้</string>
+    <string name="user_profile_save">บันทึกโปรไฟล์</string>
+    <string name="user_profile_previous">ก่อนหน้า</string>
+    <string name="user_profile_next">ถัดไป</string>
+    <string name="user_profile_full_name">ชื่อเต็ม</string>
+    <string name="user_profile_dob">วันเกิด</string>
+    <string name="user_profile_gender">เพศ</string>
+    <string name="user_profile_nationality">สัญชาติ</string>
+    <string name="user_profile_marital_status">สถานภาพสมรส</string>
+
+    <!-- About -->
+    <string name="about_title">เกี่ยวกับ</string>
+    <string name="about_version">เวอร์ชัน</string>
+    <string name="about_description">Genie AI เป็นผู้ช่วยอัจฉริยะของคุณสำหรับการนำทางบริการและข้อมูลของรัฐบาล</string>
+    <string name="about_tech_stack">เทคโนโลยีที่ใช้</string>
+    <string name="about_copyright">สงวนลิขสิทธิ์</string>
+
+    <!-- Common -->
+    <string name="common_cancel">ยกเลิก</string>
+    <string name="common_confirm">ยืนยัน</string>
+    <string name="common_save">บันทึก</string>
+    <string name="common_delete">ลบ</string>
+    <string name="common_ok">ตกลง</string>
+    <string name="common_loading">กำลังโหลด…</string>
+    <string name="common_refresh">รีเฟรช</string>
+    <string name="common_edit">แก้ไข</string>
+    <string name="common_done">เสร็จสิ้น</string>
+    <string name="common_clear">ล้าง</string>
+    <string name="common_retry">ลองอีกครั้ง</string>
+</resources>

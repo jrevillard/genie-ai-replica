@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">Benutzername</string>
+    <string name="login_password">Passwort</string>
+    <string name="login_button">Anmelden</string>
+    <string name="login_logging_in">Anmeldung läuft…</string>
+    <string name="login_remember_me">Angemeldet bleiben</string>
+    <string name="login_forgot_password">Passwort vergessen?</string>
+    <string name="login_no_account">Noch kein Konto?</string>
+    <string name="login_create_account">Konto erstellen</string>
+    <string name="login_terms">Mit der Anmeldung stimmen Sie unseren Nutzungsbedingungen und der Datenschutzrichtlinie zu</string>
+    <string name="login_error">Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.</string>
+    <string name="login_fields_required">Benutzername und Passwort sind erforderlich</string>
+
+    <!-- Register -->
+    <string name="register_create_account">Neues Konto erstellen</string>
+    <string name="register_username">Benutzername</string>
+    <string name="register_username_placeholder">Benutzernamen eingeben</string>
+    <string name="register_email">E-Mail</string>
+    <string name="register_email_placeholder">E-Mail-Adresse eingeben</string>
+    <string name="register_password">Passwort</string>
+    <string name="register_password_placeholder">Passwort erstellen</string>
+    <string name="register_confirm_password">Passwort bestätigen</string>
+    <string name="register_confirm_password_placeholder">Passwort bestätigen</string>
+    <string name="register_accept_terms">Ich akzeptiere die Nutzungsbedingungen</string>
+    <string name="register_button">Konto erstellen</string>
+    <string name="register_processing">Verarbeitung…</string>
+    <string name="register_already_have_account">Bereits ein Konto?</string>
+    <string name="register_login_now">Anmelden</string>
+    <string name="register_passwords_mismatch">Passwörter stimmen nicht überein</string>
+    <string name="register_success_title">Registrierung erfolgreich!</string>
+    <string name="register_verification_sent">Eine Bestätigungs-E-Mail wurde an %1$s gesendet</string>
+    <string name="register_check_email_instructions">Bitte überprüfen Sie Ihre E-Mail und folgen Sie den Anweisungen, um Ihr Konto zu verifizieren, bevor Sie sich anmelden.</string>
+    <string name="register_back_to_login">Zurück zur Anmeldung</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">Passwort zurücksetzen</string>
+    <string name="password_reset_description">Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen Anweisungen zum Zurücksetzen Ihres Passworts.</string>
+    <string name="password_reset_email_label">E-Mail-Adresse</string>
+    <string name="password_reset_email_placeholder">E-Mail-Adresse eingeben</string>
+    <string name="password_reset_button">Link zum Zurücksetzen senden</string>
+    <string name="password_reset_sending">Wird gesendet…</string>
+    <string name="password_reset_back_to_login">Zurück zur Anmeldung</string>
+    <string name="password_reset_success">Ein Link zum Zurücksetzen des Passworts wurde an Ihre E-Mail gesendet</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">Neues Passwort erstellen</string>
+    <string name="password_reset_confirm_instructions">Geben Sie den Zurücksetzungscode aus Ihrer E-Mail ein und erstellen Sie ein neues Passwort.</string>
+    <string name="password_reset_confirm_token_label">Zurücksetzungscode</string>
+    <string name="password_reset_confirm_token_placeholder">Zurücksetzungscode eingeben</string>
+    <string name="password_reset_confirm_new_password">Neues Passwort</string>
+    <string name="password_reset_confirm_new_password_placeholder">Neues Passwort erstellen</string>
+    <string name="password_reset_confirm_confirm_password">Neues Passwort bestätigen</string>
+    <string name="password_reset_confirm_requirements">Das Passwort muss mindestens 8 Zeichen lang sein und mindestens 1 Zahl, 1 Großbuchstaben und 1 Sonderzeichen enthalten</string>
+    <string name="password_reset_confirm_button">Passwort zurücksetzen</string>
+    <string name="password_reset_confirm_processing">Wird zurückgesetzt…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">Mein Profil</string>
+    <string name="nav_settings">Einstellungen</string>
+    <string name="nav_logout">Abmelden</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">Wissensbereiche</string>
+    <string name="sidebar_chat_history">Chatverlauf</string>
+    <string name="sidebar_search_placeholder">Wissensbereiche durchsuchen…</string>
+    <string name="sidebar_search_conversations">Unterhaltungen durchsuchen…</string>
+    <string name="sidebar_title">Info &amp; Ressourcen</string>
+    <string name="sidebar_related_docs">Verwandte Dokumente</string>
+    <string name="sidebar_no_documents">Keine verwandten Dokumente</string>
+    <string name="sidebar_faq">Häufig gestellte Fragen</string>
+    <string name="sidebar_no_chats">Keine aktuellen Chats</string>
+    <string name="sidebar_tab_all">Alle Chats</string>
+    <string name="sidebar_tab_folders">Ordner</string>
+    <string name="sidebar_tab_starred">Markiert</string>
+    <string name="sidebar_tab_archived">Archiviert</string>
+    <string name="sidebar_messages">Nachrichten</string>
+    <string name="sidebar_star">Markieren</string>
+    <string name="sidebar_unstar">Markierung entfernen</string>
+    <string name="sidebar_archive">Archivieren</string>
+    <string name="sidebar_delete_chat">Chat löschen</string>
+    <string name="sidebar_rename_chat">Chat umbenennen</string>
+    <string name="sidebar_move_chat">Chat verschieben</string>
+    <string name="sidebar_create_folder">Ordner erstellen</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">Geben Sie hier Ihre Frage ein…</string>
+    <string name="chatbot_send_button">Senden</string>
+    <string name="chatbot_welcome">Willkommen bei Genie AI</string>
+    <string name="chatbot_what_can_i_help">Wie kann ich Ihnen heute helfen?</string>
+    <string name="chatbot_new_chat">Neuer Chat</string>
+    <string name="chatbot_thinking">Genie denkt nach…</string>
+    <string name="chatbot_context_prefix">Kontext:</string>
+    <string name="chatbot_remove_context">Kontext entfernen</string>
+    <string name="chatbot_save_chat">Chat speichern</string>
+    <string name="chatbot_export_chat">Chat exportieren</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">Einfach chatten</string>
+    <string name="quickhelp_apply_for_id">Ausweis beantragen</string>
+    <string name="quickhelp_pay_taxes">Steuern zahlen</string>
+    <string name="quickhelp_start_business">Unternehmen gründen</string>
+    <string name="quickhelp_find_healthcare">Gesundheitswesen</string>
+    <string name="quickhelp_education_services">Bildung</string>
+    <string name="quickhelp_transport_licenses">Verkehr</string>
+    <string name="quickhelp_housing_programs">Wohnen</string>
+    <string name="quickhelp_find_jobs">Jobs finden</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">Helfen Sie uns zu verbessern</string>
+    <string name="feedback_note">Ihr Feedback wird verwendet, um den Chatbot besser abzustimmen und die Antworten im Laufe der Zeit zu verbessern.</string>
+    <string name="feedback_comment_placeholder">Zusätzliche Kommentare…</string>
+    <string name="feedback_submit">Absenden</string>
+    <string name="feedback_rating_1">Nutzlos</string>
+    <string name="feedback_rating_2">Etwas hilfreich</string>
+    <string name="feedback_rating_3">Mäßig hilfreich</string>
+    <string name="feedback_rating_4">Sehr hilfreich</string>
+    <string name="feedback_rating_5">Lebensverändernd</string>
+    <string name="feedback_thank_you">Vielen Dank für Ihr Feedback!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_display">Anzeige</string>
+    <string name="settings_display_language">Anzeigesprache</string>
+    <string name="settings_theme">Design</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_font_size">Schriftgröße</string>
+    <string name="settings_animations">Animationen</string>
+    <string name="settings_haptics">Haptisches Feedback</string>
+    <string name="settings_notifications">Benachrichtigungen</string>
+    <string name="settings_email_updates">E-Mail-Updates</string>
+    <string name="settings_sound_notifications">Tonbenachrichtigungen</string>
+    <string name="settings_account_management">Kontoverwaltung</string>
+    <string name="settings_email_address">E-Mail-Adresse</string>
+    <string name="settings_password">Passwort</string>
+    <string name="settings_change_password">Passwort ändern</string>
+    <string name="settings_edit">Bearbeiten</string>
+    <string name="settings_reset_user_data">Benutzerdaten zurücksetzen</string>
+    <string name="settings_reset_user_data_desc">Dadurch werden alle Ihre Profildaten und der Chatverlauf gelöscht.</string>
+    <string name="settings_delete_account">Konto löschen</string>
+    <string name="settings_delete_account_desc">Dadurch werden Ihr Konto und alle zugehörigen Daten dauerhaft gelöscht.</string>
+    <string name="settings_confirm_email_change">E-Mail-Änderung bestätigen</string>
+    <string name="settings_confirm_account_deletion">Kontolöschung bestätigen</string>
+    <string name="settings_account_deletion_warning">Warnung: Diese Aktion ist dauerhaft und kann nicht rückgängig gemacht werden. Alle Ihre Daten werden dauerhaft gelöscht.</string>
+    <string name="settings_deletion_reason">Grund für die Löschung (optional)</string>
+    <string name="settings_confirm_reset_user_data">Sind Sie sicher, dass Sie alle Ihre Profildaten zurücksetzen möchten? Dadurch werden alle Ihre Profilinformationen und der Chatverlauf gelöscht, aber Ihre Kontoanmeldedaten bleiben erhalten.</string>
+    <string name="settings_reset">Zurücksetzen</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">Benutzerprofil</string>
+    <string name="user_profile_save">Profil speichern</string>
+    <string name="user_profile_previous">Zurück</string>
+    <string name="user_profile_next">Weiter</string>
+    <string name="user_profile_full_name">Vollständiger Name</string>
+    <string name="user_profile_dob">Geburtsdatum</string>
+    <string name="user_profile_gender">Geschlecht</string>
+    <string name="user_profile_nationality">Staatsangehörigkeit</string>
+    <string name="user_profile_marital_status">Familienstand</string>
+
+    <!-- About -->
+    <string name="about_title">Über</string>
+    <string name="about_version">Version</string>
+    <string name="about_description">Genie AI ist Ihr intelligenter Assistent für die Navigation durch Behördendienste und Informationen.</string>
+    <string name="about_tech_stack">Technologie-Stack</string>
+    <string name="about_copyright">Alle Rechte vorbehalten.</string>
+
+    <!-- Common -->
+    <string name="common_cancel">Abbrechen</string>
+    <string name="common_confirm">Bestätigen</string>
+    <string name="common_save">Speichern</string>
+    <string name="common_delete">Löschen</string>
+    <string name="common_ok">OK</string>
+    <string name="common_loading">Wird geladen…</string>
+    <string name="common_refresh">Aktualisieren</string>
+    <string name="common_edit">Bearbeiten</string>
+    <string name="common_done">Fertig</string>
+    <string name="common_clear">Löschen</string>
+    <string name="common_retry">Wiederholen</string>
+</resources>

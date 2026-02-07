@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">Nama pengguna</string>
+    <string name="login_password">Kata sandi</string>
+    <string name="login_button">Masuk</string>
+    <string name="login_logging_in">Sedang masuk…</string>
+    <string name="login_remember_me">Ingat saya</string>
+    <string name="login_forgot_password">Lupa kata sandi?</string>
+    <string name="login_no_account">Belum punya akun?</string>
+    <string name="login_create_account">Buat akun</string>
+    <string name="login_terms">Dengan masuk, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi kami</string>
+    <string name="login_error">Gagal masuk. Silakan periksa kredensial Anda.</string>
+    <string name="login_fields_required">Nama pengguna dan kata sandi wajib diisi</string>
+
+    <!-- Register -->
+    <string name="register_create_account">Buat Akun Baru</string>
+    <string name="register_username">Nama pengguna</string>
+    <string name="register_username_placeholder">Masukkan nama pengguna</string>
+    <string name="register_email">Email</string>
+    <string name="register_email_placeholder">Masukkan email Anda</string>
+    <string name="register_password">Kata sandi</string>
+    <string name="register_password_placeholder">Buat kata sandi</string>
+    <string name="register_confirm_password">Konfirmasi Kata Sandi</string>
+    <string name="register_confirm_password_placeholder">Konfirmasi kata sandi Anda</string>
+    <string name="register_accept_terms">Saya menerima Ketentuan Layanan</string>
+    <string name="register_button">Buat Akun</string>
+    <string name="register_processing">Memproses…</string>
+    <string name="register_already_have_account">Sudah punya akun?</string>
+    <string name="register_login_now">Masuk</string>
+    <string name="register_passwords_mismatch">Kata sandi tidak cocok</string>
+    <string name="register_success_title">Pendaftaran Berhasil!</string>
+    <string name="register_verification_sent">Email verifikasi telah dikirim ke %1$s</string>
+    <string name="register_check_email_instructions">Silakan periksa email Anda dan ikuti petunjuk untuk memverifikasi akun Anda sebelum masuk.</string>
+    <string name="register_back_to_login">Kembali ke Masuk</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">Atur Ulang Kata Sandi</string>
+    <string name="password_reset_description">Masukkan alamat email Anda dan kami akan mengirimkan petunjuk untuk mengatur ulang kata sandi Anda.</string>
+    <string name="password_reset_email_label">Alamat Email</string>
+    <string name="password_reset_email_placeholder">Masukkan email Anda</string>
+    <string name="password_reset_button">Kirim Tautan Atur Ulang</string>
+    <string name="password_reset_sending">Mengirim…</string>
+    <string name="password_reset_back_to_login">Kembali ke Masuk</string>
+    <string name="password_reset_success">Tautan atur ulang kata sandi telah dikirim ke email Anda</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">Buat Kata Sandi Baru</string>
+    <string name="password_reset_confirm_instructions">Masukkan kode atur ulang dari email Anda dan buat kata sandi baru.</string>
+    <string name="password_reset_confirm_token_label">Kode Atur Ulang</string>
+    <string name="password_reset_confirm_token_placeholder">Masukkan kode atur ulang</string>
+    <string name="password_reset_confirm_new_password">Kata Sandi Baru</string>
+    <string name="password_reset_confirm_new_password_placeholder">Buat kata sandi baru</string>
+    <string name="password_reset_confirm_confirm_password">Konfirmasi Kata Sandi Baru</string>
+    <string name="password_reset_confirm_requirements">Kata sandi harus minimal 8 karakter dengan minimal 1 angka, 1 huruf besar, dan 1 karakter khusus</string>
+    <string name="password_reset_confirm_button">Atur Ulang Kata Sandi</string>
+    <string name="password_reset_confirm_processing">Mengatur ulang…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">Profil Saya</string>
+    <string name="nav_settings">Pengaturan</string>
+    <string name="nav_logout">Keluar</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">Area Pengetahuan</string>
+    <string name="sidebar_chat_history">Riwayat Obrolan</string>
+    <string name="sidebar_search_placeholder">Cari area pengetahuan…</string>
+    <string name="sidebar_search_conversations">Cari percakapan…</string>
+    <string name="sidebar_title">Info &amp; Sumber Daya</string>
+    <string name="sidebar_related_docs">Dokumen Terkait</string>
+    <string name="sidebar_no_documents">Tidak ada dokumen terkait</string>
+    <string name="sidebar_faq">Pertanyaan yang Sering Diajukan</string>
+    <string name="sidebar_no_chats">Tidak ada obrolan terbaru</string>
+    <string name="sidebar_tab_all">Semua Obrolan</string>
+    <string name="sidebar_tab_folders">Folder</string>
+    <string name="sidebar_tab_starred">Berbintang</string>
+    <string name="sidebar_tab_archived">Diarsipkan</string>
+    <string name="sidebar_messages">pesan</string>
+    <string name="sidebar_star">Beri Bintang</string>
+    <string name="sidebar_unstar">Hapus Bintang</string>
+    <string name="sidebar_archive">Arsipkan</string>
+    <string name="sidebar_delete_chat">Hapus Obrolan</string>
+    <string name="sidebar_rename_chat">Ubah Nama Obrolan</string>
+    <string name="sidebar_move_chat">Pindahkan Obrolan</string>
+    <string name="sidebar_create_folder">Buat Folder</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">Ketik pertanyaan Anda di sini…</string>
+    <string name="chatbot_send_button">Kirim</string>
+    <string name="chatbot_welcome">Selamat datang di Genie AI</string>
+    <string name="chatbot_what_can_i_help">Apa yang bisa saya bantu hari ini?</string>
+    <string name="chatbot_new_chat">Obrolan Baru</string>
+    <string name="chatbot_thinking">Genie sedang berpikir…</string>
+    <string name="chatbot_context_prefix">Konteks:</string>
+    <string name="chatbot_remove_context">Hapus Konteks</string>
+    <string name="chatbot_save_chat">Simpan Obrolan</string>
+    <string name="chatbot_export_chat">Ekspor Obrolan</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">Ngobrol Saja</string>
+    <string name="quickhelp_apply_for_id">Ajukan KTP</string>
+    <string name="quickhelp_pay_taxes">Bayar Pajak</string>
+    <string name="quickhelp_start_business">Mulai Usaha</string>
+    <string name="quickhelp_find_healthcare">Kesehatan</string>
+    <string name="quickhelp_education_services">Pendidikan</string>
+    <string name="quickhelp_transport_licenses">Transportasi</string>
+    <string name="quickhelp_housing_programs">Perumahan</string>
+    <string name="quickhelp_find_jobs">Cari Pekerjaan</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">Bantu Kami Meningkatkan</string>
+    <string name="feedback_note">Masukan Anda akan digunakan untuk menyempurnakan chatbot dan meningkatkan respons dari waktu ke waktu.</string>
+    <string name="feedback_comment_placeholder">Komentar tambahan…</string>
+    <string name="feedback_submit">Kirim</string>
+    <string name="feedback_rating_1">Tidak Berguna</string>
+    <string name="feedback_rating_2">Sedikit Membantu</string>
+    <string name="feedback_rating_3">Cukup Membantu</string>
+    <string name="feedback_rating_4">Sangat Membantu</string>
+    <string name="feedback_rating_5">Mengubah Hidup</string>
+    <string name="feedback_thank_you">Terima kasih atas masukan Anda!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Pengaturan</string>
+    <string name="settings_display">Tampilan</string>
+    <string name="settings_display_language">Bahasa Tampilan</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_light">Terang</string>
+    <string name="settings_theme_dark">Gelap</string>
+    <string name="settings_theme_system">Sistem</string>
+    <string name="settings_font_size">Ukuran Font</string>
+    <string name="settings_animations">Animasi</string>
+    <string name="settings_haptics">Umpan Balik Haptik</string>
+    <string name="settings_notifications">Notifikasi</string>
+    <string name="settings_email_updates">Pembaruan email</string>
+    <string name="settings_sound_notifications">Notifikasi suara</string>
+    <string name="settings_account_management">Manajemen Akun</string>
+    <string name="settings_email_address">Alamat Email</string>
+    <string name="settings_password">Kata Sandi</string>
+    <string name="settings_change_password">Ubah Kata Sandi</string>
+    <string name="settings_edit">Edit</string>
+    <string name="settings_reset_user_data">Atur Ulang Data Pengguna</string>
+    <string name="settings_reset_user_data_desc">Ini akan menghapus semua data profil dan riwayat obrolan Anda.</string>
+    <string name="settings_delete_account">Hapus Akun</string>
+    <string name="settings_delete_account_desc">Ini akan menghapus akun Anda dan semua data terkait secara permanen.</string>
+    <string name="settings_confirm_email_change">Konfirmasi Perubahan Email</string>
+    <string name="settings_confirm_account_deletion">Konfirmasi Penghapusan Akun</string>
+    <string name="settings_account_deletion_warning">Peringatan: Tindakan ini permanen dan tidak dapat dibatalkan. Semua data Anda akan dihapus secara permanen.</string>
+    <string name="settings_deletion_reason">Alasan penghapusan (opsional)</string>
+    <string name="settings_confirm_reset_user_data">Apakah Anda yakin ingin mengatur ulang semua data profil Anda? Ini akan menghapus semua informasi profil dan riwayat obrolan Anda, tetapi mempertahankan kredensial akun Anda.</string>
+    <string name="settings_reset">Atur Ulang</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">Profil Pengguna</string>
+    <string name="user_profile_save">Simpan Profil</string>
+    <string name="user_profile_previous">Sebelumnya</string>
+    <string name="user_profile_next">Berikutnya</string>
+    <string name="user_profile_full_name">Nama lengkap</string>
+    <string name="user_profile_dob">Tanggal lahir</string>
+    <string name="user_profile_gender">Jenis kelamin</string>
+    <string name="user_profile_nationality">Kewarganegaraan</string>
+    <string name="user_profile_marital_status">Status perkawinan</string>
+
+    <!-- About -->
+    <string name="about_title">Tentang</string>
+    <string name="about_version">Versi</string>
+    <string name="about_description">Genie AI adalah asisten cerdas Anda untuk menjelajahi layanan dan informasi pemerintah.</string>
+    <string name="about_tech_stack">Stack Teknologi</string>
+    <string name="about_copyright">Hak cipta dilindungi.</string>
+
+    <!-- Common -->
+    <string name="common_cancel">Batal</string>
+    <string name="common_confirm">Konfirmasi</string>
+    <string name="common_save">Simpan</string>
+    <string name="common_delete">Hapus</string>
+    <string name="common_ok">OK</string>
+    <string name="common_loading">Memuat…</string>
+    <string name="common_refresh">Segarkan</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_done">Selesai</string>
+    <string name="common_clear">Hapus</string>
+    <string name="common_retry">Coba lagi</string>
+</resources>

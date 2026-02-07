@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Genie AI</string>
+    <string name="brand_name">Genie AI</string>
+
+    <!-- Login -->
+    <string name="login_username">Jina la mtumiaji</string>
+    <string name="login_password">Nenosiri</string>
+    <string name="login_button">Ingia</string>
+    <string name="login_logging_in">Inaingia…</string>
+    <string name="login_remember_me">Nikumbuke</string>
+    <string name="login_forgot_password">Umesahau nenosiri?</string>
+    <string name="login_no_account">Huna akaunti?</string>
+    <string name="login_create_account">Fungua akaunti</string>
+    <string name="login_terms">Kwa kuingia, unakubali Masharti ya Huduma na Sera ya Faragha yetu</string>
+    <string name="login_error">Kuingia kumeshindikana. Tafadhali angalia taarifa zako.</string>
+    <string name="login_fields_required">Jina la mtumiaji na nenosiri vinahitajika</string>
+
+    <!-- Register -->
+    <string name="register_create_account">Fungua Akaunti Mpya</string>
+    <string name="register_username">Jina la mtumiaji</string>
+    <string name="register_username_placeholder">Weka jina la mtumiaji</string>
+    <string name="register_email">Barua pepe</string>
+    <string name="register_email_placeholder">Weka barua pepe yako</string>
+    <string name="register_password">Nenosiri</string>
+    <string name="register_password_placeholder">Tengeneza nenosiri</string>
+    <string name="register_confirm_password">Thibitisha Nenosiri</string>
+    <string name="register_confirm_password_placeholder">Thibitisha nenosiri lako</string>
+    <string name="register_accept_terms">Nakubali Masharti ya Huduma</string>
+    <string name="register_button">Fungua Akaunti</string>
+    <string name="register_processing">Inachakata…</string>
+    <string name="register_already_have_account">Tayari una akaunti?</string>
+    <string name="register_login_now">Ingia</string>
+    <string name="register_passwords_mismatch">Nenosiri hazifanani</string>
+    <string name="register_success_title">Usajili Umefanikiwa!</string>
+    <string name="register_verification_sent">Barua pepe ya uthibitisho imetumwa kwa %1$s</string>
+    <string name="register_check_email_instructions">Tafadhali angalia barua pepe yako na ufuate maagizo ili kuthibitisha akaunti yako kabla ya kuingia.</string>
+    <string name="register_back_to_login">Rudi kwenye Kuingia</string>
+
+    <!-- Password Reset -->
+    <string name="password_reset_title">Weka Upya Nenosiri Lako</string>
+    <string name="password_reset_description">Weka anwani yako ya barua pepe na tutakutumia maagizo ya kuweka upya nenosiri lako.</string>
+    <string name="password_reset_email_label">Anwani ya Barua Pepe</string>
+    <string name="password_reset_email_placeholder">Weka barua pepe yako</string>
+    <string name="password_reset_button">Tuma Kiungo cha Kuweka Upya</string>
+    <string name="password_reset_sending">Inatuma…</string>
+    <string name="password_reset_back_to_login">Rudi kwenye Kuingia</string>
+    <string name="password_reset_success">Kiungo cha kuweka upya nenosiri kimetumwa kwenye barua pepe yako</string>
+
+    <!-- Password Reset Confirm -->
+    <string name="password_reset_confirm_title">Tengeneza Nenosiri Jipya</string>
+    <string name="password_reset_confirm_instructions">Weka msimbo wa kuweka upya kutoka barua pepe yako na utengeneze nenosiri jipya.</string>
+    <string name="password_reset_confirm_token_label">Msimbo wa Kuweka Upya</string>
+    <string name="password_reset_confirm_token_placeholder">Weka msimbo wa kuweka upya</string>
+    <string name="password_reset_confirm_new_password">Nenosiri Jipya</string>
+    <string name="password_reset_confirm_new_password_placeholder">Tengeneza nenosiri jipya</string>
+    <string name="password_reset_confirm_confirm_password">Thibitisha Nenosiri Jipya</string>
+    <string name="password_reset_confirm_requirements">Nenosiri lazima liwe na angalau herufi 8 zenye angalau nambari 1, herufi kubwa 1, na herufi maalum 1</string>
+    <string name="password_reset_confirm_button">Weka Upya Nenosiri</string>
+    <string name="password_reset_confirm_processing">Inaweka upya…</string>
+
+    <!-- Navigation -->
+    <string name="nav_profile">Wasifu Wangu</string>
+    <string name="nav_settings">Mipangilio</string>
+    <string name="nav_logout">Ondoka</string>
+
+    <!-- Sidebar -->
+    <string name="sidebar_knowledge_areas">Maeneo ya Maarifa</string>
+    <string name="sidebar_chat_history">Historia ya Mazungumzo</string>
+    <string name="sidebar_search_placeholder">Tafuta maeneo ya maarifa…</string>
+    <string name="sidebar_search_conversations">Tafuta mazungumzo…</string>
+    <string name="sidebar_title">Taarifa &amp; Rasilimali</string>
+    <string name="sidebar_related_docs">Nyaraka Zinazohusiana</string>
+    <string name="sidebar_no_documents">Hakuna nyaraka zinazohusiana</string>
+    <string name="sidebar_faq">Maswali Yanayoulizwa Mara kwa Mara</string>
+    <string name="sidebar_no_chats">Hakuna mazungumzo ya hivi karibuni</string>
+    <string name="sidebar_tab_all">Mazungumzo Yote</string>
+    <string name="sidebar_tab_folders">Folda</string>
+    <string name="sidebar_tab_starred">Yenye Nyota</string>
+    <string name="sidebar_tab_archived">Yaliyohifadhiwa</string>
+    <string name="sidebar_messages">ujumbe</string>
+    <string name="sidebar_star">Weka Nyota</string>
+    <string name="sidebar_unstar">Ondoa Nyota</string>
+    <string name="sidebar_archive">Hifadhi</string>
+    <string name="sidebar_delete_chat">Futa Mazungumzo</string>
+    <string name="sidebar_rename_chat">Badilisha Jina la Mazungumzo</string>
+    <string name="sidebar_move_chat">Hamisha Mazungumzo</string>
+    <string name="sidebar_create_folder">Tengeneza Folda</string>
+
+    <!-- Chatbot -->
+    <string name="chatbot_placeholder">Andika swali lako hapa…</string>
+    <string name="chatbot_send_button">Tuma</string>
+    <string name="chatbot_welcome">Karibu kwenye Genie AI</string>
+    <string name="chatbot_what_can_i_help">Ninawezaje kukusaidia leo?</string>
+    <string name="chatbot_new_chat">Mazungumzo Mapya</string>
+    <string name="chatbot_thinking">Genie inafikiria…</string>
+    <string name="chatbot_context_prefix">Muktadha:</string>
+    <string name="chatbot_remove_context">Ondoa Muktadha</string>
+    <string name="chatbot_save_chat">Hifadhi Mazungumzo</string>
+    <string name="chatbot_export_chat">Hamisha Mazungumzo</string>
+
+    <!-- Quick Help -->
+    <string name="quickhelp_just_chat">Zungumza Tu</string>
+    <string name="quickhelp_apply_for_id">Omba Kitambulisho</string>
+    <string name="quickhelp_pay_taxes">Lipa Kodi</string>
+    <string name="quickhelp_start_business">Anza Biashara</string>
+    <string name="quickhelp_find_healthcare">Afya</string>
+    <string name="quickhelp_education_services">Elimu</string>
+    <string name="quickhelp_transport_licenses">Usafiri</string>
+    <string name="quickhelp_housing_programs">Makazi</string>
+    <string name="quickhelp_find_jobs">Tafuta Kazi</string>
+
+    <!-- Feedback -->
+    <string name="feedback_title">Tusaidie Kuboresha</string>
+    <string name="feedback_note">Maoni yako yatatumika kuboresha chatbot na kuboresha majibu baada ya muda.</string>
+    <string name="feedback_comment_placeholder">Maoni ya ziada…</string>
+    <string name="feedback_submit">Wasilisha</string>
+    <string name="feedback_rating_1">Haina Msaada</string>
+    <string name="feedback_rating_2">Husaidia Kidogo</string>
+    <string name="feedback_rating_3">Husaidia Kiasi</string>
+    <string name="feedback_rating_4">Husaidia Sana</string>
+    <string name="feedback_rating_5">Imebadilisha Maisha</string>
+    <string name="feedback_thank_you">Asante kwa maoni yako!</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Mipangilio</string>
+    <string name="settings_display">Onyesho</string>
+    <string name="settings_display_language">Lugha ya Onyesho</string>
+    <string name="settings_theme">Mandhari</string>
+    <string name="settings_theme_light">Angavu</string>
+    <string name="settings_theme_dark">Giza</string>
+    <string name="settings_theme_system">Mfumo</string>
+    <string name="settings_font_size">Ukubwa wa Fonti</string>
+    <string name="settings_animations">Uhuishaji</string>
+    <string name="settings_haptics">Mwitikio wa Mguso</string>
+    <string name="settings_notifications">Arifa</string>
+    <string name="settings_email_updates">Masasisho ya barua pepe</string>
+    <string name="settings_sound_notifications">Arifa za sauti</string>
+    <string name="settings_account_management">Usimamizi wa Akaunti</string>
+    <string name="settings_email_address">Anwani ya Barua Pepe</string>
+    <string name="settings_password">Nenosiri</string>
+    <string name="settings_change_password">Badilisha Nenosiri</string>
+    <string name="settings_edit">Hariri</string>
+    <string name="settings_reset_user_data">Weka Upya Data ya Mtumiaji</string>
+    <string name="settings_reset_user_data_desc">Hii itafuta data yako yote ya wasifu na historia ya mazungumzo.</string>
+    <string name="settings_delete_account">Futa Akaunti</string>
+    <string name="settings_delete_account_desc">Hii itafuta akaunti yako na data yote inayohusiana kabisa.</string>
+    <string name="settings_confirm_email_change">Thibitisha Mabadiliko ya Barua Pepe</string>
+    <string name="settings_confirm_account_deletion">Thibitisha Ufutaji wa Akaunti</string>
+    <string name="settings_account_deletion_warning">Onyo: Hatua hii ni ya kudumu na haiwezi kutenduliwa. Data yako yote itafutwa kabisa.</string>
+    <string name="settings_deletion_reason">Sababu ya kufuta (si lazima)</string>
+    <string name="settings_confirm_reset_user_data">Je, una uhakika unataka kuweka upya data yako yote ya wasifu? Hii itafuta taarifa zako zote za wasifu na historia ya mazungumzo, lakini itahifadhi taarifa za kuingia kwenye akaunti yako.</string>
+    <string name="settings_reset">Weka Upya</string>
+
+    <!-- User Profile -->
+    <string name="user_profile_title">Wasifu wa Mtumiaji</string>
+    <string name="user_profile_save">Hifadhi Wasifu</string>
+    <string name="user_profile_previous">Iliyotangulia</string>
+    <string name="user_profile_next">Inayofuata</string>
+    <string name="user_profile_full_name">Jina kamili</string>
+    <string name="user_profile_dob">Tarehe ya kuzaliwa</string>
+    <string name="user_profile_gender">Jinsia</string>
+    <string name="user_profile_nationality">Uraia</string>
+    <string name="user_profile_marital_status">Hali ya ndoa</string>
+
+    <!-- About -->
+    <string name="about_title">Kuhusu</string>
+    <string name="about_version">Toleo</string>
+    <string name="about_description">Genie AI ni msaidizi wako wa akili kwa kupitia huduma na taarifa za serikali.</string>
+    <string name="about_tech_stack">Stack ya Teknolojia</string>
+    <string name="about_copyright">Haki zote zimehifadhiwa.</string>
+
+    <!-- Common -->
+    <string name="common_cancel">Ghairi</string>
+    <string name="common_confirm">Thibitisha</string>
+    <string name="common_save">Hifadhi</string>
+    <string name="common_delete">Futa</string>
+    <string name="common_ok">Sawa</string>
+    <string name="common_loading">Inapakia…</string>
+    <string name="common_refresh">Onyesha upya</string>
+    <string name="common_edit">Hariri</string>
+    <string name="common_done">Imekamilika</string>
+    <string name="common_clear">Futa</string>
+    <string name="common_retry">Jaribu tena</string>
+</resources>

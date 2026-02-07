@@ -1,19 +1,30 @@
-# **Application Docker Compose Setup**
+# **GENIE.AI Components - Docker Compose Setup**
 
-This document provides a detailed guide to the docker-compose.yaml file used for deploying the application. This setup defines a multi-container application consisting of a frontend, backend, document repository, database, cache, and virus scanning services.
+This document provides a detailed guide to the docker-compose.yaml file used for deploying the GENIE.AI application components. This setup defines a multi-container application consisting of a frontend, backend, document repository, database, cache, and virus scanning services.
 
 ## **1\. Overview**
 
-The docker-compose.yaml file orchestrates the build and deployment of six main services:
+The docker-compose.yaml file orchestrates the build and deployment of the core GENIE.AI services:
 
-* **frontend**: The user-facing web application (Vue.js), built from the ./gov-chat-frontend directory.  
-* **backend**: The server-side application (Node.js) that handles business logic, API requests, and database connections, built from ./gov-chat-backend.  
-* **document-repository**: A separate (Node.js) service for handling file uploads, ingestion, and security, built from ./document-repository.  
-* **arango-vector-db**: The ArangoDB database instance, configured with experimental vector index support.  
-* **redis-cache**: A Redis instance used for caching, particularly for frontend translations.  
+* **frontend**: The user-facing web application (Vue.js), built from the ./gov-chat-frontend directory.
+* **backend**: The server-side application (Node.js) that handles business logic, API requests, and database connections, built from ./gov-chat-backend.
+* **document-repository**: A separate (Node.js) service for handling file uploads, ingestion, and security, built from ./document-repository.
+* **arango-vector-db**: The ArangoDB database instance, configured with experimental vector index support.
+* **redis-cache**: A Redis instance used for caching, particularly for frontend translations.
 * **clamav**: A ClamAV antivirus service used by the document-repository to scan uploads.
 
-All services are designed to connect to an external Docker network named chatqna\_default for inter-service communication.
+### Integration with OPEA Services
+
+These core components integrate with the OPEA microservices infrastructure deployed separately in `../configs/opea-config/`. The OPEA services provide:
+
+* **LLM Inference** (vLLM): Text generation via port 8000
+* **Embedding Service** (TEI): Vector embeddings via port 7000
+* **Reranking Service** (TEI Reranker): Result optimization via port 7100
+* **Wrapper Services**: Standardized interfaces for GENIE.AI integration
+
+For complete OPEA deployment instructions, see [OPEA Configuration](../configs/opea-config/README.md).
+
+All services are designed to connect to an external Docker network named chatqna\_default for inter-service communication with OPEA services.
 
 ## **2\. Prerequisites**
 
@@ -242,3 +253,106 @@ This service provides on-demand antivirus scanning.
 * **chatqna\_default**: This file defines a single network named chatqna\_default.  
 * **External Network**: It is configured as external: true, which means Docker Compose will not create this network. You must create it manually (see Prerequisites). This setup is useful when integrating these services into a larger system with a shared network.  
 * **Service Communication**: Services can communicate with each other on this network using their service names as hostnames (e.g., backend can reach the database at http://arango-vector-db:8529).
+
+## **6\. Additional Documentation**
+
+For detailed documentation on each component, see:
+
+* **[Backend Services](gov-chat-backend/README.md)** - Complete backend architecture, API routes, and services
+* **[Frontend Application](gov-chat-frontend/README.md)** - Vue.js components, configuration, and features
+* **[Document Repository](document-repository/README.md)** - File upload, virus scanning, and ingestion
+* **[ArangoDB Setup](arangodb/README.md)** - Database configuration, backup, and restore procedures
+* **[Shared Libraries](shared/lib/README.md)** - Common utilities and shared code
+
+## **7\. Component Documentation Sub-folders**
+
+### Backend Sub-folders
+* **[Routes Documentation](gov-chat-backend/routes/README.md)** - API route specifications
+* **[Services Documentation](gov-chat-backend/services/README.md)** - Backend service architecture
+* **[Schema Scripts](gov-chat-backend/scripts/new-schema-scripts/README.md)** - Database setup and migration scripts
+
+### Frontend Sub-folders
+* **[Configuration Guide](gov-chat-frontend/public/config/README.md)** - Application configuration and theming
+* **[Component Library](gov-chat-frontend/src/components/README.md)** - Vue.js component reference
+
+## **8\. Quick Reference**
+
+### Service Ports
+
+| Service | Internal Port | External Port | Purpose |
+|---------|--------------|---------------|---------|
+| frontend | 8090 | 8090 | Web UI |
+| backend | 3000 | 3000 | API Server |
+| document-repository | 3001 | 3001 | File Management |
+| arango-vector-db | 8529 | 8529 | Database |
+| redis-cache | 6379 | 6379 | Cache |
+| clamav | 3310 | 3310 | Virus Scanner |
+
+### OPEA Service Integration (deployed separately)
+
+| OPEA Service | Port | Purpose |
+|--------------|------|---------|
+| vLLM | 8000 | LLM Inference |
+| TEI Embedding | 7000 | Vector Embeddings |
+| TEI Reranker | 7100 | Result Reranking |
+| Text Generation Wrapper | 9000 | GENIE.AI LLM Interface |
+| Embedding Wrapper | 6000 | GENIE.AI Embedding Interface |
+| Reranker Wrapper | 6100 | GENIE.AI Reranking Interface |
+
+### Volume Mounts
+
+| Service | Volume | Purpose |
+|---------|--------|---------|
+| backend | ./database_backups | Database backups |
+| backend | ./logs | Application logs |
+| backend | ./data | Application data |
+| backend | ./gov-chat-backend/Uploads | User uploads |
+| document-repository | ./logs | Service logs |
+| document-repository | doc_repo_uploads | File uploads |
+| arango-vector-db | /root/arango_data | Database persistence |
+| redis-cache | redis_data | Cache persistence |
+
+### Health Status
+
+Check service health:
+```bash
+# All services
+docker-compose ps
+
+# Specific service
+docker-compose ps backend
+
+# Service logs
+docker-compose logs -f backend
+```
+
+## **9\. Troubleshooting**
+
+### Common Issues
+
+**Services won't start**:
+1. Ensure external network exists: `docker network ls | grep chatqna_default`
+2. Check environment files exist in each service directory
+3. Verify ARANGO_PASSWORD is set in host environment
+
+**Backend can't connect to database**:
+1. Ensure arango-vector-db is running: `docker-compose ps arango-vector-db`
+2. Check ARANGO_URL, ARANGO_USERNAME, and ARANGO_PASSWORD in .env
+3. Verify database is accessible: `curl http://localhost:8529/_api/version`
+
+**Document uploads fail**:
+1. Verify clamav service is running: `docker-compose ps clamav`
+2. Check file size limits in document-repository .env
+3. Ensure sufficient disk space
+
+**OPEA integration issues**:
+1. Verify OPEA services are deployed: `cd ../configs/opea-config && docker-compose ps`
+2. Check OPEA_HOST and OPEA_PORT in backend .env
+3. Ensure all services are on chatqna_default network
+
+### Getting Help
+
+- **Component Documentation**: See individual component READMEs
+- **OPEA Integration**: [OPEA Configuration](../configs/opea-config/README.md)
+- **Backend Issues**: [Backend Documentation](gov-chat-backend/README.md)
+- **Frontend Issues**: [Frontend Documentation](gov-chat-frontend/README.md)

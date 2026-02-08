@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var chatViewKey = UUID()
     @State private var relatedDocs: [DocumentItem] = []
     @State private var currentAccessToken: String?
+    @State private var offlineToastMessage: String?
 
     // Category/service context to pass to ChatView
     @State private var pendingCategoryId: String?
@@ -123,6 +124,8 @@ struct ContentView: View {
                         }
                         .hapticOnTap(theme: theme)
                         .accessibilityLabel("Chat History")
+                        .disabled(!connectivity.isOnline)
+                        .opacity(connectivity.isOnline ? 1.0 : 0.5)
 
                         Button {
                             showInfoSheet = true
@@ -134,11 +137,7 @@ struct ContentView: View {
                     }
 
                     ToolbarItemGroup(placement: .topBarTrailing) {
-                        if !connectivity.isOnline {
-                            Image(systemName: "wifi.slash")
-                                .foregroundColor(.orange)
-                                .accessibilityLabel("No internet connection")
-                        }
+                        connectivityToggle
 
                         Button {
                             showServicesSheet = true
@@ -222,6 +221,9 @@ struct ContentView: View {
                 .sheet(isPresented: $showProfile) {
                     UserProfileView()
                 }
+                .overlay(alignment: .bottom) {
+                    offlineToast
+                }
         }
         .task {
             currentAccessToken = await APIService.shared.getToken()
@@ -253,11 +255,7 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if !connectivity.isOnline {
-                        Image(systemName: "wifi.slash")
-                            .foregroundColor(.orange)
-                            .accessibilityLabel("No internet connection")
-                    }
+                    connectivityToggle
 
                     Button(action: startNewChat) {
                         Image(systemName: "plus.message")
@@ -275,6 +273,9 @@ struct ContentView: View {
             .sheet(isPresented: $showProfile) {
                 UserProfileView()
             }
+            .overlay(alignment: .bottom) {
+                offlineToast
+            }
         }
         .task {
             currentAccessToken = await APIService.shared.getToken()
@@ -291,6 +292,7 @@ struct ContentView: View {
             } label: {
                 SwiftUI.Label("My Profile", systemImage: "person")
             }
+            .disabled(!connectivity.isOnline)
 
             Button {
                 showSettings = true
@@ -306,6 +308,56 @@ struct ContentView: View {
         } label: {
             Image(systemName: "person.circle.fill")
                 .font(.title3)
+        }
+    }
+
+    // MARK: - Connectivity Toggle
+
+    @ViewBuilder
+    private var connectivityToggle: some View {
+        Button {
+            let wentOffline = connectivity.toggleUserOfflineMode()
+            offlineToastMessage = wentOffline
+                ? String(localized: "Switched to Offline Mode")
+                : String(localized: "Switched to Online Mode")
+            if theme.hapticsEnabled {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+            // Auto-dismiss after 2 seconds
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                await MainActor.run {
+                    withAnimation(theme.animationSmooth) {
+                        offlineToastMessage = nil
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: connectivity.isOnline ? "wifi" : "wifi.slash")
+                .foregroundColor(connectivity.isOnline ? theme.primaryColor : .orange)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .accessibilityLabel(connectivity.isOnline ? "Online" : "Offline")
+    }
+
+    // MARK: - Offline Toast
+
+    @ViewBuilder
+    private var offlineToast: some View {
+        if let message = offlineToastMessage {
+            Text(message)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(connectivity.isOnline ? Color.green : Color.gray)
+                        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                )
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 

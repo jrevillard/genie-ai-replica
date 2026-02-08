@@ -25,6 +25,7 @@ enum LeftSidebarTab: String, CaseIterable {
 struct LeftSidebarView: View {
     @Environment(ThemeManager.self) private var theme
     @Environment(AuthService.self) private var authService
+    @Environment(ConnectivityService.self) private var connectivity
 
     @State private var selectedTab: LeftSidebarTab = .services
     @State private var searchText = ""
@@ -39,6 +40,7 @@ struct LeftSidebarView: View {
             HStack(spacing: 0) {
                 ForEach(LeftSidebarTab.allCases, id: \.self) { tab in
                     let isActive = selectedTab == tab
+                    let isDisabled = tab == .history && !connectivity.isOnline
                     Button {
                         withAnimation(theme.animationSmooth) {
                             selectedTab = tab
@@ -72,6 +74,8 @@ struct LeftSidebarView: View {
                             }
                         }
                     }
+                    .disabled(isDisabled)
+                    .opacity(isDisabled ? 0.5 : 1.0)
                 }
             }
             .padding(.horizontal, theme.spacingXS)
@@ -111,6 +115,8 @@ struct LeftSidebarView: View {
                     searchText: searchText,
                     onConversationSelected: onConversationSelected
                 )
+                .allowsHitTesting(connectivity.isOnline)
+                .opacity(connectivity.isOnline ? 1.0 : 0.5)
             }
         }
     }
@@ -121,4 +127,5 @@ struct LeftSidebarView: View {
         .frame(width: 300)
         .environment(ThemeManager())
         .environment(AuthService())
+        .environment(ConnectivityService())
 }

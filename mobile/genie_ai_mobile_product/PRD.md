@@ -407,7 +407,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ## 7. Offline Mode
 <!-- Flutter: lib/services/connectivity_service.dart -->
-<!-- SwiftUI: GenieAI/Services/ConnectivityService.swift -->
+<!-- SwiftUI: GenieAI/Services/ConnectivityService.swift, GenieAI/ContentView.swift, GenieAI/Views/Sidebar/LeftSidebarView.swift, GenieAI/Views/Settings/SettingsView.swift -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/service/ConnectivityService.kt, app/src/main/java/com/genieai/mobile/data/repository/ConnectivityRepository.kt -->
 
 **Requirements:**
@@ -423,6 +423,15 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Right sidebar: unavailable
 - Binder tabs: visual disabled state
 - Snackbar notification on mode change
+
+**SwiftUI-Specific Notes:**
+- Chat input stays **enabled** when offline (future local LLM support)
+- Knowledge Areas stay **enabled** when offline (future local RAG document cache)
+- Chat History button/tab is **disabled** when offline (requires API)
+- Profile menu item is **disabled** when offline (requires API)
+- Toolbar connectivity toggle (wifi/wifi.slash icon) allows manual mode switching
+- Toast notification appears on mode change with auto-dismiss
+- Settings save shows "saved locally" feedback when offline
 
 ---
 

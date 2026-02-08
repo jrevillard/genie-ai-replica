@@ -21,6 +21,8 @@ struct SettingsView: View {
     @State private var soundNotifications = true
     @State private var isSaving = false
     @State private var isResettingData = false
+    @State private var showSaveConfirmation = false
+    @State private var saveConfirmationMessage = ""
 
     var body: some View {
         NavigationStack {
@@ -243,6 +245,9 @@ struct SettingsView: View {
                     onDismiss: { showEmailEditSheet = false }
                 )
             }
+            .alert(saveConfirmationMessage, isPresented: $showSaveConfirmation) {
+                Button("OK", role: .cancel) {}
+            }
         }
     }
 
@@ -331,6 +336,8 @@ struct SettingsView: View {
             }
         } else {
             isSaving = false
+            saveConfirmationMessage = String(localized: "Settings saved locally (Offline Mode)")
+            showSaveConfirmation = true
         }
     }
 

@@ -87,6 +87,7 @@ public actor LlamaCppProvider: LLMProvider {
 
         // Build chat prompt in Gemma/ChatML format
         let prompt = buildPrompt(systemPrompt: systemPrompt, messages: messages, context: contextText)
+        Self.logger.debug("llama.cpp full prompt: \(prompt)")
 
         // Tokenize
         let promptTokens = tokenize(prompt, model: model)
@@ -186,6 +187,7 @@ public actor LlamaCppProvider: LLMProvider {
         let duration = clock.now - startTime
         let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
         Self.logger.info("llama.cpp generation complete: promptTokens=\(promptTokens.count), generatedTokens=\(generatedTokens.count), responseLength=\(result.count), duration=\(durationMs)ms")
+        Self.logger.debug("llama.cpp response text: \(result)")
 
         return result
     }

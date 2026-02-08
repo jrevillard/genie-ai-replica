@@ -116,6 +116,10 @@ public actor LocalRAGService {
         }
 
         Self.logger.info("Pipeline query: textLength=\(ragQuery.text.count), history=\(ragQuery.conversationHistory.count), labels=\(ragQuery.categoryLabels.joined(separator: ","))")
+        Self.logger.debug("Pipeline query text: \(ragQuery.text)")
+        for (i, msg) in ragQuery.conversationHistory.enumerated() {
+            Self.logger.debug("Pipeline history[\(i)] role=\(msg.role.rawValue): \(msg.content)")
+        }
 
         let clock = ContinuousClock()
         let pipelineStart = clock.now
@@ -161,6 +165,7 @@ public actor LocalRAGService {
         let generateDuration = clock.now - generateStart
         let generateMs = Int(generateDuration.components.seconds * 1000 + generateDuration.components.attoseconds / 1_000_000_000_000_000)
         Self.logger.info("Generation done: responseLength=\(responseText.count), duration=\(generateMs)ms")
+        Self.logger.debug("Pipeline response text: \(responseText)")
 
         // Step 5: Build sources
         let sources = results.map { result in

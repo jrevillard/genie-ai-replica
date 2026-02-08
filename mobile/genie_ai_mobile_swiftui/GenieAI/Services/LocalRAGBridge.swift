@@ -86,6 +86,10 @@ class LocalRAGBridge {
         }
 
         Self.logger.info("Local query: length=\(query.count), history=\(conversationHistory.count), labels=\(contextLabels.joined(separator: ","))")
+        Self.logger.debug("Local query text: \(query)")
+        for (i, msg) in conversationHistory.enumerated() {
+            Self.logger.debug("Local query history[\(i)] role=\(msg.role.rawValue): \(msg.actualContent ?? msg.content)")
+        }
 
         let clock = ContinuousClock()
         let startTime = clock.now
@@ -109,6 +113,7 @@ class LocalRAGBridge {
         let duration = clock.now - startTime
         let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
         Self.logger.info("Local response: contentLength=\(ragResponse.content.count), confidence=\(ragResponse.confidence, format: .fixed(precision: 2)), sources=\(ragResponse.sources.count), duration=\(durationMs)ms")
+        Self.logger.debug("Local response text: \(ragResponse.content)")
         Self.logger.debug("Local response sources: \(ragResponse.sources.map { "\($0.title)(\($0.score))" }.joined(separator: ", "))")
 
         // Map RAGResponse to QueryResponse via JSON roundtrip

@@ -66,11 +66,14 @@ public actor FoundationModelsProvider: LLMProvider {
             }
         }
 
+        Self.logger.debug("FoundationModels user prompt: \(userPrompt)")
+
         let response = try await activeSession.respond(to: userPrompt)
 
         let duration = clock.now - startTime
         let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
         Self.logger.info("FoundationModels response: contentLength=\(response.content.count), duration=\(durationMs)ms")
+        Self.logger.debug("FoundationModels response text: \(response.content)")
 
         return response.content
     }

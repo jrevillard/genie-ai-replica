@@ -51,6 +51,9 @@ class ChatService {
         }
 
         Self.logger.info("Remote query: sessionId=\(sessionId, privacy: .private), messages=\(messages.count), categoryId=\(categoryId ?? "nil"), labels=\(contextLabels ?? "nil"), language=\(language ?? "nil")")
+        for (i, msg) in messages.enumerated() {
+            Self.logger.debug("Remote request message[\(i)] role=\(msg.role.rawValue): \(msg.content)")
+        }
 
         let clock = ContinuousClock()
         let startTime = clock.now
@@ -67,6 +70,7 @@ class ChatService {
             let durationMs = Int(duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
             let contentLength = response.response?.count ?? response.content?.count ?? 0
             Self.logger.info("Remote response: id=\(response.id ?? "nil", privacy: .private), confidence=\(response.confidence ?? 0, format: .fixed(precision: 2)), sources=\(response.sources?.count ?? 0), contentLength=\(contentLength), duration=\(durationMs)ms")
+            Self.logger.debug("Remote response text: \(response.response ?? response.content ?? "")")
 
             return response
         } catch {

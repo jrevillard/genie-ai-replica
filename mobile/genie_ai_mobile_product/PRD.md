@@ -1,14 +1,14 @@
 # GENIE.AI Mobile Application - Product Requirements Document
 
-**Version:** 1.0.0
-**Last Updated:** February 5, 2026
+**Version:** 1.1.0
+**Last Updated:** February 8, 2026
 **Platforms:** Flutter (reference), SwiftUI, Jetpack Compose
 
 ---
 
 ## Overview
 
-GENIE.AI is a multilingual, cross-platform intelligent chatbot application for government services and citizen engagement. The application features AI-powered assistance, offline capability, comprehensive user profiles, and internationalization support for 11 languages.
+GENIE.AI is a multilingual, cross-platform intelligent chatbot application for government services and citizen engagement. The application features AI-powered assistance, on-device local RAG (Retrieval-Augmented Generation) for offline capability, comprehensive user profiles, and internationalization support for 11 languages.
 
 ---
 
@@ -407,7 +407,7 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 
 ## 7. Offline Mode
 <!-- Flutter: lib/services/connectivity_service.dart -->
-<!-- SwiftUI: GenieAI/Services/ConnectivityService.swift, GenieAI/ContentView.swift, GenieAI/Views/Sidebar/LeftSidebarView.swift, GenieAI/Views/Settings/SettingsView.swift -->
+<!-- SwiftUI: GenieAI/Services/ConnectivityService.swift, GenieAI/Services/LocalRAGBridge.swift, GenieAI/ContentView.swift, GenieAI/Views/Sidebar/LeftSidebarView.swift, GenieAI/Views/Settings/SettingsView.swift, GenieAI/Views/Chat/ChatView.swift, GenieAI/Services/ChatService.swift -->
 <!-- Compose: app/src/main/java/com/genieai/mobile/service/ConnectivityService.kt, app/src/main/java/com/genieai/mobile/data/repository/ConnectivityRepository.kt -->
 
 **Requirements:**
@@ -424,14 +424,23 @@ GENIE.AI is a multilingual, cross-platform intelligent chatbot application for g
 - Binder tabs: visual disabled state
 - Snackbar notification on mode change
 
-**SwiftUI-Specific Notes:**
-- Chat input stays **enabled** when offline (future local LLM support)
-- Knowledge Areas stay **enabled** when offline (future local RAG document cache)
+**Offline Chat via Local RAG (SwiftUI):**
+- Chat input stays **enabled** when offline — queries are routed to the on-device LocalRAG pipeline (see Section 15)
+- Knowledge Areas stay **enabled** when offline — indexed documents provide context for local RAG queries
 - Chat History button/tab is **disabled** when offline (requires API)
 - Profile menu item is **disabled** when offline (requires API)
 - Toolbar connectivity toggle (wifi/wifi.slash icon) allows manual mode switching
 - Toast notification appears on mode change with auto-dismiss
 - Settings save shows "saved locally" feedback when offline
+- Offline responses are visually identical to online responses (same message bubble style, markdown rendering)
+- If the local model is not loaded or generation fails, a localized error message is shown: "Offline mode: unable to generate a response. Please check that the local model is loaded."
+
+**Offline Query Routing Logic:**
+1. User sends a message
+2. `ConnectivityService.isOnline` is checked
+3. **Online**: query is sent to the backend API via `ChatService.submitQuery()` (unchanged)
+4. **Offline**: query is sent to `ChatService.submitOfflineQuery()` → `LocalRAGBridge.submitQuery()` → on-device RAG pipeline
+5. The response is mapped to the same `QueryResponse` model used by the online path, ensuring seamless UI handling
 
 ---
 
@@ -681,6 +690,11 @@ All platforms must have identical localized strings for every supported language
 - `service_tree_proxy.dart` - Service categories
 - `document_file_proxy.dart` - File management
 
+**Offline Query Path (SwiftUI):**
+- When offline, `ChatService.submitOfflineQuery()` delegates to `LocalRAGBridge` instead of the HTTP API
+- The response is mapped to the same `QueryResponse` model via JSON roundtrip, so the chat UI requires no special offline handling
+- See Section 15 for full LocalRAG architecture
+
 ---
 
 ## 14. Security Requirements
@@ -690,6 +704,132 @@ All platforms must have identical localized strings for every supported language
 - Token cleared on logout
 - HTTPS required for production
 - No credential storage without user consent ("Remember me")
+
+**Local RAG Security:**
+- All on-device processing stays on-device — no data is transmitted when offline
+- Indexed documents and embeddings are stored in application memory only (not persisted to disk by default)
+- LLM model files (.gguf) should be stored in the app's sandboxed documents directory
+- The local model never has access to authentication tokens or credentials
+- Apple FoundationModels provider uses Apple's on-device models with built-in safety guardrails
+
+---
+
+## 15. Local RAG & On-Device AI
+<!-- SwiftUI: local_rag_swift/ (Swift Package), GenieAI/Services/LocalRAGBridge.swift -->
+
+The application supports on-device AI-powered chat when offline via a local Retrieval-Augmented Generation (RAG) pipeline. This is implemented as a standalone Swift Package (`LocalRAG`) that is integrated into the SwiftUI app.
+
+### 15.1 Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    LocalRAGService                       │
+│                   (Main Facade Actor)                    │
+├─────────────┬─────────────────────┬─────────────────────┤
+│  Document   │    Vector Store     │    LLM Provider     │
+│  Indexer    │  (Cosine Similarity)│   (Swappable)       │
+├─────────────┼─────────────────────┼─────────────────────┤
+│  Text       │    Embedding        │  ┌───────────────┐  │
+│  Chunker    │    Service          │  │ llama.cpp      │  │
+│             │   (NLEmbedding)     │  │ (Gemma, etc.)  │  │
+│  Context    │                     │  ├───────────────┤  │
+│  Formatter  │                     │  │ Foundation-    │  │
+│             │                     │  │ Models (iOS26) │  │
+│             │                     │  └───────────────┘  │
+└─────────────┴─────────────────────┴─────────────────────┘
+```
+
+### 15.2 LLM Provider Abstraction
+
+The package uses a protocol-based provider pattern allowing swappable LLM backends:
+
+**LLMProviderType enum:**
+- `.llamaCpp(modelPath: String)` — Gemma, Llama, Mistral, or any GGUF-format model via llama.cpp C API
+- `.foundationModels` — Apple's on-device models (iOS 26+ / macOS 26+ only, via FoundationModels framework)
+
+**Provider Selection Logic:**
+1. If `LLMProviderType.foundationModels` is configured AND `#available(iOS 26, *)` → use `FoundationModelsProvider`
+2. If `.foundationModels` is configured but iOS < 26 → fall back to a no-op provider (graceful degradation)
+3. If `.llamaCpp(modelPath:)` is configured → use `LlamaCppProvider` with the specified GGUF model file
+
+**llama.cpp Provider Details:**
+- Uses `StanfordBDHG/llama.cpp` v0.3.3 precompiled XCFramework (avoids unsafeFlags issue in upstream ggml-org repo)
+- Metal GPU acceleration (99 layers offloaded)
+- Context window: 4096 tokens, batch size: 512
+- Sampling: configurable temperature, top-k, top-p
+- Chat template: Gemma-style (`<start_of_turn>user`, `<start_of_turn>model`)
+- Requires C++ interop (`SWIFT_OBJC_INTEROP_MODE = objcxx`) on both the package AND the consuming app target
+
+### 15.3 RAG Pipeline
+
+**Indexing Flow (Document → Searchable Chunks):**
+1. `RAGDocument` (id, title, content, metadata) is submitted
+2. `TextChunker` splits content at sentence boundaries (default: 500 chars, 50 char overlap) using `NLTokenizer`
+3. `EmbeddingService` generates 512-dimensional vectors for each chunk via `NLEmbedding.sentenceEmbedding`
+4. `VectorStore` stores chunks with their embeddings in memory
+
+**Query Flow (Question → Answer):**
+1. User query is embedded using the same `EmbeddingService`
+2. `VectorStore` performs cosine similarity search (configurable top-K and threshold)
+3. Optional label filtering narrows results to selected knowledge area categories
+4. `ContextFormatter` assembles retrieved chunks into a numbered context block
+5. Context is injected into a system prompt template (with `{context}` placeholder)
+6. `LLMProvider.generate()` produces the response
+7. Response is wrapped in `RAGResponse` with source attributions and confidence score
+
+**Configuration (`RAGConfiguration`):**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `topK` | 5 | Number of chunks to retrieve |
+| `chunkSize` | 500 | Target chunk size in characters |
+| `chunkOverlap` | 50 | Overlap between adjacent chunks |
+| `similarityThreshold` | 0.3 | Minimum cosine similarity to include |
+| `maxGenerationTokens` | 512 | Maximum tokens for LLM response |
+| `temperature` | 0.7 | Sampling temperature |
+| `embeddingLanguage` | `.english` | Language for NLEmbedding model |
+
+### 15.4 App Integration (SwiftUI)
+
+**LocalRAGBridge** (`@Observable` class) bridges the `LocalRAG` package to the app:
+- Injected via `.environment(localRAGBridge)` from `GenieAIApp`
+- Initialized on app launch via `.task { await localRAGBridge.initialize() }`
+- Maps `RAGResponse` → `QueryResponse` via JSON roundtrip (preserves Decodable-only init on QueryResponse)
+- Exposes: `isReady`, `isLoading`, `error` for UI state binding
+
+**Offline Query Flow in ChatView:**
+```
+sendQuery() → connectivity.isOnline?
+  ├── YES → chatService.submitQuery() → API
+  └── NO  → chatService.submitOfflineQuery() → LocalRAGBridge → LocalRAGService
+```
+
+### 15.5 Model Management
+
+**Requirements:**
+- LLM model files (.gguf) must be placed in the app's documents directory or bundle
+- Model loading is async and should happen on app launch (not blocking UI)
+- Model should be unloaded on memory pressure or app backgrounding (future)
+- The app must gracefully handle missing model files with a user-friendly error
+
+**Supported Model Formats:**
+- GGUF (llama.cpp): Gemma 2B, Llama 3.2, Mistral 7B, Phi-3, etc.
+- Apple FoundationModels: No user-managed model files (system-provided)
+
+### 15.6 Embedding Service
+
+- Uses Apple's `NLEmbedding.sentenceEmbedding(for:)` from the NaturalLanguage framework
+- 512-dimensional vectors, built-in to iOS (no external dependencies)
+- Language-configurable via `RAGConfiguration.embeddingLanguage`
+- Thread-safe via actor isolation
+
+### 15.7 Future Enhancements
+
+- **Persistent vector store**: Persist indexed documents to disk for faster cold starts
+- **Streaming generation**: Token-by-token streaming for real-time response display
+- **Model download manager**: In-app model downloading with progress UI
+- **Conversation history caching**: Cache recent conversations locally for offline browsing
+- **Cross-platform LocalRAG**: Kotlin Multiplatform or Android-native equivalent for Jetpack Compose
+- **Hybrid mode**: Use local RAG for immediate response while fetching richer API response in background
 
 ---
 
@@ -703,9 +843,9 @@ All platforms should maintain similar:
 - API integration
 
 ### Platform-Specific Adaptations
-- **SwiftUI (iOS 17+):** Use @Observable macro for services, @Environment for injection; NavigationStack for routing
-- **Jetpack Compose:** Use ViewModel + StateFlow for services; NavHost for routing
-- **Flutter:** Use ChangeNotifier + StatefulWidget; Navigator with named routes
+- **SwiftUI (iOS 17+):** Use @Observable macro for services, @Environment for injection; NavigationStack for routing; LocalRAG Swift Package for on-device AI
+- **Jetpack Compose:** Use ViewModel + StateFlow for services; NavHost for routing; on-device AI via llama.android or MediaPipe (planned)
+- **Flutter:** Use ChangeNotifier + StatefulWidget; Navigator with named routes; on-device AI not yet implemented
 
 ### Data Model JSON Decoding
 The backend API (ArangoDB) returns varying field names. All platforms must handle flexible decoding:
@@ -737,4 +877,40 @@ lib/services/              GenieAI/Services/                 data/repository/
 lib/utils/                 GenieAI/Extensions/               util/
 lib/i18n/locales/          GenieAI/Localizable.xcstrings     res/values/
 assets/config/             GenieAI/Resources/                assets/
+(n/a)                      local_rag_swift/                   (planned)
+```
+
+### LocalRAG Package Structure (SwiftUI only)
+```
+local_rag_swift/
+├── Package.swift
+├── Sources/LocalRAG/
+│   ├── LocalRAGService.swift              # Main facade (actor)
+│   ├── LocalRAGError.swift                # Error types
+│   ├── Configuration/
+│   │   ├── RAGConfiguration.swift         # Pipeline parameters
+│   │   └── LLMProviderType.swift          # Provider selection enum
+│   ├── Models/
+│   │   ├── RAGDocument.swift              # Input document
+│   │   ├── RAGResponse.swift              # Output response
+│   │   ├── RAGSource.swift                # Source attribution
+│   │   └── RAGQuery.swift                 # Query input
+│   ├── Protocols/
+│   │   └── LLMProvider.swift              # LLM provider protocol
+│   ├── Providers/
+│   │   ├── LlamaCppProvider.swift         # llama.cpp C API (actor)
+│   │   └── FoundationModelsProvider.swift # Apple on-device (iOS 26+)
+│   ├── Embedding/
+│   │   └── EmbeddingService.swift         # NLEmbedding wrapper (actor)
+│   ├── VectorStore/
+│   │   ├── VectorStore.swift              # Cosine similarity search (actor)
+│   │   └── DocumentChunk.swift            # Chunk with embedding
+│   └── Pipeline/
+│       ├── DocumentIndexer.swift          # Chunk → embed → store (actor)
+│       ├── TextChunker.swift              # Sentence-boundary chunking
+│       └── ContextFormatter.swift         # Format chunks for LLM prompt
+└── Tests/LocalRAGTests/
+    ├── TextChunkerTests.swift
+    ├── VectorStoreTests.swift
+    └── EmbeddingServiceTests.swift
 ```

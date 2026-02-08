@@ -8,6 +8,8 @@ struct ChatView: View {
     @Environment(AuthService.self) private var authService
     @Environment(ThemeManager.self) private var theme
     @Environment(AppLocaleService.self) private var appLocale
+    @Environment(ConnectivityService.self) private var connectivity
+    @Environment(LocalRAGBridge.self) private var localRAG
 
     @State private var chatService = ChatService()
     @State private var chatHistoryService = ChatHistoryService()
@@ -338,14 +340,30 @@ struct ChatView: View {
                     }
                 }
 
-                let response = try await chatService.submitQuery(
-                    sessionId: sessionId,
-                    messages: apiMessages,
-                    userId: userId,
-                    categoryId: selectedCategoryId,
-                    contextLabels: contextLabels,
-                    language: appLocale.currentLocale
-                )
+                let response: QueryResponse
+
+                if connectivity.isOnline {
+                    // Online: use cloud API
+                    response = try await chatService.submitQuery(
+                        sessionId: sessionId,
+                        messages: apiMessages,
+                        userId: userId,
+                        categoryId: selectedCategoryId,
+                        contextLabels: contextLabels,
+                        language: appLocale.currentLocale
+                    )
+                } else {
+                    // Offline: use local RAG
+                    let labels = contextLabels?.components(separatedBy: ",")
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty } ?? []
+
+                    response = try await chatService.submitOfflineQuery(
+                        messages: apiMessages,
+                        localRAG: localRAG,
+                        contextLabels: labels
+                    )
+                }
 
                 // Add assistant response
                 let assistantMessage = Message(
@@ -368,9 +386,12 @@ struct ChatView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
+                    let errorContent = connectivity.isOnline
+                        ? String(localized: "Error processing your request.")
+                        : String(localized: "Offline mode: unable to generate a response. Please check that the local model is loaded.")
                     let errorMessage = Message(
                         role: .assistant,
-                        content: String(localized: "Error processing your request.")
+                        content: errorContent
                     )
                     messages.append(errorMessage)
                 }
@@ -815,4 +836,6 @@ struct ExportPDFSheet: View {
         .environment(AuthService())
         .environment(ThemeManager())
         .environment(AppLocaleService.shared)
+        .environment(ConnectivityService())
+        .environment(LocalRAGBridge())
 }

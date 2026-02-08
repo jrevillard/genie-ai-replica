@@ -36,6 +36,8 @@
 		D0971DD62F366F8B00E0EE08 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = D0971DD52F366F8B00E0EE08 /* AppIcon.icon */; };
 		D097GLASS2F34B35E00E0EE09 /* View+GlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */; };
 		F0A1B2C3D4E5F6A7B8C9D0E1 /* FAQ.md in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */; };
+		LOCALRAG0001 /* LocalRAGBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = LOCALRAG0002 /* LocalRAGBridge.swift */; };
+		LOCALRAG0004 /* LocalRAG in Frameworks */ = {isa = PBXBuildFile; productRef = LOCALRAG0003 /* LocalRAG */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +71,7 @@
 		D0971DD52F366F8B00E0EE08 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		D097GLASS2F34B35E00E0EE08 /* View+GlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+GlassStyle.swift"; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E2 /* FAQ.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FAQ.md; sourceTree = "<group>"; };
+		LOCALRAG0002 /* LocalRAGBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRAGBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -85,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				LOCALRAG0004 /* LocalRAG in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -146,6 +150,7 @@
 				D09719672F34B30300E0EE08 /* ConfigService.swift */,
 				D09719682F34B30300E0EE08 /* ConnectivityService.swift */,
 				A0B1C2D3E4F5A6B7C8D9E0F1 /* AppLocaleService.swift */,
+				LOCALRAG0002 /* LocalRAGBridge.swift */,
 				D097196A2F34B30300E0EE08 /* ServiceTreeService.swift */,
 				D097196B2F34B30300E0EE08 /* ThemeManager.swift */,
 				D097196C2F34B30300E0EE08 /* UserService.swift */,
@@ -213,6 +218,9 @@
 				D09719912F34B31600E0EE08 /* Sidebar */,
 			);
 			name = GenieAI;
+			packageProductDependencies = (
+				LOCALRAG0003 /* LocalRAG */,
+			);
 			productName = GenieAI;
 			productReference = 20000001 /* GenieAI.app */;
 			productType = "com.apple.product-type.application";
@@ -251,6 +259,9 @@
 				th,
 			);
 			mainGroup = 40000001;
+			packageReferences = (
+				LOCALRAG0005 /* XCLocalSwiftPackageReference "../../local_rag_swift" */,
+			);
 			productRefGroup = 40000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -304,6 +315,7 @@
 				D09719622F34B2E600E0EE08 /* ServiceCategory.swift in Sources */,
 				D09719D02F34B40000E0EE08 /* PasswordValidator.swift in Sources */,
 				D09719D22F34B40000E0EE08 /* JSONDecoder+FlexibleDate.swift in Sources */,
+				LOCALRAG0001 /* LocalRAGBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -457,6 +469,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = int.itu.GenieAI;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_INTEROP_MODE = objcxx;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -488,6 +501,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = int.itu.GenieAI;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_INTEROP_MODE = objcxx;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -515,6 +529,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		LOCALRAG0005 /* XCLocalSwiftPackageReference "../local_rag_swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../local_rag_swift;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		LOCALRAG0003 /* LocalRAG */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LocalRAG;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 70000001 /* Project object */;
 }

@@ -58,6 +58,24 @@ class ChatService {
         return try decoder.decode(QueryResponse.self, from: data)
     }
 
+    // MARK: - Offline Query
+
+    func submitOfflineQuery(
+        messages: [Message],
+        localRAG: LocalRAGBridge,
+        contextLabels: [String]
+    ) async throws -> QueryResponse {
+        guard let lastUserMessage = messages.last(where: { $0.role == .user }) else {
+            throw NSError(domain: "ChatService", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user message found"])
+        }
+
+        return try await localRAG.submitQuery(
+            query: lastUserMessage.actualContent ?? lastUserMessage.content,
+            conversationHistory: messages,
+            contextLabels: contextLabels
+        )
+    }
+
     // MARK: - Feedback
 
     func submitFeedback(

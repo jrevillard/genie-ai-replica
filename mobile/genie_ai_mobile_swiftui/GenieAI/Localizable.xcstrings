@@ -50865,6 +50865,77 @@
         }
       }
     },
+    "Offline mode: unable to generate a response. Please check that the local model is loaded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وضع عدم الاتصال: تعذر إنشاء استجابة. يرجى التحقق من تحميل النموذج المحلي."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline-Modus: Antwort konnte nicht generiert werden. Bitte überprüfen Sie, ob das lokale Modell geladen ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline mode: unable to generate a response. Please check that the local model is loaded."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo sin conexión: no se pudo generar una respuesta. Verifique que el modelo local esté cargado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mode hors ligne : impossible de générer une réponse. Veuillez vérifier que le modèle local est chargé."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mode offline: tidak dapat menghasilkan respons. Harap periksa apakah model lokal sudah dimuat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo offline: não foi possível gerar uma resposta. Verifique se o modelo local está carregado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Офлайн-режим: не удалось сгенерировать ответ. Пожалуйста, проверьте, загружена ли локальная модель."
+          }
+        },
+        "sw" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hali ya nje ya mtandao: haiwezi kutengeneza jibu. Tafadhali hakikisha kuwa modeli ya ndani imepakiwa."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "โหมดออฟไลน์: ไม่สามารถสร้างคำตอบได้ โปรดตรวจสอบว่าโมเดลในเครื่องถูกโหลดแล้ว"
+          }
+        },
+        "zh" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "离线模式：无法生成响应。请检查本地模型是否已加载。"
+          }
+        }
+      }
+    },
     "OK" : {
       "extractionState" : "manual",
       "localizations" : {
